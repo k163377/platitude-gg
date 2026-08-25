@@ -314,35 +314,22 @@ Item {
         onTriggered: rowItem.openPointed()
     }
 
-    // The two clicks this row answers with one gesture: where it leads is the double-click, and the name is the second
-    // click that came too late to be one (デザイン規約 §グラフ行のダブルクリック). The same component the sidebar's rows and the
-    // names a chip unstacks use — one answer to "how long is a double-click" for all three.
-    //
-    // **Which row was clicked last is held on the list**, not here: this delegate is recycled the moment its row
-    // scrolls off, and the memory has to outlive it.
-    ReclickGesture {
-        id: reclick
-        key: rowItem.oid_hex
-        activeKey: rowItem.ListView.view ? rowItem.ListView.view.clickedOid : ""
-        nameable: rowItem.renameRecord !== ""
-        onRenameAsked: rowItem.ListView.view.rowRenameRequested(rowItem.oid_hex, rowItem.renameRecord)
-    }
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click — what a headless run reads to put its second click in as a second
-    /// (app-ui.md §UI 自動化の因果性, PG_AUTO_ACT=graph-reclick).
-    readonly property bool renameArmed: reclick.armed
-    readonly property bool clickGuarded: reclick.guarded
-    /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
-    /// the row itself rather than at a copy of what the row would have decided.
-    function leftClick() {
+    /// (app-ui.md §UI 自動化の因果性, PG_AUTO_ACT=graph-reclick). Both are the list's answer: the gesture lives there,
+    /// because this delegate is pooled the moment its row scrolls off (`GraphList`).
+    readonly property bool renameArmed:
+        rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameRecord) : false
+    readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false
+    /// A left click, as this row answers one. `held` is how long the button was down, which is what the gesture takes
+    /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
+    /// click in at the row itself rather than at a copy of what the row would have decided.
+    function leftClick(held) {
         // The second click of a double-click is not a click of its own: the first one already did what a click does,
         // and the gesture is the double.
-        if (!reclick.click())
+        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameRecord, held))
             return
         rowItem.claimRow()
-        // Read before it is written (`ReclickGesture.click`): what makes a second click a second is that this row was
-        // already the one clicked.
-        rowItem.ListView.view.clickedOid = rowItem.oid_hex
     }
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
     /// picked (規約 §矢印で履歴を辿る). Taken by the list rather than by this row: the delegate is recycled the moment the
@@ -350,7 +337,7 @@ Item {
     function claimRow() {
         rowItem.ListView.view.takeKeyboard()
         rowItem.ListView.view.currentIndex = rowItem.index
-        rowItem.ListView.view.rowSelected(rowItem.oid_hex)
+        rowItem.ListView.view.rowSelected(rowItem.oid_hex, rowItem.index)
     }
 
     MouseArea {
@@ -364,9 +351,16 @@ Item {
         anchors.leftMargin: rowItem.naming ? Theme.spaceXs + chipColumn.nameBoxWidth : 0
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        /// When the button went down, so the gesture can take the time it was held off the wait it has left — Qt
+        /// measures a double-click press to press, and `clicked` arrives at the release.
+        property real pressAt: 0
+        onPressed: mouse => {
+            if (mouse.button === Qt.LeftButton)
+                rowMouse.pressAt = Date.now()
+        }
         onClicked: mouse => {
             if (mouse.button !== Qt.RightButton) {
-                rowItem.leftClick()
+                rowItem.leftClick(Date.now() - rowMouse.pressAt)
                 return
             }
             rowItem.claimRow()
@@ -389,7 +383,7 @@ Item {
                 return
             // The second click came inside the window after all, so the gesture was the double-click and not the name.
             // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
-            reclick.drop()
+            rowItem.ListView.view.dropRename()
             if (!rowItem.movable)
                 return
             rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)

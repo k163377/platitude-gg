@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import platitude
 import platitude.ui
 
 // The history itself: the rows, the viewport arithmetic every mover in the pane goes through (`clampY` /
@@ -75,10 +76,43 @@ AppListView {
     // which is where the models that answer it are (`RepoPage.namingRefusedWhy`) — the row only draws the answer.
     property bool namingRefused: false
     property string namingRefusedWhy: ""
-    // Which row the last left click landed on. Held here for the recycling reason again, and written only by clicks:
-    // what makes a second click a second is that the row was already the one clicked, and a selection the arrows moved
-    // is not that (`ReclickGesture`, デザイン規約 §左メニューの所作).
-    property string clickedOid: ""
+    // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック).
+    //
+    // **One for the whole graph, not one per row — and the card a chip unfolds into shares it** (`RefListPopup` takes
+    // it through `GraphPane.rowGesture`). Two reasons, and both are things that go wrong without it:
+    //
+    // - the delegate is pooled the moment its row scrolls off, so a wait carried by the row is either dropped or
+    //   comes back on whatever commit the recycled row is now showing;
+    // - **the card opens on the chip's own seat after a rest**, so the reader's two clicks at one spot land on two
+    //   different surfaces — the row, then the card. Separate memories make the second one a first click, and the
+    //   gesture reads as "sometimes it does nothing" (2026-08-26 ユーザー報告).
+    //
+    // The key is what the reader is pointing at — the ref's kind and name (`GitFacts.recordKey`), which is the same
+    // string on both surfaces and does not change when a background pass rewrites the chip's flags.
+    ReclickGesture {
+        id: reclick
+        onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.record)
+    }
+    /// The gesture itself, for the card that stands on these rows. Nothing else reaches past this list for it: what
+    /// it holds is one answer to "which target was clicked last", and a second holder would be a second answer.
+    readonly property alias rowGesture: reclick
+    /// A row was left-clicked: answers whether it is a click of its own (see the gesture), and takes the wait with it.
+    /// `record` is the chip's first one, read now rather than when the wait ends — by then the row may be showing
+    /// something else, or be another row altogether.
+    function noteClick(oidHex, record, held) {
+        return reclick.click(record === "" ? "" : GitFacts.recordKey(record),
+                             record === "" ? null : { "oid": oidHex, "record": record },
+                             held)
+    }
+    function dropRename() {
+        reclick.drop()
+    }
+    /// Which target the last left click landed on, and the gesture's own state for the runs that photograph it.
+    readonly property alias clickedKey: reclick.activeKey
+    readonly property alias clickGuarded: reclick.guarded
+    function renameArmed(record) {
+        return record !== "" && reclick.armedFor(GitFacts.recordKey(record))
+    }
     // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
     // words are on the bar; the row only marks itself.
     property string askOid: ""
@@ -89,7 +123,9 @@ AppListView {
     // Which row the working tree stands on, mirrored for the delegates the same way: that row writes its message in
     // the branch's blue, wherever it is read (規約 §グラフの中で HEAD を見失わない).
     readonly property int headRow: graphList.graphModel.headRow
-    signal rowSelected(string oidHex)
+    /// A row was clicked. **The row number travels with the commit**: the page has to place the selection, and
+    /// looking a row up is a walk over every loaded one (`RepoPage.activateRow`).
+    signal rowSelected(string oidHex, int atRow)
     signal rowMenuRequested(string oidHex)
     signal chipMenuRequested(string oidHex, string record)
     signal rowSwitchRequested(string oidHex, string record)

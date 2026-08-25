@@ -835,6 +835,12 @@ Item {
         rowHost.closeRefList()
         graphPane.startRenaming(oidHex, kind, id,
                                 kind === "remote" ? GitFacts.branchOfRef(id, repoTab.remoteNames) : id)
+        // **A box always opens where it can be seen** (デザイン規約 §左メニューの所作「開く行は必ず見える所へ送る」): the wait this
+        // gesture opens is long enough to scroll away in, and a name changing itself off screen is a name nobody
+        // agreed to. A row the walk no longer has is simply not sent anywhere.
+        const row = graphModel.rowOf(oidHex)
+        if (row >= 0)
+            graphPane.showRowSoon(row)
     }
     /// Whether what is in the graph's name box can be accepted, and the one line that says why not. The rules are
     /// git's own, asked of core, and the models that answer "is that name taken" are here — the pane only draws it.
@@ -880,7 +886,6 @@ Item {
         onRecordActivated: record => page.activateRecord(record)
         // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
         onRecordChosen: oidHex => page.activateRow(oidHex)
-        onRecordRenameAsked: (oidHex, record) => page.startRename(oidHex, record)
         onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
 
@@ -1673,7 +1678,11 @@ Item {
 
     // What a row click means: the synthetic WIP row (all-zero id) opens the working-tree view, anything else selects
     // the commit.
-    function activateRow(oidHex) {
+    /// `atRow` is where the row is, for the callers that already know (a click knows: it came from that row). **The
+    /// lookup is a walk over every loaded row** (`GraphModel::row_of`), so a path that has the number and asks for it
+    /// again puts a walk of the whole history on a click (CLAUDE.md §性能予算「コミット数に比例する同期処理を UI 操作の経路に置かない」).
+    /// -1 asks for the lookup, which is what a landing named only by its commit has to do.
+    function activateRow(oidHex, atRow) {
         // Any new selection settles where the last rewrite left off, and answers any landing this page still owed.
         page.rewordRow = -1
         page.pendingHeadSelect = false
@@ -1683,15 +1692,23 @@ Item {
         // progress.
         graphPane.stopNaming()
         page.stopRowAsk()
-        const row = graphModel.rowOf(oidHex)
+        const row = atRow !== undefined && atRow >= 0 ? atRow : graphModel.rowOf(oidHex)
         if (row >= 0) {
             graphPane.setCurrentRow(row)
             page.selectedRow = row
         }
         if (GitFacts.wipOid(oidHex)) {
-            page.showWip()
+            if (!page.wipShown)
+                page.showWip()
             return
         }
+        // The commit already open. **Everything below is of this commit and has been asked once**: the details, the
+        // history question and the signature are answers to a hash, and a hash cannot have changed under the same row
+        // — asking again spends a `git show`, a `merge-base` and a gpg run per click for an answer already on screen
+        // (the find bar says the same of landing twice on one row). The second click of the rename gesture is exactly
+        // this click, so the wait it opens would be spent on work nobody is waiting for (デザイン規約 §グラフ行のダブルクリック).
+        if (!page.wipShown && page.selectedOid === oidHex)
+            return
         page.wipShown = false
         page.selectedOid = oidHex
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
@@ -2036,7 +2053,7 @@ Item {
                         blank: page.blank
                         chipListAnchor: rowHost.refListAnchor
                         rowCardOid: rowHost.rowCardOid
-                        onRowActivated: oidHex => page.activateRow(oidHex)
+                        onRowActivated: (oidHex, atRow) => page.activateRow(oidHex, atRow)
                         // The bar moves between matches, not between commits — landing on the same row twice changes
                         // nothing and costs no git.
                         onFindLanded: oidHex => {

@@ -125,8 +125,6 @@ Item {
     signal rowClicked()
     /// Double-click: go where this row leads.
     signal activateRequested()
-    /// A second click, once the double-click window has passed: put this row's name in a box.
-    signal renameRequested()
     /// The box: typed into, accepted, walked away from.
     signal editTyped(string text)
     signal editAccepted(string text)
@@ -209,20 +207,16 @@ Item {
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")
-    // The two clicks, and the wait between them that tells them apart — the same one the graph's rows and the names a
-    // chip unstacks answer (`ReclickGesture`).
-    ReclickGesture {
-        id: reclick
-        key: navRow.rowKey
-        activeKey: navRow.activeKey
-        nameable: navRow.nameable
-        onRenameAsked: navRow.renameRequested()
-    }
+    /// The gesture the rows of this section share, or null for a list whose rows cannot be typed into (the working
+    /// tree's files). Held by the sidebar, since it has to outlive this delegate (`SidebarRowGestures`).
+    property var reclick: null
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
-    /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
-    readonly property bool renameArmed: reclick.armed
-    readonly property bool clickGuarded: reclick.guarded
+    /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性). Both are the sidebar's answer:
+    /// the gesture lives with it, because this delegate is recycled the moment its row scrolls off
+    /// (`SidebarRowGestures`).
+    readonly property bool renameArmed: navRow.reclick ? navRow.reclick.armedFor(navRow.rowKey) : false
+    readonly property bool clickGuarded: navRow.reclick ? navRow.reclick.guarded : false
     /// Whether the box on this row has the keyboard. The output side: a box drawn where nothing can be typed reads as
     /// a box, and the folded list's section is a popup, which takes the keyboard only when something in it asks.
     readonly property bool editFocused: editField.activeFocus
@@ -235,13 +229,29 @@ Item {
     readonly property string editBoxAt: editField.cameOut
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
-    function leftClick(modifiers) {
+    function leftClick(modifiers, held) {
         // The second click of a double-click is not a click of its own: the first one already did what a click does,
         // and the gesture is the double.
-        if (!reclick.click())
+        //
+        // What a second click on this row would name is read now rather than when the wait runs out: by then this
+        // delegate may be showing another row's name (`ReclickGesture`).
+        if (navRow.reclick
+                && !navRow.reclick.click(navRow.rowKey,
+                                         navRow.nameable ? navRow.renameNames() : null,
+                                         held))
             return
         navRow.rowClicked()
         navRow.ordinaryClick(modifiers)
+    }
+    /// What the box a second click opens is named after: the row's kind, what git knows it by, the commit it is on,
+    /// and the name it shows (a stash is typed by its message, not by its selector).
+    function renameNames() {
+        return {
+            "kind": navRow.kindHint,
+            "id": navRow.full !== "" ? navRow.full : navRow.name,
+            "oid": navRow.oid_hex,
+            "name": navRow.name
+        }
     }
     function ordinaryClick(modifiers) {
         if (navRow.folder) {
@@ -274,6 +284,13 @@ Item {
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        /// When the button went down, so the gesture can take the time it was held off the wait it has left — Qt
+        /// measures a double-click press to press, and `clicked` arrives at the release.
+        property real pressAt: 0
+        onPressed: mouse => {
+            if (mouse.button === Qt.LeftButton)
+                itemMouse.pressAt = Date.now()
+        }
         onClicked: mouse => {
             if (mouse.button === Qt.RightButton) {
                 // Only rows with operations behind them open a menu.
@@ -289,12 +306,13 @@ Item {
                     navRow.remoteMenuRequested(navRow.fullName)
                 return
             }
-            navRow.leftClick(mouse.modifiers)
+            navRow.leftClick(mouse.modifiers, Date.now() - itemMouse.pressAt)
         }
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton || navRow.folder)
                 return
-            reclick.drop()
+            if (navRow.reclick)
+                navRow.reclick.drop()
             navRow.activateRequested()
         }
     }

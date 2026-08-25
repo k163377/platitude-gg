@@ -47,6 +47,19 @@ impl GitFacts {
         crate::encode::label_name_of(&record).to_string()
     }
 
+    /// What a chip record answers to across the two places it is drawn:
+    /// its kind letter and its name, without the flag digits between
+    /// them (`encode::label_key`). **The flags are how the chip is
+    /// drawn, not which ref it is** — a background pass that learns the
+    /// branch now has a remote rewrites the record and would lose a
+    /// gesture keyed on the whole of it, and the row and the card its
+    /// chip unfolds into have to agree on what "the same target" means
+    /// (デザイン規約 §グラフ行のダブルクリック).
+    #[qslot]
+    fn record_key(&self, record: String) -> String {
+        crate::encode::label_key(&record)
+    }
+
     /// How many records a packed list holds (`encode::RECORD_SEP`
     /// between them); `""` holds none.
     #[qslot]

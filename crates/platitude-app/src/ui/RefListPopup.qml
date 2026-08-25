@@ -31,10 +31,9 @@ AppCard {
     /// switches the working tree instead (2026-08-26 ユーザー報告「予想外に switch される」). These rows answer a click the
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
     signal picked(string record)
-    /// One was clicked once: the row it is on becomes the one being read.
+    /// One was clicked once: the row it is on becomes the one being read. **The second click has no signal of its
+    /// own** — the wait it opens belongs to the graph, and so does the box it turns into (`gesture`).
     signal chose(string record)
-    /// One was clicked a second time, late enough that the double-click has been ruled out: its name is being changed.
-    signal renameAsked(string record)
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
     signal menuAsked(string record)
@@ -58,11 +57,15 @@ AppCard {
     /// A chip that wrapped keeps the same margin above and below and takes the extra height for itself.
     readonly property real chipInset:
         Math.round((Theme.rowHeight - (Theme.fontChipLine + 2 * Theme.borderWidth)) / 2)
-    /// Which of these rows the last click landed on — what makes a second click a second (`ReclickGesture`). Held by
-    /// the card rather than by its rows, and **dropped by the owner when the card goes** (`RowHoverHost.onClosed`, with
-    /// the rest of what a closed card leaves behind): it opens and closes with the pointer, so a memory that outlived
-    /// it would turn the next visit's first click into a second (the same trap the folded rail's peek has, app-ui.md).
-    property string activeRecord: ""
+    /// The two clicks these rows answer with one gesture, and the commit they are all on.
+    ///
+    /// **The gesture is the graph's, not this card's** (`GraphList.rowGesture`, handed over by the owner). This card
+    /// opens on the chip's own seat once the pointer has rested, so a reader clicking that spot twice clicks the row
+    /// the first time and this card the second: a memory of its own would make that second click a first one, and the
+    /// gesture would read as "sometimes it does nothing" (2026-08-26 ユーザー報告). It is one target either way — the
+    /// card's first row *is* the chip (規約 §グラフ行のダブルクリック) — so it is one memory.
+    property var gesture: null
+    property string rowOid: ""
     /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
     ///
     /// **The card is never narrower than what it stands on.** Its own rows carry one record each and so draw no `+N`,
@@ -85,7 +88,8 @@ AppCard {
         const row = rowsRepeater.itemAt(i)
         if (!row)
             return false
-        row.leftClick()
+        // Nothing was held down: a run with no pointer has no press to time (`ReclickGesture.click`).
+        row.leftClick(0)
         return true
     }
     function doubleClickRow(i) {
@@ -97,11 +101,10 @@ AppCard {
     }
     function rowArmed(i) {
         const row = rowsRepeater.itemAt(i)
-        return row ? row.renameArmed : false
+        return row && refList.gesture ? refList.gesture.armedFor(GitFacts.recordKey(row.modelData)) : false
     }
     function rowGuarded(i) {
-        const row = rowsRepeater.itemAt(i)
-        return row ? row.clickGuarded : false
+        return refList.gesture ? refList.gesture.guarded : false
     }
 
     /// Lays the rows out now, for an owner that is about to show this in the same turn it handed over the records. A
@@ -204,37 +207,29 @@ AppCard {
                 // ref to change. **Not `leadsNowhere`** — the branch the reader is standing on and the tag that is a
                 // mark rather than a place both keep their names (the same split the sidebar's rows make).
                 readonly property bool nameable: GitFacts.recordKind(refRow.modelData) !== ""
-                /// Whether this row is holding the wait the name box opens after, and whether a click landing now
-                /// would still be counted as the other half of a double-click (app-ui.md §UI 自動化の因果性).
-                readonly property bool renameArmed: reclick.armed
-                readonly property bool clickGuarded: reclick.guarded
-                ReclickGesture {
-                    id: reclick
-                    key: refRow.modelData
-                    activeKey: refList.activeRecord
-                    nameable: refRow.nameable
-                    // The card is not taken down here: what the box needs is the seat this card is standing on, and
-                    // the owner is what knows both (`RepoPage.startRename`). Closing first would take the row this
-                    // card is of down with it — the owner reads it back to say which commit the name is on.
-                    onRenameAsked: refList.renameAsked(refRow.modelData)
-                }
                 /// A left click and a double-click on this row, as the row answers them. Named so that a run with no
                 /// pointer to press with puts its clicks in at the row itself rather than at a copy of what the row
                 /// would have decided (PG_AUTO_ACT=graph-reclick-list / ref-list-pick).
                 ///
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
-                function leftClick() {
-                    if (!reclick.click())
+                function leftClick(held) {
+                    // The key and the payload are the graph row's own (`GraphList.noteClick`): the row under this
+                    // card and this card's first row are one target, and they have to answer to one string.
+                    if (refList.gesture
+                            && !refList.gesture.click(
+                                refRow.nameable ? GitFacts.recordKey(refRow.modelData) : "",
+                                refRow.nameable ? { "oid": refList.rowOid, "record": refRow.modelData } : null,
+                                held))
                         return
-                    refList.activeRecord = refRow.modelData
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)
                 }
                 function doubleClick() {
                     // The second click came inside the window after all: the gesture was the double-click, and the box
                     // it was about to open is not what was meant.
-                    reclick.drop()
+                    if (refList.gesture)
+                        refList.gesture.drop()
                     if (refRow.leadsNowhere)
                         return
                     refList.close()
@@ -244,7 +239,11 @@ AppCard {
                     id: rowHover
                 }
                 TapHandler {
-                    onSingleTapped: refRow.leftClick()
+                    id: rowTap
+                    /// When the button went down, for the gesture to take off the wait it has left (see the component).
+                    property real pressAt: 0
+                    onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
+                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
                     onDoubleTapped: refRow.doubleClick()
                 }
                 TapHandler {

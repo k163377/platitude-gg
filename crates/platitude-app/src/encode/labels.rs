@@ -105,7 +105,7 @@ pub fn label_kind_word(record: &str) -> &'static str {
 /// it. The flag digits between the two say how the chip is drawn, not
 /// which ref it is — and a tag may share a name with a branch, so the
 /// letter stays.
-fn label_key(record: &str) -> String {
+pub fn label_key(record: &str) -> String {
     let mut key = String::with_capacity(1 + record.len().saturating_sub(FLAGS + 1));
     key.push_str(record.get(..1).unwrap_or(""));
     key.push_str(label_name_of(record));

@@ -15,7 +15,7 @@ Rectangle {
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
-    signal rowActivated(string oidHex)
+    signal rowActivated(string oidHex, int atRow)
     signal rowMenuOpenRequested(string oidHex)
     /// Right-click on the chip itself: the menu is the named ref's rather than the row's — and the page still falls
     /// back to the row's where the chip names nothing to act on. `record` is the chip as drawn (kind + flags + name).
@@ -35,7 +35,13 @@ Rectangle {
     signal chipExpandRequested(string oidHex, var records, var anchor)
     /// A row was clicked a second time, late enough for the double-click to have been ruled out: the name on its chip
     /// is being changed (デザイン規約 §グラフ行のダブルクリック). `record` is the chip's first one, whatever kind it names.
+    ///
+    /// **Raised for the card the chip unfolds into as well** — it shares the rows' own gesture below, because a hand
+    /// clicking one spot twice clicks the row and then the card, and those are one target.
     signal rowRenameRequested(string oidHex, string record)
+    /// The gesture the graph's rows answer two clicks with, for the card that stands on them (`RowHoverHost`). One
+    /// memory of "which target was clicked last" for the whole pane.
+    readonly property alias rowGesture: graphList.rowGesture
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
     /// needs for its position and its fields — it must not hold on to it.
     signal rowHoverRequested(var row, bool inside)
@@ -201,7 +207,8 @@ Rectangle {
         view: graphList
         graphModel: graphArea.graphModel
         asking: askBar.label !== ""
-        onActivated: oidHex => graphArea.rowActivated(oidHex)
+        // The walk names the commit it landed on, not the row — the page looks that one up.
+        onActivated: oidHex => graphArea.rowActivated(oidHex, -1)
     }
     function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
@@ -310,7 +317,7 @@ Rectangle {
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
         onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
-        onRowSelected: oidHex => graphArea.rowActivated(oidHex)
+        onRowSelected: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
         onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
         onChipExpandRequested: (oidHex, records, anchor) =>
@@ -389,7 +396,7 @@ Rectangle {
         onActivated: row => {
             graphList.takeKeyboard()
             graphArea.jumpToRow(row)
-            graphArea.rowActivated(graphArea.graphModel.oidAt(row))
+            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row)
         }
     }
     /// The stand-in itself — automation-only exposure, the same one `view` is (app-ui.md). A headless run reads what it

@@ -17,7 +17,22 @@ QtObject {
     /// A menu raised from one of the folded list's rows is standing over it. The page's to set — the menus are its.
     property bool menuOpen: false
 
-    property string activeKey: ""
+    /// The two clicks a row answers with one gesture — one for the sidebar, not one per row (`ReclickGesture`): a
+    /// delegate is recycled the moment its row scrolls off, and both the memory and the wait have to outlive it.
+    /// What the wait was aimed at is read at the click (`p`), because by the time it runs out the row may be showing
+    /// another name.
+    property ReclickGesture reclick: ReclickGesture {
+        onRenameAsked: (key, p) => gestures.startEdit(p.kind, key, "rename", p.id, p.oid,
+                                                      gestures.typedName(p.kind, p.id, p.name))
+    }
+    property alias activeKey: gestures.reclick.activeKey
+    /// The name this row is typed and renamed by. A stash is named by its message and known to git by its selector;
+    /// everything else answers to the name it shows. A remote branch is typed without the remote it is on —
+    /// `origin/` is where the branch lives, not part of its name.
+    function typedName(kind, id, name) {
+        return kind === "stash" ? name
+             : kind === "remote" ? gestures.remoteBranchHalf(id) : id
+    }
     property string editKey: ""
     property string editKind: ""
     property string editMode: ""
@@ -100,12 +115,16 @@ QtObject {
         else if (text.trim() !== was)
             gestures.host.renameSubmitted(kind, id, text.trim())
     }
-    /// A click landed somewhere: the row it landed on becomes the one a second click would name, and any box open
-    /// elsewhere is walked away from (nothing is asked — what it costs is the typing).
+    /// A click landed somewhere: any box open elsewhere is walked away from (nothing is asked — what it costs is the
+    /// typing). Which row it landed on is the gesture's own to remember — it is what tells its next click apart.
     function noteClick(key) {
         if (gestures.editKey !== "" && gestures.editKey !== key)
             gestures.stopEdit()
-        gestures.activeKey = key
+    }
+    /// The rows this gesture was made on have gone (the folded rail's peek closed): the memory and the wait go with
+    /// them, or the next visit's first click comes up as a second one (app-ui.md).
+    function forgetClicks() {
+        gestures.reclick.forget()
     }
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {

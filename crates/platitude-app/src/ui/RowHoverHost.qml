@@ -68,12 +68,14 @@ Item {
     /// on that row of the graph.
     property string refListOid: ""
 
-    /// A stacked row was double-clicked, clicked once, asked for its name,
-    /// or right-clicked. The list's rows answer the same gestures the row
-    /// under them does, with no row of the graph to fall back to.
+    /// A stacked row was double-clicked, clicked once, or right-clicked.
+    /// The list's rows answer the same gestures the row under them does,
+    /// with no row of the graph to fall back to. **The second click,
+    /// spaced, has no signal here**: the wait it opens is the graph's own
+    /// (`GraphList.rowGesture`), because the card and the row it stands
+    /// on are one target.
     signal recordActivated(string record)
     signal recordChosen(string oidHex)
-    signal recordRenameAsked(string oidHex, string record)
     signal recordMenuAsked(string record)
 
     anchors.fill: parent
@@ -181,9 +183,12 @@ Item {
     RefListPopup {
         id: refList
         currentBranch: host.currentBranch
+        // The rows of this card and the rows of the graph are the same targets, so they answer to the same memory of
+        // which one was clicked last (see the card's `gesture`).
+        gesture: host.graphPane.rowGesture
+        rowOid: host.refListOid
         onPicked: record => host.recordActivated(record)
         onChose: host.recordChosen(host.refListOid)
-        onRenameAsked: record => host.recordRenameAsked(host.refListOid, record)
         onMenuAsked: record => host.recordMenuAsked(record)
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
@@ -200,10 +205,9 @@ Item {
             host.refListWanted = false
             host.refListAnchor = null
             host.refListOid = ""
-            // The card opens and closes with the pointer, so which of its rows was clicked cannot outlive it: kept, the
-            // next visit's first click would come up as a second one and put a name box on a row nobody asked about
-            // (app-ui.md — the folded rail's peek dropped its own for the same reason).
-            refList.activeRecord = ""
+            // **Which row was clicked last is not forgotten here.** The card is a window onto rows that stay on
+            // screen, wearing the mark a second click is aimed at — unlike the folded rail's peek, which takes its
+            // rows away with it and has to forget them (app-ui.md). The memory is the graph's, and so is the row.
         }
     }
     // A ref menu standing on one of the list's rows keeps the list up

@@ -104,7 +104,7 @@ AppCard {
         // (2026-08-18 ユーザー報告). `gestures` is asked for because
         // closing a tab takes the page's pieces down before this popup.
         if (peek.kind !== "" && peek.gestures)
-            peek.gestures.activeKey = ""
+            peek.gestures.forgetClicks()
         peek.kind = ""
         peek.wanted = false
         // The list it was in has gone, so the pointer is not in it

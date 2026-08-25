@@ -90,7 +90,8 @@ AppListView {
         const row = navList.itemAtIndex(index)
         if (!row)
             return false
-        row.leftClick(Qt.NoModifier)
+        // Nothing was held down: a run with no pointer has no press to time (`ReclickGesture.click`).
+        row.leftClick(Qt.NoModifier, 0)
         return true
     }
     function rowArmed(index) {
@@ -186,6 +187,9 @@ AppListView {
         headBehind: navList.headBehind
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
+        // The gesture itself, not a copy of what it holds: the wait a second click opens has to outlive this row, and
+        // a list whose rows cannot be typed into has none (`ReclickGesture`).
+        reclick: navList.gestures ? navList.gestures.reclick : null
         editKey: navList.gestures ? navList.gestures.editKey : ""
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
@@ -204,19 +208,6 @@ AppListView {
         onActivateRequested: {
             if (navList.gestures)
                 navList.gestures.activateRow(navList.kindHint, row.name, row.full, row.oid_hex)
-        }
-        onRenameRequested: {
-            if (!navList.gestures)
-                return
-            // A stash is named by its message and known to git by its selector; everything else answers to the name it
-            // shows. A remote branch is typed without the remote it is on — `origin/` is where the branch lives, not
-            // part of its name.
-            const id = row.full !== "" ? row.full : row.name
-            navList.gestures.startEdit(
-                navList.kindHint, row.rowKey, "rename", id, row.oid_hex,
-                navList.kindHint === "stash" ? row.name
-                : navList.kindHint === "remote"
-                  ? navList.gestures.remoteBranchHalf(id) : id)
         }
         onEditTyped: text => {
             if (navList.gestures)

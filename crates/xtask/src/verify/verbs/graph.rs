@@ -106,6 +106,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
+    // The same gesture with the history scrolled away under the wait
+    // it opened. The row that was clicked is pooled by that scroll, so
+    // a wait carried by the row would go down with it — and the box
+    // that does open has to be sent back into sight, since a name
+    // changing itself off screen is a name nobody agreed to. Neither
+    // half is anything a picture answers: a run whose box never opened
+    // frames the same history as one whose box opened two hundred rows
+    // above the fold.
+    // The two clicks put in at one spot but two surfaces: the row, and
+    // then the card its chip opens into on the rest between them. That
+    // is what a reader's hand does without knowing it, and with a
+    // memory per surface the second click comes up as a first one — the
+    // gesture does nothing, and nothing on screen says why (2026-08-26
+    // ユーザー報告「入力モードに切り替わらないケースも有った」).
+    Verb {
+        name: "graph-reclick-across",
+        when: &[],
+        plain: "armed=true box=true list=false",
+    },
+    Verb {
+        name: "graph-reclick-scrolled",
+        when: &[],
+        plain: "armed=true box=true mode=rename kind=branch typed=main branch=main shown=true",
+    },
     // The graph column pulled past its floor: the clamp has to land
     // on the floor exactly, and the floor is the message tick
     // brought up against lane 0's co-author badge without touching

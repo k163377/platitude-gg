@@ -9,47 +9,73 @@ import QtQuick.Controls.Fusion
 // names a graph chip unstacks. A surface that worked the wait out for itself would be a second answer to "how long is
 // a double-click", and the whole of the gesture is that answer.
 //
-// **What was clicked last is not held here.** A delegate is recycled the moment its row scrolls off, so the memory
-// belongs to whatever outlives it (the sidebar's `SidebarRowGestures`, the graph's list, the chip's card) — this reads
-// it back through `activeKey` and never writes it.
+// **One of these per surface, never one per row.** What was clicked last, the wait a second click opened, and what
+// that click was aimed at all outlive the row they were made on: the graph pools its delegates on every pass, and a
+// wait that travelled with the row would either go down with it (nothing happens, and nothing says why) or come back
+// on a recycled row and name whatever commit that row is now showing. Only one target can be waiting at a time, which
+// is exactly what one of these holds.
 QtObject {
     id: gesture
 
-    /// What this target answers to. Compared against `activeKey`, so the two have to be written in the same shape.
-    property string key: ""
-    /// The key the last click landed on, held by whoever outlives the delegates.
+    /// The target the last click landed on. Written here and nowhere else — a surface that wrote it itself would set
+    /// it before the next click could read what it was.
     property string activeKey: ""
-    /// Whether this target has a name that can be changed at all. A folder is not one, and neither is a row with
-    /// nothing on it to name.
-    property bool nameable: false
+    /// The target of the wait now running, and what that click was aimed at — the caller's own value, handed back
+    /// untouched when the wait runs out (a chip record for the graph, the row's own fields for the sidebar).
+    /// **Read at the click, not when the wait ends**: by then the row may be showing something else.
+    property string armedKey: ""
+    property var armedNames: null
 
     /// The wait ran out with no second half to the double-click: this target is being named.
-    signal renameAsked()
+    signal renameAsked(string key, var names)
 
-    /// Whether this target is holding the wait the name box opens after, and whether a click landing now would still
-    /// be counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
-    /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
-    readonly property bool armed: renameTimer.running
+    /// Whether a click landing now would still be counted as the other half of a double-click, and whether a given
+    /// target is holding the wait the name box opens after. What a headless run reads to put its second click in as a
+    /// second (app-ui.md §UI 自動化の因果性).
     readonly property bool guarded: doubleGuard.running
+    function armedFor(key) {
+        return renameTimer.running && gesture.armedKey === key
+    }
 
     /// A left click landed. Answers whether it is a click of its own — the second one of a double-click is not, the
     /// gesture there being the double — so the caller does what a click does only when this says so.
     ///
+    /// `names` is what a second click on this target would name, or nothing where there is no name to change (a
+    /// folder, a marker, a row with no ref on it). `held` is how long the button was down, in milliseconds.
+    ///
     /// The arming is decided here, before the caller has answered the click: what makes a second click a second is
     /// that the target was already the one clicked, and the caller's own answer is what makes it that.
-    function click() {
+    function click(key, names, held) {
         if (doubleGuard.running)
             return false
-        const wasActive = gesture.key !== "" && gesture.key === gesture.activeKey
+        const window = Application.styleHints.mouseDoubleClickInterval
+        const wasActive = key !== "" && key === gesture.activeKey
+        gesture.activeKey = key
+        doubleGuard.interval = window
         doubleGuard.restart()
-        if (wasActive && gesture.nameable)
-            renameTimer.restart()
+        renameTimer.stop()
+        if (wasActive && names) {
+            gesture.armedKey = key
+            gesture.armedNames = names
+            // **Qt measures the double-click press to press, and this is the release.** What is left to wait for is
+            // the rest of that window, not another whole one — the time the button was down has already gone by, and
+            // a press that comes after the window is no longer a double-click whatever this does. A button held
+            // longer than the window leaves nothing to wait for at all.
+            renameTimer.interval = Math.max(1, window - (held === undefined ? 0 : held))
+            renameTimer.start()
+        }
         return true
     }
     /// The second click came inside the window after all: the gesture was the double-click, and the box it was about
     /// to open is not what was meant.
     function drop() {
         renameTimer.stop()
+    }
+    /// The surface these rows are on has gone (a peek closed, a card came down). The memory goes with it: kept, the
+    /// next visit's first click would come up as a second one (app-ui.md).
+    function forget() {
+        renameTimer.stop()
+        gesture.activeKey = ""
     }
 
     // Long enough that the second click of a double-click falls inside it; the system's own setting, since it is the
@@ -61,6 +87,6 @@ QtObject {
     // same wait Explorer makes (デザイン規約 §左メニューの所作).
     property Timer renameTimer: Timer {
         interval: Application.styleHints.mouseDoubleClickInterval
-        onTriggered: gesture.renameAsked()
+        onTriggered: gesture.renameAsked(gesture.armedKey, gesture.armedNames)
     }
 }
