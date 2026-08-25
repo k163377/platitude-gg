@@ -25,9 +25,21 @@ MenuItem {
     /// word (デザイン 規約 §git 用語のコード表記). Never translated: it is the command, not a phrase about it. It sits ahead of
     /// `text`, which carries whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
+    /// The mark a row wears instead of a chip, and its colour: the `NavIcon` kind of the thing the rows behind this one
+    /// act on (デザイン規約 §メニュー の入れ子). Only the rows that open a submenu carry one — a row that runs a command says
+    /// which by its chip, and a row that opens a card of them has no command to name.
+    ///
+    /// **A row with a mark is the sidebar's section band, in a menu**: the mark where the rows start their words, its
+    /// own word a hair behind it, spelled the way a section spells its name. The word is out of the chip column
+    /// entirely — this row names the card below it rather than taking a turn in the table.
+    property string markKind: ""
+    property color markTint: Theme.textSecondary
+    readonly property bool heads: menuItem.markKind !== ""
+
     /// The width this row asks the menu's shared chip column to hold: its chip's own glyphs, whether or not words
     /// follow them. A chip that ends its row asks too — the column has to clear the widest command, or it would end
-    /// past where the other rows' words begin (デザイン規約 §git 用語のコード表記). Only a row with no chip asks for nothing.
+    /// past where the other rows' words begin (デザイン規約 §git 用語のコード表記). Only a row with no chip asks for nothing —
+    /// and a row that names a card asks for nothing either, standing outside the column.
     readonly property real codeColSeat: menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
     /// Whether the row's words bid their whole width from the menu. Off for a row whose text is data rather than
@@ -85,14 +97,25 @@ MenuItem {
         menuItem.menu !== null && menuItem.menu.holdIndent !== undefined ? menuItem.menu.holdIndent : 0
 
     padding: Theme.spaceSm
-    leftPadding: Theme.spaceSm + menuItem.holdIndent
+
+    /// Where a card's name starts its mark — **the mark's ink, not its box**. Shifted left by exactly the seat the
+    /// menu leaves for the hold ring and the `!`: where there is one the mark stands in it, where there is none it
+    /// starts on the same x the other rows start their words (2026-08-26 ユーザー指示).
+    readonly property real markX: Theme.spaceSm - menuItem.holdIndent
+
+    // A row that names a card carries its whole name in the padding, seated **to the mark's ink and not its box**:
+    // `spaceXs` of air behind the ink and no more, with the box's own air on either side not spent a second time. The
+    // same seat the copy mark takes beside a hash and the face takes beside a name (`HashPlate`, `CommitAuthorRow` —
+    // デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」, 2026-08-26 ユーザー指示).
+    leftPadding: menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
+                                : Theme.spaceSm + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
     // A row this menu is not offering takes no room. The list lays its rows out by height, so an invisible one that
     // keeps a height leaves an empty row behind — a hole where the reader looks for the row that is missing (measured
     // on the file menu, whose two destructive rows are one per bucket).
     implicitHeight: menuItem.offered ? Theme.rowHeight : 0
-    implicitWidth: (menuItem.code !== "" ? codeChip.implicitWidth + Theme.spaceSm : 0)
+    implicitWidth: (codeChip.visible ? codeChip.implicitWidth + Theme.spaceSm : 0)
                    + (menuItem.growsForText
                       ? itemLabel.implicitWidth : Math.min(itemLabel.implicitWidth, Metrics.labelColW))
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
@@ -147,6 +170,26 @@ MenuItem {
         height: Theme.iconSm
         visible: menuItem.asks && menuItem.holdMs <= 0
     }
+    // The kind's own mark, standing where the row begins. Out in the card's padding rather than in the row's layout
+    // for the same reason the ring is: the word behind it has to sit against the mark, not against the mark plus the
+    // layout's gap. What is put at `markX` is the **ink**, so the box hangs half its own air either side of that —
+    // air that is already the card's padding on the left and the word's gap on the right, and would otherwise be
+    // spent twice.
+    NavIcon {
+        id: rowMark
+        x: menuItem.markX - (rowMark.width - rowMark.inkWidth) / 2
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: Metrics.opticalDrop
+        width: Theme.iconMd
+        height: Theme.iconMd
+        visible: menuItem.heads
+        kind: menuItem.heads ? menuItem.markKind : "branch"
+        tint: menuItem.markTint
+        // A `Canvas` in the overlay layer can miss its first chance to paint — the card is built before it is shown,
+        // and a mark that never painted frames as one nobody wired.
+        Component.onCompleted: rowMark.requestPaint()
+        onVisibleChanged: if (visible) rowMark.requestPaint()
+    }
 
     contentItem: RowLayout {
         spacing: Theme.spaceSm
@@ -195,7 +238,10 @@ MenuItem {
             id: itemLabel
             Layout.fillWidth: true
             text: menuItem.text
-            font: menuItem.font
+            // Written out rather than taken as a group, so the one row that changes its weight can (a group assignment
+            // and a `font.weight` on the same Label is "already assigned").
+            font.family: Theme.uiFamily
+            font.pixelSize: menuItem.font.pixelSize
             // Pinned, not left to `AutoText`. Rows carry text nobody here chose — branch names, paths, commit subjects
             // — plus one deliberate placeholder in angle brackets, and AutoText decides by guessing whether a string
             // looks like markup. A branch called `<b>` should read as its name, not vanish.
@@ -206,7 +252,10 @@ MenuItem {
             // when there is one, is what sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
-            color: menuItem.wordColor
+            // The section band's own spelling, for a row that names a card: the same weight and colour the sidebar
+            // gives BRANCHES and TAGS, so the two read as one kind of thing wherever they are met (NavHeader).
+            font.weight: menuItem.heads ? Font.DemiBold : menuItem.font.weight
+            color: menuItem.heads ? Theme.textSecondary : menuItem.wordColor
         }
         Label {
             id: noteLabel
@@ -229,6 +278,18 @@ MenuItem {
         HoldFill {
             progress: menuItem.holdProgress
             tone: menuItem.holdTone
+        }
+        // Under the hand, a row that names a card is underlined in its mark's colour, right across the card. The wash
+        // says *where the hand is* — every row gets that — and this says **what is about to open**, which is the one
+        // thing this row does that no other row does (デザイン規約 §メニュー の入れ子). Across the whole row rather than
+        // under the word: it is the card below that is being named, not the two words themselves.
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Theme.borderWidth
+            visible: menuItem.heads && (menuItem.hovered || menuItem.highlighted)
+            color: menuItem.markTint
         }
     }
 

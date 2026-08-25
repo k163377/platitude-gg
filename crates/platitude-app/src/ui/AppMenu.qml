@@ -17,6 +17,12 @@ Menu {
     /// (RepoPage's reset submenu). Empty for a title that is all words.
     property string titleCode: ""
 
+    /// The mark that row wears instead, for a submenu holding everything one kind of ref answers for: the `NavIcon`
+    /// kind and the kind's own colour (デザイン規約 §メニュー の入れ子). A submenu takes one or the other — a title that
+    /// names a command says so with the chip, one that names a kind says so with the mark.
+    property string titleKind: ""
+    property color titleTint: Theme.textSecondary
+
     /// Whether the row that opens this menu is worth offering at all, for a menu that hangs off a row of another one
     /// (RepoPage's reset submenu). A submenu cannot say this through `visible` — on a Menu that means "the card is on
     /// screen" — and the row is built by the menu above, so the two meet here.
@@ -43,6 +49,18 @@ Menu {
             return false
         appMenu.popup()
         return true
+    }
+
+    /// Opens the card one of this menu's rows carries, and lights that row the way resting on it would. The
+    /// automation's only way in — hover cannot be injected (app-ui.md §UI 自動化の因果性) — and the same `offer()`
+    /// the card would get from a hand, so a card with nothing in it still does not come up. Says whether it opened.
+    function openSub(sub) {
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.subMenu === sub)
+                appMenu.currentIndex = i
+        }
+        return sub.offer()
     }
 
     // Every divider is handed the menu it was declared in: a MenuSeparator, unlike a MenuItem, has no `menu` of its
@@ -126,9 +144,12 @@ Menu {
     // the code chip, when the submenu asked for one on its title.
     delegate: AppMenuItem {
         code: subMenu && subMenu.titleCode !== undefined ? subMenu.titleCode : ""
+        markKind: subMenu && subMenu.titleKind !== undefined ? subMenu.titleKind : ""
+        markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
         // A submenu with nothing to offer takes its own title row with it, the way any other row that cannot be chosen
-        // goes.
-        offered: !subMenu || subMenu.applies !== false
+        // goes — whether it said so itself (`applies`) or simply came out empty. Without the second half a row would
+        // open a card with nothing in it, which `offer()` already refuses to do at the top level.
+        offered: !subMenu || (subMenu.applies !== false && subMenu.offeredRows > 0)
     }
 
     background: AppCardFace {}

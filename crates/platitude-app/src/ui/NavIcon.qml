@@ -49,6 +49,12 @@ Canvas {
         // The three lobes as drawn: the left one reaches 2.0 and the right one 14.72. **Not centred in its box** —
         // which is why this kind answers `inkRightGrid` as well.
         case "remote": return 12.72
+        // The two rings, each 1.8 either side of its own centre (5 and 11): 3.2 to 12.8. The stem and the curve
+        // between them both stand inside that.
+        case "branch": return 9.6
+        // A square of 7.2 turned a quarter of a right angle about the middle, so what it spans sideways is its own
+        // diagonal.
+        case "tag": return 10.18
         default: return 16
         }
     }
