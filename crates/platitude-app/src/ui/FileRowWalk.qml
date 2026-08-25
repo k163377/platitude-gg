@@ -63,7 +63,10 @@ Item {
     ///
     /// Answering `false` at either end is how it stops rather than wraps: the model has nowhere to send it and the key
     /// goes unaccepted.
-    function stepFile(way) {
+    ///
+    /// `held` says the key was already down when this step arrived (`KeyEvent.isAutoRepeat`); it changes nothing about
+    /// where the walk goes, only when the file is read (`noteStep`).
+    function stepFile(way, held) {
         if (!walk.visible || !walk.view.visible || walk.atPath === "")
             return false
         let side = walk.sideHolding()
@@ -91,7 +94,7 @@ Item {
         // §diff のファイル一覧).
         walk.sides[side].view.positionViewAtIndex(Number(record.substring(0, first)), ListView.Contain)
         walk.stepped(walk.atBucket, walk.atPath)
-        walk.noteStep()
+        walk.noteStep(held)
         return true
     }
     /// Automation: the name of the row the list is painting as lit, read off the rectangle rather than off the
@@ -133,12 +136,12 @@ Item {
             walk.sides[side].view.focus = false
     }
 
-    /// Books the reading of the file stepped onto. The first step of a run is read at once — a single press has to
-    /// answer inside the interaction budget — and the ones behind it only push the settle back. So a held arrow is read
-    /// exactly twice: where it set off, and where it stopped. The shape, and the timer, are the graph walk's
-    /// (`GraphRowWalk`).
-    function noteStep() {
-        if (stepTimer.running) {
+    /// Books the reading of the file stepped onto. A press is read at once — a single one has to answer inside the
+    /// interaction budget — and a step taken with the key still down only pushes the settle back. So a held arrow is
+    /// read exactly twice: where it set off, and where it stopped. The shape, the timer and why the repeat has to name
+    /// itself are the graph walk's (`GraphRowWalk.noteStep`).
+    function noteStep(held) {
+        if (held || stepTimer.running) {
             walk.stepPending = true
             stepTimer.restart()
             return
@@ -147,8 +150,8 @@ Item {
         walk.landStep()
         stepTimer.restart()
     }
-    /// Whether a step went by unread while the settle was running. Without it the settle behind a single press would
-    /// read the same file twice.
+    /// Whether a step went by unread: one taken with the key down, or one that came while the settle was running.
+    /// Without it the settle behind a single press would read the same file twice.
     property bool stepPending: false
     function landStep() {
         if (walk.atPath !== "")

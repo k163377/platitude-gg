@@ -66,8 +66,8 @@ ColumnLayout {
         // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered by the pane's walk,
         // which crosses from this bucket's list into the next one's (規約 §diff のファイル一覧).
         keyNavigationEnabled: false
-        Keys.onUpPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(-1)
-        Keys.onDownPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(1)
+        Keys.onUpPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(-1, event.isAutoRepeat)
+        Keys.onDownPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(1, event.isAutoRepeat)
         delegate: NavItemDelegate {
             listWidth: bucketList.width
             kindHint: "wt"

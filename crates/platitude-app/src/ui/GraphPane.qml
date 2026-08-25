@@ -170,8 +170,10 @@ Rectangle {
         asking: askBar.label !== ""
         onActivated: oidHex => graphArea.rowActivated(oidHex)
     }
-    function stepRow(delta) { return rowWalk.stepRow(delta) }
+    function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
+    /// Automation only, like `view` above: whether a step is still waiting to be read (`GraphRowWalk.settling`).
+    readonly property alias stepSettling: rowWalk.settling
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
     function shiftRows(rows) { rowWalk.shiftRows(rows) }
@@ -269,9 +271,10 @@ Rectangle {
         chipListAnchor: graphArea.chipListAnchor
         rowCardOid: graphArea.rowCardOid
         // The arrows are answered here rather than in the list, because it is this pane that walks the history with
-        // them and the page that hears where they landed (規約 §矢印で履歴を辿る).
-        Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1)
-        Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1)
+        // them and the page that hears where they landed (規約 §矢印で履歴を辿る). The key says whether it was already down,
+        // which is the only thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
+        Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
+        Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
         onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
         onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)

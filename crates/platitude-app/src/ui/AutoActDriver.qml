@@ -207,7 +207,8 @@ Item {
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
-                "graph-step-named", "graph-step-dirty", "graph-step-diff", "diff-step",
+                "graph-step-named", "graph-step-dirty", "graph-step-diff", "graph-step-hold",
+                "diff-step",
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
                 "changes-fold", "changes-unfold",
                 "graph-bar", "graph-bar-away", "middle-scroll",
@@ -2106,6 +2107,74 @@ Item {
             driver.complete()
         }
     }
+    // The arrow held down, which a run of steps taken inside one tick cannot be: the settle behind the opening press
+    // expires long before any OS sends its first repeat, so the run has to wait it out before the rest of the steps
+    // arrive with the key still down (`GraphRowWalk.noteStep`). `reads=` is the whole of the report — a walk asks for
+    // a commit twice, at the row it set off from and at the row it stopped on — and no picture holds it: a run that
+    // read every row it passed through frames exactly like one that read two.
+    SampleTimer {
+        id: graphHoldTimer
+        /// How many rows the run walks, the opening press included.
+        property int steps: 6
+        onTriggered: {
+            if (!driver.cardSettled)
+                return
+            graphHoldTimer.stop()
+            graphPane.view.takeKeyboard()
+            driver.holdReads = 0
+            graphHoldReport.from = graphPane.view.currentIndex
+            graphHoldReport.refused = 0
+            if (!graphPane.stepRow(1))
+                graphHoldReport.refused++
+            graphHoldRepeat.start()
+        }
+    }
+    // The repeats. Waited on the settle being gone rather than on a count of beats (app-ui.md §UI 自動化の因果性) —
+    // that is the edge a real keyboard's first repeat always arrives behind. They go in one tick once it has: what is
+    // being proven is that a repeat is not read, not how fast one arrives.
+    SampleTimer {
+        id: graphHoldRepeat
+        onTriggered: {
+            if (graphPane.stepSettling)
+                return
+            graphHoldRepeat.stop()
+            for (let n = 1; n < graphHoldTimer.steps; n++) {
+                if (!graphPane.stepRow(1, true))
+                    graphHoldReport.refused++
+            }
+            graphHoldReport.start()
+        }
+    }
+    // The hand off the key: the settle behind the last repeat has landed the selection and the card has caught up to
+    // it — the same pair `graph_step` waits out, and here also what says the run is over.
+    SampleTimer {
+        id: graphHoldReport
+        property int from: -1
+        property int refused: 0
+        onTriggered: {
+            const row = graphPane.view.currentIndex
+            if (row < 0 || graphPane.stepSettling
+                    || page.selectedOid !== graphModel.oidAt(row) || !driver.cardSettled)
+                return
+            graphHoldReport.stop()
+            AppBackend.report(
+                "graph_hold from=" + graphHoldReport.from
+                + " row=" + row
+                + " steps=" + graphHoldTimer.steps
+                + " reads=" + driver.holdReads
+                + " refused=" + graphHoldReport.refused
+                + " selected=" + (page.selectedOid === graphModel.oidAt(row))
+                + " card=" + (detailsModel.shaHex === page.selectedOid))
+            driver.complete()
+        }
+    }
+    /// How many commits the walk has asked for since the hold verb set off. Taken on the signal rather than sampled:
+    /// the asks this verb is about are the ones that come and go inside a beat (app-ui.md §UI 自動化の因果性).
+    property int holdReads: 0
+    Connections {
+        target: driver.graphPane
+        function onRowActivated(oidHex) { driver.holdReads++ }
+    }
     // The file list's arrows: the light and the diff move together, one file per press (規約 §diff のファイル一覧). Two things
     // have to be real for this to say anything, so both go through the door a hand goes through:
     //
@@ -3823,6 +3892,13 @@ Item {
                                  : act === "graph-step-edge" ? 10 : act === "graph-step-far" ? 1
                                  : act === "graph-step-diff" ? 1 : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
+        } else if (act === "graph-step-hold") {
+            // The same door with the key held down: every step behind the first says the key was already down. What it
+            // proves is `reads=` — the settle cannot tell a repeat from a press on its own (`GraphRowWalk.noteStep`),
+            // and this is the run where it would get it wrong.
+            page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
+            graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
                    || act === "wip-step") {
             // The file list's arrows: one file per press, the light and the diff moving together (規約 §diff のファイル一覧).

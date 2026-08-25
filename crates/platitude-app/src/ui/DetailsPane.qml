@@ -463,8 +463,8 @@ ColumnLayout {
         // the arrows are answered here instead, where they move the file
         // being read (規約 §diff のファイル一覧).
         keyNavigationEnabled: false
-        Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1)
-        Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1)
+        Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
+        Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow

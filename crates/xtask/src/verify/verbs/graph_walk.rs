@@ -66,6 +66,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "landing=center back=false refused=0 focused=true",
     },
+    // The same walk with the key held down, which is the one thing
+    // the picture cannot hold at all: a run that read every row it
+    // passed through frames exactly like one that read two. `reads=2`
+    // is the rule — the row the hand set off from, and the row it
+    // stopped on — and a third read is the first repeat being taken
+    // for a press of its own, which is what every OS's delay before
+    // that repeat invites (`GraphRowWalk.noteStep`).
+    Verb {
+        name: "graph-step-hold",
+        when: &[],
+        plain: "reads=2 refused=0 selected=true card=true",
+    },
     // The refusing half. `back=true` is the whole of it — nothing
     // moved — and it is worth nothing without `refused=`, since a walk
     // that was never attempted leaves the same row lit. Read it beside

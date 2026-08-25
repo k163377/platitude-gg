@@ -24,12 +24,15 @@ Item {
     /// automation hook both come through here — a headless run cannot inject a keystroke, so the step has to be
     /// callable as well as pressable (verify-ui).
     ///
+    /// `held` says the key was already down when this step arrived (`KeyEvent.isAutoRepeat`); it changes nothing about
+    /// where the selection goes, only when the row is read (`noteStep`).
+    ///
     /// Refused while something stands over a row: a question waiting to be answered, or a name box being typed into.
     /// The name box is the one that has to be named here rather than left to the focus: it lives inside a row, and a
     /// single-line box does not consume Up and Down — they come up through the delegate to the list.
     ///
     /// Refused as well while the pane is off screen: this item is inside it, so its own visibility is the pane's.
-    function stepRow(delta) {
+    function stepRow(delta, held) {
         if (!walk.visible || walk.asking
                 || walk.view.namingOid !== "" || walk.view.count === 0)
             return false
@@ -42,7 +45,7 @@ Item {
         const near = walk.view.rowOnScreen(from)
         walk.view.currentIndex = row
         walk.revealStep(row, near)
-        walk.noteStep()
+        walk.noteStep(held)
         return true
     }
     /// Brings a stepped-onto row into view. `near` moves as little as will do, which is the row itself; anything else
@@ -84,12 +87,18 @@ Item {
         return "adrift"
     }
 
-    /// Books the reading of the row stepped onto. The first step of a run is read at once — a single press has to
-    /// answer inside the interaction budget — and the ones behind it only push the settle back. So a held arrow is read
-    /// exactly twice: where it set off, and where it stopped. A selection carries three git processes with it (`git
-    /// show`, the history question, the signature question), which is not a thing to run at the keyboard's repeat rate.
-    function noteStep() {
-        if (stepTimer.running) {
+    /// Books the reading of the row stepped onto. A press is read at once — a single one has to answer inside the
+    /// interaction budget — and a step taken with the key still down only pushes the settle back. So a held arrow is
+    /// read exactly twice: where it set off, and where it stopped. A selection carries three git processes with it
+    /// (`git show`, the history question, the signature question), which is not a thing to run at the keyboard's
+    /// repeat rate.
+    ///
+    /// The repeat has to say so itself (`held`), because the settle cannot tell: every OS waits longer before the
+    /// first repeat than the settle runs (250ms at the fastest Windows setting, 225ms at the shortest macOS one,
+    /// 500ms by GNOME's default), so the settle behind the opening press has always expired by the time a run gets
+    /// going — and without the flag the second row of every held arrow is read at once, like a press of its own.
+    function noteStep(held) {
+        if (held || stepTimer.running) {
             walk.stepPending = true
             stepTimer.restart()
             return
@@ -98,8 +107,8 @@ Item {
         walk.landStep()
         stepTimer.restart()
     }
-    /// Whether a step went by unread while the settle was running. Without it the settle behind a single press would
-    /// read the same row twice.
+    /// Whether a step went by unread: one taken with the key down, or one that came while the settle was running.
+    /// Without it the settle behind a single press would read the same row twice.
     property bool stepPending: false
     function landStep() {
         // The row under the highlight as it stands, not the one the key asked for: a background rebuild during the
@@ -108,6 +117,10 @@ Item {
         if (oidHex !== "")
             walk.activated(oidHex)
     }
+    /// Automation: whether a settle stands between the last step and its reading (verify-ui). A headless run cannot
+    /// hold a key down, so the hold verb plays the opening press, waits here for the settle behind it to expire the
+    /// way an OS's delay before the first repeat does, and only then sends the repeats.
+    readonly property alias settling: stepTimer.running
     Timer {
         id: stepTimer
         interval: Metrics.keyStepSettleMs
