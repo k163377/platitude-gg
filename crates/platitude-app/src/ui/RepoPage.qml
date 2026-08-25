@@ -815,6 +815,47 @@ Item {
         id: clipboard
     }
 
+    // ---- the second click, spaced, on a graph row -------------------
+    /// The name on the row's chip goes into a box where the chip is (デザイン規約 §グラフ行のダブルクリック / §左メニューの所作 — the
+    /// gesture and the box are the sidebar's, and this is the other place a ref name is on screen). **One way in for
+    /// both halves of the row**: the click that lands on the row itself, and the one that lands on the card the chip
+    /// unfolds into, which is standing on that same chip.
+    ///
+    /// What is typed is the ref's own name — a remote branch without the remote it is on, the shape `renameRow` and
+    /// the sidebar's box both take it in.
+    function startRename(oidHex, record) {
+        if (repoTab.state !== "open" || record === "")
+            return
+        const kind = GitFacts.recordKind(record)
+        // The detached-HEAD marker names no ref, so there is nothing here to be renamed.
+        if (kind === "")
+            return
+        const id = GitFacts.recordName(record)
+        // The card the chip unfolds into is standing on the column the box opens in.
+        rowHost.closeRefList()
+        graphPane.startRenaming(oidHex, kind, id,
+                                kind === "remote" ? GitFacts.branchOfRef(id, repoTab.remoteNames) : id)
+    }
+    /// Whether what is in the graph's name box can be accepted, and the one line that says why not. The rules are
+    /// git's own, asked of core, and the models that answer "is that name taken" are here — the pane only draws it.
+    /// **Only a rename is refused**: a box that opened empty to make a name has not been answered yet, and a frame
+    /// that comes up already turned down is turning down the reader's arrival (§可否・警告の出し場所, `SidebarRowGestures`).
+    readonly property string graphRenameRemote: graphPane.namingKind !== "remote" ? ""
+        : GitFacts.remoteOfRef(graphPane.namingId, repoTab.remoteNames)
+    readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
+        && graphPane.namingText.trim() !== ""
+        && remotesModel.oidOfName(page.graphRenameRemote + "/" + graphPane.namingText.trim()) !== ""
+    readonly property string namingRefusedWhy: {
+        if (graphPane.namingOid === "" || graphPane.namingMode !== "rename")
+            return ""
+        const typed = graphPane.namingText
+        if (typed.trim() === "")
+            return qsTr("A name is needed")
+        if (page.graphNameTaken)
+            return qsTr("%1 already has a branch called that").arg(page.graphRenameRemote)
+        return GitFacts.validRefName(typed) ? "" : qsTr("git will not take this as a name")
+    }
+
     // ---- double-click on a graph row -------------------------------
     // A row with no chip is offered one instead of doing nothing.
     function rowDoubleClicked(oidHex, record) {
@@ -837,6 +878,9 @@ Item {
         menuStanding: refRowMenu.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
+        // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
+        onRecordChosen: oidHex => page.activateRow(oidHex)
+        onRecordRenameAsked: (oidHex, record) => page.startRename(oidHex, record)
         onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
 
@@ -2002,7 +2046,12 @@ Item {
                         onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
                         onChipMenuOpenRequested: (oidHex, record) => page.openRecordMenu(record, oidHex)
                         onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
-                        onChipExpandRequested: (records, anchor) => rowHost.openRefList(records, anchor)
+                        onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
+                        onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
+                        namingRefused: page.namingRefusedWhy !== ""
+                        namingRefusedWhy: page.namingRefusedWhy
+                        onChipExpandRequested: (oidHex, records, anchor) =>
+                            rowHost.openRefList(oidHex, records, anchor)
                         onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
                         onRowHoverRequested: (row, inside) => {
                             rowHost.rowCardWanted = inside

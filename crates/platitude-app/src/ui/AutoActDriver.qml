@@ -161,7 +161,7 @@ Item {
                 "delete-remote-go", "delete-force", "delete-branch-refused",
                 "set-upstream-go",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
-                "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
+                "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
@@ -217,7 +217,7 @@ Item {
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
-                "ref-list-card", "row-part",
+                "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
@@ -2464,7 +2464,7 @@ Item {
                 return
             fetchedRefListTimer.stop()
             graphPane.view.chipExpandRequested(
-                stacked.chipItem.records, stacked.chipItem)
+                stacked.oid_hex, stacked.chipItem.records, stacked.chipItem)
             renderedBarrier.begin()
         }
     }
@@ -3103,6 +3103,121 @@ Item {
             + " agrees=" + (got === rowPartReport.want
                             && refList.opened !== rowCard.opened))
             driver.complete()
+        }
+    }
+    // PG_AUTO_ACT=graph-reclick / graph-reclick-list / ref-list-pick: the two clicks of the rename gesture put in at a
+    // graph row, and at a row of the card its chip unfolds into — and, on the same card, the double-click that is the
+    // way to move. Every step waits for its own answer: the row has to exist before it can be clicked, the card has to
+    // be up before one of its rows can be, and the double-click window the first click opened has to have passed
+    // before a second one counts as a second (app-ui.md §UI 自動化の因果性).
+    property bool reclickGraphArmed: false
+    property int reclickGraphStep: 0
+    SampleTimer {
+        id: reclickGraphTimer
+        property int row: 0
+        /// The name to put in the box once it is open, for the run that carries the gesture through to git
+        /// (`graph-rename`); empty for the one that stops at the box.
+        property string name: ""
+        onTriggered: {
+            const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
+            // A row the view has not laid out yet is not a row that was clicked: latching here would wait for an
+            // answer to a question nobody put.
+            if (!item)
+                return
+            if (driver.reclickGraphStep === 0) {
+                item.leftClick()
+                driver.reclickGraphStep = 1
+            } else if (driver.reclickGraphStep === 1) {
+                // Inside the window the first click opened, a second click is the other half of a double-click and not
+                // a second click at all.
+                if (item.clickGuarded)
+                    return
+                item.leftClick()
+                // Read where it is set, not where it lapses: the wait is short and the box is what it turns into.
+                driver.reclickGraphArmed = item.renameArmed
+                driver.reclickGraphStep = 2
+            } else if (driver.reclickGraphStep === 2) {
+                if (driver.reclickGraphArmed && graphPane.namingOid === "")
+                    return
+                reclickGraphTimer.stop()
+                AppBackend.report(
+                "graph_reclick row=" + reclickGraphTimer.row
+                + " armed=" + driver.reclickGraphArmed
+                + " box=" + (graphPane.namingOid !== "")
+                + " mode=" + graphPane.namingMode
+                + " kind=" + graphPane.namingKind
+                + " typed=" + graphPane.namingText
+                // The tree has not moved: the gesture the reader made was not the double-click, and this is the half
+                // of the report a picture of an open box cannot make (2026-08-26 ユーザー報告).
+                + " branch=" + workTree.branch)
+                if (reclickGraphTimer.name === "") {
+                    driver.complete()
+                    return
+                }
+                // Through to git, by the path the field's own Enter takes. The write barrier finishes this one.
+                graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
+                                               reclickGraphTimer.name, graphPane.namingMode)
+            }
+        }
+    }
+    property bool reclickListArmed: false
+    property int reclickListStep: 0
+    SampleTimer {
+        id: reclickListTimer
+        property int row: 0
+        property int card: 0
+        /// Whether this run is the double-click that moves rather than the two clicks that name.
+        property bool picks: false
+        onTriggered: {
+            if (driver.reclickListStep === 0) {
+                const item = graphPane.view.itemAtIndex(reclickListTimer.row)
+                if (!item)
+                    return
+                // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
+                graphPane.view.chipExpandRequested(item.oid_hex, item.chipItem.records, item.chipItem)
+                driver.reclickListStep = 1
+            } else if (driver.reclickListStep === 1) {
+                // The card lays its rows out as it is shown; until it is up there is no row to click.
+                if (!refList.opened)
+                    return
+                if (reclickListTimer.picks) {
+                    if (!refList.doubleClickRow(reclickListTimer.card))
+                        return
+                    reclickListTimer.stop()
+                    AppBackend.report("ref_list_pick row=" + reclickListTimer.row
+                                      + " card=" + reclickListTimer.card
+                                      + " list=" + refList.opened)
+                    // The write barrier is what finishes this one: the move is the whole of it.
+                    return
+                }
+                if (!refList.clickRow(reclickListTimer.card))
+                    return
+                driver.reclickListStep = 2
+            } else if (driver.reclickListStep === 2) {
+                if (refList.rowGuarded(reclickListTimer.card))
+                    return
+                if (!refList.clickRow(reclickListTimer.card))
+                    return
+                driver.reclickListArmed = refList.rowArmed(reclickListTimer.card)
+                driver.reclickListStep = 3
+            } else if (driver.reclickListStep === 3) {
+                if (driver.reclickListArmed && graphPane.namingOid === "")
+                    return
+                reclickListTimer.stop()
+                AppBackend.report(
+                "graph_reclick_list row=" + reclickListTimer.row
+                + " card=" + reclickListTimer.card
+                + " armed=" + driver.reclickListArmed
+                + " box=" + (graphPane.namingOid !== "")
+                // The card came down for the box: it was standing on the column the box opens in, and one left up
+                // would be covering what the run is about.
+                + " list=" + refList.opened
+                + " mode=" + graphPane.namingMode
+                + " kind=" + graphPane.namingKind
+                + " typed=" + graphPane.namingText
+                + " branch=" + workTree.branch)
+                driver.complete()
+            }
         }
     }
     // The row under a standing menu, asked for its card the way its own delay timer would ask (hover cannot be
@@ -3886,6 +4001,22 @@ Item {
                 probed.pointerRowX = rowPartReport.x
                 rowPartTimer.start()
             }
+        } else if (act === "graph-reclick" || act === "graph-rename") {
+            // The gesture at the row itself. The argument is `<行>[:<付ける名前>]` — the first row is the default, and a
+            // run that wants a chip on it says which (`--preset tags`). `graph-rename` carries the same gesture
+            // through to git; without a name there is nothing to carry.
+            const renameCut = arg.indexOf(":")
+            reclickGraphTimer.row = Number(renameCut < 0 ? (arg === "" ? "0" : arg) : arg.substring(0, renameCut))
+            reclickGraphTimer.name = renameCut < 0 ? "" : arg.substring(renameCut + 1)
+            reclickGraphTimer.start()
+        } else if (act === "graph-reclick-list" || act === "ref-list-pick") {
+            // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The argument
+            // is `<行>[:<カードの行>]` — the card's first row is the one sitting on the chip's own seat.
+            const listParts = arg.split(":")
+            reclickListTimer.row = listParts[0] === "" ? 0 : Number(listParts[0])
+            reclickListTimer.card = listParts.length > 1 ? Number(listParts[1]) : 0
+            reclickListTimer.picks = act === "ref-list-pick"
+            reclickListTimer.start()
         } else if (act === "ref-list" || act === "ref-list-card") {
             // Hover cannot be injected, so this enters where the hover timer would. `-card` walks row → card → chip →
             // asked again from under the list: both card closes have to hold, and either failing leaves `open=true`.
@@ -3894,7 +4025,7 @@ Item {
                 if (act === "ref-list-card")
                     graphPane.view.rowHoverRequested(stacked, true)
                 graphPane.view.chipExpandRequested(
-                    stacked.chipItem.records, stacked.chipItem)
+                    stacked.oid_hex, stacked.chipItem.records, stacked.chipItem)
                 if (act === "ref-list-card") {
                     graphPane.view.rowHoverRequested(stacked, true)
                     rowCardTimer.row = Number(arg)

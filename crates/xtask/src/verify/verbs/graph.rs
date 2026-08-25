@@ -88,6 +88,24 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "agrees=true",
     },
+    // The two clicks of the rename gesture, at the row and at the card
+    // its chip unfolds into. `armed=` is the half no picture answers —
+    // a box that never opened and a wait that was never taken frame
+    // the same — and the two are read as one run because the box is
+    // what the wait turns into. The card's own run carries `list=` as
+    // well: it was standing on the column the box opens in, and one
+    // left up would be covering the whole subject of the shot
+    // (2026-08-26 ユーザー報告「予想外に switch される」).
+    Verb {
+        name: "graph-reclick",
+        when: &[],
+        plain: "armed=true box=true",
+    },
+    Verb {
+        name: "graph-reclick-list",
+        when: &[],
+        plain: "armed=true box=true list=false",
+    },
     // The graph column pulled past its floor: the clamp has to land
     // on the floor exactly, and the floor is the message tick
     // brought up against lane 0's co-author badge without touching

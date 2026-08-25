@@ -30,8 +30,12 @@ Rectangle {
     /// The commit whose card the page has out (empty when none). Rows read it back through the view the same way: the
     /// row the card came out of stays lit under it, the card having taken the pointer off it.
     property string rowCardOid: ""
-    /// A stacked chip was hovered: unstack it under the chip.
-    signal chipExpandRequested(var records, var anchor)
+    /// A stacked chip was hovered: unstack it under the chip. The row comes with it — every name in the card is on
+    /// that one commit, so a click in the card is a click on that row.
+    signal chipExpandRequested(string oidHex, var records, var anchor)
+    /// A row was clicked a second time, late enough for the double-click to have been ruled out: the name on its chip
+    /// is being changed (デザイン規約 §グラフ行のダブルクリック). `record` is the chip's first one, whatever kind it names.
+    signal rowRenameRequested(string oidHex, string record)
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
     /// needs for its position and its fields — it must not hold on to it.
     signal rowHoverRequested(var row, bool inside)
@@ -41,6 +45,9 @@ Rectangle {
     /// The same box, answered with a tag instead. Two signals rather than one with a word in it: what the page does
     /// with the answer is a different command, and the pane has already read which box it was.
     signal createTagRequested(string oidHex, string name)
+    /// And the same box again, answered with a new name for something that already has one. The kind travels with it:
+    /// what git is asked is a different command for each (`RepoPage.renameRow`).
+    signal renameSubmitted(string kind, string id, string name)
     signal openRepositoryRequested()
 
     // ---- naming a branch or a tag on a row -------------------------
@@ -48,21 +55,45 @@ Rectangle {
     /// nowhere to move to — and `startTagging` for a tag on the same commit; the mode goes in before the row that
     /// carries it, so the box comes up already holding its own question.
     function startNaming(oidHex) {
-        graphArea.openNameBox(oidHex, "branch")
+        graphArea.openNameBox(oidHex, "branch", "", "", "")
     }
     function startTagging(oidHex) {
-        graphArea.openNameBox(oidHex, "tag")
+        graphArea.openNameBox(oidHex, "tag", "", "", "")
     }
-    function openNameBox(oidHex, mode) {
+    /// The third of them: the box opens holding a name that is already there, to be typed over. `kind` is what git is
+    /// being asked to rename ("branch" / "remote" / "tag"), `id` the ref it answers to, and `text` the name as it is
+    /// typed — a remote branch is typed without the remote it is on, so the two are not the same string.
+    function startRenaming(oidHex, kind, id, text) {
+        graphArea.openNameBox(oidHex, "rename", kind, id, text)
+    }
+    function openNameBox(oidHex, mode, kind, id, text) {
         graphList.askOid = ""
-        graphList.namingText = ""
+        // Before the row that carries it: the box comes up already holding its own question, and what it opened
+        // holding is what a press elsewhere weighs against (`dropEmptyBoxes`).
+        graphList.namingText = text
         graphList.namingMode = mode
+        graphList.namingKind = kind
+        graphArea.namingId = id
+        graphArea.namingOpenedWith = text
         graphList.namingOid = oidHex
     }
     function stopNaming() {
         graphList.namingOid = ""
         graphList.namingText = ""
+        graphArea.namingOpenedWith = ""
     }
+    /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the two boxes that
+    /// make a name rather than change one.
+    property string namingId: ""
+    property string namingOpenedWith: ""
+    /// What the box is standing on, for the page to decide whether what is typed can be accepted at all — the models
+    /// that answer that are the page's (`RepoPage.namingRefusedWhy`).
+    readonly property alias namingMode: graphList.namingMode
+    readonly property alias namingKind: graphList.namingKind
+    readonly property alias namingOid: graphList.namingOid
+    readonly property alias namingText: graphList.namingText
+    property alias namingRefused: graphList.namingRefused
+    property alias namingRefusedWhy: graphList.namingRefusedWhy
 
     // ---- looking for a commit --------------------------------------
     /// The card itself — automation-only exposure, the same one `view` and `headPin` are (app-ui.md). A headless run
@@ -83,7 +114,10 @@ Rectangle {
     /// where it landed); one with something typed in it stays, because the typing is what there would be to lose.
     function dropEmptyBoxes(scenePos) {
         findBar.dropIfEmpty(scenePos)
-        if (graphList.namingOid !== "" && graphList.namingText === "")
+        // "Empty" is "nothing has been put in it": for a box that makes a name that is no text at all, and for one
+        // changing a name it is the name it opened holding — a rename that has not been typed in has nothing to lose,
+        // and one that has is the same half-written name the two others keep.
+        if (graphList.namingOid !== "" && graphList.namingText === graphArea.namingOpenedWith)
             graphArea.stopNaming()
     }
     /// Whether all of `row` is on screen — asked of the list, which is where the viewport arithmetic lives.
@@ -101,8 +135,7 @@ Rectangle {
     /// the head of the question and on the pill both, where the act has one word of its own (デザイン規約 §git 用語のコード表記);
     /// `accept` carries the wording everywhere else.
     function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "") {
-        graphList.namingOid = ""
-        graphList.namingText = ""
+        graphArea.stopNaming()
         // Before the label, which is what opens the bar: the form has to exist by the time opening decides where the
         // focus goes.
         askBar.form = form
@@ -279,18 +312,28 @@ Rectangle {
         onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
         onRowSelected: oidHex => graphArea.rowActivated(oidHex)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
-        onChipExpandRequested: (records, anchor) => graphArea.chipExpandRequested(records, anchor)
+        onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
+        onChipExpandRequested: (oidHex, records, anchor) =>
+            graphArea.chipExpandRequested(oidHex, records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()
         onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
         onNamingSubmitted: (oidHex, name, mode) => {
+            const kind = graphList.namingKind
+            const id = graphArea.namingId
+            const was = graphArea.namingOpenedWith
             graphArea.stopNaming()
             // An empty box is the way out of the offer, not a branch or a tag called nothing.
             if (name === "")
                 return
-            if (mode === "tag")
+            if (mode === "rename") {
+                // The name it opened holding is not a rename: the box was left as it was found.
+                if (name !== was)
+                    graphArea.renameSubmitted(kind, id, name)
+            } else if (mode === "tag") {
                 graphArea.createTagRequested(oidHex, name)
-            else
+            } else {
                 graphArea.createBranchRequested(oidHex, name)
+            }
         }
         onNamingCancelled: graphArea.stopNaming()
         onWheelTaken: graphArea.autoScrolling = false

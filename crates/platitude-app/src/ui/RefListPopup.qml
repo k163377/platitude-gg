@@ -24,8 +24,17 @@ AppCard {
     property var records: []
     /// The branch the working tree is on; that one leads nowhere.
     property string currentBranch: ""
-    /// One was chosen; the whole record, so its kind travels with it.
+    /// One was double-clicked: that is where the reader is going. The whole record, so its kind travels with it.
+    ///
+    /// **A single click does not move.** The card lands on the chip's own seat and opens on a rest, so a hand that
+    /// stopped over a branch has one under it a beat later — with a click to go, the click a reader aims at the chip
+    /// switches the working tree instead (2026-08-26 ユーザー報告「予想外に switch される」). These rows answer a click the
+    /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
     signal picked(string record)
+    /// One was clicked once: the row it is on becomes the one being read.
+    signal chose(string record)
+    /// One was clicked a second time, late enough that the double-click has been ruled out: its name is being changed.
+    signal renameAsked(string record)
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
     signal menuAsked(string record)
@@ -49,6 +58,11 @@ AppCard {
     /// A chip that wrapped keeps the same margin above and below and takes the extra height for itself.
     readonly property real chipInset:
         Math.round((Theme.rowHeight - (Theme.fontChipLine + 2 * Theme.borderWidth)) / 2)
+    /// Which of these rows the last click landed on — what makes a second click a second (`ReclickGesture`). Held by
+    /// the card rather than by its rows, and **dropped by the owner when the card goes** (`RowHoverHost.onClosed`, with
+    /// the rest of what a closed card leaves behind): it opens and closes with the pointer, so a memory that outlived
+    /// it would turn the next visit's first click into a second (the same trap the folded rail's peek has, app-ui.md).
+    property string activeRecord: ""
     /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
     ///
     /// **The card is never narrower than what it stands on.** Its own rows carry one record each and so draw no `+N`,
@@ -63,6 +77,32 @@ AppCard {
     // — this is the list the pair was measured on.
     tracksPointer: true
     contentPointed: contentHover.hovered
+
+    /// The gesture put in at one of the rows, and what that row is holding — an automation-only exposure, the same one
+    /// the sidebar's sections give (`NavList.clickRow` / `rowArmed` / `rowGuarded`): a run has no pointer to press
+    /// with, and a copy of what the row would have decided would prove nothing about the row.
+    function clickRow(i) {
+        const row = rowsRepeater.itemAt(i)
+        if (!row)
+            return false
+        row.leftClick()
+        return true
+    }
+    function doubleClickRow(i) {
+        const row = rowsRepeater.itemAt(i)
+        if (!row)
+            return false
+        row.doubleClick()
+        return true
+    }
+    function rowArmed(i) {
+        const row = rowsRepeater.itemAt(i)
+        return row ? row.renameArmed : false
+    }
+    function rowGuarded(i) {
+        const row = rowsRepeater.itemAt(i)
+        return row ? row.clickGuarded : false
+    }
 
     /// Lays the rows out now, for an owner that is about to show this in the same turn it handed over the records. A
     /// `Column` positions in the polish that runs after the turn, so without this the list is shown at the size it had
@@ -93,6 +133,7 @@ AppCard {
             return widest
         }
         Repeater {
+            id: rowsRepeater
             model: refList.records
             delegate: Rectangle {
                 id: refRow
@@ -159,15 +200,52 @@ AppCard {
                     width: Math.min(implicitWidth, refList.chipRoom / 3)
                     elide: Text.ElideRight
                 }
+                // A name that can be changed: every kind of ref has one, and only the detached-HEAD marker names no
+                // ref to change. **Not `leadsNowhere`** — the branch the reader is standing on and the tag that is a
+                // mark rather than a place both keep their names (the same split the sidebar's rows make).
+                readonly property bool nameable: GitFacts.recordKind(refRow.modelData) !== ""
+                /// Whether this row is holding the wait the name box opens after, and whether a click landing now
+                /// would still be counted as the other half of a double-click (app-ui.md §UI 自動化の因果性).
+                readonly property bool renameArmed: reclick.armed
+                readonly property bool clickGuarded: reclick.guarded
+                ReclickGesture {
+                    id: reclick
+                    key: refRow.modelData
+                    activeKey: refList.activeRecord
+                    nameable: refRow.nameable
+                    // The card is not taken down here: what the box needs is the seat this card is standing on, and
+                    // the owner is what knows both (`RepoPage.startRename`). Closing first would take the row this
+                    // card is of down with it — the owner reads it back to say which commit the name is on.
+                    onRenameAsked: refList.renameAsked(refRow.modelData)
+                }
+                /// A left click and a double-click on this row, as the row answers them. Named so that a run with no
+                /// pointer to press with puts its clicks in at the row itself rather than at a copy of what the row
+                /// would have decided (PG_AUTO_ACT=graph-reclick-list / ref-list-pick).
+                ///
+                /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
+                /// still has is a name, and the gesture that changes it begins with a click of its own.
+                function leftClick() {
+                    if (!reclick.click())
+                        return
+                    refList.activeRecord = refRow.modelData
+                    if (refRow.nameable)
+                        refList.chose(refRow.modelData)
+                }
+                function doubleClick() {
+                    // The second click came inside the window after all: the gesture was the double-click, and the box
+                    // it was about to open is not what was meant.
+                    reclick.drop()
+                    if (refRow.leadsNowhere)
+                        return
+                    refList.close()
+                    refList.picked(refRow.modelData)
+                }
                 HoverHandler {
                     id: rowHover
                 }
                 TapHandler {
-                    enabled: !refRow.leadsNowhere
-                    onTapped: {
-                        refList.close()
-                        refList.picked(refRow.modelData)
-                    }
+                    onSingleTapped: refRow.leftClick()
+                    onDoubleTapped: refRow.doubleClick()
                 }
                 TapHandler {
                     acceptedButtons: Qt.RightButton

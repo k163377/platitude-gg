@@ -63,10 +63,17 @@ Item {
     readonly property alias listPopup: refList
     readonly property alias hoverCard: rowCard
 
-    /// A stacked row was chosen, or right-clicked. The list's rows answer
-    /// the same right-click the chip does, with no row of the graph to
-    /// fall back to.
+    /// The commit whose chip the open list belongs to. Every row in it
+    /// names a ref on that one commit, so a click in the card is a click
+    /// on that row of the graph.
+    property string refListOid: ""
+
+    /// A stacked row was double-clicked, clicked once, asked for its name,
+    /// or right-clicked. The list's rows answer the same gestures the row
+    /// under them does, with no row of the graph to fall back to.
     signal recordActivated(string record)
+    signal recordChosen(string oidHex)
+    signal recordRenameAsked(string oidHex, string record)
     signal recordMenuAsked(string record)
 
     anchors.fill: parent
@@ -119,8 +126,9 @@ Item {
     /// the same condition §hover のツールチップ turns down for the file
     /// rows). The names' heads hold still instead, which is what a name
     /// is told apart by.
-    function openRefList(records, anchor) {
+    function openRefList(oidHex, records, anchor) {
         const at = anchor.mapToItem(host, 0, 0)
+        host.refListOid = oidHex
         // The row's card opens under the pointer, which is on the chip
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
@@ -155,6 +163,14 @@ Item {
         host.refListWanted = false
         host.settleRefList()
     }
+    /// Down now, not in a beat's time — the same as the row's card, and
+    /// for the same reason: what takes this card's place is drawn on the
+    /// ground it is standing on (the name box opens in the chip column
+    /// this covers), and the two would overlap for as long as the wait.
+    function closeRefList() {
+        host.refListWanted = false
+        refList.close()
+    }
     function settleRefList() {
         refListKeep.settle()
     }
@@ -166,6 +182,8 @@ Item {
         id: refList
         currentBranch: host.currentBranch
         onPicked: record => host.recordActivated(record)
+        onChose: host.recordChosen(host.refListOid)
+        onRenameAsked: record => host.recordRenameAsked(host.refListOid, record)
         onMenuAsked: record => host.recordMenuAsked(record)
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
@@ -181,6 +199,11 @@ Item {
         onClosed: {
             host.refListWanted = false
             host.refListAnchor = null
+            host.refListOid = ""
+            // The card opens and closes with the pointer, so which of its rows was clicked cannot outlive it: kept, the
+            // next visit's first click would come up as a second one and put a name box on a row nobody asked about
+            // (app-ui.md — the folded rail's peek dropped its own for the same reason).
+            refList.activeRecord = ""
         }
     }
     // A ref menu standing on one of the list's rows keeps the list up

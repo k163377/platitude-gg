@@ -71,6 +71,13 @@ Item {
     // to. Empty means the row shows no branch, which is the offer to put one there.
     readonly property string primaryRecord:
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
+    // What the spaced second click names: the chip's own first record, whatever kind it is. **Not `primaryRecord`** —
+    // that one answers "where does this row lead", and a tag leads nowhere while still being a name that can be
+    // changed (the same split the sidebar's TAGS rows make: デザイン規約 §左メニューの所作). The HEAD marker names no ref at
+    // all, so it answers `""` and the row has nothing to rename.
+    readonly property string renameRecord:
+        rowItem.labelRecords.length > 0 && GitFacts.recordKind(rowItem.labelRecords[0]) !== ""
+            ? rowItem.labelRecords[0] : ""
     // The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: chipColumn.chipItem
     // What the name box on this row came out to (see the column — a headless run reads it off here).
@@ -132,6 +139,11 @@ Item {
             columnWidth: rowItem.labelsW
             naming: rowItem.naming
             namingMode: rowItem.ListView.view ? rowItem.ListView.view.namingMode : "branch"
+            namingKind: rowItem.ListView.view ? rowItem.ListView.view.namingKind : ""
+            // Only the row holding the box can be refused: the answer is about what is typed, and one row is typed in.
+            namingRefused: rowItem.naming && rowItem.ListView.view
+                           ? rowItem.ListView.view.namingRefused : false
+            namingRefusedWhy: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedWhy : ""
             onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(
                 rowItem.oid_hex, name, rowItem.ListView.view.namingMode)
             onNamingEdited: text => rowItem.ListView.view.namingText = text
@@ -292,7 +304,7 @@ Item {
         if (!view)
             return
         if (rowItem.pointedPart === "chip")
-            view.chipExpandRequested(chipColumn.chipItem.records, chipColumn.chipItem)
+            view.chipExpandRequested(rowItem.oid_hex, chipColumn.chipItem.records, chipColumn.chipItem)
         else if (rowItem.pointedPart === "row")
             view.rowHoverRequested(rowItem, true)
     }
@@ -300,6 +312,45 @@ Item {
         id: restDelay
         interval: Metrics.tipDelayMs
         onTriggered: rowItem.openPointed()
+    }
+
+    // The two clicks this row answers with one gesture: where it leads is the double-click, and the name is the second
+    // click that came too late to be one (デザイン規約 §グラフ行のダブルクリック). The same component the sidebar's rows and the
+    // names a chip unstacks use — one answer to "how long is a double-click" for all three.
+    //
+    // **Which row was clicked last is held on the list**, not here: this delegate is recycled the moment its row
+    // scrolls off, and the memory has to outlive it.
+    ReclickGesture {
+        id: reclick
+        key: rowItem.oid_hex
+        activeKey: rowItem.ListView.view ? rowItem.ListView.view.clickedOid : ""
+        nameable: rowItem.renameRecord !== ""
+        onRenameAsked: rowItem.ListView.view.rowRenameRequested(rowItem.oid_hex, rowItem.renameRecord)
+    }
+    /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
+    /// counted as the other half of a double-click — what a headless run reads to put its second click in as a second
+    /// (app-ui.md §UI 自動化の因果性, PG_AUTO_ACT=graph-reclick).
+    readonly property bool renameArmed: reclick.armed
+    readonly property bool clickGuarded: reclick.guarded
+    /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
+    /// the row itself rather than at a copy of what the row would have decided.
+    function leftClick() {
+        // The second click of a double-click is not a click of its own: the first one already did what a click does,
+        // and the gesture is the double.
+        if (!reclick.click())
+            return
+        rowItem.claimRow()
+        // Read before it is written (`ReclickGesture.click`): what makes a second click a second is that this row was
+        // already the one clicked.
+        rowItem.ListView.view.clickedOid = rowItem.oid_hex
+    }
+    /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
+    /// picked (規約 §矢印で履歴を辿る). Taken by the list rather than by this row: the delegate is recycled the moment the
+    /// row scrolls off, and either button is the same claim.
+    function claimRow() {
+        rowItem.ListView.view.takeKeyboard()
+        rowItem.ListView.view.currentIndex = rowItem.index
+        rowItem.ListView.view.rowSelected(rowItem.oid_hex)
     }
 
     MouseArea {
@@ -314,14 +365,13 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {
-            // A press here says where the keyboard is working, so the arrows walk the history from the row that was
-            // just picked (規約 §矢印で履歴を辿る). Taken by the list rather than by this row: the delegate is recycled the
-            // moment the row scrolls off, and either button is the same claim.
-            rowItem.ListView.view.takeKeyboard()
-            rowItem.ListView.view.currentIndex = rowItem.index
-            rowItem.ListView.view.rowSelected(rowItem.oid_hex)
+            if (mouse.button !== Qt.RightButton) {
+                rowItem.leftClick()
+                return
+            }
+            rowItem.claimRow()
             // The synthetic WIP row is not a commit, so nothing in the commit menu applies to it.
-            if (mouse.button === Qt.RightButton && !rowItem.isWip) {
+            if (!rowItem.isWip) {
                 // In the chip's half the menu is the named ref's — what the name on screen names — and in the other
                 // half the row's. **The same division the hover uses** (`partAt`): one boundary, so the button and the
                 // rest cannot answer a point differently. The stacked names under +N take the same right-click on the
@@ -335,7 +385,12 @@ Item {
         // Where the row leads: the chip it shows, or — with no branch on it — the offer to put one there. The page
         // decides which.
         onDoubleClicked: mouse => {
-            if (mouse.button !== Qt.LeftButton || !rowItem.movable)
+            if (mouse.button !== Qt.LeftButton)
+                return
+            // The second click came inside the window after all, so the gesture was the double-click and not the name.
+            // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
+            reclick.drop()
+            if (!rowItem.movable)
                 return
             rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
         }

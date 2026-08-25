@@ -63,9 +63,22 @@ AppListView {
     // delegate: the delegate is recycled the moment its row scrolls off.
     property string namingOid: ""
     property string namingText: ""
-    // Which of the two the box is asking for ("branch" / "tag"). The field is the same one either way — what is typed
-    // is a ref name for both — and the question it stands there holding is the whole of what tells them apart.
+    // Which of the three the box is asking for ("branch" / "tag" / "rename"). The field is the same one for all of
+    // them — what is typed is a ref name either way — and the question it stands there holding is the whole of what
+    // tells them apart.
     property string namingMode: "branch"
+    // What a rename box is naming, in the word the page's `renameRow` branches on ("branch" / "remote" / "tag"), so
+    // the frame can say which kind is being typed (規約 §ref の種別: 枠 = 種別). Empty for the two boxes that make a name
+    // rather than change one.
+    property string namingKind: ""
+    // Whether what is in the box can be accepted at all, and the one line that says why not. Decided by the page,
+    // which is where the models that answer it are (`RepoPage.namingRefusedWhy`) — the row only draws the answer.
+    property bool namingRefused: false
+    property string namingRefusedWhy: ""
+    // Which row the last left click landed on. Held here for the recycling reason again, and written only by clicks:
+    // what makes a second click a second is that the row was already the one clicked, and a selection the arrows moved
+    // is not that (`ReclickGesture`, デザイン規約 §左メニューの所作).
+    property string clickedOid: ""
     // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
     // words are on the bar; the row only marks itself.
     property string askOid: ""
@@ -80,7 +93,10 @@ AppListView {
     signal rowMenuRequested(string oidHex)
     signal chipMenuRequested(string oidHex, string record)
     signal rowSwitchRequested(string oidHex, string record)
-    signal chipExpandRequested(var records, var anchor)
+    /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
+    /// being changed. `record` is the chip's first one, whatever kind it names.
+    signal rowRenameRequested(string oidHex, string record)
+    signal chipExpandRequested(string oidHex, var records, var anchor)
     signal chipCollapseRequested()
     signal rowHoverRequested(var row, bool inside)
     property var chipListAnchor: null
