@@ -242,6 +242,36 @@ pub async fn rename(
     executor.run(cmd, cancel).await.map(drop)
 }
 
+/// Records which remote branch a local one is measured against
+/// (`branch.<name>.remote` / `.merge`).
+///
+/// **`upstream` has to be the full refname** (`refs/remotes/origin/main`).
+/// The shorthand git prints and takes elsewhere is a rev-parse spelling,
+/// and a local branch literally named `origin/main` makes it *ambiguous*
+/// — git refuses the whole command rather than choosing (実測). The full
+/// form names one ref and cannot be read two ways; what it writes into
+/// the config is identical either way.
+///
+/// Nothing about the working tree stands in its way: this is
+/// configuration about a branch, not a move onto it, so **a branch another
+/// working copy has checked out takes it** (実測) — unlike the delete,
+/// which git refuses there.
+pub async fn set_upstream(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    upstream: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "branch",
+        &format!("--set-upstream-to={upstream}"),
+        "--end-of-options",
+        name,
+    ]);
+    executor.run(cmd, cancel).await.map(drop)
+}
+
 /// The configured upstream of a local branch, as the full refname
 /// (`refs/remotes/origin/main`), or `None` where none is configured.
 ///

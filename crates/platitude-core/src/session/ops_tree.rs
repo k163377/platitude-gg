@@ -296,6 +296,24 @@ impl RepoSession {
         });
     }
 
+    /// Points a local branch at the remote branch it is measured against.
+    ///
+    /// `upstream` is the full remote-tracking refname the question was
+    /// answered with — the one spelling that cannot be read two ways
+    /// ([`branch::set_upstream`]). Through the queue like every other
+    /// write: the counts beside the branch, the delete's reference point
+    /// and where a push goes all come off this setting, so the reads
+    /// behind it are the ones that put the new answer on screen.
+    pub fn set_upstream(self: &Arc<Self>, branch: String, upstream: String) {
+        self.write(
+            "branch",
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::set_upstream(&exec, &repo.workdir, &branch, &upstream, &cancel).await
+            },
+        );
+    }
+
     pub fn rename_branch(self: &Arc<Self>, from: String, to: String, force: bool) {
         self.write(
             "branch",

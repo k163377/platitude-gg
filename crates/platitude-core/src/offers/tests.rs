@@ -39,13 +39,65 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             push_tag: false,
             delete_remote_tag: false,
             delete_tag_everywhere: false,
+            set_upstream: true,
             on_current_branch: false,
         }
     );
     assert_eq!(
         offers.words(),
-        "switch branch-here integrate delete delete-remote"
+        "switch branch-here integrate delete delete-remote set-upstream"
     );
+}
+
+#[test]
+fn only_a_local_branch_is_measured_against_anything() {
+    assert!(offers_on(RefKind::Branch, "feat").set_upstream);
+    assert!(
+        offers_on(RefKind::Branch, "main").set_upstream,
+        "the branch the tree is on has an upstream like any other"
+    );
+    for kind in [RefKind::Remote, RefKind::Tag, RefKind::Stash] {
+        assert!(
+            !offers_on(kind, "origin/feat").set_upstream,
+            "{kind:?} carries no upstream of its own"
+        );
+    }
+}
+
+#[test]
+fn there_is_nothing_to_be_measured_against_without_a_remote() {
+    let offers = ref_menu(
+        RefKind::Branch,
+        "feat",
+        "abc123",
+        true,
+        0,
+        "main",
+        false,
+        "",
+        0,
+        "",
+        "",
+        "",
+        "here",
+    );
+    assert!(!offers.set_upstream, "no remote is no question to ask");
+    let busy = ref_menu(
+        RefKind::Branch,
+        "feat",
+        "abc123",
+        true,
+        1,
+        "main",
+        false,
+        "",
+        0,
+        "",
+        "",
+        "origin",
+        "here",
+    );
+    assert!(!busy.set_upstream, "another git is still running");
 }
 
 #[test]

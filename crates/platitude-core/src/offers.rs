@@ -126,6 +126,14 @@ pub struct RefMenuOffers {
     pub delete_remote_tag: bool,
     /// Both at once, for the name that stands on both sides.
     pub delete_tag_everywhere: bool,
+    /// Which remote branch this local one is measured against. Only a
+    /// local branch has the setting at all — a remote-tracking ref is the
+    /// far side of somebody's, and it has none of its own — and the
+    /// answer is a question rather than a lookup, so the row needs a
+    /// remote to ask about and nothing else. **The branch the tree is on
+    /// takes it, and so does one another working copy holds** (実測): this
+    /// writes configuration about a branch rather than moving onto it.
+    pub set_upstream: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
     /// names first.
     pub on_current_branch: bool,
@@ -134,7 +142,7 @@ pub struct RefMenuOffers {
 impl RefMenuOffers {
     /// The offers as packed words (`switch asks branch-here integrate
     /// delete delete-remote push-tag delete-remote-tag
-    /// delete-tag-everywhere current`), the shape
+    /// delete-tag-everywhere set-upstream current`), the shape
     /// `GitFacts.refMenuOffers` answers with and the opening function
     /// decodes mechanically.
     pub fn words(&self) -> String {
@@ -165,6 +173,9 @@ impl RefMenuOffers {
         }
         if self.delete_tag_everywhere {
             words.push("delete-tag-everywhere");
+        }
+        if self.set_upstream {
+            words.push("set-upstream");
         }
         if self.on_current_branch {
             words.push("current");
@@ -238,6 +249,7 @@ pub fn ref_menu(
         push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty() && tag_here,
         delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote,
         delete_tag_everywhere: !busy && !default_remote.is_empty() && tag_on_remote && tag_here,
+        set_upstream: kind == RefKind::Branch && !busy && !default_remote.is_empty(),
         on_current_branch,
     }
 }

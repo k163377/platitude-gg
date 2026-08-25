@@ -132,14 +132,9 @@ pub async fn rename_remote_branch(
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
     delete_remote_branch(executor, workdir, remote, from, timeout, cancel).await?;
+    let moved = format!("refs/remotes/{remote}/{to}");
     for branch in tracking_branches(executor, workdir, remote, from, cancel).await? {
-        let cmd = GitCommand::new().cwd(workdir).args([
-            "branch",
-            &format!("--set-upstream-to={remote}/{to}"),
-            "--end-of-options",
-            &branch,
-        ]);
-        executor.run(cmd, cancel).await?;
+        crate::branch::set_upstream(executor, workdir, &branch, &moved, cancel).await?;
     }
     Ok(())
 }
