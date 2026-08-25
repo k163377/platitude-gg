@@ -34,6 +34,8 @@ impl Default for RepoTab {
             publish_published: 0,
             history_oid: String::new(),
             history_in: false,
+            history_wanted: String::new(),
+            signature_wanted: String::new(),
             head_reached_elsewhere: false,
             author_name: String::new(),
             author_email: String::new(),
