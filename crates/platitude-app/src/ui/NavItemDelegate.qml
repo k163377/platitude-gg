@@ -209,24 +209,20 @@ Item {
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")
-    // Long enough that the second click of a double-click falls inside it; the system's own setting, since it is the
-    // system that decides what counts as a double-click.
-    Timer {
-        id: doubleGuard
-        interval: Application.styleHints.mouseDoubleClickInterval
-    }
-    // A second click on a row already clicked means the name, but only once a double-click can be ruled out — the same
-    // wait Explorer makes (デザイン規約 §左メニューの所作).
-    Timer {
-        id: renameTimer
-        interval: Application.styleHints.mouseDoubleClickInterval
-        onTriggered: navRow.renameRequested()
+    // The two clicks, and the wait between them that tells them apart — the same one the graph's rows and the names a
+    // chip unstacks answer (`ReclickGesture`).
+    ReclickGesture {
+        id: reclick
+        key: navRow.rowKey
+        activeKey: navRow.activeKey
+        nameable: navRow.nameable
+        onRenameAsked: navRow.renameRequested()
     }
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
     /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性).
-    readonly property bool renameArmed: renameTimer.running
-    readonly property bool clickGuarded: doubleGuard.running
+    readonly property bool renameArmed: reclick.armed
+    readonly property bool clickGuarded: reclick.guarded
     /// Whether the box on this row has the keyboard. The output side: a box drawn where nothing can be typed reads as
     /// a box, and the folded list's section is a popup, which takes the keyboard only when something in it asks.
     readonly property bool editFocused: editField.activeFocus
@@ -240,16 +236,12 @@ Item {
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers) {
-        // The second click of a double-click: the first one already did what a click does, and the gesture is the
-        // double.
-        if (doubleGuard.running)
+        // The second click of a double-click is not a click of its own: the first one already did what a click does,
+        // and the gesture is the double.
+        if (!reclick.click())
             return
-        const wasActive = navRow.activeKey === navRow.rowKey
-        doubleGuard.restart()
         navRow.rowClicked()
         navRow.ordinaryClick(modifiers)
-        if (wasActive && navRow.nameable)
-            renameTimer.restart()
     }
     function ordinaryClick(modifiers) {
         if (navRow.folder) {
@@ -302,7 +294,7 @@ Item {
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton || navRow.folder)
                 return
-            renameTimer.stop()
+            reclick.drop()
             navRow.activateRequested()
         }
     }

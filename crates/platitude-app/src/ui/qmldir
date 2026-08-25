@@ -123,6 +123,7 @@ RefTagMenu 1.0 RefTagMenu.qml
 RemoteRowMenu 1.0 RemoteRowMenu.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
+ReclickGesture 1.0 ReclickGesture.qml
 RepoPage 1.0 RepoPage.qml
 RepoPageStack 1.0 RepoPageStack.qml
 RowHoverHost 1.0 RowHoverHost.qml
