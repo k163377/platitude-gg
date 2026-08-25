@@ -205,7 +205,7 @@
 - `ref-list` / `ref-list-card`(チップ列の展開と、行カードとの対読み)
 - `row-part`(引数は `<行番号>:<行に沿った x>:<chip|row>`。**グラフ行がどこで分かれるかを 1 点で訊く** — 行の `pointerRowX`(実ポインタが書く 1 つのプロパティ)へ x を書き、あとの判断は全部行に任せる。`ref-list` / `row-card` は `chipExpandRequested` / `rowHoverRequested` を直に呼ぶので**境界を 1px も通らない** = この動詞と対で読む。報告行 `row_part x= want= got= list= card= agrees=`、must_say は **`agrees=true`**(期待と一致 + もう片方が閉じている)。サンプラは**どちらかのカードが開いたら**答える(期待した方だけを待つと、境界がずれた run が watchdog まで無言になる)。境界は列幅なのでフォントに依らない — `--preset tags` の実測は `0:150:chip`(列の右端 2px 内 = 名前枠の外の余白)/ `0:160:row`(仕切りの外)/ `0:10:chip`(列の左端・チップの無い所)/ `2:10:row`(チップを持たない行))
 - `fetch-ref-list`(fetch を撃ってから行のチップを展開 — タグの雲)
-- `signature`(詳細ペインの署名 1 語。`--preset signed`)
+- `signature`(詳細ペインの名前の右肩に立つ印。`--preset signed`)
 - `signature-tip`(署名のツールチップ。**must_say `code=E tip=true` = `--preset errsig` 以外では FAIL**)
 - `stash-tip`(stash 行を選んだ時の summary 箱のツールチップ)
 - `path-tip`(ファイル行の hover が出すフルパスのツールチップ — 長さは問わない。`-tree` 付きはツリーのフォルダ連鎖行。`--preset longpaths` は行が省略される長さで撮るため)
