@@ -56,6 +56,14 @@ Rectangle {
     /// Whether the window is standing on its floor. Handed in, because the floor is the larger of this band's and the
     /// page's and only `Main` has both. The group gives up its words there whatever else is true (2026-08-11 ユーザー指示).
     property bool windowAtFloor: false
+    /// The width the window may not be laid out under **with the left list open**, whether or not it is open now
+    /// (`Main.floorWidth` measured on `RepoPage.openFloorWidth`). The three actions finish giving their words up
+    /// exactly there (2026-08-25 ユーザー指示「左サイドパネル展開状態の横幅底表示時点で縮退が完了すること」).
+    ///
+    /// The open floor rather than the floor of the moment: folding the list lowers the real floor, and a schedule read
+    /// off that would put the words back on screen as the rail took the list's place — a thing nobody asked to see
+    /// move (規約 §窓の床).
+    property real windowFloorWidth: 0
     /// Stands in for the pointer where headless cannot put one, so the card can be photographed (`badges-hover` /
     /// `identity-tip`). The real hover writes this same one property — hover is the input that cannot be injected, so
     /// the card has to be answering a single question or the headless run proves nothing about it.
@@ -174,6 +182,75 @@ Rectangle {
     /// binding that reads four text metrics and feeds three button widths is a loop as far as the engine is concerned.
     property string widestAction: ""
     property bool widestActionCode: false
+
+    // ---- how the three give way as the band runs short -----------------
+    // The band narrows in the order §ウィンドウの縁 sets out: the tab names and the state words give together, the strip
+    // scrolls, the group becomes a mark — and these three narrow with them and then give their words up altogether.
+    /// What one of them holds between the box the set shares and the band's own end-cell width. All three are the same
+    /// width by construction (one box, one seat), so one of them answers for the set.
+    readonly property real actionGive: fetchButton.naturalWidth - Theme.railWidth
+    /// The floor a wording is cut down to — two characters of the family this band says its wordings in
+    /// (`BandWidest.wordFloor`).
+    readonly property real actionWordFloor: widest.wordFloor
+    /// The narrowest cell that still holds a word, for the **set**: the widest of the three floors, since a cell that
+    /// only fits the shortest wording's floor cuts the longest one past its own (`ActionButton.foldWidth`). It moves
+    /// with what the buttons are saying — a branch that has diverged makes push's wording longer, and a longer
+    /// wording gives up sooner, which is the same rule the shared box is measured under.
+    readonly property real actionFold: Math.max(fetchButton.foldWidth,
+                                                pushButton.foldWidth,
+                                                stashButton.foldWidth)
+    /// The widest a button may be drawn at the width the window is standing at now.
+    ///
+    /// **The three give what they have over the last of the window's own travel**: their room between them is exactly
+    /// what a window narrowing towards its floor has left to take, so that is the stretch the giving is spread over.
+    /// One stretch above the floor every wording is whole; on the floor every one of them is a mark in an end cell;
+    /// between the two the cap comes down evenly and each wording elides into what is left (`ActionButtonLabel.cap`).
+    ///
+    /// Read off the window's width rather than off what the row has spare: the row's leftover is a question about how
+    /// many tabs are open and how long their names are, and the width at which this has to be finished is not
+    /// (2026-08-25 ユーザー指示). The row still takes more when the tabs need it — the cap is a ceiling, and the share-out
+    /// underneath it can come down to the end cell on its own.
+    readonly property real actionCap:
+        topBar.actionGive <= 0 ? fetchButton.naturalWidth
+        : Math.max(Theme.railWidth,
+                   Math.min(fetchButton.naturalWidth,
+                            fetchButton.naturalWidth
+                            - (topBar.windowFloorWidth + 3 * topBar.actionGive - topBar.width) / 3))
+    /// Where the words go. Said once for the set rather than left to each button's own arithmetic: three cells the row
+    /// rounded differently must not come out in two different shapes.
+    readonly property bool actionsFolded: topBar.actionCap < topBar.actionFold
+
+    /// Automation: the two ends of the cap's travel and what the band made of it at this width
+    /// (`PG_AUTO_ACT=band-actions`). A photograph of the band says which shape landed but not which arithmetic put it
+    /// there, and the widths the three shapes sit at are a question about the installed fonts.
+    readonly property int actionNaturalW: Math.round(fetchButton.naturalWidth)
+    readonly property int actionFoldW: Math.round(topBar.actionFold)
+    readonly property int actionCapW: Math.round(topBar.actionCap)
+    readonly property int actionWordFloorW: Math.round(topBar.actionWordFloor)
+    /// The widest wording actually **on** the band right now, which is not the widest the box was measured for: the
+    /// box holds every state's wording, and the run that has to land between "cut" and "given up" has to aim at the
+    /// one being said (`band-actions`).
+    readonly property int actionWantW: Math.round(Math.max(fetchButton.wordWant,
+                                                           pushButton.wordWant,
+                                                           stashButton.wordWant))
+    /// The cell width at which that wording starts being cut: itself, plus everything the cell holds around a word.
+    readonly property int actionCutW:
+        Math.round(fetchButton.naturalWidth - fetchButton.wordBox + topBar.actionWantW)
+    /// …and what one button came out as. Read off push, which is the one that says the longest wording and wears the
+    /// frame, the `!` and the hold when its branch has diverged (`BandPushButton`).
+    readonly property int actionCellW: Math.round(pushButton.width)
+    readonly property int actionCellH: Math.round(pushButton.height)
+    readonly property int actionWordW: Math.round(pushButton.wordRoom)
+    readonly property int actionInkW: Math.round(pushButton.wordInk)
+    /// Whether any of the three had to cut its wording. Asked of the set rather than of push: the cell is shared, so
+    /// the widest wording is the first to be cut, and which of the three is saying it is a question about the fonts
+    /// (`BandWidest`).
+    readonly property bool actionWordCut:
+        fetchButton.wordCut || pushButton.wordCut || stashButton.wordCut
+    /// Whether either of the two that can wear a `!` is wearing one. Asked of the pair rather than of push: the run
+    /// that can stage a refusal without a network is the fetch that cannot reach its remote (`band-actions-alert`).
+    readonly property bool actionAlertShown: fetchButton.alert || pushButton.alert
+
     Component.onCompleted: {
         let best = widest.fetchCodeWidest
         for (const m of [widest.fetchWordWidest, widest.pushCodeWidest, widest.stashCodeWidest])
@@ -240,7 +317,9 @@ Rectangle {
             // its wording.
             controlPadding: fetchButton.padding
             controlHeight: fetchButton.implicitHeight
+            cellFolded: topBar.actionsFolded
             Layout.fillWidth: true
+            Layout.fillHeight: stateGroup.cellFolded
             Layout.maximumWidth: stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth
             // Second in both queues (the strip's comment carries the order).
@@ -254,6 +333,21 @@ Rectangle {
             busyLatched: topBar.autoFetchBusyLatched
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
+            wordFloor: topBar.actionWordFloor
+            foldRequested: topBar.actionsFolded
+            // Laid out by the row rather than measured to its own content, so the band can take its width back as it
+            // runs short. **The three ask for the same three numbers**, and each of the three is a stable measurement
+            // — the box the set shares, the band's end cell, and the cap the window's width settles. None of them
+            // moves with the shape the button is in, so giving the word up cannot change the width that decided to.
+            //
+            // The floor is the **folded** width, the way the state group's is (規約 §窓の床「帯の床は畳んだ姿で数える」): a floor
+            // counted with a word still on it would rise the moment the words came back, and a window standing on it
+            // would be grown by its own band.
+            Layout.fillWidth: true
+            Layout.fillHeight: fetchButton.folded
+            Layout.preferredWidth: fetchButton.naturalWidth
+            Layout.minimumWidth: Theme.railWidth
+            Layout.maximumWidth: topBar.actionCap
         }
         // Push, in whichever shape this branch's standing with its remote allows (`BandPushButton`).
         BandPushButton {
@@ -262,6 +356,13 @@ Rectangle {
             busyLatched: topBar.autoPushBusyLatched
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
+            wordFloor: topBar.actionWordFloor
+            foldRequested: topBar.actionsFolded
+            Layout.fillWidth: true
+            Layout.fillHeight: pushButton.folded
+            Layout.preferredWidth: pushButton.naturalWidth
+            Layout.minimumWidth: Theme.railWidth
+            Layout.maximumWidth: topBar.actionCap
         }
         // Everything uncommitted, set aside in one entry, on the press (`BandStashButton`).
         BandStashButton {
@@ -269,6 +370,13 @@ Rectangle {
             curPage: topBar.curPage
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
+            wordFloor: topBar.actionWordFloor
+            foldRequested: topBar.actionsFolded
+            Layout.fillWidth: true
+            Layout.fillHeight: stashButton.folded
+            Layout.preferredWidth: stashButton.naturalWidth
+            Layout.minimumWidth: Theme.railWidth
+            Layout.maximumWidth: topBar.actionCap
         }
         // Where what the app owns ends and what the window owns begins.
         Rectangle {

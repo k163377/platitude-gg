@@ -17,6 +17,32 @@ Item {
     /// the box has to be told which one it is holding).
     property string widestText: ""
     property bool widestCode: false
+    /// How much room the button's cell left this word; -1 is "as much as it wants", which is every button that is
+    /// measured to its own content rather than laid out by a band that has run short (`ActionButton.wordRoom`).
+    property real cap: -1
+    /// The word is given up altogether and the button is down to its mark (`ActionButton.folded`). The cell keeps its
+    /// **height** — the state group beside it borrows the button's box (規約 §ウィンドウの縁), and a box that lost its height
+    /// here would take that mark down with it.
+    property bool folded: false
+    /// The ceiling on a single wording, whatever the cell allows.
+    readonly property int wordCeiling: 240
+    /// What this wording would like to be, before the cell has its say — and the one measurement here a cap may not be
+    /// allowed to move. Read off a hidden label of the whole wording rather than off the drawn parts: what is drawn
+    /// depends on this answer (a capped wording gives its flag up, below), so reading the parts back would close the
+    /// ring. Typed dashes, like the box the buttons share, which the drawn flag is designed to sit inside.
+    readonly property real wantWidth: btnLabel.phrased ? phraseRow.implicitWidth
+        : Math.min(wanted.implicitWidth, btnLabel.wordCeiling)
+    /// Cut down to fit: what the cell left is less than the wording wants, so it elides into what there is.
+    readonly property bool capped: btnLabel.cap >= 0 && btnLabel.cap < btnLabel.wantWidth
+    /// What the chip is drawn round and what the `!` stands past — the **ink**, once a cut is in it. An elided word is
+    /// painted narrower than the width it was given, and a ground stretched to the width leaves a tail with no letters
+    /// in it (app-ui.md).
+    readonly property real inkWidth: btnLabel.capped
+        ? btnLabel.headRun + btnLabel.flagRoom : btnLabel.implicitWidth
+    /// How far the head reaches: the width it was given, or — once a cut is in it — the ink it actually painted. What
+    /// follows the head follows the letters rather than the room they were handed, or the flag stands off in the air
+    /// a `…` left behind (実測 2026-08-25: the chip's ground ended before the flag did).
+    readonly property real headRun: btnLabel.capped ? headText.paintedWidth : headText.width
     /// The colour the word is drawn in — the button's own `fg`.
     property color tint: Theme.textPrimary
     /// The last go at what this button does did not work.
@@ -38,8 +64,16 @@ Item {
     /// mono family carries is the same 7px rule in an 8px cell (measured over U+002D / 2010 / 2011 / 2212), and on the
     /// wording the shared box was measured for that is what leaves the mark no room past the word. Drawn, the rule's
     /// length and the air either side are ours to pick (デザイン規約 §git 用語のコード表記).
+    ///
+    /// **The flag is the last thing to give — it does not give at all.** What a cut takes off a wording is the end of
+    /// it, and the end of this one is what the reader can be wrong about: `push -f` cut to `push …` is a push with an
+    /// ellipsis after it, which everywhere else in the world means "asks first" (実測 2026-08-25: it read as exactly
+    /// that). So the command gives and the flag stays — `pu… -f` says a cut command *and* what it would do
+    /// (規約 §長押し「警告の色は語ではなく枠と印が持つ」, and the same order the commit phrase gives its parts up in).
     readonly property int flagAt: btnLabel.code ? btnLabel.text.indexOf(" -") : -1
     readonly property bool splitFlag: btnLabel.flagAt > 0
+    /// What the flag holds, gap and drawn rules included. Never read back from the head, so a cut cannot move it.
+    readonly property real flagRoom: btnLabel.splitFlag ? flagRow.implicitWidth : 0
     readonly property string head: btnLabel.splitFlag
         ? btnLabel.text.substring(0, btnLabel.flagAt) : btnLabel.text
     /// The flag with its leading dashes taken off, and how many of them there were.
@@ -129,9 +163,10 @@ Item {
         : (btnLabel.mateFits ? mateFull.implicitWidth : btnLabel.cutMark) + phraseRow.spacing
 
     implicitWidth: btnLabel.phrased ? phraseRow.implicitWidth
-                   : headText.width + (btnLabel.splitFlag ? flagRow.width : 0)
+                   : btnLabel.folded ? 0
+                   : btnLabel.headRun + (btnLabel.splitFlag ? flagRow.width : 0)
     implicitHeight: btnLabel.phrased ? phraseRow.implicitHeight : headText.implicitHeight
-    Layout.maximumWidth: btnLabel.phrased ? Number.POSITIVE_INFINITY : 240
+    Layout.maximumWidth: btnLabel.phrased ? Number.POSITIVE_INFINITY : btnLabel.wordCeiling
     // Its own width: what the shared box asks for past this wording is held by the button's padding (`slack`), so the
     // chip and the mark, both measured off this cell, keep sitting on the word.
     //
@@ -150,6 +185,15 @@ Item {
         text: btnLabel.widestText
         font.family: btnLabel.widestCode ? Theme.monoFamily : Theme.uiFamily
         font.wordSpacing: btnLabel.widestCode ? -Theme.spaceXs : 0
+        font.pixelSize: btnLabel.fontSize
+    }
+    // This wording at the length it would like to be, measured the same way and never drawn (`wantWidth`).
+    Label {
+        id: wanted
+        visible: false
+        text: btnLabel.text
+        font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
+        font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
     }
     // Also measured, never drawn: the mark a cut leaves, and the `+N` at the length it would like to be. Both are read
@@ -272,12 +316,15 @@ Item {
     }
     Label {
         id: headText
-        visible: !btnLabel.phrased
+        visible: !btnLabel.phrased && !btnLabel.folded
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         // Bounded by the cell's own ceiling rather than by its width: the width comes from this, so reading it back
-        // would close a loop.
-        width: Math.min(implicitWidth, btnLabel.Layout.maximumWidth)
+        // would close a loop. The cap is not the cell's width either — it is what the *button* left this word
+        // (`ActionButton.wordRoom`), which is arrived at from the width the row handed the button and nothing here.
+        width: Math.min(implicitWidth, btnLabel.wordCeiling,
+                        btnLabel.capped ? Math.max(0, btnLabel.cap - btnLabel.flagRoom)
+                                        : Number.POSITIVE_INFINITY)
         text: btnLabel.head
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
@@ -293,8 +340,9 @@ Item {
     // follows it so the letter does not touch.
     Row {
         id: flagRow
-        visible: btnLabel.splitFlag
-        anchors.left: headText.right
+        visible: btnLabel.splitFlag && !btnLabel.folded
+        anchors.left: headText.left
+        anchors.leftMargin: btnLabel.headRun
         anchors.verticalCenter: headText.verticalCenter
         spacing: 0
         Item {
@@ -327,9 +375,9 @@ Item {
     // gap of tint hangs off either end, the same as a menu row's (デザイン規約 §git 用語のコード表記).
     Rectangle {
         z: -1
-        visible: btnLabel.code
+        visible: btnLabel.code && !btnLabel.folded
         x: -Theme.spaceXs / 2
-        width: btnLabel.implicitWidth + Theme.spaceXs
+        width: btnLabel.inkWidth + Theme.spaceXs
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         radius: Theme.radiusSm
@@ -343,7 +391,8 @@ Item {
     // (§署名の表示), and a yellow `!` standing there would read as something said about the signature, which it is
     // never about. The head is the one end of this phrase that carries nothing.
     NavIcon {
-        visible: btnLabel.alert
+        // The folded button wears this mark in the seat instead, where the icon's own corner is (`ActionButtonSeat`).
+        visible: btnLabel.alert && !btnLabel.folded
         kind: "bang"
         tint: btnLabel.alertTone
         width: Theme.iconSm
@@ -353,7 +402,7 @@ Item {
         // the reason above.
         x: btnLabel.phrased
            ? phraseRow.x - width + Theme.spaceXs / 2
-           : btnLabel.implicitWidth - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
+           : btnLabel.inkWidth - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
              - (btnLabel.alertTight ? Theme.spaceXs : 0)
         y: btnLabel.phrased
            ? phraseRow.y - Theme.spaceXs

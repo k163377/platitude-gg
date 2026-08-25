@@ -29,6 +29,11 @@ Item {
     /// read off a neighbour by id, so the group can be laid out beside anything.
     property real controlPadding: 0
     property real controlHeight: 0
+    /// The buttons beside this group have given their words up and stand in the band's own end cells now
+    /// (`TopBar.actionsFolded`). The mark goes with them: what it is drawn at is «the same box as its neighbours»
+    /// rather than a size of its own (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」), and a mark left at the box a *word*
+    /// stood in would be the one low target in a row of marks.
+    property bool cellFolded: false
 
     /// The four things that can be the matter here, folded into one mark and opened as a card (`BandStateCard`). One
     /// expression each, read by the mark and by the card: written twice, the two could disagree about whether there is
@@ -91,7 +96,8 @@ Item {
         + (stateGroup.identityBadgeShown ? stateGroup.identityBadgeW + Theme.spaceXs : 0)
         + (stateGroup.oldGitBadgeShown ? stateGroup.oldGitBadgeW + Theme.spaceXs : 0)
         - Theme.spaceXs
-    readonly property real foldedWidth: stateMark.implicitWidth + 2 * stateGroup.controlPadding
+    readonly property real foldedWidth: stateGroup.cellFolded
+        ? Theme.railWidth : stateMark.implicitWidth + 2 * stateGroup.controlPadding
     /// What each badge's box is drawn at, once they have given way together. `Number.MAX_VALUE` is "nothing is
     /// narrowed". Settled by hand (`settleCap`), since it is read off a list of measurements.
     property real cap: Number.MAX_VALUE
@@ -334,14 +340,24 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         implicitWidth: stateGroup.foldedWidth
-        height: stateGroup.controlHeight
+        height: stateGroup.cellFolded ? stateGroup.height : stateGroup.controlHeight
         width: implicitWidth
         radius: Theme.radiusSm
         color: stateMouse.containsMouse ? Theme.bgHover : "transparent"
-        border.width: Theme.borderWidth
-        border.color: stateGroup.tint
         Accessible.role: Accessible.Button
         Accessible.name: qsTr("What needs attention here")
+        // The frame keeps the height its neighbours' boxes have even where the cell fills the band, for the reason
+        // theirs do: a line along the band's top edge is a box glued to the window (`ActionButton.frameInset`).
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: stateGroup.cellFolded
+                ? Math.max(0, (stateToggle.height - stateGroup.controlHeight) / 2) : 0
+            anchors.bottomMargin: anchors.topMargin
+            color: "transparent"
+            border.width: Theme.borderWidth
+            border.color: stateGroup.tint
+            radius: Theme.radiusSm
+        }
         Label {
             id: stateMark
             anchors.centerIn: parent

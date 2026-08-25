@@ -48,6 +48,11 @@ ApplicationWindow {
     readonly property var floorPage: root.curPage !== null ? root.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.floorWidth : 0)
+    /// The same floor with the left list open whether or not it is — the width the band's three actions have finished
+    /// giving their words up at (`TopBar.actionCap`). Folding the list lowers the real floor, and a schedule read off
+    /// that would put the words back as the rail took the list's place (規約 §窓の床).
+    readonly property real openFloorWidth:
+        Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.openFloorWidth : 0)
     readonly property real floorHeight:
         // The band, the divider under it, and the line the window's bottom edge is drawn as — the three rows of
         // `mainUi` that are not the page (they carry their own heights; the page's is its own floor).
@@ -349,6 +354,9 @@ ApplicationWindow {
             // up its words there (`TopBar.windowAtFloor`). Read here because the floor is the larger of the band's and
             // the page's.
             windowAtFloor: root.width <= Math.ceil(root.floorWidth)
+            // …and the width the three actions have to be down to their marks by, which is that floor with the list
+            // open (2026-08-25 ユーザー指示). Read here for the same reason: only this window has both halves of it.
+            windowFloorWidth: root.openFloorWidth
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: identityGate.identityEditing = true
             onSettingsRequested: settingsDialog.open()

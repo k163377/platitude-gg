@@ -25,6 +25,11 @@ Item {
     property bool busy: false
     /// The colour both marks are drawn in — the button's own `markFg`.
     property color tint: Theme.textPrimary
+    /// The last go at what this button does did not work, on a button with no word left to say it after
+    /// (`ActionButton.folded`). The mark comes to the icon's own upper corner — raised and set out by the same half
+    /// gap it keeps from the end of a word, so it reads the same wherever it is met (デザイン規約 §ウィンドウの縁).
+    property bool cornerAlert: false
+    property color cornerAlertTone: seat.tint
 
     /// Both marks to wear at once: what the button does, and that it is held rather than clicked.
     readonly property bool paired: seat.kind !== "" && seat.holdMs > 0
@@ -70,6 +75,17 @@ Item {
         anchors.centerIn: parent
         tint: seat.tint
         spinning: seat.busy
+    }
+    // The mark a folded button has nowhere else to put. Drawn over the seat rather than inside it, so the icon under
+    // it keeps the step and the centre it had while the word was still there.
+    NavIcon {
+        visible: seat.cornerAlert
+        kind: "bang"
+        tint: seat.cornerAlertTone
+        width: Theme.iconSm
+        height: Theme.iconSm
+        x: parent.width - width + Theme.spaceXs / 2
+        y: -Theme.spaceXs
     }
     // A held button with nothing to name it says only how it is worked, where the eye starts the row (デザイン規約 §長押し).
     HoldIcon {

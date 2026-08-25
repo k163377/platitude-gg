@@ -124,6 +124,47 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "card=true rows=op,conflicts,identity",
     },
+    // The band's three actions at the last cell that still has a word
+    // in it. A band shot at one width says nothing about the width its
+    // shape was supposed to change at, so what is judged is that the
+    // words were still there at the narrowest cell that holds one.
+    // `cut=` rides along rather than being judged: how long the stretch
+    // where the wordings are cut lasts is a question about the
+    // installed fonts, and for a four-letter command it can be nothing
+    // at all (`…` and two characters measure what `push` does).
+    Verb {
+        name: "band-actions",
+        when: &[],
+        plain: "band_actions fits=true folded=false",
+    },
+    // And the end of that road: the words given up for the marks, at
+    // the floor the window has with its left list open — which is the
+    // width they have to be finished by (2026-08-25 ユーザー指示). A band
+    // whose actions never folded frames as three ordinary buttons,
+    // which is what an ordinary band looks like.
+    Verb {
+        name: "band-actions-fold",
+        when: &[],
+        plain: "band_actions fits=true folded=true",
+    },
+    // The same marks with one of them saying the last go did not work.
+    // A `!` on a button with no word after it has nowhere to stand but
+    // the mark's own corner, and that corner is also where a signature
+    // and an avatar's badge sit elsewhere — so what is judged is that
+    // the mark survived the fold at all. The refusal is the
+    // repository's own (an origin that is not there, `fetch-fail` の
+    // 仕込み): handed a remote it can reach, the run never reports.
+    Verb {
+        name: "band-actions-alert",
+        when: &[],
+        plain: "band_actions fits=true folded=true cut=true alert=true",
+    },
+    // Kept beside its pair so the two read together.
+    Verb {
+        name: "band-actions-none",
+        when: &[],
+        plain: "band_actions fits=true folded=false cut=false",
+    },
     // The fourth badge. A run whose shim never reached PATH reads the
     // git this machine has, wears no badge, and photographs an
     // ordinary window — which is exactly what an ordinary window looks

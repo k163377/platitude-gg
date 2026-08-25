@@ -86,6 +86,13 @@ QtObject {
     readonly property real floorWidth:
         (layout.page.sidebarCollapsed ? Theme.railWidth : layout.sidebarPane.minOpenWidth)
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
+    /// The same floor with the list open, whether or not it is. The band's actions give up their words over the last
+    /// stretch before this width (`TopBar.actionCap`), and that stretch may not move when somebody folds the list:
+    /// a schedule read off the floor of the moment would put the words back on screen as the rail took the list's
+    /// place, which is a thing nobody asked to see move (規約 §窓の床「誰も頼んでいないものが画面上で動く」).
+    readonly property real openFloorWidth:
+        layout.sidebarPane.minOpenWidth
+        + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
     /// The log is a second row when it is open, and it brings its own floor with it — so opening it raises this the
     /// same way.
     readonly property real floorHeight:

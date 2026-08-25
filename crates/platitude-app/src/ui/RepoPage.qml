@@ -1367,6 +1367,9 @@ Item {
     /// What the window reads off the page it is showing: the floor it may not be laid out under (`Main.floorWidth` /
     /// `floorHeight`) and the two panes' own overflow, which the floor's own verb asks about.
     readonly property real floorWidth: pageLayout.floorWidth
+    /// …and the same floor with the list open whether or not it is, which is the one the band's actions time their
+    /// giving way against (`PageLayout.openFloorWidth`).
+    readonly property real openFloorWidth: pageLayout.openFloorWidth
     readonly property real floorHeight: pageLayout.floorHeight
     readonly property bool wipBlockScrolls: pageLayout.wipBlockScrolls
     readonly property real detailsOverHeight: pageLayout.detailsOverHeight

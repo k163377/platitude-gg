@@ -84,6 +84,49 @@ HoverToolButton {
     /// would otherwise move everything beside it in the toolbar every time the state changed.
     property string widestText: ""
     property bool widestCode: false
+    /// The narrowest this button draws its word before giving it up for the icon alone (`BandWidest.wordFloor`).
+    ///
+    /// **Zero — the default — is the whole of the old behaviour**: a button measured to its own content, which is what
+    /// every ActionButton outside the band is. Only a control the band lays out (`TopBar`) hands the row a cell that
+    /// can be narrower than the word inside it, and only that one has a shape to fall back to (規約 §ウィンドウの縁).
+    property real wordFloor: 0
+    /// Told from outside that the band has come to the width where the words go, whether or not this cell is short of
+    /// room yet (`TopBar.actionsFolded`). The button also gives up on its own when the cell it was handed cannot hold
+    /// the floor, which is what happens when the tabs take the room before the window is done shrinking.
+    property bool foldRequested: false
+    /// The room the word is given inside this cell, once the marks and the air either side are paid for.
+    ///
+    /// Read off the control's own `padding` rather than off `leftPadding` / `rightPadding`: those two are answered
+    /// from here (through `slack`), and reading them back would close the ring. `padding` is the style's own and never
+    /// moves, so this is a question about the width the row handed over and nothing else.
+    readonly property real wordRoom:
+        actionBtn.wordFloor <= 0 ? btnLabel.box
+        : Math.max(0, actionBtn.width - 2 * actionBtn.padding - seat.implicitWidth - btnRow.spacing)
+    /// Down to the icon: nothing left to say the word in, or the band has said so.
+    readonly property bool folded: actionBtn.wordFloor > 0
+        && (actionBtn.foldRequested || actionBtn.wordRoom < actionBtn.wordFloor)
+    /// The widest this button is ever drawn, and the narrowest it is drawn with a word still on it. **Neither moves
+    /// with the shape the button is in** — the row lays the cell out from these rather than from what the button asks
+    /// for at the moment, so giving the word up cannot change the width that decides whether to give it up (`TopBar`).
+    readonly property real naturalWidth:
+        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.box
+    ///
+    /// **The flag is counted into the floor**, because it is the part that never gives: without it the last step
+    /// before the fold hands `push -f` a `…` and one letter, while its neighbours still have three
+    /// (`ActionButtonLabel.flagRoom`). Which is also why the set reads the **widest** of the three floors
+    /// (`TopBar.actionFoldW`) — a floor that only fits the shortest wording is not a floor for the set.
+    readonly property real foldWidth:
+        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing
+        + actionBtn.wordFloor + btnLabel.flagRoom
+    /// Automation: the word as it came out — the ink left after a cut, and whether there was one. A picture cannot be
+    /// asked whether a wording ended in a `…` of its own or was elided into one (`PG_AUTO_ACT=band-actions`).
+    readonly property real wordInk: btnLabel.inkWidth
+    readonly property bool wordCut: btnLabel.capped
+    /// …what this state's wording would like to be, and the box the set was measured for — which a run aiming between
+    /// the two shapes needs, because the cell that starts cutting a wording is that wording plus everything the cell
+    /// holds around it (`naturalWidth - wordBox`).
+    readonly property real wordWant: btnLabel.wantWidth
+    readonly property real wordBox: btnLabel.box
     /// Icon and word centred as a pair rather than packed from the left. A toolbar button is measured to its content
     /// and never sees the difference; one told to fill a pane's width does — the icon would sit against the far edge
     /// with the word adrift from it.
@@ -96,8 +139,14 @@ HoverToolButton {
     ///
     /// The phrase moves whole, so the step from the icon to the word is the same in every state (デザイン規約 §余白). Centring
     /// the word inside the box instead would open that step wider than the gap to the button beside it.
+    ///
+    /// **A cell narrower than the box has no slack at all** — what it has is a word too long for it, and the word
+    /// elides into what there is (`ActionButtonLabel.cap`). Measured against the *wanted* width rather than the
+    /// painted one for the same reason the box is measured off a hidden label: the painted width is the answer this
+    /// arithmetic produces.
     readonly property real slack:
-        Math.max(0, btnLabel.box - btnLabel.implicitWidth, actionBtn.floorSlack)
+        actionBtn.folded ? 0
+        : Math.max(0, Math.min(btnLabel.box, actionBtn.wordRoom) - btnLabel.wantWidth, actionBtn.floorSlack)
     /// What a framed button is short of `Theme.buttonMinWidth`, which it takes as slack like any other (so the phrase
     /// still moves whole and the ink still comes out even at the two ends).
     ///
@@ -111,8 +160,12 @@ HoverToolButton {
     /// button told to fill a pane is already far past it. It cannot be measured here either: a phrased cell asks for
     /// no width at all (`ActionButtonLabel.phraseRoom`), so the row reads as a tiny button and the floor would charge
     /// the padding a whole `buttonMinWidth` — straight out of the room the phrase then has to elide itself into.
+    ///
+    /// **Nor does a button that has given its word up.** That floor is a box put round a *word*; a box put round a
+    /// mark takes the size of the mark, which is the same ruling the state group's `…` is drawn under (規約 §ウィンドウの縁
+    /// 「枠を着ていても `buttonMinWidth` は敷かない」).
     readonly property real floorSlack:
-        actionBtn.framed && !btnLabel.phrased
+        actionBtn.framed && !btnLabel.phrased && !actionBtn.folded
         ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0
     /// The air each end is already holding before the slack is shared out (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」): a lone
     /// mark sits centred in the two-mark seat, and a command's chip reaches half a gap past its last letter. Taken off
@@ -173,6 +226,18 @@ HoverToolButton {
         holdMs: actionBtn.holdMs
         onFinished: actionBtn.held()
     }
+    /// How far in from the cell's two ends the frame is drawn. Nothing at all for a button measured to its own
+    /// content, where the cell **is** the box; in a folded cell, which fills the band's height the way the ☰ and the
+    /// window's three do, the frame keeps the height the button's own box has — **a line drawn along the band's top
+    /// edge is a box glued to the window rather than a frame round a button** (実測 2026-08-25). The wash still fills
+    /// the whole cell, because that is the target, and the target is what the pointer is answering.
+    ///
+    /// Read only where the two can differ. A button measured to its own content **is** its implicit height, and a
+    /// binding that reads both closes a ring the engine can see from the outside even where the arithmetic cannot
+    /// (実測 2026-08-25: `OpExitCard` / `DiffPaneHeader` reported a loop on this property).
+    readonly property real frameInset:
+        actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.implicitHeight) / 2) : 0
+
     background: Rectangle {
         // The same wash every other tool button answers with (`HoverToolButton.washColor`), read rather than left out:
         // a background handed in replaces the one that carries it, so the wash, the frame, the hold's fill and the
@@ -182,19 +247,28 @@ HoverToolButton {
         // the hand that started the fetch is still resting on it — the wash must not stay up for the whole call
         // (2026-08-10 報告).
         color: actionBtn.live ? actionBtn.washColor : "transparent"
-        // The frame goes a step down with the rest of the button while git is out on the network: the button is still
-        // the one that overwrites a remote, and a frame that dropped to grey would take that back for as long as the
-        // wait lasted.
-        //
-        // A button with no frame of its own grows none: the ring already says the wait has started, and a frame drawn
-        // around a button that has never worn one reads as a box laid over the band (2026-08-10 報告).
-        border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
-        border.width: Theme.borderWidth
         radius: Theme.radiusSm
-        HoldFill {
-            progress: actionBtn.holdProgress
-            tone: actionBtn.holdTone
-            inset: actionBtn.framed ? Theme.borderWidth : 0
+        // The frame, and the fill a hold puts inside it. Its own item rather than this one's border, so that a cell
+        // taller than the button's box can wash edge to edge and still draw the frame round the box (`frameInset`).
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: actionBtn.frameInset
+            anchors.bottomMargin: actionBtn.frameInset
+            color: "transparent"
+            // The frame goes a step down with the rest of the button while git is out on the network: the button is
+            // still the one that overwrites a remote, and a frame that dropped to grey would take that back for as
+            // long as the wait lasted.
+            //
+            // A button with no frame of its own grows none: the ring already says the wait has started, and a frame
+            // drawn around a button that has never worn one reads as a box laid over the band (2026-08-10 報告).
+            border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
+            border.width: Theme.borderWidth
+            radius: Theme.radiusSm
+            HoldFill {
+                progress: actionBtn.holdProgress
+                tone: actionBtn.holdTone
+                inset: actionBtn.framed ? Theme.borderWidth : 0
+            }
         }
         // Drawn outside the frame rather than in it: the frame's colour is already saying this button is the dangerous
         // one, and focus must not be able to take that over.
@@ -226,11 +300,14 @@ HoverToolButton {
     // (`floorSlack`). A button sized to its own content is already as tight as the two ends can be, and taking the ink
     // off its padding would move every button in the app for the sake of the few that have room to give.
     readonly property real headAir:
-        (btnLabel.box > 0 || actionBtn.floorSlack > 0)
-        ? Math.floor((actionBtn.slack - actionBtn.headInk - actionBtn.tailInk) / 2)
-        : 0
-    leftPadding: actionBtn.padding + actionBtn.headAir
-    rightPadding: actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
+        actionBtn.folded ? 0
+        : (btnLabel.box > 0 || actionBtn.floorSlack > 0)
+          ? Math.floor((actionBtn.slack - actionBtn.headInk - actionBtn.tailInk) / 2)
+          : 0
+    // A folded button pays no padding of its own: the cell it stands in is the band's own end-cell width and the mark
+    // is centred in it, the way the ☰'s is and the window's three are (規約 §ウィンドウの縁「帯の両端は同じ組み方」).
+    leftPadding: actionBtn.folded ? 0 : actionBtn.padding + actionBtn.headAir
+    rightPadding: actionBtn.folded ? 0 : actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
 
     // The row keeps its size while the network call runs — the toolbar must not shuffle under a pointer that is still
     // resting on the button — so nothing here leaves the layout: the word stays where it is and only its colour steps
@@ -248,7 +325,10 @@ HoverToolButton {
                 // A phrased label fills the row on its own and centres its phrase inside itself. A spacer either side
                 // would split the slack three ways instead, leaving the phrase off the button's centre by an amount
                 // its own parts change (the `+N` alone moves it).
-                visible: actionBtn.centred && !btnLabel.phrased
+                //
+                // A folded button centres the same way: with no word beside it the mark is the whole content, and a
+                // mark packed against the left of a cell would not line up with the ones either side of it.
+                visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
             }
             ActionButtonSeat {
                 id: seat
@@ -260,6 +340,11 @@ HoverToolButton {
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.busy
                 tint: actionBtn.markFg
+                // With the word gone the `!` has nowhere to stand after it, so it comes to the mark's own corner —
+                // the warning has to survive the fold, being the one thing on this button that is news (規約 §長押し:
+                // 警告の色は語ではなく枠と印が持つ).
+                cornerAlert: actionBtn.folded && actionBtn.alert
+                cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
                 Layout.alignment: Qt.AlignVCenter
             }
             ActionButtonLabel {
@@ -268,6 +353,10 @@ HoverToolButton {
                 code: actionBtn.code
                 widestText: actionBtn.widestText
                 widestCode: actionBtn.widestCode
+                // What the cell left the word, and the two ends of the answer to that: -1 is "as much as it wants",
+                // which is every button the band does not lay out.
+                cap: actionBtn.wordFloor > 0 ? actionBtn.wordRoom : -1
+                folded: actionBtn.folded
                 tint: actionBtn.fg
                 alert: actionBtn.alert
                 // The mark goes a step down with the frame while the wait lasts, like every other mark on the button:
@@ -290,7 +379,7 @@ HoverToolButton {
             }
             Item {
                 Layout.fillWidth: true
-                visible: actionBtn.centred && !btnLabel.phrased
+                visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
             }
         }
     }

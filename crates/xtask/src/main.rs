@@ -172,8 +172,9 @@ commands:
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
-                          fetch-recover, fetch-resume, push-retry, and
-                          push / publish-new-go against an unreachable
+                          fetch-recover, fetch-resume, push-retry,
+                          band-actions-alert, and push / publish-new-go
+                          against an unreachable
                           remote). A replay that stops part-way is not
                           among them any more: git left it standing,
                           which is a landing rather than a failed write.
