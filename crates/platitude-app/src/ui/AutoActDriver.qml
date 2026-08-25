@@ -45,6 +45,7 @@ Item {
     property AppMenu refBranchCard
     property AppMenu refTagCard
     property AppMenuItem refDeleteItem
+    property AppMenuItem refUpstreamItem
     property AppMenuItem refStashDropItem
     property AppMenuItem refSwitchItem
     property AppMenuItem refPushTagItem
@@ -67,6 +68,7 @@ Item {
     property AppMenu commitTagCard
     property AppMenuItem hardResetItem
     property PublishFlow publishFlow
+    property UpstreamFlow upstreamFlow
     property RemoteDialog remoteDialog
     property AppMenu remoteMenu
     /// The remote the push-default verbs act on, and the mark they wait for before they photograph anything — empty
@@ -157,6 +159,7 @@ Item {
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "delete-force", "delete-branch-refused",
+                "set-upstream-go",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
@@ -205,7 +208,9 @@ Item {
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // Stops at its question, so the ask bar settling is the completion — a write
                 // never comes (the write half is "-go", which stays a write act above).
-                "rename-remote",
+                "rename-remote", "set-upstream",
+                // The write barrier is behind this one: the question is answered from the timer, not before it.
+                "set-upstream-go",
                 "move-ask", "switch-conflicted", "switch-held", "switch-mark",
                 // The write barrier is behind these, not in front of them: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
@@ -3702,6 +3707,21 @@ Item {
             refMenu.openSub(refBranchCard)
             if (act === "delete-branch-go")
                 forceDeleteTimer.start()
+        } else if (act === "set-upstream" || act === "set-upstream-go") {
+            // `<branch>[:<name to answer with>]` — `:` cannot be in a ref name (`check-ref-format`), so it separates
+            // the two without ambiguity. Without the second half the question stands as it opened, on whatever the
+            // branch already speaks for.
+            const want = arg.split(":")
+            const on = want[0]
+            upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
+            upstreamAskTimer.answers = act === "set-upstream-go"
+            upstreamAskTimer.typed = false
+            // Through the row itself rather than the page's function, so a build where that row stopped reaching the
+            // question waits here instead of passing.
+            page.openRefMenu("branch", on, on, branchesModel.oidOfName(on))
+            refMenu.openSub(refBranchCard)
+            refUpstreamItem.triggered()
+            upstreamAskTimer.start()
         } else if (act === "delete-gone") {
             // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
             // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
@@ -4575,6 +4595,42 @@ Item {
                 graphPane.completeHold()
             else
                 page.answerRowAsk()
+            writeBarrier.start()
+        }
+    }
+    /// PG_AUTO_ACT=set-upstream…: the question about what a branch is measured against (`UpstreamFlow`). The bar has
+    /// to be all the way down before there is a box to answer into — the form is loaded as the bar opens — and that
+    /// is the picture's own moment as well (`AskBar.settled`).
+    SampleTimer {
+        id: upstreamAskTimer
+        /// Whether this run answers the question or only photographs it.
+        property bool answers: false
+        property string wantName: ""
+        property bool typed: false
+        onTriggered: {
+            if (!graphPane.askSettled)
+                return
+            if (upstreamAskTimer.wantName !== "" && !upstreamAskTimer.typed) {
+                upstreamFlow.setBranchName(upstreamAskTimer.wantName)
+                upstreamAskTimer.typed = true
+                return
+            }
+            if (upstreamAskTimer.answers && !graphPane.askAnswerable)
+                return
+            upstreamAskTimer.stop()
+            // `there=` is whether this repository actually holds what was answered, which is what decides the pill —
+            // and the refused form is the frame and the line, neither of which a full-window picture settles.
+            AppBackend.report("upstream branch=" + upstreamFlow.branch
+                              + " remote=" + upstreamFlow.remote
+                              + " name=" + upstreamFlow.branchName
+                              + " there=" + upstreamFlow.targetIsThere
+                              + " answerable=" + graphPane.askAnswerable)
+            if (!upstreamAskTimer.answers) {
+                driver.complete()
+                return
+            }
+            driver.writeSeqBefore = repoTab.writeSeq
+            page.answerRowAsk()
             writeBarrier.start()
         }
     }

@@ -499,6 +499,20 @@ impl RepoTab {
         self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
     }
 
+    /// Records the remote branch `branch` is measured against. The two
+    /// halves the question was answered with are joined here rather than
+    /// in QML: what git is given is the full remote-tracking refname,
+    /// the one spelling a local branch of the same name cannot make
+    /// ambiguous (`branch::set_upstream`).
+    #[qslot]
+    fn set_upstream(&mut self, branch: String, remote: String, remote_branch: String) {
+        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+            return;
+        }
+        let upstream = format!("refs/remotes/{remote}/{remote_branch}");
+        self.with_session(|s| s.set_upstream(branch.clone(), upstream.clone()));
+    }
+
     /// Puts a lightweight tag on `commit` (HEAD when empty). Never
     /// forced: a name already taken is git's to refuse.
     #[qslot]

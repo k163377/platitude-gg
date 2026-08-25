@@ -55,10 +55,12 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
-    /// The branch card's two, passed straight up: the delete git may still refuse is the page's question, and the row
-    /// taken off the list ahead of the answer is the page's list (デザイン規約 §消す操作は先に画面から消す).
+    /// The branch card's three, passed straight up: the delete git may still refuse is the page's question, the row
+    /// taken off the list ahead of the answer is the page's list (デザイン規約 §消す操作は先に画面から消す), and the upstream is
+    /// answered in the page's one question bar (`UpstreamFlow`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal deleting(string kind, string id)
+    signal upstreamRequested(string branch, string counterpart)
 
     /// Either card is on screen. A plain property rather than an alias — `visible` read from another file comes back
     /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
@@ -237,6 +239,7 @@ Item {
             worktreesModel: rowMenu.worktreesModel
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
             onDeleting: (kind, id) => rowMenu.deleting(kind, id)
+            onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
             onCloseRequested: commitMenu.close()
         }
         AppMenuSeparator {}

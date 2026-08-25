@@ -34,6 +34,11 @@ AppMenu {
     /// list ahead of git's answer is the page's list (デザイン規約 §消す操作は先に画面から消す).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal deleting(string kind, string id)
+    /// Which remote branch this one is measured against — the page opens the question, because the bar it stands in
+    /// is the one every other question in the window stands in (`UpstreamFlow`). The remote branch this one already
+    /// speaks for goes with it: that is where the question opens, and it is read here while the row still answers to
+    /// its own name.
+    signal upstreamRequested(string branch, string counterpart)
     /// The card above, which a press here has to take down along with this one.
     signal closeRequested()
 
@@ -41,6 +46,7 @@ AppMenu {
     readonly property alias deleteItem: refDeleteItem
     readonly property alias deleteRemoteItem: refRemoteDeleteItem
     readonly property alias deleteBothItem: refBothDeleteItem
+    readonly property alias upstreamItem: refUpstreamItem
 
     /// Everything this card reads, worked out once as the menu opens and left alone while it stands. `kind` empty
     /// takes the card with it, which is how a row that names no branch — a tag, a stash, a commit nothing points at —
@@ -55,6 +61,7 @@ AppMenu {
         property string heldByWorktree: ""
         property bool canDelete: false
         property bool canDeleteRemote: false
+        property bool canSetUpstream: false
         property bool onCurrentBranch: false
     }
 
@@ -69,6 +76,7 @@ AppMenu {
             state.heldByWorktree = ""
             state.canDelete = false
             state.canDeleteRemote = false
+            state.canSetUpstream = false
             state.onCurrentBranch = false
             return
         }
@@ -88,6 +96,7 @@ AppMenu {
             branchCard.repoTab.defaultRemote, "").split(" ")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
+        state.canSetUpstream = offers.includes("set-upstream")
         state.onCurrentBranch = offers.includes("current")
         // Whether the everyday delete would be refused, asked as the menu opens: the unmerged answer usually lands
         // before the pointer does, and the delete row wears `-D` from the start instead of only after a refused click
@@ -138,6 +147,25 @@ AppMenu {
     // Only a row that names a branch has any of this, so only such a row puts the card up.
     applies: state.kind === "branch" || state.kind === "remote"
 
+    // Which remote branch this one is measured against — the counts beside it, the point `branch --delete` calls
+    // merged, and where it pushes when nothing is marked all come off this one setting (デザイン規約
+    // §ブランチが測られる相手を決める).
+    //
+    // **No chip, and a `…`**: what runs is `branch --set-upstream-to=<答え>`, and the flag's value is not settled
+    // until the question has been answered — so the row is no more 1:1 with a command than `Create branch here…` is
+    // (§git 用語のコード表記). The spelling would not be the short one either: a menu row wears the long form, and
+    // `branch --set-upstream-to` in the shared chip column would push every delete row's name across for a row that
+    // is not even a command yet. Above the deletes with a line between, since a table of things that take a name away
+    // is not where a row that only writes configuration belongs (§メニュー の入れ子).
+    //
+    // Only a local branch: a remote-tracking ref is the far side of somebody's setting and has none of its own.
+    AppMenuItem {
+        id: refUpstreamItem
+        text: qsTr("Set upstream…")
+        offered: state.kind === "branch" && state.canSetUpstream
+        onTriggered: branchCard.upstreamRequested(state.refId, state.remoteCounterpart)
+    }
+    AppMenuSeparator {}
     AppMenuItem {
         id: refDeleteItem
         // Alone in this menu the delete re-states its target: during the hold the name of what is about to go has to

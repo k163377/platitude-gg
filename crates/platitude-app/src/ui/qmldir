@@ -149,6 +149,8 @@ TabMetrics 1.0 TabMetrics.qml
 TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
+UpstreamFlow 1.0 UpstreamFlow.qml
+UpstreamForm 1.0 UpstreamForm.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowChrome 1.0 WindowChrome.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml

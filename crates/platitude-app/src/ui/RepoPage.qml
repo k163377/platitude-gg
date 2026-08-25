@@ -384,6 +384,7 @@ Item {
     function stopRowAsk() {
         page.rowAskRun = null
         publishFlow.publishAsking = false
+        upstreamFlow.asking = false
         graphPane.stopAsking()
     }
     function answerRowAsk() {
@@ -401,6 +402,21 @@ Item {
             return
         page.seenMoveAskSeq = repoTab.moveAskSeq
         page.askMoveBranchOnto(repoTab.moveAskLocal, repoTab.moveAskStart)
+    }
+
+    // ---- what a branch is measured against --------------------------
+    UpstreamFlow {
+        id: upstreamFlow
+        repoTab: repoTab
+        remotesModel: remotesModel
+        graphPane: graphPane
+        onAskRequested: (oidHex, label, accept, run, form) =>
+            page.startRowAsk(oidHex, label, "", false, accept, run, false, "", form, "")
+    }
+    /// The branch card's row, from either menu it is carried by. Marked on the row that branch stands on, so the
+    /// question is beside the thing it is about.
+    function startUpstreamAsk(branch, counterpart) {
+        upstreamFlow.startAsk(branch, branchesModel.oidOfName(branch), counterpart)
     }
 
     // ---- sending the branch to its remote ---------------------------
@@ -449,6 +465,7 @@ Item {
         onTagHereRequested: oidHex => page.startTagAt(oidHex)
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDropStashRequested: selector => page.dropStashNow(selector)
+        onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
         onDeleting: (kind, id) => page.showGone(kind, id)
         // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
         // whether it stays now is the pointer's to answer again.
@@ -788,9 +805,10 @@ Item {
         onApplyStashRequested: selector => repoTab.applyStash(selector)
         onPopStashRequested: selector => page.popStash(selector)
         onDropStashRequested: selector => page.dropStashNow(selector)
-        // The branch card's own two, answered exactly where the ref menu's are.
+        // The branch card's own three, answered exactly where the ref menu's are.
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDeleting: (kind, id) => page.showGone(kind, id)
+        onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
     }
 
     ClipboardHelper {
@@ -943,6 +961,7 @@ Item {
             refBranchCard: refRowMenu.branchCard
             refTagCard: refRowMenu.tagCard
             refDeleteItem: refRowMenu.deleteItem
+            refUpstreamItem: refRowMenu.upstreamItem
             refStashDropItem: refRowMenu.stashDropItem
             refSwitchItem: refRowMenu.switchItem
             refPushTagItem: refRowMenu.pushTagItem
@@ -963,6 +982,7 @@ Item {
             commitTagCard: commitRowMenu.tagCard
             hardResetItem: commitRowMenu.hardResetRow
             publishFlow: publishFlow
+            upstreamFlow: upstreamFlow
             remoteDialog: publishFlow.dialog
             remoteMenu: remoteRowMenu.menu
             refList: rowHost.listPopup

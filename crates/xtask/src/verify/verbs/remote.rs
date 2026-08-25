@@ -149,4 +149,29 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "publish_remotes open=true marked=true",
     },
+    // The question about what a branch is measured against. **The
+    // picture holds two boxes and a pill and cannot say what any of them
+    // are worth**: whether the name answered with is one this repository
+    // actually holds is the whole of what decides the press, and a pill
+    // greyed for that reason frames like one greyed for any other.
+    //
+    // **`:missing` is the refused half.** The reserved name is one no
+    // demo repository carries, so the run photographs the frame and the
+    // line a name that was never fetched puts up — and both halves are
+    // needed: the plain side alone passes for an implementation that
+    // never checks, and the refused side alone for one that always
+    // refuses.
+    Verb {
+        name: "set-upstream",
+        when: &[(Arg::Ends(":missing"), "there=false answerable=false")],
+        plain: "there=true answerable=true",
+    },
+    // Answered, and judged before the press: the write barrier says the
+    // config landed, and this says the question was answerable rather
+    // than answered past a dead pill.
+    Verb {
+        name: "set-upstream-go",
+        when: &[],
+        plain: "there=true answerable=true",
+    },
 ];

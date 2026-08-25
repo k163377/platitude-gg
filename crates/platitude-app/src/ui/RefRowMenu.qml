@@ -79,6 +79,7 @@ Item {
     readonly property alias deleteRemoteTagItem: tagMenu.deleteRemoteTagItem
     readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
     readonly property alias deleteItem: branchMenu.deleteItem
+    readonly property alias upstreamItem: branchMenu.upstreamItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
     /// The two cards the rows above hang behind — a run that photographs one of those rows has to open its card
@@ -96,6 +97,9 @@ Item {
     signal tagHereRequested(string oidHex)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
+    /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
+    /// (`UpstreamFlow`).
+    signal upstreamRequested(string branch, string counterpart)
     /// A ref this menu has just asked git to delete, so the window can show it as gone while the write is out
     /// (デザイン規約 §消す操作は先に画面から消す). One per ref — `Delete both` names two. `kind` is `branch` / `remote` /
     /// `tag`, `id` what git knows it by. Raised beside the write rather than instead of it: the rows the page owns
@@ -238,6 +242,7 @@ Item {
             worktreesModel: refRowMenu.worktreesModel
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
             onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
+            onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
             onCloseRequested: refMenu.close()
         }
         AppMenuSeparator {}
