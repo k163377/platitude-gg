@@ -117,7 +117,9 @@ PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
+RefBranchMenu 1.0 RefBranchMenu.qml
 RefRowMenu 1.0 RefRowMenu.qml
+RefTagMenu 1.0 RefTagMenu.qml
 RemoteRowMenu 1.0 RemoteRowMenu.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml

@@ -17,21 +17,19 @@ Item {
 
     required property RepoTab repoTab
     required property WorkTreeModel workTree
-    /// Which remote reading a branch speaks for (`upstreamOf`).
+    /// Handed to the branch card, which reads the remote a branch speaks for and the working copy that may be
+    /// holding it out of them (`RefBranchMenu`). `switch` asks the second one here as well — it is the only row on
+    /// this level that the answer changes.
     required property NavSectionModel branchesModel
-    /// Which other working copy has a branch checked out (`worktreeHolding`) — the list lives in this section alone.
     required property NavSectionModel worktreesModel
     /// Where a remote last had a tag that is here as well (`remoteTagDrift`) — the readings live in this section alone.
     required property NavSectionModel tagsModel
 
-    /// The row the menu stands on. `refName` is what the row shows, `refId` what git knows it by (they differ for a
-    /// stash: a message and a selector).
+    /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector rather than
+    /// the message the row shows.
     property string kind: ""
-    property string refName: ""
     property string refId: ""
     property string refOid: ""
-    /// The branch git has just refused to delete, while the menu that asked is still standing.
-    property string forceDeleteBranch: ""
 
     /// What this menu offers, decided as it opens (see the note above).
     property bool canSwitch: false
@@ -42,10 +40,6 @@ Item {
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
     property bool canDelete: false
-    /// The remote reading a branch row can also shed (`origin/main`), empty where it has none. What the remote-side
-    /// delete rows name.
-    property string remoteCounterpart: ""
-    property bool canDeleteRemote: false
     /// A tag sent to the remote this repository pushes to, and where that remote already has the name when it has it
     /// somewhere else. **Both are read as the menu opens**: the drift is what decides whether the row is a plain push
     /// or the leased overwrite, and a row that changed from a click to a hold while the card stood would be a row that
@@ -60,30 +54,6 @@ Item {
     /// Where this repository's pushes go. Not read per row — it is the repository's answer — but latched with the rest
     /// so the row that names it cannot be renamed out from under the hand.
     property string pushRemote: ""
-    /// The other working copy holding this row's local branch, empty when none does. **git refuses both `switch` and
-    /// `branch --delete` for a branch another worktree has out** (実測), so this is read and not the lock — a lock
-    /// stops `worktree remove` and `worktree move`, which is a different question the WORKTREES row answers. The
-    /// delete rows go out on it; `switch` presses through to the question that opens that copy instead
-    /// (`RepoPage.askOpenHolder`).
-    property string heldByWorktree: ""
-    /// The folder that copy is listed under in WORKTREES. The whole path is what git answers with and is the only
-    /// unambiguous form, but nobody reads a tooltip that wide — and the list the reader goes to next shows the leaf.
-    readonly property string heldByWorktreeName: GitFacts.pathLeaf(refRowMenu.heldByWorktree)
-    /// Why the delete table's rows are out — decided as the menu opens, worn as the rows' `blockedReason` (デザイン規約 §無効).
-    property bool onCurrentBranch: false
-    readonly property string deleteBlockedOnCurrent:
-        qsTr("Switch away first — this is the branch you are on")
-    readonly property string deleteBlockedWhileBusy:
-        qsTr("Another git command is still running")
-    // Why git keeps a branch to one working copy is the causal half, and the tooltip rule drops it (デザイン規約 §hover の
-    // ツールチップ) — what is left is the state that blocks the row and the one thing the menu cannot show: where.
-    //: %1 is the folder of the other working copy that has this branch checked out.
-    readonly property string blockedByWorktree:
-        qsTr("Checked out in another working copy — %1").arg(refRowMenu.heldByWorktreeName)
-    // **The delete rows are the only ones this blocks.** `switch` is never greyed here — a branch another copy holds
-    // and a tree with unmerged files both press through to a question instead (デザイン規約 §進行中の操作から出る): a row
-    // that cannot be pressed says why only on hover, and the reader who reached for it is the one who needs to read
-    // it (2026-08-22 ユーザー判断).
 
     // ---- bringing two lines of history together --------------------
     /// The commits a rebase onto this row would rewrite. Asked as the menu opens — the answer is a whole git call away,
@@ -103,12 +73,18 @@ Item {
     /// (app-ui.md).
     readonly property alias menu: refMenu
     readonly property alias branchHereItem: refBranchHereItem
-    readonly property alias tagHereItem: refTagHereItem
-    readonly property alias pushTagItem: refPushTagItem
-    readonly property alias deleteRemoteTagItem: refRemoteTagDeleteItem
-    readonly property alias deleteTagBothItem: refBothTagDeleteItem
-    readonly property alias deleteItem: refDeleteItem
+    readonly property alias tagHereItem: tagMenu.tagHereItem
+    readonly property alias pushTagItem: tagMenu.pushTagItem
+    readonly property alias deleteTagItem: tagMenu.deleteTagItem
+    readonly property alias deleteRemoteTagItem: tagMenu.deleteRemoteTagItem
+    readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
+    readonly property alias deleteItem: branchMenu.deleteItem
+    readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
+    /// The two cards the rows above hang behind — a run that photographs one of those rows has to open its card
+    /// first (`AppMenu.openSub`).
+    readonly property alias branchCard: branchMenu
+    readonly property alias tagCard: tagMenu
 
     /// What the page answers for: moving the working tree, the delete git may still refuse, and the stash drop that two
     /// menus share.
@@ -135,10 +111,8 @@ Item {
     /// offer — the current branch met as a chip — falls back to the row's own menu.
     function offerOn(kind, name, full, oidHex) {
         refRowMenu.kind = kind
-        refRowMenu.refName = name
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
-        refRowMenu.forceDeleteBranch = ""
         refRowMenu.rebasePublished = false
         // Where a push would go, and what that remote already has under this name. Both settle before the offers are
         // asked for, so the push row's whole shape is decided by the time the card is on screen.
@@ -147,40 +121,36 @@ Item {
             ? refRowMenu.tagsModel.remoteTagDrift(full, refRowMenu.pushRemote) : ""
         // Which sides of the name exist, which is what tells the three delete rows apart.
         const sides = kind === "tag" ? refRowMenu.tagsModel.tagSides(full) : ""
-        // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
-        refRowMenu.heldByWorktree =
-            kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
-            : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
-                                      refRowMenu.repoTab.localNameFor(full))
-                                : ""
-        refRowMenu.remoteCounterpart = kind === "branch" ? refRowMenu.branchesModel.upstreamOf(full) : ""
+        // The deletes are the branch card's own question, and it works its answers out for itself — the same card the
+        // graph row's menu carries, asked the same way (RefBranchMenu).
+        branchMenu.offerOn(kind, name, full, oidHex)
+        // Whether another working copy has this row's branch out. **git refuses `switch` for one** (実測), and the
+        // row wears the `!` for it rather than greying — this level's one use of the answer; the delete rows read
+        // their own copy inside the card. A remote row lands on the local branch of the same name, so it is that one
+        // another copy can be holding.
+        const held = kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
+                   : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
+                                             refRowMenu.repoTab.localNameFor(full))
+                                       : ""
         // The lookups above are the models'; what the rows may offer on them is core's rule, with the measured
-        // refusals it encodes — held elsewhere keeps the switch row, the current branch its delete table
-        // (offers::ref_menu). Asked the once, so the answers stand while the menu does (see the note above).
+        // refusals it encodes — held elsewhere keeps the switch row (offers::ref_menu). Asked the once, so the
+        // answers stand while the menu does (see the note above).
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
             refRowMenu.repoTab.state === "open", refRowMenu.repoTab.busyCount,
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
-            refRowMenu.heldByWorktree, refRowMenu.remoteCounterpart,
-            refRowMenu.pushRemote, sides).split(" ")
+            held, "", refRowMenu.pushRemote, sides).split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canDelete = offers.includes("delete")
-        refRowMenu.canDeleteRemote = offers.includes("delete-remote")
         refRowMenu.canPushTag = offers.includes("push-tag")
         refRowMenu.canDeleteRemoteTag = offers.includes("delete-remote-tag")
         refRowMenu.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
-        refRowMenu.onCurrentBranch = offers.includes("current")
         if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
             refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
-        // Whether the everyday delete would be refused, asked as the menu opens: the unmerged answer usually lands
-        // before the pointer does, and the delete row wears `-D` from the start instead of only after a refused click
-        // (§左メニューの所作). The chip column is settled at open, so the swap moves no other row.
-        if (refRowMenu.repoTab.state === "open" && kind === "branch" && refRowMenu.canDelete)
-            refRowMenu.repoTab.checkBranchDelete(full)
         return refMenu.offer()
     }
 
@@ -189,51 +159,35 @@ Item {
         refMenu.close()
     }
 
-    /// Held, not asked: git refuses nothing here — the branch is on the far side, so no `-d` can weigh what it holds —
-    /// and the hold stands in for that refusal (デザイン規約 §リモートブランチを消す).
-    function deleteRemoteNow(remoteRef) {
-        // The configured names say where the cut is (a remote's own name may contain `/`); an unconfigured
-        // remote still cuts at the first slash, so the press acts and git answers (`GitFacts.remoteOfRef`).
-        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
-        if (remote === "")
-            return
-        refRowMenu.deleting("remote", remoteRef)
-        refRowMenu.repoTab.deleteRemoteBranch(remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames))
-    }
-
     AppMenu {
         id: refMenu
-        // Walking away from a refused delete takes the offer with it.
-        onClosed: {
-            refRowMenu.forceDeleteBranch = ""
-            refRowMenu.dismissed()
-        }
-        // A branch of one's own, started where this row stands. Ahead of everything and behind a rule of its own —
-        // deliberately not beside `switch`, which is where it would read as a variant of moving onto what is already
-        // there; nothing here moves anywhere until a name has been typed (2026-08-17 ユーザー判断). Same seat, same words
-        // as the commit menu's row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        // A refused delete's offer is not cleared here: the card puts it back as it opens (`RefBranchMenu.offerOn`),
+        // and nothing reads it while the card is down.
+        onClosed: refRowMenu.dismissed()
+        // **The card holds what moves the reader; the rest is behind a mark** (デザイン規約 §メニュー の入れ子). Every row on
+        // this level answers the question the reader came with — where am I, and where do I go from here — and the
+        // cards at the foot hold what is *done to* a ref rather than gone from it.
+        //
+        // A branch of one's own, started where this row stands, is one of those moves and not a thing done to this
+        // ref: it is where the reader carries on from (2026-08-25 ユーザー判断). Ahead of `switch` rather than beside
+        // it — nothing moves anywhere until a name has been typed (2026-08-17 ユーザー判断) — and the same words in
+        // the same seat as the commit menu's row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
         AppMenuItem {
             id: refBranchHereItem
             text: qsTr("Create branch here…")
             offered: refRowMenu.canBranchHere
             onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
-        // The mark, beside the place to carry on from. Same seat, same words as the commit menu's pair (デザイン規約
-        // §メニュー: 入口が違っても同じ操作は同じ文), and offered on the same answer: every row that names a commit takes one,
-        // a stash — nobody's history — takes neither.
-        AppMenuItem {
-            id: refTagHereItem
-            text: qsTr("Create tag here…")
-            offered: refRowMenu.canBranchHere
-            onTriggered: refRowMenu.tagHereRequested(refRowMenu.refOid)
-        }
         AppMenuSeparator {}
         AppMenuItem {
             id: refSwitchItem
             code: "switch"
             offered: refRowMenu.canSwitch
-            // Never blocked: everything that stands in a move's way is answered by the question the press raises — and
-            // the mark says that a question is what this press raises.
+            // **Never blocked**, however much stands in the move's way: a branch another copy holds and a tree with
+            // unmerged files both press through to a question instead, and the mark is what says so before the press
+            // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer, not this one's — a row that cannot be
+            // pressed says why only on hover, and the reader who reached for it is the one who needs to read it
+            // (2026-08-22 ユーザー判断).
             blockedReason: ""
             asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
@@ -260,190 +214,50 @@ Item {
             note: refRowMenu.rebasePublished ? qsTr("rewrites pushed commits") : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)
         }
-        // A tag sent to where this repository pushes. Last of the rows that run a command on this ref, and the only one
-        // of them that leaves the machine — the branches' own push is the toolbar's, which is where the counts that
-        // decide how hard it may push live (デザイン規約 §リモートへ送る).
-        //
-        // **Two forms, chosen as the menu opens.** A name the remote already has on another commit is refused outright
-        // by a plain push, so that case comes up as the leased overwrite instead: warning-coloured, held, and pinned to
-        // the commit that was being shown (§相手の履歴を置き換える — the same reason the toolbar's `push` and `push -f` are
-        // never both live). The plain form is an ordinary row: it adds a name over there and takes nothing away, and
-        // where the remote already has it on this very commit git answers that there was nothing to send. The long
-        // spelling because a menu row is measured against the widest row (§git 用語のコード表記 — the toolbar's pill is
-        // where `-f` belongs).
+        // A stash has one thing done to it and nothing to nest: it is not a branch and not a tag, so its drop stays on
+        // the card where the reader found it.
         AppMenuItem {
-            id: refPushTagItem
-            code: refRowMenu.tagDriftOid === "" ? "push" : "push --force"
-            //: Follows the `push` chip: "push to origin".
-            text: qsTr("to %1").arg(refRowMenu.pushRemote)
-            offered: refRowMenu.canPushTag
-            holdMs: refRowMenu.tagDriftOid === "" ? 0 : Metrics.holdMs
-            // Reaching past this machine is the warning tone, as it is on the remote-branch delete (デザイン規約 §状態).
-            holdTone: Theme.warning
-            onTriggered: refRowMenu.repoTab.pushTag(refRowMenu.pushRemote, refRowMenu.refId, "")
+            id: refStashDropItem
+            code: "drop"
+            offered: refRowMenu.kind === "stash" && refRowMenu.canDelete
+            holdMs: Metrics.holdMs
+            holdTone: Theme.danger
             onHeld: {
                 refMenu.close()
-                refRowMenu.repoTab.pushTag(refRowMenu.pushRemote, refRowMenu.refId,
-                                           refRowMenu.tagDriftOid)
+                refRowMenu.dropStashRequested(refRowMenu.refId)
             }
         }
         AppMenuSeparator {}
-        AppMenuItem {
-            id: refDeleteItem
-            // Alone in this menu the delete re-states its target: during the hold the name of what is about to go has
-            // to be readable on the row itself (デザイン規約 §メニュー 言い直さない、の例外).
-            readonly property bool stashRow: refRowMenu.kind === "stash"
-            readonly property bool remoteRow: refRowMenu.kind === "remote"
-            readonly property bool tagRow: refRowMenu.kind === "tag"
-            readonly property bool branchRow: refRowMenu.kind === "branch"
-            // git already refused `--delete` while this menu stood — or the check run at open came back unmerged, the
-            // same answer a click ahead of time (§左メニューの所作).
-            readonly property bool refusedRow:
-                branchRow
-                && (refRowMenu.forceDeleteBranch === refRowMenu.refId
-                    || (refRowMenu.repoTab.branchDeleteAsked === refRowMenu.refId
-                        && !refRowMenu.repoTab.branchDeleteMerged))
-            readonly property bool heldRow: stashRow || remoteRow || tagRow || refusedRow
-            code: refusedRow ? "branch -D"
-                : branchRow ? "branch --delete"
-                : tagRow ? "tag --delete"
-                : remoteRow ? "push --delete"
-                : "drop"
-            // The name is data, not sentence: never translated, and it does not bid for the menu's width
-            // (`growsForText`).
-            text: stashRow ? "" : refRowMenu.refId
-            growsForText: false
-            note: refusedRow ? qsTr("not merged") : ""
-            // On a branch the three delete forms are a fixed table — rows that cannot be chosen stay and grey out, the
-            // app-menu rule rather than the assembled-menu one (デザイン規約 §メニュー、2026-08-11 ユーザー判断): the current branch
-            // keeps its rows, saying why nothing here answers. The other kinds keep the assembled rule.
-            offered: branchRow || (heldRow && refRowMenu.canDelete)
-            blockedReason: !branchRow || refRowMenu.canDelete ? ""
-                         : refRowMenu.onCurrentBranch
-                           ? refRowMenu.deleteBlockedOnCurrent
-                           : refRowMenu.heldByWorktree !== ""
-                             ? refRowMenu.blockedByWorktree
-                             : refRowMenu.deleteBlockedWhileBusy
-            holdMs: heldRow ? Metrics.holdMs : 0
-            // A branch's plain delete keeps the menu up: git's answer has nowhere to land otherwise, and this row is
-            // where it lands.
-            staysOpen: branchRow
-            // Reaching past this machine is the warning tone; throwing away what is in hand is danger (デザイン規約 §状態).
-            holdTone: remoteRow ? Theme.warning : Theme.danger
-            onPicked: refRowMenu.deleteRequested(refRowMenu.kind,
-                                                 refRowMenu.refId,
-                                                 refRowMenu.refName,
-                                                 refRowMenu.refOid)
-            onHeld: {
-                refMenu.close()
-                if (stashRow)
-                    refRowMenu.dropStashRequested(refRowMenu.refId)
-                else if (remoteRow)
-                    refRowMenu.deleteRemoteNow(refRowMenu.refId)
-                else if (tagRow) {
-                    refRowMenu.deleting("tag", refRowMenu.refId)
-                    refRowMenu.repoTab.deleteTag(refRowMenu.refId)
-                } else {
-                    refRowMenu.deleting("branch", refRowMenu.refId)
-                    refRowMenu.repoTab.deleteBranch(refRowMenu.refId, true)
-                }
-            }
+        // The deletes a branch's name answers for — its own file, because the graph row's menu carries the very same
+        // card (RefBranchMenu).
+        RefBranchMenu {
+            id: branchMenu
+            repoTab: refRowMenu.repoTab
+            workTree: refRowMenu.workTree
+            branchesModel: refRowMenu.branchesModel
+            worktreesModel: refRowMenu.worktreesModel
+            onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
+            onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
+            onCloseRequested: refMenu.close()
         }
-        // The tag's copy on the remote, taken off without touching the one here — and, where the name is only over
-        // there, the one delete this menu has to offer at all (デザイン規約 §タグを作る・送る).
-        //
-        // **Assembled, not a fixed table.** The branch's three deletes stay and grey out because the current branch's
-        // menu would otherwise open empty; a tag always has something to press, so its rows follow the ordinary rule
-        // and the ones with nothing to name are gone (デザイン規約 §メニュー). What decides that is the sides the name
-        // stands on, not a guess: the qualified `--delete` git needs does not fail on a name the remote has not got
-        // (実測), so a row offered on a hunch would report success for having done nothing.
-        AppMenuItem {
-            id: refRemoteTagDeleteItem
-            code: "push --delete"
-            text: refRowMenu.refId
-            growsForText: false
-            offered: refRowMenu.kind === "tag" && refRowMenu.canDeleteRemoteTag
-            holdMs: Metrics.holdMs
-            // Reaching past this machine is warning, not danger — what goes is a name over there, and whatever it
-            // marked stays wherever it is (デザイン規約 §状態).
-            holdTone: Theme.warning
-            onHeld: {
-                refMenu.close()
-                // A name only the remote had leaves the sidebar with it; one held here keeps its row and loses the
-                // badge, which the read after the write brings back (デザイン規約 §消す操作は先に画面から消す).
-                if (!refRowMenu.canDeleteTagEverywhere)
-                    refRowMenu.deleting("tag", refRowMenu.refId)
-                refRowMenu.repoTab.deleteRemoteTag(refRowMenu.pushRemote, refRowMenu.refId)
-            }
-        }
-        // Both copies of the one name. A composite of two commands is no one command, so words rather than a chip —
-        // the same row the branch table carries, for the same reason (§git 用語のコード表記 の 1:1 規則).
-        AppMenuItem {
-            id: refBothTagDeleteItem
-            text: qsTr("Delete both")
-            offered: refRowMenu.kind === "tag" && refRowMenu.canDeleteTagEverywhere
-            holdMs: Metrics.holdMs
-            // The local half of a tag throws nothing away that the commit is not still holding — git keeps the object
-            // and only the name goes — so this pair never reaches the danger the branch's `-D` does.
-            holdTone: Theme.warning
-            onHeld: {
-                refMenu.close()
-                refRowMenu.deleting("tag", refRowMenu.refId)
-                refRowMenu.repoTab.deleteTagEverywhere(refRowMenu.refId, refRowMenu.pushRemote)
-            }
-        }
-        // The branch's remote reading, deleted without touching the local one — on the current branch the one delete on
-        // offer at all (デザイン規約 §左メニューの所作).
-        AppMenuItem {
-            id: refRemoteDeleteItem
-            code: "push --delete"
-            text: refRowMenu.remoteCounterpart
-            growsForText: false
-            // In the table only while the branch has a remote reading at all: a row for a target that does not exist
-            // keeps no seat (2026-08-11 ユーザー判断). Grey is for "not now" — busy — not for "no such thing".
-            offered: refRowMenu.kind === "branch"
-                     && refRowMenu.remoteCounterpart !== ""
-            blockedReason: refRowMenu.canDeleteRemote ? "" : refRowMenu.deleteBlockedWhileBusy
-            holdMs: Metrics.holdMs
-            holdTone: Theme.warning
-            onHeld: {
-                refMenu.close()
-                refRowMenu.deleteRemoteNow(refRowMenu.remoteCounterpart)
-            }
-        }
-        // A composite of two commands is no one command, so words rather than a chip (§git 用語のコード表記 の 1:1 規則). The
-        // local half runs first and a refusal stops the pair with nothing touched.
-        AppMenuItem {
-            id: refBothDeleteItem
-            text: qsTr("Delete both")
-            note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
-            offered: refRowMenu.kind === "branch"
-                     && refRowMenu.remoteCounterpart !== ""
-            blockedReason: refRowMenu.canDelete && refRowMenu.canDeleteRemote
-                           ? ""
-                           : refRowMenu.onCurrentBranch
-                             ? refRowMenu.deleteBlockedOnCurrent
-                             : refRowMenu.heldByWorktree !== ""
-                               ? refRowMenu.blockedByWorktree
-                               : refRowMenu.deleteBlockedWhileBusy
-            holdMs: Metrics.holdMs
-            // The colour of the half that decides: reaching past this machine is warning, but once the local half runs
-            // as `-D` this row throws away commits that live nowhere else, and that is danger (デザイン規約 §状態).
-            holdTone: refDeleteItem.refusedRow ? Theme.danger : Theme.warning
-            onHeld: {
-                refMenu.close()
-                const c = refRowMenu.remoteCounterpart
-                const remote = GitFacts.remoteOfRef(c, refRowMenu.repoTab.remoteNames)
-                if (remote === "")
-                    return
-                // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
-                refRowMenu.deleting("branch", refRowMenu.refId)
-                refRowMenu.deleting("remote", c)
-                refRowMenu.repoTab.deleteBranchEverywhere(
-                    refRowMenu.refId, remote,
-                    GitFacts.branchOfRef(c, refRowMenu.repoTab.remoteNames),
-                    refDeleteItem.refusedRow)
-            }
+        AppMenuSeparator {}
+        // Everything a tag's name answers for, behind its own mark — its own file for length alone (RefTagMenu).
+        RefTagMenu {
+            id: tagMenu
+            repoTab: refRowMenu.repoTab
+            kind: refRowMenu.kind
+            refId: refRowMenu.refId
+            refOid: refRowMenu.refOid
+            pushRemote: refRowMenu.pushRemote
+            tagDriftOid: refRowMenu.tagDriftOid
+            canBranchHere: refRowMenu.canBranchHere
+            canPushTag: refRowMenu.canPushTag
+            canDelete: refRowMenu.canDelete
+            canDeleteRemoteTag: refRowMenu.canDeleteRemoteTag
+            canDeleteTagEverywhere: refRowMenu.canDeleteTagEverywhere
+            onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
+            onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
+            onCloseRequested: refMenu.close()
         }
     }
 }

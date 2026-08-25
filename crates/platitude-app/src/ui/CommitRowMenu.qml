@@ -16,6 +16,16 @@ Item {
     id: rowMenu
 
     required property RepoTab repoTab
+    /// What the branch card needs to work its own answers out — the same models the ref menu hands it, so the two
+    /// entrances to a row cannot drift (RefBranchMenu).
+    required property WorkTreeModel workTree
+    required property NavSectionModel branchesModel
+    required property NavSectionModel worktreesModel
+
+    /// The branch this row carries, if it carries one — what the card is about. Empty on a row nothing points at,
+    /// which takes the card off the menu.
+    property string rowBranchKind: ""
+    property string rowBranch: ""
     /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
     required property string branch
 
@@ -45,6 +55,10 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
+    /// The branch card's two, passed straight up: the delete git may still refuse is the page's question, and the row
+    /// taken off the list ahead of the answer is the page's list (デザイン規約 §消す操作は先に画面から消す).
+    signal deleteRequested(string kind, string id, string name, string oidHex)
+    signal deleting(string kind, string id)
 
     /// Either card is on screen. A plain property rather than an alias — `visible` read from another file comes back
     /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
@@ -59,6 +73,9 @@ Item {
     readonly property alias stashDropItem: stashDeleteItem
     readonly property alias resetSubmenu: resetMenu
     readonly property alias hardResetRow: hardResetItem
+    /// The two cards the rows above hang behind (`AppMenu.openSub`).
+    readonly property alias branchCard: branchCommitMenu
+    readonly property alias tagCard: tagCommitMenu
 
     anchors.fill: parent
 
@@ -66,6 +83,9 @@ Item {
         stashMenu.offer()
     }
     function offerCommit() {
+        // The branch card is asked before the menu opens, the way every other row's answer is settled first — its own
+        // `applies` is what decides whether the card's row is there to count (`AppMenu.offeredRows`).
+        branchCommitMenu.offerOn(rowMenu.rowBranchKind, rowMenu.rowBranch, rowMenu.rowBranch, rowMenu.oid)
         commitMenu.offer()
     }
 
@@ -97,32 +117,26 @@ Item {
 
     AppMenu {
         id: commitMenu
-        // Where this row leads rather than what it brings here, so it stands ahead of the rest and behind a rule of its
-        // own — the same seat and the same words in the ref menu (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        // **The card holds what moves the reader** (デザイン規約 §メニュー の入れ子): a branch of one's own started here,
+        // the commits replayed onto where they are, this one's place in the history rewritten, the current branch
+        // brought over or taken back. What is *done to* a ref goes behind a mark at the foot.
         //
-        // Words rather than a chip, alone in a menu that is otherwise a column of commands: no one command is what this
-        // row runs. It opens a box, and what git is finally spawned with depends on what is typed into it — the ellipsis
-        // is that (`Add remote…` / `Open repository…`). The one command that would fit, `switch --create`, is the
-        // spelling the row above the ref menu's own `switch` would then share, and switching is precisely what this
-        // row does not do until a name exists (2026-08-17 ユーザー判断).
+        // The rules between the groups are the ones this menu has always drawn; what changed is the order. Down the
+        // card, what each row acts on widens: where the reader would stand, then the rows that only add a commit,
+        // then the rows that rewrite this one, then the rows that move the branch itself.
+        //
+        // Words rather than a chip: no one command is what this row runs. It opens a box, and what git is finally
+        // spawned with depends on what is typed into it — the ellipsis is that (`Add remote…` / `Open repository…`).
+        // The one command that would fit, `switch --create`, is the spelling the ref menu's own `switch` row would
+        // then share, and switching is precisely what this row does not do until a name exists (2026-08-17 ユーザー判断).
+        //
+        // Still no row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミット
+        // への移動). This row is the whole of what the menu offers towards standing here — with a branch under it.
         AppMenuItem {
             id: branchHereCommitItem
             text: qsTr("Create branch here…")
             offered: rowMenu.canBranchHere
             onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
-        }
-        // Beside it, in the same paragraph and for the same reasons: it opens the same box on the same commit, and what
-        // git is finally spawned with depends on what is typed into it. The one thing the two rows do not share is what
-        // happens next — a branch is somewhere to carry on from, a tag is a mark left behind — and that is what the two
-        // nouns say. Nothing else in this menu is offered on the same terms, so they stand together above the rule
-        // (§git 用語のコード表記「区切り線の外へ出す」).
-        AppMenuItem {
-            id: tagHereCommitItem
-            text: qsTr("Create tag here…")
-            // The same answer the row above reads: both ask only that this row names a commit and that nothing else is
-            // running (`offers::commit_menu`).
-            offered: rowMenu.canBranchHere
-            onTriggered: rowMenu.tagHereRequested(rowMenu.oid)
         }
         AppMenuSeparator {}
         AppMenuItem {
@@ -136,24 +150,6 @@ Item {
             offered: rowMenu.canSequence
             onTriggered: rowMenu.repoTab.revert(rowMenu.oid)
         }
-        AppMenuSeparator {}
-        AppMenuItem {
-            code: "merge"
-            //: Follows the `merge` chip: "merge into main".
-            text: qsTr("into %1").arg(rowMenu.branch)
-            offered: rowMenu.canIntegrate
-            onTriggered: rowMenu.repoTab.merge(rowMenu.oid, false, false, "")
-        }
-        AppMenuItem {
-            code: "rebase"
-            //: Follows the `rebase` chip: "rebase main onto it".
-            text: qsTr("%1 onto it").arg(rowMenu.branch)
-            note: rowMenu.published ? qsTr("rewrites pushed commits") : ""
-            offered: rowMenu.canIntegrate
-            onTriggered: rowMenu.repoTab.rebase(rowMenu.oid, "", true)
-        }
-        // Still no row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミットへの移動).
-        // The row at the top is the whole of what this menu offers towards standing here — with a branch under it.
         AppMenuSeparator {}
         // No entry for editing the message: the click that opens this menu already puts the message in the details
         // pane's boxes.
@@ -183,6 +179,22 @@ Item {
                 rowMenu.dropRequested(rowMenu.oid)
             }
         }
+        AppMenuSeparator {}
+        AppMenuItem {
+            code: "merge"
+            //: Follows the `merge` chip: "merge into main".
+            text: qsTr("into %1").arg(rowMenu.branch)
+            offered: rowMenu.canIntegrate
+            onTriggered: rowMenu.repoTab.merge(rowMenu.oid, false, false, "")
+        }
+        AppMenuItem {
+            code: "rebase"
+            //: Follows the `rebase` chip: "rebase main onto it".
+            text: qsTr("%1 onto it").arg(rowMenu.branch)
+            note: rowMenu.published ? qsTr("rewrites pushed commits") : ""
+            offered: rowMenu.canIntegrate
+            onTriggered: rowMenu.repoTab.rebase(rowMenu.oid, "", true)
+        }
         AppMenu {
             id: resetMenu
             titleCode: "reset"
@@ -210,6 +222,37 @@ Item {
                     commitMenu.close()
                     rowMenu.resetRequested("hard")
                 }
+            }
+        }
+        AppMenuSeparator {}
+        // **The very card the chip on this row opens** (RefBranchMenu): a row that carries a branch is a way at that
+        // branch, and a right-click on the row has to offer what a right-click on its chip offers (2026-08-26 ユーザー
+        // 判断). The card works its own answers out from the name the page hands it, so the two entrances cannot
+        // drift; a row that carries none is handed "" and the card goes with its row.
+        RefBranchMenu {
+            id: branchCommitMenu
+            repoTab: rowMenu.repoTab
+            workTree: rowMenu.workTree
+            branchesModel: rowMenu.branchesModel
+            worktreesModel: rowMenu.worktreesModel
+            onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
+            onDeleting: (kind, id) => rowMenu.deleting(kind, id)
+            onCloseRequested: commitMenu.close()
+        }
+        AppMenuSeparator {}
+        // The mark left on this commit, behind the tag's own mark. The box this row opens is the same box the row at
+        // the head opens, on the same commit and on the same answer; what the two do not share is what happens next —
+        // a branch is somewhere to carry on from, a tag is a mark left behind.
+        AppMenu {
+            id: tagCommitMenu
+            titleKind: "tag"
+            titleTint: Theme.refTag
+            title: qsTr("TAG")
+            AppMenuItem {
+                id: tagHereCommitItem
+                text: qsTr("Create tag here…")
+                offered: rowMenu.canBranchHere
+                onTriggered: rowMenu.tagHereRequested(rowMenu.oid)
             }
         }
     }

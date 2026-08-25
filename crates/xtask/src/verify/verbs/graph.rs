@@ -36,6 +36,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=2",
     },
+    // The two cards this menu ends with, opened one level in (デザイン規約
+    // §メニュー の入れ子). Judged the same way and for the same reason:
+    // what is being looked at is entirely inside the second popup, so a
+    // run that opened nothing frames as a menu nobody pressed. `branch-
+    // card` is also the proof that a graph row offers what its own chip
+    // offers — an empty card would take its row with it and the run
+    // would come back with one popup.
+    Verb {
+        name: "branch-card",
+        when: &[],
+        plain: "overlay saved=true popups=2",
+    },
+    Verb {
+        name: "tag-card",
+        when: &[],
+        plain: "overlay saved=true popups=2",
+    },
     // The card that must *not* come out. A picture cannot carry an
     // absence on its own — an empty overlay would frame the same as a
     // run whose hover request never arrived — so the menu is judged

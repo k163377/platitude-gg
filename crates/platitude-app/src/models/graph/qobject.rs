@@ -286,6 +286,19 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// The chip records of a row (`encode::encode_labels`) — the same
+    /// string its delegate hands the chip column. Read when a menu opens
+    /// on the row, so the branch that row carries can be offered what
+    /// its own chip offers (`CommitRowMenu`).
+    #[qslot]
+    fn labels_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.rows.get(i))
+            .map(|r| r.labels.clone())
+            .unwrap_or_default()
+    }
+
     /// The draw tokens of a row (`encode::encode_geometry`) — the same
     /// string its delegate paints from. For the smoke hooks: a lane is a
     /// stroke a couple of pixels wide, and whether one of them is dotted

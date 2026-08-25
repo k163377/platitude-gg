@@ -699,7 +699,10 @@ Item {
     /// upstream when it has one, so a branch merged into HEAD but not yet pushed is refused while nothing at all would
     /// be lost (実測).
     function noteForceDelete(name) {
-        refRowMenu.forceDeleteBranch = name
+        // Whichever card asked — the ref menu's or the graph row's — is the one the answer belongs on. They are the
+        // same component, and only one of them is ever standing.
+        refRowMenu.branchCard.noteRefused(name)
+        commitRowMenu.branchCard.noteRefused(name)
         if (AppBackend.autoAct !== "")
             AppBackend.report("force_delete_offered branch=" + name)
     }
@@ -723,7 +726,32 @@ Item {
     // ---- context menu on a graph row -------------------------------
     /// The one door into that menu: the graph's rows, a chip that names nothing to act on, and the automation all come
     /// through here.
+    /// The branch a graph row carries, in the words the chip records use — the first one the row shows, which is the
+    /// one a double-click on it already goes to (`GraphRowDelegate.primaryRecord`). The rows already taken off the
+    /// screen ahead of git's answer are filtered out the same way the delegate filters them, so a chip that is gone
+    /// does not put a card up over a branch that is not there any more (デザイン規約 §消す操作は先に画面から消す).
+    function branchRecordAt(oidHex) {
+        const row = graphModel.rowOf(oidHex)
+        if (row < 0)
+            return ""
+        const shown = GitFacts.labelsShown(graphModel.labelsAt(row), graphModel.goneChips)
+        if (shown === "")
+            return ""
+        const records = shown.split(String.fromCharCode(31))
+        for (let i = 0; i < records.length; i++) {
+            const kind = GitFacts.recordKind(records[i])
+            if (kind === "branch" || kind === "remote")
+                return records[i]
+        }
+        return ""
+    }
+
     function openRowMenu(oidHex) {
+        // The row's own branch, so the card at the foot of its menu is the card that branch's chip opens — the two
+        // are ways at the same thing (2026-08-26 ユーザー判断).
+        const record = page.branchRecordAt(oidHex)
+        commitRowMenu.rowBranchKind = GitFacts.recordKind(record)
+        commitRowMenu.rowBranch = record === "" ? "" : GitFacts.recordName(record)
         commitMenuState.openRowMenu(oidHex)
     }
 
@@ -738,6 +766,9 @@ Item {
     CommitRowMenu {
         id: commitRowMenu
         repoTab: repoTab
+        workTree: workTree
+        branchesModel: branchesModel
+        worktreesModel: worktreesModel
         branch: workTree.branch
         oid: commitMenuState.menuOid
         stashRef: commitMenuState.menuStashRef
@@ -757,6 +788,9 @@ Item {
         onApplyStashRequested: selector => repoTab.applyStash(selector)
         onPopStashRequested: selector => page.popStash(selector)
         onDropStashRequested: selector => page.dropStashNow(selector)
+        // The branch card's own two, answered exactly where the ref menu's are.
+        onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
+        onDeleting: (kind, id) => page.showGone(kind, id)
     }
 
     ClipboardHelper {
@@ -906,9 +940,13 @@ Item {
             wipPane: wipPane
             gitCorner: gitCorner
             refMenu: refRowMenu.menu
+            refBranchCard: refRowMenu.branchCard
+            refTagCard: refRowMenu.tagCard
             refDeleteItem: refRowMenu.deleteItem
+            refStashDropItem: refRowMenu.stashDropItem
             refSwitchItem: refRowMenu.switchItem
             refPushTagItem: refRowMenu.pushTagItem
+            refTagDeleteItem: refRowMenu.deleteTagItem
             refTagHereItem: refRowMenu.tagHereItem
             refRemoteTagDeleteItem: refRowMenu.deleteRemoteTagItem
             refTagBothDeleteItem: refRowMenu.deleteTagBothItem
@@ -921,6 +959,8 @@ Item {
             tagHereCommitItem: commitRowMenu.tagHereItem
             stashDeleteItem: commitRowMenu.stashDropItem
             resetMenu: commitRowMenu.resetSubmenu
+            commitBranchCard: commitRowMenu.branchCard
+            commitTagCard: commitRowMenu.tagCard
             hardResetItem: commitRowMenu.hardResetRow
             publishFlow: publishFlow
             remoteDialog: publishFlow.dialog

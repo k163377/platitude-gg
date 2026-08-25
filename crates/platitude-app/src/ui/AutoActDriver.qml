@@ -40,10 +40,16 @@ Item {
     property RowLayout gitCorner
 
     property AppMenu refMenu
+    /// The two cards the ref menu's rows hang behind. A verb that photographs one of those rows opens its card first
+    /// (`driver.showRefCard`) — the row is reachable either way, but the picture is of the card the reader would see.
+    property AppMenu refBranchCard
+    property AppMenu refTagCard
     property AppMenuItem refDeleteItem
+    property AppMenuItem refStashDropItem
     property AppMenuItem refSwitchItem
     property AppMenuItem refPushTagItem
     property AppMenuItem refTagHereItem
+    property AppMenuItem refTagDeleteItem
     property AppMenuItem refRemoteTagDeleteItem
     property AppMenuItem refTagBothDeleteItem
     property FileRowMenu fileRowMenu
@@ -57,6 +63,8 @@ Item {
     property AppMenuItem tagHereCommitItem
     property AppMenuItem stashDeleteItem
     property AppMenu resetMenu
+    property AppMenu commitBranchCard
+    property AppMenu commitTagCard
     property AppMenuItem hardResetItem
     property PublishFlow publishFlow
     property RemoteDialog remoteDialog
@@ -1789,6 +1797,9 @@ Item {
             tagMenuTimer.stop()
             page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
                              tagsModel.oidOfName(tagMenuTimer.tag), true)
+            // Every row this verb is about is one card in (デザイン規約 §メニュー の入れ子), so the run opens it: the
+            // report reads the rows either way, but a picture of the outer card proves nothing about them.
+            refMenu.openSub(refTagCard)
             // Every row this menu grew, in one line. The delete rows are told apart by nothing but which of them is
             // drawn, and a card missing one frames exactly like a card that never offered it.
             // **The order is the judging order.** `must_say` matches a run of this line, so what one run has to
@@ -1796,7 +1807,7 @@ Item {
             // own shape after them (`verify/verbs/remote.rs`).
             AppBackend.report("tag_menu tag=" + tagMenuTimer.tag
                               + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
-                              + " local_del=" + refDeleteItem.offered
+                              + " local_del=" + refTagDeleteItem.offered
                               + " remote_del=" + refRemoteTagDeleteItem.offered
                               + " both_del=" + refTagBothDeleteItem.offered
                               + " tag_here=" + refTagHereItem.offered
@@ -3688,6 +3699,7 @@ Item {
             // On a branch git refuses, the row turns into the held force-delete, which "-go" then runs to its end.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
             if (act === "delete-branch-go")
                 forceDeleteTimer.start()
         } else if (act === "delete-gone") {
@@ -3696,24 +3708,27 @@ Item {
             // *back* from a refusal, which `delete-branch-refused` photographs. The page holds the in-between open
             // for the shot (`RepoPage.goneHeldForShot`); a demo repository answers before a picture can be grabbed.
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
-            refDeleteItem.completeHold()
+            refMenu.openSub(refTagCard)
+            refTagDeleteItem.completeHold()
             goneRowTimer.start()
         } else if (act === "delete-tag" || act === "delete-tag-go") {
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            refMenu.openSub(refTagCard)
             if (act === "delete-tag-go")
-                refDeleteItem.completeHold()
+                refTagDeleteItem.completeHold()
         } else if (act === "delete-stash" || act === "delete-stash-go") {
             page.openRefMenu("stash", stashesModel.nameAt(0),
                              stashesModel.fullAt(0),
                              stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "delete-stash-go")
-                refDeleteItem.completeHold()
+                refStashDropItem.completeHold()
         } else if (act === "delete-remote" || act === "delete-remote-go") {
             // Named outright (`origin/feature/x`) because those rows sit behind a fold — opened here so the row is
             // under the menu. The remote's own name may hold `/`, so the cut is the configured one
             // (`GitFacts.remoteOfRef`), the same as the rows the verbs drive.
             remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
             AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)
             if (act === "delete-remote-go")
@@ -3724,6 +3739,7 @@ Item {
             // Same entry as delete-branch; this one waits for git's answer rather than acting on it.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
             refusedRowTimer.start()
         } else if (act === "chip-menu") {
             // Only the kind letter and the name of the record are read.
@@ -3741,6 +3757,7 @@ Item {
             const blockedOn = arg === "" ? workTree.branch : arg
             page.openRecordMenu((arg === "" ? "L10010" : "L00000") + blockedOn,
                                 branchesModel.oidOfName(blockedOn))
+            refMenu.openSub(refBranchCard)
             refDeleteItem.tipForced = true
             blockedTipTimer.start()
         } else if (act === "switch-mark") {
@@ -3761,6 +3778,7 @@ Item {
         } else if (act === "delete-branch-early") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
             page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
             earlyDeleteTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The row menu on the first stash's row; the argument "go" holds the delete row down.
@@ -3795,6 +3813,7 @@ Item {
             // graph is showing (the working tree, a stash), and neither of them opens this menu at all.
             driver.createTagOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
             page.openRowMenu(driver.createTagOid)
+            commitMenu.openSub(commitTagCard)
             tagHereCommitItem.triggered()
             // `<name>:box` stops at the box the row opened, which is the other half of what this verb wires up: the
             // chip column asking the second of its two questions (`GraphRowChips`).
@@ -4123,7 +4142,8 @@ Item {
             resetMenu.offer()
             if (act === "reset-hard")
                 hardResetItem.completeHold()
-        } else if (act === "commit-menu" || act === "reset-menu") {
+        } else if (act === "commit-menu" || act === "reset-menu"
+                   || act === "branch-card" || act === "tag-card") {
             // With no row named, the row under HEAD's: most of this menu is about a commit the branch is *not* already
             // standing on, and it is counted from where HEAD actually sits — the rows above belong to whatever else the
             // graph is showing.
@@ -4134,6 +4154,10 @@ Item {
             page.openRowMenu(menuOid)
             if (act === "reset-menu")
                 resetMenu.offer()
+            else if (act === "branch-card")
+                commitMenu.openSub(commitBranchCard)
+            else if (act === "tag-card")
+                commitMenu.openSub(commitTagCard)
             AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "menu-hover") {
