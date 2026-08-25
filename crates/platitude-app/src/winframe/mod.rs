@@ -17,6 +17,6 @@ mod api;
 mod win32;
 
 pub use api::{
-    CAPTION_RUNS, fit_to_work_area, keep_system_gestures, minimize, set_caption_strips, set_icon,
-    set_maximized, square_corners, take_frame_hit_test,
+    fit_to_work_area, keep_system_gestures, minimize, set_caption_strips, set_icon, set_maximized,
+    square_corners, take_frame_hit_test,
 };

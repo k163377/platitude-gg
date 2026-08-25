@@ -10,7 +10,7 @@
 use std::cell::Cell;
 use std::ffi::c_void;
 
-use super::CAPTION_RUNS;
+use super::api::CAPTION_RUNS;
 
 mod frame;
 mod icon;
