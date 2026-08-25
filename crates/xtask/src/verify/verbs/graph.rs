@@ -106,14 +106,44 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
-    // The same gesture with the history scrolled away under the wait
-    // it opened. The row that was clicked is pooled by that scroll, so
-    // a wait carried by the row would go down with it — and the box
-    // that does open has to be sent back into sight, since a name
-    // changing itself off screen is a name nobody agreed to. Neither
-    // half is anything a picture answers: a run whose box never opened
-    // frames the same history as one whose box opened two hundred rows
-    // above the fold.
+    // The same two clicks with the pointer rested on the chip, so the
+    // card's own rest is running under the wait. Nothing may open or
+    // close in that beat: the reader has clicked and is watching one
+    // spot for the box, and a card that arrived halfway through is a
+    // change they did not ask for (2026-08-26 ユーザー指示). `list=` and
+    // `card=` are what would have opened — a picture of the box says
+    // nothing about what came and went before it.
+    Verb {
+        name: "graph-reclick-still",
+        when: &[],
+        plain: "armed=true box=true list=false card=false",
+    },
+    // The mark the chip wears while the second click waits out its
+    // window — the one thing on screen between the press and the box
+    // (2026-08-26 ユーザー判断). This run ends inside the wait rather than
+    // at the box, so the picture frames the mark; `mark=` is the chip's
+    // own answer, since a shot taken a beat late frames the box and
+    // would read the same either way.
+    Verb {
+        name: "graph-reclick-mark",
+        when: &[],
+        plain: "armed=true mark=true box=false",
+    },
+    // Every way out of the name box, one route per run. `armed=` is
+    // the half that catches the box coming back by itself: a wait left
+    // running after the box has been walked away from reopens it a
+    // window later, which is what a row clicked while its own box was
+    // up used to do (2026-08-26 ユーザー報告). The picture cannot tell a
+    // box that closed for good from one that is about to return.
+    Verb {
+        name: "rename-box-out",
+        when: &[
+            // The one route the box survives: something has been typed
+            // into it, and a press elsewhere is not worth losing that.
+            (Arg::Is("typed-away"), "box=true armed=false"),
+        ],
+        plain: "box=false armed=false",
+    },
     // The two clicks put in at one spot but two surfaces: the row, and
     // then the card its chip opens into on the rest between them. That
     // is what a reader's hand does without knowing it, and with a
@@ -125,10 +155,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
+    // The same gesture with the history scrolled away under the wait
+    // it opened. The row that was clicked is pooled by that scroll, so
+    // a wait carried by the row would go down with it — and the box
+    // that does open has to be sent back into sight, since a name
+    // changing itself off screen is a name nobody agreed to. Neither
+    // half is anything a picture answers: a run whose box never opened
+    // frames the same history as one whose box opened two hundred rows
+    // above the fold.
     Verb {
         name: "graph-reclick-scrolled",
         when: &[],
-        plain: "armed=true box=true mode=rename kind=branch typed=main branch=main shown=true",
+        plain: "armed=true box=true list=false card=false mode=rename kind=branch typed=main branch=main shown=true",
     },
     // The graph column pulled past its floor: the clamp has to land
     // on the floor exactly, and the floor is the message tick

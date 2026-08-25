@@ -80,6 +80,8 @@ Item {
             ? rowItem.labelRecords[0] : ""
     // The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: chipColumn.chipItem
+    // The mark the chip wears while a second click waits out its window, as drawn (PG_AUTO_ACT=graph-reclick-mark).
+    readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
     readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
     // This row's chip column is a branch-name box right now.
@@ -137,6 +139,7 @@ Item {
             opacity: rowItem.dimmed ? Metrics.dimFade : 1
             records: rowItem.labelRecords
             columnWidth: rowItem.labelsW
+            waiting: rowItem.renameArmed
             naming: rowItem.naming
             namingMode: rowItem.ListView.view ? rowItem.ListView.view.namingMode : "branch"
             namingKind: rowItem.ListView.view ? rowItem.ListView.view.namingKind : ""
@@ -281,9 +284,15 @@ Item {
     // **Only one of the two is ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
     // rather than in a beat's time — the beat is for walking into what is open, and what is being left is not it.
     onPointedPartChanged: rowItem.settlePointed()
+    /// A second click is waiting out its window somewhere in this graph. **Nothing hover opens or closes while it
+    /// runs**: the reader has clicked and is waiting for the box, and a card that came or went in that beat is a
+    /// change they did not ask for (2026-08-26 ユーザー指示). What the pointer did in the meantime is settled the moment
+    /// the wait ends — the box that opens is what the row shows by then, and the rest catches up with it.
+    readonly property bool renameWaiting: rowItem.ListView.view ? rowItem.ListView.view.renameWaiting : false
+    onRenameWaitingChanged: if (!rowItem.renameWaiting) rowItem.settlePointed()
     function settlePointed() {
         const view = rowItem.ListView.view
-        if (!view)
+        if (!view || rowItem.renameWaiting)
             return
         restDelay.stop()
         if (rowItem.pointedPart !== "chip")
@@ -301,7 +310,9 @@ Item {
     }
     function openPointed() {
         const view = rowItem.ListView.view
-        if (!view)
+        // The rest that was already running when the second click landed is part of the same beat: it opens what the
+        // reader did not ask for, half a second into a wait they are watching (see `renameWaiting`).
+        if (!view || rowItem.renameWaiting)
             return
         if (rowItem.pointedPart === "chip")
             view.chipExpandRequested(rowItem.oid_hex, chipColumn.chipItem.records, chipColumn.chipItem)

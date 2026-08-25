@@ -33,6 +33,10 @@ QtObject {
     /// target is holding the wait the name box opens after. What a headless run reads to put its second click in as a
     /// second (app-ui.md §UI 自動化の因果性).
     readonly property bool guarded: doubleGuard.running
+    /// Whether any target is waiting. What the surface holds still while it runs: a wait is a beat with nothing to
+    /// show for it, and anything that opened or closed under it would be the answer to a different question
+    /// (2026-08-26 ユーザー指示 — the hover cards were changing under the wait).
+    readonly property bool armed: renameTimer.running
     function armedFor(key) {
         return renameTimer.running && gesture.armedKey === key
     }

@@ -218,7 +218,8 @@ Item {
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
                 "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
-                "graph-reclick-scrolled", "graph-reclick-across",
+                "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
+                "graph-reclick-still", "rename-box-out",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
@@ -3127,6 +3128,11 @@ Item {
         /// that scroll**, which is what the gesture must not be carried by (`ReclickGesture`) — and the box that
         /// opens has to be sent back into view (2026-08-26 ユーザー報告「入力モードに切り替わらないケースも有った」).
         property bool scrolls: false
+        /// Whether the run ends inside the wait, on the mark the chip wears while it runs, instead of at the box.
+        property bool marks: false
+        /// Whether the pointer is rested on the chip first, so the card it opens has a rest running under the wait —
+        /// what the gesture has to hold still (2026-08-26 ユーザー指示).
+        property bool points: false
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
             // A row the view has not laid out yet is not a row that was clicked: latching here would wait for an
@@ -3134,6 +3140,11 @@ Item {
             if (!item)
                 return
             if (driver.reclickGraphStep === 0) {
+                // The pointer comes to rest on the chip first, which starts the rest that opens the card
+                // (`GraphRowDelegate.restDelay`). Written where a real pointer writes it, so the row makes every
+                // decision after that for itself (`row-part`).
+                if (reclickGraphTimer.points)
+                    item.pointerRowX = item.labelsW - 2
                 item.leftClick(0)
                 driver.reclickGraphStep = 1
             } else if (driver.reclickGraphStep === 1) {
@@ -3149,6 +3160,20 @@ Item {
                 // has to survive that. Far enough that the row is well outside the view's own buffer.
                 if (reclickGraphTimer.scrolls)
                     graphPane.view.positionViewAtIndex(reclickGraphTimer.row + 200, ListView.Beginning)
+                if (reclickGraphTimer.marks) {
+                    // **The mark is what the reader has to see during the wait**, so this run ends inside it rather
+                    // than at the box. Read off the chip itself (`RefChip.waiting`), because a picture taken a beat
+                    // late frames the box instead and would say nothing either way.
+                    reclickGraphTimer.stop()
+                    AppBackend.report(
+                    "graph_reclick_mark row=" + reclickGraphTimer.row
+                    + " armed=" + driver.reclickGraphArmed
+                    + " mark=" + item.chipWaiting
+                    + " box=" + (graphPane.namingOid !== "")
+                    + " window=" + Application.styleHints.mouseDoubleClickInterval)
+                    driver.complete()
+                    return
+                }
                 driver.reclickGraphStep = 2
             } else if (driver.reclickGraphStep === 2) {
                 if (driver.reclickGraphArmed && graphPane.namingOid === "")
@@ -3162,6 +3187,10 @@ Item {
                 "graph_reclick row=" + reclickGraphTimer.row
                 + " armed=" + driver.reclickGraphArmed
                 + " box=" + (graphPane.namingOid !== "")
+                // Nothing hover opened or closed under the wait — the rest that was running when the second click
+                // landed is part of the same beat (`GraphList.renameWaiting`).
+                + " list=" + refList.opened
+                + " card=" + rowCard.opened
                 + " mode=" + graphPane.namingMode
                 + " kind=" + graphPane.namingKind
                 + " typed=" + graphPane.namingText
@@ -3182,6 +3211,57 @@ Item {
                 // Through to git, by the path the field's own Enter takes. The write barrier finishes this one.
                 graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
                                                reclickGraphTimer.name, graphPane.namingMode)
+            }
+        }
+    }
+    // PG_AUTO_ACT=rename-box-out: the ways out of the name box, one route per run. **The claim is what the box and the
+    // gesture are left holding**, not how long nothing happened for: a wait still running is the whole of how a box
+    // comes back by itself, so `armed=false` is what says it will not (2026-08-26 ユーザー報告 — the box on a row clicked
+    // again closed and reopened a window later).
+    property int boxOutStep: 0
+    SampleTimer {
+        id: boxOutTimer
+        /// Which way out this run takes: `same-row` / `other-row` / `escape` / `away` / `typed-away`.
+        property string route: ""
+        onTriggered: {
+            const item = graphPane.view.itemAtIndex(0)
+            if (!item)
+                return
+            if (driver.boxOutStep === 0) {
+                // The box is opened by the same call the gesture ends in — what this run is about is the way out.
+                page.startRename(item.oid_hex, item.renameRecord)
+                driver.boxOutStep = 1
+            } else if (driver.boxOutStep === 1) {
+                if (graphPane.namingOid === "")
+                    return
+                const route = boxOutTimer.route
+                if (route === "same-row") {
+                    item.leftClick(0)
+                } else if (route === "other-row") {
+                    const other = graphPane.view.itemAtIndex(1)
+                    if (!other)
+                        return
+                    other.leftClick(0)
+                } else if (route === "escape") {
+                    graphPane.view.namingCancelled()
+                } else {
+                    if (route === "typed-away") {
+                        graphPane.view.namingText = "half-written"
+                        item.takeNamingFocus()
+                    }
+                    page.releasePressedAway(null)
+                }
+                driver.boxOutStep = 2
+            } else if (driver.boxOutStep === 2) {
+                boxOutTimer.stop()
+                AppBackend.report(
+                "rename_box_out route=" + boxOutTimer.route
+                + " box=" + (graphPane.namingOid !== "")
+                // A wait left running is how a box that has just been walked away from comes back on its own.
+                + " armed=" + graphPane.view.renameWaiting
+                + " guarded=" + graphPane.view.clickGuarded
+                + " typed=" + graphPane.namingText)
+                driver.complete()
             }
         }
     }
@@ -4041,7 +4121,13 @@ Item {
                 probed.pointerRowX = rowPartReport.x
                 rowPartTimer.start()
             }
-        } else if (act === "graph-reclick" || act === "graph-rename" || act === "graph-reclick-scrolled") {
+        } else if (act === "rename-box-out") {
+            // The argument is the way out; the row is the first one, which every preset with a chip on it can answer.
+            boxOutTimer.route = arg
+            boxOutTimer.start()
+        } else if (act === "graph-reclick" || act === "graph-rename"
+                   || act === "graph-reclick-scrolled" || act === "graph-reclick-mark"
+                   || act === "graph-reclick-still") {
             // The gesture at the row itself. The argument is `<行>[:<付ける名前>]` — the first row is the default, and a
             // run that wants a chip on it says which (`--preset tags`). `graph-rename` carries the same gesture
             // through to git; without a name there is nothing to carry.
@@ -4049,6 +4135,8 @@ Item {
             reclickGraphTimer.row = Number(renameCut < 0 ? (arg === "" ? "0" : arg) : arg.substring(0, renameCut))
             reclickGraphTimer.name = renameCut < 0 ? "" : arg.substring(renameCut + 1)
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
+            reclickGraphTimer.marks = act === "graph-reclick-mark"
+            reclickGraphTimer.points = act === "graph-reclick-still"
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The argument

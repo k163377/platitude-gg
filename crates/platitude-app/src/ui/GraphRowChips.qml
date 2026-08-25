@@ -14,6 +14,8 @@ Item {
     /// How wide the column is. The chip and the box are laid out from it rather than from `width`, which a layout
     /// settles a frame later.
     required property real columnWidth
+    /// This chip has taken a second click and is waiting out the double-click window (`RefChip.waiting`).
+    required property bool waiting
     /// This column is a name box right now, and which of the three names it is asking for ("branch" / "tag" /
     /// "rename"). One field for all of them — what is typed is a ref name either way — and the question it holds is
     /// the whole of the difference: the two that make a name ask it in the placeholder, and the one that changes a
@@ -30,6 +32,9 @@ Item {
 
     /// The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: rowChip
+    /// The mark as the chip is actually wearing it, for the run that photographs the wait (`RefChip.waiting`) — read
+    /// off the chip rather than off what was asked of it, which would be green with the binding cut.
+    readonly property alias chipWaiting: rowChip.waiting
     /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
     /// ground the box is standing on, and a headless run (`PG_AUTO_ACT=name-box`) to say which of the two it got.
     readonly property alias nameBoxWidth: nameField.width
@@ -92,6 +97,7 @@ Item {
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         records: chipColumn.records
+        waiting: chipColumn.waiting
         // The names the chip cannot fit are read in the card, not squeezed here.
         maxWidth: chipColumn.columnWidth - Theme.spaceSm
     }

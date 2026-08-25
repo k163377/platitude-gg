@@ -175,6 +175,10 @@ AppCard {
                     x: 0
                     records: [refRow.modelData]
                     muted: refRow.unavailable
+                    // The same wash the row's own chip wears while a second click waits out its window — this card is
+                    // that chip, so the mark is on whichever of the two the reader is looking at (規約 §グラフ行のダブルクリック).
+                    waiting: refList.gesture
+                             ? refList.gesture.armedFor(GitFacts.recordKey(refRow.modelData)) : false
                     // Unstacking is only worth it if the names read, so the chip takes everything the row has left once
                     // the reading's remote has its seat — and what will not fit even then is wrapped, not cut: this is
                     // the one place the name is shown in order to be read (規約 §hover のツールチップ).

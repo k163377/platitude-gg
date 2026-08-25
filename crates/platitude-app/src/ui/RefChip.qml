@@ -27,6 +27,11 @@ Rectangle {
     /// either (git refuses it outright), so it reads the way the caller's own `muted` does. It carries a mark of its
     /// own as well — the muting says a move cannot land here, the mark says where the branch went instead.
     readonly property bool dulled: chip.muted || chip.recHeld
+    /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
+    /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
+    /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
+    /// and the reader is looking straight at this chip while it does (2026-08-26 ユーザー判断).
+    property bool waiting: false
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
@@ -151,6 +156,14 @@ Rectangle {
         font: nameLabel.font
     }
 
+    // The wash the wait wears. A layer of its own rather than a colour on the frame: a tag already has a fill and a
+    // branch has none, and the wash has to read as one step over whichever of the two is underneath.
+    Rectangle {
+        anchors.fill: parent
+        radius: chip.radius
+        color: Theme.bgHover
+        visible: chip.waiting
+    }
     Row {
         id: chipContent
         anchors.top: parent.top

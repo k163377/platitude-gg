@@ -100,8 +100,14 @@ AppListView {
     /// `record` is the chip's first one, read now rather than when the wait ends — by then the row may be showing
     /// something else, or be another row altogether.
     function noteClick(oidHex, record, held) {
+        // **A box already standing is not something to open again.** It is what this gesture turns into, so a click
+        // while one is up is the reader walking away from it — and the row's own click takes it down
+        // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
+        // which reads as a blink (2026-08-26 ユーザー報告). The click still says which target it landed on, so the next
+        // one is a second click in the ordinary way.
+        const nameable = record !== "" && graphList.namingOid === ""
         return reclick.click(record === "" ? "" : GitFacts.recordKey(record),
-                             record === "" ? null : { "oid": oidHex, "record": record },
+                             nameable ? { "oid": oidHex, "record": record } : null,
                              held)
     }
     function dropRename() {
@@ -110,6 +116,10 @@ AppListView {
     /// Which target the last left click landed on, and the gesture's own state for the runs that photograph it.
     readonly property alias clickedKey: reclick.activeKey
     readonly property alias clickGuarded: reclick.guarded
+    /// A second click is waiting out the double-click window. **The rows hold what they are showing still while it
+    /// runs** (`GraphRowDelegate.settlePointed`): the wait is a beat the reader is already watching one thing through,
+    /// and a card opening or closing in it answers a question nobody asked (2026-08-26 ユーザー指示).
+    readonly property alias renameWaiting: reclick.armed
     function renameArmed(record) {
         return record !== "" && reclick.armedFor(GitFacts.recordKey(record))
     }
