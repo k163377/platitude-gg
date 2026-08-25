@@ -73,9 +73,17 @@ Rectangle {
     /// How far past the row the ground stays whole. **The graph has to be gone before the rows start coming back**
     /// (2026-08-22 ユーザー判断) — without this the two overlap and neither reads, and what is left below the
     /// stand-in is a row at half strength rather than a stretch of nothing.
-    readonly property real hold: Theme.graphRowHeight / 2
-    /// And how long they take coming back: a whole row, or the one they land on is cut across.
-    readonly property real fadeRoom: Theme.graphRowHeight
+    ///
+    /// **A quarter of a row, not half** (2026-08-25 ユーザー判断): the whole going-out sits that much higher, so the
+    /// commit directly under the stand-in is most of the way back rather than wiped across its middle. It is still the
+    /// only room the lanes have to dissolve in, so it cannot go to nothing — a hard edge is what is on the other side.
+    readonly property real hold: Theme.graphRowHeight / 4
+    /// And how long they take coming back. **What the hold gives up, this takes** (2026-08-25 ユーザー判断) — the two
+    /// together are a row and a half whatever the split, so the stand-in stands on the same 2.5 rows it always did and
+    /// only the shape of the dissolve moves. Shortening the whole instead would put the same drop in brightness across
+    /// a shorter distance, which is the one thing a gradient is here to avoid. A row is the floor: less, and the commit
+    /// it lands on is cut across.
+    readonly property real fadeRoom: Theme.graphRowHeight * 5 / 4
     readonly property real rowY: pin.rowAbove ? 0 : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
     /// Where the lane leaves the node — **a hairline past its edge, not the row's** (2026-08-22 ユーザー判断). The row's
