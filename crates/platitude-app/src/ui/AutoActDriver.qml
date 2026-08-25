@@ -219,7 +219,7 @@ Item {
                 "delete-gone",
                 "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
-                "graph-reclick-still", "rename-box-out",
+                "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
                 "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
@@ -3228,20 +3228,31 @@ Item {
             if (!item)
                 return
             if (driver.boxOutStep === 0) {
-                // The box is opened by the same call the gesture ends in — what this run is about is the way out.
-                page.startRename(item.oid_hex, item.renameRecord)
+                // **The box is opened by the gesture itself, not by the page's own call.** A box put up any other way
+                // leaves the gesture with no memory of the row, and every way out then passes for free — which is how
+                // the blink survived a green run twice (2026-08-26 ユーザー報告). What the reader did is two clicks, and
+                // the second one is what the way out has to be weighed against.
+                item.leftClick(0)
                 driver.boxOutStep = 1
             } else if (driver.boxOutStep === 1) {
+                if (graphPane.view.clickGuarded)
+                    return
+                item.leftClick(0)
+                driver.boxOutStep = 2
+            } else if (driver.boxOutStep === 2) {
                 if (graphPane.namingOid === "")
                     return
                 const route = boxOutTimer.route
-                if (route === "same-row") {
-                    item.leftClick(0)
-                } else if (route === "other-row") {
-                    const other = graphPane.view.itemAtIndex(1)
-                    if (!other)
+                if (route === "same-row" || route === "other-row") {
+                    // **A click on a row is a press and then a release, and the two are answered in different
+                    // places**: the box holds the caret, so the press reaches `FocusRelease` first and takes the box
+                    // down, and only then does the row see the click. A run that put the click in alone never
+                    // reproduced what a hand does — which is how the blink survived a green run (2026-08-26 ユーザー報告).
+                    page.releasePressedAway(null)
+                    const row = route === "same-row" ? item : graphPane.view.itemAtIndex(1)
+                    if (!row)
                         return
-                    other.leftClick(0)
+                    row.leftClick(0)
                 } else if (route === "escape") {
                     graphPane.view.namingCancelled()
                 } else {
@@ -3251,8 +3262,8 @@ Item {
                     }
                     page.releasePressedAway(null)
                 }
-                driver.boxOutStep = 2
-            } else if (driver.boxOutStep === 2) {
+                driver.boxOutStep = 3
+            } else if (driver.boxOutStep === 3) {
                 boxOutTimer.stop()
                 AppBackend.report(
                 "rename_box_out route=" + boxOutTimer.route
@@ -3261,6 +3272,53 @@ Item {
                 + " armed=" + graphPane.view.renameWaiting
                 + " guarded=" + graphPane.view.clickGuarded
                 + " typed=" + graphPane.namingText)
+                driver.complete()
+            }
+        }
+    }
+    // PG_AUTO_ACT=graph-reclick-lanes: the same gesture put in through **the strip over the lane column** — the half
+    // of the row between the two dividers, which has a press-taking layer of its own wherever the lanes overflow their
+    // column (`GraphLanePan`). A reader aiming at the middle of a wide graph is aiming at that strip, and a strip that
+    // answered with a copy of half of what a click does left the gesture doing nothing there (2026-08-26 ユーザー報告).
+    property bool laneClickArmed: false
+    property int laneClickStep: 0
+    SampleTimer {
+        id: laneClickTimer
+        property int row: 0
+        onTriggered: {
+            const item = graphPane.view.itemAtIndex(laneClickTimer.row)
+            if (!item)
+                return
+            if (driver.laneClickStep === 0) {
+                // The strip is only up while the lanes have somewhere sideways to go, so the column is squeezed to its
+                // floor first — the state a repository wide enough to need panning is in from the start.
+                page.setGraphColumns(graphPane.labelW, 0)
+                driver.laneClickStep = 1
+            } else if (driver.laneClickStep === 1) {
+                if (!graphPane.lanePan.visible)
+                    return
+                // A point in the strip's own frame, over this row — the strip works out which row that is.
+                if (!graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y))
+                    return
+                driver.laneClickStep = 2
+            } else if (driver.laneClickStep === 2) {
+                if (graphPane.view.clickGuarded)
+                    return
+                if (!graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y))
+                    return
+                driver.laneClickArmed = item.renameArmed
+                driver.laneClickStep = 3
+            } else if (driver.laneClickStep === 3) {
+                if (driver.laneClickArmed && graphPane.namingOid === "")
+                    return
+                laneClickTimer.stop()
+                AppBackend.report(
+                "graph_reclick_lanes row=" + laneClickTimer.row
+                + " strip=" + graphPane.lanePan.visible
+                + " armed=" + driver.laneClickArmed
+                + " box=" + (graphPane.namingOid !== "")
+                + " typed=" + graphPane.namingText
+                + " branch=" + workTree.branch)
                 driver.complete()
             }
         }
@@ -4121,6 +4179,10 @@ Item {
                 probed.pointerRowX = rowPartReport.x
                 rowPartTimer.start()
             }
+        } else if (act === "graph-reclick-lanes") {
+            // The argument is the row the presses land on.
+            laneClickTimer.row = Number(arg === "" ? "0" : arg)
+            laneClickTimer.start()
         } else if (act === "rename-box-out") {
             // The argument is the way out; the row is the first one, which every preset with a chip on it can answer.
             boxOutTimer.route = arg

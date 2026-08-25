@@ -84,6 +84,13 @@ Rectangle {
         graphList.namingOid = oidHex
     }
     function stopNaming() {
+        // **A box coming down spends the gesture that opened it.** The press that walks away from a box lands before
+        // the click it belongs to (`FocusRelease` fires on the press, `MouseArea.clicked` on the release), so by the
+        // time the click is answered the box is already gone — and a click that found no box would come up as a
+        // second one and open it again a window later, which is the blink that was reported twice (2026-08-26 ユーザー
+        // 報告). Asked here rather than at the click, because this is the one place that knows a box was standing.
+        if (graphList.namingOid !== "")
+            graphList.forgetClicks()
         graphList.namingOid = ""
         graphList.namingText = ""
         graphArea.namingOpenedWith = ""
@@ -372,10 +379,13 @@ Rectangle {
         }
     }
     GraphLanePan {
+        id: lanePan
         columns: metrics
         view: graphList
-        graphModel: graphArea.graphModel
     }
+    /// The lane strip — automation-only exposure, the same one `view` is (app-ui.md). A run has no pointer to press
+    /// with, and the strip is the one way in that covers the column between the two dividers.
+    readonly property alias lanePan: lanePan
     // The current branch's stand-in, riding whichever edge its own row went out of. **Over the lane strip and under the
     // dividers**: the strip takes presses across the lane column, so a stand-in below it would answer its own lanes
     // with the row scrolling underneath — and the dividers stay on top, because a boundary that can be dragged is only

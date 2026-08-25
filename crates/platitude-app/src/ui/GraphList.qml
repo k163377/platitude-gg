@@ -113,6 +113,11 @@ AppListView {
     function dropRename() {
         reclick.drop()
     }
+    /// The box this gesture opens has been taken down: the gesture is spent with it, so the click that took it down
+    /// cannot come up as a second one (`GraphPane.stopNaming`).
+    function forgetClicks() {
+        reclick.forget()
+    }
     /// Which target the last left click landed on, and the gesture's own state for the runs that photograph it.
     readonly property alias clickedKey: reclick.activeKey
     readonly property alias clickGuarded: reclick.guarded

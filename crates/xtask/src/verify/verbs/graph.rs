@@ -106,6 +106,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
+    // The same two clicks put in through the strip over the lane
+    // column. That strip is up wherever the lanes overflow their
+    // column — which is every repository wide enough for a reader to
+    // aim at the middle of a row — and it took presses of its own
+    // without handing them to the row, so the gesture did nothing
+    // between the two dividers while working either side of them
+    // (2026-08-26 ユーザー報告). `strip=` says the layer was actually up:
+    // with the lanes inside their column there is nothing to prove.
+    Verb {
+        name: "graph-reclick-lanes",
+        when: &[],
+        plain: "strip=true armed=true box=true",
+    },
     // The same two clicks with the pointer rested on the chip, so the
     // card's own rest is running under the wait. Nothing may open or
     // close in that beat: the reader has clicked and is watching one

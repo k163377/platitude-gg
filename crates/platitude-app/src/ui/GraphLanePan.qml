@@ -14,9 +14,8 @@ MouseArea {
     /// The three columns' arithmetic (`GraphColumnMetrics`): where the lanes start, how wide they are drawn, and how
     /// far they have been sent — this writes that last one.
     required property var columns
-    /// The list underneath: which row a press landed on is its answer.
+    /// The list underneath: which row a press landed on is its answer, and the row itself is what answers it.
     required property var view
-    required property var graphModel
 
     x: pan.columns.labelW
     width: pan.columns.graphColW
@@ -27,10 +26,13 @@ MouseArea {
     property real pressX: 0
     property real startGX: 0
     property bool panning: false
+    /// When the button went down, for the gesture to take off the wait it has left (`ReclickGesture.click`).
+    property real pressAt: 0
     onPressed: mouse => {
         pan.pressX = mouse.x
         pan.startGX = pan.columns.graphX
         pan.panning = false
+        pan.pressAt = Date.now()
     }
     onPositionChanged: mouse => {
         if (!pan.pressed)
@@ -40,33 +42,48 @@ MouseArea {
         if (pan.panning)
             pan.columns.graphX = Math.max(0, Math.min(pan.startGX - (mouse.x - pan.pressX), pan.columns.graphXMax))
     }
-    // The lanes are part of the row, so a double-click on them means what it means anywhere else on it. Without this
-    // the gesture would die in exactly the repositories wide enough to need panning, and nothing on screen would say
-    // why.
-    onDoubleClicked: mouse => {
-        // mouse.y is in this MouseArea's frame, which starts at the pane's top; the list starts below the ask bar. Map,
-        // or a standing question makes every lane click land rows lower.
+    /// A press and a release on this strip, as a run with no pointer to press with puts one in — at a point in this
+    /// strip's own frame, so **the mapping from the point to a row is the strip's own**, which is the half worth
+    /// proving (PG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
+    ///
+    /// **It goes in at the handler's own body**, not beside it: a hook that did what the handler would have done
+    /// stays green while the handler does something else, which is exactly how the gap this proves survived a run
+    /// (2026-08-26).
+    function clickAt(x, y) {
+        return pan.pressLanded({ "x": x, "y": y }, 0)
+    }
+    /// The row a press on this strip landed on, or null.
+    ///
+    /// `mouse.y` is in this MouseArea's frame, which starts at the pane's top; the list starts below the ask bar. Map,
+    /// or a standing question makes every lane press land rows lower.
+    function rowAt(mouse) {
         const p = pan.mapToItem(pan.view, mouse.x, mouse.y)
         const idx = pan.view.indexAt(pan.columns.labelW + 1, pan.view.contentY + p.y)
-        if (idx < 0)
-            return
-        // Asked of the row itself, so which chip a row leads to is worked out in exactly one place.
-        const row = pan.view.itemAtIndex(idx)
-        if (row && row.movable)
-            pan.view.rowSwitchRequested(pan.graphModel.oidAt(idx), row.primaryRecord)
+        return idx < 0 ? null : pan.view.itemAtIndex(idx)
+    }
+    // **The lanes are part of the row, so both gestures are the row's own.** Handed straight to the row rather than
+    // worked out again here: where a row leads and what a second click on it means are decided in one place
+    // (`GraphRowDelegate`), and this strip covers the whole of the column between the two dividers — the half of the
+    // row a reader is most likely to aim at when the graph is wide. Answering it with a copy of half of what a click
+    // does is how the name gesture came to do nothing there, in exactly the repositories wide enough to raise this
+    // strip (2026-08-26 ユーザー報告).
+    onDoubleClicked: mouse => {
+        const row = pan.rowAt(mouse)
+        if (row)
+            row.doubleClick()
     }
     onReleased: mouse => {
         if (pan.panning)
             return
-        // Same frame correction as the double-click above.
-        const p = pan.mapToItem(pan.view, mouse.x, mouse.y)
-        const idx = pan.view.indexAt(pan.columns.labelW + 1, pan.view.contentY + p.y)
-        if (idx >= 0) {
-            // Same as a click on the row itself: the lanes are part of the row, so a press that lands on them leaves
-            // the keyboard here too (規約 §矢印で履歴を辿る).
-            pan.view.takeKeyboard()
-            pan.view.currentIndex = idx
-            pan.view.rowSelected(pan.graphModel.oidAt(idx))
-        }
+        pan.pressLanded(mouse, Date.now() - pan.pressAt)
+    }
+    /// What a press that did not travel means. One line in the handler above, so the run and the hand go in at the
+    /// same place (`clickAt`).
+    function pressLanded(at, held) {
+        const row = pan.rowAt(at)
+        if (!row)
+            return false
+        row.leftClick(held)
+        return true
     }
 }

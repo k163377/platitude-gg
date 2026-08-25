@@ -342,6 +342,18 @@ Item {
             return
         rowItem.claimRow()
     }
+    /// A double-click, as this row answers one. Named for the same reason `leftClick` is: **the lane column has a
+    /// strip of its own over the list** (`GraphLanePan`, up wherever the lanes overflow their column), and where a row
+    /// leads — and what a second click on it means — has to be decided in one place, or the half of the row between
+    /// the two dividers answers differently from the two halves either side of it (2026-08-26 ユーザー報告).
+    function doubleClick() {
+        // The second click came inside the window after all, so the gesture was the double-click and not the name.
+        // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
+        rowItem.ListView.view.dropRename()
+        if (!rowItem.movable)
+            return
+        rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
+    }
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
     /// picked (規約 §矢印で履歴を辿る). Taken by the list rather than by this row: the delegate is recycled the moment the
     /// row scrolls off, and either button is the same claim.
@@ -392,12 +404,7 @@ Item {
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton)
                 return
-            // The second click came inside the window after all, so the gesture was the double-click and not the name.
-            // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
-            rowItem.ListView.view.dropRename()
-            if (!rowItem.movable)
-                return
-            rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
+            rowItem.doubleClick()
         }
         onPositionChanged: mouse => rowItem.pointerRowX = mouse.x
         onContainsMouseChanged: {

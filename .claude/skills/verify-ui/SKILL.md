@@ -20,6 +20,8 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 ## 壊れない動詞の実装と反復
 
 - **時間は成功条件にしない**。動詞は実際の入力経路を通し、対象の `loaded` / popup `visible` / tooltip `visible` / busy edge と終了 / write sequence / model output 等、その操作が生む観測可能な出力を待って `finishAutoAct()` する。25ms 等の Timer は状態 sampler であり、回数・経過時間で先へ進めない。`--quit-ms` という旗は無い(指定すると fail fast する)
+- **注入はハンドラ本体そのものへ入れる — 隣に置いた「同じことをする関数」は嘘をつく**(2026-08-26 実測、同じ罠で 2 回緑を出した)。`onReleased` / `onClicked` の中身を名前付き関数へ出し、**ハンドラは 1 行にして run もそこを呼ぶ**。フックが「ハンドラがやるはずのこと」を書き写していると、**ハンドラが別のことをしていても緑になる**(グラフのレーン列の所作が死んでいた run は、フックが行の関数を直接叩いていたので通っていた)。同じ理由で、**前提の状態も実経路で作る** — 箱を `page.startRename()` で開けた run は「所作の記憶」を持たないので、出口の判定が全部素通りした
+- **1 クリックは press と release の 2 つで、別々の場所が答える**(2026-08-26 実測)。入力欄が開いている時の押下は **`FocusRelease` の `PointHandler` が press で先に受けて箱を閉じ**、その後で行の `MouseArea.clicked` が来る。run が click だけを注入すると**この順序が再現されず**、実機だけで壊れる(箱が閉じた後のクリックが「2 回目」に化ける経路がまさにこれ)。押下で何かが閉じる動詞は `page.releasePressedAway(null)` を先に撃つ
 - **`--watchdog-ms` は診断用の外側の天井だけ**。性能が落ちても正しい run の撮影時点を変えないよう通常は既定 120s のまま使う。短くして「通信中」や「起動途中」を狙わない。**watchdog 到達はそれだけで FAIL** — アプリは自分で `Qt.quit()` するので exit 0 で戻り、2 枚のうち app.png だけ書けた run は「screenshot saved=true」も持つ。判定は `auto-act watchdog expired` の行そのもの
 - **非因果の寿命管理を因果完了へ混ぜない**。性能測定の 12 秒窓は測定入力なので保持するが、起動からの固定 quit は成功条件にしない。`perf_done` と親 watchdog で perf の終了・kill を判定し、raw worktree app 起動は offscreen 環境変数だけでは許可しない。Windows の直接起動ではなく `cargo xtask verify-ui <verb>`、Linux では `cargo xtask linux verify-ui <verb>` を使う
 - **owner は 1 run に 1 つ**。page 内は `AutoActDriver.qml`、window 横断は `WindowAutoActDriver.qml` が完了を持ち、後者の動詞は page completion を defer する。`AutoShotDriver.claimPageAct()` より前に page 動詞を始めず、新規 tab に同じ動詞を replay させない。最終撮影は `AutoShotDriver` だけが行う
