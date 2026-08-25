@@ -151,6 +151,7 @@ fn proc_scan() -> Vec<(u32, String)> {
         .collect()
 }
 
+#[cfg(any(windows, test))]
 fn parse_pid_paths(listing: &str) -> Vec<(u32, String)> {
     listing
         .lines()

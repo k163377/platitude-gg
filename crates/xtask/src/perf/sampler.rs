@@ -1,5 +1,6 @@
 //! Peak process-memory sampling for the performance harness.
 
+#[cfg(windows)]
 use std::process::Command;
 use std::time::Instant;
 
@@ -126,6 +127,7 @@ fn linux_sample_once(pid: u32) -> (u64, u64) {
 }
 
 /// `"123 456"` -> `(123, 456)`; anything else becomes zero.
+#[cfg(any(windows, test))]
 fn parse_pair(text: &str) -> (u64, u64) {
     let mut numbers = text.split_whitespace().filter_map(|v| v.parse().ok());
     (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0))
