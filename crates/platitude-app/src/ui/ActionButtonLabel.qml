@@ -252,8 +252,8 @@ Item {
             signatureTip: btnLabel.phraseSignatureTip
             signaturePointedAt: btnLabel.phraseSignaturePointedAt
             badgeInk: Theme.iconXs
-            // Clear of the round face's corner by the same step the details pane uses, so what the eye reads is a tick
-            // beside a face rather than a tick on one (§署名の表示).
+            // Clear of the round face's corner by a step, one pixel short of the frame beside it, so what the eye
+            // reads is a tick beside a face rather than a tick on one (§署名の表示).
             badgeTopOut: Theme.spaceXs - Theme.borderWidth
             badgeRightOut: Theme.spaceXs - Theme.borderWidth
             width: Theme.iconLg

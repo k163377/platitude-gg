@@ -35,6 +35,9 @@ Canvas {
         // diagonals read heavier (`onPaint`). A tab seats its `✕` off this, so the air a caller has to take off is
         // nearly half of what the box says (デザイン規約 §余白).
         case "close": return 7
+        // The tick runs 3.5 to 12.5, so it no more fills its box than `close` does. Said out loud because the seat
+        // beside a name measures the gap to this ink, and the kind that shares that seat spans two (`SignatureMark`).
+        case "check": return 9
         // Two rotated pieces: the body and the point, turned 45° about the middle, so what they span sideways is their
         // diagonal.
         case "pen": return 10

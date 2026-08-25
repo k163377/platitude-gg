@@ -45,7 +45,7 @@ RowLayout {
     readonly property bool authorLit: authorRow.authorPointed || authorRow.authorCardInside
 
     /// The verdict tooltip is up (`SignatureMark.tipShown` — the output side, so a cut binding cannot read as green).
-    readonly property bool signatureTipShown: avatarBadge.signatureTipShown
+    readonly property bool signatureTipShown: sigMark.tipShown
 
     /// The name did not fit the room the row gave it. Nothing is drawn differently for it — the ellipsis already says
     /// so — but a headless run cannot see an ellipsis, and the width rule against `authorLabel` is the whole of what
@@ -94,22 +94,15 @@ RowLayout {
     // 行内の詰め).
     spacing: Theme.spaceXs
 
-    // The face carries the signature in its top-right corner (デザイン規約 §署名の表示): the mark is about the person
-    // whose commit this is, and the corner is where the editor's own face carries the same thing.
+    // The face here carries the pen and nothing else: this row shows the name, and the name is what the signature is
+    // hung off (デザイン規約 §署名の表示). The editor's face wears the mark in its corner because out there no name is
+    // written.
     AvatarButton {
         id: avatarBadge
         face: authorRow.details.avatar
         faceUrl: authorRow.details.avatarUrl
         email: authorRow.details.authorEmail
         pointedAt: authorRow.avatarPointedAt
-        signatureKind: authorRow.signatureKind
-        signatureCode: authorRow.signatureCode
-        signatureSigner: authorRow.signatureSigner
-        signaturePointedAt: authorRow.signaturePointedAt
-        // Out of the round face's empty corner and onto the pane's ground, as far as the air above the row allows: one
-        // pixel short of the band's own hairline (§署名の表示).
-        badgeTopOut: Theme.spaceXs - Theme.borderWidth
-        badgeRightOut: Theme.spaceXs - Theme.borderWidth
         Layout.preferredWidth: Metrics.detailsAvatar
         Layout.preferredHeight: Metrics.detailsAvatar
         onClicked: authorRow.avatarClicked()
@@ -117,9 +110,10 @@ RowLayout {
     ColumnLayout {
         spacing: 0
         Layout.fillWidth: true
-        // Name, and beside it the one word a signature ever spends. The verdict itself is a mark on the face
-        // (デザイン規約 §署名の表示) — but a broken one reads as the error message it is, and an error nobody can
-        // find without hovering is not one, so that single case keeps a word out here beside the name it contradicts.
+        // Name, the mark on its shoulder, and the one word a signature ever spends. The verdict is about the person,
+        // and this is where the person is named (デザイン規約 §署名の表示) — a broken one also reads as the error
+        // message it is, and an error nobody can find without hovering is not one, so that single case spends a word
+        // as well, out past the mark and still against the name it contradicts.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
@@ -151,14 +145,34 @@ RowLayout {
                     onHoveredChanged: authorRow.showAuthor(authorHover.hovered)
                 }
             }
+            // The shoulder every `!` in this app stands on: raised to the top of the name's own line rather than set
+            // level with it, and pulled half a gap in, so it reads as part of the name instead of as the next column
+            // (`NameCell`, `AppMenuItem`, the toolbar's `push -f` — デザイン規約 §git 用語のコード表記).
+            //
+            // Both distances are measured to the **ink**, never to the box (§余白): the tick's ink starts 3.5 of its
+            // grid in and the bang's 7, so a seat written to the box would stand a broken signature two and a half
+            // pixels further off the name than a good one. The right-hand air comes off the same way, so what follows
+            // is a gap from the mark rather than from where the mark's square happens to end.
+            SignatureMark {
+                id: sigMark
+                kind: authorRow.signatureKind
+                code: authorRow.signatureCode
+                signer: authorRow.signatureSigner
+                pointedAt: authorRow.signaturePointedAt
+                // A mark beside a word carries the letters' weight, not a badge's (`NavIcon.stroke`).
+                stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                Layout.alignment: Qt.AlignTop
+                Layout.leftMargin: -(Theme.spaceXs / 2 + sigMark.inkAirLeft)
+                Layout.rightMargin: -sigMark.inkAirRight
+            }
             Label {
-                visible: avatarBadge.signatureBroken
+                visible: sigMark.broken
                 text: qsTr("Bad signature")
-                color: avatarBadge.signatureTone
+                color: sigMark.tone
                 font.pixelSize: Theme.fontSm
                 Layout.alignment: Qt.AlignVCenter
             }
-            // The slack lives here, past both of them, so the word stays against the name.
+            // The slack lives here, past all three, so the mark and the word stay against the name.
             Item { Layout.fillWidth: true }
         }
         // Date, and beside it whoever the message credits along with the author. A commit with no trailer shows only

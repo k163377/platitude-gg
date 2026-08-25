@@ -5,10 +5,9 @@ import platitude.ui
 // The one place a picture is reached from. A pointer resting on the face raises a badge saying so; pressing it opens
 // the settings card with this author already named (デザイン規約 §アバターを与える).
 //
-// The face carries what is said about the person wearing it, a corner apiece: the pen that assigns a picture at the
-// bottom right, and what git makes of their signature at the top right (§署名の表示). Both panes wear the same pair,
-// so a face means the same thing wherever it stands — the commit editor's is simply smaller, and hands in a smaller
-// ink for the two badges with it.
+// The pen that assigns a picture rides the bottom right corner. The other one is empty unless the caller fills it:
+// the commit editor's phrase has a face but no name to hang a signature off, so there the mark rides the top right
+// (§署名の表示). A row that shows the name says it there instead, and leaves this corner alone.
 Item {
     id: avatarBox
 
@@ -21,8 +20,8 @@ Item {
     /// Stands in for the pointer where headless cannot put one, so the badge can be photographed
     /// (PG_AUTO_ACT=avatar-hover).
     property bool pointedAt: false
-    /// What rides the other corner (`SignatureMark`): git's verdict on this commit's signature in the details pane,
-    /// and whether the next commit will be signed in the editor. Empty `signatureKind` puts nothing there.
+    /// What rides the other corner (`SignatureMark`): whether the commit being written will be signed. Empty
+    /// `signatureKind` puts nothing there, which is what a face standing beside its own name hands in.
     property string signatureKind: ""
     property string signatureCode: ""
     property string signatureSigner: ""
@@ -93,6 +92,9 @@ Item {
         signer: avatarBox.signatureSigner
         pointedAt: avatarBox.signaturePointedAt
         ink: avatarBox.badgeInk
+        // Anchored rather than laid out, so the implicit size has to be taken by hand.
+        width: sigMark.implicitWidth
+        height: sigMark.implicitHeight
     }
     // Clicks only. Hover is a handler's, because handlers are passive: a hoverEnabled MouseArea over the whole face
     // takes the hover from everything under it, and the mark in the corner would never say why it is the colour it is

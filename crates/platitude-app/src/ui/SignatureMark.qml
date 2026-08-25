@@ -5,11 +5,13 @@ import platitude.ui
 // A signature that holds is a tick and nothing more; only one that
 // contradicts the content spends words (規約 §署名の表示).
 //
-// The mark rides a corner of the face it is about, the way the pen rides
-// the other one: both are things said about the person under them, and a
-// corner apiece is what keeps the pair from ever standing on each other.
-// The commit editor's badge is the same shape over the same face, so the
-// two panes say "signature" in one vocabulary.
+// Where it stands is the caller's to say, and there are two seats for it.
+// In the details pane it rides the committer's name, on the shoulder every
+// other `!` in this app stands on (規約 §署名の表示). In the commit editor
+// there is no name to hang it off — the phrase names a branch, not a person
+// — so it rides the corner of the face the phrase already carries, the way
+// the pen rides the other one. One shape either way, so both panes say
+// "signature" in one vocabulary.
 //
 // Green stays with the signatures git actually vouched for. One it
 // could read but not judge gets the same tick in textSecondary: the
@@ -35,6 +37,11 @@ Item {
     /// hands in a smaller ink rather than wearing the same badge twice
     /// over (デザイン規約 §アバターを与える).
     property int ink: Theme.iconSm
+    /// Line weight. A mark standing at `iconSm` beside a word carries 4/3
+    /// the weight of the letters unless the caller hands the grid ratio in,
+    /// and weight is what the eye reads as size (`NavIcon.stroke`) — so the
+    /// seat on a name asks for it and the badge on a face does not.
+    property real stroke: Metrics.iconStroke
 
     /// The tooltip is up. Reported through the ToolTip's own visible —
     /// the output side, so a cut binding cannot read as green.
@@ -44,18 +51,22 @@ Item {
     /// 「1 つのポインタが開けるものは 1 つ」).
     readonly property bool pointed: signatureHover.hovered || signatureMark.pointedAt
 
-    /// The air this mark's own square holds past its ink, on the two
-    /// sides that are set against something. **The seat is the ink, not
-    /// the box** (規約 §余白): the mark is drawn well inside its square
-    /// on both of those axes, so one placed a pixel off a frame would
-    /// leave several between the frame and anything actually drawn.
-    /// Whoever places this adds these back, and each kind answers for
-    /// its own drawing (`NavIcon.inkRightGrid` / `inkTopGrid`).
+    /// The air this mark's own square holds past its ink, on whichever
+    /// side is set against something. **The seat is the ink, not the box**
+    /// (規約 §余白): the mark is drawn well inside its square, so one
+    /// placed a pixel off a frame — or half a gap off a name — would leave
+    /// several between that and anything actually drawn. Whoever places
+    /// this adds the air back, and each kind answers for its own drawing
+    /// (`NavIcon.inkGrid` / `inkRightGrid` / `inkTopGrid`). **The two kinds
+    /// disagree by more than a hair**: the tick's ink starts 3.5 of the
+    /// grid in and the bang's 7, so a seat written to one of them stands
+    /// the other somewhere else.
     ///
     /// The grid air as drawn, with nothing taken off for the stroke:
     /// `inkWidth` adds a line to a span because there a stroke straddles
-    /// a path running along the axis being measured, and neither of
-    /// these does.
+    /// a path running along the axis being measured, and none of these
+    /// does.
+    readonly property real inkAirLeft: (mark.inkRightGrid - mark.inkGrid) / 16 * signatureMark.ink
     readonly property real inkAirRight: (16 - mark.inkRightGrid) / 16 * signatureMark.ink
     readonly property real inkAirTop: mark.inkTopGrid / 16 * signatureMark.ink
 
@@ -87,21 +98,18 @@ Item {
     visible: signatureMark.kind !== ""
     implicitWidth: signatureMark.ink
     implicitHeight: signatureMark.ink
-    // Anchored rather than laid out by a layout, so the implicit sizes
-    // above have to be taken by hand.
-    width: signatureMark.implicitWidth
-    height: signatureMark.implicitHeight
 
     // **No disc under it.** The pen's is what makes the pen legible on a
-    // face of any colour, but this mark is placed to sit past the corner
-    // of the round face rather than on it — so it already stands on the
-    // pane's own ground, and a ring there would only be a second small
-    // frame beside whatever frame it is set against.
+    // face of any colour, but this mark is never on one: beside a name it
+    // stands on the pane's own ground, and on a face it is placed past the
+    // round corner rather than over it. A ring either way would only be a
+    // second small frame beside whatever frame it is set against.
     NavIcon {
         id: mark
         anchors.fill: parent
         kind: signatureMark.broken ? "bang" : "check"
         tint: signatureMark.tone
+        stroke: signatureMark.stroke
     }
     ToolTip.visible: signatureMark.pointed
     ToolTip.delay: Metrics.tipDelayMs
