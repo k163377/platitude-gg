@@ -209,7 +209,7 @@ Item {
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")
     /// The gesture the rows of this section share, or null for a list whose rows cannot be typed into (the working
     /// tree's files). Held by the sidebar, since it has to outlive this delegate (`SidebarRowGestures`).
-    property var reclick: null
+    property ReclickGesture reclick: null
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
     /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性). Both are the sidebar's answer:

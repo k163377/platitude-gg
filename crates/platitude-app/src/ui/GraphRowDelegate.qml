@@ -315,7 +315,8 @@ Item {
         if (!view || rowItem.renameWaiting)
             return
         if (rowItem.pointedPart === "chip")
-            view.chipExpandRequested(rowItem.oid_hex, chipColumn.chipItem.records, chipColumn.chipItem)
+            view.chipExpandRequested(rowItem.oid_hex, rowItem.index,
+                                     chipColumn.chipItem.records, chipColumn.chipItem)
         else if (rowItem.pointedPart === "row")
             view.rowHoverRequested(rowItem, true)
     }

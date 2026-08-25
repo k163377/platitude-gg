@@ -73,13 +73,13 @@ AppListView {
     // rather than change one.
     property string namingKind: ""
     // Whether what is in the box can be accepted at all, and the one line that says why not. Decided by the page,
-    // which is where the models that answer it are (`RepoPage.namingRefusedWhy`) — the row only draws the answer.
+    // which is where the models that answer it are (`RepoPage.graphNameRefusedWhy`) — the row only draws the answer.
     property bool namingRefused: false
     property string namingRefusedWhy: ""
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック).
     //
     // **One for the whole graph, not one per row — and the card a chip unfolds into shares it** (`RefListPopup` takes
-    // it through `GraphPane.rowGesture`). Two reasons, and both are things that go wrong without it:
+    // it through `GraphPane.noteRowClick`). Two reasons, and both are things that go wrong without it:
     //
     // - the delegate is pooled the moment its row scrolls off, so a wait carried by the row is either dropped or
     //   comes back on whatever commit the recycled row is now showing;
@@ -93,9 +93,6 @@ AppListView {
         id: reclick
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.record)
     }
-    /// The gesture itself, for the card that stands on these rows. Nothing else reaches past this list for it: what
-    /// it holds is one answer to "which target was clicked last", and a second holder would be a second answer.
-    readonly property alias rowGesture: reclick
     /// A row was left-clicked: answers whether it is a click of its own (see the gesture), and takes the wait with it.
     /// `record` is the chip's first one, read now rather than when the wait ends — by then the row may be showing
     /// something else, or be another row altogether.
@@ -147,7 +144,7 @@ AppListView {
     /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
     /// being changed. `record` is the chip's first one, whatever kind it names.
     signal rowRenameRequested(string oidHex, string record)
-    signal chipExpandRequested(string oidHex, var records, var anchor)
+    signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     signal chipCollapseRequested()
     signal rowHoverRequested(var row, bool inside)
     property var chipListAnchor: null

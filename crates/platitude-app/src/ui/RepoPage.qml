@@ -851,7 +851,7 @@ Item {
     readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
         && graphPane.namingText.trim() !== ""
         && remotesModel.oidOfName(page.graphRenameRemote + "/" + graphPane.namingText.trim()) !== ""
-    readonly property string namingRefusedWhy: {
+    readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "" || graphPane.namingMode !== "rename")
             return ""
         const typed = graphPane.namingText
@@ -885,7 +885,7 @@ Item {
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
         // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
-        onRecordChosen: oidHex => page.activateRow(oidHex)
+        onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
         onRecordMenuAsked: record => page.openRecordMenu(record, "")
     }
 
@@ -1697,9 +1697,10 @@ Item {
             graphPane.setCurrentRow(row)
             page.selectedRow = row
         }
+        // **The working tree's row is not a hash**, so nothing below can be skipped for it the way it can for a
+        // commit: what it shows is whatever the tree is now.
         if (GitFacts.wipOid(oidHex)) {
-            if (!page.wipShown)
-                page.showWip()
+            page.showWip()
             return
         }
         // The commit already open. **Everything below is of this commit and has been asked once**: the details, the
@@ -2065,10 +2066,10 @@ Item {
                         onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
                         onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
                         onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
-                        namingRefused: page.namingRefusedWhy !== ""
-                        namingRefusedWhy: page.namingRefusedWhy
-                        onChipExpandRequested: (oidHex, records, anchor) =>
-                            rowHost.openRefList(oidHex, records, anchor)
+                        namingRefused: page.graphNameRefusedWhy !== ""
+                        namingRefusedWhy: page.graphNameRefusedWhy
+                        onChipExpandRequested: (oidHex, atRow, records, anchor) =>
+                            rowHost.openRefList(oidHex, atRow, records, anchor)
                         onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
                         onRowHoverRequested: (row, inside) => {
                             rowHost.rowCardWanted = inside

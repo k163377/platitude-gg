@@ -29,9 +29,12 @@ QtObject {
     /// The wait ran out with no second half to the double-click: this target is being named.
     signal renameAsked(string key, var names)
 
-    /// Whether a click landing now would still be counted as the other half of a double-click, and whether a given
-    /// target is holding the wait the name box opens after. What a headless run reads to put its second click in as a
-    /// second (app-ui.md §UI 自動化の因果性).
+    /// Whether the window a click opened is still running, and whether a given target is holding the wait the name box
+    /// opens after. What a headless run reads to put its second click in as a second (app-ui.md §UI 自動化の因果性).
+    ///
+    /// **`guarded` is the surface's window, not a target's**: only a click on the target the window belongs to is
+    /// dropped (see `click`), so a run waiting on this waits a little longer than it strictly has to — which is the
+    /// safe way round for a run.
     readonly property bool guarded: doubleGuard.running
     /// Whether any target is waiting. What the surface holds still while it runs: a wait is a beat with nothing to
     /// show for it, and anything that opened or closed under it would be the answer to a different question
@@ -50,7 +53,11 @@ QtObject {
     /// The arming is decided here, before the caller has answered the click: what makes a second click a second is
     /// that the target was already the one clicked, and the caller's own answer is what makes it that.
     function click(key, names, held) {
-        if (doubleGuard.running)
+        // The second click of a double-click, dropped — **but only on the target the first one landed on**. One of
+        // these serves a whole surface, so a guard that answered for all of it would swallow the second of two quick
+        // clicks on *different* rows, which is a hand reading down a list rather than a double-click on anything
+        // (the per-row timers this replaced could not make that mistake).
+        if (doubleGuard.running && key === gesture.activeKey)
             return false
         const window = Application.styleHints.mouseDoubleClickInterval
         const wasActive = key !== "" && key === gesture.activeKey

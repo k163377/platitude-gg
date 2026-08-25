@@ -91,6 +91,11 @@ QtObject {
         gestures.editKey = key
     }
     function stopEdit() {
+        // **A box coming down spends the gesture that opened it** — the same rule the graph's box answers to
+        // (`GraphPane.stopNaming`). Without it a row whose box was walked away from is still the row last clicked, so
+        // the very next click on it opens the box again a window later, which reads as a blink (2026-08-26 ユーザー報告).
+        if (gestures.editKey !== "")
+            gestures.forgetClicks()
         gestures.editKey = ""
         gestures.editText = ""
         gestures.editMode = ""

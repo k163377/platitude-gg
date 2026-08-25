@@ -32,16 +32,26 @@ Rectangle {
     property string rowCardOid: ""
     /// A stacked chip was hovered: unstack it under the chip. The row comes with it — every name in the card is on
     /// that one commit, so a click in the card is a click on that row.
-    signal chipExpandRequested(string oidHex, var records, var anchor)
+    signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     /// A row was clicked a second time, late enough for the double-click to have been ruled out: the name on its chip
     /// is being changed (デザイン規約 §グラフ行のダブルクリック). `record` is the chip's first one, whatever kind it names.
     ///
-    /// **Raised for the card the chip unfolds into as well** — it shares the rows' own gesture below, because a hand
+    /// **Raised for the card the chip unfolds into as well** — its rows answer through the four below, because a hand
     /// clicking one spot twice clicks the row and then the card, and those are one target.
     signal rowRenameRequested(string oidHex, string record)
-    /// The gesture the graph's rows answer two clicks with, for the card that stands on them (`RowHoverHost`). One
-    /// memory of "which target was clicked last" for the whole pane.
-    readonly property alias rowGesture: graphList.rowGesture
+    /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
+    /// these rows**, so they go through this door rather than building the same key and the same payload beside it —
+    /// two surfaces that had to agree on what "the same target" means is exactly what was wrong before (2026-08-26).
+    function noteRowClick(oidHex, record, held) {
+        return graphList.noteClick(oidHex, record, held)
+    }
+    function dropRowRename() {
+        graphList.dropRename()
+    }
+    function rowRenameArmed(record) {
+        return graphList.renameArmed(record)
+    }
+    readonly property alias rowClickGuarded: graphList.clickGuarded
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
     /// needs for its position and its fields — it must not hold on to it.
     signal rowHoverRequested(var row, bool inside)
@@ -93,6 +103,8 @@ Rectangle {
             graphList.forgetClicks()
         graphList.namingOid = ""
         graphList.namingText = ""
+        graphList.namingKind = ""
+        graphArea.namingId = ""
         graphArea.namingOpenedWith = ""
     }
     /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the two boxes that
@@ -100,7 +112,7 @@ Rectangle {
     property string namingId: ""
     property string namingOpenedWith: ""
     /// What the box is standing on, for the page to decide whether what is typed can be accepted at all — the models
-    /// that answer that are the page's (`RepoPage.namingRefusedWhy`).
+    /// that answer that are the page's (`RepoPage.graphNameRefusedWhy`).
     readonly property alias namingMode: graphList.namingMode
     readonly property alias namingKind: graphList.namingKind
     readonly property alias namingOid: graphList.namingOid
@@ -327,8 +339,8 @@ Rectangle {
         onRowSelected: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
         onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
-        onChipExpandRequested: (oidHex, records, anchor) =>
-            graphArea.chipExpandRequested(oidHex, records, anchor)
+        onChipExpandRequested: (oidHex, atRow, records, anchor) =>
+            graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()
         onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
         onNamingSubmitted: (oidHex, name, mode) => {

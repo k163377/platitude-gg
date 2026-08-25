@@ -32,7 +32,7 @@ AppCard {
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
     signal picked(string record)
     /// One was clicked once: the row it is on becomes the one being read. **The second click has no signal of its
-    /// own** — the wait it opens belongs to the graph, and so does the box it turns into (`gesture`).
+    /// own** — the wait it opens belongs to the graph, and so does the box it turns into (`rowClicks`).
     signal chose(string record)
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
@@ -57,14 +57,15 @@ AppCard {
     /// A chip that wrapped keeps the same margin above and below and takes the extra height for itself.
     readonly property real chipInset:
         Math.round((Theme.rowHeight - (Theme.fontChipLine + 2 * Theme.borderWidth)) / 2)
-    /// The two clicks these rows answer with one gesture, and the commit they are all on.
+    /// How a click on these rows is answered, and the commit they are all on — the graph pane's own four
+    /// (`noteRowClick` / `dropRowRename` / `rowRenameArmed` / `rowClickGuarded`), handed over by the owner.
     ///
-    /// **The gesture is the graph's, not this card's** (`GraphList.rowGesture`, handed over by the owner). This card
-    /// opens on the chip's own seat once the pointer has rested, so a reader clicking that spot twice clicks the row
-    /// the first time and this card the second: a memory of its own would make that second click a first one, and the
-    /// gesture would read as "sometimes it does nothing" (2026-08-26 ユーザー報告). It is one target either way — the
-    /// card's first row *is* the chip (規約 §グラフ行のダブルクリック) — so it is one memory.
-    property var gesture: null
+    /// **This card's rows are the graph's rows.** It opens on the chip's own seat once the pointer has rested, so a
+    /// reader clicking that spot twice clicks the row the first time and this card the second: an answer of its own
+    /// would make that second click a first one, and the gesture would read as "sometimes it does nothing"
+    /// (2026-08-26 ユーザー報告). It is one target either way — the card's first row *is* the chip (規約 §グラフ行の
+    /// ダブルクリック) — so it goes through one door.
+    property var rowClicks: null
     property string rowOid: ""
     /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
     ///
@@ -101,10 +102,10 @@ AppCard {
     }
     function rowArmed(i) {
         const row = rowsRepeater.itemAt(i)
-        return row && refList.gesture ? refList.gesture.armedFor(GitFacts.recordKey(row.modelData)) : false
+        return row && refList.rowClicks ? refList.rowClicks.rowRenameArmed(row.modelData) : false
     }
     function rowGuarded(i) {
-        return refList.gesture ? refList.gesture.guarded : false
+        return refList.rowClicks ? refList.rowClicks.rowClickGuarded : false
     }
 
     /// Lays the rows out now, for an owner that is about to show this in the same turn it handed over the records. A
@@ -177,8 +178,7 @@ AppCard {
                     muted: refRow.unavailable
                     // The same wash the row's own chip wears while a second click waits out its window — this card is
                     // that chip, so the mark is on whichever of the two the reader is looking at (規約 §グラフ行のダブルクリック).
-                    waiting: refList.gesture
-                             ? refList.gesture.armedFor(GitFacts.recordKey(refRow.modelData)) : false
+                    waiting: refList.rowClicks ? refList.rowClicks.rowRenameArmed(refRow.modelData) : false
                     // Unstacking is only worth it if the names read, so the chip takes everything the row has left once
                     // the reading's remote has its seat — and what will not fit even then is wrapped, not cut: this is
                     // the one place the name is shown in order to be read (規約 §hover のツールチップ).
@@ -218,13 +218,11 @@ AppCard {
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
                 function leftClick(held) {
-                    // The key and the payload are the graph row's own (`GraphList.noteClick`): the row under this
-                    // card and this card's first row are one target, and they have to answer to one string.
-                    if (refList.gesture
-                            && !refList.gesture.click(
-                                refRow.nameable ? GitFacts.recordKey(refRow.modelData) : "",
-                                refRow.nameable ? { "oid": refList.rowOid, "record": refRow.modelData } : null,
-                                held))
+                    // Answered by the row this card is standing on — a name that leads nowhere is still a name, but
+                    // the marker names no ref, so it goes in as a row with nothing on it.
+                    if (refList.rowClicks
+                            && !refList.rowClicks.noteRowClick(
+                                refList.rowOid, refRow.nameable ? refRow.modelData : "", held))
                         return
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)
@@ -232,8 +230,8 @@ AppCard {
                 function doubleClick() {
                     // The second click came inside the window after all: the gesture was the double-click, and the box
                     // it was about to open is not what was meant.
-                    if (refList.gesture)
-                        refList.gesture.drop()
+                    if (refList.rowClicks)
+                        refList.rowClicks.dropRowRename()
                     if (refRow.leadsNowhere)
                         return
                     refList.close()

@@ -2466,7 +2466,7 @@ Item {
                 return
             fetchedRefListTimer.stop()
             graphPane.view.chipExpandRequested(
-                stacked.oid_hex, stacked.chipItem.records, stacked.chipItem)
+                stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
             renderedBarrier.begin()
         }
     }
@@ -3343,7 +3343,8 @@ Item {
                 if (reclickListTimer.across)
                     item.leftClick(0)
                 // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
-                graphPane.view.chipExpandRequested(item.oid_hex, item.chipItem.records, item.chipItem)
+                graphPane.view.chipExpandRequested(item.oid_hex, reclickListTimer.row,
+                                                   item.chipItem.records, item.chipItem)
                 driver.reclickListStep = 1
             } else if (driver.reclickListStep === 1) {
                 // The card lays its rows out as it is shown; until it is up there is no row to click.
@@ -4217,7 +4218,7 @@ Item {
                 if (act === "ref-list-card")
                     graphPane.view.rowHoverRequested(stacked, true)
                 graphPane.view.chipExpandRequested(
-                    stacked.oid_hex, stacked.chipItem.records, stacked.chipItem)
+                    stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
                 if (act === "ref-list-card") {
                     graphPane.view.rowHoverRequested(stacked, true)
                     rowCardTimer.row = Number(arg)

@@ -67,15 +67,18 @@ Item {
     /// names a ref on that one commit, so a click in the card is a click
     /// on that row of the graph.
     property string refListOid: ""
+    /// And which row of the graph it is, so a click in the card does not send the page looking for one it was handed
+    /// (`GraphModel::row_of` walks every loaded row — CLAUDE.md §性能予算).
+    property int refListRow: -1
 
     /// A stacked row was double-clicked, clicked once, or right-clicked.
     /// The list's rows answer the same gestures the row under them does,
     /// with no row of the graph to fall back to. **The second click,
     /// spaced, has no signal here**: the wait it opens is the graph's own
-    /// (`GraphList.rowGesture`), because the card and the row it stands
+    /// (`GraphPane.noteRowClick`), because the card and the row it stands
     /// on are one target.
     signal recordActivated(string record)
-    signal recordChosen(string oidHex)
+    signal recordChosen(string oidHex, int atRow)
     signal recordMenuAsked(string record)
 
     anchors.fill: parent
@@ -128,9 +131,10 @@ Item {
     /// the same condition §hover のツールチップ turns down for the file
     /// rows). The names' heads hold still instead, which is what a name
     /// is told apart by.
-    function openRefList(oidHex, records, anchor) {
+    function openRefList(oidHex, atRow, records, anchor) {
         const at = anchor.mapToItem(host, 0, 0)
         host.refListOid = oidHex
+        host.refListRow = atRow
         // The row's card opens under the pointer, which is on the chip
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
@@ -183,12 +187,12 @@ Item {
     RefListPopup {
         id: refList
         currentBranch: host.currentBranch
-        // The rows of this card and the rows of the graph are the same targets, so they answer to the same memory of
-        // which one was clicked last (see the card's `gesture`).
-        gesture: host.graphPane.rowGesture
+        // The rows of this card and the rows of the graph are the same targets, so a click here is answered by the row
+        // it is standing on (see the card's `rowClicks`).
+        rowClicks: host.graphPane
         rowOid: host.refListOid
         onPicked: record => host.recordActivated(record)
-        onChose: host.recordChosen(host.refListOid)
+        onChose: host.recordChosen(host.refListOid, host.refListRow)
         onMenuAsked: record => host.recordMenuAsked(record)
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
@@ -205,6 +209,7 @@ Item {
             host.refListWanted = false
             host.refListAnchor = null
             host.refListOid = ""
+            host.refListRow = -1
             // **Which row was clicked last is not forgotten here.** The card is a window onto rows that stay on
             // screen, wearing the mark a second click is aimed at — unlike the folded rail's peek, which takes its
             // rows away with it and has to forget them (app-ui.md). The memory is the graph's, and so is the row.
