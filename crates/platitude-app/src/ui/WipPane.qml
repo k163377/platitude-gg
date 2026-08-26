@@ -735,7 +735,7 @@ ColumnLayout {
                 Layout.margins: Theme.spaceXs
                 // The gutter this block's scroll bar is drawn in — see DetailsPane, which insets the same pair the
                 // same way.
-                Layout.rightMargin: Theme.spaceSm
+                Layout.rightMargin: Theme.scrollBarWidth
                 spacing: Theme.spaceXs
                 // The pair is one block of one height, in the same component the details pane reads messages in (デザイン規約
                 // §コミットメッセージの 2 つの枠).

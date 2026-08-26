@@ -75,9 +75,10 @@ Item {
         id: nameCell
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs + (fileRow.model.depth ?? 0) * Theme.spaceMd
-        // Not padding: the gutter the list's own scroll bar is drawn in. At the pane's own inset the thumb takes the
-        // last glyph of an elided name (measured: the thumb ends 2px inside the list's right edge and reaches 8 in).
-        anchors.rightMargin: Theme.spaceSm
+        // Not padding: the gutter the list's own scroll bar is drawn in. The thumb ends 2px inside the list's right
+        // edge and reaches 8 in, so anything short of this stands the last glyph of an elided name under it
+        // (デザイン規約 §余白).
+        anchors.rightMargin: Theme.scrollBarWidth
         folder: fileRow.isFolder
         folded: fileRow.isFolded
         change: fileRow.changeText

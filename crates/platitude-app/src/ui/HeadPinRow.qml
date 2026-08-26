@@ -47,7 +47,9 @@ Rectangle {
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceMd
-        anchors.rightMargin: Theme.spaceSm
+        // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs
+        // (`NavItemDelegate`).
+        anchors.rightMargin: Theme.scrollBarWidth
         spacing: Theme.spaceXs
         // The rows' mark slot, left empty: the stand-in has no mark of its own, but its name has to begin in the same
         // column as the rows it rides above.

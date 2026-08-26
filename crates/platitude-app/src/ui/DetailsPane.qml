@@ -372,13 +372,14 @@ ColumnLayout {
             // inside use, so band → summary → description → author → band is
             // one even rhythm and the card's edge stands under the header
             // label. The right is the exception and is not padding: it is the
-            // gutter this block's scroll bar is drawn in, which at the pane's
-            // own inset covers the boxes' frame and the parent hash's tail
-            // (measured — デザイン規約 §QML 実装ルール).
+            // gutter this block's scroll bar is drawn in. The thumb's ink
+            // reaches 8px in, so anything short of this draws it over the
+            // boxes' frame and the parent hash's tail (measured — デザイン規約
+            // §余白).
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.margins: Theme.spaceXs
-                Layout.rightMargin: Theme.spaceSm
+                Layout.rightMargin: Theme.scrollBarWidth
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 
