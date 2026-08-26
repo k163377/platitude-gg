@@ -96,16 +96,16 @@ RowLayout {
         visible: nameCell.showName
         Layout.fillWidth: true
         spacing: 0
-        Label {
+        CutName {
             id: origName
             visible: !nameCell.folder && nameCell.origPath !== ""
             Layout.fillWidth: true
-            // Rounded up: the layout hands an item the whole pixel below a fractional ceiling, and a ceiling one hair
-            // under the name's own width elides it (app-ui.md §自然幅の上限は切り上げる).
-            Layout.maximumWidth: Math.ceil(origName.implicitWidth)
+            // The ceiling is the name's own width, and `CutName` reports that already rounded up — the layout hands an
+            // item the whole pixel below a fractional ceiling, and a ceiling one hair under the name's own width cuts
+            // it (app-ui.md §自然幅の上限は切り上げる).
+            Layout.maximumWidth: origName.implicitWidth
             text: nameCell.origPath
-            elide: Text.ElideMiddle
-            font.pixelSize: Theme.fontMd
+            pixelSize: Theme.fontMd
             // The name the file has now is the subject; where it came from is context, and wears the colour the rest of
             // the app gives context (§テキスト: author / 日時 / 短縮ハッシュ). **Not `textMuted`** — that one is the disabled
             // signal (§無効), and a second meaning for it cannot be read apart.
@@ -128,13 +128,12 @@ RowLayout {
                 tint: Theme.textSecondary
             }
         }
-        Label {
+        CutName {
             id: newName
             Layout.fillWidth: true
             text: nameCell.name
-            elide: Text.ElideMiddle
-            font.pixelSize: Theme.fontMd
-            font.weight: nameCell.weight
+            pixelSize: Theme.fontMd
+            weight: nameCell.weight
             color: nameCell.folder ? Theme.textSecondary : nameCell.tone
             NavIcon {
                 visible: nameCell.marked
@@ -142,10 +141,10 @@ RowLayout {
                 tint: nameCell.markTint
                 width: Theme.iconSm
                 height: Theme.iconSm
-                // Clamped: an elided name is wider than its box, and the mark belongs to the name that is on screen.
-                // Half a gap back into the name's own trailing bearing, so it reads as part of the word rather than as
-                // the next column.
-                x: Math.min(newName.implicitWidth - Theme.spaceXs / 2,
+                // Clamped: a cut name ends at the column's own right edge, and the mark belongs to the name that is on
+                // screen. Half a gap back into the name's own trailing bearing, so it reads as part of the word rather
+                // than as the next column.
+                x: Math.min(newName.inkWidth - Theme.spaceXs / 2,
                             newName.width - Theme.iconSm)
                 y: 0
             }

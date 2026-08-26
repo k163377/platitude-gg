@@ -67,13 +67,14 @@ RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
     }
-    // Worktree rows: checked-out branch on the right.
-    Label {
+    // Worktree rows: checked-out branch on the right. Cut in the part that keeps the column's edges (`CutName`) — this
+    // one is the row's right-aligned column, so a cut that stopped short of the gutter left the branch names hanging
+    // a different distance from the edge on every row.
+    CutName {
         visible: !body.row.folder && body.row.kindHint === "worktree"
         text: body.row.bucket !== "" ? body.row.bucket : qsTr("detached")
         color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
-        elide: Text.ElideMiddle
+        pixelSize: Theme.fontSm
         Layout.maximumWidth: body.row.listWidth / 2
     }
     // Current branch's ahead/behind, left of the state icon.
