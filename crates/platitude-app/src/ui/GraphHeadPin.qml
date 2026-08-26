@@ -182,7 +182,7 @@ Rectangle {
         width: pin.graphColWidth
         height: Math.abs(pin.outTo - pin.nodeOutY)
         clip: true
-        Canvas {
+        InkCanvas {
             id: goingOut
             anchors.fill: parent
             // Resizing a canvas scales what it already holds; only a repaint redraws it (`GraphLaneCell`).

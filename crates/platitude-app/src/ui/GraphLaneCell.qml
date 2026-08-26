@@ -76,7 +76,7 @@ Item {
     Item {
         anchors.fill: parent
         clip: true
-        Canvas {
+        InkCanvas {
             id: laneCanvas
             x: -laneCell.xOffset
             width: laneCell.fullWidth
@@ -178,7 +178,7 @@ Item {
         width: parent.width + Theme.spaceSm
         height: parent.height
         clip: true
-        Canvas {
+        InkCanvas {
             id: nodeCanvas
             x: -laneCell.xOffset
             width: laneCell.fullWidth

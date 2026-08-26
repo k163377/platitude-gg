@@ -23,7 +23,7 @@ Item {
     width: Theme.iconLg
     height: Theme.iconLg
 
-    Canvas {
+    InkCanvas {
         id: pattern
         anchors.fill: parent
         onImageLoaded: requestPaint()

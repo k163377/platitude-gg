@@ -22,6 +22,13 @@ Item {
     property bool overlayAsked: false
     property bool overlayGrabbed: false
     property int shotParts: 0
+    property bool appSaved: false
+    /// A grab already asked for and not yet answered. **One at a time**: two in flight both answer, and the second
+    /// saving the same file again would take the run's part count past zero and quit it out from under the overlay.
+    property bool appGrabbing: false
+    /// How many marks the picture had to wait for, 0 where the scene was already drawn when it was called for. Said in
+    /// the report line, so a run cannot go green with this wait unwired.
+    property int inkWaited: 0
     // Every PG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
     // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
     readonly property bool causal: AppBackend.autoAct !== ""
@@ -118,22 +125,58 @@ Item {
         if (driver.shotTaken)
             return
         driver.shotTaken = true
-        const path = AppBackend.shotDir + "/app.png"
         driver.shotParts = overlayMirror.item ? 2 : 1
         // Asked for here, taken in `grabOverlay` when the mirror answers.
         if (overlayMirror.item) {
             driver.overlayAsked = true
             overlayMirror.item.scheduleUpdate()
         }
+        driver.grabApp()
+    }
+
+    /// The window, once the frame this asks for has been rendered.
+    ///
+    /// **The scene is still being built in that frame**, and the completion edge is often what builds it: a verb that
+    /// finishes when the status arrives finishes in the very turn the working tree's buckets stand up, so their rows
+    /// are laid out and their names drawn in the frame the grab is fulfilled in — and their marks are not, because a
+    /// `Canvas` cannot draw before the turn after the one that made it (`Ink`). The picture that came out was a list of
+    /// names with an empty seat at the head of every row (2026-08-26 ユーザー報告).
+    ///
+    /// So the frame is read for what it is worth and thrown away if the scene still owed ink: `Ink` says when the last
+    /// mark has been drawn, and the grab is asked for again from there. A scene that was already drawn when the picture
+    /// was called for — which is every verb that waits for something of its own after the edge — owes nothing and is
+    /// saved from the first grab, exactly as before.
+    function grabApp() {
+        if (driver.appSaved || driver.appGrabbing)
+            return
+        driver.appGrabbing = true
+        const path = AppBackend.shotDir + "/app.png"
         const shown = gate.visible ? gate : mainUi
         const ok = shown.grabToImage(function (res) {
+            driver.appGrabbing = false
+            if (Ink.owed > 0) {
+                // Asked for again by `onOwedChanged` below, once every one of them has been drawn.
+                driver.inkWaited = Math.max(driver.inkWaited, Ink.owed)
+                return
+            }
+            driver.appSaved = true
             const saved = res.saveToFile(path)
-            console.warn("screenshot saved=" + saved + " path=" + path)
+            console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
             driver.partDone()
         })
         if (!ok) {
             console.warn("grabToImage returned false")
+            driver.appGrabbing = false
+            driver.appSaved = true
             driver.partDone()
+        }
+    }
+
+    Connections {
+        target: Ink
+        function onOwedChanged() {
+            if (driver.shotTaken && Ink.owed === 0)
+                driver.grabApp()
         }
     }
 }

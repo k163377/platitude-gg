@@ -66,6 +66,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/Theme.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Metrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Words.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/Ink.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButtonLabel.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButtonSeat.qml", "qt/qml/platitude");
@@ -152,6 +153,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/HoverCardHost.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HoverToolButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentIcon.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/InkCanvas.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentityDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentityGate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ImagePreviewCell.qml", "qt/qml/platitude");

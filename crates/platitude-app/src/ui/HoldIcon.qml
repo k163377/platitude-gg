@@ -10,7 +10,7 @@ import platitude.ui
 //
 // Its own component rather than another NavIcon kind: NavIcon repaints only when its kind or its tint changes, and this
 // one is repainted some thirty times over a single press.
-Canvas {
+InkCanvas {
     id: holdIcon
 
     /// How far into the hold the press has got, 0 to 1.

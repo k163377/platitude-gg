@@ -3,7 +3,7 @@ import platitude.ui
 
 // Hand-drawn 16px-grid icons in the common git-client style (branch fork, cloud remote, price-tag, archive box, tree,
 // clock). Scaled by the item size; single stroke color.
-Canvas {
+InkCanvas {
     id: icon
     property string kind: "branch"
     property color tint: Theme.textSecondary

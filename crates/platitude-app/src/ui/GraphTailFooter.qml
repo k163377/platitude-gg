@@ -33,7 +33,7 @@ Item {
         width: tail.graphColWidth
         height: parent.height
         clip: true
-        Canvas {
+        InkCanvas {
             id: tailCanvas
             x: -tail.graphXOffset
             width: tail.graphFullWidth

@@ -2,6 +2,7 @@ module platitude.ui
 singleton Theme 1.0 Theme.qml
 singleton Metrics 1.0 Metrics.qml
 singleton Words 1.0 Words.qml
+singleton Ink 1.0 Ink.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml
 ActionButtonSeat 1.0 ActionButtonSeat.qml
@@ -89,6 +90,7 @@ HoldIcon 1.0 HoldIcon.qml
 HoverCardHost 1.0 HoverCardHost.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
+InkCanvas 1.0 InkCanvas.qml
 IdentityDialog 1.0 IdentityDialog.qml
 IdentityGate 1.0 IdentityGate.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
