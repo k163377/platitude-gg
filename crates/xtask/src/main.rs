@@ -30,16 +30,19 @@ commands:
       Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
       container running in parallel: structure, fmt, clippy and the
       workspace tests here, while the container runs test -p
-      platitude-core, verify-ui
-      for each --verb, and bare. The two sides write to different build
-      trees (target/ vs the docker volume), so the wall clock is
-      whichever side finishes last. Each --verb also runs verify-ui on
-      the host, so one flag covers the verb on both OSes; its value is
-      a whole verify-ui argument line, quoted when the verb needs its
-      preset or argument beside it (--verb 'co-authors 4 --preset
-      co-authors'). Without --verb the summary says the touched verbs
-      still have to run — it never passes for the whole of stage 2 on
-      its own.
+      platitude-core, that same clippy for Linux, verify-ui for each
+      --verb, and bare. Clippy runs on both sides because the host's
+      cannot answer for the other one: a name reachable only under
+      #[cfg(not(windows))] is not compiled here at all, so an unused
+      import or an orphaned fn behind that cfg would reach CI unseen.
+      The two sides write to different build trees (target/ vs the
+      docker volume), so the wall clock is whichever side finishes
+      last. Each --verb also runs verify-ui on the host, so one flag
+      covers the verb on both OSes; its value is a whole verify-ui
+      argument line, quoted when the verb needs its preset or argument
+      beside it (--verb 'co-authors 4 --preset co-authors'). Without
+      --verb the summary says the touched verbs still have to run — it
+      never passes for the whole of stage 2 on its own.
 
   structure
       The per-file line ceilings of .claude/rules/structure.md (src 500,

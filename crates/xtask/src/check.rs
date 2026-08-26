@@ -57,14 +57,29 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ]),
         words(&["cargo", "test", "--workspace"]),
     ];
-    let mut linux_steps: Vec<Vec<String>> = vec![words(&[
-        "cargo",
-        "xtask",
-        "linux",
-        "test",
-        "-p",
-        "platitude-core",
-    ])];
+    let mut linux_steps: Vec<Vec<String>> = vec![
+        words(&["cargo", "xtask", "linux", "test", "-p", "platitude-core"]),
+        // The same line as the host's clippy above, because the host's
+        // cannot answer for it: a name reachable only under
+        // #[cfg(not(windows))] is not compiled on Windows at all, so an
+        // unused import or an orphaned fn behind that cfg passes here and
+        // fails the Linux and macOS jobs the first time CI runs
+        // (.github/workflows/ci.yml runs this across the whole matrix).
+        // `bare` is the only other thing on this side that compiles the
+        // app for Linux, and it is a release build whose warnings are not
+        // errors and which nobody reads.
+        words(&[
+            "cargo",
+            "xtask",
+            "linux",
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+    ];
     for (i, verb) in verbs.iter().enumerate() {
         // A --verb value is a whole verify-ui argument line — some verbs
         // only mean anything with their preset or argument beside them
