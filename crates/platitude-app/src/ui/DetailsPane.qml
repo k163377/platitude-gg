@@ -379,7 +379,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.margins: Theme.spaceXs
-                Layout.rightMargin: Theme.scrollBarWidth
+                Layout.rightMargin: Theme.scrollBarGutter
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 

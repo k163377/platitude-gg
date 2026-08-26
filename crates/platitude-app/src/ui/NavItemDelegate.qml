@@ -176,7 +176,7 @@ Item {
         // branch a worktree has out), and the thumb is drawn over it — the bar's box is 10 wide and holds 2 of its
         // own, so the ink reaches 8 in and a gutter of `spaceSm` ends the row exactly where that ink begins
         // (デザイン規約 §余白).
-        anchors.rightMargin: Theme.scrollBarWidth
+        anchors.rightMargin: Theme.scrollBarGutter
         row: navRow
     }
     // The name, in a box, where the name was — drawn outside the list, which is the box's own business (`NavNameBox`).

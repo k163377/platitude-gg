@@ -207,11 +207,11 @@ Item {
                 // The gutter the list's own scroll bar is drawn in, not padding: this is where a message is cut, and
                 // the thumb's ink reaches 8px in (デザイン規約 §余白). The uncommitted row gives the gutter up to the
                 // tallies below, which are its own last column.
-                rightPadding: rowItem.isWip ? 0 : Theme.scrollBarWidth
+                rightPadding: rowItem.isWip ? 0 : Theme.scrollBarGutter
             }
             WipTallyRow {
                 Layout.leftMargin: Theme.spaceSm
-                Layout.rightMargin: Theme.scrollBarWidth
+                Layout.rightMargin: Theme.scrollBarGutter
                 conflicted: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipConflicted : 0
                 added: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipAdded : 0
                 modified: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipModified : 0

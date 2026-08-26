@@ -49,7 +49,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceMd
         // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs
         // (`NavItemDelegate`).
-        anchors.rightMargin: Theme.scrollBarWidth
+        anchors.rightMargin: Theme.scrollBarGutter
         spacing: Theme.spaceXs
         // The rows' mark slot, left empty: the stand-in has no mark of its own, but its name has to begin in the same
         // column as the rows it rides above.

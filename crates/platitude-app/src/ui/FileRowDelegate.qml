@@ -78,7 +78,7 @@ Item {
         // Not padding: the gutter the list's own scroll bar is drawn in. The thumb ends 2px inside the list's right
         // edge and reaches 8 in, so anything short of this stands the last glyph of an elided name under it
         // (デザイン規約 §余白).
-        anchors.rightMargin: Theme.scrollBarWidth
+        anchors.rightMargin: Theme.scrollBarGutter
         folder: fileRow.isFolder
         folded: fileRow.isFolded
         change: fileRow.changeText
