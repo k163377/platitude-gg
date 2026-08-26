@@ -169,9 +169,12 @@ AppListView {
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + Theme.borderWidth
     model: sectionModel
+    // The left panel's own bar, in place of the style's one that `AppListView` hands every other list.
+    ScrollBar.vertical: NavScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width
+        barGutter: Theme.navBarGutter
         // The list's own place in that layer, so a scroll carries the box along with the row it belongs to.
         boxLayer: navList.boxLayer
         boxRowsX: navList.boxRowsX

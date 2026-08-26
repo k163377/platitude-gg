@@ -1,0 +1,39 @@
+import QtQuick
+import QtQuick.Controls.Fusion
+import platitude.ui
+
+/// The left panel's scroll bar: a slab of ink held against the pane's inner edge, opaque, and running the whole height
+/// of the view it belongs to (デザイン規約 §QML 実装ルール の摘みの項).
+///
+/// Three things it does not take from the style's own bar, which every other pane still wears:
+///
+///  - **it does not float.** The style's handle stops a step short of the edge, which leaves it reading as part of the
+///    content it is drawn over rather than as the pane's own edge.
+///  - **it is not see-through.** At 0.75 opacity the colour the eye reads is a blend with whatever passes underneath,
+///    and it moves as the view scrolls (qmltestrunner 実測: `#273346` over the pane's ground, `#2C3A55` over a selected
+///    row, `#5F6B7C` over body text). The gutter already keeps ink from under the bar, so there is nothing to read
+///    through it — the blend over the pane's ground is written down as `Theme.navBarInk` and painted flat.
+///  - **it does not stop short of the ends.** The style keeps a step of padding at both ends of the track, so a view
+///    scrolled hard against its top frame left the slab hanging a step below it (2026-08-27 ユーザー報告). Only the far
+///    side keeps its step, where it is grabbing room rather than a gap: the box stays wider than the ink.
+AutoScrollBar {
+    id: navBar
+
+    rightPadding: 0
+    topPadding: 0
+    bottomPadding: 0
+    contentItem: Rectangle {
+        implicitWidth: Theme.navBarReach
+        implicitHeight: Theme.navBarReach
+        // Round on the free side only: a slab rounded on all four corners reads as floating over the pane rather than
+        // as belonging to its edge, and the ends have to meet the frames square to sit against them.
+        radius: Theme.radiusSm
+        topRightRadius: 0
+        bottomRightRadius: 0
+        color: navBar.pressed ? Theme.navBarInkHeld : Theme.navBarInk
+        // What the style's own "active" state asks, without its fade: a bar told to stand shows its ink, and one left
+        // to decide for itself shows it while the view is being worked and has somewhere to go. The style waits 450ms
+        // and then fades over 200ms, which leaves a bar standing over a list that has stopped having anywhere to go.
+        opacity: navBar.policy === ScrollBar.AlwaysOn || (navBar.active && navBar.size < 1) ? 1 : 0
+    }
+}

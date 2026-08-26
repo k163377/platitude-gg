@@ -20,6 +20,12 @@ QtObject {
     readonly property color borderStrong: "#475569"
     readonly property color borderFocus: "#3B82F6"
 
+    // ---- colors: scroll bar ----
+    // Not colours anyone picked: what the style's 0.75-opacity handle already reads as over the pane's own ground.
+    // Worn by the left panel's slab; every other bar is still the style's own and takes its colour from the palette.
+    readonly property color navBarInk: "#273346"
+    readonly property color navBarInkHeld: "#364255"
+
     // ---- colors: text ----
     readonly property color textPrimary: "#E2E8F0"
     readonly property color textSecondary: "#94A3B8"
@@ -140,5 +146,9 @@ QtObject {
     readonly property int radiusMd: 4
     readonly property int splitterWidth: 4
     readonly property int scrollBarGutter: 9
+    // The left panel's own bar, which is a slab held against the pane's edge rather than the style's floating pill:
+    // how thick it is, and the room a row of that panel leaves for it.
+    readonly property int navBarReach: 5
+    readonly property int navBarGutter: 8
     readonly property int messageMaxHeight: 108
 }

@@ -62,6 +62,10 @@ Item {
     property int headAhead: 0
     property int headBehind: 0
     property real listWidth: 200
+    /// How much room the list's own scroll bar wants at this row's right edge. The left panel's bar is a slab held
+    /// against the pane's edge and asks for less than the style's own, which every other list showing these rows still
+    /// wears (`NavScrollBar` / デザイン規約 §QML 実装ルール の摘みの項).
+    property int barGutter: Theme.scrollBarGutter
     /// Where an open name box is drawn, and where the list showing this row sits in it: where its rows begin, where
     /// the list itself begins, and how tall it is. All of it comes from the list (`NavList`), so that a scroll moves
     /// the box with its row and a row carried out of the list takes the box with it. No layer means the box stays in
@@ -172,11 +176,10 @@ Item {
         id: rowLayout
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs + navRow.depth * Theme.spaceMd
-        // Not padding: the gutter the list's own scroll bar is drawn in. This row ends in a right-aligned column (the
-        // branch a worktree has out), and the thumb is drawn over it — the bar's box is 10 wide and holds 2 of its
-        // own, so the ink reaches 8 in and a gutter of `spaceSm` ends the row exactly where that ink begins
-        // (デザイン規約 §余白).
-        anchors.rightMargin: Theme.scrollBarGutter
+        // Not padding: the gutter the list's own scroll bar is drawn in (`barGutter`). This row ends in a
+        // right-aligned column (the branch a worktree has out) and the bar is drawn over it, so the row stops where
+        // the bar's ink begins (デザイン規約 §QML 実装ルール の摘みの項).
+        anchors.rightMargin: navRow.barGutter
         row: navRow
     }
     // The name, in a box, where the name was — drawn outside the list, which is the box's own business (`NavNameBox`).

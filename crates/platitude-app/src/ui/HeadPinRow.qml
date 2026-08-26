@@ -47,9 +47,9 @@ Rectangle {
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceMd
-        // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs
-        // (`NavItemDelegate`).
-        anchors.rightMargin: Theme.scrollBarGutter
+        // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs. This one
+        // only ever rides the left panel's list, so it takes that panel's gutter outright (`NavItemDelegate.barGutter`).
+        anchors.rightMargin: Theme.navBarGutter
         spacing: Theme.spaceXs
         // The rows' mark slot, left empty: the stand-in has no mark of its own, but its name has to begin in the same
         // column as the rows it rides above.
