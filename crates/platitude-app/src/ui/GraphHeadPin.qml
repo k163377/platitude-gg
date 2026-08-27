@@ -35,10 +35,10 @@ Rectangle {
     required property real graphColWidth
     required property real graphFullWidth
     required property real graphXOffset
-    /// How much of the right edge belongs to the list's own scroll bar. **This stops short of it** — an overlay drawn
-    /// over the bar hides where the reader is in two thousand rows, and one that took presses there answered the trough
-    /// with a jump to HEAD (2026-08-22 ユーザー報告 + 実測). The strip it leaves shows the bar, which is drawn inside the
-    /// list.
+    /// How much of the right edge belongs to the list's own scroll bar. **What this stand-in takes presses on stops
+    /// short of it** — one that took them there answered the trough with a jump to HEAD (2026-08-22 ユーザー報告 + 実測).
+    /// Its ink is a separate question and does not read this: the words stop where a row's words stop, four pixels off
+    /// the pane, and the ground is laid under the bar rather than over it (`band`).
     required property real barRoom
 
     /// The stand-in was pressed: go to the row it stands for.
@@ -97,7 +97,9 @@ Rectangle {
     visible: pin.wanted && (pin.rowAbove || pin.rowBelow)
     height: Theme.graphRowHeight + pin.hold + pin.fadeRoom
     x: pin.view.x
-    width: pin.view.width - pin.barRoom
+    // The list's own width, so every column in here lands where a row's lands — the message included. `barRoom` is
+    // taken off the press area alone (`pinMouse`).
+    width: pin.view.width
     y: pin.view.y + (pin.rowAbove ? 0 : pin.view.height - pin.height)
     color: "transparent"
 
@@ -109,35 +111,49 @@ Rectangle {
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
     // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after
     // that.
-    Rectangle {
-        y: pin.rowAbove ? 0 : pin.fadeRoom
-        width: parent.width
-        height: Theme.graphRowHeight + pin.hold
-        color: Theme.bgSurface
-    }
-    Rectangle {
-        y: pin.rowAbove ? Theme.graphRowHeight + pin.hold : 0
-        width: parent.width
-        height: pin.fadeRoom
-        gradient: Gradient {
-            GradientStop { position: 0; color: pin.rowAbove ? Theme.bgSurface : "transparent" }
-            GradientStop { position: 1; color: pin.rowAbove ? "transparent" : Theme.bgSurface }
+    // **The ground is laid inside the list; everything else stands over it out here.** Two things have to hold at once
+    // and only this seat holds both. It has to cover the whole width — a row's message runs on under the bar now
+    // (規約 §余白), so a band that stopped short of the bar would leave the tail of whatever is scrolling past showing
+    // in that strip. And it may not hide the bar. A child of the view is drawn over the rows and
+    // under the bar (`AutoScrollBar` takes `z: 1` for exactly this), which is both. The chip, the lanes and the words
+    // stay out here, where the lane strip below cannot answer a press for them.
+    Item {
+        id: band
+        parent: pin.view
+        visible: pin.visible
+        y: pin.rowAbove ? 0 : pin.view.height - pin.height
+        width: pin.view.width
+        height: pin.height
+
+        Rectangle {
+            y: pin.rowAbove ? 0 : pin.fadeRoom
+            width: parent.width
+            height: Theme.graphRowHeight + pin.hold
+            color: Theme.bgSurface
+        }
+        Rectangle {
+            y: pin.rowAbove ? Theme.graphRowHeight + pin.hold : 0
+            width: parent.width
+            height: pin.fadeRoom
+            gradient: Gradient {
+                GradientStop { position: 0; color: pin.rowAbove ? Theme.bgSurface : "transparent" }
+                GradientStop { position: 1; color: pin.rowAbove ? "transparent" : Theme.bgSurface }
+            }
+        }
+        // Only over the row: what is under it is a way out of this band, not part of the target.
+        Rectangle {
+            id: pinHover
+            y: pin.rowY
+            width: parent.width
+            height: Theme.graphRowHeight
+            color: Theme.bgHover
+            visible: pinMouse.containsMouse || pin.pointed
         }
     }
 
     /// The hover ground as drawn, for the headless run: reading the two conditions back would pass a stand-in whose
     /// ground is not wired to them (verify-ui).
     readonly property alias lit: pinHover.visible
-
-    // Only over the row: what is under it is a way out of this band, not part of the target.
-    Rectangle {
-        id: pinHover
-        y: pin.rowY
-        width: parent.width
-        height: Theme.graphRowHeight
-        color: Theme.bgHover
-        visible: pinMouse.containsMouse || pin.pointed
-    }
 
     // The chip column, laid out as a row's is (`GraphRowChips`): the chip against the column's right edge, its names
     // cut to the column, and level with the row.
@@ -244,14 +260,18 @@ Rectangle {
         radius: Theme.borderWidth
         color: pin.laneColor
     }
-    Label {
+    CutName {
         id: subject
         x: pin.labelWidth + pin.graphColWidth + Theme.spaceSm + 2 * Theme.borderWidth + Theme.spaceXs
         y: pin.rowMidY - height / 2
-        width: pin.width - subject.x - Theme.spaceSm
+        // **The same box a row gives its message**: from the tick to the pane's own inset (デザイン規約 §余白), so this
+        // commit's message is cut at exactly the character it is cut at down in the list. Read off the same numbers
+        // rather than off `barRoom` — a stand-in that stopped at the bar's box cut a word earlier than the row it
+        // stands for, and the message changed length as the reader scrolled it off (2026-08-27 ユーザー報告).
+        width: pin.width - subject.x - Theme.spaceXs
+        cutAt: "end"
         text: pin.graphModel.headSubject
-        elide: Text.ElideRight
-        font.pixelSize: Theme.fontMd
+        pixelSize: Theme.fontMd
         // The whole of the emphasis, and it is the same blue the chip beside it already writes the current branch in —
         // `textLink` here, on the chip, and on this commit's own row down in the list (`GraphRowDelegate.isHead`).
         //
@@ -271,7 +291,9 @@ Rectangle {
     MouseArea {
         id: pinMouse
         y: pin.rowY
-        width: parent.width
+        // **The one thing that gives the bar room.** A press taken over the trough answered it with a jump to HEAD
+        // (`barRoom`); the ink around it does not have to move for that.
+        width: parent.width - pin.barRoom
         height: Theme.graphRowHeight
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton

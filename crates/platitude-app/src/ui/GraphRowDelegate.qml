@@ -172,6 +172,11 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // Where the message stops: the pane's own inset, the same the chip column keeps against the pane on the
+            // other side (デザイン規約 §余白). The mark is held on this edge rather than trailing the words, so without it
+            // every row would end in ink against the frame beside it (2026-08-27 ユーザー報告). **Not the bar's gutter** —
+            // the thumb reaches twice as far in and is drawn thin enough to read the tail through.
+            Layout.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             // The tick goes with the message, not with the lanes: it stands in the subject column and belongs to this
             // row alone.
@@ -188,15 +193,18 @@ Item {
                 radius: Theme.borderWidth
                 color: Theme.graphLane[rowItem.node_color % Theme.graphLane.length]
             }
-            Label {
+            // The message, cut at its end and the mark held against the column's right edge, so every row's `…` stands
+            // at one x (デザイン規約 §タイポグラフィ). **The stand-in cuts its own at the same x** (`GraphHeadPin`): one
+            // commit's message may not change length when its row steps aside for the stand-in.
+            CutName {
                 // The uncommitted row's words are a fixed length, and the counts read as part of the same sentence: it
                 // keeps its own width so they sit right after it rather than out at the pane's far edge.
                 Layout.fillWidth: !rowItem.isWip
+                cutAt: "end"
                 // No total: the tallies beside it add up to exactly that number, and the pane's own heading says it as
                 // well (規約 §未コミット行が名乗るもの).
                 text: rowItem.isWip ? qsTr("Uncommitted changes") : rowItem.subject
-                elide: Text.ElideRight
-                font.pixelSize: Theme.fontMd
+                pixelSize: Theme.fontMd
                 // The commit the working tree is standing on writes its message in the branch's own blue — the same
                 // `textLink` the chip on it uses, and the same the stand-in uses while this row is scrolled off
                 // (規約 §グラフの中で HEAD を見失わない). One rule for the one commit, so nothing changes under the reader when
@@ -204,14 +212,14 @@ Item {
                 color: rowItem.isWip ? Theme.textSecondary
                        : rowItem.isHead ? Theme.textLink
                        : Theme.textPrimary
-                // The gutter the list's own scroll bar is drawn in, not padding: this is where a message is cut, and
-                // the thumb's ink reaches 8px in (デザイン規約 §余白). The uncommitted row gives the gutter up to the
-                // tallies below, which are its own last column.
-                rightPadding: rowItem.isWip ? 0 : Theme.scrollBarGutter
             }
+            // **Only on the row they belong to.** A nested layout defaults to `Layout.fillWidth: true`, so left up on
+            // every commit row this takes a share of the free space even with all six counts at zero and nothing drawn
+            // — measured 67px of a 400px row, which is that much of the message cut off for a column holding nothing
+            // (qmltestrunner 実測 2026-08-27). The margins and the layout's spacing go with it.
             WipTallyRow {
+                visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm
-                Layout.rightMargin: Theme.scrollBarGutter
                 conflicted: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipConflicted : 0
                 added: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipAdded : 0
                 modified: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipModified : 0
