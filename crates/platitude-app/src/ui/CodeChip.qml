@@ -42,8 +42,10 @@ Item {
         // Drawn to the ink, not to the cell: an elided word paints narrower than the width it was given, and a ground
         // stretched to that width leaves a tail of chip with nothing on it (2026-08-18 実測).
         anchors.left: wordLabel.left
-        anchors.top: wordLabel.top
-        anchors.bottom: wordLabel.bottom
+        // The word's own step rather than the label's height, which is the mono family's line box — the one part of
+        // this dress each OS settles differently (`ActionButtonLabel` carries the measurements).
+        anchors.verticalCenter: wordLabel.verticalCenter
+        height: chip.size + Theme.spaceXs / 2
         // Half a gap of ground either side, not a whole one: it eats into the air the line already had rather than
         // pushing the glyphs about, so the word starts where it would have started bare.
         anchors.leftMargin: -Theme.spaceXs / 2

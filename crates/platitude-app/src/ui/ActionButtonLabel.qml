@@ -378,8 +378,13 @@ Item {
         visible: btnLabel.code && !btnLabel.folded
         x: -Theme.spaceXs / 2
         width: btnLabel.inkWidth + Theme.spaceXs
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        // Off the word's own step, never off the cell it stands in: the cell is the mono family's line box, and that
+        // box is the one thing about this dress each OS decides for itself (実測 @14px: Cascadia Mono 16, Noto Sans
+        // Mono CJK JP 21 — a CJK family carries half an em more leading than a Latin one). Left to the cell the same
+        // command wore a wash on Windows and a tag on Ubuntu (2026-08-28 ユーザー報告), while the glyphs themselves sat
+        // on the same rows on both (デザイン規約 §git 用語のコード表記).
+        height: btnLabel.fontSize + Theme.spaceXs / 2
+        anchors.verticalCenter: parent.verticalCenter
         radius: Theme.radiusSm
         color: Theme.bgHover
     }

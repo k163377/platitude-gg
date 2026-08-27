@@ -209,7 +209,14 @@ MenuItem {
             }
             implicitHeight: codeLabel.implicitHeight
             Rectangle {
-                anchors.fill: codeLabel
+                anchors.left: codeLabel.left
+                anchors.right: codeLabel.right
+                // The word's own step rather than the label's height, which is the mono family's line box — the one
+                // part of this dress each OS settles differently (`ActionButtonLabel` carries the measurements). Here
+                // it also has a line of its own to keep to: the row's words are set in the UI family, and a ground
+                // taking the mono box stands taller than the sentence it is a word of.
+                anchors.verticalCenter: codeLabel.verticalCenter
+                height: codeLabel.font.pixelSize + Theme.spaceXs / 2
                 // Half a gap of tint outside the glyphs, not a whole one: a chip that follows the hold mark would
                 // otherwise reach back far enough to sit against it, and the row would read as one run of ink with no
                 // air between the two things it is saying.
