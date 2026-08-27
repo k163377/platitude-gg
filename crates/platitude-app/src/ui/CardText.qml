@@ -76,6 +76,10 @@ Item {
         // reader who wants the whole line reaches for first.
         selectByMouse: true
         selectByKeyboard: true
+        // What was picked out stays picked out with the caret elsewhere: a card is read alongside the pane it came
+        // from, and a selection that vanished the moment the reader looked away would have to be made twice. It is
+        // also what puts the selection in a headless picture, where nothing ever takes focus (`tip-copy`).
+        persistentSelection: true
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // A field of its own width, with no room around it: the card's padding is the card's.

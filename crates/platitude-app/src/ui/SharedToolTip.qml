@@ -117,13 +117,19 @@ Item {
 
     /// Flush against the target, above it while there is room and below it when there is not — the band's own controls
     /// are one tip's height from the top of the window, and a tip pushed back in would stand on the hand.
+    ///
+    /// **Neither side fitting is a third case, not a fall through to one of them.** A wrapped name in a short window
+    /// can be taller than the room on either side of its row, and a tip that always answered that with "below" would
+    /// hang out of the bottom with `margins` off. The roomier side keeps the most of it on screen.
     function seatY() {
         const tip = shared.sharedTip
         const at = tip.parent
         if (at === null)
             return 0
         const p = shared.targetAt()
-        return p.y >= tip.implicitHeight ? -tip.implicitHeight : at.height
+        const above = p.y
+        const below = shared.host.height - (p.y + at.height)
+        return tip.implicitHeight <= above || above >= below ? -tip.implicitHeight : at.height
     }
 
     /// Reads the hand's seat off, for a tip that is coming out now.
@@ -174,11 +180,17 @@ Item {
         return shared.hand.over(at)
     }
 
+    /// Takes it down for good. **The mark is cleared where the fall is heard, not on the line after `close()`**: the
+    /// style this app dresses has no exit transition, so the fall comes back inside the call — but a style that grew
+    /// one would announce it a frame later, with the mark already down, and this part would answer its own close by
+    /// putting the tip back up. Nothing is marked when there is nothing to close, so the mark can never be left
+    /// standing over somebody else's fall.
     function drop() {
+        shared.keeping = false
+        if (!shared.sharedTip.visible)
+            return
         shared.dropping = true
         shared.sharedTip.close()
-        shared.dropping = false
-        shared.keeping = false
     }
 
     /// Puts it back after a fall that the hand may be walking into.
@@ -226,7 +238,11 @@ Item {
                     shared.freeze()
                 return
             }
-            if (shared.dropping || !shared.walkable)
+            if (shared.dropping) {
+                shared.dropping = false
+                return
+            }
+            if (!shared.walkable)
                 return
             shared.keeping = true
             Qt.callLater(shared.reopen)
