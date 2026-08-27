@@ -18,7 +18,7 @@
 - identity のダイアログは「git が今どう答えるか」で閉じる(`identityError === ""` ではない)。2 連書きは原子的にできない(core.md)ので、半端は消さず欄ごとのチェック印で見せる — 印は成功の飾りではなく失敗の説明。trim 規則の写しを QML に作らない(判定は Rust 側)。印は `visible` でなく `opacity`(入力欄の幅を動かさない)
 - 半端のまま閉じたらツールバーの identity バッジが引き受ける(`identityUnsaved`)。文言は `SET IDENTITY` のまま・分けるのは tooltip だけ(操作が同じなら語彙を増やさない)。セッション内に閉じる — 持ち越すと「アプリは identity のコピーを持たない」方針と両立しない
 - git が何も言わないのに揃わない時(repo-local が global の上に座る)の 1 文は QML が持つ — 自前の文は `qsTr()` の側に要る(CLAUDE.md 文言規約)
-- ヘッドレスは `identity` / `identity-half` の対
+- ヘッドレスは `identity` / `identity-half` の対と、半端の印を撮る `identity-tip`。**後者がダイアログを閉じる合図は `identityUnsaved`(save の答え)であって、ダイアログが立っていることではない** — 立った所で閉じると git の 2 本のサブプロセスを追い越し、書き込み途中の `missing`(カードは「No name or email set for commits」)を撮って緑になりかけた(2026-08-27 実測。半端の側は「Name and email were not both saved」)
 - `Open repository` のピッカーは開いているリポジトリの隣から始める(`RepoTab.pickerFolderUrl`)— 既定は前回受理したフォルダ = リポジトリ自身の中で、そこだけ開くものが無い。`urlpath::picker_folder_url` はルート直下のリポジトリでルート自身を返す(空だと置き去りフォルダへ落ちる)。`currentFolder` はバインディングにしない — ダイアログは移動の度に自分で書くので、押した瞬間に 1 度だけ入れる。ヘッドレスは `open-picker`
 - ピッカーのフォルダは開けると分かってからタブにする(規約 §リポジトリを開く)。不採用: タブを先に作って失敗で消す(答えは 30〜36ms で返り、タブが 1〜2 フレーム点滅する)
 - 開けなかった時の置き場所は経路、文言は種別(規約 §リポジトリを開く)。ダイアログ(`OpenFailedDialog`)はピッカー経由だけ — 人が今選んでいないもの(復元タブ / worktree 行 / `PG_AUTO_OPEN`)に起動直後のモーダルを出さない。文言は `Words.openFailure` の 1 か所

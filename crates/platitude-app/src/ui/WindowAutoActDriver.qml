@@ -667,11 +667,11 @@ Item {
 
     // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
-    // saying exactly what it should.
+    // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer, not the open dialog.
     SampleTimer {
         running: AppBackend.autoAct === "identity-tip"
         onTriggered: {
-            if (!identityDialog.opened && !AppBackend.identityUnsaved)
+            if (!identityDialog.opened || !AppBackend.identityUnsaved)
                 return
             window.dismissIdentity()
             stop()
