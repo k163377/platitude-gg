@@ -58,6 +58,8 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **overlay.png は撮影時点のオーバーレイそのもの** — ミラーは live ではなく、撮影時に `scheduleUpdate()` を 1 回だけ受け、その完了(`scheduledUpdateCompleted`)を待って grab する。**白紙の overlay.png は「その時点で何も開いていなかった」の意味**で、フレームに追い越された絵ではない(閉じたポップアップの残像も残らない)。報告行 `overlay saved=<bool> popups=<n>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)。`commit-menu` / `reset-menu` はこの行が must_say なので、カードの写っていない run は緑にならない — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」を絵ではなく `Popup.opened` の報告行で読むのは変わらない(白紙は「何も無い」としか言えず、どのカードが閉じたかは言えない)。
 
+**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**。ペアでは答えられない唯一の問い =「開いたものは、それを開けたものに対して**どこに**立っているか」がこれでしか読めない(hover の席・カードの密着・メニューの掛かり方)。報告行は `scene saved=<bool>`。**app.png の保存後に頼む**ので、Canvas の借り(`Ink.owed`)を待ち切った同じ場面が写る。overlay が空の run は撮らない(app.png と同じ絵になるだけ)。**hover の席を見せる時はこの 1 枚を board に出す** —— 的の写っていない overlay.png だけでは「届く所に出たか」を誰も判定できない。
+
 ## hover の絵の撮り方(仮表示)
 
 hover はアプリへは注入できない(§Windows での実行・デバッグの罠)が、**絵は撮れる** — 入力(ポインタ)だけを迂回し、表示側は実 hover と同じ経路を通す。**「hover は再現できない」で止まってユーザーに実操作を頼まない**。上から順に 3 つの道を検討する:
