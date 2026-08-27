@@ -157,73 +157,15 @@ Item {
         return true
     }
 
-    /// Automation: how many of the strip's rows have an item standing for them. `tabPaths` and `hasTabPath` walk those
-    /// items, so this is what says whether their answer is the whole strip or only the part of it the layout has caught
-    /// up with.
-    function tabItemCount() {
-        let n = 0
-        for (let i = 0; i < tabs.count; i++)
-            if (tabs.itemAtIndex(i))
-                n++
-        return n
-    }
-
-    /// Automation: whether any tab in the strip was opened on `path`. The closed tab's title cannot say it went — every
-    /// demo working tree is called the same thing — and the path is the only thing that can.
-    function hasTabPath(path) {
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            if (tab && tab.repo_path === path)
-                return true
-        }
-        return false
-    }
-
-    /// Automation: the paths rather than the titles — every demo repository is called the same thing, and a strip of
-    /// one name proves nothing.
-    function tabPaths() {
-        let paths = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            if (tab)
-                paths.push(tab.repo_path)
-        }
-        return paths.join(",")
-    }
-
-    /// Automation: the path a tab was opened with, spelled the way the strip has it (`PG_AUTO_ACT=open-again`).
-    function tabPathAt(index) {
-        const tab = tabs.itemAtIndex(index)
-        return tab ? tab.repo_path : ""
-    }
-
-    /// Automation: every tab's width, in the order they sit in (`PG_AUTO_ACT=tab-widths`).
-    function tabWidths() {
-        let widths = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            widths.push(tab ? Math.round(tab.width) : 0)
-        }
-        return widths.join(",")
-    }
-
-    /// Automation: the pointer, set down on the tab at `index` — the half no headless run can reach any other way
-    /// (`PG_AUTO_ACT=tab-mark`).
-    function pointAtTab(index) {
-        const tab = tabs.itemAtIndex(index)
-        if (tab)
-            tab.pointed = true
-    }
-
-    /// Automation: which tabs have their mark out, in strip order.
-    function tabMarks() {
-        let marks = []
-        for (let i = 0; i < tabs.count; i++) {
-            const tab = tabs.itemAtIndex(i)
-            marks.push(tab ? tab.markShown : 0)
-        }
-        return marks.join(",")
-    }
+    /// Automation: what the strip's own items came out as, asked of `TabProbe` and handed on under the names the band
+    /// already calls them by (`TopBar`).
+    function tabItemCount() { return tabProbe.tabItemCount() }
+    function hasTabPath(path) { return tabProbe.hasTabPath(path) }
+    function tabPaths() { return tabProbe.tabPaths() }
+    function tabPathAt(index) { return tabProbe.tabPathAt(index) }
+    function tabWidths() { return tabProbe.tabWidths() }
+    function pointAtTab(index) { tabProbe.pointAtTab(index) }
+    function tabMarks() { return tabProbe.tabMarks() }
 
     /// Hands the run out among the tab names, the longest giving way last (デザイン規約 §ウィンドウの縁); below `tabTitleMinW` the
     /// strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of items, and a binding
@@ -435,6 +377,11 @@ Item {
         id: tabCarry
         view: tabs
         tabsModel: tabStrip.tabsModel
+    }
+    // The headless run's window onto that same list, declared after it for the same reason.
+    TabProbe {
+        id: tabProbe
+        view: tabs
     }
     // Opening one more. Drawn rather than typed: a `+` is in every family the chain names, so nothing here ever looked
     // broken — but its shape and the weight of its line were whatever the platform resolved, where every other mark in

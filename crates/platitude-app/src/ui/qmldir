@@ -155,6 +155,7 @@ SummaryArea 1.0 SummaryArea.qml
 TabCarry 1.0 TabCarry.qml
 TabItemDelegate 1.0 TabItemDelegate.qml
 TabMetrics 1.0 TabMetrics.qml
+TabProbe 1.0 TabProbe.qml
 TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml

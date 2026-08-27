@@ -1,0 +1,84 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+
+// What the headless run is allowed to ask of the strip: what the tabs came out as, and the one input a run has no
+// pointer for. Every answer is read off the items the view actually built — the output side, so a binding that came
+// apart answers with what is on screen rather than with what was asked for (rules-refs/app-ui.md).
+//
+// Not the strip's own for the reason the hand is not (`TabCarry`): the strip is about laying tabs out, and this is
+// about reporting on them. A `QtObject`: nothing here draws, and nothing here needs a child.
+QtObject {
+    id: probe
+
+    /// The strip's own list. This reads it and never lays anything out.
+    required property ListView view
+
+    /// How many of the strip's rows have an item standing for them. `tabPaths`, `tabTitles` and `hasTabPath` walk
+    /// those items, so this is what says whether their answer is the whole strip or only the part of it the layout has
+    /// caught up with.
+    function tabItemCount() {
+        let n = 0
+        for (let i = 0; i < probe.view.count; i++)
+            if (probe.view.itemAtIndex(i))
+                n++
+        return n
+    }
+
+    /// Whether any tab in the strip was opened on `path`. The closed tab's title cannot say it went — every demo
+    /// working tree is called the same thing — and the path is the only thing that can.
+    function hasTabPath(path) {
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            if (tab && tab.repo_path === path)
+                return true
+        }
+        return false
+    }
+
+    /// The paths rather than the titles — every demo repository is called the same thing, and a strip of one name
+    /// proves nothing.
+    function tabPaths() {
+        let paths = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            if (tab)
+                paths.push(tab.repo_path)
+        }
+        return paths.join(",")
+    }
+
+    /// The path a tab was opened with, spelled the way the strip has it (`PG_AUTO_ACT=open-again`).
+    function tabPathAt(index) {
+        const tab = probe.view.itemAtIndex(index)
+        return tab ? tab.repo_path : ""
+    }
+
+    /// Every tab's width, in the order they sit in (`PG_AUTO_ACT=tab-widths`).
+    function tabWidths() {
+        let widths = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            widths.push(tab ? Math.round(tab.width) : 0)
+        }
+        return widths.join(",")
+    }
+
+    /// The pointer, set down on the tab at `index` — the half no headless run can reach any other way
+    /// (`PG_AUTO_ACT=tab-mark`).
+    function pointAtTab(index) {
+        const tab = probe.view.itemAtIndex(index)
+        if (tab)
+            tab.pointed = true
+    }
+
+    /// Which tabs have their mark out, in strip order.
+    function tabMarks() {
+        let marks = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            marks.push(tab ? tab.markShown : 0)
+        }
+        return marks.join(",")
+    }
+}
