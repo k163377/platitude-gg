@@ -20,6 +20,7 @@ mod nav;
 mod notify;
 mod pathtree;
 mod repo_tab;
+mod tab_name;
 mod tabs;
 #[cfg(test)]
 mod tabs_tests;

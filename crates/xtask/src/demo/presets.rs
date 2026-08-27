@@ -41,7 +41,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 }
 
 /// Builds `preset` with the work tree called `name` rather than `repo` —
-/// a tab is titled after its work-tree folder (`models::tabs::title_of`).
+/// a tab is titled after its work-tree folder (`models::tab_name`).
 pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
     let root = match at {
         Some(dir) => dir,

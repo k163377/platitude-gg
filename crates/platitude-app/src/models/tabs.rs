@@ -6,7 +6,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 use crate::hub::{Feed, Hub, PickMsg};
 use crate::urlpath::file_url_to_path;
 
-use super::{impl_move_notified, qml_register};
+use super::{impl_move_notified, impl_notify_runs, push_run, qml_register, tab_name};
 
 // ---------------------------------------------------------------------------
 // TabsModel: open repositories (the tab strip)
@@ -77,6 +77,7 @@ impl QListModel for TabsModel {
 }
 
 impl_move_notified!(TabsModel, items);
+impl_notify_runs!(TabsModel);
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl TabsModel {
@@ -194,7 +195,7 @@ impl TabsModel {
             self.set_current_index(position as i32);
             return;
         }
-        let title = title_of(&path_buf, &path);
+        let title = title_of(&path);
         let Some(Some(tab_id)) = Hub::with(|hub| hub.open_tab(path_buf)) else {
             return;
         };
@@ -203,6 +204,7 @@ impl TabsModel {
             title,
             repo_path: path,
         });
+        self.settle_titles();
         self.leave_front();
         self.current_index = self.items.len() as i32 - 1;
         self.report();
@@ -254,7 +256,7 @@ impl TabsModel {
                 }
                 continue;
             }
-            let title = title_of(&path_buf, path);
+            let title = title_of(path);
             let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(path_buf)) else {
                 continue;
             };
@@ -264,6 +266,10 @@ impl TabsModel {
                 repo_path: path.clone(),
             });
         }
+        // Once, with the whole strip standing: a name settled against
+        // half of it would be settled against tabs that are still to
+        // arrive.
+        self.settle_titles();
         if self.items.is_empty() {
             return;
         }
@@ -284,6 +290,9 @@ impl TabsModel {
         Hub::with(|hub| hub.close_tab(tab_id));
         if let Some(pos) = closing {
             self.remove(pos);
+            // The namesake that made a tab spell out its parent may be
+            // the one that just went, and the name goes back with it.
+            self.settle_titles();
             // Closing a tab left of the active one shifts the active row
             // down; the index has to follow it, or the visible repository
             // silently becomes its right-hand neighbour.
@@ -369,6 +378,33 @@ impl TabsModel {
             .position(|t| platitude_core::repo::open_key(&t.repo_path) == key)
     }
 
+    /// Names every tab against the strip it now stands in
+    /// ([`tab_name::names_for`]).
+    ///
+    /// Called by opening, restoring and closing — the three acts that
+    /// change which names are in the strip. **Not by a move**: the order
+    /// is not what a name is settled against, and a `dataChanged` on the
+    /// row being carried would be one the hand did not ask for.
+    ///
+    /// Rows that came out the same are left alone, so the ordinary case
+    /// — a repository whose name nobody shares — costs no notification at
+    /// all, and the strip re-measures only the tabs whose words moved
+    /// (`TabStrip.settleTitleCap`).
+    fn settle_titles(&mut self) {
+        let names = {
+            let paths: Vec<&str> = self.items.iter().map(|t| t.repo_path.as_str()).collect();
+            tab_name::names_for(&paths)
+        };
+        let mut runs = Vec::new();
+        for (at, (item, name)) in self.items.iter_mut().zip(names).enumerate() {
+            if item.title != name {
+                item.title = name;
+                push_run(&mut runs, at);
+            }
+        }
+        self.notify_runs(runs);
+    }
+
     /// Names the tab the front row is holding (`current_tab_id`).
     ///
     /// Called from [`TabsModel::report`], which every act on the strip
@@ -418,11 +454,18 @@ impl TabsModel {
     }
 }
 
-/// The tab's label: the repository's own folder name.
-fn title_of(path: &std::path::Path, whole: &str) -> String {
-    path.file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| whole.to_string())
+/// The tab's label before the strip has been consulted: the repository's
+/// own folder name, which is what it is called wherever nobody shares it.
+///
+/// Asked of the same rule the whole strip is settled by
+/// ([`tab_name::names_for`]), so a tab is never named twice over — the
+/// row is pushed with this and [`TabsModel::settle_titles`] grows it if
+/// the strip it landed in has a namesake standing in it.
+fn title_of(path: &str) -> String {
+    tab_name::names_for(&[path])
+        .into_iter()
+        .next()
+        .unwrap_or_default()
 }
 
 /// Where the row at `current` ends up once the row at `from` has been
