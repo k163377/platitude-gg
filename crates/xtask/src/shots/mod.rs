@@ -12,11 +12,16 @@
 //! `.git`, and each run carries the seat that took it. A picture from
 //! another seat's tree says nothing about this one, so a board that did
 //! not name the seat would be a board nobody could trust.
+//!
+//! And it is read in *one* window, however many seats and sessions put
+//! pictures on it: the page is rewritten where it stands, so the window
+//! already open is one F5 away from the newest run (`window.rs`).
 
 mod board;
 mod cli;
 mod page;
 mod sweep;
+mod window;
 
 pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;

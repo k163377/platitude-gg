@@ -164,8 +164,9 @@ const BODY: &str = r#"<div id="wrap"><div id="side"><div id="head">
   <b id="name"></b><span id="from"></span><b id="zoom"></b>
   <span id="keys"><kbd>wheel</kbd> zoom <kbd>drag</kbd> pan <kbd>0</kbd> fit
   <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd><kbd>8</kbd> exact
-  <kbd>&larr;</kbd><kbd>&rarr;</kbd> next</span></div>
-  <div id="stage"><div id="imgs"></div><div id="empty">no shots yet</div></div></div></div>"#;
+  <kbd>&larr;</kbd><kbd>&rarr;</kbd> next <kbd>F5</kbd> newest</span></div>
+  <div id="stage"><div id="imgs"></div>
+  <div id="empty">no shots yet &mdash; <kbd>F5</kbd> once there are</div></div></div></div>"#;
 
 /// The whole page: a few KB whatever the board holds, because the runs
 /// carry paths rather than pictures.

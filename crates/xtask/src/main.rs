@@ -305,7 +305,7 @@ commands:
       one (CLAUDE.md ビルド・テスト). Ends with how to read the columns,
       and a locked seat carries the mark past them.
 
-  shots <add|prune|open|list|path>
+  shots <add|prune|open [--again]|list|path>
       The shot board: pictures land on a page that opens in a window of
       its own, magnifies to exact integer ratios without smoothing, and
       is still there after it is closed. A chat pane fits a picture to
@@ -318,6 +318,15 @@ commands:
       picture from another tree proves nothing about this one, which is
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
+
+      One window, and it is `open` that hands it out: the page sits at a
+      fixed path and is rewritten in place, so the window already showing
+      the board is one F5 away from the run just taken. `open` says so
+      rather than opening a second, whichever seat or session asks, and
+      `--again` is the reader's own word that they closed theirs. Six
+      windows of one board are six answers to which one is current, so
+      the count is kept in the board rather than left to whoever
+      remembers (shots/window.rs).
 
       A before/after goes on with `add --before <png> --after <png>`,
       which puts the two on one view side by side under one magnifier.
