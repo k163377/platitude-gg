@@ -226,7 +226,7 @@ Item {
                 "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
-                "signature", "signature-tip", "stash-tip", "path-tip", "row-card", "menu-hover",
+                "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
@@ -2844,6 +2844,31 @@ Item {
             driver.complete()
         }
     }
+    // A tooltip's words are a field, not a label (`CardText`), and this is the run that says so: it takes the whole of
+    // the tip into a selection the way a reader's drag would, and reports what came back against what the tip is
+    // showing. **Selection is as far as a run can go** — the clipboard belongs to the platform, and a run that wrote to
+    // it would be testing Qt rather than this window; the walk from the row into the tip cannot be injected at all
+    // (verify-ui スキル), so that half is measured on a throwaway qmltestrunner scene.
+    //
+    // Asked of the contentItem without checking what it is: a tip wearing the style's own `Text` again has no
+    // `selectAll` and the run dies on the spot, which is the answer.
+    SampleTimer {
+        id: tipCopyTimer
+        onTriggered: {
+            if (worktreeModel.total === 0)
+                return
+            wipPane.pointedTipRow = 0
+            const tip = page.ToolTip.toolTip
+            if (!tip.visible)
+                return
+            tipCopyTimer.stop()
+            tip.contentItem.selectAll()
+            AppBackend.report("tip_copy tip=" + tip.visible
+                + " copied=" + (tip.contentItem.selected === tip.text)
+                + " text=" + tip.text)
+            driver.complete()
+        }
+    }
     // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
     // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
     // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
@@ -4312,6 +4337,13 @@ Item {
                 detailsModel.setTreeView(wantsTree)
             }
             pathTipTimer.start()
+        } else if (act === "tip-copy") {
+            // The same row `path-tip` points at in its plain form, for the same reason: the flattened view spells a
+            // whole path, which is the longest thing this window puts in a tooltip and so the one worth taking away.
+            // The tree's row 0 is a folder and would put one word in the picture.
+            page.showWip()
+            worktreeModel.setTreeView(false)
+            tipCopyTimer.start()
         } else if (act === "row-card") {
             // Hover cannot be injected, so this enters where the row's delay timer would.
             const hovered = graphPane.view.itemAtIndex(Number(arg))

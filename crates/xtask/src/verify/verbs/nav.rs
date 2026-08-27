@@ -26,6 +26,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Ends("-tree"), "tree=true tip=true")],
         plain: "tree=false tip=true",
     },
+    // And the same tooltip taken away: `copied=` is the whole of the
+    // tip read back out of a selection made on it, so it is false the
+    // moment the words stop being a field the reader can drag over.
+    // **A picture cannot answer this** — a selected line and an
+    // unselected one differ by a wash the shot's own scaling can lose,
+    // and a `Text` put back in place of the field would frame
+    // identically.
+    Verb {
+        name: "tip-copy",
+        when: &[],
+        plain: "tip=true copied=true",
+    },
     // A row's tooltip. `lit=` is the control — the tip that came up
     // under the same pointer on the way in, so a run that photographs
     // an empty overlay is showing the row's answer and not a pointer

@@ -224,6 +224,7 @@
 - `signature-tip`(署名のツールチップ。**must_say `code=E tip=true` = `--preset errsig` 以外では FAIL**)
 - `stash-tip`(stash 行を選んだ時の summary 箱のツールチップ)
 - `path-tip`(ファイル行の hover が出すフルパスのツールチップ — 長さは問わない。`-tree` 付きはツリーのフォルダ連鎖行。`--preset longpaths` は行が省略される長さで撮るため)
+- `tip-copy`(**ツールチップの字が持ち帰れる欄であること** — 同じファイル行の tip を実 hover と同じ経路で出し、`CardText.selectAll()` で全選択して読み返す。引数なし・`--preset longpaths` が見せ場(行が中略しているパスを tip が全部持っている絵)。報告行 `tip_copy tip= copied= text=` の **`copied=true` が must_say**(選択で読み返した字が tip の文言と一致 = 欄である側)。**写真では判定できない** — 選択の重ね色は縮小で飛び、素の `Text` に戻しても同じ枠に収まる。**クリップボードまでは撃たない**(プラットフォームの持ち物で、書くと Qt を試すことになる)。行から tip へ歩く側は注入できないので使い捨ての qmltestrunner シーンが持つ(rules-refs/app-ui.md))
 - `author-card` / `author-card-open`(author 名の平常時とカード。`--preset authorship`。must_say `author_card cut=false`)
 - `co-authors` / `co-authors-open`(日付行の credit 表示とカード。`--preset co-authors`)
 - `row-card`(グラフ行の hover カード。must_say `row_card open=true lit=true`)
