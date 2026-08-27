@@ -170,6 +170,7 @@ Rectangle {
     function runAtEnd() { return tabStrip.runAtEnd() }
     function runOffset() { return tabStrip.runOffset() }
     function tabPaths() { return tabStrip.tabPaths() }
+    function tabTitles() { return tabStrip.tabTitles() }
     function tabItemCount() { return tabStrip.tabItemCount() }
     function hasTabPath(path) { return tabStrip.hasTabPath(path) }
     function tabPathAt(index) { return tabStrip.tabPathAt(index) }

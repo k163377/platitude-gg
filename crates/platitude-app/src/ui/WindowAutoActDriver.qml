@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached `ToolTip` alone (`tab-name`; rules-refs/app-ui.md carries what an unimported attached type answers).
+import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Window
 import platitude
@@ -893,6 +895,44 @@ Item {
                 + " current=" + tabsModel.currentIndex
                 + " pointed=" + pointed
                 + " marks=" + topBar.tabMarks())
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=tab-name: the names a strip of namesakes settled on, and the whole path the hand asks for on top of
+    // them. The argument is which tab to point at. Both halves in one run because they are one question — what this tab
+    // stands on — asked of the strip and then of the hover (デザイン規約 §タブの所作 / §hover のツールチップ).
+    SampleTimer {
+        id: tabNameActTimer
+        running: AppBackend.autoAct === "tab-name"
+        property bool requested: false
+        readonly property int pointed: Number(AppBackend.autoActArg || 0)
+        onTriggered: {
+            // Every row has to have an item before the names are read: the strip's answer for a row the layout has not
+            // reached yet is the empty string, which reads exactly like a name that came out blank.
+            if (topBar.bandTabCount === 0 || topBar.tabItemCount() < topBar.bandTabCount)
+                return
+            if (!tabNameActTimer.requested) {
+                tabNameActTimer.requested = true
+                topBar.pointAtTab(tabNameActTimer.pointed)
+                return
+            }
+            const tip = mainUi.ToolTip.toolTip
+            // The tip is on a delay, so this waits it out rather than reading the moment after the hand landed.
+            if (!tip.visible)
+                return
+            stop()
+            // `unique=` rather than the names themselves as the judged claim: what a name comes out as is spelled with
+            // the platform's own separator, and no two tabs reading alike is the rule either way (`verify/verbs.rs`).
+            const titles = topBar.tabTitles()
+            const names = titles.split(",")
+            AppBackend.report(
+                "tab_names tabs=" + topBar.bandTabCount
+                + " pointed=" + tabNameActTimer.pointed
+                + " unique=" + names.every((name, at) => names.indexOf(name) === at)
+                + " tip=" + tip.visible
+                + " titles=" + titles
+                + " said=" + tip.text)
             window.finishAutoAct()
         }
     }

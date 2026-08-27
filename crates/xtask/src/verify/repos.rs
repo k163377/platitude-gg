@@ -62,6 +62,47 @@ pub(super) fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
     Ok(made)
 }
 
+/// The strip the `tab-name` verb is run against: repositories that share
+/// a folder name, and one that shares nothing with anybody.
+///
+/// Both halves of that rule need seeing at once too (デザイン規約 §タブの所作):
+/// `foo/repo` and `bar/repo` grow a parent each, the two `repo`s under a
+/// `deep` of their own have to grow past that parent as well, and `solo`
+/// stands there proving that a name nobody shares never moves. A ladder
+/// of distinct names — the one `tab-widths` runs on — can show none of
+/// it, because there is nothing there to tell apart.
+///
+/// Built under one root so the paths differ only where the names do: an
+/// answer that came out right because each repository sat in a directory
+/// of its own would say nothing about the rule.
+///
+/// `solo` comes last and carries the history, for the reason the ladder's
+/// last one does: the tab opened last is the one in front, so that is the
+/// page under the strip in the picture.
+pub(super) fn tab_name_repos() -> Result<Vec<PathBuf>, String> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let root = std::env::temp_dir()
+        .join("pg-demo")
+        .join(format!("tab-name-{nanos}"));
+    let mut made = Vec::with_capacity(5);
+    for (under, name) in [
+        (Some("foo"), "repo"),
+        (Some("bar"), "repo"),
+        (Some("1/deep"), "repo"),
+        (Some("2/deep"), "repo"),
+        (None, "solo"),
+    ] {
+        let at = under.map_or_else(|| root.clone(), |dir| root.join(dir));
+        let preset = if name == "solo" { "basic" } else { "empty" };
+        made.push(crate::demo::create_named(preset, Some(at), name)?);
+    }
+    println!("demo repos (tab-name): four called `repo`, and one nobody shares");
+    Ok(made)
+}
+
 /// The description a verb needs typed for it, when the run brought none.
 ///
 /// The commit editor starts empty, so the verbs that pull its box open

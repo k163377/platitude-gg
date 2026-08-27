@@ -206,6 +206,11 @@ commands:
       cannot show. `tab-edge` opens eight, puts the window down on its
       floor so the strip has to overflow, and holds a tab past the end of
       it until the strip has travelled the whole way.
+      `tab-name` opens a strip of a different shape: four repositories
+      called `repo` — two of them under a parent they also share — and
+      one nobody shares at all, which is what a name that has to grow to
+      tell itself apart needs standing beside it. It points at the tab
+      its argument names (default 0) and reads the hover as well.
       `identity` and `identity-half` are read as a pair, and are the only
       verbs whose write would land outside a demo repository — so they are
       handed a git configuration of their own (GIT_CONFIG_GLOBAL in the

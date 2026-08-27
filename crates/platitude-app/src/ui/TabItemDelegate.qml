@@ -77,6 +77,17 @@ Rectangle {
         id: heldShift
         x: tabItem.held ? tabItem.heldX - tabItem.x : 0
     }
+    // The repository in full, under the hand (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずリポジトリの
+    // フルパスを言う」). Read off `pointed` like the mark, so the one property the real hover writes is what puts the
+    // words out — and the headless run reaches them the same way it reaches the mark (`TabProbe.pointAtTab`).
+    //
+    // Nothing new comes out under a hand that is carrying: by then the hand is doing something else, and a box opening
+    // beside a tab in motion is not there to be read (同§「掴んだ手の下では新しく出さない」). Only the new one — a tip
+    // already standing is the shared instance's to take down, and it keeps one up while the pointer is on the target
+    // it came out of (`SharedToolTip.wanted`), which a tab under a carrying hand still is (P3-確認事項).
+    ToolTip.visible: tabItem.pointed && !tabItem.held
+    ToolTip.delay: Metrics.tipDelayMs
+    ToolTip.text: tabItem.repo_path
     // Which tab the hand is on (デザイン規約 §タブの所作「`✕` が出るのは前に居るタブと、手の下のタブだけ」). A handler
     // because handlers are passive: the mark, the wash and the tab go on answering the one pointer however many
     // children of this tab take hover of their own.

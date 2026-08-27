@@ -48,6 +48,17 @@ QtObject {
         return paths.join(",")
     }
 
+    /// The name each tab came out with, in the order they sit in (`PG_AUTO_ACT=tab-name`). Read off the tabs rather
+    /// than off the model: what the strip settled on is only worth anything where it is what the strip is drawing.
+    function tabTitles() {
+        let names = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            names.push(tab ? tab.title : "")
+        }
+        return names.join(",")
+    }
+
     /// The path a tab was opened with, spelled the way the strip has it (`PG_AUTO_ACT=open-again`).
     function tabPathAt(index) {
         const tab = probe.view.itemAtIndex(index)

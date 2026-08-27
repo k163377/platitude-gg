@@ -50,6 +50,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "sessions=1 folded=true log=true empty=true back=true wip=true",
     },
+    // A strip of namesakes, and the path the hand asks for on top of
+    // it. `unique=` rather than the names themselves: a name is spelled
+    // with the platform's own separator, so the two machines cannot be
+    // held to one string — what both have to answer is that no two tabs
+    // read alike. `tip=` is the hover, which the strip's own picture
+    // cannot hold (it comes out on the overlay), and a run whose tip
+    // never opened photographs a perfectly ordinary band.
+    Verb {
+        name: "tab-name",
+        when: &[],
+        plain: "unique=true tip=true",
+    },
     // Which tab was carried and where it came to rest. A strip whose
     // order merely changed passes with any two tabs swapped, and one
     // where the carry never took hold photographs the order it

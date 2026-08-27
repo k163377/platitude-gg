@@ -162,6 +162,7 @@ Item {
     function tabItemCount() { return tabProbe.tabItemCount() }
     function hasTabPath(path) { return tabProbe.hasTabPath(path) }
     function tabPaths() { return tabProbe.tabPaths() }
+    function tabTitles() { return tabProbe.tabTitles() }
     function tabPathAt(index) { return tabProbe.tabPathAt(index) }
     function tabWidths() { return tabProbe.tabWidths() }
     function pointAtTab(index) { tabProbe.pointAtTab(index) }

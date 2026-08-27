@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use super::options::parse;
 use super::outcome::Outcome;
 use super::ownership::{claim_resource, fresh_shot_dir};
-use super::repos::{body_for, folder_for, seed_merge_tool, tab_width_repos};
+use super::repos::{body_for, folder_for, seed_merge_tool, tab_name_repos, tab_width_repos};
 use super::shim::{
     SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git, stage_old_git,
 };
@@ -36,6 +36,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // Same strip; the argument here names a tab in it rather than
         // how many there are.
         tab_width_repos("")?
+    } else if opts.verb == "tab-name" {
+        // A different strip entirely: names that collide, which the
+        // ladder above deliberately has none of.
+        tab_name_repos()?
     } else if opts.verb == "tab-drag" || opts.verb == "tab-hold" {
         // Same ladder of names, four of them: the order is what this one
         // is about, and four differently named tabs say an order a
