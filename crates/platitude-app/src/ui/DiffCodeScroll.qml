@@ -80,6 +80,10 @@ Item {
         // Fusion draws a bar's handle only in the style's "active" state, which for one not attached to a Flickable
         // means while the pointer is on the bar itself — a strip on the bottom edge nobody would find. When this bar is
         // out it is because this pane put it there, so the style stops deciding (GraphPane's lane bar, same reason).
+        //
+        // The thumb itself is the style's see-through one, as every bar with content under it is (デザイン規約 §色
+        // スクロールバー): the code runs beneath this one, and the ink comes from the window's palette, so a bare
+        // `ScrollBar` wears it without asking.
         ScrollBar {
             id: bar
             visible: codeScroll.canPan && (codeScroll.paneHovered || pressed || hand.scrolling)

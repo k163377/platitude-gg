@@ -247,6 +247,9 @@ ComboBox {
                 implicitHeight: contentHeight
                 model: combo.delegateModel
                 currentIndex: combo.highlightedIndex
+                // The style's see-through thumb rather than the panels' flat slab (デザイン規約 §色 スクロールバー):
+                // this bar stands inside a card and the rows run under it, which is the frame's answer rather than a
+                // pane's edge. Over the card's own ground the same ink reads `#303F54`.
                 ScrollBar.vertical: AutoScrollBar {}
             }
         }

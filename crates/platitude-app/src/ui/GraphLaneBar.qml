@@ -7,6 +7,11 @@ import platitude.ui
 /// It lies over the lanes of the last row, so it comes out only while the hand is in the pane, and stays out for as long
 /// as it is being dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る).
 ///
+/// **The style's see-through thumb, which is what a bar with content under it wears** (デザイン規約 §色 スクロールバー):
+/// the lanes run beneath this one, so there is no gutter keeping ink off it and nothing to gain by painting it flat.
+/// The colour arrives on its own — the window's `palette.mid` / `dark` are the thumb's own pair, so a bare `ScrollBar`
+/// carries the same ink as the ones built on `AutoScrollBar` without naming it.
+///
 /// **The bar and nothing else.** Whether the hand is in the pane is the pane's own answer and has to stay there: a
 /// `HoverHandler` put in a wrapper item over the list **takes the hover away from every row underneath** — hover goes to
 /// the topmost item that accepts it, and an item carrying a handler accepts it for its whole area (2026-08-22
