@@ -77,13 +77,26 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        NavIcon {
+        // The seat stays `iconSm`, so the caption and the section's own mark do not move; the chevron inside it is
+        // drawn on the `iconMd` grid, so what grows is the ink and not the column (デザイン規約 §寸法「箱の大きさと実インクは
+        // 別物」). The mark is a quarter of its box wide and half of it tall, so an `iconMd` grid still keeps every
+        // stroke inside an `iconSm` seat — the air it was holding is what gets taken off.
+        //
+        // Level with the `>` inside the `terminal` mark at the foot of this same menu, which is this same geometry on
+        // this same grid, and a step above the fold arrow a row *inside* a section wears (`NameCell`, still `iconSm`):
+        // the two ranks of fold are told apart by ink.
+        Item {
             visible: header.foldable
-            width: Theme.iconSm
-            height: Theme.iconSm
-            kind: "chevron"
-            rotation: header.showsRows ? 90 : 0
-            tint: header.empty ? Theme.textMuted : Theme.textSecondary
+            Layout.preferredWidth: Theme.iconSm
+            Layout.preferredHeight: Theme.iconSm
+            NavIcon {
+                anchors.centerIn: parent
+                width: Theme.iconMd
+                height: Theme.iconMd
+                kind: "chevron"
+                rotation: header.showsRows ? 90 : 0
+                tint: header.empty ? Theme.textMuted : Theme.textSecondary
+            }
         }
         NavIcon {
             kind: header.iconKind
