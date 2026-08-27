@@ -96,8 +96,12 @@ ApplicationWindow {
         base: Theme.bgBase
         button: Theme.bgElevated
         placeholderText: Theme.textMuted
-        mid: Theme.borderDefault
-        dark: Theme.borderStrong // Fusion: a scroll bar's held handle
+        // The two roles Fusion paints a scroll bar's thumb with, and in this window they paint nothing else: every
+        // other place the style reaches for `mid` (a Popup's border, a Dialog's, a SplitView's handle) is a background
+        // this app supplies itself (`AppCardFace` / `SplitHandleBar`). So they are the thumb's own colors, and they
+        // are translucent — the graph's rows run under the bar (デザイン規約 §スクロールバー).
+        mid: Theme.scrollBarThumb
+        dark: Theme.scrollBarThumbHeld // Fusion: a scroll bar's held handle
         light: Theme.borderDefault
 
         active {
