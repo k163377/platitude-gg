@@ -15,6 +15,11 @@ import platitude.ui
 // name. What is left after that is under one character, and it goes **into the cut**, where the mark already says
 // something was taken out. Neither edge of the column moves, and no row's ink stops short of it.
 //
+// **A sentence is cut at its end instead** (`cutAt: "end"` — a commit's subject). It has no tail the reader tells it
+// apart by, so nothing is kept past the mark; but the elide frays the same way, one character at a time, so the head is
+// filled out here in the same loop and **the mark is pinned to the column's right edge**. Down the graph every `…`
+// stands at one x (規約 §タイポグラフィ「文の省略は末尾で、印は列の右辺に貼る」).
+//
 // The name in full stays the row's hover (規約 §hover のツールチップ) — this part only decides what is on screen.
 Item {
     id: cut
@@ -24,6 +29,9 @@ Item {
     property color color: Theme.textPrimary
     property int weight: Font.Normal
     property real pixelSize: Theme.fontMd
+    /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
+    /// left, and nothing after the cut is worth keeping).
+    property string cutAt: "middle"
 
     /// The two halves that are drawn, and whether the mark stands between them — the output side, which is also how a
     /// caller asks whether this name was cut at all (`Text.truncated` has no meaning here: neither half is elided).
@@ -65,16 +73,18 @@ Item {
         probe.text = whole
         const elided = probe.elidedText
         const at = cut.cutPoint(whole, elided)
+        const toEnd = cut.cutAt === "end"
         let head = at >= 0 ? at : 0
-        let tail = at >= 0 ? elided.length - at - 1 : 0
+        let tail = !toEnd && at >= 0 ? elided.length - at - 1 : 0
         // Fill the column. The tail grows first: a generated name is told apart by its end (規約 §git 用語のコード表記
-        // 「ref の省略は中央 — ブランチ名は末尾で見分ける」).
+        // 「ref の省略は中央 — ブランチ名は末尾で見分ける」). A cut at the end has no tail at all, so only the head grows
+        // and what the fill cannot use is left in front of the mark, which is already standing at the column's edge.
         const room = box - cut.inkOf("…")
         let headInk = cut.inkOf(whole.substring(0, head))
         let tailInk = cut.inkOf(whole.substring(whole.length - tail))
         for (;;) {
             let grew = false
-            const back = cut.stepBack(whole, whole.length - tail)
+            const back = toEnd ? 0 : cut.stepBack(whole, whole.length - tail)
             if (back > 0 && head + tail + back <= whole.length) {
                 const ink = cut.inkOf(whole.substring(whole.length - tail - back))
                 if (headInk + ink <= room) {
@@ -162,7 +172,7 @@ Item {
     TextMetrics {
         id: probe
         font: headLabel.font
-        elide: Text.ElideMiddle
+        elide: cut.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
     }
 
     // The three pieces. Head and tail fill the item and let their own alignment hold them to its edges — the same
@@ -197,7 +207,13 @@ Item {
         // In the middle of the cut. What the fill could not use is under one character, and halving it either side of
         // the mark keeps it from reading as a space in the name. Never left of the head — a measure that came out a
         // hair wide would otherwise draw the mark over it.
-        x: Math.max(headLabel.implicitWidth,
-                    (headLabel.implicitWidth + cut.width - tailLabel.implicitWidth - markLabel.implicitWidth) / 2)
+        //
+        // **A cut at the end puts it on the column's right edge instead**, which is the whole point of that mode: a
+        // mark set against the head lands on a different x every row and frays the column. The leftover — under one
+        // character — falls in front of it, where the mark already says something was taken out.
+        x: cut.cutAt === "end"
+           ? cut.width - markLabel.implicitWidth
+           : Math.max(headLabel.implicitWidth,
+                      (headLabel.implicitWidth + cut.width - tailLabel.implicitWidth - markLabel.implicitWidth) / 2)
     }
 }
