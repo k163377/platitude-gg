@@ -204,35 +204,47 @@ Item {
 
     // The bar's own state follows what has been typed into it, which is why these are bindings rather than arguments:
     // the question changes what it is asking while it stands.
+    //
+    // **Nothing is put back when they let go** (`RestoreNone`). `publishAsking` drops at the press that walks away —
+    // it has to, or the check timer would still be firing a round trip at a remote for a question nobody is asking any
+    // more — and a restore there lands on a bar that is still on screen, retracting: the blue frame this question
+    // wears would turn `warning` for the 200ms it takes to go, which is the flash that was reported (2026-08-27
+    // ユーザー報告). Every one of these is written again by `GraphPane.startAsking`, so the next question dresses the bar
+    // whole and there is nothing for a restore to be right about.
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"
         value: publishFlow.publishFilled && publishFlow.publishChecked
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
         property: "askHold"
         value: publishFlow.publishRefused
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
         property: "askNeutral"
         value: !publishFlow.publishRefused
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
         property: "askCode"
         value: publishFlow.publishRefused ? "push -f" : "push"
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
         property: "askAlert"
         value: publishFlow.publishUnsure
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
@@ -255,6 +267,7 @@ Item {
                          : qsTr("%1 does not exist yet; this makes it.")
                            .arg(publishFlow.publishTarget)
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
@@ -271,6 +284,7 @@ Item {
                      .arg(publishFlow.publishRemote)
                    : ""
         when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
     }
 
     function startPublishAsk() {

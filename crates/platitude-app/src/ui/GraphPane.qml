@@ -161,8 +161,8 @@ Rectangle {
     /// `accept` carries the wording everywhere else.
     function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "") {
         graphArea.stopNaming()
-        // Before the label, which is what opens the bar: the form has to exist by the time opening decides where the
-        // focus goes.
+        // Down before the new one goes in, or the last question's typing comes back under these words (`AskBar.form`).
+        askBar.form = null
         askBar.form = form
         askBar.answerable = true
         askBar.neutral = false
@@ -176,6 +176,8 @@ Rectangle {
         askBar.tip = tip
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
+        // Last of all: dressed, then raised — so nothing on a bar the reader can see is ever written (`AskBar.open`).
+        askBar.open = true
     }
     /// Whether the standing question can be answered yet. A question with a form turns this off until the form has
     /// something to send.
@@ -188,19 +190,19 @@ Rectangle {
     /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
     /// question as the remote answers, because what would run depends on what is over there.
     property alias askCode: askBar.code
-    /// The pill's ordinary-voice word, for the questions git has no one command for (`Move` / `Open`).
-    property alias askAccept: askBar.accept
-    /// Automation: the bar is all the way down, words and pill at their own size (`AskBar.settled`) — and all the way
-    /// back up once it has been answered (`AskBar.shut`).
-    readonly property alias askSettled: askBar.settled
-    readonly property alias askShut: askBar.shut
     property alias askAlert: askBar.alert
     property alias askDetail: askBar.detail
     property alias askTip: askBar.tip
     /// The live form, so its owner can read what was typed into it.
     readonly property alias askForm: askBar.formItem
+    /// The bar itself — automation-only exposure, the same one `view` and `findCard` are (app-ui.md). A headless run
+    /// reads its `settled` / `shut` / `label` / `accept` off it and presses the ✕ through `dismiss()`; five names on
+    /// this pane said nothing the bar does not, and none of them is a thing that can be pressed from there.
+    readonly property alias askCard: askBar
     function stopAsking() {
-        askBar.label = ""
+        // Only lowered. The words and the colour are left where they are — the bar is on screen for the whole 200ms it
+        // takes to go, and the next question is what re-dresses it (`AskBar.open`).
+        askBar.open = false
         graphList.askOid = ""
     }
     /// Automation: answer a held question the way a person does, by keeping the pill down to the end.
@@ -225,7 +227,7 @@ Rectangle {
         id: rowWalk
         view: graphList
         graphModel: graphArea.graphModel
-        asking: askBar.label !== ""
+        asking: askBar.open
         // The walk names the commit it landed on, not the row — the page looks that one up.
         onActivated: oidHex => graphArea.rowActivated(oidHex, -1)
     }
@@ -298,7 +300,7 @@ Rectangle {
         z: 4
         graphModel: graphArea.graphModel
         view: graphList
-        asking: askBar.label !== ""
+        asking: askBar.open
         // How far left the card may reach: `spaceXs` past where a subject starts, which is about half of the first
         // character (§コミットを探す). Measured from the columns rather than from the pane, so the cap follows the dividers
         // when they are dragged — it is a distance from the tick the messages begin at, not a fraction of the window.

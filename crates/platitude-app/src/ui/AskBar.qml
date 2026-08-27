@@ -14,7 +14,8 @@ import platitude.ui
 Rectangle {
     id: bar
 
-    /// The question. Empty is closed; nothing else opens or shuts it.
+    /// The question. What the bar says, not whether it stands — `open` alone raises and lowers it, so the words are
+    /// still here while it goes back up.
     property string label: ""
     /// What answering costs, in the one line §用語 allows for it.
     property string detail: ""
@@ -51,6 +52,11 @@ Rectangle {
     /// the question, since only they know what is being asked; the bar just gives it a place under the words and above
     /// nothing (デザイン規約 §可否・警告の出し場所: the answer is given where the question is, not in a window of its own). Null for
     /// the questions the pill alone can answer.
+    ///
+    /// **Put down before the next one goes in, never on the way out** (`GraphPane.startAsking`). A Loader handed the
+    /// component it already has keeps the item, so a second question of the same kind would come up holding what was
+    /// typed into the first — and clearing it at the press instead would take the form out from under a bar that is
+    /// still on screen, dropping the pill and the ✕ (centred against the whole row) by half its height.
     property Component form: null
     /// The loaded form, so the owner can read what was put into it.
     readonly property alias formItem: formLoader.item
@@ -77,8 +83,19 @@ Rectangle {
     signal confirmed()
     /// Walked away from — Escape, the ✕, or a click elsewhere.
     signal cancelled()
+    /// The ✕'s own handler, named so the headless run presses what a hand presses (verify-ui: a run that calls a
+    /// second function doing the same thing passes for a mark wired to nothing).
+    function dismiss() {
+        bar.cancelled()
+    }
 
-    readonly property bool open: bar.label !== ""
+    /// Whether the question stands. **Not the words** — what the bar says is `label` and the rest, and those stay put
+    /// when it comes down: the bar is on screen for the whole 200ms it spends going back up, and nothing that can be
+    /// seen may change while it can be seen. A bar emptied at the press spends that time as a blank band in whatever
+    /// colour its owner's bindings fell back to, which is the flash that was reported (2026-08-27 ユーザー報告).
+    /// The next question is what replaces the words, not this one ending (`GraphPane.startAsking` dresses the bar and
+    /// then raises it; `stopAsking` only lowers it).
+    property bool open: false
     readonly property color tone: bar.danger ? Theme.danger : bar.neutral ? Theme.accent : Theme.warning
     // A question walked away from mid-press takes the press with it: a fill left standing would carry on into whatever
     // is asked next.
@@ -160,10 +177,12 @@ Rectangle {
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
-            // Built only while the question stands, so what was typed into the last one cannot come back with the next.
+            // Put down as the next question is dressed rather than as this one comes down, so the pill and the ✕ —
+            // centred against the whole row — do not jump up the moment the ✕ is pressed. What was typed still cannot
+            // come back with the next question: `GraphPane.startAsking` clears the form before it hands over the new
+            // one, and a Loader given the same component twice would otherwise keep the item it has.
             Loader {
                 id: formLoader
-                active: bar.open
                 sourceComponent: bar.form
                 Layout.fillWidth: true
                 Layout.topMargin: bar.form === null ? 0 : Theme.spaceXs
@@ -353,7 +372,7 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: -Theme.spaceXs
                 hoverEnabled: true
-                onClicked: bar.cancelled()
+                onClicked: bar.dismiss()
             }
         }
     }

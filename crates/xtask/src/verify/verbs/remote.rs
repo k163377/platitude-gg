@@ -149,6 +149,24 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "publish_remotes open=true marked=true",
     },
+    // What the bar wears on the way back up, after the ✕. **No picture
+    // of this run can hold it**: the bar takes 200ms to go and the shot
+    // is taken once it has, so a bar that spent the whole of it as an
+    // empty band in the wrong colour frames exactly like one that kept
+    // its question (2026-08-27 ユーザー報告).
+    //
+    // Every field is read in the turn the ✕ was pressed in, which is
+    // why `shut=false` leads: it is what says the reading was taken
+    // while the bar was still on screen. `neutral=` is the frame — this
+    // question asks where a branch goes rather than for consent, so it
+    // wears the accent colour and not `warning` — and `code=push` is
+    // the pill's word, which two of the flow's own bindings hold. Both
+    // fall off a bar re-dressed at the press, and so do the words.
+    Verb {
+        name: "publish-dismiss",
+        when: &[],
+        plain: "ask_dismissed shut=false words=true detail=true code=push neutral=true",
+    },
     // The question about what a branch is measured against. **The
     // picture holds two boxes and a pill and cannot say what any of them
     // are worth**: whether the name answered with is one this repository

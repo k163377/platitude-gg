@@ -183,7 +183,8 @@ Item {
 
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-remotes", "publish-add",
-                "publish-go", "publish-new-go", "amend-reset-author", "amend-author",
+                "publish-go", "publish-new-go", "publish-dismiss",
+                "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
@@ -1667,7 +1668,7 @@ Item {
     SampleTimer {
         id: renameAskTimer
         onTriggered: {
-            if (!graphPane.askSettled)
+            if (!graphPane.askCard.settled)
                 return
             renameAskTimer.stop()
             // `code=` being empty is part of the claim: a push and a delete make no one command, so the pill answers
@@ -1680,7 +1681,7 @@ Item {
     SampleTimer {
         id: moveAskTimer
         onTriggered: {
-            if (!graphPane.askSettled)
+            if (!graphPane.askCard.settled)
                 return
             moveAskTimer.stop()
             // No chip on this one — git has no single word for moving a branch onto a ref, so the pill answers in the
@@ -1720,11 +1721,11 @@ Item {
         id: switchStoppedTimer
         property bool go: false
         onTriggered: {
-            if (!graphPane.askSettled)
+            if (!graphPane.askCard.settled)
                 return
             switchStoppedTimer.stop()
             AppBackend.report("switch_stopped code=" + graphPane.askCode
-                              + " accept=" + graphPane.askAccept
+                              + " accept=" + graphPane.askCard.accept
                               + " hold=" + graphPane.askHold
                               + " bang=" + graphPane.askAlert
                               + " op=" + workTree.opCommand
@@ -1753,7 +1754,7 @@ Item {
         property int stashes: -1
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
-                    || workTree.opCommand !== "" || !graphPane.askShut)
+                    || workTree.opCommand !== "" || !graphPane.askCard.shut)
                 return
             if (switchStoppedLandedTimer.stashes >= 0
                     && stashesModel.total !== switchStoppedLandedTimer.stashes)
@@ -3742,7 +3743,8 @@ Item {
         driver.prepareCompletion(act)
         if (act === "publish" || act === "publish-taken"
                 || act === "publish-add" || act === "publish-go"
-                || act === "publish-new-go" || act === "publish-remotes") {
+                || act === "publish-new-go" || act === "publish-remotes"
+                || act === "publish-dismiss") {
             // The button's own path, so the state machine in front of the question is exercised too, not just the
             // question.
             page.pushNow()
@@ -3758,6 +3760,8 @@ Item {
                 publishAnswerTimer.start()
             else if (act === "publish-remotes")
                 publishRemotesTimer.start()
+            else if (act === "publish-dismiss")
+                publishDismissTimer.start()
             else if (act === "publish-add")
                 publishDialogTimer.start()
             else if (act === "publish")
@@ -4918,6 +4922,39 @@ Item {
             driver.complete()
         }
     }
+    /// `publish-dismiss` is about what the bar wears on the way back up, which no picture of this run can hold: the
+    /// 200ms it spends going is over long before the shot, and a bar that turned `warning` and empty for the whole of
+    /// it frames exactly like one that kept its question (2026-08-27 ユーザー報告).
+    ///
+    /// The ✕ is pressed through the bar's own handler once the question is both dressed (`publishChecked` — the
+    /// remote has answered, so the frame and the pill's word are settled) and all the way down, and the line is read
+    /// in the same turn: that is the frame a reader is looking at. `shut=false` is what says the reading was taken
+    /// while the bar was still on screen — a line read after it had gone would be about nothing.
+    SampleTimer {
+        id: publishDismissTimer
+        onTriggered: {
+            if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+                return
+            publishDismissTimer.stop()
+            graphPane.askCard.dismiss()
+            AppBackend.report("ask_dismissed shut=" + graphPane.askCard.shut
+                              + " words=" + (graphPane.askCard.label !== "")
+                              + " detail=" + (graphPane.askDetail !== "")
+                              + " code=" + graphPane.askCode
+                              + " neutral=" + graphPane.askNeutral)
+            publishGoneTimer.start()
+        }
+    }
+    /// …and the picture is taken once it really has gone, so the run is not photographing a bar caught half way.
+    SampleTimer {
+        id: publishGoneTimer
+        onTriggered: {
+            if (!graphPane.askCard.shut)
+                return
+            publishGoneTimer.stop()
+            driver.complete()
+        }
+    }
     /// `publish-add` stops with the real dialog on screen. A check that happens to finish behind it is unrelated and
     /// must not end the run.
     SampleTimer {
@@ -4991,7 +5028,7 @@ Item {
         property string wantName: ""
         property bool typed: false
         onTriggered: {
-            if (!graphPane.askSettled)
+            if (!graphPane.askCard.settled)
                 return
             if (upstreamAskTimer.wantName !== "" && !upstreamAskTimer.typed) {
                 upstreamFlow.setBranchName(upstreamAskTimer.wantName)

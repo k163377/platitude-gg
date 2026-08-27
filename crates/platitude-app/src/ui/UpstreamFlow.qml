@@ -100,18 +100,22 @@ Item {
     }
 
     // The bar's own state follows what has been answered into it, which is why these are bindings rather than
-    // arguments: the question changes what it is saying while it stands.
+    // arguments: the question changes what it is saying while it stands. **Nothing is put back when they let go**, for
+    // the reason the other question of this kind spells out (`PublishFlow`): letting go happens at the press that
+    // walks away, and the bar is still on screen for the 200ms after it.
     Binding {
         target: upstreamFlow.graphPane
         property: "askAnswerable"
         value: upstreamFlow.targetIsThere
         when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: upstreamFlow.graphPane
         property: "askNeutral"
         value: true
         when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
     }
     Binding {
         target: upstreamFlow.graphPane
@@ -124,6 +128,7 @@ Item {
                  //: %1 is a remote branch, e.g. origin/main.
                  : qsTr("Ahead and behind are counted against %1.").arg(upstreamFlow.target)
         when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
     }
 
     Component {

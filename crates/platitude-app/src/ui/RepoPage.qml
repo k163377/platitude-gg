@@ -378,6 +378,13 @@ Item {
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
                          hold = false, tip = "", form = null, code = "") {
+        // Whoever was dressing the bar lets go first: a question can be raised over one still standing (a ref clicked
+        // in the left menu while the first push asks where it goes), and the flow left behind would go on calling
+        // itself the one standing — which is what keeps its check timer firing round trips at a remote nobody is
+        // asking about. Not for the dress: `startAsking`'s assignments beat a live `Binding` outright (実測
+        // 2026-08-27). The flow raising this one turns its own back on after this returns.
+        publishFlow.publishAsking = false
+        upstreamFlow.asking = false
         page.rowAskRun = run
         graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code)
     }
