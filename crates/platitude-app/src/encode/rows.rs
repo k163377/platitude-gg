@@ -42,6 +42,13 @@ pub struct DiffRow {
     /// staged straight from what the pane is showing.
     pub hunk: i32,
     pub line: i32,
+    /// Which of the read's patches the two above are counted within (-1
+    /// where they name nothing). Hunks are numbered from zero inside each
+    /// patch, so this is what makes the pair above an address: the
+    /// selection reads a row's own source line back off
+    /// `patches[patch].hunks[hunk].lines[line]` rather than keeping a
+    /// second copy of the text (`DiffModel::source_line`).
+    pub patch: i32,
     /// One marker column per side of a combined diff (`" +"`, `"++"`,
     /// `"- "`), empty on every ordinary row. Which side a line came from
     /// is in here and nowhere else: the colour cannot carry it, since git
@@ -120,6 +127,7 @@ pub fn flatten_patches(
                     fence: false,
                     hunk: -1,
                     line: -1,
+                    patch: -1,
                     markers: String::new(),
                 });
             }
@@ -132,6 +140,7 @@ pub fn flatten_patches(
                 format!(" {}", hunk.heading)
             };
             let hunk_no = i32::try_from(hunk_index).unwrap_or(-1);
+            let patch_no = i32::try_from(patch_index).unwrap_or(-1);
             rows.push(DiffRow {
                 kind: "hunk",
                 old_no: -1,
@@ -142,6 +151,7 @@ pub fn flatten_patches(
                 fence: false,
                 hunk: hunk_no,
                 line: -1,
+                patch: patch_no,
                 markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
@@ -166,6 +176,7 @@ pub fn flatten_patches(
                     fence: read.fence,
                     hunk: hunk_no,
                     line: i32::try_from(line_index).unwrap_or(-1),
+                    patch: patch_no,
                     markers: line.markers.clone(),
                 });
             }

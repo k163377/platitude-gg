@@ -57,27 +57,17 @@ impl DiffModel {
         let Some(patches) = self.shown.clone() else {
             return;
         };
+        // The rows these numbers addressed are about to go. A selection
+        // left standing would point into the new ones by position, which
+        // is a different part of a file that has just been written to.
+        self.forget_selection();
         self.reset();
-        let rows: Vec<DiffLineItem> = flatten_patches(
+        let rows = line_items(
             &patches,
             !self.shown_has_preview,
             colors,
             Some(&self.shown_marks),
-        )
-        .into_iter()
-        .map(|r: DiffRow| DiffLineItem {
-            kind: r.kind.to_string(),
-            old_no: r.old_no,
-            new_no: r.new_no,
-            text: r.text,
-            rich: r.rich,
-            emph: r.emph,
-            fence: r.fence,
-            hunk: r.hunk,
-            line: r.line,
-            side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
-        })
-        .collect();
+        );
         // Both sides at once: the two columns are laid out to one width,
         // and a file whose old side ran further than its new one would
         // otherwise hand the wider number to the narrower column.
@@ -127,6 +117,7 @@ impl DiffModel {
             self.unmerged = false;
             self.widest_no = 0;
             self.widest_columns = 0;
+            self.forget_selection();
             self.shown_marks = Default::default();
             self.apply_preview(None);
             self.reset();
@@ -183,6 +174,36 @@ impl DiffModel {
         self.preview_old_size = size(&p.old);
         self.preview_new_size = size(&p.new);
     }
+}
+
+/// The rows a read's patches make, in the shape the list holds them.
+///
+/// Apart from [`DiffModel::lay_out_rows`] so that what a row carries can
+/// be checked without a view to hang it on: laying them out tells the
+/// QObject side, and there is none in a unit test (`selection`'s cases).
+pub(super) fn line_items(
+    patches: &[FilePatch],
+    binary_note: bool,
+    colors: &platitude_core::highlight::DiffColors,
+    marks: Option<&platitude_core::intraline::IntraMarks>,
+) -> Vec<DiffLineItem> {
+    flatten_patches(patches, binary_note, colors, marks)
+        .into_iter()
+        .map(|r: DiffRow| DiffLineItem {
+            kind: r.kind.to_string(),
+            old_no: r.old_no,
+            new_no: r.new_no,
+            text: r.text,
+            rich: r.rich,
+            emph: r.emph,
+            fence: r.fence,
+            hunk: r.hunk,
+            line: r.line,
+            patch: r.patch,
+            sel: String::new(),
+            side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
+        })
+        .collect()
 }
 
 /// Which diff one of the working tree's four buckets asks for. Read by

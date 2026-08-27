@@ -9,15 +9,18 @@ use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
-    DiffRow, diff_key, flatten_patches, human_size, image_data_url, is_combined, is_new_file,
-    is_unmerged_only, widest_columns,
+    DiffRow, diff_key, display_ranges, flatten_patches, hit_byte, human_size, image_data_url,
+    is_combined, is_new_file, is_unmerged_only, widest_columns,
 };
 use crate::hub::{DiffMsg, Feed};
 
-use super::{impl_extend_notified, impl_notify_runs, qml_register};
+use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
 mod qobject;
 mod rows;
+mod selection;
+#[cfg(test)]
+mod selection_tests;
 
 // The two siblings reach the imports above through `use super::*`, which
 // sees what this module can see -- the block stays whole here rather than
@@ -55,6 +58,23 @@ pub struct DiffLineItem {
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
+    /// Which of the read's patches the two above are counted within (-1
+    /// where they name nothing) — hunks are numbered from zero inside
+    /// each one, so it takes all three to reach a line. What the copy
+    /// reads a row's own source text back off, rather than keeping a
+    /// second copy of every line beside the drawn one (`selection`).
+    patch: i32,
+    /// The columns the reader's own selection covers on this row, in the
+    /// same `"col:wides:width:wides"` spelling as `emph` — with `"*"` for
+    /// a row that is in the selection from end to end, which is the shape
+    /// almost every selected row has and the one the pane can draw
+    /// without being told any columns at all.
+    ///
+    /// Empty on every row the plain `Copy` does not take: outside the
+    /// selection, and on the removed lines and hunk headings inside it.
+    /// **The wash is the answer** — what is not washed is not copied
+    /// (デザイン規約 §diff の中身をコピーする).
+    sel: String,
     /// The side a combined diff's marker columns name — `"ours"` /
     /// `"theirs"` / `""`, empty for a single-parent diff — read once as
     /// the row is built, by the parser's own rule
@@ -70,6 +90,7 @@ impl platitude_core::mem::Footprint for DiffLineItem {
             + self.text.heap_bytes()
             + self.side.heap_bytes()
             + self.emph.heap_bytes()
+            + self.sel.heap_bytes()
     }
 }
 
@@ -146,6 +167,25 @@ pub struct DiffModel {
     /// Whether the diff on screen is one a picture stands in for, which is
     /// the other half of what `flatten_patches` is told.
     shown_has_preview: bool,
+    /// The two ends of the reader's own selection of the text: a row and
+    /// a byte offset into that row's source line. `from` is where the
+    /// press landed and `to` is where the pointer has reached, so the
+    /// pair is in the order it was made rather than in reading order —
+    /// `taken()` sorts it. Whether the four mean anything at all is
+    /// `sel_active`'s to say: a fresh model reads 0,0,0,0, which is a
+    /// perfectly good empty selection on row 0 and no selection at all.
+    sel_from_row: i32,
+    sel_from_at: i32,
+    sel_to_row: i32,
+    sel_to_at: i32,
+    /// What the selection holds, published so the menu can leave out a
+    /// row that would copy nothing (デザイン規約 §メニュー: 選べない行は消す).
+    /// Read off the rows as the selection settles rather than counted
+    /// again when the menu opens — the menu decides what it offers once,
+    /// as it opens, and these are what it decides from.
+    sel_active: bool,
+    sel_has_new: bool,
+    sel_removed: i32,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,
 }

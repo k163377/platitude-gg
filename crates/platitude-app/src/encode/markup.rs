@@ -103,7 +103,7 @@ struct Stand {
 /// (`DiffPane.wideDelta`), and a wash placed on columns alone slid right of
 /// the characters it names by that difference a glyph. What `DiffRow::emph`
 /// carries and the pane turns into the stronger wash.
-pub(super) fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+pub fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
     if ranges.is_empty() {
         return String::new();
     }
@@ -154,6 +154,46 @@ fn push_run(out: &mut String, from: Stand, to: Stand) {
         first = false;
         out.push_str(&number.to_string());
     }
+}
+
+/// Which byte of `text` a press `x` pixels along the row lands on, as the
+/// row is actually drawn.
+///
+/// The inverse of [`display_ranges`], and it has to be walked by the same
+/// rule: a hit worked out any other way would put the selection's edge
+/// beside the character the reader pressed on rather than on it. So this
+/// steps by [`step_of`] with `markup::TAB_WIDTH` and counts the wide
+/// glyphs the way [`Stand`] does — one column is `char_w`, and each wide
+/// glyph is worth `wide_delta` more than the two columns it is counted as
+/// (`DiffPane.wideDelta`, measured).
+///
+/// The answer is a **boundary**, not a character: past the middle of a
+/// glyph the hit belongs to the gap after it, which is what makes a drag
+/// select the character it was dragged across. Past the end of the line it
+/// is the line's length.
+pub fn hit_byte(text: &str, x: f64, char_w: f64, wide_delta: f64) -> usize {
+    // Before the row's own font has been measured there is no mapping to
+    // make; the head of the line is the only honest answer.
+    if x <= 0.0 || char_w <= 0.0 {
+        return 0;
+    }
+    let mut here = Stand { col: 0, wide: 0 };
+    let pixels = |at: Stand| at.col as f64 * char_w + at.wide as f64 * wide_delta;
+    for (at, ch) in text.char_indices() {
+        let next = Stand {
+            col: here.col + step_of(ch, here.col, TAB_WIDTH),
+            wide: here.wide + usize::from(is_wide(ch)),
+        };
+        let (left, right) = (pixels(here), pixels(next));
+        if x < left + (right - left) / 2.0 {
+            return at;
+        }
+        if x < right {
+            return at + ch.len_utf8();
+        }
+        here = next;
+    }
+    text.len()
 }
 
 #[cfg(test)]
@@ -235,5 +275,42 @@ mod tests {
     #[test]
     fn a_line_nothing_changed_in_carries_no_wash() {
         assert!(display_ranges("日\tab", &[]).is_empty());
+    }
+
+    #[test]
+    fn a_press_lands_on_the_nearer_edge_of_the_glyph_it_is_over() {
+        // Ten pixels a column, nothing wide: `abc` is drawn 0..10,
+        // 10..20, 20..30.
+        assert_eq!(hit_byte("abc", 0.0, 10.0, 0.0), 0);
+        assert_eq!(hit_byte("abc", 4.0, 10.0, 0.0), 0);
+        assert_eq!(hit_byte("abc", 6.0, 10.0, 0.0), 1);
+        assert_eq!(hit_byte("abc", 14.0, 10.0, 0.0), 1);
+        assert_eq!(hit_byte("abc", 16.0, 10.0, 0.0), 2);
+    }
+
+    #[test]
+    fn a_press_past_the_end_of_the_line_is_the_end_of_the_line() {
+        assert_eq!(hit_byte("abc", 400.0, 10.0, 0.0), 3);
+        // And before the font is measured there is no mapping to make.
+        assert_eq!(hit_byte("abc", 400.0, 0.0, 0.0), 0);
+    }
+
+    #[test]
+    fn a_tab_is_hit_across_all_the_columns_it_stands_for() {
+        // The tab reaches the stop at 4, so it is drawn 0..40 and `a`
+        // stands on 40..50.
+        assert_eq!(hit_byte("\tab", 10.0, 10.0, 0.0), 0);
+        assert_eq!(hit_byte("\tab", 30.0, 10.0, 0.0), 1);
+        assert_eq!(hit_byte("\tab", 46.0, 10.0, 0.0), 2);
+    }
+
+    #[test]
+    fn a_wide_glyph_is_hit_where_it_is_drawn_rather_than_where_columns_put_it() {
+        // 日 is counted as two columns but drawn one fallback advance
+        // wide: 2 * 10 - 3 = 17px, so its middle is at 8.5 and not at 10.
+        assert_eq!(hit_byte("日x", 8.0, 10.0, -3.0), 0);
+        assert_eq!(hit_byte("日x", 9.0, 10.0, -3.0), 3);
+        assert_eq!(hit_byte("日x", 20.0, 10.0, -3.0), 3);
+        assert_eq!(hit_byte("日x", 25.0, 10.0, -3.0), 4);
     }
 }

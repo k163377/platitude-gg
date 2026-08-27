@@ -38,6 +38,9 @@ impl DiffModel {
     qproperty!("endingLines", Member = ending_lines, Notify = changed);
     qproperty!("endingScope", Member = ending_scope, Notify = changed);
     qproperty!("endingExt", Member = ending_ext, Notify = changed);
+    qproperty!("selActive", Member = sel_active, Notify = changed);
+    qproperty!("selHasNew", Member = sel_has_new, Notify = changed);
+    qproperty!("selRemoved", Member = sel_removed, Notify = changed);
 
     #[qsignal]
     pub(super) fn changed(&mut self);
@@ -130,6 +133,79 @@ impl DiffModel {
         count
     }
 
+    // ---- the reader's own selection of the text --------------------
+    // The pane brings a row and a place along it; everything after that is
+    // read off the patches, because the file's own bytes are here and not
+    // there (`selection`).
+
+    /// Which byte of row `row`'s line a press `x` pixels along it lands
+    /// on. `char_w` and `wide_delta` are what the pane measured of the
+    /// mono font (`DiffPane.charW` / `wideDelta`) — the same two numbers
+    /// the emphasis wash is placed with.
+    #[qslot]
+    fn hit_byte_at(&self, row: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
+        self.hit_at(row, x, char_w, wide_delta)
+    }
+
+    /// A press landed: the selection starts here and holds nothing yet.
+    ///
+    /// The three published counts ride `changed`, the way every other
+    /// property of this model does — and it is said here rather than
+    /// inside the selection itself, so that the four ways in cost one
+    /// signal each and a drag that has not left the character it is on
+    /// costs none.
+    #[qslot]
+    fn begin_select(&mut self, row: i32, at: i32) {
+        if self.start_select(row, at) {
+            self.changed();
+        }
+    }
+
+    /// The hand has moved to here.
+    #[qslot]
+    fn extend_select(&mut self, row: i32, at: i32) {
+        if self.drag_select(row, at) {
+            self.changed();
+        }
+    }
+
+    /// One whole row becomes the selection — a right-click outside
+    /// whatever was selected (デザイン規約 §diff の中身をコピーする).
+    #[qslot]
+    fn select_row(&mut self, row: i32) {
+        if self.select_whole_row(row) {
+            self.changed();
+        }
+    }
+
+    /// Whether a place in the text is inside the selection, which is what
+    /// a right-click asks before deciding whether to take its own row.
+    #[qslot]
+    fn selection_holds(&self, row: i32, at: i32) -> bool {
+        self.holds(row, at)
+    }
+
+    #[qslot]
+    fn clear_select(&mut self) {
+        if self.drop_selection() {
+            self.changed();
+        }
+    }
+
+    /// What the plain `Copy` puts on the clipboard: the unchanged and
+    /// added lines the selection covers, cut at its two ends.
+    #[qslot]
+    fn selection_text(&self) -> String {
+        self.copied_new()
+    }
+
+    /// What `Copy removed lines` puts there: the removed lines the
+    /// selection reaches over, whole.
+    #[qslot]
+    fn removed_text(&self) -> String {
+        self.copied_removed()
+    }
+
     #[qslot]
     fn clear(&mut self) {
         self.current_key = String::new();
@@ -143,6 +219,7 @@ impl DiffModel {
         self.loading = false;
         self.apply_endings(None);
         self.apply_preview(None);
+        self.forget_selection();
         self.reset();
         self.changed();
     }
