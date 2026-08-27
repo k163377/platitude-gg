@@ -37,9 +37,7 @@ AutoScrollBar {
         topRightRadius: 0
         bottomRightRadius: 0
         color: paneBar.pressed ? Theme.navBarInkHeld : Theme.navBarInk
-        // What the style's own "active" state asks, without its fade: a bar told to stand shows its ink, and one left
-        // to decide for itself shows it while the view is being worked and has somewhere to go. The style waits 450ms
-        // and then fades over 200ms, which leaves a bar standing over a list that has stopped having anywhere to go.
-        opacity: paneBar.policy === ScrollBar.AlwaysOn || (paneBar.active && paneBar.size < 1) ? 1 : 0
+        // Flat, and always: the bar itself is what comes and goes, and it does that without the style's fade
+        // (`AutoScrollBar.visible`).
     }
 }

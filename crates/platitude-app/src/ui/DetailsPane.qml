@@ -360,8 +360,8 @@ ColumnLayout {
         // Hard stop at the ends, as everywhere else that scrolls
         // (デザイン規約 §QML 実装ルール).
         boundsBehavior: Flickable.StopAtBounds
-        // The pane's own bar, as everywhere in this panel: what scrolls here is the block, not the words inside the
-        // boxes, and those keep the style's bar of their own (`PaneScrollBar`).
+        // The pane's own bar (`PaneScrollBar`), as everywhere this panel scrolls. What moves here is the block; the
+        // words inside the message boxes move under a bar of their own, and that one is the style's.
         ScrollBar.vertical: PaneScrollBar {}
         ColumnLayout {
             id: blockCol

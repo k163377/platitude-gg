@@ -219,6 +219,14 @@ ColumnLayout {
             id: summaryView
             anchors.fill: parent
             anchors.margins: Theme.spaceXs
+            // Both boxes are inset by the one value and lay their own bar out — see `DescriptionBox` for why either is
+            // so.
+            ScrollBar.vertical: AutoScrollBar {
+                view: summaryView.contentItem
+                x: summaryView.width - width
+                y: summaryView.topPadding
+                height: summaryView.availableHeight
+            }
             // ScrollView keeps its Flickable private -- reach it once it exists. Not interactive, for the reason the
             // description box carries: the flickable answering the same wheel as the handler moved the text twice.
             Component.onCompleted: {

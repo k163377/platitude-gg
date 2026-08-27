@@ -96,8 +96,8 @@ Rectangle {
         box.toTop()
     }
     function toTop() {
-        if (view.contentItem)
-            view.contentItem.contentY = 0
+        if (textView.contentItem)
+            textView.contentItem.contentY = 0
     }
     /// Held at the top until the reader moves it themselves. A single assignment is not enough: the scroll to the caret
     /// happens when the text lays itself out, which is after this returns, and how long after depends on how much text
@@ -110,15 +110,15 @@ Rectangle {
         box.pinnedTop = false
     }
     Connections {
-        target: view.contentItem
+        target: textView.contentItem
         enabled: box.pinnedTop
         function onContentYChanged() {
-            if (box.pinnedTop && view.contentItem.contentY !== 0)
-                view.contentItem.contentY = 0
+            if (box.pinnedTop && textView.contentItem.contentY !== 0)
+                textView.contentItem.contentY = 0
         }
         function onContentHeightChanged() {
             if (box.pinnedTop)
-                view.contentItem.contentY = 0
+                textView.contentItem.contentY = 0
         }
     }
 
@@ -175,7 +175,7 @@ Rectangle {
     readonly property real wheelStep: Metrics.wheelRows * Theme.fontMdLine
     function rollBy(dy) {
         box.unpin()
-        const flick = view.contentItem
+        const flick = textView.contentItem
         const pixels = dy / 120 * box.wheelStep
         const max = Math.max(0, flick.contentHeight - flick.height)
         const next = Math.max(0, Math.min(max, flick.contentY - pixels))
@@ -208,7 +208,7 @@ Rectangle {
     // is watching for the viewport to move under it, which is the one thing a resize does not do.
     onHeightChanged: Qt.callLater(box.repaint)
     function repaint() {
-        const flick = view.contentItem
+        const flick = textView.contentItem
         const was = flick.contentY
         flick.contentY = was + 1
         flick.contentY = was
@@ -226,9 +226,25 @@ Rectangle {
     border.width: Theme.borderWidth
 
     ScrollView {
-        id: view
+        id: textView
         anchors.fill: parent
+        // One value on all four sides, the bar's side included — no gutter is taken for it, so the words run under the
+        // thumb the way the graph's messages do, and the text stands between two equal margins. **Not narrower on the
+        // right**: taken to the frame's own line the text reads as stuck to it, which is the answer the graph's right
+        // edge already gives (2026-08-27 ユーザー指示 — デザイン規約 §余白).
         anchors.margins: Theme.spaceXs
+        // A bar handed to a `ScrollView` arrives half-wired: `size` and `position` track the text, but **no geometry
+        // comes with it** — it is laid out at `x 0 y 0` at its own implicit 10x10, which draws a dot in the box's top
+        // corner (qmltestrunner 実測 2026-08-27; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So
+        // the three numbers are written here, and the flickable it answers for is named (`AutoScrollBar.view`), since
+        // the bar is parented to the view rather than to the flickable inside it. `MessageEditor` puts the same block
+        // over the summary box.
+        ScrollBar.vertical: AutoScrollBar {
+            view: textView.contentItem
+            x: textView.width - width
+            y: textView.topPadding
+            height: textView.availableHeight
+        }
         // ScrollView keeps its Flickable private -- reach it once it exists.
         //
         // `interactive` goes with the hard stop: the flickable answers the wheel itself as well as letting the handler
