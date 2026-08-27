@@ -127,10 +127,26 @@ Item {
     }
 
     /// Reads the hand's seat off, for a tip that is coming out now.
+    ///
+    /// **And again a turn later.** The tip comes out inside the same delivery that moved the pointer, and the window's
+    /// watch is another item in that delivery — which of the two Qt reaches first is not written down anywhere (規約
+    /// §hover のツールチップ の罠 (3), the same unordered pair the beat exists for). Read from the first one, a tip whose
+    /// site opens it without a rest lands on the target's middle as though there were no hand at all (実測 2026-08-27:
+    /// with `delay: 0` the seat came out at the row's centre, and again at the far edge with a position the hand had
+    /// already left). The second read is before anything is drawn, so nothing moves on screen; by then the hand is
+    /// still on the target, because the walk into the tip has not begun.
     function freeze() {
-        const at = shared.sharedTip.parent
         shared.keeping = false
         keep.stop()
+        shared.readAnchor()
+        Qt.callLater(shared.settleAnchor)
+    }
+    function settleAnchor() {
+        if (shared.sharedTip.visible && !shared.keeping)
+            shared.readAnchor()
+    }
+    function readAnchor() {
+        const at = shared.sharedTip.parent
         if (at === null) {
             shared.anchorKnown = false
             return
@@ -174,6 +190,12 @@ Item {
     function reopen() {
         if (!shared.keeping || shared.sharedTip.visible)
             return
+        // **Without the rest.** The wait before a tip is the question "was that a hand going past, or one that meant
+        // it?", and a tip that is already out has been answered (規約 §hover のツールチップ「出ているものの的へ戻る手は
+        // 待たせない」). Put back through the delay it would still be counting when the beat below ran out, and the beat
+        // would find nothing on screen to be inside of and take it down under the hand (実測 2026-08-27). The attached
+        // property writes the delay again on the next real ask, so this heals itself.
+        shared.sharedTip.delay = 0
         shared.sharedTip.open()
         keep.restart()
     }
