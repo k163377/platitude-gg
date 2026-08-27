@@ -103,6 +103,17 @@ Item {
     /// Beside the hand, and inside the window. The hand is where the tip was opened; with none to read (a tip raised
     /// from inside a menu, or a run with no pointer at all) the target's own middle stands in, which is where the
     /// style put every one of them.
+    ///
+    /// **A tip at least as wide as its target stands on that target's left edge instead, and the hand stops choosing.**
+    /// It covers the whole target wherever it is put, so the walk into it is safe from anywhere — which leaves the seat
+    /// free to answer the other question a tooltip is always asked: *which of these is it about*. Centred on the hand
+    /// it cannot: two neighbouring tabs are a hand's width apart, so the box comes out at very nearly the same x for
+    /// both, and a reader crossing them sees one box quietly change its words (2026-08-27 ユーザー報告 — two
+    /// repositories whose tips began within a few pixels of each other). Sat on the target's own corner, it moves by a
+    /// whole tab and says whose it is (規約 §hover のツールチップ).
+    ///
+    /// Narrower than its target is the case the hand is there for — a row a pane wide, where a seat on the left corner
+    /// is a seat nowhere near the thing that raised it.
     function seatX() {
         const tip = shared.sharedTip
         const at = tip.parent
@@ -110,9 +121,10 @@ Item {
             return 0
         const p = shared.targetAt()
         const mid = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
+        const want = tip.implicitWidth >= at.width ? p.x : mid - tip.implicitWidth / 2
         const edge = Theme.spaceXs
         const room = shared.host.width - tip.implicitWidth - edge
-        return Math.max(edge, Math.min(mid - tip.implicitWidth / 2, room)) - p.x
+        return Math.max(edge, Math.min(want, room)) - p.x
     }
 
     /// Flush against the target, above it while there is room and below it when there is not — the band's own controls
