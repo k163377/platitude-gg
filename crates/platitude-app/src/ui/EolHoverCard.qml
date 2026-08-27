@@ -25,23 +25,34 @@ AppCard {
     /// The whole sentence, already worded (`Words.lineEndings`).
     property string notice: ""
 
+    // The hand walks into this one to read the path out of it and take it away, so both halves of
+    // `AppCard.pointerInside` are wanted — the face's and the content's (規約 §hover のツールチップ の罠 (2)).
+    tracksPointer: true
+    contentPointed: contentHover.hovered
+
     contentItem: ColumnLayout {
         spacing: Theme.spaceXs
+        HoverHandler {
+            id: contentHover
+        }
         // The path first: someone who cannot see which file this is about has lost more than the notice gives them. The
         // commit button's card has no one file to name and leaves this out.
-        Label {
+        //
+        // **It wraps rather than being cut.** The row it came from is where the name was cut down; a card that cuts it
+        // again is a card the path cannot be read out of, let alone copied (規約 §hover のツールチップ).
+        CardText {
             visible: eolCard.path !== ""
             text: eolCard.path
             color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
-            elide: Text.ElideMiddle
+            pixelSize: Theme.fontSm
+            Layout.fillWidth: true
             Layout.maximumWidth: eolCard.parent !== null ? eolCard.parent.width : implicitWidth
         }
-        Label {
+        CardText {
             text: eolCard.notice
             color: Theme.warning
-            font.pixelSize: Theme.fontSm
-            wrapMode: Text.WordWrap
+            pixelSize: Theme.fontSm
+            Layout.fillWidth: true
             Layout.maximumWidth: eolCard.parent !== null ? eolCard.parent.width : implicitWidth
         }
     }

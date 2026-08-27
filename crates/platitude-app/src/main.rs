@@ -96,6 +96,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/BandStateCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandStateGroup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandWidest.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CardText.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CodeChip.qml", "qt/qml/platitude");
@@ -182,6 +183,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/OpenFailedScreen.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PageLayout.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/PointerWatch.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PublishFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PublishForm.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");

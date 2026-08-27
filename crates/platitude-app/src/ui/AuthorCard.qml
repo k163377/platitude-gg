@@ -46,17 +46,17 @@ AppCard {
     // (`AppMenu.codeColW` shares a column the same way). Measured off labels rather than `TextMetrics`, which comes out
     // a few pixels short of what a Label actually takes.
     readonly property real wordColW: Math.max(wroteMetric.implicitWidth, putMetric.implicitWidth)
-    Label {
+    CardText {
         id: wroteMetric
         visible: false
         text: authorCard.wroteWord
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
     }
-    Label {
+    CardText {
         id: putMetric
         visible: false
         text: authorCard.putWord
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
     }
 
     padding: Theme.spaceXs
@@ -87,6 +87,10 @@ AppCard {
         readonly property bool hasAct: block.word !== ""
         readonly property real textLeft: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
         readonly property real textCap: block.cap - Theme.iconMd - Theme.spaceXs
+        /// How tall the face-and-name line came out. A row's worth ordinarily; more when a name longer than the cap
+        /// wrapped into a second line — **and it wraps rather than being cut**, because this card is where a name that
+        /// the pane's own row had to cut goes to be read in full and taken away (規約 §hover のツールチップ).
+        readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
 
         // Only what is drawn is measured: an invisible Row still knows how wide its labels are, and letting that into
         // the maximum makes an ordinary one-person card as wide as the act line it is not showing.
@@ -94,15 +98,15 @@ AppCard {
                                 block.hasAddress ? address.x - Theme.spaceSm + address.width : 0,
                                 block.hasAct ? act.x - Theme.spaceSm + act.width : 0)
                        + 2 * Theme.spaceSm
-        implicitHeight: Theme.rowHeight
-                        + (block.hasAddress ? Theme.fontSmLine : 0) + (block.hasAct ? Theme.fontSmLine : 0)
+        implicitHeight: block.headHeight
+                        + (block.hasAddress ? address.height : 0) + (block.hasAct ? Theme.fontSmLine : 0)
         width: implicitWidth
         height: implicitHeight
 
         RowLayout {
             id: rowContent
             x: Theme.spaceSm
-            y: (Theme.rowHeight - height) / 2
+            y: (block.headHeight - height) / 2
             spacing: Theme.spaceXs
             IdentIcon {
                 code: block.face
@@ -111,43 +115,41 @@ AppCard {
                 height: Theme.iconMd
                 Layout.alignment: Qt.AlignVCenter
             }
-            Label {
+            CardText {
                 text: block.name
                 color: Theme.textPrimary
-                font.pixelSize: Theme.fontMd
-                elide: Text.ElideRight
+                pixelSize: Theme.fontMd
                 Layout.maximumWidth: block.textCap
                 Layout.alignment: Qt.AlignVCenter
             }
         }
         // Under the name, indented past the face so the two read as one person.
-        Label {
+        CardText {
             id: address
             visible: block.hasAddress
             width: Math.min(implicitWidth, block.textCap)
-            elide: Text.ElideRight
             x: block.textLeft
-            y: Theme.rowHeight - Theme.spaceXs
+            y: block.headHeight - Theme.spaceXs
             text: block.address
             color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
         }
         Row {
             id: act
             visible: block.hasAct
             spacing: Theme.spaceXs
             x: block.textLeft
-            y: address.y + (block.hasAddress ? Theme.fontSmLine : 0)
-            Label {
+            y: address.y + (block.hasAddress ? address.height : 0)
+            CardText {
                 width: block.wordWidth
                 text: block.word
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
-            Label {
+            CardText {
                 text: block.stamp
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
         }
     }
@@ -189,16 +191,16 @@ AppCard {
                 id: lateAct
                 spacing: Theme.spaceXs
                 x: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
-                Label {
+                CardText {
                     width: authorCard.wordColW
                     text: authorCard.putWord
                     color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
+                    pixelSize: Theme.fontSm
                 }
-                Label {
+                CardText {
                     text: Words.stamp(authorCard.committedAt)
                     color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
+                    pixelSize: Theme.fontSm
                 }
             }
         }

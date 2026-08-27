@@ -253,6 +253,11 @@ ApplicationWindow {
     SharedToolTip {
         id: sharedToolTip
         host: mainUi
+        hand: hand
+        // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would
+        // have been. A quarter across the target: far enough off its middle that the picture says which of the two the
+        // seat was read from (`SharedToolTip.handAcross`).
+        handAcross: AppBackend.autoAct !== "" ? 0.25 : -1
     }
 
     Component.onCompleted: {
@@ -392,6 +397,12 @@ ApplicationWindow {
         anchors.topMargin: -root.contentItem.y
         spacing: 0
         visible: AppBackend.gitState === "ok"
+
+        // Where the hand is, for the shared tooltip to open beside. Declared here, on the parent of the whole content,
+        // because that is the one place a window-wide handler costs the rows nothing (`PointerWatch`).
+        PointerWatch {
+            id: hand
+        }
 
         TopBar {
             id: topBar

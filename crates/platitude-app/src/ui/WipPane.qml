@@ -288,14 +288,22 @@ ColumnLayout {
     function showStageTools(bucket, path) {
         wipPane.stageHotKey = bucket + ":" + path
     }
+    /// Something is asking for the line-ending card: a row's mark under the hand, or the commit button. The hand
+    /// inside the card is the third, and `eolKeep` reads that one off the card itself.
+    property bool eolAsked: false
     /// Names the file whose line-ending sentence the hover should carry. The empty string clears it. Automation writes
     /// it directly, the same way it writes `showStageTools` — hover cannot be injected.
     function pointEol(path) {
-        wipPane.worktreeModel.pointEol(path)
         if (path === "") {
-            eolCard.close()
+            // Not taken down here: the hand that let go of the mark may be walking into the card to read the path out
+            // of it, and the card holds still for a beat while that settles (`eolKeep`). The pointed row is left
+            // standing with it — the mark that opened the card stays lit for as long as the card does
+            // (規約 §hover のツールチップ).
+            wipPane.eolAsked = false
+            eolKeep.settle()
             return
         }
+        wipPane.worktreeModel.pointEol(path)
         // Under the row rather than under the pointer: these rows are a pane wide at most, so the two are never far
         // apart, and a card placed from the row lands in the same place whether a pointer or the automation named it.
         const row = wipPane.rowFor(path)
@@ -307,6 +315,7 @@ ColumnLayout {
         eolCard.x = at.x + Theme.spaceMd
         eolCard.anchorY = at.y
         eolCard.above = false
+        wipPane.eolAsked = true
         eolCard.open()
     }
     /// Puts the commit button's card out without a pointer, the way the rows' is put out — hover cannot be injected.
@@ -325,8 +334,12 @@ ColumnLayout {
     }
     function settleCommitCard() {
         if (!commitButton.eolWarned || !(commitHover.containsMouse || wipPane.pointAtCommit)) {
-            if (eolCard.path === "")
-                eolCard.close()
+            // The card the button put out settles rather than closing, for the reason the rows' does: the hand may be
+            // walking into it (`pointEol`).
+            if (eolCard.path === "") {
+                wipPane.eolAsked = false
+                eolKeep.settle()
+            }
             return
         }
         // No one file to name: the button speaks for the whole index, and so has to hold for all four cases at once.
@@ -346,6 +359,7 @@ ColumnLayout {
         eolCard.x = at.x
         eolCard.anchorY = at.y
         eolCard.above = true
+        wipPane.eolAsked = true
         eolCard.open()
     }
     // The one card both hovers open: only one pointer, so only one of them is ever out. Owned here rather than by a
@@ -358,7 +372,24 @@ ColumnLayout {
         /// **Bound, not assigned.** A popup handed its text is not its final height in that same frame (規約 §hover
         /// のツールチップ 「出す前に採寸する」), and a card placed *above* its anchor needs that height to be placed at
         /// all — assigned, it would open one card-height too low every time.
-        y: eolCard.above ? eolCard.anchorY - eolCard.height - Theme.spaceXs : eolCard.anchorY
+        ///
+        /// **Flush on either side.** A gap is a band the pointer crosses while touching neither the card nor what it
+        /// came out of, and the words in here are read and copied now, so the hand has to be able to walk in
+        /// (規約 §hover のツールチップ — the same rule the co-author card and the ref list already keep).
+        y: eolCard.above ? eolCard.anchorY - eolCard.height : eolCard.anchorY
+        // What put the card out is forgotten only when the card itself goes: the row's mark stays lit for as long as
+        // the card stands on it, and the sentence the card is showing is read off the pointed row.
+        onClosed: {
+            eolCard.path = ""
+            wipPane.worktreeModel.pointEol("")
+        }
+    }
+    // The beat between the card and the mark it hangs off — the hand walks from one into the other, and only when it
+    // is out of both does the card go.
+    HoverCardHost {
+        id: eolKeep
+        card: eolCard
+        pointedAt: wipPane.eolAsked
     }
     /// The card itself is up. Read by the headless runs — reporting what asked for it would go green with the wiring
     /// cut.

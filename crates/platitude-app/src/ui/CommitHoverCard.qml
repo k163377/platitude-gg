@@ -53,49 +53,45 @@ AppCard {
         HoverHandler {
             id: contentHover
         }
-        Label {
+        CardText {
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
-            Layout.maximumHeight: hoverCard.textHeight
             text: hoverCard.subject
             color: Theme.textPrimary
-            font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
-            wrapMode: Text.Wrap
-            elide: Text.ElideRight
+            pixelSize: Theme.fontMd
+            weight: Font.DemiBold
+            capHeight: hoverCard.textHeight
         }
-        Label {
+        CardText {
             visible: hoverCard.body !== ""
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
-            Layout.maximumHeight: hoverCard.textHeight
             text: hoverCard.body
             color: Theme.textSecondary
-            font.pixelSize: Theme.fontMd
-            wrapMode: Text.Wrap
-            elide: Text.ElideRight
+            pixelSize: Theme.fontMd
+            capHeight: hoverCard.textHeight
         }
         // The same width the message is held to. Nothing in git bounds an author's name either, and this one line was
         // the only field here outside the share: a name of a couple of hundred characters widened the whole card past
         // the pane it opens over (measured 1,031px over a 775px pane), because a Popup is as wide as its widest child
-        // no matter what the others were told.
-        Label {
+        // no matter what the others were told. What will not fit wraps rather than being cut — the name is here to be
+        // read and taken away (規約 §hover のツールチップ).
+        CardText {
             Layout.fillWidth: true
             Layout.maximumWidth: hoverCard.textWidth
             text: hoverCard.author
             color: Theme.textPrimary
-            font.pixelSize: Theme.fontMd
-            elide: Text.ElideRight
+            pixelSize: Theme.fontMd
         }
         // Date, and beside it whoever the message credits — written out and comma separated, because this card is the
         // preview and the details pane is where a commit is read in full (規約 §co-author の表示).
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
-            Label {
+            CardText {
                 text: Words.stamp(hoverCard.atime)
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
             CoAuthorLine {
                 id: mateLine

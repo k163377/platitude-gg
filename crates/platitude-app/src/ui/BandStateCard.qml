@@ -16,6 +16,11 @@ import platitude.ui
 // のツールチップ = ラベルに入らなかった 1 点だけを足す). The badges keep their own shapes — the frame and the fill are what says which of them
 // is the one that stops work — so this is the picture the band stands for, only stacked.
 //
+// **The sentences can be taken away, the badges cannot.** A `CardText` is what the right-hand half of every row is,
+// because the git version and the count of waiting files are things a reader wants in their hands. A badge is a mark
+// rather than a line of content — its word is the band's own, it is drawn to be recognised by colour and shape, and one
+// of the four is a button.
+//
 // Owned by the band rather than by the mark: a popup parented to something that can be laid out away takes the card
 // with it (app-ui.md).
 AppCard {
@@ -142,10 +147,10 @@ AppCard {
                     }
                 }
             }
-            Label {
+            CardText {
                 text: qsTr("Ways out sit under the commit button")
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
         }
 
@@ -171,10 +176,10 @@ AppCard {
                     font.weight: Font.DemiBold
                 }
             }
-            Label {
+            CardText {
                 text: qsTr("%n file(s) waiting on a decision", "", stateCard.conflictCount)
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
         }
 
@@ -216,12 +221,12 @@ AppCard {
             }
             // The word the badge stands for, and which of the two ways it came to be standing — a half-landed save
             // leaves an identity that *is* set, and nothing else on screen would say so (規約 §identity).
-            Label {
+            CardText {
                 text: stateCard.identityUnsaved
                       ? qsTr("Name and email were not both saved")
                       : qsTr("No name or email set for commits")
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
         }
 
@@ -250,11 +255,11 @@ AppCard {
                     font.weight: Font.DemiBold
                 }
             }
-            Label {
+            CardText {
                 text: qsTr("git %1 is older than the %2 this app is built for")
                           .arg(stateCard.gitVersion).arg(stateCard.minimumGit)
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
             }
         }
     }

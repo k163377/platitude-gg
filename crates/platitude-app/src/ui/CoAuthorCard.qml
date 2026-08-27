@@ -51,17 +51,22 @@ AppCard {
                 //
                 // On a second line rather than beside the name: side by side made the card wider than the pane it opens
                 // in (2026-08-08), and this way the address costs height, which the card has to spare.
+                //
+                // **Both wrap rather than being cut**, and for the same reason the height was always the side that gave:
+                // this card is where the names and addresses the date line could not fit are read in full and taken
+                // away (規約 §hover のツールチップ).
+                readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
                 implicitWidth: Math.max(rowContent.implicitWidth,
                                         address.x - Theme.spaceSm + address.width)
                                + 2 * Theme.spaceSm
-                implicitHeight: Theme.rowHeight + (mateRow.hasAddress ? Theme.fontSmLine : 0)
+                implicitHeight: mateRow.headHeight + (mateRow.hasAddress ? address.height : 0)
                 width: implicitWidth
                 height: implicitHeight
 
                 RowLayout {
                     id: rowContent
                     x: Theme.spaceSm
-                    y: (Theme.rowHeight - height) / 2
+                    y: (mateRow.headHeight - height) / 2
                     spacing: Theme.spaceXs
                     IdentIcon {
                         code: parseInt(mateRow.parts[2])
@@ -69,26 +74,24 @@ AppCard {
                         height: Theme.iconMd
                         Layout.alignment: Qt.AlignVCenter
                     }
-                    Label {
+                    CardText {
                         text: mateRow.parts[0]
                         color: Theme.textPrimary
-                        font.pixelSize: Theme.fontMd
-                        elide: Text.ElideRight
+                        pixelSize: Theme.fontMd
                         Layout.maximumWidth: mateCard.rowCap - Theme.iconMd - Theme.spaceXs
                         Layout.alignment: Qt.AlignVCenter
                     }
                 }
-                Label {
+                CardText {
                     id: address
                     visible: mateRow.hasAddress
                     width: Math.min(implicitWidth, mateCard.rowCap - Theme.iconMd - Theme.spaceXs)
-                    elide: Text.ElideRight
                     // Under the name, indented past the face so the two read as one person.
                     x: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
-                    y: Theme.rowHeight - Theme.spaceXs
+                    y: mateRow.headHeight - Theme.spaceXs
                     text: mateRow.parts[1]
                     color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
+                    pixelSize: Theme.fontSm
                 }
             }
         }

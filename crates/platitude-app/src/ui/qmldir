@@ -23,6 +23,7 @@ AutoShotDriver 1.0 AutoShotDriver.qml
 PagePerfDriver 1.0 PagePerfDriver.qml
 AvatarAssignRow 1.0 AvatarAssignRow.qml
 AvatarButton 1.0 AvatarButton.qml
+CardText 1.0 CardText.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
 CloseToolButton 1.0 CloseToolButton.qml
@@ -119,6 +120,7 @@ OpenFailedDialog 1.0 OpenFailedDialog.qml
 OpenFailedScreen 1.0 OpenFailedScreen.qml
 PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml
+PointerWatch 1.0 PointerWatch.qml
 PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml
 RefChip 1.0 RefChip.qml
