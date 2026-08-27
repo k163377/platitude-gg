@@ -90,29 +90,24 @@ pub struct RepoTab {
     publish_range: String,
     publish_total: i32,
     publish_published: i32,
-    /// Last answer to `checkInHistory`: the commit asked about, and whether
-    /// HEAD can reach it. Empty oid means nothing has been asked yet.
-    history_oid: String,
-    history_in: bool,
-    /// The commits the standing `checkInHistory` and `checkSignature` are
-    /// about — **the question, where the two above are the answer**.
+    /// The commit the standing `checkSignature` is about — **the
+    /// question, where `signature_oid` and its three are the answer**.
     ///
-    /// Both are asked on every selection and both run a git of their own,
-    /// so two selections in quick succession leave two reads racing, and
-    /// the one about the row already left behind can win. It answers a
-    /// question nobody is asking any more, and the pair above hold one
-    /// answer between them, so letting it land throws away the answer the
-    /// pane was waiting for — which reads on screen as no answer at all,
-    /// and nothing asks a third time (2026-08-25 ユーザー報告: a verified
+    /// It is asked on every selection and runs a git of its own, so two
+    /// selections in quick succession leave two reads racing, and the one
+    /// about the row already left behind can win. It answers a question
+    /// nobody is asking any more, and there is one seat for every answer,
+    /// so letting it land throws away the answer the pane was waiting
+    /// for — which reads on screen as no answer at all, and
+    /// nothing asks a third time (2026-08-25 ユーザー報告: a verified
     /// commit whose tick never came). Dropped here instead, which is what
     /// デザイン規約 §署名の表示 asks for: 答えは持ち回らない — 選択が動けば
     /// 捨て、同じ行へ戻ってくれば投げ直す.
     ///
-    /// Not properties: QML compares the answer with what it has selected
+    /// Not a property: QML compares the answer with what it has selected
     /// (`RepoPage.signatureIsForSelection`), and that is a different
     /// question — the selection can move without this tab being asked
     /// anything.
-    history_wanted: String,
     signature_wanted: String,
     /// Whether something other than the current branch still reaches its
     /// tip — whether a rewrite here leaves the old commits drawn or leaves

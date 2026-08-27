@@ -126,7 +126,6 @@ impl RepoTab {
                     self.publish_total = total;
                     self.publish_published = published;
                 }
-                TabMsg::InHistory { oid, in_history } => self.settle_in_history(oid, in_history),
                 TabMsg::HeadReach { reached_elsewhere } => {
                     self.head_reached_elsewhere = reached_elsewhere;
                 }
@@ -186,21 +185,6 @@ impl RepoTab {
         self.signature_signer = signer;
     }
 
-    /// Whether HEAD can reach one commit — whether a rewrite may start
-    /// there. Dropped on the same terms as the signature beside it.
-    pub(super) fn settle_in_history(&mut self, oid: String, in_history: bool) {
-        if oid != self.history_wanted {
-            tracing::debug!(
-                answered = %oid,
-                asked = %self.history_wanted,
-                "history answer about a selection left behind"
-            );
-            return;
-        }
-        self.history_oid = oid;
-        self.history_in = in_history;
-    }
-
     /// One write's answer, folded into the properties the page reads.
     ///
     /// The op names are turned into meanings **here**, on this side of
@@ -257,14 +241,12 @@ mod tests {
     const ON_SCREEN: &str = "f7892e60a51c14c36a159b33169be38823edc07f";
     const LEFT_BEHIND: &str = "1db47e8896c214d7ef5fa1aa2c34d010ab9f7481";
 
-    /// Both questions asked before either is answered — what two
+    /// Both rows asked about before either is answered — what two
     /// selections in quick succession leave in flight.
     fn asked_about_both() -> RepoTab {
         let mut tab = RepoTab::default();
         tab.look_up_signature(LEFT_BEHIND.into());
-        tab.look_up_in_history(LEFT_BEHIND.into());
         tab.look_up_signature(ON_SCREEN.into());
-        tab.look_up_in_history(ON_SCREEN.into());
         tab
     }
 
@@ -296,15 +278,6 @@ mod tests {
     }
 
     #[test]
-    fn a_history_answer_about_a_selection_left_behind_is_dropped() {
-        let mut tab = asked_about_both();
-        tab.settle_in_history(ON_SCREEN.into(), true);
-        tab.settle_in_history(LEFT_BEHIND.into(), false);
-        assert_eq!(tab.history_oid, ON_SCREEN);
-        assert!(tab.history_in);
-    }
-
-    #[test]
     fn the_answer_the_pane_is_waiting_for_lands_however_late() {
         let mut tab = asked_about_both();
         tab.settle_signature(
@@ -313,18 +286,14 @@ mod tests {
             "U".into(),
             "stranger@example.com".into(),
         );
-        tab.settle_in_history(LEFT_BEHIND.into(), false);
         tab.settle_signature(
             ON_SCREEN.into(),
             "verified".into(),
             "G".into(),
             "demo@example.com".into(),
         );
-        tab.settle_in_history(ON_SCREEN.into(), true);
         assert_eq!(tab.signature_oid, ON_SCREEN);
         assert_eq!(tab.signature_code, "G");
-        assert_eq!(tab.history_oid, ON_SCREEN);
-        assert!(tab.history_in);
     }
 
     // Coming back to a row asks again (デザイン規約 §署名の表示 「同じ行へ
@@ -361,9 +330,7 @@ mod tests {
             "G".into(),
             "demo@example.com".into(),
         );
-        tab.settle_in_history(ON_SCREEN.into(), true);
         assert_eq!(tab.signature_oid, "");
-        assert_eq!(tab.history_oid, "");
     }
 
     fn settled(op: &str, error: &str) -> RepoTab {

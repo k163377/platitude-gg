@@ -267,9 +267,6 @@ impl SessionSink for BridgeSink {
                     published: state.published() as i32,
                 });
             }
-            SessionEvent::InHistoryChecked { oid, in_history } => {
-                self.feeds.tab.push(TabMsg::InHistory { oid, in_history });
-            }
             SessionEvent::HeadReachChecked { reached_elsewhere } => {
                 self.feeds.tab.push(TabMsg::HeadReach { reached_elsewhere });
             }

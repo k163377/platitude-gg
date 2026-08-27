@@ -64,11 +64,6 @@ pub enum TabMsg {
         total: i32,
         published: i32,
     },
-    /// Whether HEAD can reach a commit — whether a rewrite may start there.
-    InHistory {
-        oid: String,
-        in_history: bool,
-    },
     /// Whether anything besides the current branch still reaches its tip,
     /// which is what a rewrite here would cost.
     HeadReach {

@@ -941,19 +941,19 @@ Item {
     // Row to re-select once the rewritten graph arrives (-1 = none).
     property int rewordRow: -1
 
-    // Whether the selected commit is one HEAD was built on. Only those can be amended or replayed from here, so the
-    // boxes stay read-only until this comes back for the commit on screen.
-    readonly property bool selectedInHistory:
-        detailsModel.shaHex !== "" && repoTab.historyOid === detailsModel.shaHex && repoTab.historyIn
-    function askInHistory(oidHex) {
-        if (oidHex !== "" && repoTab.state === "open")
-            repoTab.checkInHistory(oidHex)
-    }
+    // What the details pane's boxes do with the commit on screen, in core's own word (`offers::message_edit`):
+    // `amend` where typing lands, `stash` / `not-head` / `standing` where it does not, `""` where there is no message.
+    // **Only HEAD's own commit takes it** — everything else would be replayed, and this is a text box a click can land
+    // a caret in (デザイン規約 §コミットメッセージの 2 つの枠). A binding rather than an answer asked per selection: the
+    // boxes stand open while the repository moves under them, so a commit that stops being HEAD's stops taking typing.
+    readonly property string messageEdit: GitFacts.messageEdit(
+        !page.blank && repoTab.state === "open", detailsModel.shaHex, workTree.headOid,
+        page.selectedStashRef, workTree.opText)
 
-    // What git makes of the selected commit's signature. Asked on every selection, like the history question beside it,
-    // and read only when the answer names the commit now on screen — verifying runs gpg or ssh-keygen, so the answer
-    // arrives well after the details do. A signature only changes when the commit does, and a changed commit is a
-    // different hash, so nothing has to ask twice.
+    // What git makes of the selected commit's signature. Asked on every selection, and read only when the answer names
+    // the commit now on screen — verifying runs gpg or ssh-keygen, so the answer arrives well after the details do.
+    // A signature only changes when the commit does, and a changed commit is a different hash, so nothing has to ask
+    // twice.
     function askSignature(oidHex) {
         if (oidHex !== "" && repoTab.state === "open")
             repoTab.checkSignature(oidHex)
@@ -1174,9 +1174,6 @@ Item {
         if (repoTab.writeMovedHead)
             page.closeDiff()
         page.refreshHeadPublished()
-        // HEAD may have moved: what the selected commit is to it — and so whether its message is ours to rewrite — is
-        // asked again.
-        page.askInHistory(page.selectedOid)
     }
 
     // Center area switches between the graph and a file diff. The pieces are kept apart rather than parsed back out of
@@ -1726,18 +1723,17 @@ Item {
             page.showWip()
             return
         }
-        // The commit already open. **Everything below is of this commit and has been asked once**: the details, the
-        // history question and the signature are answers to a hash, and a hash cannot have changed under the same row
-        // — asking again spends a `git show`, a `merge-base` and a gpg run per click for an answer already on screen
-        // (the find bar says the same of landing twice on one row). The second click of the rename gesture is exactly
-        // this click, so the wait it opens would be spent on work nobody is waiting for (デザイン規約 §グラフ行のダブルクリック).
+        // The commit already open. **Everything below is of this commit and has been asked once**: the details and the
+        // signature are answers to a hash, and a hash cannot have changed under the same row — asking again spends a
+        // `git show` and a gpg run per click for an answer already on screen (the find bar says the same of landing
+        // twice on one row). The second click of the rename gesture is exactly this click, so the wait it opens would
+        // be spent on work nobody is waiting for (デザイン規約 §グラフ行のダブルクリック).
         if (!page.wipShown && page.selectedOid === oidHex)
             return
         page.wipShown = false
         page.selectedOid = oidHex
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)
-        page.askInHistory(oidHex)
         page.askSignature(oidHex)
         page.closeDiff()
     }
@@ -2185,16 +2181,16 @@ Item {
                         details: detailsModel
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
-                        // Only what the working tree stands on: a commit off this line cannot be amended or replayed
-                        // from here, and a stash is a commit but never one of them.
-                        editable: !page.blank && repoTab.state === "open"
-                                  && page.selectedStashRef === ""
-                                  && page.selectedInHistory
-                        editBlocked: page.selectedStashRef !== ""
+                        // The one commit an amend reaches, and the line the box gives when this is not it
+                        // (`page.messageEdit`). The words are the page's; the rule is core's.
+                        editable: page.messageEdit === "amend"
+                        editBlocked: page.messageEdit === "stash"
                             ? qsTr("Rename it in the list on the left")
-                            : (detailsModel.shaHex !== "" && !page.selectedInHistory
-                               ? qsTr("Not in the current history — switch to a branch that has it")
-                               : "")
+                            : page.messageEdit === "not-head"
+                              ? qsTr("Only the newest commit's message can be rewritten here")
+                              : page.messageEdit === "standing"
+                                ? qsTr("Finish the stopped operation first")
+                                : ""
                         busy: repoTab.busyCount > 0
                         published: page.selectedPublished
                         signatureKind: page.selectedSignatureKind
@@ -2210,8 +2206,6 @@ Item {
                                     : repoTab.signingFormat === "x509"
                                       ? qsTr("Signed with your x509 certificate")
                                       : qsTr("Signed with your gpg key")
-                        // HEAD's own commit, not the current branch's tip: detached, there is no branch to ask.
-                        headOid: workTree.headOid
                         readPath: page.diffKind === "commit" ? page.diffPath : ""
                         onMessageSubmitted: (oidHex, subject, body) => page.saveMessage(oidHex, subject, body)
                         onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
@@ -2309,7 +2303,6 @@ Item {
         page.selectedOid = oidHex
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)
-        page.askInHistory(oidHex)
         page.askSignature(oidHex)
         page.closeDiff()
     }

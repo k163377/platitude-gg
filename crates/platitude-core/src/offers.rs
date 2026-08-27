@@ -11,6 +11,10 @@ use crate::integrate::InProgress;
 use crate::opstate::OpState;
 use crate::status::Counts;
 
+mod message;
+
+pub use message::{MessageEdit, message_edit};
+
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

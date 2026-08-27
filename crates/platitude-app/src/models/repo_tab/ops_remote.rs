@@ -88,20 +88,10 @@ impl RepoTab {
         });
     }
 
-    /// Both of these are asked on every selection, and both are answered
-    /// by a git of their own. The commit asked about is written down
-    /// first, so that an answer arriving for a selection already left
-    /// behind can be told from the one the pane is waiting for
-    /// (`history_wanted` / `signature_wanted`).
-    pub(super) fn look_up_in_history(&mut self, oid_hex: String) {
-        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
-            tracing::warn!(oid_hex, "invalid oid in history check");
-            return;
-        };
-        self.history_wanted = oid.to_hex();
-        self.with_session(|s| s.check_in_history(oid));
-    }
-
+    /// Asked on every selection and answered by a git of its own. The
+    /// commit asked about is written down first, so that an answer
+    /// arriving for a selection already left behind can be told from the
+    /// one the pane is waiting for (`signature_wanted`).
     pub(super) fn look_up_signature(&mut self, oid_hex: String) {
         let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
             tracing::warn!(oid_hex, "invalid oid in signature check");

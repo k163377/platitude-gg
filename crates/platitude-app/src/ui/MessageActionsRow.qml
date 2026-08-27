@@ -16,8 +16,6 @@ ColumnLayout {
 
     /// The boxes differ from the commit's own message.
     property bool dirty: false
-    /// Saving replays instead of amending (not HEAD's own commit).
-    property bool replays: false
     /// A remote already has this commit.
     property bool published: false
     /// A write is already running, so nothing new starts.
@@ -41,16 +39,6 @@ ColumnLayout {
     visible: actions.dirty || actions.editing
     spacing: Theme.spaceXs
 
-    // The newest commit is amended in place and costs nothing; an older one is replayed, and everything built on it
-    // comes back as different commits. Only the second case is worth a line.
-    Label {
-        Layout.fillWidth: true
-        visible: actions.replays
-        wrapMode: Text.Wrap
-        text: qsTr("Saving replays this commit, so every commit after it gets a new identity.")
-        color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
-    }
     // Said, not asked, like the amend editor's tag: the save still goes ahead, and this line is the warning it gets.
     Label {
         Layout.fillWidth: true
@@ -61,8 +49,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSm
     }
     // The same button the commit editor ends with, and for the same reason: it names the command it runs and whom the
-    // result will be attributed to. `commit --amend` where git really does amend, `reword` where the commit is older
-    // and the app replays it — the todo verb git gave that operation (デザイン規約 §git 用語のコード表記).
+    // result will be attributed to. One command only — the boxes open on HEAD's own commit and nothing else
+    // (`offers::message_edit`), which is exactly what `commit --amend` reaches (デザイン規約 §git 用語のコード表記).
     ActionButton {
         id: saveButton
         Layout.fillWidth: true
@@ -72,7 +60,7 @@ ColumnLayout {
         tone: Theme.textPrimary
         frameColor: saveButton.enabled ? Theme.accent : Theme.borderDefault
         activeFocusOnTab: true
-        phraseHead: actions.replays ? "reword" : "commit --amend"
+        phraseHead: "commit --amend"
         text: qsTr("the message")
         phraseFace: actions.committerFace
         phraseFaceUrl: actions.committerFaceUrl

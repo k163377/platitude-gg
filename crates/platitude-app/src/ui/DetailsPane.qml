@@ -16,14 +16,11 @@ ColumnLayout {
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
     // Whether this commit's message may be rewritten from here. The
-    // page decides: only commits the working tree stands on can be
-    // amended or replayed, and a stash is a commit but not one of those.
+    // page decides (`RepoPage.messageEdit` → `offers::message_edit`):
+    // HEAD's own commit is amended, and nothing else here is touched.
     property bool editable: false
     // A write is already running, so nothing new starts.
     property bool busy: false
-    // HEAD's own commit: anything older is replayed instead of amended,
-    // which the editor says out loud.
-    property string headOid: ""
     // Why the boxes are read-only, in one line ("" when they are not).
     // A box that refuses typing without saying why reads as broken.
     property string editBlocked: ""
@@ -215,7 +212,7 @@ ColumnLayout {
     function submitMessage() {
         // Nothing changed is nothing to do. The button stands from the moment someone is writing rather than from the
         // moment the text differs (`MessageActionsRow.editing`), so this is the ordinary press, not a mistake —
-        // and rewriting a commit into the same message would still replay everything after it.
+        // and rewriting a commit into the same message would still write a new one under a new hash.
         if (!detailsPane.editable || !detailsPane.messageDirty || msgEditor.subjectText.trim() === "")
             return
         detailsPane.messageSubmitted(detailsPane.details.shaHex, msgEditor.subjectText, msgEditor.bodyText)
@@ -432,7 +429,6 @@ ColumnLayout {
                     Layout.fillWidth: true
                     dirty: detailsPane.messageDirty
                     editing: detailsPane.editable && msgEditor.anyFocused
-                    replays: detailsPane.details.shaHex !== detailsPane.headOid
                     published: detailsPane.published
                     busy: detailsPane.busy
                     canSave: msgEditor.subjectText.trim() !== ""

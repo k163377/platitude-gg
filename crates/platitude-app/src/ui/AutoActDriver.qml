@@ -2715,8 +2715,8 @@ Item {
             driver.complete()
         }
     }
-    // The message has to arrive before it can be typed over, and the "is this commit ours to rewrite?" answer before it
-    // may be saved.
+    // The message has to arrive before it can be typed over: `cardSettled` is that wait, and the boxes read-only until
+    // the details of the row jumped to are the ones on screen.
     SampleTimer {
         id: rewordTimer
         onTriggered: {
@@ -2806,7 +2806,7 @@ Item {
             stashTipReport.stop()
             AppBackend.report(
             "stash_tip blocked=" + (detailsPane.editBlocked !== "")
-            + " tip=" + detailsPane.summaryTipShown)
+            + " tip=" + detailsPane.summaryTipShown + " why=" + detailsPane.editBlocked)
             driver.complete()
         }
     }
@@ -4320,8 +4320,10 @@ Item {
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTipTimer.start()
         } else if (act === "stash-tip") {
-            // The box is asked why it refuses the caret.
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            // The box is asked why it refuses the caret — the row decides which refusal answers. `older` names the
+            // row under HEAD's, so the commit that is not HEAD's own is found without reading a preset's order.
+            page.activateRow(graphModel.oidAt(
+                arg === "older" ? graphModel.rowOf(workTree.headOid) + 1 : Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf in the flattened view, the folder chain in the tree (`-tree`). The argument
@@ -4548,8 +4550,8 @@ Item {
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
                    || act === "edit-message-focus") {
-            // Detached there is no branch tip to name, so the newest row stands in — a commit other than HEAD.
-            page.jumpToRef(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            // HEAD's own, not the branch tip: the only row that takes typing (`offers::message_edit`), branch or not.
+            page.jumpToRef(workTree.headOid !== "" ? workTree.headOid : branchesModel.headOid)
             rewordTimer.start()
         } else if (act === "cherry-pick" || act === "cherry-pick-stops") {
             const pickOid = driver.autoActOid(arg)

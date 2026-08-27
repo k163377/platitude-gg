@@ -59,19 +59,6 @@ impl RepoSession {
         });
     }
 
-    /// Asks whether HEAD can reach `oid`, so the UI can tell which commits
-    /// a rewrite may start from. A read, not a write.
-    pub fn check_in_history(self: &Arc<Self>, oid: Oid) {
-        self.spawn_read("history", move |s, workdir, cancel| async move {
-            let in_history =
-                commit::is_in_head_history(&s.executor, &workdir, &oid, &cancel).await?;
-            Ok(SessionEvent::InHistoryChecked {
-                oid: oid.to_hex(),
-                in_history,
-            })
-        });
-    }
-
     /// Asks whether `oid` carries a signature and what git makes of it.
     ///
     /// Kept out of [`Self::load_details`] on purpose: verifying runs gpg or

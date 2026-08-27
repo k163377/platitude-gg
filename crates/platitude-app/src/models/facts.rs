@@ -237,6 +237,28 @@ impl GitFacts {
         .words()
     }
 
+    /// What the details pane's message boxes do with the commit on
+    /// screen (`platitude_core::offers::message_edit`), in the word
+    /// `RepoPage.messageEdit` branches on: `amend` where typing lands,
+    /// `stash` / `not-head` / `standing` where it does not and the box
+    /// has a reason to give, `""` where there is no message on screen.
+    /// **Asked as a binding, not frozen like the menus' answers** — the
+    /// boxes stand open while the repository moves under them, so a
+    /// commit that stops being HEAD's has to stop taking typing.
+    #[qslot]
+    fn message_edit(
+        &self,
+        open: bool,
+        oid_hex: String,
+        head_oid: String,
+        stash_ref: String,
+        op_text: String,
+    ) -> String {
+        platitude_core::offers::message_edit(open, &oid_hex, &head_oid, &stash_ref, &op_text)
+            .as_str()
+            .to_string()
+    }
+
     /// The move a press on a ref adds up to
     /// (`platitude_core::offers::switch_action`), in the word
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /

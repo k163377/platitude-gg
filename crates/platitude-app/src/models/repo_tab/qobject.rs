@@ -61,8 +61,6 @@ impl RepoTab {
         Member = publish_published,
         Notify = changed
     );
-    qproperty!("historyOid", Member = history_oid, Notify = changed);
-    qproperty!("historyIn", Member = history_in, Notify = changed);
     qproperty!(
         "headReachedElsewhere",
         Member = head_reached_elsewhere,
@@ -854,13 +852,6 @@ impl RepoTab {
     #[qslot]
     fn check_publish(&mut self, range: String) {
         self.with_session(|s| s.check_publish(range.clone()));
-    }
-
-    /// Asks whether HEAD can reach `oid_hex` — whether a rewrite may start
-    /// there; the answer arrives as `historyOid` / `historyIn`.
-    #[qslot]
-    fn check_in_history(&mut self, oid_hex: String) {
-        self.look_up_in_history(oid_hex)
     }
 
     /// Asks what git makes of `oid_hex`'s signature; the answer arrives as

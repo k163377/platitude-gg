@@ -154,11 +154,6 @@ pub enum SessionEvent {
         range: String,
         state: publish::PublishState,
     },
-    /// Answer to [`RepoSession::check_in_history`].
-    InHistoryChecked {
-        oid: String,
-        in_history: bool,
-    },
     /// Whether anything besides the branch HEAD is on still reaches its
     /// tip, so the rows that rewrite history can tell a rewrite that
     /// leaves the old commits drawn from one that leaves them to the
