@@ -173,7 +173,6 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/NavNameBox.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavRail.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavRowBody.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/NavScrollBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavSections.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NoticeButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NoticeLine.qml", "qt/qml/platitude");
@@ -183,6 +182,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/OpenFailedScreen.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PageLayout.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/PaneScrollBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PointerWatch.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PublishFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PublishForm.qml", "qt/qml/platitude");

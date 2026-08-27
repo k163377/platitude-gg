@@ -753,7 +753,7 @@ ColumnLayout {
         clip: true
         // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: AutoScrollBar {}
+        ScrollBar.vertical: PaneScrollBar {}
         ColumnLayout {
             id: blockCol
             width: blockScroll.width
@@ -766,7 +766,7 @@ ColumnLayout {
                 Layout.margins: Theme.spaceXs
                 // The gutter this block's scroll bar is drawn in — see DetailsPane, which insets the same pair the
                 // same way.
-                Layout.rightMargin: Theme.scrollBarGutter
+                Layout.rightMargin: Theme.navBarGutter
                 spacing: Theme.spaceXs
                 // The pair is one block of one height, in the same component the details pane reads messages in (デザイン規約
                 // §コミットメッセージの 2 つの枠).

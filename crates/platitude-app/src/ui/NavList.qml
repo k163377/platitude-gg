@@ -169,12 +169,11 @@ AppListView {
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + Theme.borderWidth
     model: sectionModel
-    // The left panel's own bar, in place of the style's one that `AppListView` hands every other list.
-    ScrollBar.vertical: NavScrollBar {}
+    // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
+    ScrollBar.vertical: PaneScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width
-        barGutter: Theme.navBarGutter
         // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
         // sides instead of hard against the left frame; the folds step in by that same value
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).

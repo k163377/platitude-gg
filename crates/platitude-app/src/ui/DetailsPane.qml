@@ -360,7 +360,9 @@ ColumnLayout {
         // Hard stop at the ends, as everywhere else that scrolls
         // (デザイン規約 §QML 実装ルール).
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: AutoScrollBar {}
+        // The pane's own bar, as everywhere in this panel: what scrolls here is the block, not the words inside the
+        // boxes, and those keep the style's bar of their own (`PaneScrollBar`).
+        ScrollBar.vertical: PaneScrollBar {}
         ColumnLayout {
             id: blockCol
             width: blockScroll.width
@@ -372,14 +374,14 @@ ColumnLayout {
             // inside use, so band → summary → description → author → band is
             // one even rhythm and the card's edge stands under the header
             // label. The right is the exception and is not padding: it is the
-            // gutter this block's scroll bar is drawn in. The thumb's ink
-            // reaches 8px in, so anything short of this draws it over the
-            // boxes' frame and the parent hash's tail (measured — デザイン規約
-            // §余白).
+            // gutter this block's scroll bar is drawn in. The slab reaches
+            // 5px in and the ground behind it is 3, so anything short of this
+            // draws it over the boxes' frame and the parent hash's tail
+            // (measured — デザイン規約 §余白).
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.margins: Theme.spaceXs
-                Layout.rightMargin: Theme.scrollBarGutter
+                Layout.rightMargin: Theme.navBarGutter
                 spacing: Theme.spaceXs
                 visible: detailsPane.details.shaHex !== ""
 
@@ -460,6 +462,8 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: detailsPane.details
+        // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
+        ScrollBar.vertical: PaneScrollBar {}
         // Qt's own key navigation moves `currentIndex` and tells nobody;
         // the arrows are answered here instead, where they move the file
         // being read (規約 §diff のファイル一覧).

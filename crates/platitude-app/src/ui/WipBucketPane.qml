@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -63,6 +64,8 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: bucketPane.model
+        // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
+        ScrollBar.vertical: PaneScrollBar {}
         // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered by the pane's walk,
         // which crosses from this bucket's list into the next one's (規約 §diff のファイル一覧).
         keyNavigationEnabled: false
