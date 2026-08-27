@@ -66,6 +66,15 @@ Item {
     /// against the pane's edge and asks for less than the style's own, which every other list showing these rows still
     /// wears (`NavScrollBar` / デザイン規約 §QML 実装ルール の摘みの項).
     property int barGutter: Theme.scrollBarGutter
+    /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down for the same reason
+    /// `barGutter` is: the left panel sets its rows in from the pane's edge by the room its own bar takes at the other
+    /// one, so a row stands between two equal margins rather than hard against the frame (`NavList` — デザイン規約 §余白);
+    /// the working tree's file list keeps the pane's inner margin it shares with a commit's own list
+    /// (`FileRowDelegate`). **Two values and not one**: a list is free to start its rows on one step and fold them on
+    /// another, and the file lists do (the pane's inner margin, then a group's step). The left panel is the one that
+    /// asks for the same value twice, so that a name at any depth stands on the grid its own left margin sets.
+    property int rowInset: Theme.spaceXs
+    property int nestStep: Theme.spaceMd
     /// Where an open name box is drawn, and where the list showing this row sits in it: where its rows begin, where
     /// the list itself begins, and how tall it is. All of it comes from the list (`NavList`), so that a scroll moves
     /// the box with its row and a row carried out of the list takes the box with it. No layer means the box stays in
@@ -175,7 +184,7 @@ Item {
     NavRowBody {
         id: rowLayout
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceXs + navRow.depth * Theme.spaceMd
+        anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep
         // Not padding: the gutter the list's own scroll bar is drawn in (`barGutter`). This row ends in a
         // right-aligned column (the branch a worktree has out) and the bar is drawn over it, so the row stops where
         // the bar's ink begins (デザイン規約 §QML 実装ルール の摘みの項).

@@ -175,6 +175,11 @@ AppListView {
         id: row
         listWidth: navList.width
         barGutter: Theme.navBarGutter
+        // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
+        // sides instead of hard against the left frame; the folds step in by that same value
+        // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
+        rowInset: Theme.spaceSm
+        nestStep: Theme.spaceSm
         // The list's own place in that layer, so a scroll carries the box along with the row it belongs to.
         boxLayer: navList.boxLayer
         boxRowsX: navList.boxRowsX

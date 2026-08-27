@@ -46,7 +46,9 @@ Rectangle {
     }
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceMd
+        // The panel's own margin and one fold of it — where a branch carrying a `/` begins, which is where nearly
+        // every branch this stands in for does (`NavItemDelegate.rowInset` / `nestStep`).
+        anchors.leftMargin: Theme.spaceSm + Theme.spaceSm
         // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs. This one
         // only ever rides the left panel's list, so it takes that panel's gutter outright (`NavItemDelegate.barGutter`).
         anchors.rightMargin: Theme.navBarGutter
