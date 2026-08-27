@@ -82,8 +82,11 @@ ComboBox {
         text: combo.pickOnly ? combo.wanted : combo.editText
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
-        leftPadding: Theme.spaceSm
-        rightPadding: Theme.spaceSm
+        // The same frame-to-word inset the plain boxes keep (`SlimField`) — this field stands beside one of them in
+        // the question bar, and two boxes a row apart holding their text at different distances read as two different
+        // kinds of box (デザイン規約 §選ぶ欄と打つ欄 already has the ground saying which is which).
+        leftPadding: Theme.spaceXs
+        rightPadding: Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
         readOnly: combo.pickOnly
         selectByMouse: !combo.pickOnly

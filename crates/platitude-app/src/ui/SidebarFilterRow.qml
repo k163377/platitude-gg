@@ -29,8 +29,12 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             font.pixelSize: Theme.fontMd
-            leftPadding: Theme.spaceSm
-            rightPadding: Theme.spaceSm
+            // The pane's own inset, which is what every other box holds its words at (`SlimField`) — and here the two
+            // measures are the same one, since the band has no frame of its own and what stands to the left of the
+            // word is the pane's edge. The rows below went out to `spaceSm` to balance the gutter their bar takes
+            // (デザイン規約 §余白 の左メニューの行); this band has neither, so it stays at the inset with the section headers.
+            leftPadding: Theme.spaceXs
+            rightPadding: Theme.spaceXs
             topPadding: 0
             bottomPadding: 0
             placeholderText: qsTr("Filter")

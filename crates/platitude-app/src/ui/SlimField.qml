@@ -18,8 +18,14 @@ TextField {
     property color focusTone: Theme.borderFocus
     implicitHeight: Theme.iconLg
     font.pixelSize: Theme.fontMd
-    leftPadding: Theme.spaceSm
-    rightPadding: Theme.spaceSm
+    // The one value every box in this application keeps between its frame and its words — the pane's own inset, which
+    // is what the message frames already stand their text on (デザイン規約 §余白). Neither side is the odd one out: a box is
+    // read the same way wherever it stands, so the frame around a name in the graph and the frame around a description
+    // in the panel hold their text at the same distance. **Not `spaceSm`** — that was never chosen, only carried over
+    // when these primitives were lifted out of `Main.qml`, and it puts the app's smallest boxes on a wider step than
+    // the pane they sit in.
+    leftPadding: Theme.spaceXs
+    rightPadding: Theme.spaceXs
     topPadding: 0
     bottomPadding: 0
     background: Rectangle {
