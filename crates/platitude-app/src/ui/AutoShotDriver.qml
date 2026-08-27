@@ -11,6 +11,9 @@ Item {
 
     property var window
     property Loader overlayMirror
+    /// The two textures laid over each other, for the picture that holds the hover and the thing it hangs off at once
+    /// (`Main.qml`). Only asked for when the overlay was holding something.
+    property Loader sceneMirror
     property ColumnLayout mainUi
     property Item gate
 
@@ -23,6 +26,10 @@ Item {
     property bool overlayGrabbed: false
     property int shotParts: 0
     property bool appSaved: false
+    /// The overlay was holding something when the picture was called for, so the two are worth laying over each other.
+    /// Counted off the overlay's own children at that moment, the same number `popups=` reports.
+    property bool sceneWanted: false
+    property bool sceneAsked: false
     /// A grab already asked for and not yet answered. **One at a time**: two in flight both answer, and the second
     /// saving the same file again would take the run's part count past zero and quit it out from under the overlay.
     property bool appGrabbing: false
@@ -125,13 +132,39 @@ Item {
         if (driver.shotTaken)
             return
         driver.shotTaken = true
-        driver.shotParts = overlayMirror.item ? 2 : 1
+        const holding = overlayMirror.item && overlayMirror.item.sourceItem
+                        ? overlayMirror.item.sourceItem.children.length : 0
+        driver.sceneWanted = holding > 0 && driver.sceneMirror !== null && driver.sceneMirror.item !== null
+        driver.shotParts = 1 + (overlayMirror.item ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
         // Asked for here, taken in `grabOverlay` when the mirror answers.
         if (overlayMirror.item) {
             driver.overlayAsked = true
             overlayMirror.item.scheduleUpdate()
         }
         driver.grabApp()
+    }
+
+    /// The picture that holds both. Asked for only once the app's own is saved, so the two textures are taken from the
+    /// scene that picture came out of — a mirror refreshed before the ink landed would draw the rows without their
+    /// marks (`grabApp`).
+    Connections {
+        target: driver.sceneWanted && driver.sceneMirror ? driver.sceneMirror.item : null
+        ignoreUnknownSignals: true
+        function onReady() {
+            driver.grabScene()
+        }
+    }
+    function grabScene() {
+        const scene = driver.sceneMirror.item
+        const ok = scene.grabToImage(function (res) {
+            const saved = res.saveToFile(AppBackend.shotDir + "/scene.png")
+            console.warn("scene saved=" + saved)
+            driver.partDone()
+        })
+        if (!ok) {
+            console.warn("scene grabToImage returned false")
+            driver.partDone()
+        }
     }
 
     /// The window, once the frame this asks for has been rendered.
@@ -162,6 +195,11 @@ Item {
             driver.appSaved = true
             const saved = res.saveToFile(path)
             console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
+            // The scene this picture came out of is what the composite mirrors, so it is asked for from here.
+            if (driver.sceneWanted && !driver.sceneAsked) {
+                driver.sceneAsked = true
+                driver.sceneMirror.item.refresh()
+            }
             driver.partDone()
         })
         if (!ok) {
