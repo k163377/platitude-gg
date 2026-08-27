@@ -53,17 +53,38 @@ RowLayout {
     /// the condition behind it, so a run cannot go green with the arrow unwired (verify-ui — the same reading as
     /// `FileRowDelegate.litKey`).
     readonly property real foldTurn: foldArrow.visible ? foldArrow.rotation : -1
+    /// How wide the slot every row opens with is. **The seat is taken on the ink, not on the box the mark is drawn
+    /// in** — the same reading `NavHeader`'s own fold seat makes, where an `iconMd` chevron stands in an `iconSm` seat
+    /// and overflows it (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A change code fills its box, so a list
+    /// that shows one takes the box outright (`iconMd`); the marks that stand here where no change can — the fold
+    /// arrow and the sidebar's state marks — are drawn on the `iconSm` grid and none of them reaches its edge, so that
+    /// seat comes down a step further and the air stops being paid for twice (2026-08-27 ユーザー指示: the widest of them,
+    /// the padlock, spans 9 of the 16, so with the line it carries it fills an `iconXs` seat almost exactly).
+    ///
+    /// **One answer per list.** `showChange` is a section's kind rather than a row's, so no row's name begins in a
+    /// different column from its neighbours' — the invariant the seat is held open for in the first place. It is the
+    /// same reason the seat is not taken on each row's own mark: the padlock and the fold arrow hold different
+    /// amounts of air, and a seat that measured them one row at a time would step the names in and out.
+    readonly property int seatSize: nameCell.showChange ? Theme.iconMd : Theme.iconXs
+    /// Where a mark stands inside that seat: hard against its left edge, which for the trimmed seat above means the
+    /// box it is drawn in hangs a pixel out on the right. **The air is taken off the right alone** (2026-08-27
+    /// ユーザー指示) — the left of the mark is what the fold's own step reads as nesting, and centring the mark in a seat
+    /// narrower than its box would walk it back towards the frame by half of whatever the right gave up. Zero where
+    /// the change mark fills its seat: there the box *is* the ink, and the arrow it shares the slot with is centred in
+    /// it the way it always was.
+    readonly property real seatNudge: nameCell.showChange ? 0 : (Theme.iconSm - nameCell.seatSize) / 2
 
     spacing: Theme.spaceXs
 
     // The seat every row opens with.
     Item {
-        Layout.preferredWidth: Theme.iconMd
-        Layout.preferredHeight: Theme.iconMd
+        Layout.preferredWidth: nameCell.seatSize
+        Layout.preferredHeight: nameCell.seatSize
         Layout.alignment: Qt.AlignVCenter
         NavIcon {
             id: foldArrow
             anchors.centerIn: parent
+            anchors.horizontalCenterOffset: nameCell.seatNudge
             visible: nameCell.folder
             width: Theme.iconSm
             height: Theme.iconSm
@@ -76,11 +97,20 @@ RowLayout {
             visible: !nameCell.folder && nameCell.showChange
             change: nameCell.change
         }
-        // The whole seat, the way the change mark takes it — not the fold arrow's smaller share. A state mark is what
-        // this seat is for on a row that is not a folder, and the conflict `!` a file row wears is this same mark at
-        // this same size (`ChangeIcon`): one question, one size (デザイン規約 §寸法).
+        // The fold arrow's step, not the change mark's. These stand in the sidebar alone, beside the arrows of the
+        // rows they are nested among, and a mark drawn on the wider grid carried a heavier line than the folds it
+        // sits between — weight is what the eye reads as size (`NavIcon.stroke`; 2026-08-27 ユーザー指示). The line
+        // itself is not scaled with the grid: it is levelled *with* the arrow, so both wear the family's own
+        // (デザイン規約 §寸法「畳みの山形は 2 階級」).
+        //
+        // **Placed, not filled.** A mark given the seat's own size takes the seat's top-left corner, and on a row
+        // whose seat is centred in it that reads as a mark riding a step high (2026-08-27 ユーザー報告 — the slip the
+        // first pass at this made). So it is centred down the seat and set against its left edge (`seatNudge`).
         NavIcon {
-            anchors.fill: parent
+            anchors.centerIn: parent
+            anchors.horizontalCenterOffset: nameCell.seatNudge
+            width: Theme.iconSm
+            height: Theme.iconSm
             visible: nameCell.seatMark !== ""
             kind: nameCell.seatMark
             tint: nameCell.seatTint

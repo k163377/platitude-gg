@@ -54,10 +54,11 @@ Rectangle {
         anchors.rightMargin: Theme.navBarGutter
         spacing: Theme.spaceXs
         // The rows' mark slot, left empty: the stand-in has no mark of its own, but its name has to begin in the same
-        // column as the rows it rides above.
+        // column as the rows it rides above — so it takes their seat, which is the one a fold arrow and a state mark
+        // stand in (`NameCell.seatSize` on a list with no change codes in it — the ink of an `iconSm` mark, not its box).
         Item {
-            Layout.preferredWidth: Theme.iconMd
-            Layout.preferredHeight: Theme.iconMd
+            Layout.preferredWidth: Theme.iconXs
+            Layout.preferredHeight: Theme.iconXs
             Layout.alignment: Qt.AlignVCenter
         }
         Label {
