@@ -451,6 +451,7 @@ Item {
     /// the one place that can see all of them.
     readonly property bool menuStanding:
         refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing || remoteRowMenu.showing
+        || diffRowMenu.showing
 
     // ---- context menu on a sidebar row ------------------------------
     RefRowMenu {
@@ -740,6 +741,19 @@ Item {
         onCopyRequested: text => clipboard.copy(text)
     }
 
+    // ---- context menu on the diff's own text ------------------------
+    /// The one door into that menu. What it will act on is the selection, and the hand settled that before asking
+    /// (`DiffTextSelect.askMenu`), so nothing about the row travels here.
+    function openCodeMenu() {
+        page.stopRowAsk()
+        diffRowMenu.offer()
+    }
+    DiffRowMenu {
+        id: diffRowMenu
+        diffModel: diffModel
+        onCopyRequested: text => clipboard.copy(text)
+    }
+
     // ---- context menu on a graph row -------------------------------
     /// The one door into that menu: the graph's rows, a chip that names nothing to act on, and the automation all come
     /// through here.
@@ -1021,6 +1035,8 @@ Item {
             fileRowMenu: fileRowMenu
             fileMenu: fileRowMenu.menu
             fileDiscardItem: fileRowMenu.discardItem
+            diffRowMenu: diffRowMenu
+            clipboard: clipboard
             commitMenuState: commitMenuState
             commitMenu: commitRowMenu.menu
             dropCommitItem: commitRowMenu.dropItem
@@ -2099,7 +2115,10 @@ Item {
                         sideColorOurs: page.sideColorOurs
                         sideColorTheirs: page.sideColorTheirs
                         busy: page.diffSettling
+                        menuStanding: page.menuStanding
                         onCloseRequested: page.closeDiff()
+                        onCopyRequested: text => clipboard.copy(text)
+                        onCodeMenuRequested: page.openCodeMenu()
                         onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                         onStageFileRequested: {
                             if (page.diffStaged)

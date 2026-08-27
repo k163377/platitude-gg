@@ -64,11 +64,20 @@ Rectangle {
              + " both=" + (ours > 0 && theirs > 0) + " ours=" + ours + " theirs=" + theirs
     }
 
+    /// One of the page's right-click menus is standing, so nothing behind it is being hovered — the marks a row puts
+    /// out under the pointer would be drawn over the very rows the menu is about (デザイン規約 §メニュー).
+    property bool menuStanding: false
+
     signal closeRequested()
     /// Stage or unstage the whole file (direction follows `staged`).
     signal stageFileRequested()
     /// Stage or unstage one hunk (line < 0) or one line of it.
     signal stageSelectionRequested(int hunk, int line)
+    /// Text the reader picked out of the rows, on its way to the clipboard (the page owns it).
+    signal copyRequested(string text)
+    /// A right-click landed on the text. What the menu will act on is already the selection — the hand settled that
+    /// before asking (`DiffTextSelect.askMenu`).
+    signal codeMenuRequested()
 
     /// A press on one line's mark, which is the only thing in a row that takes one (デザイン規約 §diff の中のステージ). Named so the
     /// automation can enter where the mark enters — a press on a square that only exists under a pointer cannot be
@@ -112,6 +121,11 @@ Rectangle {
     /// Names the row the pointer is over, or nothing where it is over none of them. A heading is named as itself (line
     /// -1), which is what lights its whole hunk.
     function settlePointedRow() {
+        // A menu is what the pointer is over now; the row it was opened on is behind it.
+        if (diffPane.menuStanding) {
+            diffPane.showLineTools(-1, -1)
+            return
+        }
         if (!panePointer.hovered)
             return
         const at = diffPane.mapToItem(diffList, panePointer.point.position.x, panePointer.point.position.y)
@@ -124,6 +138,9 @@ Rectangle {
         }
         diffPane.showLineTools(row.hunk, row.kind === "hunk" ? -1 : row.line)
     }
+    // A menu standing takes the marks away there and then, and the pointer says nothing while it stands — it has not
+    // moved, so nothing else would ask again.
+    onMenuStandingChanged: diffPane.settlePointedRow()
     // The rows the pointer is over have just been replaced. The wait is the one the scroll restore takes, and for the
     // same reason: on the frame the rows land the list has not laid them out, and nothing is under the pointer yet
     // (`DiffScrollPlace`).
@@ -177,6 +194,50 @@ Rectangle {
     function sendCode(dx) { codeScroll.shift(dx) }
     function startCodeHand(x, y) { codeScroll.startHand(x, y) }
     function driftCodeHand(x, y) { codeScroll.driftHand(x, y) }
+
+    // ---- the text the reader picked out -------------------------------
+    /// What the plain `Copy` and Ctrl+C both put on the clipboard: the unchanged and added lines the selection covers
+    /// (デザイン規約 §diff の中身をコピーする). Nothing goes out for a selection that holds nothing — an empty clipboard is
+    /// worse than the one the reader already had — and saying so is what lets the key fall through to whoever else
+    /// wants it.
+    function copySelection() {
+        const text = diffPane.diffModel.selectionText()
+        if (text === "")
+            return false
+        diffPane.copyRequested(text)
+        return true
+    }
+    /// Automation: the hand that picks text, without a pointer behind it (verify-ui). It enters the same three
+    /// functions the `MouseArea`'s own handlers call, so a run cannot pass while the handlers do something else.
+    function pickText(fromRow, fromAt, toRow, toAt) {
+        textPick.pressText(fromRow, fromAt)
+        textPick.dragText(toRow, toAt)
+        textPick.releaseText()
+    }
+    /// Automation: the right-click, at a place in the text — which is where the menu's answer is settled.
+    function askCodeMenu(row, at) { textPick.askMenu(row, at) }
+    /// Automation: the first row of the view that is a removed line, or -1. The one row the menu's second word is
+    /// about, and the run has to name it — a drag that never reaches one proves half the rule.
+    function firstRemovedRow() {
+        for (let i = 0; i < diffList.count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row && row.kind === "del")
+                return i
+        }
+        return -1
+    }
+    /// Automation: what a row is wearing of the selection, and what the two menu rows would take.
+    function pickTally() {
+        let washed = 0
+        for (let i = 0; i < diffList.count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row && row.sel !== "")
+                washed++
+        }
+        return "new=" + diffPane.diffModel.selHasNew
+             + " removed=" + diffPane.diffModel.selRemoved
+             + " washed=" + washed
+    }
 
     // ---- the view's place in a diff that is about to be rebuilt -------
     DiffScrollPlace {
@@ -338,6 +399,14 @@ Rectangle {
             // row, so it would scroll the view to a selection that means nothing; the arrows are answered below
             // instead, where they move the view itself (規約 §diff を上下に送る).
             keyNavigationEnabled: false
+            // The one key this pane answers that is not a step. `StandardKey` rather than a spelling of our own, so
+            // the platform's idea of copy is what is matched. Declared before the two below because the general
+            // handler is offered every key first; the arrows carry on to their own handlers whenever this one leaves
+            // the key alone.
+            Keys.onPressed: event => {
+                if (event.matches(StandardKey.Copy))
+                    event.accepted = diffPane.copySelection()
+            }
             Keys.onUpPressed: event => event.accepted = diffPane.stepRows(-1)
             Keys.onDownPressed: event => event.accepted = diffPane.stepRows(1)
             // Mouse wheels scroll a fixed number of rows per notch — the same Metrics.wheelRows every other surface
@@ -379,6 +448,24 @@ Rectangle {
                 onStageHunkRequested: hunk => diffPane.stageSelectionRequested(hunk, -1)
             }
         }
+    }
+    // The hand that picks the text out of the rows. Declared after the body so it stands over them, and before the
+    // scroll below so that the bar along the bottom edge and the middle-click hand keep their own presses.
+    DiffTextSelect {
+        id: textPick
+        view: diffList
+        diffModel: diffPane.diffModel
+        gutterW: diffPane.gutterW
+        codeX: codeScroll.offset
+        charW: diffPane.charW
+        wideDelta: diffPane.wideDelta
+        // One clamp and one shift, the ones every other hand that sends this pane goes through
+        // (デザイン規約 §diff を上下に送る / §diff を横へ送る).
+        onScrollWanted: (dy, dx) => {
+            diffList.contentY = diffList.clampY(diffList.contentY + dy)
+            codeScroll.shift(dx)
+        }
+        onMenuWanted: diffPane.codeMenuRequested()
     }
     // The hand that sends the rows sideways and up and down, and the bar that says how far there is to go. Declared
     // after the body, so it stands over the rows — and beside the list rather than inside it, for the two measured

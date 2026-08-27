@@ -31,6 +31,14 @@ Rectangle {
     required property string emph
     /// One of git's conflict fences (`encode::DiffRow`).
     required property bool fence
+    /// Where the reader's own selection falls on this row (`DiffModel.sel`): `"*"` for a line taken end to end —
+    /// which is what almost every selected row is — and otherwise the same `col:wides:width:wides` runs `emph`
+    /// carries, for the one or two rows a drag cuts through.
+    ///
+    /// Empty on every row the plain `Copy` does not take: outside the selection, and on the removed lines and hunk
+    /// headings inside it. **The wash is the answer** — what is not washed is not copied
+    /// (デザイン規約 §diff の中身をコピーする).
+    required property string sel
     required property int hunk
     required property int line
     /// "ours" / "theirs" / "" — the model reads it off the marker columns once, by the parser's own rule
@@ -185,7 +193,27 @@ Rectangle {
                 color: diffRow.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
             }
         }
+        // The reader's own selection, over the emphasis and under the text — the same place the row's other two
+        // washes stand, and for the same reason: the strong/weak split of a diff is rectangles, not letters
+        // (デザイン規約 §シンタックスハイライト), so a selected line keeps its syntax colours.
+        Repeater {
+            model: diffRow.sel === "" ? [] : diffRow.sel === "*" ? [diffRow.sel] : diffRow.sel.split(",")
+            delegate: Rectangle {
+                required property string modelData
+                readonly property bool whole: modelData === "*"
+                readonly property var run: whole ? [] : modelData.split(":")
+                x: -diffRow.codeX
+                   + (whole ? 0 : Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta)
+                // A line taken whole is washed to its own end — and never to nothing: an empty line is still a line
+                // the copy takes, and a wash of no width would leave a hole in the middle of a selection.
+                width: whole ? Math.max(codeLine.implicitWidth, diffRow.charW)
+                             : Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
+                height: parent.height
+                color: Theme.bgSelected
+            }
+        }
         Label {
+            id: codeLine
             // A hunk heading does not travel: it is the pane's own words about the rows below, and words that slid off
             // the left while the code was read would take with them the only thing saying which hunk this is. It gives
             // up the right of the row to the two buttons and elides into what is left.

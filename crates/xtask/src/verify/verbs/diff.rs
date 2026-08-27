@@ -147,6 +147,52 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=hunk-tools ready=true",
     },
+    // The text picked out of the rows. All four drag the same stretch —
+    // the head of the first line down past the first removed one — so
+    // `diff_pick new=true removed=1` is the fixture answering that the
+    // selection reached both sides. Without it the three below prove
+    // nothing: a drag that never crossed a removed line copies no removed
+    // line either, and every claim comes back green on an empty
+    // selection.
+    //
+    // `washed=` is what the picture is of, and it is the one number a
+    // camera can be asked for here — the wash on a removed line is the
+    // failure this feature has, and it is a coloured rectangle a few
+    // pixels tall inside a pane of them.
+    Verb {
+        name: "diff-select",
+        when: &[],
+        plain: "diff_pick new=true removed=1",
+    },
+    // The plain copy, and the whole of what it claims: the old line
+    // stayed out of it. Read back off the pad the copy goes through,
+    // because the clipboard will not answer a headless run — and read as
+    // "does the text hold the removed line" rather than as a line count,
+    // since a copy that took the wrong four lines counts to four as well.
+    Verb {
+        name: "diff-copy",
+        when: &[],
+        plain: "diff_copy holdsRemoved=false",
+    },
+    // The card itself, for the words on it (the reader's whole way to the
+    // old side, so the spelling is the deliverable — the picture is
+    // overlay.png). `open=` is the menu's own answer rather than the
+    // conditions behind it: a card that refused to open because it had
+    // nothing in it photographs exactly like one nobody asked for.
+    // `rows=2` is beside it because a selection that reached only one
+    // side opens a one-row card that reads like a full one.
+    Verb {
+        name: "diff-menu",
+        when: &[],
+        plain: "diff_menu open=true rows=2",
+    },
+    // And the same claim from the other side: the row named for the
+    // removed lines puts exactly them on the clipboard.
+    Verb {
+        name: "diff-copy-removed",
+        when: &[],
+        plain: "diff_copy_removed holdsRemoved=true",
+    },
     Verb {
         name: "stage-hunk",
         when: &[],

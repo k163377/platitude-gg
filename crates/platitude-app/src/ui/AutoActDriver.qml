@@ -56,6 +56,10 @@ Item {
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
+    property DiffRowMenu diffRowMenu
+    /// What reached the clipboard, which the clipboard itself will not say. The one place a copy verb can read its
+    /// own answer back (`ClipboardHelper.lastCopied`).
+    property ClipboardHelper clipboard
     /// What the commit menu is standing on, read where a verb has to say which row it opened on and what was offered
     /// there.
     property CommitMenuState commitMenuState
@@ -183,6 +187,7 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
+                "diff-select", "diff-copy", "diff-menu", "diff-copy-removed",
                 "preview", "preview-unstaged", "preview-staged",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
@@ -314,6 +319,48 @@ Item {
         AppBackend.report("diff_place at=" + Math.round(at)
                           + " want=" + Math.round(driver.readY)
                           + " room=" + Math.round(room))
+    }
+
+    /// The drag the four text verbs share, and what each of them does with it
+    /// (デザイン規約 §diff の中身をコピーする). Hover and a real button cannot be injected, so this enters the same three
+    /// functions the hand's own handlers call (`DiffTextSelect`).
+    ///
+    /// **The stretch is chosen to hold both sides**: from the head of the first line down past the first removed one,
+    /// so the wash has something to be on and the menu's second word has something to take. A drag that reached only
+    /// one side would prove half the rule and read as a pass.
+    function pickDiffText(act) {
+        const removedRow = diffPane.firstRemovedRow()
+        const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
+        diffPane.pickText(1, 0, lastRow, driver.pastLineEnd)
+        AppBackend.report("diff_pick " + diffPane.pickTally()
+                          + " removedRow=" + removedRow + " to=" + lastRow)
+        if (act === "diff-select")
+            return
+        if (act === "diff-copy") {
+            diffPane.copySelection()
+            driver.reportCopy("diff_copy")
+            return
+        }
+        // The right-click lands inside what was just dragged, so the selection stands as it is — which is the half of
+        // the rule this verb is about (the other half is a click outside it, and that one takes its own row).
+        diffPane.askCodeMenu(removedRow, 0)
+        if (act === "diff-copy-removed") {
+            diffRowMenu.menu.close()
+            diffRowMenu.copyRemovedNow()
+            driver.reportCopy("diff_copy_removed")
+        }
+    }
+    /// Past the end of any line these fixtures carry: `hit_byte` clamps, so a drag that means "to the end of the row"
+    /// can say so without measuring the row.
+    readonly property int pastLineEnd: 9999
+    /// What reached the clipboard, read back off the pad the copy goes through (`ClipboardHelper.lastCopied`) — the
+    /// clipboard itself will not say. `holdsRemoved=` is the whole claim of both verbs, from opposite sides: the plain
+    /// copy left the old line out, and the menu's second row is exactly it.
+    function reportCopy(name) {
+        const text = driver.clipboard.lastCopied
+        const removed = diffPane.diffModel.removedText()
+        AppBackend.report(name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
+                          + " lines=" + (text === "" ? 0 : text.split("\n").length))
     }
 
     // AutoShotDriver owns the final render boundary: it requests an update, advances the event loop, and waits for
@@ -663,6 +710,16 @@ Item {
             // row is named instead. A heading's own row is line -1 (`flatten_patches`).
             if (act === "hunk-tools") {
                 diffPane.showLineTools(0, -1)
+                renderedBarrier.begin()
+                return
+            }
+            // The text picked out of the rows, and what the two ways of copying it hand over
+            // (デザイン規約 §diff の中身をコピーする). All four drag over the same stretch: from the head of the first line to
+            // past the end of the first removed one, so the selection is guaranteed to hold both sides — the new one
+            // to wash and the old one for the menu's second word.
+            if (act === "diff-select" || act === "diff-copy"
+                || act === "diff-menu" || act === "diff-copy-removed") {
+                driver.pickDiffText(act)
                 renderedBarrier.begin()
                 return
             }
@@ -4644,6 +4701,8 @@ Item {
                    || act === "diff-file" || act === "conflict-sides" || act === "line-tools"
                    || act === "hunk-tools" || act === "keep-place" || act === "diff-tick"
                    || act === "code-send" || act === "line-back"
+                   || act === "diff-select" || act === "diff-copy"
+                   || act === "diff-menu" || act === "diff-copy-removed"
                    || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,
