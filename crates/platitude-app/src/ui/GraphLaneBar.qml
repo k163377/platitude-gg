@@ -5,26 +5,32 @@ import platitude.ui
 /// Horizontal scroll of the lanes when the full graph is wider than its column.
 ///
 /// It lies over the lanes of the last row, so it comes out only while the hand is in the pane, and stays out for as long
-/// as it is being dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る).
+/// as it is being dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る). **This is the one bar in
+/// the window that still comes and goes** — the others are always drawn once they have somewhere to go, and say the
+/// difference in brightness (`AutoScrollBar`), but this one is laid over a row of history rather than beside it, so
+/// standing when nobody is sending the lanes would cost a row of the graph.
+///
+/// Within that, it keeps the same two steps of ink as every other bar: dim while the hand is merely in the pane, full
+/// once the lanes have actually been sent.
 ///
 /// **The style's see-through thumb, which is what a bar with content under it wears** (デザイン規約 §色 スクロールバー):
 /// the lanes run beneath this one, so there is no gutter keeping ink off it and nothing to gain by painting it flat.
-/// The colour arrives on its own — the window's `palette.mid` / `dark` are the thumb's own pair, so a bare `ScrollBar`
-/// carries the same ink as the ones built on `AutoScrollBar` without naming it.
 ///
 /// **The bar and nothing else.** Whether the hand is in the pane is the pane's own answer and has to stay there: a
 /// `HoverHandler` put in a wrapper item over the list **takes the hover away from every row underneath** — hover goes to
 /// the topmost item that accepts it, and an item carrying a handler accepts it for its whole area (2026-08-22
 /// qmltestrunner で実測, after a report of rows that would not light and cards that would not close).
-ScrollBar {
+AutoScrollBar {
     id: laneBar
 
     /// The lane column's arithmetic (`GraphColumnMetrics`): where it starts, how wide it is drawn, how wide the whole
     /// graph is, and how far it has been sent. The last one is written back here.
     required property var columns
-    /// Whether the pointer is anywhere in the pane — the pane's answer, handed in.
+    /// Whether the pointer is anywhere in the pane — the pane's answer, handed in. Attached to no flickable, this bar
+    /// has no view of its own to ask (`AutoScrollBar.inArea`).
     required property bool pointerInside
 
+    inArea: laneBar.pointerInside
     visible: laneBar.columns.graphXMax > 0 && (laneBar.pointerInside || pressed)
     // Fusion draws its handle only in the style's "active" state, which for a bar that is not attached to a Flickable
     // means while the pointer is on the bar itself — a 6px strip on the pane's bottom edge that nobody would find. When
@@ -36,6 +42,9 @@ ScrollBar {
     size: laneBar.columns.graphFullW > 0 ? laneBar.columns.graphColW / laneBar.columns.graphFullW : 1
     position: laneBar.columns.graphFullW > 0 ? laneBar.columns.graphX / laneBar.columns.graphFullW : 0
     onPositionChanged: {
+        // Attached to no flickable, this bar has no `contentY` to be wired to — its own position is what says the lanes
+        // have just been sent, whichever hand did it (the thumb, the wheel, the middle button, `GraphLanePan`).
+        laneBar.moved()
         if (!pressed)
             return
         laneBar.columns.graphX = Math.max(0, Math.min(position * laneBar.columns.graphFullW,

@@ -29,6 +29,10 @@ Rectangle {
     /// app-ui.md).
     readonly property color textColor: area.color
     readonly property bool focused: area.activeFocus
+    /// Automation: the bar inside the box, and how far the text stands. A bar in here is the one the style keeps
+    /// (デザイン規約 §色 スクロールバー), and what it paints is its own opacity — the side a run reads (verify-ui).
+    readonly property alias bar: textBar
+    readonly property real textAt: textView.contentItem ? textView.contentItem.contentY : 0
 
     /// What the pane has allotted this box at rest, before any pull. The box does not work this out for itself: the
     /// summary above it and this box are laid out inside one block of a single height (デザイン規約 §コミットメッセージの 2 つの枠), so
@@ -240,6 +244,7 @@ Rectangle {
         // the bar is parented to the view rather than to the flickable inside it. `MessageEditor` puts the same block
         // over the summary box.
         ScrollBar.vertical: AutoScrollBar {
+            id: textBar
             view: textView.contentItem
             x: textView.width - width
             y: textView.topPadding

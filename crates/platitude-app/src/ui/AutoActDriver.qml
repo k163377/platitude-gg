@@ -235,7 +235,8 @@ Item {
                 "diff-step",
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
                 "changes-fold", "changes-unfold",
-                "graph-bar", "graph-bar-away", "middle-scroll",
+                "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away",
+                "text-bar", "text-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
                 "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy",
@@ -2091,31 +2092,152 @@ Item {
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.
     SampleTimer {
         id: graphPanTimer
+        /// The lanes have been sent. Latched, so the tick after it can read the ink rather than the send
+        /// (app-ui.md §UI 自動化の因果性).
+        property bool sent: false
+        function begin() {
+            graphPanTimer.sent = false
+            graphPanTimer.start()
+        }
         onTriggered: {
             if (graphPane.graphXMax <= 0)
                 return
-            graphPanTimer.stop()
-            // Where the pointer is, which is the whole of what puts the bar on screen. `-away` walks it back out again:
-            // a bar that comes when the pointer does proves nothing on its own unless it also goes when the pointer
-            // goes.
+            // Where the pointer is, which is the whole of what puts this bar on screen (デザイン規約 §グラフを横へ送る).
+            // `-away` walks it back out again: a bar that comes when the pointer does proves nothing on its own unless
+            // it also goes when the pointer goes.
             graphPane.restPointer(true)
-            if (AppBackend.autoAct !== "middle-scroll") {
-                if (AppBackend.autoAct === "graph-bar-away")
-                    graphPane.restPointer(false)
-                AppBackend.report(
-                    "graph_bar shown=" + graphPane.laneBarShown
-                    + " overflow=" + Math.round(graphPane.graphXMax))
-                driver.complete()
+            if (AppBackend.autoAct === "middle-scroll") {
+                graphPanTimer.stop()
+                // The middle click, then the pointer drifting sideways off it. The argument says which column the click
+                // landed in, which is the whole question — only the lanes take the sideways drift
+                // (デザイン規約 §グラフを横へ送る).
+                const y = graphPane.height / 2
+                const x = AppBackend.autoActArg === "message"
+                        ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl : graphPane.labelW + Theme.spaceSm
+                graphPane.startAutoScroll(x, y)
+                graphPane.driftPointer(x + graphPane.width, y)
+                middleScrollTimer.start()
                 return
             }
-            // The middle click, then the pointer drifting sideways off it. The argument says which column the click
-            // landed in, which is the whole question — only the lanes take the sideways drift (デザイン規約 §グラフを横へ送る).
-            const y = graphPane.height / 2
-            const x = AppBackend.autoActArg === "message"
-                    ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl : graphPane.labelW + Theme.spaceSm
-            graphPane.startAutoScroll(x, y)
-            graphPane.driftPointer(x + graphPane.width, y)
-            middleScrollTimer.start()
+            // The pointer puts the bar on screen; sending the lanes is what brings it up to full ink
+            // (§QML 実装ルール のバーの明るさ). Both halves are wanted on the side that photographs it.
+            if (!graphPanTimer.sent) {
+                graphPanTimer.sent = true
+                graphPane.graphX = graphPane.graphXMax / 2
+                return
+            }
+            // The rise takes 200ms, so reading on the tick the send landed would report the way there rather than the
+            // arrival.
+            if (AppBackend.autoAct === "graph-bar" && graphPane.laneBarInk < 1)
+                return
+            if (AppBackend.autoAct === "graph-bar-away")
+                graphPane.restPointer(false)
+            graphPanTimer.stop()
+            AppBackend.report(
+                "graph_bar shown=" + graphPane.laneBarShown
+                + " ink=" + Math.round(graphPane.laneBarInk * 100) / 100
+                + " overflow=" + Math.round(graphPane.graphXMax))
+            driver.complete()
+        }
+    }
+    // The panels' own bar (`PaneScrollBar`): the pane's ink while the reader is sending the list, and the pane's own
+    // divider ink once they have left it (デザイン規約 §QML 実装ルール のバーの明るさ). **The pair is the whole claim** —
+    // either state alone reads as "it always looks like that", and the two are what changed.
+    //
+    // The list is sent by assigning `contentY` rather than by pressing the arrows: what is being proven here is the
+    // bar, not the walk (`changes-step` owns the arrows), and a bar lit by a send of any kind is the claim.
+    SampleTimer {
+        id: paneBarTimer
+        /// The list has been sent, and the slab has been seen at full ink because of it. Latched in order: a slab that
+        /// dims without ever having been bright proves nothing (app-ui.md §UI 自動化の因果性).
+        property bool sent: false
+        property bool wasLit: false
+        function begin() {
+            paneBarTimer.sent = false
+            paneBarTimer.wasLit = false
+            paneBarTimer.start()
+        }
+        onTriggered: {
+            const view = detailsPane.filesWalk.view
+            const bar = detailsPane.filesBar
+            // Laid out, and with somewhere to go. A list still measuring itself has no bar to light, and one that fits
+            // has none to light either — both would go green on a run that photographs nothing.
+            if (!view || view.count <= 0 || view.height <= 0
+                    || view.contentHeight <= view.height + 1)
+                return
+            if (!paneBarTimer.sent) {
+                paneBarTimer.sent = true
+                // Brightness wants both halves: the reader inside the range, and the range being sent. Hover cannot be
+                // injected, so the first goes to the property a real pointer writes (`AutoScrollBar.inArea`).
+                bar.inArea = true
+                view.contentY = (view.contentHeight - view.height) / 2
+                return
+            }
+            if (!paneBarTimer.wasLit) {
+                if (!Qt.colorEqual(bar.slabColor, Theme.borderDefault))
+                    return
+                paneBarTimer.wasLit = true
+                // The reader leaves, which is the only thing that puts the slab back down (there is no timer — the
+                // bar answers the reader, not the clock).
+                if (AppBackend.autoAct === "pane-bar-away")
+                    bar.inArea = false
+            }
+            if (AppBackend.autoAct === "pane-bar-away" && !Qt.colorEqual(bar.slabColor, Theme.bgElevated))
+                return
+            paneBarTimer.stop()
+            AppBackend.report("pane_bar ink=" + bar.slabColor
+                              + " at=" + Math.round(view.contentY)
+                              + " rows=" + view.count)
+            driver.complete()
+        }
+    }
+    // The bar inside the description box, which is the style's see-through one rather than the panel's slab: a box is
+    // the content's own place, not a pane's edge (デザイン規約 §色 スクロールバー). **Read as a pair** — the two steps of
+    // ink are a quarter apart, which a picture answers badly on a 6px thumb.
+    //
+    // This is the one bar the window hands a `ScrollView`, whose flickable is not interactive and never calls itself
+    // moving — a box scrolled by the wheel was showing no bar at all until it was told to watch the text instead
+    // (2026-08-27 ユーザー報告). So the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar
+    // answers for itself.
+    SampleTimer {
+        id: textBarTimer
+        property bool rolled: false
+        property bool wasLit: false
+        function begin() {
+            textBarTimer.rolled = false
+            textBarTimer.wasLit = false
+            textBarTimer.start()
+        }
+        onTriggered: {
+            // The commit has to have arrived, or the box holds no text and there is nothing to send.
+            if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
+                return
+            if (!textBarTimer.rolled) {
+                // The reader in the box, then one notch down. A box that fits swallows the notch and stands where it
+                // was, which the report says rather than the watchdog.
+                detailsPane.holdDescriptionBar(true)
+                detailsPane.rollDescription(-120)
+                if (detailsPane.descriptionAt <= 0)
+                    return
+                textBarTimer.rolled = true
+                return
+            }
+            if (!textBarTimer.wasLit) {
+                if (detailsPane.descriptionBarInk < 1)
+                    return
+                textBarTimer.wasLit = true
+                // The reader leaves the box, which is the only thing that puts the ink back down.
+                if (AppBackend.autoAct === "text-bar-away")
+                    detailsPane.holdDescriptionBar(false)
+            }
+            // All the way down to the idle step (three tenths — 規約 §QML 実装ルール のバーの明るさ), not merely on the
+            // way there: the fall takes 400ms, and a tick inside it reports the descent rather than where it lands.
+            if (AppBackend.autoAct === "text-bar-away" && detailsPane.descriptionBarInk > 0.305)
+                return
+            textBarTimer.stop()
+            AppBackend.report("text_bar ink=" + Math.round(detailsPane.descriptionBarInk * 100) / 100
+                              + " at=" + Math.round(detailsPane.descriptionAt))
+            driver.complete()
         }
     }
     // Where the lanes ended up is the whole question, so that is what is waited for — a pan that ran and a pan that was
@@ -4509,7 +4631,14 @@ Item {
             // pulled in the way a person would.
             page.setGraphColumns(graphPane.labelWManual,
                                  Metrics.laneInset + 2 * Metrics.laneW)
-            graphPanTimer.start()
+            graphPanTimer.begin()
+        } else if (act === "pane-bar" || act === "pane-bar-away") {
+            paneBarTimer.begin()
+        } else if (act === "text-bar" || act === "text-bar-away") {
+            // The argument picks a commit whose body runs past the box — one that fits has no bar to raise, which the
+            // report says rather than the watchdog.
+            page.activateRow(graphModel.oidAt(Number(arg)))
+            textBarTimer.begin()
         } else if (act === "graph-min") {
             // Pulled past the floor so the clamp answers (the floor is lane 0's co-author badge kept whole).
             page.setGraphColumns(graphPane.labelWManual, 0)

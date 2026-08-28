@@ -230,6 +230,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "wip_lanes geometry=O0.0;O1.1",
     },
+    // The lanes' sideways bar: out while the hand is in the pane, gone
+    // when it leaves, and at full ink only once the lanes have actually
+    // been sent (デザイン規約 §グラフを横へ送る / §バーの明るさ). Neither
+    // half frames as an answer on its own — a bar six pixels tall on a
+    // pane's bottom edge is as easy to miss in a picture as it is to
+    // imagine, and a quarter of opacity is not something a screenshot
+    // settles. `overflow=` stands beside them so a run over lanes that
+    // already fit — where the bar is rightly absent and nothing was
+    // proven — cannot read as the half where it went away.
+    Verb {
+        name: "graph-bar",
+        when: &[],
+        plain: "graph_bar shown=true ink=1",
+    },
+    Verb {
+        name: "graph-bar-away",
+        when: &[],
+        plain: "graph_bar shown=false",
+    },
     // Which column the middle click landed in is the whole question,
     // and a photograph answers neither half of it: lanes carried
     // sideways and lanes left where they were frame alike at this

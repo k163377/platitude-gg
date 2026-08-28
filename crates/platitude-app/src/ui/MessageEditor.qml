@@ -205,6 +205,16 @@ ColumnLayout {
     // -- smoke hooks, forwarded to the box --
     function growDescription(dy) { descBox.grow(dy) }
     function pullDescriptionPast(down) { descBox.pullPast(down) }
+    /// Smoke hook: the wheel over the description box, through the one door a notch comes in by
+    /// (`DescriptionBox.rollBy` — the flickable inside a `ScrollView` is not interactive, so this is the only thing
+    /// that moves this text).
+    function rollDescription(dy) { descBox.rollBy(dy) }
+    /// Smoke hook: the reader inside the box, which is what keeps its bar bright — and the one thing a headless run
+    /// cannot do, since hover is not injectable (`AutoScrollBar.inArea`, verify-ui).
+    function holdDescriptionBar(on) { descBox.bar.inArea = on }
+    /// How much ink is on the box's own bar, and how far the text stands (verify-ui).
+    readonly property real descriptionBarInk: descBox.bar.opacity
+    readonly property real descriptionAt: descBox.textAt
 
     spacing: Theme.spaceXs
 

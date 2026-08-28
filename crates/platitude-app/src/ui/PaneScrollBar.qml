@@ -10,25 +10,38 @@ import platitude.ui
 /// inside the right panel. **A box being typed into keeps the style's bar** — it is the one place a bar is inside the
 /// content rather than at a pane's edge (2026-08-27 ユーザー指示).
 ///
+/// **Its three states climb the palette from the pane's ground** (2026-08-28 ユーザー指示): `bgElevated` idle, the one
+/// step there is between a pane's ground and the lines it divides itself with; `borderDefault` while the view is being
+/// sent, the ink a frame is drawn in; `borderStrong` under a held thumb. The style's see-through bar lands on the same
+/// three over a pane's ground by carrying that much of its one ink, so the two families read alike by two routes — and
+/// this one, opaque on purpose (below), cannot say a step by carrying less, so it names the colours (`dimsItself`).
+///
 /// Three things it does not take from the style's bar:
 ///
 ///  - **it does not float.** The style's handle stops a step short of the edge, which leaves it reading as part of the
 ///    content it is drawn over rather than as the pane's own edge.
-///  - **it is not see-through.** At 0.75 opacity the colour the eye reads is a blend with whatever passes underneath,
-///    and it moves as the view scrolls (qmltestrunner 実測: `#273346` over the pane's ground, `#2C3A55` over a selected
-///    row, `#5F6B7C` over body text). The gutter already keeps ink from under the bar, so there is nothing to read
-///    through it — the blend over the pane's ground is written down as `Theme.navBarInk` and painted flat. Both panels
-///    stand on `Theme.bgSurface`, so that one value is the colour both were already showing.
+///  - **it is not see-through.** The colour the eye reads through a translucent thumb is a blend with whatever passes
+///    underneath, so it changes as the view scrolls — measured over the pane's ground, over a selected row and over
+///    body text, one thumb read as three colours. The gutter already keeps ink from under this bar, so there is
+///    nothing to read through it, and what it paints is a named colour, flat.
 ///  - **it does not stop short of the ends.** The style keeps a step of padding at both ends of the track, so a view
 ///    scrolled hard against its top frame left the slab hanging a step below it (2026-08-27 ユーザー報告). Only the far
 ///    side keeps its step, where it is grabbing room rather than a gap: the box stays wider than the ink.
 AutoScrollBar {
     id: paneBar
 
+    // Named colours, not a share of one (above).
+    dimsItself: false
+
+    /// What the slab is painting, for a run to read back — the painted side, so a cut binding cannot read as green
+    /// (verify-ui).
+    readonly property alias slabColor: slab.color
+
     rightPadding: 0
     topPadding: 0
     bottomPadding: 0
     contentItem: Rectangle {
+        id: slab
         implicitWidth: Theme.navBarReach
         implicitHeight: Theme.navBarReach
         // Round on the free side only: a slab rounded on all four corners reads as floating over the pane rather than
@@ -36,8 +49,23 @@ AutoScrollBar {
         radius: Theme.radiusSm
         topRightRadius: 0
         bottomRightRadius: 0
-        color: paneBar.pressed ? Theme.navBarInkHeld : Theme.navBarInk
-        // Flat, and always: the bar itself is what comes and goes, and it does that without the style's fade
-        // (`AutoScrollBar.visible`).
+        // Idle a step under the ramp, and on it while the view is being sent. Up at once, down over 400ms — the two
+        // halves every bar in the window shares (規約 §QML 実装ルール のバーの明るさ).
+        color: Theme.bgElevated
+        states: [
+            State { name: "gone"; when: !paneBar.visible },
+            State {
+                name: "lit"
+                when: paneBar.bright
+                PropertyChanges {
+                    slab.color: paneBar.pressed ? Theme.borderStrong : Theme.borderDefault
+                }
+            }
+        ]
+        transitions: Transition {
+            from: "lit"
+            to: ""
+            ColorAnimation { duration: 400 }
+        }
     }
 }

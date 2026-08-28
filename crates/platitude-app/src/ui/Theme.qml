@@ -21,19 +21,13 @@ QtObject {
     readonly property color borderFocus: "#3B82F6"
 
     // ---- colors: scroll bar (the style's own bar — thumb ink, drawn over the content) ----
-    // One ink, two amounts of it. Fusion draws the thumb at `opacity 0.75`, so what lands is 0.75 of the alpha here:
-    // 0.30 at rest and 0.42 held, which over `bgSurface` come out within 5/255 of the opaque thumb this replaced
-    // (デザイン規約 §スクロールバー). The graph's rows run under the bar rather than stopping short of it, so the
-    // thumb carries only as much ink as leaves the words beneath it readable.
-    readonly property color scrollBarThumb: "#677D9CB4"
-    readonly property color scrollBarThumbHeld: "#8F7D9CB4"
-
-    // ---- colors: scroll bar (the left panel's own slab) ----
-    // Not colours anyone picked: what the style's 0.75-opacity handle already reads as over the pane's own ground.
-    // Worn by the left panel's slab alone — its gutter keeps ink from under it, so there is nothing to read through
-    // and an opaque one stops picking up the row beneath. Every other bar is the style's own, above.
-    readonly property color navBarInk: "#273346"
-    readonly property color navBarInkHeld: "#364255"
+    // One ink, three amounts of it, chosen so that over `bgSurface` they land on palette steps counted up from the
+    // ground: the idle bar reads `bgElevated`, the one being used `borderDefault`, the one being held `borderStrong`
+    // (デザイン規約 §スクロールバー). Fusion draws the thumb at `opacity 0.75`, so what lands is 0.75 of the alpha
+    // here, and the idle step is a further 3/10 of that rather than a fourth colour. The graph's rows run under this
+    // bar rather than stopping short of it, so it carries no more ink than leaves the words beneath it readable.
+    readonly property color scrollBarThumb: "#867D9CB4"
+    readonly property color scrollBarThumbHeld: "#B47D9CB4"
 
     // ---- colors: text ----
     readonly property color textPrimary: "#E2E8F0"

@@ -234,6 +234,13 @@ ColumnLayout {
     /// would read green with the binding cut.
     readonly property color descriptionColor: msgEditor.descriptionColor
     readonly property bool descriptionFocused: msgEditor.descriptionFocused
+    /// Smoke hooks: the wheel over the description box, the reader being
+    /// in it or not, and how much ink its own bar carries as a result
+    /// (デザイン規約 §QML 実装ルール のバーの明るさ).
+    function rollDescription(dy) { msgEditor.rollDescription(dy) }
+    function holdDescriptionBar(on) { msgEditor.holdDescriptionBar(on) }
+    readonly property real descriptionBarInk: msgEditor.descriptionBarInk
+    readonly property real descriptionAt: msgEditor.descriptionAt
 
     // -- what this pane lends the message editor --
     //
@@ -305,6 +312,10 @@ ColumnLayout {
     /// arrows and read where they landed — the same kind of exposure
     /// `GraphPane.view` is (verify-ui).
     readonly property alias filesWalk: fileWalk
+    /// Automation only: the bar that list wears, so a run can read what it
+    /// paints and hold it there for a shot. **One panel's bar stands in
+    /// for both** — same component, same two states (verify-ui).
+    readonly property alias filesBar: fileBar
 
     /// How far this pane's own content runs past its right edge, in px.
     /// A child with no `Layout.fillWidth` of its own is Fixed -- only a
@@ -459,7 +470,7 @@ ColumnLayout {
         Layout.fillHeight: true
         model: detailsPane.details
         // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
-        ScrollBar.vertical: PaneScrollBar {}
+        ScrollBar.vertical: PaneScrollBar { id: fileBar }
         // Qt's own key navigation moves `currentIndex` and tells nobody;
         // the arrows are answered here instead, where they move the file
         // being read (規約 §diff のファイル一覧).

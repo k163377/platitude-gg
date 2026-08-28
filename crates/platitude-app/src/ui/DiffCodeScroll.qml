@@ -26,7 +26,8 @@ Item {
     required property real codeWidth
     required property real roomWidth
     /// Whether the pointer is anywhere in the pane (the pane's own handler). The bar lies over the last row, so it is
-    /// only out while there is a hand here to use it (デザイン規約 §diff を横へ送る).
+    /// only out while there is a hand here to use it (デザイン規約 §diff を横へ送る), and it is the same answer the bar
+    /// dims by — attached to no flickable, it has no view of its own to ask (`AutoScrollBar.inArea`).
     required property bool paneHovered
     /// The file on screen. A different one starts at its own left edge; the same one read again — which is what every
     /// partial write ends with — keeps the place it was being read from, the way the vertical place is kept
@@ -81,11 +82,17 @@ Item {
         // means while the pointer is on the bar itself — a strip on the bottom edge nobody would find. When this bar is
         // out it is because this pane put it there, so the style stops deciding (GraphPane's lane bar, same reason).
         //
+        // **Out while the hand is in the pane, and bright once the code has been sent** — the same two steps of ink
+        // every bar in the window carries (`AutoScrollBar`), over a visibility this bar keeps for itself: it lies over
+        // the last row of the diff, so standing when nobody is sending the code would cost a line of the file
+        // (デザイン規約 §diff を横へ送る).
+        //
         // The thumb itself is the style's see-through one, as every bar with content under it is (デザイン規約 §色
-        // スクロールバー): the code runs beneath this one, and the ink comes from the window's palette, so a bare
-        // `ScrollBar` wears it without asking.
-        ScrollBar {
+        // スクロールバー): the code runs beneath this one, and the ink comes from the window's palette, so the bar wears
+        // it without asking.
+        AutoScrollBar {
             id: bar
+            inArea: codeScroll.paneHovered
             visible: codeScroll.canPan && (codeScroll.paneHovered || pressed || hand.scrolling)
             policy: ScrollBar.AlwaysOn
             orientation: Qt.Horizontal
@@ -95,6 +102,9 @@ Item {
             size: codeScroll.codeWidth > 0 ? codeScroll.roomWidth / codeScroll.codeWidth : 1
             position: codeScroll.codeWidth > 0 ? codeScroll.offset / codeScroll.codeWidth : 0
             onPositionChanged: {
+                // No flickable to be wired to, so the bar's own position is what says the code has just been sent —
+                // by the thumb, the wheel, or the hand drifting sideways.
+                bar.moved()
                 if (pressed)
                     codeScroll.offset = Math.max(0, Math.min(position * codeScroll.codeWidth, codeScroll.maxOffset))
             }

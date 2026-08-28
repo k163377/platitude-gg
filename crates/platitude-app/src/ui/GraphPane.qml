@@ -472,14 +472,13 @@ Rectangle {
     HoverHandler {
         onHoveredChanged: graphArea.pointerInside = hovered
     }
-    /// Automation: the pointer resting in the pane, which is the only thing that puts the lane bar on screen
+    /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
     /// (`PG_AUTO_ACT=graph-bar`).
-    function restPointer(inside) {
-        graphArea.pointerInside = inside
-    }
-    /// What is drawn, not what was asked for: the automation hook reports the bar itself so a broken binding cannot
-    /// pass.
+    function restPointer(inside) { graphArea.pointerInside = inside }
+    /// What is drawn and how brightly, not what was asked for: the hooks report the bar itself, so a broken binding
+    /// cannot pass (verify-ui).
     readonly property alias laneBarShown: laneBar.visible
+    readonly property alias laneBarInk: laneBar.opacity
     // The lanes' horizontal bar (`GraphLaneBar`), on the pane's bottom edge. **Its own `z`, on the bar itself**: a QML
     // stack is the parent's one number, and at the default it would go under the lane strip and the dividers it has to
     // sit on top of.

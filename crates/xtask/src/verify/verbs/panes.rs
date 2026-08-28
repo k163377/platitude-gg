@@ -63,4 +63,43 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "description_grow keeps=true",
     },
+    // The two bars a panel carries, each judged as a pair, because each
+    // says its state in brightness alone: a few pixels of ink at the
+    // edge of a 1440px frame, one step apart. A screenshot cannot
+    // settle that, and neither state means anything without the other
+    // one beside it.
+    //
+    // The panel's slab is opaque, so it steps between named inks and the
+    // colour itself is the report — a frame's ink while the list is
+    // being sent, one step off the pane's ground once the reader has
+    // left (デザイン規約 §QML 実装ルール のバーの明るさ). Reporting
+    // `bright` instead would be the asked-for side, green with the paint
+    // cut off.
+    Verb {
+        name: "pane-bar",
+        when: &[],
+        plain: "pane_bar ink=#334155",
+    },
+    Verb {
+        name: "pane-bar-away",
+        when: &[],
+        plain: "pane_bar ink=#0f172a",
+    },
+    // The bar inside the description box is the style's see-through one,
+    // which reaches the same two inks by carrying three tenths of its
+    // single one. That box is also the one place the window hands a bar
+    // to a `ScrollView`, whose flickable never calls itself moving — the
+    // lit half is what says the wiring around that is still there
+    // (2026-08-27 ユーザー報告: no bar at all until the bar was told to
+    // watch the text).
+    Verb {
+        name: "text-bar",
+        when: &[],
+        plain: "text_bar ink=1",
+    },
+    Verb {
+        name: "text-bar-away",
+        when: &[],
+        plain: "text_bar ink=0.3",
+    },
 ];
