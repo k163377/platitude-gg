@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
@@ -170,7 +169,7 @@ AppListView {
                           : count * Theme.rowHeight + Theme.borderWidth
     model: sectionModel
     // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
-    ScrollBar.vertical: PaneScrollBar {}
+    verticalBar: PaneScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width

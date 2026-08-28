@@ -41,12 +41,11 @@ ScrollBar {
     /// be injected (verify-ui).
     ///
     /// **Read through a guard, because the handler's life is the view's.** A pointer handler's `parent` *is* its
-    /// QObject parent, so a bar whose view goes null hands its handler to the JS heap and loses it at the next
-    /// collection, leaving this binding to read a destroyed object (verify-ui 実測 2026-08-28: ten `TypeError` lines
-    /// on every start). The bars that lose a view are the ones nobody sees: `AppListView` fits one of these, and
-    /// every list wanting the pane's slab fits a second over it (`NavList`, `DetailsPane`, `WipPane`,
-    /// `WipBucketPane`) — the attached property drops the first, which stays alive with nothing left to answer for.
-    /// A bar with no view has no range to be inside, so `false` is the answer here rather than a repair.
+    /// QObject parent, so a bar with no view hands its handler to the JS heap and loses it at the next collection,
+    /// leaving this binding to read a destroyed object (verify-ui 実測 2026-08-28: one `TypeError` line per such bar
+    /// on every start). **The bars with no view are the two sideways ones** (`GraphLaneBar` / `DiffCodeScroll`),
+    /// which answer for a pane rather than for a flickable. A bar with no view has no range to be inside, so `false`
+    /// is the answer here rather than a repair.
     property bool inArea: viewHover ? viewHover.hovered : false
     HoverHandler {
         id: viewHover

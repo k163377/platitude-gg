@@ -317,7 +317,7 @@ ColumnLayout {
     /// Automation only: the bar that list wears, so a run can read what it
     /// paints and hold it there for a shot. **One panel's bar stands in
     /// for both** — same component, same two states (verify-ui).
-    readonly property alias filesBar: fileBar
+    readonly property ScrollBar filesBar: fileList.ScrollBar.vertical
 
     /// How far this pane's own content runs past its right edge, in px.
     /// A child with no `Layout.fillWidth` of its own is Fixed -- only a
@@ -475,7 +475,7 @@ ColumnLayout {
         Layout.fillHeight: true
         model: detailsPane.details
         // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
-        ScrollBar.vertical: PaneScrollBar { id: fileBar }
+        verticalBar: PaneScrollBar {}
         // Qt's own key navigation moves `currentIndex` and tells nobody;
         // the arrows are answered here instead, where they move the file
         // being read (規約 §diff のファイル一覧).
