@@ -13,8 +13,8 @@ import platitude.ui
 //
 // **The height is the one cap that stays a cut.** A message has no length git enforces and a card that grows with one
 // takes its own footer off the screen, so a caller may hand this part a `capHeight`; what will not fit is clipped and
-// the mark below says so. Nothing is taken out of the field itself — the whole of it is still there to be selected,
-// which is what separates this from an elide.
+// the mark below says so, and **the cap is spent in whole lines** (`capLines`). Nothing is taken out of the field
+// itself — the whole of it is still there to be selected, which is what separates this from an elide.
 Item {
     id: cardText
 
@@ -23,7 +23,8 @@ Item {
     property color color: Theme.textPrimary
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
-    /// How tall the field may grow before the rest is left behind. 0 = no cap, which is every one-line field.
+    /// How tall the field may grow before the rest is left behind. 0 = no cap, which is every one-line field. Spent in
+    /// whole lines all the same — see `capLines`.
     property real capHeight: 0
     /// The card this stands on, for the mark's own ground: the mark is drawn over the last line it cuts, and needs
     /// something opaque under it (`AppCardFace` paints `bgElevated`, which is what every card here is).
@@ -32,10 +33,40 @@ Item {
     /// The pointer is on the words. The card ORs this into its own `pointerInside`, the same as any other content that
     /// takes hover (`AppCard.contentPointed` — 規約 §hover のツールチップ の罠 (2)).
     readonly property alias pointed: wordHover.hovered
+    /// One line of the field, which is the size of every line in it: the whole of it is laid out in one font, so its
+    /// height divides by its line count exactly.
+    readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
+    /// How many whole lines the cap leaves room for — **the cap is always spent in whole lines**. A height taken at its
+    /// word lands inside a line and leaves a row of glyphs cut through the waist, with the mark floating beside it on a
+    /// baseline of its own: not a message that stops, one that broke (2026-08-28 ユーザー報告). Rounded down to the line
+    /// below, the field ends the way an elide ends — a whole last line with the mark standing on its tail. Never less
+    /// than one: a cap shorter than a line still has to show the line it is cutting, or all that is left is a blank
+    /// strip with a mark on it.
+    readonly property int capLines: cardText.capHeight > 0 && cardText.lineHeight > 0
+                                    ? Math.max(1, Math.floor(cardText.capHeight / cardText.lineHeight))
+                                    : 0
     /// The cap left something behind. The output side, and what a headless run reads in place of a mark it cannot see.
-    readonly property bool clipped: cardText.capHeight > 0 && field.implicitHeight > cardText.capHeight + 0.5
+    readonly property bool clipped: cardText.capLines > 0 && field.lineCount > cardText.capLines
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
+
+    /// Where the mark's ground begins: the near edge of the glyph it would otherwise stand on the right half of. Asking
+    /// the field which position sits under that edge, and then where that position is, rounds the band out to a
+    /// character boundary — a letter cut down its middle is the same broken line `capLines` is for, laid on its side.
+    readonly property real markLeft: {
+        const want = cardText.width - markLabel.implicitWidth - Theme.spaceXs
+        // The guard is also the dependency list: `positionAt` is a call, and a call tells QML nothing about when its
+        // answer went stale, so the reads that decide it have to be made here (規約 §QML 実装ルール).
+        if (field.text === "" || field.width <= 0 || field.contentHeight <= 0 || want <= 0)
+            return Math.max(0, want)
+        const under = field.positionAt(want, cardText.height - cardText.lineHeight / 2)
+        // `positionAt` answers with the *nearest* boundary, which is the one past the glyph as often as the one before
+        // it; the band wants the last boundary that still starts left of the mark, so a nearest answer that overshot is
+        // walked back by one.
+        const near = field.positionToRectangle(under).x
+        const left = near > want && under > 0 ? field.positionToRectangle(under - 1).x : near
+        return Math.max(0, Math.min(want, left))
+    }
 
     /// Puts the whole field in the selection, for the automation and for `Ctrl+A` (see `selectByKeyboard`).
     function selectAll() {
@@ -47,8 +78,8 @@ Item {
     /// binding standing on its own answer (規約 §QML 実装ルール). Rounded up: a layout hands an item the whole pixel
     /// below a fractional width, and a line asking for 79.28 given 79 wraps against a box meant to hold it.
     implicitWidth: Math.ceil(ruler.implicitWidth)
-    implicitHeight: cardText.capHeight > 0
-                    ? Math.min(field.implicitHeight, cardText.capHeight)
+    implicitHeight: cardText.capLines > 0
+                    ? Math.min(field.implicitHeight, cardText.capLines * cardText.lineHeight)
                     : field.implicitHeight
     // Only the height ever cuts, and only when a caller asked for a cap.
     clip: cardText.clipped
@@ -91,18 +122,20 @@ Item {
         }
     }
 
-    // What the cap left behind. On the card's own ground rather than over the words: the last line it cuts through is
-    // drawn under this, and a mark read through a sentence is not a mark.
+    // What the cap left behind, on the tail of the last line the cap kept — where an elide puts it. On the card's own
+    // ground rather than over the words: the line runs on under this, and a mark read through a sentence is not a mark.
+    // The band is a line tall so the mark sits on that line's own baseline rather than beside it.
     Rectangle {
         visible: cardText.clipped
         color: cardText.ground
-        width: markLabel.implicitWidth + Theme.spaceXs
-        height: markLabel.implicitHeight
-        x: cardText.width - width
+        width: cardText.width - cardText.markLeft
+        height: cardText.lineHeight
+        x: cardText.markLeft
         y: cardText.height - height
         Label {
             id: markLabel
             anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             text: "…"
             color: cardText.color
             font.family: Theme.uiFamily
