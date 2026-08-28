@@ -46,7 +46,9 @@ ActionButton {
         if (pushButton.curPage === null)
             return ""
         const to = pushButton.curPage.pushTargetLabel
-        const what = pushButton.mode === "publish"
+        const what = pushButton.mode === "unborn"
+                     ? qsTr("No commits yet — git has no branch to send")
+                   : pushButton.mode === "publish"
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
                    // No count: the marked remote is not the one this branch tracks, so `ahead` is the
                    // standing with somewhere else (デザイン規約 §リモートへ送る).

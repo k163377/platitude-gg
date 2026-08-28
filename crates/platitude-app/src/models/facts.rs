@@ -108,6 +108,7 @@ impl GitFacts {
     #[expect(clippy::too_many_arguments)]
     fn push_standing(
         &self,
+        unborn: bool,
         detached: bool,
         branch: String,
         upstream: String,
@@ -119,6 +120,7 @@ impl GitFacts {
         remote_names: String,
     ) -> String {
         platitude_core::remote::push_standing(
+            unborn,
             detached,
             &branch,
             &upstream,

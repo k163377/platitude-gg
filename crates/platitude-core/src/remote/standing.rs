@@ -14,6 +14,10 @@
 pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out.
     Closed,
+    /// No commits yet: git refuses the send itself (`error: src refspec
+    /// <branch> does not match any` — 実測 2.55), so the button says so
+    /// rather than offering a push that cannot land.
+    Unborn,
     /// Never sent, or the tracking ref is gone: where the branch goes is
     /// a question rather than something to look up.
     Publish,
@@ -36,6 +40,7 @@ impl PushStanding {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Closed => "closed",
+            Self::Unborn => "unborn",
             Self::Publish => "publish",
             Self::Elsewhere => "elsewhere",
             Self::Ready => "ready",
@@ -130,6 +135,7 @@ pub fn push_target<'a>(
 /// tracks is [`upstream_is_on`]'s answer.
 #[expect(clippy::too_many_arguments)]
 pub fn push_standing<'a>(
+    unborn: bool,
     detached: bool,
     branch: &str,
     upstream: &'a str,
@@ -142,6 +148,12 @@ pub fn push_standing<'a>(
 ) -> PushStanding {
     if detached || branch.is_empty() {
         return PushStanding::Closed;
+    }
+    // Before anything about remotes: there is no ref to name in a
+    // refspec yet, so every other answer here would be about a send git
+    // refuses outright.
+    if unborn {
+        return PushStanding::Unborn;
     }
     if upstream.is_empty() || !upstream_tracked {
         return PushStanding::Publish;
@@ -178,14 +190,23 @@ mod tests {
         marked: &str,
     ) -> PushStanding {
         push_standing(
-            false, "main", upstream, tracked, ahead, behind, "", marked, REMOTES,
+            false, false, "main", upstream, tracked, ahead, behind, "", marked, REMOTES,
         )
+    }
+
+    #[test]
+    fn a_branch_with_no_commits_has_no_refspec_to_send() {
+        assert_eq!(
+            push_standing(true, false, "main", "", false, 0, 0, "", "", REMOTES),
+            PushStanding::Unborn
+        );
     }
 
     /// The same, with the branch's own mark set instead of the
     /// repository's.
     fn standing_marked_on_branch(upstream: &str, push_remote: &str) -> PushStanding {
         push_standing(
+            false,
             false,
             "main",
             upstream,
@@ -212,7 +233,7 @@ mod tests {
     #[test]
     fn a_push_standing_is_read_without_sending_anything() {
         assert_eq!(
-            push_standing(true, "", "", false, 0, 0, "", "", []),
+            push_standing(false, true, "", "", false, 0, 0, "", "", []),
             PushStanding::Closed
         );
         assert_eq!(standing_of("", false, 0, 0, ""), PushStanding::Publish);
@@ -291,6 +312,7 @@ mod tests {
         assert_eq!(
             push_standing(
                 false,
+                false,
                 "main",
                 "origin/main",
                 true,
@@ -305,6 +327,7 @@ mod tests {
         );
         assert_eq!(
             push_standing(
+                false,
                 false,
                 "main",
                 "origin/main",

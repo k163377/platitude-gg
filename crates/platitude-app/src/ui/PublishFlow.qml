@@ -66,7 +66,8 @@ Item {
     /// come from the last fetch, so they prove the negative only: a push may still be refused when they say it fits.
     readonly property string pushState:
         publishFlow.repoTab.state !== "open" ? "closed"
-        : GitFacts.pushStanding(publishFlow.workTree.detached, publishFlow.workTree.branch,
+        : GitFacts.pushStanding(publishFlow.workTree.loaded && publishFlow.workTree.headOid === "",
+                                publishFlow.workTree.detached, publishFlow.workTree.branch,
                                 publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
                                 publishFlow.workTree.ahead, publishFlow.workTree.behind,
                                 publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
