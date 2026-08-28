@@ -786,6 +786,9 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spaceXs
+                    // Nothing to amend before the first commit: the row goes rather than standing down, since a
+                    // repository with no history has no "last commit" the reader is being kept from.
+                    visible: wipPane.workTree.headOid !== ""
                     AppCheckBox {
                         id: amendBox
                         text: qsTr("Amend the last commit")

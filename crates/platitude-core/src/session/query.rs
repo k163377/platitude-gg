@@ -53,6 +53,18 @@ impl RepoSession {
     /// Asks how much of `range` a remote already has, so the UI can warn
     /// before rewriting published history. A read, not a write.
     pub fn check_publish(self: &Arc<Self>, range: String) {
+        // A repository with no commits has nothing published, and that is
+        // an answer rather than a read: `rev-list --count HEAD^!` on an
+        // unborn branch is `fatal: ambiguous argument` (実測 2.55), which
+        // would turn the command log red on a repository doing nothing
+        // wrong.
+        if self.known_head_tip() == Some(None) {
+            self.sink.event(SessionEvent::PublishChecked {
+                range,
+                state: publish::PublishState::default(),
+            });
+            return;
+        }
         self.spawn_read("publish", |s, workdir, cancel| async move {
             let state = publish::state_of(&s.executor, &workdir, &range, &cancel).await?;
             Ok(SessionEvent::PublishChecked { range, state })
