@@ -49,6 +49,8 @@ CommandsTextSelect 1.0 CommandsTextSelect.qml
 CommandsToggle 1.0 CommandsToggle.qml
 DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml
+LineText 1.0 LineText.qml
+SweepRoom 1.0 SweepRoom.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
 CutName 1.0 CutName.qml

@@ -76,10 +76,11 @@ Item {
         // reader who wants the whole line reaches for first.
         selectByMouse: true
         selectByKeyboard: true
-        // What was picked out stays picked out with the caret elsewhere: a card is read alongside the pane it came
-        // from, and a selection that vanished the moment the reader looked away would have to be made twice. It is
-        // also what puts the selection in a headless picture, where nothing ever takes focus (`tip-copy`).
-        persistentSelection: true
+        // **Never `persistentSelection`.** There is one selection in this window, and it belongs to whatever the caret
+        // is in — a card holding several of these would otherwise stay lit in every line the reader had swept, and so
+        // would the pane behind it (2026-08-28 ユーザー報告, on the pane's own fields). It was kept for the camera, and
+        // the camera never needed it: a field that has not taken focus answers `selectedText` after `selectAll()` all
+        // the same, which is the whole of what `tip-copy` reads (実測 qmltestrunner `tst_twofields`).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // A field of its own width, with no room around it: the card's padding is the card's.

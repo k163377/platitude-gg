@@ -163,12 +163,14 @@ ColumnLayout {
     }
 
     signal fileActivated(string path, string origPath)
-    /// The arrows walked onto another file. Not the signal a click raises: a
-    /// click on the file already open closes the diff, and holding Down must
-    /// not (規約 §diff のファイル一覧).
+    /// The arrows walked onto another file. Not the signal a click raises: a click on the file already open closes
+    /// the diff, and holding Down must not (規約 §diff のファイル一覧).
     signal fileWalked(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
+    /// The row that draws the commit's values, handed to a run whole — an automation-only exposure, the same kind
+    /// `filesWalk` is (verify-ui). A dozen one-line relays here would say nothing this does not.
+    readonly property alias valueRow: authorRow
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     /// Save was pressed.
@@ -399,6 +401,9 @@ ColumnLayout {
                 // does — whose it is, what it says, what it touched --
                 CommitAuthorRow {
                     id: authorRow
+                    // Said out loud: this row is an `Item`, and a plain item takes its own width and stops — which
+                    // parked the hash plate against the end of the name (2026-08-28 ユーザー報告).
+                    Layout.fillWidth: true
                     details: detailsPane.details
                     signatureKind: detailsPane.signatureKind
                     signatureCode: detailsPane.signatureCode

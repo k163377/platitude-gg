@@ -142,6 +142,21 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("seeded window: 320x240 (under every floor)");
     }
 
+    // The other side of the same idea: `details-fit` is about the pane's
+    // right column, and half of what it claims only bites where the
+    // author row is narrower than the block it stands in. At the default
+    // 400 the row is already wider than the block, so it is clamped to
+    // the block whether or not it was told to fill — and a row that
+    // never filled answers exactly like one that did. Seeded wide, the
+    // same run puts the hash plate 540px short of the pane's edge the
+    // moment the fill is gone (2026-08-28 ユーザー報告).
+    if opts.verb == "details-fit" {
+        let state = config_dir.join("state.toml");
+        std::fs::write(&state, "version = 1\n\n[layout]\ndetails_width = 800\n")
+            .map_err(|e| format!("could not write {}: {e}", state.display()))?;
+        println!("seeded layout: an 800px details pane (wider than the row asks for)");
+    }
+
     let arg = match opts.arg.is_empty() {
         true => match body_for(&opts.verb) {
             Some(body) => body,

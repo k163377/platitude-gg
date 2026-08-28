@@ -5,7 +5,7 @@
 //! itself — the window had the machine to itself, which an ordinary
 //! window photographs exactly like.
 
-use super::Verb;
+use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     Verb {
@@ -13,20 +13,78 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "solo blocked=true",
     },
+    // Two ways the pane's column stops being one, and a photograph
+    // answers neither. `fits` is the overflow: a child that will not
+    // shrink is a floor the whole column sits on, and every box in the
+    // pane then paints past the window's edge with its glyphs cut in
+    // half — which frames exactly like a pane that fits. `fills` is the
+    // other end of the same axis: the author row was given the whole
+    // block or it was not, and the hash plate is right-aligned against
+    // it, so a row that took only its own width parks the plate against
+    // the end of the name (2026-08-28 ユーザー報告). A picture shows a
+    // plate either way; it does not say which edge it was meant to be
+    // on.
     Verb {
         name: "details-fit",
         when: &[],
-        plain: "details_fit fits=true",
+        plain: "details_fit fills=true fits=true",
+    },
+    // The pane's values are fields, and `Ctrl+A` is what reaches the
+    // whole of one — including a tail the row had to cut. A picture
+    // cannot answer this: a `Text` put back in place of the field draws
+    // the identical row, and the wash a selection leaves is a few pixels
+    // of colour a scaled-down look drops. So the claim is that what came
+    // out of the field is what the model says the pane is showing.
+    Verb {
+        name: "details-select",
+        when: &[],
+        plain: "details_select match=true",
+    },
+    // One selection in the window. The pane shipped with every field
+    // keeping what it held, so a reader who swept a second value found
+    // the first still lit (2026-08-28 ユーザー報告 — three at once), and
+    // no picture of a single run can say that: one lit field frames the
+    // same either way. Both halves are claimed, because a pane that had
+    // simply cleared everything would answer the first on its own.
+    Verb {
+        name: "details-select-away",
+        when: &[],
+        plain: "details_select_away dropped=true held=true",
+    },
+    // A range selection is taken from the room beside the values, not
+    // from the values themselves — they are a few characters wide and
+    // one line tall, and aiming at that misses. Two claims, because
+    // either alone photographs as a working pane: the sweep reaches the
+    // value, and a press on the value's own box is still whatever
+    // control was there. On the plate's two that second answer must be
+    // `false`, which is the whole of "the hit areas did not shrink".
+    //
+    // Not for a value the row had to cut: a sweep reaches what is on
+    // screen, which is the point of it, and the tail lives in the card
+    // and under Ctrl+A (`details-select`).
+    Verb {
+        name: "details-sweep",
+        when: &[
+            (
+                Arg::Starts("hash"),
+                "details_sweep reach=9/9 caret=true grabs=false ours=false",
+            ),
+            (
+                Arg::Starts("parent"),
+                "details_sweep reach=9/9 caret=true grabs=false ours=false",
+            ),
+        ],
+        plain: "details_sweep reach=9/9 caret=true grabs=true ours=true",
     },
     // The author's name, capped at its own width so the signature's one
     // word stays against it. A ceiling drawn a fraction of a pixel under
-    // that width elides the name, and an ellipsis is what a picture
-    // answers worst — it is a few pixels wide, both OSes draw one, and
-    // the box around it does not move, so the run that lost the last
-    // glyph frames exactly like the run that kept it (2026-08-23
-    // ユーザー報告: Ubuntu drew `Yuki Tana…` where Windows drew
-    // `Yuki Tanaka`, in the same 78px of ink). At the window the verbs
-    // open, the row has 200px of slack — nothing here is meant to give.
+    // that width cuts the name, and a cut is what a picture answers
+    // worst — the mark is a few pixels wide, both OSes draw one, and the
+    // box around it does not move, so the run that lost the last glyph
+    // frames exactly like the run that kept it (2026-08-23 ユーザー報告:
+    // Ubuntu drew `Yuki Tana…` where Windows drew `Yuki Tanaka`, in the
+    // same 78px of ink). At the window the verbs open, the row has 200px
+    // of slack — nothing here is meant to give.
     Verb {
         name: "author-card",
         when: &[],

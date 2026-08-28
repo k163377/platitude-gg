@@ -4,6 +4,12 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The commit's own hash over its parent's, rows aligned right.
+//
+// **Both rows are controls, and they answer the pointer exactly as they always did**: the whole plate is the button
+// that copies the hash, the whole link is the target that goes to the parent (デザイン規約 §右のペインの字は掴める —
+// 押せる的の判定は狭めない). The digits are drawn in fields so that a selection can be *put* into them, but the fields
+// take no press of their own: whoever presses here is pressing the control, and the selection arrives from the room
+// around the plate instead (`SweepRoom`).
 ColumnLayout {
     id: plate
 
@@ -13,6 +19,47 @@ ColumnLayout {
 
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
+
+    /// The words a sweep may put a selection into, and the boxes a sweep must keep its hands off — the two are the
+    /// same rows seen from either side (`SweepRoom`).
+    readonly property var valueFields: [shaText, parentText]
+    /// Whether a point in another item's coordinates lands on a control of this plate. A press there belongs to the
+    /// control, whole: this is what keeps the hit areas the size they have always been.
+    function claims(item, x, y) {
+        return plate.inside(hashCopy, item, x, y) || (parentLink.visible && plate.inside(parentLink, item, x, y))
+    }
+    function inside(box, item, x, y) {
+        const p = box.mapFromItem(item, x, y)
+        return p.x >= 0 && p.y >= 0 && p.x < box.width && p.y < box.height
+    }
+    /// Where this plate begins, for whoever is looking for room beside it.
+    function leftEdge(item) {
+        return plate.mapToItem(item, 0, 0).x
+    }
+    function fieldFor(which) {
+        return which === "parent" ? parentText : shaText
+    }
+    /// The middle of the control that owns that row's presses, in another item's coordinates — what a run aims at to
+    /// ask whether the press there is still the control's.
+    function controlPoint(which, item) {
+        const box = which === "parent" ? parentLink : hashCopy
+        return box.mapToItem(item, box.width / 2, box.height / 2)
+    }
+
+    /// What the two controls' handlers call, and the only way in (verify-ui §壊れない動詞の実装).
+    function copyFullNow() {
+        plate.copyRequested(plate.fullSha)
+    }
+    function goToParentNow() {
+        if (plate.parentSha === "")
+            return
+        plate.parentClicked(plate.parentSha)
+    }
+
+    function selectSha() { shaText.selectAll() }
+    function selectParent() { parentText.selectAll() }
+    readonly property alias shaSelected: shaText.selected
+    readonly property alias parentSelected: parentText.selected
 
     spacing: 0
 
@@ -24,7 +71,6 @@ ColumnLayout {
         id: hashCopy
         Layout.alignment: Qt.AlignRight
         hoverEnabled: true
-        text: plate.sha8
         leftPadding: Theme.spaceXs
         // Nothing on this side. The mark's ink is seated on the plate's own right edge below (`copyMark`), which is
         // where the parent hash ends and where the message box's frame under it stands — a padding here would hold the
@@ -36,7 +82,7 @@ ColumnLayout {
         ToolTip.visible: hovered
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: qsTr("Copy full hash")
-        onClicked: plate.copyRequested(plate.fullSha)
+        onClicked: plate.copyFullNow()
         background: Rectangle {
             radius: Theme.radiusSm
             color: hashCopy.down ? Theme.bgPressed : hashCopy.lit ? Theme.bgHover : "transparent"
@@ -60,11 +106,15 @@ ColumnLayout {
         }
         contentItem: RowLayout {
             spacing: Theme.spaceXs
-            Label {
-                text: hashCopy.text
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.fontMd
+            LineText {
+                id: shaText
+                text: plate.sha8
+                mono: true
+                pixelSize: Theme.fontMd
                 color: Theme.textPrimary
+                // The button owns every press on this face. The field is here to be written into, not to be pressed
+                // (デザイン規約 §右のペインの字は掴める).
+                grabbable: false
                 Layout.alignment: Qt.AlignVCenter
             }
             // A seat drawn to the mark's ink rather than its box: the two squares fill nine of the sixteen, so the box
@@ -84,43 +134,53 @@ ColumnLayout {
             }
         }
     }
-    Label {
+    Item {
         id: parentLink
         visible: plate.parentSha !== ""
         Layout.alignment: Qt.AlignRight
-        text: plate.parentSha.substring(0, 8)
-        font.family: Theme.monoFamily
-        color: Theme.textLink
-        font.pixelSize: Theme.fontSm
-        // The mark is drawn, not typed. The fonts disagree about `←`: Cascadia Mono holds it in one cell (7px of ink)
-        // where Noto Sans Mono CJK JP gives it a full-width one (12px), so Ubuntu grew a tail nobody chose — the same
-        // way `⚑` came out a different shape on each of the three.
-        //
-        // The seat is the mark's ink, not its box, so the `spaceXs` lands where the eye measures it — the same gap the
-        // plate above spends between its hash and copy icon (規約 §余白「印が自分で持っている 余白は、隣の詰めに数える」).
-        leftPadding: parentBack.inkWidth + Theme.spaceXs
+        implicitWidth: parentRow.implicitWidth
+        implicitHeight: parentRow.implicitHeight
         ToolTip.visible: parentHover.containsMouse
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: qsTr("Go to parent commit")
-        NavIcon {
-            id: parentBack
-            kind: "arrow"
-            // The family draws it leaving; this one points back, and turning the mark is how `FoldBlock` faces its
-            // chevrons too.
-            rotation: 180
-            tint: Theme.textLink
-            width: Theme.iconSm
-            height: Theme.iconSm
-            // The grid shrinks and the line shrinks with it, or the mark carries more weight than the digits beside it
-            // (§語の隣に立つ印).
-            stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-            // Hung off the left by the air it keeps inside its box, so the ink starts where the link does and the line
-            // under the pair starts with it.
-            x: -(parentBack.width - parentBack.inkWidth) / 2
-            anchors.verticalCenter: parent.verticalCenter
+        RowLayout {
+            id: parentRow
+            anchors.fill: parent
+            spacing: Theme.spaceXs
+            // The mark is drawn, not typed. The fonts disagree about `←`: Cascadia Mono holds it in one cell (7px of
+            // ink) where Noto Sans Mono CJK JP gives it a full-width one (12px), so Ubuntu grew a tail nobody chose —
+            // the same way `⚑` came out a different shape on each of the three. The seat is the mark's ink, not its
+            // box, so the `spaceXs` beside it lands where the eye measures it (規約 §余白).
+            Item {
+                Layout.preferredWidth: parentBack.inkWidth
+                Layout.preferredHeight: Theme.iconSm
+                Layout.alignment: Qt.AlignVCenter
+                NavIcon {
+                    id: parentBack
+                    anchors.centerIn: parent
+                    kind: "arrow"
+                    // The family draws it leaving; this one points back, and turning the mark is how `FoldBlock` faces
+                    // its chevrons too.
+                    rotation: 180
+                    tint: Theme.textLink
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    // The grid shrinks and the line shrinks with it, or the mark carries more weight than the digits
+                    // beside it (§語の隣に立つ印).
+                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                }
+            }
+            LineText {
+                id: parentText
+                text: plate.parentSha.substring(0, 8)
+                mono: true
+                pixelSize: Theme.fontSm
+                color: Theme.textLink
+                grabbable: false
+                Layout.alignment: Qt.AlignVCenter
+            }
         }
         // One line under the mark and the hash: they are one target, the way the hash and its copy icon share theirs.
-        // `font.underline` cannot reach the mark now that the mark is not a letter.
         Rectangle {
             visible: parentHover.containsMouse
             color: Theme.textLink
@@ -134,7 +194,7 @@ ColumnLayout {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: plate.parentClicked(plate.parentSha)
+            onClicked: plate.goToParentNow()
         }
     }
 }

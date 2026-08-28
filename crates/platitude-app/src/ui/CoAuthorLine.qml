@@ -34,9 +34,18 @@ Item {
     property bool plain: false
     /// The pointer entered or left the underlined stretch.
     signal pointerChanged(bool inside)
-    /// The names did not fit what the holder gave them. Nothing is drawn differently for it — the ellipsis already says
-    /// so — but a headless run cannot see an ellipsis, and the width rule is the whole of the plain form.
-    readonly property bool clipped: names.truncated
+    /// What the cut mark is drawn on, since the names are a field that clips rather than a label that elides
+    /// (`LineText`): the pane's ground here, a card's ground where a card holds this line.
+    property color ground: Theme.bgBase
+    /// The names did not fit what the holder gave them. Nothing is drawn differently for it — the mark already says
+    /// so — but a headless run cannot see a mark, and the width rule is the whole of the plain form.
+    readonly property bool clipped: names.clipped
+    /// Automation: drag cannot be injected, so a run selects the field the way `Ctrl+A` does and reads it back.
+    function selectNames() { names.selectAll() }
+    readonly property alias namesSelected: names.selected
+    /// The one value this line draws, for a sweep over the row that holds it — empty where nobody is credited, since
+    /// a line with nothing in it is not a place to land (`SweepRoom`).
+    readonly property var valueFields: line.records.length > 0 ? [names] : []
 
     readonly property var records: line.packed === "" ? [] : line.packed.split(String.fromCharCode(31))
     function nameAt(i) {
@@ -69,18 +78,21 @@ Item {
             height: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
         }
-        Label {
+        // A field rather than a label: what this line credits is a person, and a person's name is something the reader
+        // takes away (規約 §右のペインの字は掴める). A field has no `elide`, so the cut is a clip with a mark on the
+        // holder's ground — the names in full are one hover away in the card either holder opens.
+        LineText {
             id: names
             text: line.plain ? line.allNames() : line.nameAt(0)
             color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
+            ground: line.ground
             Layout.alignment: Qt.AlignVCenter
             // Written out, the names take the room the holder gives them and stop there; as a chip, the name gives way
             // at the share its holder passed. Either way the name is what yields when the room runs out -- the face and
             // the count are one glyph each and have nothing to give.
             Layout.fillWidth: true
             Layout.maximumWidth: line.plain || line.nameWidth <= 0 ? Number.POSITIVE_INFINITY : line.nameWidth
-            elide: Text.ElideRight
         }
         Label {
             visible: !line.plain && line.records.length > 1

@@ -230,7 +230,8 @@ Item {
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "row-card", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
-                "details-fit", "corner", "graph-step", "graph-step-edge", "graph-step-far",
+                "details-fit", "details-select", "details-select-away", "details-sweep",
+                "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "graph-step-hold",
                 "diff-step",
                 "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
@@ -3675,18 +3676,151 @@ Item {
             driver.complete()
         }
     }
+    /// The pane's values are fields the reader drags over (規約 §右のペインの字は掴める). A drag cannot be injected, so
+    /// this picks the field out the way `Ctrl+A` does and reads back what it holds — the same pair `tip-copy` uses,
+    /// and for the same reason: **a picture cannot answer this**. A `Text` put back in place of the field would draw
+    /// the identical row, and the selection's wash is a few pixels of colour that a scaled-down look loses.
+    ///
+    /// The selection is left standing (`persistentSelection`), so the shot is of a value picked out.
+    SampleTimer {
+        id: detailsSelectTimer
+        /// `author` / `date` / `mate` / `hash` / `parent`.
+        property string which: ""
+        property bool asked: false
+        /// The value picked out first, for the run that is about the one after it letting go (`-away`).
+        property string firstWhich: ""
+        onTriggered: {
+            if (!driver.cardSettled)
+                return
+            if (!detailsSelectTimer.asked) {
+                if (detailsSelectTimer.firstWhich !== "")
+                    detailsPane.valueRow.selectValue(detailsSelectTimer.firstWhich)
+                detailsPane.valueRow.selectValue(detailsSelectTimer.which)
+                detailsSelectTimer.asked = true
+                return
+            }
+            detailsSelectTimer.stop()
+            const got = detailsPane.valueRow.selectedValue(detailsSelectTimer.which)
+            const want = detailsPane.valueRow.shownValue(detailsSelectTimer.which)
+            if (detailsSelectTimer.firstWhich !== "") {
+                // The fault this pane shipped with: every field kept what it was holding, so a reader who swept a
+                // second value found the first still lit (2026-08-28 ユーザー報告 — three at once). **Both halves are
+                // said**: a run that simply cleared everything would answer `dropped=true` on its own.
+                AppBackend.report("details_select_away dropped="
+                                  + (detailsPane.valueRow.selectedValue(detailsSelectTimer.firstWhich) === "")
+                                  + " held=" + (want !== "" && got === want)
+                                  + " first=" + detailsSelectTimer.firstWhich
+                                  + " then=" + detailsSelectTimer.which)
+                driver.complete()
+                return
+            }
+            // `match=` is the whole claim: what came out of the field is what the model says the pane is showing. The
+            // text rides along for the eye.
+            AppBackend.report("details_select match=" + (want !== "" && got === want)
+                              + " which=" + detailsSelectTimer.which + " text=" + got)
+            driver.complete()
+        }
+    }
+
+    /// The range selection, taken from the gaps around the values rather than from the values themselves
+    /// (規約 §右のペインの字は掴める). **Four claims in one line, and each answers something the others cannot**: the
+    /// sweep reaches the value from every corner of the gap (`reach`), the keyboard went with it so `Ctrl+C` will
+    /// land (`caret`), the words answer their own press wherever nothing stands over them (`grabs`), and a press on
+    /// the value's own box is still somebody else's (`ours` — false on the plate's two, which is what says their
+    /// controls kept every press across their whole face).
+    SampleTimer {
+        id: detailsSweepTimer
+        /// `author` / `date` / `mate` / `hash` / `parent`.
+        property string which: ""
+        /// The row's geometry at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // **Both sides of the comparison have to exist first.** The details arrive a frame ahead of the row that
+            // draws them, so `cardSettled` alone is not enough: the model's value can still be empty, and a field
+            // with no width yet is passed over by the sweep exactly as an absent one is. Either way the run reports
+            // an empty selection as a failure of the wiring (3 of 6 runs before this wait, 1 of 10 with only half of
+            // it — 2026-08-28).
+            const which = detailsSweepTimer.which
+            if (!driver.cardSettled || !detailsPane.valueRow.valueReady(which) || detailsPane.valueRow.shownValue(which) === "")
+                return
+            // **And the row has to have stopped moving.** The pane lays out more than once on its way to a commit,
+            // and a sweep run against a half-laid-out row starts from a gap of a dozen pixels and lands on the line
+            // above the one it aimed at — every one of its nine tries, in about a fifth of runs (2026-08-28). Two
+            // samples with the same geometry is the settle; no number is written down, so it holds at any pane width.
+            const geom = detailsPane.valueRow.valueGeom(which)
+            if (geom !== detailsSweepTimer.lastGeom) {
+                detailsSweepTimer.lastGeom = geom
+                return
+            }
+            detailsSweepTimer.stop()
+            const want = detailsPane.valueRow.shownValue(which)
+            // **Every corner of the gap, not just its middle.** A reach that only worked level with the words is the
+            // fault this shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告).
+            let reach = 0
+            let tries = 0
+            let took = true
+            let got = ""
+            let on = ""
+            let caret = false
+            let miss = ""
+            const across = [0.15, 0.5, 0.9]
+            const down = [0.05, 0.5, 0.95]
+            for (let i = 0; i < across.length; i++) {
+                for (let j = 0; j < down.length; j++) {
+                    tries++
+                    if (!detailsPane.valueRow.sweepAt(which, across[i], down[j])) {
+                        took = false
+                        continue
+                    }
+                    got = detailsPane.valueRow.selectedValue(which)
+                    // Read before the next sweep, and before the press below — both clear the board on their way in.
+                    on = detailsPane.valueRow.sweptField()
+                    caret = detailsPane.valueRow.sweptCaret()
+                    if (want !== "" && got === want)
+                        reach++
+                    else if (miss === "")
+                        // The first start that came away with the wrong thing, and what the sweep saw while it did.
+                        // Without it the line reports only the last try, which is the one that worked.
+                        miss = "x" + across[i] + ",y" + down[j] + "," + detailsPane.valueRow.sweptTrace()
+                }
+            }
+            const ours = detailsPane.valueRow.pressOnControl(which)
+            const grabs = detailsPane.valueRow.valueGrabs(which)
+            // `caret=` is the half a selection does not say: `Ctrl+C` goes to the field holding the keyboard, so a
+            // value picked out without it is not one the reader can take away. `took=` and `on=` are the diagnosis
+            // when `grabbed` comes back false — the gesture was refused at its start, or it landed on another line.
+            AppBackend.report("details_sweep reach=" + reach + "/" + tries
+                              + " caret=" + caret
+                              + " grabs=" + grabs
+                              + " ours=" + ours
+                              + " which=" + which + " took=" + took
+                              + " on=" + on + " miss=[" + miss + "] text=" + got)
+            driver.complete()
+        }
+    }
+
     // The details have to arrive, and the column has to be laid out with them, before there is anything to measure.
     SampleTimer {
         id: detailsFitTimer
         // A pane width the splitter left on a fraction can put a fraction in the answer; what this verb is about is
         // tens of pixels.
+        /// The row's geometry at the previous sample, for the settle below.
+        property string lastGeom: ""
         onTriggered: {
             if (!driver.cardSettled || detailsPane.width <= 0 || detailsPane.height <= 0)
                 return
+            // **And the row has to have stopped moving.** The pane lays out more than once on its way to a commit,
+            // and mid-way the row and the block it stands in are both some other width — where `fills` compares one
+            // against the other and answers true about a frame nobody sees (`row=173/173`, 2026-08-28).
+            const geom = detailsPane.valueRow.width + "x" + detailsPane.valueRow.parent.width
+            if (geom !== detailsFitTimer.lastGeom) {
+                detailsFitTimer.lastGeom = geom
+                return
+            }
             detailsFitTimer.stop()
             AppBackend.report(
-            "details_fit fits=" + (detailsPane.contentOverflow < 1)
-            + " over=" + Math.round(detailsPane.contentOverflow)
+            "details_fit fills=" + detailsPane.valueRow.fillsBlock + " fits=" + (detailsPane.contentOverflow < 1)
+            + " row=" + Math.round(detailsPane.valueRow.width) + "/" + Math.round(detailsPane.valueRow.parent.width) + " over=" + Math.round(detailsPane.contentOverflow)
             + " pane=" + Math.round(detailsPane.width)
             // The other axis rides along unjudged, the way `edge=` does in `window_fill`: how far the column runs past
             // the pane's own bottom is what says whether this pane needs a scroll of its own, and the answer depends on
@@ -4485,6 +4619,23 @@ Item {
             // Same pairing as author-card.
             page.activateRow(graphModel.oidAt(Number(arg)))
             coAuthorTimer.start()
+        } else if (act === "details-select" || act === "details-select-away") {
+            // `<value>` or `<value>:<row>` — the graph row defaults to the top one, since what this is about is the
+            // pane rather than which commit is in it. `-away` takes two values instead, `<first>+<then>`, and is
+            // about the first one letting go.
+            const away = act === "details-select-away"
+            const plus = arg.indexOf("+")
+            detailsSelectTimer.firstWhich = away && plus > 0 ? arg.substring(0, plus) : ""
+            const rest = away && plus > 0 ? arg.substring(plus + 1) : arg
+            const cut = rest.indexOf(":")
+            detailsSelectTimer.which = cut > 0 ? rest.substring(0, cut) : rest
+            page.activateRow(graphModel.oidAt(cut > 0 ? Number(rest.substring(cut + 1)) : 0))
+            detailsSelectTimer.start()
+        } else if (act === "details-sweep") {
+            const sweepCut = arg.indexOf(":")
+            detailsSweepTimer.which = sweepCut > 0 ? arg.substring(0, sweepCut) : arg
+            page.activateRow(graphModel.oidAt(sweepCut > 0 ? Number(arg.substring(sweepCut + 1)) : 0))
+            detailsSweepTimer.start()
         } else if (act === "details-grow" || act === "details-grow-squeeze") {
             // The corner grip pulled past what the pane can spare; `-squeeze` then takes the pane's room back with the
             // log.

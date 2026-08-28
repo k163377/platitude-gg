@@ -97,6 +97,9 @@ AppCard {
                 id: mateLine
                 packed: hoverCard.mates
                 plain: true
+                // The card's own face, so the mark a cut leaves is drawn on it rather than on the pane's ground
+                // (`LineText.ground`).
+                ground: Theme.bgElevated
                 Layout.alignment: Qt.AlignVCenter
                 // The message sets this card's width; the credit line takes what is left of it and elides.
                 // `preferredWidth` 0 is what keeps the names out of the card's own size hint — a crowd would otherwise
