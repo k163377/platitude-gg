@@ -130,6 +130,11 @@ QtObject {
     property real graphX: 0
     readonly property real graphXMax: Math.max(0, graphFullW - graphColW)
     onGraphXMaxChanged: graphX = Math.min(graphX, graphXMax)
+    /// How tall the bar that sends the lanes is, written here by the bar itself (`GraphLaneBar`) the way `graphX` is.
+    /// It stands on the pane's bottom edge, over whatever row is there — and once the history has been sent all the
+    /// way down that row is the oldest one, which nobody can then send out from under it. So the list adds this to its
+    /// run-out while the lanes overflow (`GraphList.bottomMargin`. デザイン規約 §グラフを横へ送る).
+    property real laneBarRoom: 0
     /// Where a subject's first character sits — the two columns, then the tick and the gap after it. **Must match
     /// GraphRowDelegate's third column**, whose RowLayout lays out the same three steps; the find bar measures its cap
     /// from here (§コミットを探す).

@@ -47,8 +47,9 @@ AppListView {
     // meets the neighbouring bands' bottom edge when scrolled to the top.
     topMargin: Theme.headerHeight - Theme.graphRowHeight
     // A sliver of run-out at the end: without it the oldest row sits flush on the pane edge and reads as clipped
-    // rather than as the end of what is loaded. Just enough to see the break.
-    bottomMargin: Theme.spaceSm
+    // rather than as the end of what is loaded. Just enough to see the break — and the lanes' bar's own strip beneath
+    // that whenever the lanes have somewhere sideways to go, so the last row ends above the bar rather than under it.
+    bottomMargin: Theme.spaceSm + (graphList.columns.graphXMax > 0 ? graphList.columns.laneBarRoom : 0)
     // Bridge into the delegate (GraphRowDelegate reads its column geometry off ListView.view).
     property real labelWidth: graphList.columns.labelW
     property real graphColWidth: graphList.columns.graphColW

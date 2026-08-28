@@ -50,4 +50,12 @@ AutoScrollBar {
         laneBar.columns.graphX = Math.max(0, Math.min(position * laneBar.columns.graphFullW,
                                                       laneBar.columns.graphXMax))
     }
+    /// **The strip this bar needs, published where the list already reads its geometry.** It is the list's run-out that
+    /// has to hold the strip, and only a bar's own size says how tall it is — so the answer goes through the column
+    /// arithmetic both of them hold, the way `graphX` does above (`GraphColumnMetrics.laneBarRoom`).
+    Binding {
+        target: laneBar.columns
+        property: "laneBarRoom"
+        value: laneBar.height
+    }
 }

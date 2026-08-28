@@ -39,6 +39,12 @@ Item {
     readonly property real maxOffset: Math.max(0, codeScroll.codeWidth - codeScroll.roomWidth)
     readonly property bool canPan: codeScroll.maxOffset > 0
 
+    /// The strip the bar stands on, below the last row rather than over it — the pane keeps its rows this much clear
+    /// of its own bottom edge (`DiffPane`). A line of a file is read while it is being sent sideways, so the bar
+    /// cannot be allowed to lie on one; a file with nowhere sideways to go has no bar and gives the strip back
+    /// (デザイン規約 §diff を横へ送る). Read off the bar itself: its own size is the only thing that says how tall it is.
+    readonly property real barRoom: codeScroll.canPan ? bar.height : 0
+
     /// Sends the code `dx` further, as far as it goes. The bar, the wheel and the hand all arrive here, so one clamp
     /// holds for all of them.
     function shift(dx) {
@@ -83,13 +89,15 @@ Item {
         // out it is because this pane put it there, so the style stops deciding (GraphPane's lane bar, same reason).
         //
         // **Out while the hand is in the pane, and bright once the code has been sent** — the same two steps of ink
-        // every bar in the window carries (`AutoScrollBar`), over a visibility this bar keeps for itself: it lies over
-        // the last row of the diff, so standing when nobody is sending the code would cost a line of the file
+        // every bar in the window carries (`AutoScrollBar`), over a visibility this bar keeps for itself
         // (デザイン規約 §diff を横へ送る).
         //
-        // The thumb itself is the style's see-through one, as every bar with content under it is (デザイン規約 §色
-        // スクロールバー): the code runs beneath this one, and the ink comes from the window's palette, so the bar wears
-        // it without asking.
+        // **It stands below the rows, not on them.** A line of the file is being read at the very moment it is sent
+        // sideways, so the pane holds its rows `barRoom` clear of its own bottom edge and the bar takes that strip
+        // — the one place in this window where the room is taken by the pane and not by a gutter in the rows.
+        //
+        // The thumb itself is the style's see-through one, as every bar that takes no gutter is (デザイン規約 §色
+        // スクロールバー): the ink comes from the window's palette, so the bar wears it without asking.
         AutoScrollBar {
             id: bar
             inArea: codeScroll.paneHovered
@@ -98,7 +106,7 @@ Item {
             orientation: Qt.Horizontal
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.bottom: parent.bottom
+            anchors.top: parent.bottom
             size: codeScroll.codeWidth > 0 ? codeScroll.roomWidth / codeScroll.codeWidth : 1
             position: codeScroll.codeWidth > 0 ? codeScroll.offset / codeScroll.codeWidth : 0
             onPositionChanged: {

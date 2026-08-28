@@ -373,6 +373,9 @@ Rectangle {
             id: diffList
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // The strip the sideways bar stands on, below the last row rather than over it (`DiffCodeScroll.barRoom`).
+            // A file with nowhere sideways to go has no bar and gets the strip back.
+            Layout.bottomMargin: codeScroll.barRoom
             model: diffPane.diffModel
             // The rows the write asked for have landed: put the view back where it was reading, and work out again
             // which of the new rows the pointer is over. The empty half of the swap is not it — a reset shows up here
