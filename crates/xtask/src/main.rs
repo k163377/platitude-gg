@@ -151,8 +151,8 @@ commands:
       the press and what is judged is what it left behind: a window with
       no panel in it, and a quiet mark in a corner of the band. Its
       neighbour `commands-copy` is judged on its report for the opposite
-      reason: the press changes nothing on screen at all, so what left
-      for the clipboard is read back and counted against the rows.
+      reason: Ctrl+C changes nothing on screen at all, so what left for
+      the clipboard is read back and counted against the rows.
       `details-grow` and `wip-grow` (each with a `-squeeze` twin) pull the
       description box's grip past everything and are judged the same way,
       on what sits under the box still being inside the pane. The details

@@ -5,9 +5,16 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use platitude_core::session::Recording;
 
+use crate::encode::{display_ranges, hit_byte};
 use crate::hub::{CommandMsg, Feed};
 
-use super::qml_register;
+use super::{impl_notify_runs, push_run, qml_register};
+
+mod selection;
+#[cfg(test)]
+mod selection_tests;
+
+use selection::clock_of;
 
 // ---------------------------------------------------------------------------
 // CommandsModel: the git invocations this tab made, newest last.
@@ -22,8 +29,11 @@ const KEEP: usize = 500;
 
 #[derive(QModelItem, Default, Clone)]
 pub struct CommandItem {
-    /// Spawn time as epoch milliseconds; the delegate renders the clock.
-    at_ms: i64,
+    /// The time of day this went out, `HH:mm:ss`, already in the reader's
+    /// own zone (`selection::clock_of`). Made here rather than at the row
+    /// so that the clock the reader copies and the clock they are looking
+    /// at cannot be two different times.
+    clock: String,
     /// Everything after the program name (`push origin main`). The row
     /// draws `git` itself: it never varies, and what does is what the
     /// eye should land on.
@@ -40,6 +50,10 @@ pub struct CommandItem {
     duration: String,
     /// git's own parting words. Only failures show it.
     output: String,
+    /// Where the reader's own selection falls on this row, for the wash
+    /// the delegate lays down (`selection::spell`). Empty on a row it
+    /// does not reach.
+    sel: String,
 }
 
 #[derive(Default)]
@@ -55,6 +69,17 @@ pub struct CommandsModel {
     /// one that does not.
     failed: bool,
     background_reads: bool,
+    /// Minutes to add to local time to reach UTC, as the display side
+    /// reads it off the machine (`Date.getTimezoneOffset()`). What stamps
+    /// the rows that arrive from here on.
+    zone_minutes: i32,
+    /// Whether the reader is holding a selection at all. The four numbers
+    /// below are the two ends, in the order the hand made them.
+    sel_active: bool,
+    sel_from_row: i32,
+    sel_from_at: i32,
+    sel_to_row: i32,
+    sel_to_at: i32,
     feed: Option<Arc<Feed<CommandMsg>>>,
     tab_id: i32,
 }
@@ -90,6 +115,8 @@ impl QListModel for CommandsModel {
     }
 }
 
+impl_notify_runs!(CommandsModel);
+
 /// Milliseconds in the unit they read best in. Sub-second work is what
 /// most of this log is, and "1420 ms" hides how long 1.42 s felt.
 fn humanize(ms: i64) -> String {
@@ -98,57 +125,6 @@ fn humanize(ms: i64) -> String {
     } else {
         format!("{}.{:02} s", ms / 1000, (ms % 1000) / 10)
     }
-}
-
-/// The gap between a command and the two words about how it went. Two
-/// spaces, because the row draws them as a column of their own and one
-/// space would read as another argument.
-const GAP: &str = "  ";
-/// git's own words, set in from the command they belong to the way the
-/// row indents them.
-const UNDER: &str = "    ";
-
-/// The whole log as one block of text: one line per command in the order
-/// they ran, with git's parting words under the ones that failed
-/// (デザイン規約 §git が言ったことを読む場所).
-///
-/// What is on screen and nothing else. Exit 0 is not written, a
-/// successful command's stderr is not shown and is not taken either, and
-/// a command still running has neither word yet — its line stops at what
-/// was asked of git, which is all that is known about it.
-///
-/// The clock is the one column left behind: the time of day is made on
-/// the display side out of `at_ms`, by the only part of this that knows
-/// the reader's zone (`Qt.formatDateTime`), and what a log is pasted
-/// somewhere else for is the sequence, the answer and how long it took.
-fn transcript(rows: &[CommandItem]) -> String {
-    let mut out = String::new();
-    for row in rows {
-        if !out.is_empty() {
-            out.push('\n');
-        }
-        // The program the rows draw rather than read, written out here: a
-        // transcript is read away from the panel that supplied it.
-        out.push_str("git ");
-        out.push_str(&row.args);
-        if !row.result.is_empty() {
-            out.push_str(GAP);
-            out.push_str(&row.result);
-        }
-        if !row.duration.is_empty() {
-            out.push_str(GAP);
-            out.push_str(&row.duration);
-        }
-        if row.state != "failed" {
-            continue;
-        }
-        for line in row.output.lines() {
-            out.push('\n');
-            out.push_str(UNDER);
-            out.push_str(line);
-        }
-    }
-    out
 }
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
@@ -184,21 +160,14 @@ impl CommandsModel {
         self.reset();
         self.running = false;
         self.failed = false;
+        // The rows the selection named are gone, so the selection is too:
+        // left standing it would name rows that arrive later.
+        self.forget_selection();
         self.changed();
     }
 
-    /// Everything the panel is showing, for the clipboard: the band's
-    /// `Copy` takes the whole log the way its `Clear` empties the whole
-    /// of it. Empty while there are no rows, which is why the button is
-    /// off over an empty panel — an empty clipboard is not an answer
-    /// anyone meant (デザイン規約 §diff の中身をコピーする).
-    #[qslot]
-    fn copy_text(&self) -> String {
-        transcript(&self.rows)
-    }
-
     /// How many rows the log is holding, for the automation that has to
-    /// weigh what `copyText` handed out against what it was made from
+    /// weigh what a copy handed out against what it was made from
     /// (`PG_AUTO_ACT=commands-copy`). The panel's own count is the view's
     /// (`ListView.count`), which is not the same number in the frame a
     /// press lands in — 2026-08-28 実測: 1 there against 4 commands on
@@ -206,6 +175,55 @@ impl CommandsModel {
     #[qslot]
     fn rows_held(&self) -> i32 {
         i32::try_from(self.rows.len()).unwrap_or(i32::MAX)
+    }
+
+    /// The machine's offset from UTC, which is the one thing about the
+    /// clock this side cannot work out for itself (`selection::clock_of`).
+    /// Asked for when the tab attaches and again whenever the panel comes
+    /// up, so a session carried across a change of offset stamps what
+    /// arrives afterwards with the new one.
+    #[qslot]
+    fn set_zone_minutes(&mut self, minutes: i32) {
+        self.zone_minutes = minutes;
+    }
+
+    /// Which byte of a row's line a press landed on: the pane says which
+    /// column it was in and how far along, this walks that column
+    /// (デザイン規約 §git が言ったことを読む場所).
+    #[qslot]
+    fn hit_at(&self, row: i32, at: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
+        self.hit(row, at, x, char_w, wide_delta)
+    }
+
+    /// A press landed: the selection starts here and holds nothing yet.
+    #[qslot]
+    fn begin_select(&mut self, row: i32, at: i32) {
+        if self.start_select(row, at) {
+            self.changed();
+        }
+    }
+
+    /// The hand has moved to here.
+    #[qslot]
+    fn extend_select(&mut self, row: i32, at: i32) {
+        if self.drag_select(row, at) {
+            self.changed();
+        }
+    }
+
+    #[qslot]
+    fn clear_select(&mut self) {
+        if self.drop_selection() {
+            self.changed();
+        }
+    }
+
+    /// What Ctrl+C puts on the clipboard: the lines the selection covers,
+    /// cut at its two ends, with git's own words under the ones taken
+    /// whole.
+    #[qslot]
+    fn selection_text(&self) -> String {
+        self.copied()
     }
 
     /// Also record the reads the session makes on its own. Applies to
@@ -236,12 +254,20 @@ impl CommandsModel {
                     full,
                     at_ms,
                 } => {
+                    let mut gone = 0;
                     while self.rows.len() >= KEEP {
                         self.remove(0);
+                        gone += 1;
+                    }
+                    // The rows under the selection's two ends have moved
+                    // (`shift_selection`); a wash left on its old numbers
+                    // would name commands nobody picked.
+                    if gone > 0 {
+                        self.shift_selection(gone);
                     }
                     self.ids.push(id);
                     self.push(CommandItem {
-                        at_ms,
+                        clock: clock_of(at_ms, self.zone_minutes),
                         args: display
                             .split_once(' ')
                             .map(|(_, rest)| rest.to_string())
@@ -287,6 +313,13 @@ impl CommandsModel {
                             ..row
                         },
                     );
+                    // The line just grew the two words about how it went,
+                    // so a selection standing on this row reaches further
+                    // than the wash it was last spelled with. Told again
+                    // afterwards: the `set` above carried the old one.
+                    if self.respell_row(index) {
+                        self.notify_runs([(index, index)]);
+                    }
                     // "Still running" is about the whole list, not this
                     // row: a fetch can outlive the write that started it.
                     self.running = self.rows.iter().any(|r| r.state == "running");
@@ -310,93 +343,20 @@ qml_register!(CommandsModel, "CommandsModel", singleton = false);
 
 impl platitude_core::mem::Footprint for CommandItem {
     fn heap_bytes(&self) -> usize {
-        self.args.heap_bytes()
+        self.clock.heap_bytes()
+            + self.args.heap_bytes()
             + self.full.heap_bytes()
             + self.state.heap_bytes()
             + self.result.heap_bytes()
             + self.duration.heap_bytes()
             + self.output.heap_bytes()
+            + self.sel.heap_bytes()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn row(args: &str, state: &str, result: &str, duration: &str, output: &str) -> CommandItem {
-        CommandItem {
-            args: args.to_string(),
-            full: format!("git {args}"),
-            state: state.to_string(),
-            result: result.to_string(),
-            duration: duration.to_string(),
-            output: output.to_string(),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn an_empty_log_has_nothing_to_put_on_the_clipboard() {
-        assert_eq!(transcript(&[]), "");
-    }
-
-    #[test]
-    fn a_command_that_went_through_keeps_only_how_long_it_took() {
-        assert_eq!(
-            transcript(&[row("status --porcelain=v2", "ok", "", "84 ms", "")]),
-            "git status --porcelain=v2  84 ms"
-        );
-    }
-
-    #[test]
-    fn a_command_still_running_stops_at_what_was_asked_of_git() {
-        assert_eq!(
-            transcript(&[row("fetch origin", "running", "", "", "")]),
-            "git fetch origin"
-        );
-    }
-
-    #[test]
-    fn a_failure_carries_gits_own_words_under_it() {
-        assert_eq!(
-            transcript(&[row(
-                "switch nope",
-                "failed",
-                "exit 128",
-                "12 ms",
-                "fatal: invalid reference: nope\nhint: try again",
-            )]),
-            "git switch nope  exit 128  12 ms\n    fatal: invalid reference: nope\n    hint: try again"
-        );
-    }
-
-    #[test]
-    fn what_the_rows_do_not_show_is_not_taken_either() {
-        // stderr is reported for every command that ends, and the panel
-        // draws it under the failures alone (P3-確認事項「成功した git の
-        // stderr をコマンドログへ出すことを、EOL を理由には決めない」).
-        assert_eq!(
-            transcript(&[row(
-                "fetch origin",
-                "ok",
-                "",
-                "1.42 s",
-                "From github.com:o/r"
-            )]),
-            "git fetch origin  1.42 s"
-        );
-    }
-
-    #[test]
-    fn the_rows_come_out_in_the_order_they_ran_one_line_each() {
-        let text = transcript(&[
-            row("add -- a.txt", "ok", "", "9 ms", ""),
-            row("reset -- a.txt", "ok", "", "11 ms", ""),
-        ]);
-        assert_eq!(text, "git add -- a.txt  9 ms\ngit reset -- a.txt  11 ms");
-        assert_eq!(text.lines().count(), 2);
-    }
-
     #[test]
     fn durations_read_in_the_unit_they_belong_to() {
         assert_eq!(humanize(0), "0 ms");

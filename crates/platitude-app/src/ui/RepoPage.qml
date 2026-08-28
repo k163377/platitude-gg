@@ -1403,9 +1403,13 @@ Item {
     function clearCommandLog() {
         commandsPane.clearPanel()
     }
-    /// Automation only: the header's `Copy`, pressed from outside the panel (`PG_AUTO_ACT=commands-copy`).
-    function copyCommandLog() {
-        commandsPane.copyLog()
+    /// Automation only: the hand that drags over the log, and the key that takes what it picked
+    /// (`PG_AUTO_ACT=commands-select` / `commands-copy`). Both enter the panel's own functions.
+    function pickCommandText(fromRow, fromAt, toRow, toAt) {
+        commandsPane.pickText(fromRow, fromAt, toRow, toAt)
+    }
+    function copyCommandText() {
+        return commandsPane.copySelection()
     }
 
     RepoTab { id: repoTab }

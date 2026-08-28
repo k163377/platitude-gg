@@ -15,13 +15,22 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_clear was=true wrong=false open=false",
     },
-    // A copy leaves nothing in the picture at all: the window frames
-    // the same whether the press took the log, one row of it, or
-    // nothing. `perRow=` is the whole judgement — one command line on
-    // the clipboard for every row in the panel, read back off the pad
-    // the copy goes through. Command lines rather than lines, because a
-    // row that failed brings git's own words down indented under it and
-    // no run owns which of its commands fail.
+    // The drag, left standing for the picture: the wash over the rows is
+    // the deliverable, and a run whose drag reached nothing frames the
+    // same way — an unwashed log and one nobody dragged over are one
+    // photograph. `holds=` is that half.
+    Verb {
+        name: "commands-select",
+        when: &[],
+        plain: "commands_pick holds=true",
+    },
+    // And the key that takes it, which leaves nothing in the picture at
+    // all: the window frames the same whether Ctrl+C took the log, one
+    // row of it, or nothing. `perRow=` is the whole judgement — one line
+    // on the clipboard for every row in the panel, read back off the pad
+    // the copy goes through. Lines that begin with a tab are not counted:
+    // a row that failed brings git's own words down indented under it,
+    // and no run owns which of its commands fail.
     Verb {
         name: "commands-copy",
         when: &[],

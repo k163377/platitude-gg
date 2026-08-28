@@ -45,6 +45,7 @@ CommitRowMenu 1.0 CommitRowMenu.qml
 EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
 CommandsPane 1.0 CommandsPane.qml
+CommandsTextSelect 1.0 CommandsTextSelect.qml
 CommandsToggle 1.0 CommandsToggle.qml
 DescriptionBox 1.0 DescriptionBox.qml
 DetailsPane 1.0 DetailsPane.qml

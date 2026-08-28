@@ -37,7 +37,21 @@ Rectangle {
 
     // The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
     // somebody came here to read. The page raises it; where it is looking when it comes up is this panel's own answer.
-    onVisibleChanged: if (pane.visible) pane.showLatest()
+    onVisibleChanged: if (pane.visible) {
+        pane.showLatest()
+        pane.tellTheZone()
+        // The keys this panel answers are the list's, and a panel nobody has clicked in has not been given them
+        // (Ctrl+C over a log that is on screen is what a reader would expect to work).
+        list.forceActiveFocus()
+    }
+
+    /// The machine's offset from UTC, which is the one thing about the clock the model cannot work out for itself
+    /// (`CommandsModel.setZoneMinutes`). Said again every time the panel comes up rather than once at the start, so a
+    /// session carried across a change of offset stamps what arrives afterwards with the new one.
+    function tellTheZone() {
+        pane.commandsModel.setZoneMinutes(new Date().getTimezoneOffset())
+    }
+    Component.onCompleted: pane.tellTheZone()
     // …and a failure that arrives with the panel already up puts it back at the end as well, over a reader who had
     // scrolled away from it. The rows follow on their own while nobody has (`list.follow`), so this is only about the
     // reader who has: a failure is the one row worth taking them back to, which is the same call the page makes when
@@ -70,14 +84,24 @@ Rectangle {
         pane.closeRequested()
     }
 
-    /// What `Copy` takes: every row the panel is holding, oldest first, as the model writes them out
-    /// (`CommandsModel.copyText`). The band's tools act on the whole panel — the row under the pointer is the row
-    /// menu's business (`Copy command` / `Copy output`).
-    ///
-    /// The header's own line stays out of it: that place is for a failure that never became a row, and a write that
-    /// failed already has one down here (P3-確認事項「エラー表示が仮置き」).
-    function copyLog() {
-        pane.copyRequested(pane.commandsModel.copyText())
+    /// What Ctrl+C puts on the clipboard: the text the reader dragged over
+    /// (デザイン規約 §git が言ったことを読む場所). Nothing goes out for a drag that took nothing — an empty clipboard is
+    /// worse than the one the reader already had — and saying so is what lets the key fall through to whoever else
+    /// wants it.
+    function copySelection() {
+        const text = pane.commandsModel.selectionText()
+        if (text === "")
+            return false
+        pane.copyRequested(text)
+        return true
+    }
+
+    /// Automation: the hand that picks text, without a pointer behind it (verify-ui). It enters the same three
+    /// functions the `MouseArea`'s own handlers call, so a run cannot pass while the handlers do something else.
+    function pickText(fromRow, fromAt, toRow, toAt) {
+        textPick.pressText(fromRow, fromAt)
+        textPick.dragText(toRow, toAt)
+        textPick.releaseText()
     }
 
     ColumnLayout {
@@ -146,16 +170,6 @@ Rectangle {
                     ToolTip.text: qsTr("Also record the reads this window makes on its own, from now on")
                     onToggled: pane.commandsModel.setBackgroundReads(checked)
                 }
-                // No object in the word, the same as `Clear` beside it: the band's controls are the panel's, and what
-                // they act on is the panel (デザイン規約 §diff の中身をコピーする — 行が自分で示しているものは文言で
-                // 言い直さない). Off over an empty one, where the press would put an empty clipboard out.
-                HoverToolButton {
-                    text: qsTr("Copy")
-                    font.pixelSize: Theme.fontMd
-                    enabled: list.count > 0
-                    tip: qsTr("Copy every command in this log")
-                    onClicked: pane.copyLog()
-                }
                 HoverToolButton {
                     text: qsTr("Clear")
                     font.pixelSize: Theme.fontMd
@@ -181,9 +195,17 @@ Rectangle {
             onMovementEnded: list.follow = list.atYEnd
             onCountChanged: if (list.follow) list.positionViewAtEnd()
 
+            // The one key this panel answers. `StandardKey` rather than a spelling of our own, so the platform's idea
+            // of copy is what is matched — the same way the diff answers it (規約 §diff の中身をコピーする).
+            Keys.onPressed: event => {
+                if (event.matches(StandardKey.Copy))
+                    event.accepted = pane.copySelection()
+            }
+
             delegate: CommandRowDelegate {
                 width: list.width
-                onCopyRequested: text => pane.copyRequested(text)
+                charW: pane.charW
+                wideDelta: pane.wideDelta
             }
 
             Label {
@@ -197,5 +219,37 @@ Rectangle {
                 font.pixelSize: Theme.fontSm
             }
         }
+    }
+
+    // ---- the hand that picks the text ---------------------------------------------------------------------------
+    /// One column of the mono font the rows are drawn in, measured rather than assumed, and what a wide glyph costs
+    /// beyond the two columns it is counted as. The same pair the diff places its wash with, measured the same way:
+    /// the mono family is Latin-only on some machines, so a kanji comes from a fallback that need not advance two of
+    /// them (`DiffPane.wideDelta`).
+    readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
+    readonly property real wideDelta: wideMeasure.implicitWidth / wideMeasure.text.length - 2 * pane.charW
+    Text {
+        id: charMeasure
+        visible: false
+        text: "0000000000"
+        font.family: Theme.monoFamily
+        font.pixelSize: Theme.fontSm
+    }
+    Text {
+        id: wideMeasure
+        visible: false
+        text: "あああああ"
+        font.family: Theme.monoFamily
+        font.pixelSize: Theme.fontSm
+    }
+
+    CommandsTextSelect {
+        id: textPick
+        view: list
+        commandsModel: pane.commandsModel
+        charW: pane.charW
+        wideDelta: pane.wideDelta
+        onScrollWanted: dy => list.contentY = Math.max(0, Math.min(list.contentY + dy,
+                                                                   Math.max(0, list.contentHeight - list.height)))
     }
 }
