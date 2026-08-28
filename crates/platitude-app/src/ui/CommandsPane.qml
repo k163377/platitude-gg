@@ -186,7 +186,10 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: pane.commandsModel
-            topMargin: Theme.spaceXs
+            // Nothing above the first row: the band is already the edge, and a sliver of ground under it reads as the
+            // log hanging off its own header rather than as breathing room — 4 pixels of it stood between the band's
+            // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (2026-08-28
+            // ユーザー報告). The graph keeps a top margin because it has no band over it (`GraphList`).
             bottomMargin: Theme.spaceXs
 
             /// Whether new rows pull the view along. Reading further up stops that until the end is reached again — the
@@ -194,6 +197,17 @@ Rectangle {
             property bool follow: true
             onMovementEnded: list.follow = list.atYEnd
             onCountChanged: if (list.follow) list.positionViewAtEnd()
+
+            /// How far a drag may carry the view (`CommandsTextSelect`). `[0, contentHeight - height]` is not that
+            /// range: `positionViewAtEnd` over rows of differing heights — a failure brings git's words down with it —
+            /// moves the list's own origin, so the top of the log sits at `originY` and not at zero. Measured 55
+            /// pixels of it left out of a drag's reach after one open-and-walk (qmltestrunner 実測 2026-08-28), which
+            /// is the top rows of the log. The graph does the same arithmetic for the same reason (`GraphList.clampY`).
+            function clampY(y) {
+                const minY = list.originY - list.topMargin
+                const maxY = Math.max(minY, list.originY + list.contentHeight - list.height + list.bottomMargin)
+                return Math.max(minY, Math.min(y, maxY))
+            }
 
             // The one key this panel answers. `StandardKey` rather than a spelling of our own, so the platform's idea
             // of copy is what is matched — the same way the diff answers it (規約 §diff の中身をコピーする).
@@ -249,7 +263,6 @@ Rectangle {
         commandsModel: pane.commandsModel
         charW: pane.charW
         wideDelta: pane.wideDelta
-        onScrollWanted: dy => list.contentY = Math.max(0, Math.min(list.contentY + dy,
-                                                                   Math.max(0, list.contentHeight - list.height)))
+        onScrollWanted: dy => list.contentY = list.clampY(list.contentY + dy)
     }
 }
