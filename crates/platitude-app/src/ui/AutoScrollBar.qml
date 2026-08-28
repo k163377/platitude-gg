@@ -39,7 +39,15 @@ ScrollBar {
     /// — what must not happen is a handler on an item stacked *over* the rows). The two sideways bars have no view to
     /// ask and are handed their pane's answer instead. **A headless run writes this same property**, since hover cannot
     /// be injected (verify-ui).
-    property bool inArea: viewHover.hovered
+    ///
+    /// **Read through a guard, because the handler's life is the view's.** A pointer handler's `parent` *is* its
+    /// QObject parent, so a bar whose view goes null hands its handler to the JS heap and loses it at the next
+    /// collection, leaving this binding to read a destroyed object (verify-ui 実測 2026-08-28: ten `TypeError` lines
+    /// on every start). The bars that lose a view are the ones nobody sees: `AppListView` fits one of these, and
+    /// every list wanting the pane's slab fits a second over it (`NavList`, `DetailsPane`, `WipPane`,
+    /// `WipBucketPane`) — the attached property drops the first, which stays alive with nothing left to answer for.
+    /// A bar with no view has no range to be inside, so `false` is the answer here rather than a repair.
+    property bool inArea: viewHover ? viewHover.hovered : false
     HoverHandler {
         id: viewHover
         parent: bar.view
