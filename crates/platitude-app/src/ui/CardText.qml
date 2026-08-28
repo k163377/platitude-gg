@@ -12,9 +12,10 @@ import platitude.ui
 // name cut a second time in the place it went to be read is a name nobody can read anywhere.
 //
 // **The height is the one cap that stays a cut.** A message has no length git enforces and a card that grows with one
-// takes its own footer off the screen, so a caller may hand this part a `capHeight`; what will not fit is clipped and
-// the mark below says so, and **the cap is spent in whole lines** (`capLines`). Nothing is taken out of the field
-// itself — the whole of it is still there to be selected, which is what separates this from an elide.
+// takes its own footer off the screen, so a caller may cap this part — by the room there is (`capHeight`) or by a count
+// of lines (`capRows`), whichever its bound actually is. What will not fit is clipped and the mark below says so, and
+// **the cap is spent in whole lines either way** (`capLines`). Nothing is taken out of the field itself — the whole of
+// it is still there to be selected, which is what separates this from an elide.
 Item {
     id: cardText
 
@@ -23,9 +24,12 @@ Item {
     property color color: Theme.textPrimary
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
-    /// How tall the field may grow before the rest is left behind. 0 = no cap, which is every one-line field. Spent in
-    /// whole lines all the same — see `capLines`.
+    /// How tall the field may grow before the rest is left behind, as a height. 0 = no cap, which is every one-line
+    /// field. Spent in whole lines all the same — see `capLines`.
     property real capHeight: 0
+    /// The same cap said in lines, for a caller who means a number of lines rather than a share of the room there is.
+    /// Wins over `capHeight` when both are set; 0 = not asked for.
+    property int capRows: 0
     /// The card this stands on, for the mark's own ground: the mark is drawn over the last line it cuts, and needs
     /// something opaque under it (`AppCardFace` paints `bgElevated`, which is what every card here is).
     property color ground: Theme.bgElevated
@@ -36,15 +40,17 @@ Item {
     /// One line of the field, which is the size of every line in it: the whole of it is laid out in one font, so its
     /// height divides by its line count exactly.
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
-    /// How many whole lines the cap leaves room for — **the cap is always spent in whole lines**. A height taken at its
+    /// How many whole lines the cap leaves room for — **a cap is always spent in whole lines**. A height taken at its
     /// word lands inside a line and leaves a row of glyphs cut through the waist, with the mark floating beside it on a
     /// baseline of its own: not a message that stops, one that broke (2026-08-28 ユーザー報告). Rounded down to the line
     /// below, the field ends the way an elide ends — a whole last line with the mark standing on its tail. Never less
     /// than one: a cap shorter than a line still has to show the line it is cutting, or all that is left is a blank
     /// strip with a mark on it.
-    readonly property int capLines: cardText.capHeight > 0 && cardText.lineHeight > 0
-                                    ? Math.max(1, Math.floor(cardText.capHeight / cardText.lineHeight))
-                                    : 0
+    readonly property int capLines: cardText.capRows > 0
+                                    ? cardText.capRows
+                                    : (cardText.capHeight > 0 && cardText.lineHeight > 0
+                                       ? Math.max(1, Math.floor(cardText.capHeight / cardText.lineHeight))
+                                       : 0)
     /// The cap left something behind. The output side, and what a headless run reads in place of a mark it cannot see.
     readonly property bool clipped: cardText.capLines > 0 && field.lineCount > cardText.capLines
     /// What is selected right now, for a run that has no pointer to drag with.

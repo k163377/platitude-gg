@@ -231,9 +231,10 @@ Item {
     CommitHoverCard {
         id: rowCard
         textWidth: host.graphPane.width / 2
-        // A quarter each to the subject and the body, so the card can
-        // never pass half the pane however long a message is.
-        textHeight: host.graphPane.height / 4
+        // A quarter of the pane to the subject, which is the only field
+        // here whose bound is the room there is — the body is held to a
+        // count of lines instead (規約 §hover のツールチップ).
+        subjectHeight: host.graphPane.height / 4
         // The band the row is holding goes with the card, and it is the
         // card's own close that says when — the row lost the pointer a
         // beat before that and cannot tell.

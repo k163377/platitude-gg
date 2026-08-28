@@ -19,6 +19,7 @@ QtObject {
     readonly property int labelColW: 152
     readonly property int graphDefaultLanes: 12
     readonly property int messageMinW: 160
+    readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
     readonly property int keyStepSettleMs: 150
