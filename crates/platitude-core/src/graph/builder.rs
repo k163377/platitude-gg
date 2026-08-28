@@ -192,6 +192,26 @@ impl GraphBuilder {
         self.push_virtual_merging(oid, parent, &[])
     }
 
+    /// The synthetic working-tree row of a branch with no commits yet: a
+    /// node with nothing under it, the shape the first commit will have.
+    /// Nothing is leashed — there is no tip to reach down to.
+    pub fn push_virtual_root(&mut self, oid: &Oid) -> GraphRow {
+        let row = self.next_row;
+        self.next_row += 1;
+        let lane = self.find_free_lane();
+        let color = self.take_color();
+        self.rows.insert(*oid, row);
+        let width = lane + 1;
+        self.max_width = self.max_width.max(width);
+        GraphRow {
+            row,
+            node_lane: lane,
+            node_color: color,
+            segments: Vec::new(),
+            width,
+        }
+    }
+
     /// Like [`GraphBuilder::push_virtual`], but the row also reaches the
     /// sides a standing merge is bringing in (`MERGE_HEAD` — more than
     /// one of them for an octopus).

@@ -10,6 +10,30 @@ use super::*;
 /// `incoming` is what a standing merge is bringing in (`MERGE_HEAD`, empty
 /// otherwise): each side gets a dashed edge of its own, so the row already
 /// draws the fork the merge commit will have.
+/// The same row on a branch with no commits yet: nothing to reach down
+/// to, so the node stands alone where the first commit will.
+pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
+    let zero = Oid::zero_unsized();
+    let g = builder.push_virtual_root(&zero);
+    LogRow {
+        row: g.row,
+        oid_hex: zero.to_hex(),
+        short_sha: zero.short_hex(8),
+        author: String::new(),
+        author_email: String::new(),
+        co_authors: Vec::new(),
+        time: 0,
+        subject: String::new(),
+        body: String::new(),
+        node_lane: g.node_lane,
+        node_color: g.node_color,
+        width: g.width,
+        segments: g.segments,
+        labels: Vec::new(),
+        stash_ref: String::new(),
+    }
+}
+
 pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
     let g = builder.push_virtual_merging(&zero, head, incoming);

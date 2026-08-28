@@ -21,7 +21,15 @@ impl RepoSession {
             None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
         };
         let Some(head_tip) = head_tip else {
-            return Ok(LogTotals::default());
+            // No commits yet, but there can still be something to commit:
+            // the working-tree row does not hang off HEAD, so it stands
+            // here on its own where the first commit will.
+            let mut totals = LogTotals::default();
+            if self.pending_commit().is_some() {
+                self.emit_wip_root_row(generation);
+                totals.shown += 1;
+            }
+            return Ok(totals);
         };
 
         // Stashes are part of the graph: their oids join the walk and the
@@ -115,6 +123,10 @@ impl RepoSession {
             None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
         };
         let Some(head_tip) = head_tip else {
+            // Still something to commit (see stream_log).
+            if self.pending_commit().is_some() {
+                out.push(super::rows::wip_root_row(builder));
+            }
             return Ok(0);
         };
 
@@ -190,6 +202,20 @@ impl RepoSession {
         let incoming = self.merge_incoming();
         let stacked = self.wip_dirty.load(Ordering::SeqCst) || !incoming.is_empty();
         stacked.then_some(incoming)
+    }
+
+    /// Sends the same row for a branch with no commits yet.
+    fn emit_wip_root_row(&self, generation: u64) {
+        let mut guard = self.lock_shared();
+        if guard.generation != generation {
+            return; // this stream is not the graph on screen (see emit_rows)
+        }
+        let row = super::rows::wip_root_row(&mut guard.builder);
+        guard.sent_rows.push(RowPrint::of(&row));
+        self.sink.event(SessionEvent::LogChunk {
+            generation,
+            rows: vec![row],
+        });
     }
 
     /// Sends the synthetic WIP row as its own chunk.

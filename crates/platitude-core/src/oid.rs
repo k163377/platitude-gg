@@ -47,6 +47,16 @@ impl Oid {
         }
     }
 
+    /// The all-zero id of a repository that has no object to take a
+    /// length from yet (an unborn branch). Only ever a sentinel, and
+    /// [`Oid::hex_is_zero`] reads it at whatever length it is written.
+    pub fn zero_unsized() -> Self {
+        Self {
+            len: 20,
+            bytes: [0u8; 32],
+        }
+    }
+
     /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`]
     /// writes — the id the synthetic uncommitted-changes row carries.
     /// Empty is not a sentinel: it is "no id at all".
