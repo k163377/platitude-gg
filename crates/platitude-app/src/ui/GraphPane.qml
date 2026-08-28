@@ -494,6 +494,7 @@ Rectangle {
         anchors.fill: parent
         graphModel: graphArea.graphModel
         blank: graphArea.blank
+        workTree: graphArea.workTree
         onOpenRepositoryRequested: graphArea.openRepositoryRequested()
     }
 }
