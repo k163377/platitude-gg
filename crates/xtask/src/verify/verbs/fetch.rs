@@ -15,6 +15,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_clear was=true wrong=false open=false",
     },
+    // A copy leaves nothing in the picture at all: the window frames
+    // the same whether the press took the log, one row of it, or
+    // nothing. `perRow=` is the whole judgement — one command line on
+    // the clipboard for every row in the panel, read back off the pad
+    // the copy goes through. Command lines rather than lines, because a
+    // row that failed brings git's own words down indented under it and
+    // no run owns which of its commands fail.
+    Verb {
+        name: "commands-copy",
+        when: &[],
+        plain: "commands_copy perRow=true",
+    },
     // The panel taken down without being emptied, which is the only
     // way the mark's red is on screen with nothing standing over it.
     // The picture does hold the red — the row goes red with the mark —

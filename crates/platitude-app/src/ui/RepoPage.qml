@@ -1403,6 +1403,10 @@ Item {
     function clearCommandLog() {
         commandsPane.clearPanel()
     }
+    /// Automation only: the header's `Copy`, pressed from outside the panel (`PG_AUTO_ACT=commands-copy`).
+    function copyCommandLog() {
+        commandsPane.copyLog()
+    }
 
     RepoTab { id: repoTab }
     CommandsModel { id: commandsModel }

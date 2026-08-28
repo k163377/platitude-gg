@@ -174,7 +174,7 @@ Item {
                 "line-run",
                 "stage-all", "unstage-all", "resolve-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
-                "commands", "commands-fail", "commands-clear", "fetch-recover",
+                "commands", "commands-copy", "commands-fail", "commands-clear", "fetch-recover",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
             // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
             // and a run held at the write barrier for one waits out the watchdog in silence.
@@ -237,7 +237,7 @@ Item {
                 "graph-bar", "graph-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
-                "divider-refuse", "commands-fail-shut",
+                "divider-refuse", "commands-fail-shut", "commands-copy",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
@@ -4886,11 +4886,13 @@ Item {
                 graphPane.findCard.query = arg
             page.releasePressedAway(null)
             findDropSettled.restart()
-        } else if (act === "commands") {
+        } else if (act === "commands" || act === "commands-copy") {
             // Stage and unstage so the log has something in it.
             repoTab.stageAll()
             repoTab.unstageAll()
             page.toggleCommands()
+            if (act === "commands-copy")
+                commandsCopyTimer.start()
         } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
             // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
@@ -5112,6 +5114,40 @@ Item {
                               + " open=" + page.commandsShown
                               + " folded=" + page.sidebarCollapsed
                               + " mark=" + page.commandsMarkColor)
+            renderedBarrier.begin()
+        }
+    }
+    // PG_AUTO_ACT=commands-copy: the band's `Copy` takes the whole log, not the row a pointer happens to be over. The
+    // clipboard will not answer a headless run, so what went out is read back off the pad the copy goes through
+    // (`ClipboardHelper.lastCopied`), and `perRow=` is the whole claim: one command line for every row in the panel, so
+    // a press that took a single row — or the row under nothing — cannot count its way to a pass.
+    //
+    // **The command lines are counted, not the lines.** A failure brings git's own words down with it, indented under
+    // the command they belong to, and no run owns which of its commands fail: reading a repository from inside a
+    // container answers `not a git repository` for the working copy the tree really lives in, and that one refusal is
+    // three more lines (2026-08-28 実測 — the run that made this verb count the way it does).
+    //
+    // The write barrier is in front of this one rather than behind it (the same wait `dispatchFinished` makes for a
+    // plain write act): the two writes that give the log something to hold are still queued when this starts, and a
+    // tick that arrives before them presses over whatever a background read happened to leave. All of it is read in
+    // the branch that presses and nowhere else (規約 §UI 自動化の因果性).
+    SampleTimer {
+        id: commandsCopyTimer
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() === 0)
+                return
+            commandsCopyTimer.stop()
+            // The model's own count, not the panel's `(N)` — that one is the view's, and the view is a frame behind the
+            // rows in the tick a press lands in (2026-08-28 実測: 1 against 4 commands on the clipboard).
+            const rows = page.pageCommands.rowsHeld()
+            page.copyCommandLog()
+            const text = driver.clipboard.lastCopied
+            const lines = text === "" ? [] : text.split("\n")
+            const cmds = lines.filter(line => line.startsWith("git ")).length
+            AppBackend.report("commands_copy perRow=" + (rows > 0 && cmds === rows)
+                              + " rows=" + rows + " cmds=" + cmds + " lines=" + lines.length)
             renderedBarrier.begin()
         }
     }

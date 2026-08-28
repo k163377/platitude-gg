@@ -70,6 +70,16 @@ Rectangle {
         pane.closeRequested()
     }
 
+    /// What `Copy` takes: every row the panel is holding, oldest first, as the model writes them out
+    /// (`CommandsModel.copyText`). The band's tools act on the whole panel — the row under the pointer is the row
+    /// menu's business (`Copy command` / `Copy output`).
+    ///
+    /// The header's own line stays out of it: that place is for a failure that never became a row, and a write that
+    /// failed already has one down here (P3-確認事項「エラー表示が仮置き」).
+    function copyLog() {
+        pane.copyRequested(pane.commandsModel.copyText())
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -135,6 +145,16 @@ Rectangle {
                     ToolTip.delay: Metrics.tipDelayMs
                     ToolTip.text: qsTr("Also record the reads this window makes on its own, from now on")
                     onToggled: pane.commandsModel.setBackgroundReads(checked)
+                }
+                // No object in the word, the same as `Clear` beside it: the band's controls are the panel's, and what
+                // they act on is the panel (デザイン規約 §diff の中身をコピーする — 行が自分で示しているものは文言で
+                // 言い直さない). Off over an empty one, where the press would put an empty clipboard out.
+                HoverToolButton {
+                    text: qsTr("Copy")
+                    font.pixelSize: Theme.fontMd
+                    enabled: list.count > 0
+                    tip: qsTr("Copy every command in this log")
+                    onClicked: pane.copyLog()
                 }
                 HoverToolButton {
                     text: qsTr("Clear")
