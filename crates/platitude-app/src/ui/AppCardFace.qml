@@ -21,6 +21,15 @@ Rectangle {
     /// The pointer is on the face — including the padding band, which the content stops short of.
     readonly property bool pointed: faceHover.hovered
 
+    /// The content whose words the reader may take away, for the hand that hands them over from the air around them
+    /// (`SweepPad`, 規約 §hover のツールチップ). Set it and a press anywhere in this face that nothing else took starts
+    /// a selection in the nearest field — the padding band, the step between two lines, the room beside a short one.
+    ///
+    /// Null everywhere else, which is every face that is not a card of words: menus and dialogs act on a press, and
+    /// the two lists are out by the same rule that keeps the file rows out (規約: 選べる一覧は対象外). An unset pad is
+    /// invisible, and an invisible item is skipped by the delivery walk outright, so it costs those nothing.
+    property Item textContent: null
+
     color: Theme.bgElevated
     radius: Theme.radiusMd
     border.color: Theme.borderDefault
@@ -32,5 +41,16 @@ Rectangle {
         HoverHandler {
             id: faceHover
         }
+    }
+    /// The hand a range selection over this card's words is taken with, named so a run can enter it
+    /// (`<card>.background.pad`, the way `tip-copy` reaches `tip.contentItem`).
+    property alias pad: sweepHand
+    // It stands in the ground rather than over the content, so it is reached only where nothing else took the press
+    // (実測 qmltestrunner `tst_cardpad`).
+    SweepPad {
+        id: sweepHand
+        anchors.fill: parent
+        visible: face.textContent !== null
+        content: face.textContent
     }
 }

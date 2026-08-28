@@ -1408,6 +1408,12 @@ Item {
     function pickCommandText(fromRow, fromAt, toRow, toAt) {
         commandsPane.pickText(fromRow, fromAt, toRow, toAt)
     }
+    /// ...and the same hand started on the ground under the last row (`PG_AUTO_ACT=commands-sweep`).
+    function sweepCommandGround(fx, fy) {
+        return commandsPane.sweepGround(fx, fy)
+    }
+    readonly property bool commandsHasGround: commandsPane.hasGround
+    readonly property real commandsGroundTop: commandsPane.groundTop
     function copyCommandText() {
         return commandsPane.copySelection()
     }

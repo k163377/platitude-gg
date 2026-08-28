@@ -103,6 +103,16 @@ Rectangle {
         textPick.dragText(toRow, toAt)
         textPick.releaseText()
     }
+    /// Automation: the same hand started on the ground under the last row — the one place inside this panel's own
+    /// frame where a press used to reach nothing (`PG_AUTO_ACT=commands-sweep`). It goes in through the pixels rather
+    /// than through a row number, because the pixels are the whole of what changed.
+    function sweepGround(fx, fy) {
+        return textPick.sweepFromGround(fx, fy)
+    }
+    /// Whether there is any of that ground to sweep from — a log that fills its panel has none, and a run that swept
+    /// one would prove nothing — and where it begins, which is the geometry a run watches settle before it sweeps.
+    readonly property bool hasGround: textPick.hasGround
+    readonly property real groundTop: textPick.groundTop
 
     ColumnLayout {
         anchors.fill: parent

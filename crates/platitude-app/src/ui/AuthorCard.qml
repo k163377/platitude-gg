@@ -67,6 +67,9 @@ AppCard {
     // is what keeps that an implementation detail rather than a load-bearing fact.
     tracksPointer: true
     contentPointed: contentHover.hovered
+    // Every gap in this card is a place a selection can start — the inset the blocks keep, the step under a name, the
+    // room beside a stamp (規約 §hover のツールチップ).
+    textContent: cardBody
 
     /// One person: face, name, address, and the moment their part happened. Laid out from the start, never on hover —
     /// see `CoAuthorCard` for what moves when a hover resizes its own target.
@@ -155,6 +158,7 @@ AppCard {
     }
 
     contentItem: Column {
+        id: cardBody
         HoverHandler {
             id: contentHover
         }

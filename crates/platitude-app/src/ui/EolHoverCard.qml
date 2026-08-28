@@ -29,8 +29,11 @@ AppCard {
     // `AppCard.pointerInside` are wanted — the face's and the content's (規約 §hover のツールチップ の罠 (2)).
     tracksPointer: true
     contentPointed: contentHover.hovered
+    // Every gap in this card is a place a selection can start (規約 §hover のツールチップ).
+    textContent: cardBody
 
     contentItem: ColumnLayout {
+        id: cardBody
         spacing: Theme.spaceXs
         HoverHandler {
             id: contentHover

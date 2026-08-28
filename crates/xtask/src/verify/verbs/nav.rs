@@ -38,6 +38,29 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tip=true copied=true",
     },
+    // ...and taken from the band around the words rather than off the
+    // words themselves — every place in a tip that nobody else takes
+    // is a start (規約 §hover のツールチップ). The starts are the air
+    // itself, sampled: a grid over the tip with the points standing on
+    // the sentence dropped, which is exactly what a real press could
+    // reach the pad at.
+    //
+    // **`all=` and not a count.** How many places a tip's air has
+    // depends on the length of the path in it and on the machine that
+    // drew it, so the number rides along as diagnosis and the
+    // judgement is "every one of them, and there was at least one".
+    // `caret=` is beside it because a selection with no keyboard on it
+    // is not one `Ctrl+C` can take (規約: 選択できることと持ち帰れる
+    // ことは別).
+    // `hand=` is the half a sweep cannot say for itself: a run enters
+    // the pad's own functions, because a pointer cannot be injected, so
+    // a pad whose `MouseArea` had been taken out would answer every
+    // sweep it was asked and never see a press.
+    Verb {
+        name: "tip-sweep",
+        when: &[],
+        plain: "tip_sweep all=true caret=true hand=true",
+    },
     // A row's tooltip. `lit=` is the control — the tip that came up
     // under the same pointer on the way in, so a run that photographs
     // an empty overlay is showing the row's answer and not a pointer

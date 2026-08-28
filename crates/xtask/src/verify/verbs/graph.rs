@@ -76,6 +76,22 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "row_card open=true lit=true",
     },
+    // The same card's words taken from the air around them — the
+    // padding band, the step between two lines, the room beside a
+    // short one (規約 §hover のツールチップ). This card is the one
+    // worth sweeping: several lines and a badge row beside them, where
+    // a card of one sentence would prove the padding band and nothing
+    // else.
+    //
+    // `all=` and not a count, for the reason `tip-sweep` carries — how
+    // much air a card has depends on the words in it. `open=` rides
+    // with it because a card that never came up has no air either, and
+    // "nothing to press" must not read as "everything worked".
+    Verb {
+        name: "card-sweep",
+        when: &[],
+        plain: "card_sweep all=true caret=true hand=true open=true",
+    },
     // Where a graph row divides into the chip's half and the commit's,
     // asked at one point along the row. The picture shows which card
     // came out, but not which point was asked for or whether that is

@@ -36,6 +36,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_copy perRow=true",
     },
+    // The same drag started on the ground under the last row — every
+    // place in the panel that nobody else takes is a start
+    // (規約 §git が言ったことを読む場所). `reach=9/9` is from every
+    // corner of that ground rather than one point in it: a verb that
+    // pressed the middle alone goes green over a hand that only answers
+    // there, which is the fault the right pane's values shipped with
+    // (`details-sweep`). `ground=true` is the fixture's half — a log
+    // that fills its panel leaves no ground, and `reach=0/9` off one
+    // says nothing about the hand.
+    Verb {
+        name: "commands-sweep",
+        when: &[],
+        plain: "commands_sweep reach=9/9 ground=true",
+    },
     // The panel taken down without being emptied, which is the only
     // way the mark's red is on screen with nothing standing over it.
     // The picture does hold the red — the row goes red with the mark —

@@ -214,6 +214,11 @@ Rectangle {
         textPick.dragText(toRow, toAt)
         textPick.releaseText()
     }
+    /// Automation: the hand itself, for the runs that go in through the pixels rather than through a row number — the
+    /// ground under the last row is a place only a coordinate can name (`PG_AUTO_ACT=diff-sweep`). Handed over whole,
+    /// the way the view is: what a sweep needs of it is four answers, and four forwards here would be four more lines
+    /// of this file saying nothing (`readonly property alias view`, the same call).
+    readonly property alias textHand: textPick
     /// Automation: the right-click, at a place in the text — which is where the menu's answer is settled.
     function askCodeMenu(row, at) { textPick.askMenu(row, at) }
     /// Automation: the first row of the view that is a removed line, or -1. The one row the menu's second word is

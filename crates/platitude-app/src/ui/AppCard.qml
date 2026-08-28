@@ -32,6 +32,11 @@ Popup {
     /// And the corners, for a card that opens flush against the thing it comes out of — there is nothing for the two
     /// corners on that side to round into.
     property alias faceRadius: cardFace.radius
+    /// The words this card hands over, for the hand that takes them from the air around them
+    /// (`AppCardFace.textContent`). A card of sentences sets it to its own content and every gap in it — the padding
+    /// band included — becomes a place a selection can start; a card of rows leaves it alone, because there a press is
+    /// the row's (規約 §hover のツールチップ「選べる一覧は対象外」).
+    property alias textContent: cardFace.textContent
 
     padding: Theme.spaceSm
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside

@@ -53,8 +53,11 @@ AppCard {
     // and the content's.
     tracksPointer: true
     contentPointed: contentHover.hovered
+    // Every gap in this card is a place a selection can start (規約 §hover のツールチップ).
+    textContent: cardBody
 
     contentItem: ColumnLayout {
+        id: cardBody
         spacing: Theme.spaceXs
         HoverHandler {
             id: contentHover

@@ -88,6 +88,9 @@ AppCard {
     // and the rows.
     tracksPointer: true
     contentPointed: contentHover.hovered
+    // Every gap in this card is a place a selection can start (規約 §hover のツールチップ). The badges keep their own
+    // face: they are not content, and the pad lies under them (規約: バッジと印も対象外).
+    textContent: rows
 
     contentItem: ColumnLayout {
         id: rows

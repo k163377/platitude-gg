@@ -30,8 +30,13 @@ AppCard {
     // is what keeps that an implementation detail rather than a load-bearing fact.
     tracksPointer: true
     contentPointed: contentHover.hovered
+    // Every gap in this card is a place a selection can start — the inset the rows keep, the step under a name, the
+    // room beside a short address (規約 §hover のツールチップ). The rows answer no press of their own, so nothing here
+    // loses one.
+    textContent: cardBody
 
     contentItem: Column {
+        id: cardBody
         HoverHandler {
             id: contentHover
         }

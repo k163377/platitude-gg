@@ -43,6 +43,10 @@ Item {
     readonly property bool clipped: Math.ceil(ruler.implicitWidth) > line.width + 0.5
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
+    /// This is a value a sweep from the air around it can land on. The pane's own row names its values one by one
+    /// (`SweepRoom`), but a card holding one of these — the credit line beside a hover card's date — is swept by a pad
+    /// that walks the card looking for exactly this (`SweepPad`, 規約 §hover のツールチップ).
+    readonly property bool sweepable: true
     /// Whether the keyboard is here — which is what `Ctrl+C` needs, and the half a selection alone does not say. The
     /// caret arrives with a selection and only with one (`anchorFrom`).
     readonly property alias hasCaret: field.activeFocus

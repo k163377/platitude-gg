@@ -9,6 +9,10 @@ import platitude.ui
 // **It covers the code column and not the gutter.** The two numbers and the seat between them are the row's own —
 // the `+` a line puts out there has to keep taking presses — so this starts where they end (`gutterW`).
 //
+// **Inside that column every place nobody else takes is a start**, the ground a file shorter than the frame leaves
+// under its last row included (`rowAt`, 規約 §diff の中身をコピーする). The hunk headings are the one exception, and
+// they are one because something else is standing there.
+//
 // **It is laid over the list rather than declared inside it**, for two reasons that are the same reason twice: a
 // `Flickable` takes the grab away from its own children once a drag passes the threshold, and `reuseItems` builds a
 // scrolled-away row again from scratch. A hand that started on row 40 and is now dragging past the bottom of the
@@ -56,6 +60,35 @@ Item {
     property real handY: 0
 
     // ---- what the hand does, named so a headless run enters where it enters -------------------------------------
+    /// A press at a point of this item, in its own coordinates: true where the text took it, false where it goes down
+    /// to whatever is under this — the hunk's own two words, or the list itself. **The `MouseArea` below and a run
+    /// enter here**, so a hand that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+    function takeAt(x, y, button) {
+        const row = pick.rowAt(y)
+        if (row < 0 || !pick.takesPress(row))
+            return false
+        pick.handX = x
+        pick.handY = y
+        if (button === Qt.LeftButton)
+            pick.pressText(row, pick.byteAt(row, x))
+        return true
+    }
+    /// The hand has reached here. A drag that has left the rows keeps the one it can still see (`rowAt`).
+    function followAt(x, y) {
+        pick.handX = x
+        pick.handY = y
+        if (!pick.dragging)
+            return
+        const row = pick.rowAt(y)
+        if (row >= 0)
+            pick.dragText(row, pick.byteAt(row, x))
+    }
+    /// A right-click that has been let go of, at a point of this item.
+    function answerAt(x, y) {
+        const row = pick.rowAt(y)
+        if (row >= 0)
+            pick.askMenu(row, pick.byteAt(row, x))
+    }
     /// A press on the text: the selection starts here and holds nothing until the hand moves.
     function pressText(row, at) {
         pick.diffModel.beginSelect(row, at)
@@ -81,12 +114,27 @@ Item {
     }
 
     // ---- pixels to rows ----------------------------------------------------------------------------------------
-    /// Which row a point of this item is over, or -1 where it is over none. The y is clamped to the frame so that a
-    /// drag past either edge keeps naming the row it can still see, while the edge below carries the rows to it.
+    /// Which row a point of this item is over, or -1 where the list has no rows at all. **The point is clamped
+    /// twice.** To the frame, so that a drag past either edge keeps naming the row it can still see while the edge
+    /// below carries the rows to it — and to the rows themselves (`onRows`), so that the ground a file shorter than
+    /// the frame leaves under its last row belongs to that row.
     function rowAt(y) {
         const inside = Math.max(0, Math.min(y, pick.height - 1))
         // One pixel in from the left: rows are as wide as the list, so any x inside it finds the same row.
-        return pick.view.indexAt(1, pick.view.contentY + inside)
+        return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
+    }
+    /// A content y brought onto the band the rows themselves stand on — the whole of what makes the ground under the
+    /// last row a place a selection can start (規約 §diff の中身をコピーする「掴めるのは、誰も取らない所すべて」).
+    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had
+    /// (2026-08-28 ユーザー報告).
+    ///
+    /// `originY` rather than zero: a list of rows with differing heights moves its own origin once it has been sent
+    /// to its end (app-ui.md, `CommandsPane.clampY`). An empty list has no band at all — the clamp then answers above
+    /// its own last row, `indexAt` finds nothing, and the press goes down to the list as it always did.
+    function onRows(y) {
+        const first = pick.view.originY
+        const last = first + pick.view.contentHeight - 1
+        return Math.max(first, Math.min(y, last))
     }
     /// Which byte of that row's line an x of this item lands on.
     function byteAt(row, x) {
@@ -99,6 +147,49 @@ Item {
         return !!item && item.kind !== "hunk"
     }
 
+    // ---- the ground under the last row ---------------------------------------------------------------------------
+    /// Where the ground a file shorter than the frame leaves under its last row begins, in this item's own
+    /// coordinates, and whether there is any of it at all. A sweep run against a diff that fills its frame would
+    /// prove nothing, so it says so rather than passing (verify-ui `diff-sweep`).
+    readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
+    readonly property bool hasGround: pick.groundTop < pick.height - 2
+    /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
+    /// same two functions the `MouseArea` below calls, and it **starts in the ground**: an injection that began on a
+    /// row would go green with the whole of this taken back out (`SweepRoom`, the same rule).
+    function sweepFromGround(fx, fy) {
+        if (!pick.hasGround)
+            return false
+        const x = Math.max(1, Math.min(pick.width - 1, pick.width * fx))
+        const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
+        if (!pick.takeAt(x, y, Qt.LeftButton))
+            return false
+        // Up into the text at the x it started from — a drag does not jump sideways, and reading a row out at a place
+        // the reader never pressed is how a run passes while the gesture does not work.
+        const top = pick.view.itemAtIndex(0)
+        pick.followAt(x, top ? top.y - pick.view.contentY + top.height / 2 : 1)
+        pick.releaseText()
+        return true
+    }
+    /// Automation: the first row of the view that is a hunk's heading, or -1.
+    function firstHunkRow() {
+        for (let i = 0; i < pick.view.count; i++) {
+            const item = pick.view.itemAtIndex(i)
+            if (item && item.kind === "hunk")
+                return i
+        }
+        return -1
+    }
+    /// Automation: the other half — a press on a hunk's heading is still the hunk's, ground or no ground. The two
+    /// words there act on the hunk (規約 §diff の中のステージ), and this is what says their face kept every press.
+    function pressOnHunk(row) {
+        const item = pick.view.itemAtIndex(row)
+        if (!item)
+            return true
+        const took = pick.takeAt(1, item.y - pick.view.contentY + item.height / 2, Qt.LeftButton)
+        pick.releaseText()
+        return took
+    }
+
     // ---- the hand ----------------------------------------------------------------------------------------------
     MouseArea {
         id: hand
@@ -106,41 +197,12 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         // Not hoverEnabled: the rows below keep their own (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => hand.take(mouse)
-        onPositionChanged: mouse => hand.follow(mouse)
+        // The three above, and nothing beside them: what the hand does is written once, where a run enters it too.
+        onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y, mouse.button) }
+        onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
-        onClicked: mouse => hand.answer(mouse)
-
-        /// Decides whether this press is the text's at all, and starts the drag where it is.
-        function take(mouse) {
-            const row = pick.rowAt(mouse.y)
-            if (row < 0 || !pick.takesPress(row)) {
-                // Down to whatever is under this: the hunk's own two words, or the list itself.
-                mouse.accepted = false
-                return
-            }
-            pick.handX = mouse.x
-            pick.handY = mouse.y
-            if (mouse.button === Qt.LeftButton)
-                pick.pressText(row, pick.byteAt(row, mouse.x))
-        }
-        function follow(mouse) {
-            pick.handX = mouse.x
-            pick.handY = mouse.y
-            if (!pick.dragging)
-                return
-            const row = pick.rowAt(mouse.y)
-            if (row >= 0)
-                pick.dragText(row, pick.byteAt(row, mouse.x))
-        }
-        function answer(mouse) {
-            if (mouse.button !== Qt.RightButton)
-                return
-            const row = pick.rowAt(mouse.y)
-            if (row >= 0)
-                pick.askMenu(row, pick.byteAt(row, mouse.x))
-        }
+        onClicked: mouse => { if (mouse.button === Qt.RightButton) pick.answerAt(mouse.x, mouse.y) }
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------

@@ -193,6 +193,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_copy_removed holdsRemoved=true",
     },
+    // The same text taken from the ground under the last row — every
+    // place in the code column that nobody else takes is a start
+    // (規約 §diff の中身をコピーする). Three claims, and each answers
+    // something the other two cannot:
+    //
+    //  - `reach=9/9` — from every corner of that ground, not just its
+    //    middle. A verb that pressed one point in it goes green over a
+    //    hand that only answers there, which is the fault the right
+    //    pane's own values shipped with (`details-sweep`).
+    //  - `ground=true` — the fixture is half the claim. A file that
+    //    fills the frame leaves no ground at all, and `reach=0/9` off
+    //    one says nothing about the hand (`--preset dirty` の `b.txt`
+    //    = 3 rows).
+    //  - `ours=false` — and a press on a hunk's heading is still the
+    //    hunk's. That face carries `Stage hunk` / `Discard hunk`, and
+    //    taking it is the one way this widening could cost anybody
+    //    anything.
+    Verb {
+        name: "diff-sweep",
+        when: &[],
+        plain: "diff_sweep reach=9/9 ground=true ours=false",
+    },
     Verb {
         name: "stage-hunk",
         when: &[],

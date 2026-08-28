@@ -11,6 +11,11 @@ import platitude.ui
 // *because* the row it came from had already cut it (規約 §hover のツールチップ「名前は文ではないので 1 行に収めない」), and a
 // name cut a second time in the place it went to be read is a name nobody can read anywhere.
 //
+// **Two ways in, the pair the right pane's values carry.** Where the pointer is on the words they answer their own
+// press, which is Qt's machinery and needs nothing from us; where it is in the card's own air — the padding band, the
+// step between two lines, the room beside a short one — the press is taken by the pad lying under the card and driven
+// in from there (`SweepPad`, 規約 §hover のツールチップ). Both land on the same selection.
+//
 // **The height is the one cap that stays a cut.** A message has no length git enforces and a card that grows with one
 // takes its own footer off the screen, so a caller may cap this part — by the room there is (`capHeight`) or by a count
 // of lines (`capRows`), whichever its bound actually is. What will not fit is clipped and the mark below says so, and
@@ -55,6 +60,12 @@ Item {
     readonly property bool clipped: cardText.capLines > 0 && field.lineCount > cardText.capLines
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
+    /// This is a value a sweep from the gaps around it can land on (`SweepPad`, 規約 §hover のツールチップ). The pad
+    /// walks the card it stands under looking for exactly this, so a field added to a card is reachable from the
+    /// card's own air the day it is added and nobody has to remember to list it.
+    readonly property bool sweepable: true
+    /// Whether the keyboard is here — which is what `Ctrl+C` needs, and the half a selection alone does not say.
+    readonly property alias hasCaret: field.activeFocus
 
     /// Where the mark's ground begins: the near edge of the glyph it would otherwise stand on the right half of. Asking
     /// the field which position sits under that edge, and then where that position is, rounds the band out to a
@@ -77,6 +88,39 @@ Item {
     /// Puts the whole field in the selection, for the automation and for `Ctrl+A` (see `selectByKeyboard`).
     function selectAll() {
         field.selectAll()
+    }
+    function deselect() {
+        field.deselect()
+    }
+
+    // ---- driven from outside ----------------------------------------
+    // For a gesture that began in the card's own air rather than on these words: the pad under the card hands it down
+    // in its own coordinates and the field turns it into characters (`SweepPad`, the pair `LineText` carries for the
+    // right pane). The anchor is set once, where the drag began, and every move reads from there — the same shape the
+    // field's own drag has.
+    /// Where the gesture started, in characters.
+    property int grabAnchor: 0
+    /// A point in another item's coordinates, brought inside this field's own box. **Both axes are clamped**: a field
+    /// asked for a position outside its box answers about the line rather than about the column, so a sweep that
+    /// arrived from the padding beside it picked the same character at both ends of its drag and came away with
+    /// nothing (`LineText.onLine`, the same measurement).
+    function inBox(item, x, y) {
+        const p = cardText.mapFromItem(item, x, y)
+        return Qt.point(Math.max(0, Math.min(cardText.width - 1, p.x)),
+                        Math.max(0, Math.min(cardText.height - 1, p.y)))
+    }
+    function anchorFrom(item, x, y) {
+        const p = cardText.inBox(item, x, y)
+        // The caret comes here, which is also what takes the selection off whatever field was holding one: a field
+        // drops its own the moment it loses focus (nothing here is persistent — one selection in the window). A press
+        // on these words does the same thing on its own (`activeFocusOnPress`, 実測 qmltestrunner `tst_cardpad`).
+        field.forceActiveFocus()
+        cardText.grabAnchor = field.positionAt(p.x, p.y)
+        field.select(cardText.grabAnchor, cardText.grabAnchor)
+    }
+    function extendFrom(item, x, y) {
+        const p = cardText.inBox(item, x, y)
+        field.select(cardText.grabAnchor, field.positionAt(p.x, p.y))
     }
 
     /// The width the words want with nothing to wrap them — measured off a ruler rather than off the field, because

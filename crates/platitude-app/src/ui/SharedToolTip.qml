@@ -268,6 +268,10 @@ Item {
     Component {
         id: tipGround
         Rectangle {
+            /// The hand the tip's words are dragged over from the band around them, named so a run can enter it
+            /// (`tip.background.pad`, the way `tip-copy` reaches `tip.contentItem`) — an id inside a `Component`
+            /// belongs to the instance and nothing outside can see it.
+            property alias pad: tipPad
             color: Theme.bgElevated
             radius: Theme.radiusMd
             border.color: Theme.borderDefault
@@ -275,6 +279,13 @@ Item {
             HoverHandler {
                 id: groundHover
                 onHoveredChanged: shared.groundPointed = groundHover.hovered
+            }
+            // Every gap in the tip is a place a selection can start (規約 §hover のツールチップ). The ground is the
+            // tip's background, so this lies under its words and is reached only where they did not take the press.
+            SweepPad {
+                id: tipPad
+                anchors.fill: parent
+                content: shared.sharedTip.contentItem
             }
         }
     }

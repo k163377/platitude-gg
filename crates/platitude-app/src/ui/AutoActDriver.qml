@@ -174,7 +174,8 @@ Item {
                 "line-run",
                 "stage-all", "unstage-all", "resolve-all",
                 "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
-                "commands", "commands-select", "commands-copy", "commands-fail", "commands-clear",
+                "commands", "commands-select", "commands-copy", "commands-sweep",
+                "commands-fail", "commands-clear",
                 "fetch-recover",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
             // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
@@ -189,7 +190,7 @@ Item {
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
-                "diff-select", "diff-copy", "diff-menu", "diff-copy-removed",
+                "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
                 "preview", "preview-unstaged", "preview-staged",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
@@ -227,7 +228,8 @@ Item {
                 "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
-                "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "row-card", "menu-hover",
+                "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
+                "row-card", "card-sweep", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "details-select", "details-select-away", "details-sweep",
@@ -240,7 +242,7 @@ Item {
                 "text-bar", "text-bar-away", "middle-scroll",
                 "graph-tail", "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
-                "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy",
+                "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
@@ -727,6 +729,13 @@ Item {
                 renderedBarrier.begin()
                 return
             }
+            // The same text, taken from the ground under the last row instead of from the rows themselves — the one
+            // place inside the code column where a press used to reach nothing (規約 §diff の中身をコピーする). The
+            // rows have arrived by here; the view still has to lay them out, which is what the timer waits for.
+            if (act === "diff-sweep") {
+                diffSweepTimer.start()
+                return
+            }
             // Reading part way down a long diff and then writing: the rebuild has to come back to the same place.
             if (act === "keep-place") {
                 keepPlaceTimer.begin(line)
@@ -1203,6 +1212,61 @@ Item {
                 return
             codeSendTimer.stop()
             codeSendTimer.report()
+            renderedBarrier.begin()
+        }
+    }
+    // PG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file instead of from
+    // the rows themselves — the one place inside the code column where a press used to reach nothing
+    // (規約 §diff の中身をコピーする). The shape is `details-sweep`'s, and so are its two claims:
+    //
+    // **Nine starts, not one** (`reach=`). A reach that worked from a single place in the ground is exactly the fault
+    // the right pane's values shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告).
+    // Each start is judged on its own, over a board cleared first — a run that read the selection once at the end
+    // would report the last try and call the other eight green.
+    //
+    // **And a press on a hunk's heading is still the hunk's** (`ours=`). The two words there act on the hunk
+    // (規約 §diff の中のステージ), and a widening that took their face is the one way this could cost anybody anything.
+    SampleTimer {
+        id: diffSweepTimer
+        /// Where the ground began at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // The rows arrive a frame ahead of the view that lays them out, and a sweep aimed at ground that is about
+            // to be a row lands on neither (`details-sweep`, the same wait).
+            const hand = diffPane.textHand
+            if (diffPane.view.count <= 0)
+                return
+            const geom = Math.round(hand.groundTop) + "," + diffPane.view.count
+            if (geom !== diffSweepTimer.lastGeom) {
+                diffSweepTimer.lastGeom = geom
+                return
+            }
+            diffSweepTimer.stop()
+            let reach = 0
+            let tries = 0
+            const across = [0.05, 0.5, 0.95]
+            const down = [0.05, 0.5, 0.95]
+            for (let i = 0; i < across.length; i++) {
+                for (let j = 0; j < down.length; j++) {
+                    tries++
+                    diffPane.diffModel.clearSelect()
+                    if (hand.sweepFromGround(across[i], down[j]) && diffPane.diffModel.selHasNew)
+                        reach++
+                }
+            }
+            // The wash of the last sweep is left standing, so the picture is of a diff a hand picked out. The press
+            // below lands on a heading and is refused, which takes nothing down.
+            const hunkRow = hand.firstHunkRow()
+            const ours = hunkRow < 0 || hand.pressOnHunk(hunkRow)
+            // `ground=` is the run's own honesty: a file that fills the frame has nowhere to sweep from, and a
+            // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
+            // `ours=` reads the way `details_sweep` reads it — false is the pass, and it says the heading's own two
+            // words kept every press across their face.
+            AppBackend.report("diff_sweep reach=" + reach + "/" + tries
+                              + " ground=" + hand.hasGround
+                              + " ours=" + ours
+                              + " hunkRow=" + hunkRow
+                              + " " + diffPane.pickTally())
             renderedBarrier.begin()
         }
     }
@@ -2993,6 +3057,46 @@ Item {
             driver.complete()
         }
     }
+    // ...and the same words taken from the band around them rather than from the words themselves — the padding a tip
+    // keeps between its ground and its sentence, which is the whole of a tooltip's air (規約 §hover のツールチップ).
+    //
+    // **The starts are the air itself, sampled** (`SweepPad.airPoints`): a grid over the tip with the points standing
+    // on the sentence dropped, which leaves exactly what a real press could reach the pad at. A run that pressed the
+    // middle of a tip would be pressing on the words, which take their own press, and would go green with the pad
+    // taken back out. `air=` is beside `reach=` because a tip is a small box: a run that found two places to press
+    // has said less than one that found twenty, and the number says which it was.
+    //
+    // Reached the way `tip-copy` reaches the words — off the tip's own parts, without checking what they are. A ground
+    // that lost its pad dies here, which is the answer.
+    SampleTimer {
+        id: tipSweepTimer
+        onTriggered: {
+            if (worktreeModel.total === 0)
+                return
+            wipPane.pointedTipRow = 0
+            const tip = page.ToolTip.toolTip
+            if (!tip.visible || tip.width <= 0)
+                return
+            tipSweepTimer.stop()
+            const pad = tip.background.pad
+            const air = pad.airPoints(7)
+            let reach = 0
+            for (let i = 0; i < air.length; i++) {
+                if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
+                    reach++
+            }
+            // **`all=` is the claim, not `reach=`**: how many places a tip's air has depends on how long the path is
+            // and on which machine drew it, so the number is a diagnosis and "every one of them, and there was at
+            // least one" is the judgement. `caret=` is the half a selection does not say — `Ctrl+C` goes to the field
+            // holding the keyboard, so a value picked out without one is not a value the reader can take away.
+            AppBackend.report("tip_sweep all=" + (air.length > 0 && reach === air.length)
+                + " caret=" + pad.caretLanded
+                + " hand=" + pad.handStands
+                + " reach=" + reach + "/" + air.length
+                + " text=" + pad.sweptText())
+            driver.complete()
+        }
+    }
     // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
     // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
     // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
@@ -3283,6 +3387,56 @@ Item {
             + " list=" + refList.opened
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
+            driver.complete()
+        }
+    }
+    // ...and the same card's words taken from the air around them: the padding band, the step between two lines, the
+    // room beside a short one (規約 §hover のツールチップ). The card is the graph row's, because it is the one with
+    // several lines in it and a badge row beside them — a card with one sentence proves the padding band and nothing
+    // else.
+    //
+    // **The starts are the air itself, sampled** (`SweepPad.airPoints`), for the reason `tip-sweep` carries: a grid
+    // over the card with the points standing on a field dropped is exactly what a real press could reach the pad at,
+    // and a run that pressed the middle would be pressing on the words.
+    SampleTimer {
+        id: cardSweepTimer
+        /// The card's geometry at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // **The commit's own words have to be in it first.** A card opens the frame it is asked for and fills in
+            // afterwards, and one swept before that hands back `1970-01-01` — a stamp of a commit nobody made
+            // (2026-08-28 実測).
+            if (!rowCard.opened || rowCard.subject === "")
+                return
+            // **And it has to have stopped laying out**, for the reason `details-sweep` waits: a card mid-layout has
+            // its fields at some other width, and the air a run samples is the air of a frame nobody sees.
+            const geom = Math.round(rowCard.width) + "x" + Math.round(rowCard.height)
+            if (geom !== cardSweepTimer.lastGeom) {
+                cardSweepTimer.lastGeom = geom
+                return
+            }
+            cardSweepTimer.stop()
+            const pad = rowCard.background.pad
+            const air = pad.airPoints(9)
+            let reach = 0
+            let miss = ""
+            for (let i = 0; i < air.length; i++) {
+                if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
+                    reach++
+                else if (miss === "")
+                    // The first start that came away with nothing, and what the sweep saw while it did. Without it the
+                    // line reports only the last try, which is the one that worked.
+                    miss = Math.round(air[i].x) + "," + Math.round(air[i].y) + "," + pad.sweptTrace()
+            }
+            // `all=` rather than a count, for the reason `tip-sweep` carries: how much air a card has depends on the
+            // words in it and on the machine that drew them.
+            AppBackend.report("card_sweep all=" + (air.length > 0 && reach === air.length)
+                + " caret=" + pad.caretLanded
+                + " hand=" + pad.handStands
+                + " open=" + rowCard.opened
+                + " reach=" + reach + "/" + air.length
+                + " miss=[" + miss + "]"
+                + " text=" + pad.sweptText())
             driver.complete()
         }
     }
@@ -4596,20 +4750,30 @@ Item {
                 detailsModel.setTreeView(wantsTree)
             }
             pathTipTimer.start()
-        } else if (act === "tip-copy") {
+        } else if (act === "tip-copy" || act === "tip-sweep") {
             // The same row `path-tip` points at in its plain form, for the same reason: the flattened view spells a
             // whole path, which is the longest thing this window puts in a tooltip and so the one worth taking away.
             // The tree's row 0 is a folder and would put one word in the picture.
             page.showWip()
             worktreeModel.setTreeView(false)
-            tipCopyTimer.start()
-        } else if (act === "row-card") {
-            // Hover cannot be injected, so this enters where the row's delay timer would.
-            const hovered = graphPane.view.itemAtIndex(Number(arg))
+            if (act === "tip-sweep")
+                tipSweepTimer.start()
+            else
+                tipCopyTimer.start()
+        } else if (act === "row-card" || act === "card-sweep") {
+            // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
+            // row 1, not row 0**: the presets it runs on carry a dirty working tree, whose row stands at the top and
+            // opens a card with no commit in it (2026-08-28 実測 — `subject` empty, the stamp `1970-01-01`).
+            const at = act === "card-sweep" && arg === "" ? 1 : Number(arg)
+            const hovered = graphPane.view.itemAtIndex(at)
             if (hovered)
                 graphPane.view.rowHoverRequested(hovered, true)
-            rowCardTimer.row = Number(arg)
-            rowCardTimer.start()
+            if (act === "card-sweep") {
+                cardSweepTimer.start()
+            } else {
+                rowCardTimer.row = at
+                rowCardTimer.start()
+            }
         } else if (act === "author-card" || act === "author-card-open") {
             // Hover cannot be injected, so `-open` writes the same property the handler writes; read the two as a pair
             // — "stayed shut" only means something next to a run where it opened.
@@ -5021,7 +5185,7 @@ Item {
                    || act === "hunk-tools" || act === "keep-place" || act === "diff-tick"
                    || act === "code-send" || act === "line-back"
                    || act === "diff-select" || act === "diff-copy"
-                   || act === "diff-menu" || act === "diff-copy-removed"
+                   || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
                    || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,
@@ -5167,12 +5331,15 @@ Item {
                 graphPane.findCard.query = arg
             page.releasePressedAway(null)
             findDropSettled.restart()
-        } else if (act === "commands" || act === "commands-select" || act === "commands-copy") {
+        } else if (act === "commands" || act === "commands-select" || act === "commands-copy"
+                   || act === "commands-sweep") {
             // Stage and unstage so the log has something in it.
             repoTab.stageAll()
             repoTab.unstageAll()
             page.toggleCommands()
-            if (act !== "commands")
+            if (act === "commands-sweep")
+                commandsSweepTimer.start()
+            else if (act !== "commands")
                 commandsPickTimer.start()
         } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
@@ -5441,6 +5608,52 @@ Item {
             const said = lines.filter(line => !line.startsWith("\t")).length
             AppBackend.report("commands_copy perRow=" + (rows > 0 && said === rows)
                               + " rows=" + rows + " said=" + said + " lines=" + lines.length)
+            renderedBarrier.begin()
+        }
+    }
+    // PG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row instead of on a row — the
+    // one place inside the panel's own frame where a press used to reach nothing
+    // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
+    //
+    // **Nine starts, not one.** A reach that worked from a single place in the ground is exactly the fault the right
+    // pane's values shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告). Each start
+    // is judged on its own, over a board cleared first — a run that read the selection once at the end would report
+    // the last try and call the other eight green.
+    SampleTimer {
+        id: commandsSweepTimer
+        /// Where the ground began at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
+                return
+            // **And the panel has to have stopped laying out.** The rows arrive a frame ahead of the view that draws
+            // them, and a sweep aimed at ground that is about to be a row lands on neither.
+            const geom = Math.round(page.commandsGroundTop) + "," + page.pageCommands.rowsHeld()
+            if (geom !== commandsSweepTimer.lastGeom) {
+                commandsSweepTimer.lastGeom = geom
+                return
+            }
+            commandsSweepTimer.stop()
+            let reach = 0
+            let tries = 0
+            const across = [0.05, 0.5, 0.95]
+            const down = [0.05, 0.5, 0.95]
+            for (let i = 0; i < across.length; i++) {
+                for (let j = 0; j < down.length; j++) {
+                    tries++
+                    page.pageCommands.clearSelect()
+                    if (page.sweepCommandGround(across[i], down[j])
+                        && page.pageCommands.selectionText() !== "")
+                        reach++
+                }
+            }
+            // `ground=` is the run's own honesty: a panel whose log fills it has nowhere to sweep from, and a
+            // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
+            AppBackend.report("commands_sweep reach=" + reach + "/" + tries
+                              + " ground=" + page.commandsHasGround
+                              + " rows=" + page.pageCommands.rowsHeld())
             renderedBarrier.begin()
         }
     }

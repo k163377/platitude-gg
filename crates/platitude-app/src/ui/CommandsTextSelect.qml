@@ -15,6 +15,10 @@ import platitude.ui
 // It is a plain `MouseArea` and it is not `hoverEnabled`, which is what lets the rows underneath keep their own hover —
 // the lit ground and the one line a row has no room for (a `HoverHandler` here would take all of it, app-ui.md).
 //
+// **Every place in the frame that nobody else takes is a start**, the ground a log shorter than its panel leaves under
+// the last row included (`rowAt`, 規約 §git が言ったことを読む場所). Nothing stands over these rows at all, so here that
+// is the whole of the rule.
+//
 // Everything about *which byte* a press landed on is asked of the model: this knows which of the row's three columns
 // the pointer was over and how far along it, and only the model holds the line those columns are drawn from.
 Item {
@@ -55,6 +59,32 @@ Item {
     property real handY: 0
 
     // ---- what the hand does, named so a headless run enters where it enters -------------------------------------
+    /// A press at a point of this item, in its own coordinates: true where the text took it, false where it goes down
+    /// to the list itself — which is only ever a log with no rows in it. **The `MouseArea` below and a run enter
+    /// here**, so a hand that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+    function takeAt(x, y) {
+        const row = pick.rowAt(y)
+        if (row < 0)
+            return false
+        // The press is what puts the keys here as well, so Ctrl+C reaches the text a hand has just picked out — the
+        // panel takes focus when it opens, but a reader who has been somewhere else since comes back through this and
+        // nothing else.
+        pick.view.forceActiveFocus()
+        pick.handX = x
+        pick.handY = y
+        pick.pressText(row, pick.byteAt(row, x, y))
+        return true
+    }
+    /// The hand has reached here. A drag that has left the rows keeps the one it can still see (`rowAt`).
+    function followAt(x, y) {
+        pick.handX = x
+        pick.handY = y
+        if (!pick.dragging)
+            return
+        const row = pick.rowAt(y)
+        if (row >= 0)
+            pick.dragText(row, pick.byteAt(row, x, y))
+    }
     /// A press on the text: the selection starts here and holds nothing until the hand moves.
     function pressText(row, at) {
         pick.commandsModel.beginSelect(row, at)
@@ -73,12 +103,28 @@ Item {
     }
 
     // ---- pixels to rows and columns ----------------------------------------------------------------------------
-    /// Which row a point of this item is over, or -1 where it is over none. The y is clamped to the frame so that a
-    /// drag past either edge keeps naming the row it can still see, while the edge below carries the rows to it.
+    /// Which row a point of this item is over, or -1 where the list has no rows at all. **The point is clamped
+    /// twice.** To the frame, so that a drag past either edge keeps naming the row it can still see while the edge
+    /// below carries the rows to it — and to the rows themselves (`onRows`), so that the ground a short log leaves
+    /// under its last row belongs to that row.
     function rowAt(y) {
         const inside = Math.max(0, Math.min(y, pick.height - 1))
         // One pixel in from the left: rows are as wide as the list, so any x inside it finds the same row.
-        return pick.view.indexAt(1, pick.view.contentY + inside)
+        return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
+    }
+    /// A content y brought onto the band the rows themselves stand on — the whole of what makes the ground under the
+    /// last row a place a selection can start (規約 §git が言ったことを読む場所「掴めるのは、誰も取らない所すべて」).
+    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had
+    /// (2026-08-28 ユーザー報告).
+    ///
+    /// `originY` rather than zero: this list is sent to its end over rows of differing heights — a failure brings
+    /// git's words down with it — and a view that has been so moves its own origin (`CommandsPane.clampY`). An empty
+    /// log has no band at all — the clamp then answers above its own last row, `indexAt` finds nothing, and the press
+    /// goes down to the list as it always did.
+    function onRows(y) {
+        const first = pick.view.originY
+        const last = first + pick.view.contentHeight - 1
+        return Math.max(first, Math.min(y, last))
     }
 
     /// Which byte of a row's line a point lands on. The row itself says where its three columns are drawn; a gap is
@@ -103,6 +149,30 @@ Item {
         return pick.commandsModel.hitAt(row, at, x, pick.charW, pick.wideDelta)
     }
 
+    // ---- the ground under the last row ---------------------------------------------------------------------------
+    /// Where the ground a log shorter than its panel leaves under the last row begins, in this item's own
+    /// coordinates, and whether there is any of it at all. A sweep run against a log that fills its panel would prove
+    /// nothing, so it says so rather than passing (verify-ui `commands-sweep`).
+    readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
+    readonly property bool hasGround: pick.groundTop < pick.height - 2
+    /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
+    /// same two functions the `MouseArea` below calls, and it **starts in the ground**: an injection that began on a
+    /// row would go green with the whole of this taken back out (`SweepRoom`, the same rule).
+    function sweepFromGround(fx, fy) {
+        if (!pick.hasGround)
+            return false
+        const x = Math.max(1, Math.min(pick.width - 1, pick.width * fx))
+        const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
+        if (!pick.takeAt(x, y))
+            return false
+        // Up into the text at the x it started from — a drag does not jump sideways, and reading a row out at a place
+        // the reader never pressed is how a run passes while the gesture does not work.
+        const top = pick.view.itemAtIndex(0)
+        pick.followAt(x, top ? top.y - pick.view.contentY + top.height / 2 : 1)
+        pick.releaseText()
+        return true
+    }
+
     // ---- the hand ----------------------------------------------------------------------------------------------
     MouseArea {
         id: hand
@@ -110,36 +180,11 @@ Item {
         acceptedButtons: Qt.LeftButton
         // Not hoverEnabled: the rows below keep their own (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => hand.take(mouse)
-        onPositionChanged: mouse => hand.follow(mouse)
+        // The two above, and nothing beside them: what the hand does is written once, where a run enters it too.
+        onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y) }
+        onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
-
-        /// Decides whether this press is the text's at all, and starts the drag where it is.
-        function take(mouse) {
-            const row = pick.rowAt(mouse.y)
-            if (row < 0) {
-                // Down to the list itself: below the last row there is nothing to pick.
-                mouse.accepted = false
-                return
-            }
-            // The press is what puts the keys here as well, so Ctrl+C reaches the text a hand has just picked out —
-            // the panel takes focus when it opens, but a reader who has been somewhere else since comes back through
-            // this and nothing else.
-            pick.view.forceActiveFocus()
-            pick.handX = mouse.x
-            pick.handY = mouse.y
-            pick.pressText(row, pick.byteAt(row, mouse.x, mouse.y))
-        }
-        function follow(mouse) {
-            pick.handX = mouse.x
-            pick.handY = mouse.y
-            if (!pick.dragging)
-                return
-            const row = pick.rowAt(mouse.y)
-            if (row >= 0)
-                pick.dragText(row, pick.byteAt(row, mouse.x, mouse.y))
-        }
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
