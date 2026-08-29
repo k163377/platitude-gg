@@ -1,0 +1,421 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+// For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
+import QtQuick.Controls.Fusion
+import platitude
+import platitude.ui
+
+/// What a ref's own menu offers: deleting a branch, a tag, a stash or a remote, making a tag here, and the
+/// refusals git answers those with.
+///
+/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
+/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
+/// did when it was all one file.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
+// and is never given a size.
+Item {
+    id: acts
+
+    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
+    /// the file that builds this one.
+    required property var driver
+
+    // The driver's own names, read once so what is written under them reads as it did.
+    readonly property var page: driver.page
+    readonly property var repoTab: driver.repoTab
+    readonly property var workTree: driver.workTree
+    readonly property var graphModel: driver.graphModel
+    readonly property var branchesModel: driver.branchesModel
+    readonly property var remotesModel: driver.remotesModel
+    readonly property var stashesModel: driver.stashesModel
+    readonly property var tagsModel: driver.tagsModel
+    readonly property var graphPane: driver.graphPane
+    readonly property var sidebarPane: driver.sidebarPane
+    readonly property var refMenu: driver.refMenu
+    readonly property var refBranchCard: driver.refBranchCard
+    readonly property var refTagCard: driver.refTagCard
+    readonly property var refDeleteItem: driver.refDeleteItem
+    readonly property var refStashDropItem: driver.refStashDropItem
+    readonly property var refPushTagItem: driver.refPushTagItem
+    readonly property var refTagHereItem: driver.refTagHereItem
+    readonly property var refTagDeleteItem: driver.refTagDeleteItem
+    readonly property var refRemoteTagDeleteItem: driver.refRemoteTagDeleteItem
+    readonly property var refTagBothDeleteItem: driver.refTagBothDeleteItem
+    readonly property var commitMenu: driver.commitMenu
+    readonly property var tagHereCommitItem: driver.tagHereCommitItem
+    readonly property var commitTagCard: driver.commitTagCard
+    readonly property var renderedBarrier: driver.barrierRendered
+    readonly property var writeBarrier: driver.barrierWrite
+
+    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
+    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    function run(act, arg) {
+        if (act === "delete-branch" || act === "delete-branch-go") {
+            // On a branch git refuses, the row turns into the held force-delete, which "-go" then runs to its end.
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
+            if (act === "delete-branch-go")
+                forceDeleteTimer.start()
+        } else if (act === "delete-gone") {
+            // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
+            // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
+            // *back* from a refusal, which `delete-branch-refused` photographs. The page holds the in-between open
+            // for the shot (`RepoPage.goneHeldForShot`); a demo repository answers before a picture can be grabbed.
+            page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            refMenu.openSub(refTagCard)
+            refTagDeleteItem.completeHold()
+            goneRowTimer.start()
+        } else if (act === "delete-tag" || act === "delete-tag-go") {
+            page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            refMenu.openSub(refTagCard)
+            if (act === "delete-tag-go")
+                refTagDeleteItem.completeHold()
+        } else if (act === "delete-stash" || act === "delete-stash-go") {
+            page.openRefMenu("stash", stashesModel.nameAt(0),
+                             stashesModel.fullAt(0),
+                             stashesModel.oidOfName(stashesModel.nameAt(0)))
+            if (act === "delete-stash-go")
+                refStashDropItem.completeHold()
+        } else if (act === "delete-remote" || act === "delete-remote-go" || act === "remote-refused") {
+            // Named outright (`origin/feature/x`) because those rows sit behind a fold — opened here so the row is
+            // under the menu. The remote's own name may hold `/`, so the cut is the configured one
+            // (`GitFacts.remoteOfRef`), the same as the rows the verbs drive.
+            remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
+            page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
+            AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
+                              + " " + refDeleteItem.text)
+            if (act === "delete-remote-go" || act === "remote-refused")
+                refDeleteItem.completeHold()
+            // The far side keeps the branch (`--preset protected`): what comes back is a report rather than a
+            // failure, and the bar it comes down in is what this one photographs.
+            if (act === "remote-refused")
+                remoteRefusedTimer.start()
+        } else if (act === "delete-force") {
+            repoTab.deleteBranch(arg, true)
+        } else if (act === "delete-branch-refused") {
+            // Same entry as delete-branch; this one waits for git's answer rather than acting on it.
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
+            refusedRowTimer.start()
+        } else if (act === "chip-menu") {
+            // Only the kind letter and the name of the record are read.
+            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            chipMenuTimer.start()
+        } else if (act === "chip-menu-current") {
+            page.openRecordMenu("L10010" + workTree.branch,
+                                branchesModel.oidOfName(workTree.branch))
+            chipMenuTimer.start()
+        } else if (act === "delete-blocked-tip") {
+            // Forced rather than hovered: the pointer cannot be put on a row from here, and this writes to the property
+            // the real hover writes to. The argument names the branch, because the delete row is out for more than one
+            // reason: without one it is the branch you are standing on, with one it is a branch another working copy
+            // has checked out (the flags say which, and the current branch is the only chip that carries them).
+            const blockedOn = arg === "" ? workTree.branch : arg
+            page.openRecordMenu((arg === "" ? "L10010" : "L00000") + blockedOn,
+                                branchesModel.oidOfName(blockedOn))
+            refMenu.openSub(refBranchCard)
+            refDeleteItem.tipForced = true
+            blockedTipTimer.start()
+        } else if (act === "menu-highlight") {
+            // The keyboard's road to `highlighted` — the only one that can be driven from here.
+            page.openRecordMenu("L00000" + (arg === "" ? workTree.branch : arg),
+                                branchesModel.oidOfName(
+                                    arg === "" ? workTree.branch : arg))
+            refMenu.currentIndex = 1
+            AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
+        } else if (act === "delete-branch-early") {
+            // The early answer dresses the delete row before any click; the argument picks which half is on show.
+            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
+            earlyDeleteTimer.start()
+        } else if (act === "branch-at-tag") {
+            sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
+                                      tagsModel.oidOfName(tagsModel.nameAt(0)))
+            sidebarPane.submitEdit(arg)
+        } else if (act === "create-tag") {
+            // The graph's road, all the way through: the commit menu's row opens the box in the chip column, and what
+            // is typed there is what git is finally spawned with. Nothing about it is a shortcut — the row is the one
+            // the pointer would press, and the submit is the field's own.
+            //
+            // The row under HEAD's, counted the way `commit-menu` counts it: the rows above HEAD are whatever else the
+            // graph is showing (the working tree, a stash), and neither of them opens this menu at all.
+            acts.createTagOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+            page.openRowMenu(acts.createTagOid)
+            commitMenu.openSub(commitTagCard)
+            tagHereCommitItem.triggered()
+            // `<name>:box` stops at the box the row opened, which is the other half of what this verb wires up: the
+            // chip column asking the second of its two questions (`GraphRowChips`).
+            if (arg.endsWith(":box")) {
+                graphPane.view.namingText = arg.slice(0, -4)
+                AppBackend.report("create_tag box=" + (graphPane.view.namingOid !== "")
+                                  + " mode=" + graphPane.view.namingMode)
+                renderedBarrier.begin()
+            } else {
+                graphPane.view.namingSubmitted(acts.createTagOid, arg, "tag")
+                createTagTimer.start()
+            }
+        } else if (act === "tag-menu" || act === "push-tag"
+                   || act === "delete-remote-tag" || act === "delete-tag-both") {
+            // The rows a tag's menu grew, and the press that runs one of them. The suffix on the argument says what
+            // has to be known before the card is worth reading — `:drift` for the forced push, `:remote` for the
+            // delete rows — and both of those are answers only a fetch brings.
+            tagMenuTimer.begin(arg,
+                               act === "push-tag" ? "push"
+                             : act === "delete-remote-tag" ? "remote-delete"
+                             : act === "delete-tag-both" ? "both-delete" : "")
+        } else if (act === "move-branch") {
+            // Past the question, for the write it guards.
+            page.switchTo("force", repoTab.localNameFor(arg),
+                          repoTab.localNameFor(arg), arg)
+        } else {
+            return false
+        }
+        return true
+    }
+    // git's refusal has to come back before the row it turns into a held one can be held — or photographed.
+    SampleTimer {
+        id: forceDeleteTimer
+        onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0 || refDeleteItem.holdMs <= 0)
+                return
+            forceDeleteTimer.stop()
+            AppBackend.report("ref_menu delete=" + refDeleteItem.text
+                              + " note=" + refDeleteItem.note)
+            driver.writeSeqBefore = repoTab.writeSeq
+            refDeleteItem.completeHold()
+            writeBarrier.start()
+        }
+    }
+    // The blocked row's line, worn where the pointer would put it. Past `tipDelayMs`, like the other forced tooltips:
+    // read any sooner and the attached ToolTip has not opened yet, so the line reports false while the picture taken at
+    // quit holds it.
+    SampleTimer {
+        id: blockedTipTimer
+        onTriggered: {
+            if (!refDeleteItem.ToolTip.visible)
+                return
+            blockedTipTimer.stop()
+            AppBackend.report(
+            "delete_blocked code=" + refDeleteItem.code
+            + " tip=" + refDeleteItem.ToolTip.visible
+            + " reason=" + refDeleteItem.blockedReason)
+            driver.complete()
+        }
+    }
+    SampleTimer {
+        id: chipMenuTimer
+        onTriggered: {
+            if (!refMenu.opened && !commitMenu.opened)
+                return
+            chipMenuTimer.stop()
+            AppBackend.report("chip_menu ref=" + refMenu.opened
+                                       + " commit=" + commitMenu.opened
+                                       + " delete=" + refDeleteItem.code
+                                       + " " + refDeleteItem.text)
+            driver.complete()
+        }
+    }
+    // A tag that has been made is a row in TAGS, and **the write answers before the read that puts it there** (core
+    // `AfterWrite::Graph` — verify-ui §壊れない動詞). Stopping at the write barrier photographs the sidebar as it was a
+    // moment before, which is a picture of nothing having happened; what this waits for is the name itself.
+    SampleTimer {
+        id: createTagTimer
+        onTriggered: {
+            const oid = tagsModel.oidOfName(AppBackend.autoActArg)
+            if (oid === "" || repoTab.busyCount !== 0)
+                return
+            createTagTimer.stop()
+            AppBackend.report("create_tag tag=" + AppBackend.autoActArg
+                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+                              + " total=" + tagsModel.total
+                              + " at=" + (oid === acts.createTagOid))
+            renderedBarrier.begin()
+        }
+    }
+    /// The commit the run asked for the tag on, so the report can say the tag landed on that one rather than on
+    /// wherever HEAD happened to be.
+    property string createTagOid: ""
+
+    // The tag menu's push row, which is the one row in this application whose whole shape — chip, hold, colour — is
+    // decided by what a remote was last heard to carry (`RefRowMenu`). Two states to photograph and they are told
+    // apart by nothing but that reading, so the report spells it out: a picture of `push` and a picture of
+    // `push --force` differ by five glyphs in a card that is otherwise identical.
+    //
+    // **`want` is what the run is waiting for, not what it asserts.** The drifted side needs the remotes read
+    // (`ls-remote --tags` is the only carrier — core.md タグのリモート状態), and that read lands well after the fetch it
+    // rides out with; waiting on the fetch alone photographs the plain row and calls it the forced one.
+    SampleTimer {
+        id: tagMenuTimer
+        /// The tag the menu is to stand on, and what the run needs known about it before the card is worth
+        /// photographing: `drift` (a remote has the name on another commit) or `remote` (a remote has it at all).
+        /// Both are answers only `ls-remote --tags` carries, so either one fetches first.
+        property string tag: ""
+        property string wants: ""
+        /// Which row this run presses, empty for the ones that only stand the card up.
+        property string press: ""
+        function begin(arg, pressing) {
+            const parts = arg.split(":")
+            tagMenuTimer.tag = parts[0]
+            tagMenuTimer.wants = parts.length > 1 ? parts[1] : ""
+            tagMenuTimer.press = pressing
+            if (tagMenuTimer.wants !== "")
+                repoTab.fetch("")
+            tagMenuTimer.start()
+        }
+        /// Whether what this run is waiting on has arrived, asked of the same lookups the menu asks
+        /// (`NavSectionModel`): the readings are in or they are not, and no count of fetches says which.
+        function ready() {
+            if (tagMenuTimer.wants === "drift")
+                return tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) !== ""
+            if (tagMenuTimer.wants === "remote") {
+                const sides = tagsModel.tagSides(tagMenuTimer.tag)
+                return sides === "remote" || sides === "both"
+            }
+            return true
+        }
+        onTriggered: {
+            if (!tagMenuTimer.ready() || repoTab.busyCount !== 0)
+                return
+            tagMenuTimer.stop()
+            page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
+                             tagsModel.oidOfName(tagMenuTimer.tag), true)
+            // Every row this verb is about is one card in (デザイン規約 §メニュー の入れ子), so the run opens it: the
+            // report reads the rows either way, but a picture of the outer card proves nothing about them.
+            refMenu.openSub(refTagCard)
+            // Every row this menu grew, in one line. The delete rows are told apart by nothing but which of them is
+            // drawn, and a card missing one frames exactly like a card that never offered it.
+            // **The order is the judging order.** `must_say` matches a run of this line, so what one run has to
+            // assert together has to sit together: the sides and the four rows they decide first, the push row's
+            // own shape after them (`verify/verbs/remote.rs`).
+            AppBackend.report("tag_menu tag=" + tagMenuTimer.tag
+                              + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
+                              + " local_del=" + refTagDeleteItem.offered
+                              + " remote_del=" + refRemoteTagDeleteItem.offered
+                              + " both_del=" + refTagBothDeleteItem.offered
+                              + " tag_here=" + refTagHereItem.offered
+                              + " push=" + refPushTagItem.offered
+                              + " code=" + refPushTagItem.code
+                              + " held=" + (refPushTagItem.holdMs > 0)
+                              + " lease=" + refRowMenu.tagDriftOid
+                              + " text=" + refPushTagItem.text)
+            if (tagMenuTimer.press === "") {
+                driver.complete()
+                return
+            }
+            driver.writeSeqBefore = repoTab.writeSeq
+            if (tagMenuTimer.press === "remote-delete" || tagMenuTimer.press === "both-delete") {
+                // What a delete is judged on is the sidebar afterwards, and **the write answers before the read that
+                // rebuilds it** (core `AfterWrite::Graph`) — stopping at the write barrier photographs the list as it
+                // was and calls it the list as it is. What the run waits for is this name's own reading changing.
+                tagGoneTimer.was = tagsModel.tagSides(tagMenuTimer.tag)
+                tagGoneTimer.tag = tagMenuTimer.tag
+                if (tagMenuTimer.press === "remote-delete")
+                    refRemoteTagDeleteItem.completeHold()
+                else
+                    refTagBothDeleteItem.completeHold()
+                tagGoneTimer.start()
+                return
+            }
+            if (refPushTagItem.holdMs > 0)
+                refPushTagItem.completeHold()
+            else
+                refPushTagItem.triggered()
+            writeBarrier.start()
+        }
+    }
+    // A tag delete, judged on the sidebar it leaves rather than on the write that made it. The name's own reading is
+    // the edge: gone from both sides it answers nothing at all, gone from the remote alone it drops back to `here`.
+    // **A count would not do** — the remote half of a name held on both sides takes no row away.
+    SampleTimer {
+        id: tagGoneTimer
+        property string tag: ""
+        property string was: ""
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            const now = tagsModel.tagSides(tagGoneTimer.tag)
+            if (now === tagGoneTimer.was)
+                return
+            tagGoneTimer.stop()
+            AppBackend.report("tag_gone tag=" + tagGoneTimer.tag
+                              + " was=" + tagGoneTimer.was
+                              + " sides=" + now
+                              + " row=" + tagsModel.rowOfName(tagGoneTimer.tag)
+                              + " total=" + tagsModel.total)
+            renderedBarrier.begin()
+        }
+    }
+    // Waits on the early answer, not on a refusal: nothing here writes.
+    SampleTimer {
+        id: earlyDeleteTimer
+        onTriggered: {
+            // The row's `code` is never empty on a branch, so it cannot tell "git has not answered yet" from "answered
+            // merged" — both wear `branch --delete`. What readiness there is comes from the echo of the branch asked
+            // about, which the asking clears before the question goes out (app-ui.md §UI 自動化の因果性).
+            if (repoTab.branchDeleteAsked !== AppBackend.autoActArg)
+                return
+            earlyDeleteTimer.stop()
+            AppBackend.report("delete_early asked="
+                                       + (repoTab.branchDeleteAsked !== "")
+                                       + " merged=" + repoTab.branchDeleteMerged
+                                       + " code=" + refDeleteItem.code
+                                       + " held=" + (refDeleteItem.holdMs > 0)
+                                       + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The report a refusal the far side made comes down as. **Waited on all the way down** (`NoticeBar.settled`), not
+    // at the write barrier: the answer to the write is what raises the bar, so a picture taken on the answer catches a
+    // bar whose words are written and whose height is still nothing (the edge `AskBar.settled` names, for the same
+    // reason). The words themselves are reported rather than photographed for the far side's half — git's sentence
+    // wraps, and a report line cannot hold what the picture holds.
+    SampleTimer {
+        id: remoteRefusedTimer
+        onTriggered: {
+            if (!graphPane.noticeCard.settled)
+                return
+            remoteRefusedTimer.stop()
+            // `log=` and `wrong=` are the other half of the claim, and the half no picture can make on its own: the
+            // panel did not raise itself over the same news, and the mark in the corner is not calling it an error
+            // (デザイン規約 §可否・警告の出し場所). A window that never opened the log frames exactly like one that opened and
+            // closed it.
+            AppBackend.report("remote_notice open=" + graphPane.noticeCard.open
+                              + " said=" + graphPane.noticeCard.label
+                              + " why=" + (graphPane.noticeCard.detail !== "")
+                              + " log=" + page.commandsOpen
+                              + " wrong=" + page.commandsWrong)
+            driver.complete()
+        }
+    }
+    SampleTimer {
+        id: refusedRowTimer
+        onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+                return
+            refusedRowTimer.stop()
+            AppBackend.report("ref_menu delete=" + refDeleteItem.code
+                                       + " " + refDeleteItem.text
+                                       + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The row taken away ahead of git's answer. **Waited on the list, not on the write** — being ahead of the write
+    // is the whole of what this photographs, so a barrier here would wait out the very state it is about.
+    SampleTimer {
+        id: goneRowTimer
+        onTriggered: {
+            if (tagsModel.rowOfName(AppBackend.autoActArg) >= 0)
+                return
+            goneRowTimer.stop()
+            AppBackend.report("gone_row tag=" + AppBackend.autoActArg
+                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+                              + " total=" + tagsModel.total
+                              + " chips=" + (graphModel.goneChips !== ""))
+            driver.complete()
+        }
+    }
+}
