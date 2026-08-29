@@ -42,6 +42,16 @@ pub struct GraphModel {
     first_chunk_ms: i32,
     total_ms: i32,
     truncated: bool,
+    /// How many commits one press of the tail would add, as the session
+    /// has it (`RepoSession::log_window_step`). Read from there when a
+    /// walk settles rather than held as a number of our own: the window
+    /// the step is a quarter of is the session's to say, and the footer
+    /// names the step in the words it offers.
+    window_step: i32,
+    /// A press of the tail is out and the wider walk has not landed yet.
+    /// The footer wears the wait where the words are, like every other
+    /// press that goes to git (デザイン規約 §進行中・長押しの定数).
+    growing: bool,
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.
     finish_count: i32,

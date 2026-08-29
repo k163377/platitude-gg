@@ -82,8 +82,20 @@ MouseArea {
     function pressLanded(at, held) {
         const row = pan.rowAt(at)
         if (!row)
-            return false
+            return pan.tailPressed(at)
         row.leftClick(held)
         return true
+    }
+    /// A press under the last row. The only thing down there is the window's own footer, and it takes presses now
+    /// (`GraphTailFooter.loadMore`) — handed over rather than answered here, for the reason the rows' gestures are:
+    /// what a press on the cut means is decided in one place.
+    function tailPressed(at) {
+        const tail = pan.view.footerItem
+        if (tail === null)
+            return false
+        const p = pan.mapToItem(tail, at.x, at.y)
+        if (p.x < 0 || p.y < 0 || p.x > tail.width || p.y > tail.height)
+            return false
+        return tail.loadMore()
     }
 }

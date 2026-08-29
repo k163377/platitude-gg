@@ -28,6 +28,13 @@ impl GraphModel {
     );
     qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
+    // The cut's two answers: how many commits the next press loads, and
+    // whether one is already out. Both properties for the reason
+    // `matchCount` is one — the footer's words carry the step, and a
+    // background refresh that lands while a press is out is what takes
+    // the wait back off.
+    qproperty!("windowStep", Member = window_step, Notify = stats_changed);
+    qproperty!("growing", Member = growing, Notify = stats_changed);
     qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
     qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
     // How many loaded rows the find bar's line is in. A property rather
@@ -102,6 +109,22 @@ impl GraphModel {
     #[qslot]
     fn drain(&mut self) {
         self.take_feed();
+    }
+
+    /// The tail was pressed: load the next step of history.
+    ///
+    /// Turned down where there is nothing to load (an uncut window) and
+    /// while a press is still out — the walk it asked for would be
+    /// cancelled by a second one, so a double press would cost the wait
+    /// twice and land the same commits.
+    #[qslot]
+    fn grow_window(&mut self) {
+        if !self.truncated || self.growing {
+            return;
+        }
+        self.growing = true;
+        self.stats_changed();
+        crate::hub::with_session(self.tab_id, |s| s.grow_log_window());
     }
 
     /// Row index of a commit (sidebar jump); -1 when absent.

@@ -62,6 +62,10 @@ impl GraphModel {
             self.first_chunk_ms = -1;
             self.total_ms = -1;
             self.truncated = false;
+            // A stream starting over is a different graph from the one
+            // the press was made in, and it will settle a footer of its
+            // own.
+            self.growing = false;
             self.error = String::new();
             self.failed = false;
             self.started_at = Some(Instant::now());
@@ -193,6 +197,7 @@ impl GraphModel {
     fn fail_walk(&mut self, generation: u64, message: String) {
         if generation == self.generation {
             self.loading = false;
+            self.growing = false;
             self.error = message;
             self.failed = true;
         }
@@ -262,11 +267,30 @@ impl GraphModel {
         truncated: bool,
     ) {
         self.loading = false;
+        // Whatever this walk was, it is the answer to any press that was
+        // out: the wider one it asked for landing, or the pass that
+        // overtook it having walked the window it widened.
+        self.growing = false;
         self.total_ms = elapsed_ms as i32;
         self.row_total = row_total;
         self.walked_total = walked as i32;
         self.truncated = truncated;
         self.finish_count += 1;
+        // Only the cut needs the step, and only a settled walk knows
+        // there was one — asked for here rather than held from the
+        // opening, so a window the settings widen moves the step with it.
+        //
+        // **Written only where the session answered.** There being no
+        // session is not an answer of zero: this drains from a queued
+        // call, so a walk that settled just before its tab closed lands
+        // here with nothing to ask, and a 0 written then is a footer
+        // offering `Load 0 more commits` for a press that would load the
+        // step the session still has.
+        if truncated
+            && let Some(step) = crate::hub::from_session(self.tab_id, |s| s.log_window_step())
+        {
+            self.window_step = i32::try_from(step).unwrap_or(i32::MAX);
+        }
         self.tail_geometry = if truncated {
             self.rows
                 .last()
