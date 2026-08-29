@@ -77,7 +77,7 @@ pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError
         file.sync_all()
     })();
     if let Err(error) = write {
-        let _ = std::fs::remove_file(&tmp);
+        remove_leftover(&tmp);
         return Err(failed(error));
     }
 
@@ -86,10 +86,18 @@ pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError
     // file is still there and intact — losing the newest layout beats
     // losing the file.
     if let Err(error) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp);
+        remove_leftover(&tmp);
         return Err(failed(error));
     }
     Ok(())
+}
+
+/// Cleans up the temp file behind a failed write. Its own failure changes
+/// nothing about the write having failed, so it is only logged.
+fn remove_leftover(tmp: &Path) {
+    if let Err(error) = std::fs::remove_file(tmp) {
+        tracing::debug!(path = %tmp.display(), %error, "settings temp file not removed");
+    }
 }
 
 pub(super) fn sub_table<'a>(table: &'a Table, key: &str) -> Option<&'a Table> {

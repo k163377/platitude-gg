@@ -255,7 +255,9 @@ impl Avatars {
         if self.entries.iter().any(|e| e.file == file) {
             return;
         }
-        let _ = std::fs::remove_file(dir.join(file));
+        if let Err(error) = std::fs::remove_file(dir.join(file)) {
+            tracing::debug!(file, %error, "unreferenced avatar image not removed");
+        }
     }
 }
 
