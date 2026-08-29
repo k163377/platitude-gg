@@ -137,12 +137,34 @@ mod tests {
     fn every_verb_is_one_the_drivers_dispatch() {
         let ui = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../crates/platitude-app/src/ui");
-        let drivers: String = ["AutoActDriver.qml", "WindowAutoActDriver.qml"]
-            .iter()
-            .map(|name| {
-                std::fs::read_to_string(ui.join(name)).unwrap_or_else(|e| panic!("{name}: {e}"))
-            })
-            .collect();
+        // Every file of the harness, found rather than listed: the verbs are
+        // grouped by what they act on and live across a score of files, and a
+        // list would answer "unreachable" for a verb that had only moved.
+        //
+        // Two names carry the harness — `AutoAct…` anywhere in the name (both
+        // drivers, the page's families, the completion lists) and `…Acts.qml`
+        // (the window's). Anchoring the first at the head would drop
+        // `WindowAutoActDriver` itself, which still holds the two verbs that
+        // read its change signals.
+        let mut drivers = String::new();
+        let mut found = 0;
+        for entry in std::fs::read_dir(&ui).unwrap_or_else(|e| panic!("{}: {e}", ui.display())) {
+            let entry = entry.unwrap_or_else(|e| panic!("{}: {e}", ui.display()));
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !(name.contains("AutoAct") || name.ends_with("Acts.qml")) {
+                continue;
+            }
+            drivers.push_str(
+                &std::fs::read_to_string(entry.path()).unwrap_or_else(|e| panic!("{name}: {e}")),
+            );
+            found += 1;
+        }
+        assert!(
+            found > 2,
+            "found {found} harness file(s) under {} — the search stopped matching, and a test that \
+             reads nothing passes every row",
+            ui.display()
+        );
         for verb in every_verb() {
             assert!(
                 drivers.contains(&format!("\"{}\"", verb.name)),
