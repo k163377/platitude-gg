@@ -1,83 +1,10 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+//! Everything QML sees of the tab strip: the properties it binds to, the
+//! acts it calls for, and the news it is told back.
+//!
+//! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
+//! built per file (app-ui.md).
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
-
-use crate::hub::{Feed, Hub, PickMsg};
-use crate::urlpath::file_url_to_path;
-
-use super::{impl_move_notified, impl_notify_runs, push_run, qml_register, tab_name};
-
-// ---------------------------------------------------------------------------
-// TabsModel: open repositories (the tab strip)
-// ---------------------------------------------------------------------------
-
-#[derive(QModelItem, Default, Clone)]
-pub struct TabItem {
-    tab_id: i32,
-    title: String,
-    repo_path: String,
-}
-
-pub struct TabsModel {
-    items: Vec<TabItem>,
-    current_index: i32,
-    /// Which *tab* is in front, as opposed to which row it sits in.
-    ///
-    /// The window builds a page for the tab in front and takes it down
-    /// when that tab stops being in front (`Main.qml`), and that has to
-    /// key off the tab rather than the row: a row closed to the left of
-    /// the front one, or a tab carried across the strip, renumbers rows
-    /// under a `currentIndex` that has not moved yet. Read off the row,
-    /// the two disagree for as long as it takes both to settle, and the
-    /// page in front is destroyed and rebuilt for nothing — with its
-    /// session left open behind it, so the rebuilt page has an already
-    /// opened repository that will not read itself again (measured: the
-    /// graph stayed empty and `middle-close` waited out its watchdog).
-    current_tab_id: i32,
-    /// Answers about folders the picker handed over. Attached on the
-    /// first question rather than at startup: a window that never opens
-    /// the picker never has one to hear.
-    picks: Arc<Feed<PickMsg>>,
-    attached: bool,
-}
-
-impl Default for TabsModel {
-    fn default() -> Self {
-        Self {
-            items: Vec::new(),
-            // No tab selected. Deriving this (0) points at a tab that does
-            // not exist, and the UI reads "no repository open" as < 0.
-            current_index: -1,
-            current_tab_id: -1,
-            picks: Arc::new(Feed::default()),
-            attached: false,
-        }
-    }
-}
-
-impl QListModel for TabsModel {
-    type Item = TabItem;
-
-    fn len(&self) -> usize {
-        self.items.len()
-    }
-    fn get(&self, index: usize) -> Option<&TabItem> {
-        self.items.get(index)
-    }
-    fn remove_unnotified(&mut self, index: usize) -> TabItem {
-        self.items.remove(index)
-    }
-    fn reset_unnotified(&mut self) {
-        self.items.clear();
-    }
-    fn push_unnotified(&mut self, value: TabItem) {
-        self.items.push(value);
-    }
-}
-
-impl_move_notified!(TabsModel, items);
-impl_notify_runs!(TabsModel);
+use super::*;
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl TabsModel {
@@ -96,7 +23,7 @@ impl TabsModel {
     );
 
     #[qsignal]
-    fn current_index_changed(&mut self);
+    pub(super) fn current_index_changed(&mut self);
 
     /// The row at `index` is about to stop being the one in front.
     ///
@@ -108,7 +35,7 @@ impl TabsModel {
     /// tab does not change — a tab closed to the left of it renumbers the
     /// strip without the reader leaving anything.
     #[qsignal]
-    fn leaving_tab(&mut self, index: i32);
+    pub(super) fn leaving_tab(&mut self, index: i32);
 
     /// The folder picked in the dialog did not open. `kind` is `plain` /
     /// `bare` / `other`, `message` git's own words (`other` alone), and
@@ -347,147 +274,3 @@ impl TabsModel {
         }
     }
 }
-
-impl TabsModel {
-    /// Announces that the row in front is about to stop being it
-    /// (`leaving_tab`). Silent with nothing in front, where there is no
-    /// page to hand anything over.
-    fn leave_front(&mut self) {
-        if self.current_index >= 0 {
-            self.leaving_tab(self.current_index);
-        }
-    }
-
-    /// Where the repository at `path` already sits in the strip, if it
-    /// does. **The one place that answers this** — both ways a tab can
-    /// appear (opening and restoring) ask here, so the two cannot come
-    /// to different conclusions about the same folder.
-    ///
-    /// Compared by `repo::open_key` rather than by the string: the same
-    /// folder arrives spelled differently depending on the way in, and
-    /// the worktree row — the row naming the repository already open —
-    /// is the one that arrives in git's spelling every time.
-    ///
-    /// Resolves every open tab's path, so the cost is one filesystem
-    /// lookup per tab. That is bounded by the cap on the tab list and is
-    /// paid only when someone asks for a repository.
-    fn position_of(&self, path: &str) -> Option<usize> {
-        let key = platitude_core::repo::open_key(path);
-        self.items
-            .iter()
-            .position(|t| platitude_core::repo::open_key(&t.repo_path) == key)
-    }
-
-    /// Names every tab against the strip it now stands in
-    /// ([`tab_name::names_for`]).
-    ///
-    /// Called by opening, restoring and closing — the three acts that
-    /// change which names are in the strip. **Not by a move**: the order
-    /// is not what a name is settled against, and a `dataChanged` on the
-    /// row being carried would be one the hand did not ask for.
-    ///
-    /// Rows that came out the same are left alone, so the ordinary case
-    /// — a repository whose name nobody shares — costs no notification at
-    /// all, and the strip re-measures only the tabs whose words moved
-    /// (`TabStrip.settleTitleCap`).
-    fn settle_titles(&mut self) {
-        let names = {
-            let paths: Vec<&str> = self.items.iter().map(|t| t.repo_path.as_str()).collect();
-            tab_name::names_for(&paths)
-        };
-        let mut runs = Vec::new();
-        for (at, (item, name)) in self.items.iter_mut().zip(names).enumerate() {
-            if item.title != name {
-                item.title = name;
-                push_run(&mut runs, at);
-            }
-        }
-        self.notify_runs(runs);
-    }
-
-    /// Names the tab the front row is holding (`current_tab_id`).
-    ///
-    /// Called from [`TabsModel::report`], which every act on the strip
-    /// ends with — so this cannot be left out of one. The signal goes out
-    /// only on a change of tab, which is what makes a row closed to the
-    /// left, or a tab carried past another, silent here: the strip
-    /// renumbered, and the same repository is still in front.
-    fn settle_current(&mut self) {
-        let id = usize::try_from(self.current_index)
-            .ok()
-            .and_then(|at| self.items.get(at))
-            .map_or(-1, |tab| tab.tab_id);
-        if id != self.current_tab_id {
-            self.current_tab_id = id;
-            self.current_index_changed();
-        }
-    }
-
-    /// Hands the hub the tab strip as it stands. Opening, closing and
-    /// switching are single acts rather than something that moves under a
-    /// dragging hand, so they report as they happen; the file itself is
-    /// still only written by the flush.
-    ///
-    /// **Called before the act's own `current_index_changed()`**, because
-    /// this is also where the tab in front is named ([`settle_current`]) —
-    /// and a notification that goes out with the row already moved and the
-    /// tab not yet named is one where the two disagree: the page for the
-    /// row arrived at has not been built, the page for the row left is
-    /// still standing, and anything reading "the page in front" gets
-    /// nothing.
-    ///
-    /// [`settle_current`]: TabsModel::settle_current
-    fn report(&mut self) {
-        self.settle_current();
-        // Named the way the file names it. The store normalises separators
-        // on the way out anyway, so handing it the raw path would leave the
-        // state held here unequal to the one on disk — harmless today only
-        // because the flush compares against what it last wrote rather than
-        // against the file.
-        let paths = self
-            .items
-            .iter()
-            .map(|t| platitude_core::settings::repo_key(&t.repo_path))
-            .collect::<Vec<_>>();
-        let active = usize::try_from(self.current_index).unwrap_or(0);
-        Hub::with(|hub| hub.set_tabs_state(platitude_core::settings::TabsState { paths, active }));
-    }
-}
-
-/// The tab's label before the strip has been consulted: the repository's
-/// own folder name, which is what it is called wherever nobody shares it.
-///
-/// Asked of the same rule the whole strip is settled by
-/// ([`tab_name::names_for`]), so a tab is never named twice over — the
-/// row is pushed with this and [`TabsModel::settle_titles`] grows it if
-/// the strip it landed in has a namesake standing in it.
-fn title_of(path: &str) -> String {
-    tab_name::names_for(&[path])
-        .into_iter()
-        .next()
-        .unwrap_or_default()
-}
-
-/// Where the row at `current` ends up once the row at `from` has been
-/// taken out and put down at `to`.
-///
-/// Everything between the two shifts by one, towards the place the moved
-/// row left. `current` is a position rather than a tab: a strip with
-/// nothing in front of it says -1, and no move gives it a tab.
-pub(super) fn index_after_move(current: i32, from: usize, to: usize) -> i32 {
-    let Ok(at) = usize::try_from(current) else {
-        return current;
-    };
-    let landed = if at == from {
-        to
-    } else if from < at && at <= to {
-        at - 1
-    } else if to <= at && at < from {
-        at + 1
-    } else {
-        at
-    };
-    i32::try_from(landed).unwrap_or(current)
-}
-
-qml_register!(TabsModel, "TabsModel", singleton = false);
