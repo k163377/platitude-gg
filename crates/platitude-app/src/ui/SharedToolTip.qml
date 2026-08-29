@@ -77,8 +77,22 @@ Item {
     /// the beat their bindings, and hands the words a field that can be selected.
     function dressToolTip() {
         const tip = shared.sharedTip
-        tip.background = tipGround.createObject(tip)
-        tip.contentItem = tipWord.createObject(tip)
+        // Built under this item rather than under the tip itself: a popup is not an Item, so an item handed one as its
+        // parent gets an owner and no seat in the scene — which `createObject` says out loud ("Created graphical
+        // object was not placed in the graphics scene").
+        //
+        // **And the seat is given straight back**, because the two are handed over by different rules: a popup adopts
+        // the background whatever it is holding on to, and the content **only if it has no visual parent yet**. Left
+        // sitting here the words are owned by the tip, sized by the tip and read back by every run that asks the tip
+        // what it says — and painted at this item's corner, which is nowhere near it (実測 2026-08-29: the ground came
+        // out empty and `path-tip` / `tip-copy` / `tip-sweep` all stayed green). The owner set above is a `QObject`
+        // parent and outlives this line, so nothing here is left for the collector.
+        const ground = tipGround.createObject(shared)
+        const word = tipWord.createObject(shared)
+        ground.parent = null
+        word.parent = null
+        tip.background = ground
+        tip.contentItem = word
         tip.padding = Theme.spaceSm
         // Placed inside the window here rather than by `Popup`, which knows nothing about the target it is standing on
         // — asked to push a tip back in, it moves the seat and leaves the hand behind.
