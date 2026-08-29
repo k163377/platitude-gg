@@ -19,13 +19,17 @@ use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
+mod local;
 mod read;
 mod verify;
 mod write;
 
+pub use local::{load_local, set_local_identity};
 pub use read::{AuthorConfig, Identity, SignatureFormat, SigningConfig, load};
 // Reached by the siblings through `use super::*`: the rule for "git was
-// given nothing here" belongs beside the parse that first applies it.
-use read::non_empty;
+// given nothing here" belongs beside the parse that first applies it, and
+// so does the parse itself — one repository's own file answers with the
+// same records, in fewer of them.
+use read::{non_empty, parse_config};
 pub use verify::{Signature, SignatureStatus, verify_commit};
 pub use write::{ConfigScope, IdentityWrite, set_identity};

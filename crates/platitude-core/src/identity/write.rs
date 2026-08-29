@@ -22,7 +22,10 @@ pub enum ConfigScope {
 /// succeeded do not say what a commit will carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityWrite {
-    /// The effective identity now, as git reports it.
+    /// What git reports now, at the level the write was aimed at: the
+    /// effective identity for [`set_identity`], and the repository's own
+    /// file alone for [`super::set_local_identity`] — which is the only
+    /// level that can say whether an override is there at all.
     pub identity: Identity,
     /// git reports the name that was asked for.
     pub name_saved: bool,

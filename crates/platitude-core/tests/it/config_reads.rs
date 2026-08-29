@@ -62,6 +62,26 @@ async fn reading_the_identity_answers_by_code() {
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
 }
 
+/// The same read narrowed to one repository's own file, which is where a
+/// repository that overrides nothing gives the empty answer: the settings
+/// screen asks this of every repository the reader picks from the strip,
+/// and most of them will never have set a thing.
+#[tokio::test]
+async fn reading_one_repositorys_own_identity_answers_by_code() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "--local", "--unset", "user.name"]);
+    repo.git(&["config", "--local", "--unset", "user.email"]);
+    let (exec, log, cancel) = logged();
+
+    let held = identity::load_local(&exec, &repo.path, &cancel)
+        .await
+        .expect("load_local");
+
+    assert_eq!(held, identity::Identity::default());
+    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(1)]);
+}
+
 /// The remotes, read the same way — and here the empty answer is the one a
 /// test repository actually gives.
 #[tokio::test]

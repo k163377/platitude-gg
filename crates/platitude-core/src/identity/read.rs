@@ -100,7 +100,7 @@ pub async fn load(
     Ok(parse_config(&out))
 }
 
-fn parse_config(bytes: &[u8]) -> AuthorConfig {
+pub(super) fn parse_config(bytes: &[u8]) -> AuthorConfig {
     let mut parsed = AuthorConfig::default();
     for record in config::parse_z_records(bytes) {
         // A valueless key (`[commit] gpgsign`) means true, so it reads as

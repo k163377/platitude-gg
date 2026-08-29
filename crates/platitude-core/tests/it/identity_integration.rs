@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::support::exec::{env, observed_env};
+use crate::support::exec::{env, isolated_global, observed_env};
 use crate::support::{TestRepo, info};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
@@ -465,4 +465,175 @@ async fn a_signed_commit_still_costs_the_verification() {
     let seen = spawns.seen();
     assert_eq!(seen.len(), 2, "{seen:?}");
     assert!(seen[1].starts_with("git log -1"), "{seen:?}");
+}
+
+// ---- what one repository sets for itself -----------------------------
+//
+// The screen these answer for offers a repository from the tab strip and
+// two boxes standing empty for "not written here", so what has to hold is
+// that the two levels are told apart at all: an inherited value must not
+// arrive looking like an override, and an emptied box must take the key
+// out of one file without reaching the other.
+
+/// A repository that writes nothing of its own inherits — and the two
+/// reads say so differently, which is the whole reason there are two.
+#[tokio::test]
+async fn a_repository_that_sets_nothing_of_its_own_reads_as_empty() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    // `TestRepo` writes the identity into the repository's own file, which
+    // is the very thing being taken away here.
+    repo.git(&["config", "--local", "--unset", "user.name"]);
+    repo.git(&["config", "--local", "--unset", "user.email"]);
+    repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
+    repo.git(&["config", "--global", "user.email", "ada@example.com"]);
+    let exec = isolated_global(repo.global_config());
+    let cancel = CancellationToken::new();
+
+    let held = identity::load_local(&exec, &repo.path, &cancel)
+        .await
+        .expect("load_local");
+    assert_eq!(
+        held,
+        identity::Identity::default(),
+        "nothing is written in this repository's own file"
+    );
+
+    let effective = identity::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("load")
+        .identity;
+    assert_eq!(effective.name.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
+}
+
+/// The errand the whole thing exists for: another address for this
+/// project, under the name the person already goes by everywhere else.
+#[tokio::test]
+async fn one_key_is_overridden_while_the_other_stays_inherited() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "--local", "--unset", "user.name"]);
+    repo.git(&["config", "--local", "--unset", "user.email"]);
+    repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
+    repo.git(&["config", "--global", "user.email", "ada@example.com"]);
+    let exec = isolated_global(repo.global_config());
+    let cancel = CancellationToken::new();
+
+    let written = identity::set_local_identity(&exec, &repo.path, "", "work@example.com", &cancel)
+        .await
+        .expect("set_local_identity");
+    assert!(written.is_saved(), "both halves as asked: {written:?}");
+    assert!(written.message.is_empty(), "nothing to report");
+    assert_eq!(written.identity.name, None, "the name is not written here");
+    assert_eq!(written.identity.email.as_deref(), Some("work@example.com"));
+
+    let effective = identity::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("load")
+        .identity;
+    assert_eq!(
+        effective.name.as_deref(),
+        Some("Ada Lovelace"),
+        "inherited, because this repository says nothing about it"
+    );
+    assert_eq!(effective.email.as_deref(), Some("work@example.com"));
+
+    // A commit carries the pair git assembled out of the two files.
+    let repo_info = info(&repo).await;
+    repo.write_file("b.txt", "two\n");
+    repo.git(&["add", "--", "b.txt"]);
+    commit::commit(
+        &exec,
+        &repo_info,
+        "under the override",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect("commit");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%an <%ae>"]),
+        "Ada Lovelace <work@example.com>"
+    );
+}
+
+/// Emptying a box takes the key out of this repository's file, and out of
+/// that one only: what the person has set for themselves is still there
+/// to fall back to.
+#[tokio::test]
+async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
+    repo.git(&["config", "--global", "user.email", "ada@example.com"]);
+    let exec = isolated_global(repo.global_config());
+    let cancel = CancellationToken::new();
+
+    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
+        .await
+        .expect("set_local_identity");
+    assert!(written.is_saved(), "both were taken out: {written:?}");
+    assert_eq!(written.identity, identity::Identity::default());
+
+    let effective = identity::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("load")
+        .identity;
+    assert_eq!(effective.name.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
+    let global = std::fs::read_to_string(repo.global_config()).expect("read global config");
+    assert!(global.contains("Ada Lovelace"), "{global}");
+}
+
+/// A save that asks for what the file already says spawns no write at
+/// all. Not thrift: `git config --unset` fails when there was nothing to
+/// unset, and it fails with the same exit code as its refusal to touch a
+/// key written twice (実測 git 2.55: both are 5), so reading first is what
+/// keeps a real failure from passing for a harmless one.
+#[tokio::test]
+async fn a_save_that_changes_nothing_asks_git_to_write_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let (exec, spawns, cancel) = counted();
+
+    let written =
+        identity::set_local_identity(&exec, &repo.path, "Test User", "test@example.com", &cancel)
+            .await
+            .expect("set_local_identity");
+    assert!(
+        written.is_saved(),
+        "already what was asked for: {written:?}"
+    );
+
+    let seen = spawns.seen();
+    assert!(
+        seen.iter().all(|command| command.contains("--get-regexp")),
+        "only reads went out: {seen:?}"
+    );
+}
+
+/// The same from the other side: a repository that already writes nothing
+/// is not asked to take out keys it does not have.
+#[tokio::test]
+async fn emptying_boxes_that_are_already_empty_asks_git_to_write_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "--local", "--unset", "user.name"]);
+    repo.git(&["config", "--local", "--unset", "user.email"]);
+    let (exec, spawns, cancel) = counted();
+
+    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
+        .await
+        .expect("set_local_identity");
+    assert!(
+        written.is_saved(),
+        "there was nothing to take out: {written:?}"
+    );
+
+    let seen = spawns.seen();
+    assert!(
+        seen.iter().all(|command| command.contains("--get-regexp")),
+        "only reads went out: {seen:?}"
+    );
 }

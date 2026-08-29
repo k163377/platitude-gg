@@ -1,10 +1,11 @@
 //! The one shape of configuration read this app makes:
 //! `git config -z --get-regexp <pattern>`, and the records it answers with.
 //!
-//! Five callers ask git for a group of keys this way — the identity and its
+//! Six callers ask git for a group of keys this way — the identity and its
 //! signing keys, the remotes, what a branch tracks, `core.autocrlf`, the
-//! merge tools someone wrote a command for. What they do with the answer
-//! differs; how it is asked for and how it arrives does not.
+//! merge tools someone wrote a command for, and the identity one
+//! repository sets for itself. What they do with the answer differs; how
+//! it is asked for and how it arrives does not.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -14,7 +15,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Reads every key matching `pattern`, for [`parse_z_records`].
+/// Reads every key matching `pattern` from the configuration as git would
+/// resolve it here, for [`parse_z_records`].
 ///
 /// **Nothing matching is an answer, not a failure**: git exits 1 for it,
 /// every caller here asks about keys that are usually unset, and the empty
@@ -32,12 +34,52 @@ pub async fn get_regexp(
     named: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
-    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
-        "config",
-        "-z",
-        "--get-regexp",
-        pattern,
-    ]);
+    read(executor, workdir, Level::Effective, pattern, named, cancel).await
+}
+
+/// The same read, narrowed to this repository's own configuration file.
+///
+/// A door of its own rather than a flag on [`get_regexp`], because the two
+/// answer different questions and every caller knows which one it came
+/// for. [`get_regexp`] cannot answer this one at all: a key set in two
+/// places arrives twice with no word for which file either record came out
+/// of, so a value that is only inherited reads there exactly like one this
+/// repository wrote down.
+pub async fn get_regexp_local(
+    executor: &GitExecutor,
+    workdir: &Path,
+    pattern: &str,
+    named: &str,
+    cancel: &CancellationToken,
+) -> Result<Vec<u8>, GitError> {
+    read(executor, workdir, Level::Local, pattern, named, cancel).await
+}
+
+/// Which of git's configuration files the read is answered from.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Level {
+    /// Every level, lowest first.
+    Effective,
+    /// This repository's own file alone (`--local`).
+    Local,
+}
+
+async fn read(
+    executor: &GitExecutor,
+    workdir: &Path,
+    level: Level,
+    pattern: &str,
+    named: &str,
+    cancel: &CancellationToken,
+) -> Result<Vec<u8>, GitError> {
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code(1)
+        .args(["config", "-z"]);
+    if level == Level::Local {
+        cmd = cmd.arg("--local");
+    }
+    let cmd = cmd.args(["--get-regexp", pattern]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => Ok(out.stdout),
