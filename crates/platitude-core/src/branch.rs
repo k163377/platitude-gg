@@ -105,24 +105,12 @@ pub async fn checkout(
     };
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(CheckoutOutcome::Moved),
-        Err(GitError::Failed {
-            command,
-            code,
-            stderr,
-        }) => {
-            let refusal = GitError::Failed {
-                command,
-                code,
-                stderr,
-            };
-            match &refusal {
-                GitError::Failed { stderr, .. } if work_is_in_the_way(stderr) => {
-                    Ok(CheckoutOutcome::Blocked(refusal))
-                }
-                _ => Err(refusal),
+        Err(refusal) => match &refusal {
+            GitError::Failed { stderr, .. } if work_is_in_the_way(stderr) => {
+                Ok(CheckoutOutcome::Blocked(refusal))
             }
-        }
-        Err(other) => Err(other),
+            _ => Err(refusal),
+        },
     }
 }
 

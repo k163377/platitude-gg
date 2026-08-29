@@ -46,7 +46,7 @@
 | `branch` | `-d` `-D` `-m` `-M` / `--set-upstream-to=` / `--end-of-options` | 古参(1.8.0)+ gitcli 2.43.0 ✓ |
 | `cat-file` | `-s` / `blob` / `commit` | 古参 |
 | `check-attr` | `-z` / 属性名の並び / `--` | 2.43.0 ✓。**最低バージョンのコンテナで実測**(`cargo xtask linux verify-ui diff-file --preset eol`)— `path\0attr\0value\0` の三つ組で返る |
-| `checkout` | `--ours` / `--theirs`(conflict 用) | 古参(1.6.1) |
+| `restore` | `--ours` / `--theirs`(conflict 用) | 2.43.0 ✓(v2.43.0 の git-restore.txt に記載を確認) |
 | `cherry-pick` | `--no-edit` / `--continue` `--abort` `--skip` `--quit` | 2.39.3 ✓。**`--no-edit` のみ個別マニュアル外** → gitcli §Negating options でカバー |
 | `clean` | `-f` `-d` | 古参 |
 | `commit` | `--amend` / `--allow-empty` / `--reset-author` / `--no-edit` / `--cleanup=whitespace` / `--file` | 2.43.0 ✓ |

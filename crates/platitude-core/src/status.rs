@@ -29,9 +29,6 @@ pub enum StatusItem {
     Untracked {
         path: String,
     },
-    Ignored {
-        path: String,
-    },
 }
 
 impl StatusItem {
@@ -39,8 +36,7 @@ impl StatusItem {
         match self {
             StatusItem::Tracked { path, .. }
             | StatusItem::Unmerged { path, .. }
-            | StatusItem::Untracked { path }
-            | StatusItem::Ignored { path } => path,
+            | StatusItem::Untracked { path } => path,
         }
     }
 }
@@ -140,7 +136,6 @@ impl Counts {
                 }
                 StatusItem::Unmerged { .. } => counts.conflicted += 1,
                 StatusItem::Untracked { .. } => counts.untracked += 1,
-                StatusItem::Ignored { .. } => {}
             }
         }
         counts
@@ -182,7 +177,6 @@ impl Kinds {
                     kinds.take(*staged);
                     kinds.take(*unstaged);
                 }
-                StatusItem::Ignored { .. } => {}
             }
         }
         kinds
@@ -266,9 +260,10 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorkTreeStatus, StatusParseError> {
             "?" => status.items.push(StatusItem::Untracked {
                 path: rest.to_string(),
             }),
-            "!" => status.items.push(StatusItem::Ignored {
-                path: rest.to_string(),
-            }),
+            // Only `--ignored` produces `!` lines and nothing here passes
+            // it; skipped rather than fatal so a caller that ever does is
+            // not broken by them.
+            "!" => {}
             _ => return Err(StatusParseError(token.clone())),
         }
     }

@@ -111,10 +111,11 @@ pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 /// lexer only knows what a line means if it walked the file to get there
 /// ([`crate::highlight`]). `None` where the side cannot be read, is not
 /// UTF-8, or is over [`SOURCE_BYTE_CAP`] — the colours then start each
-/// hunk clean, which is what they did before there was any of this.
+/// hunk clean.
 ///
-/// One read, not two: unlike a preview this has no use for the size on
-/// its own, and the diff it rides beside has already read the same file.
+/// The blob side is one read, not two: a `cat-file -s` probe would spawn
+/// a whole process to save the rare oversized read. The working-tree side
+/// asks the metadata first — that one is free.
 pub async fn source_text(
     executor: &GitExecutor,
     workdir: &Path,
@@ -153,7 +154,12 @@ async fn read_source(
             let out = executor.run_unchecked(cmd, cancel).await.ok()?;
             (out.code == 0).then_some(out.stdout)
         }
-        SideSource::WorkTree(path) => tokio::fs::read(path).await.ok(),
+        SideSource::WorkTree(path) => {
+            if tokio::fs::metadata(path).await.ok()?.len() > SOURCE_BYTE_CAP {
+                return None;
+            }
+            tokio::fs::read(path).await.ok()
+        }
         SideSource::Absent => None,
     }
 }

@@ -318,9 +318,7 @@ impl Footprint for crate::status::StatusItem {
             Self::Tracked {
                 path, orig_path, ..
             } => path.heap_bytes() + orig_path.heap_bytes(),
-            Self::Unmerged { path, .. } | Self::Untracked { path } | Self::Ignored { path } => {
-                path.heap_bytes()
-            }
+            Self::Unmerged { path, .. } | Self::Untracked { path } => path.heap_bytes(),
         }
     }
 }

@@ -158,7 +158,10 @@ fn split_files(raw: &[u8]) -> Vec<RawFile<'_>> {
         if line.starts_with(b"@@ ") {
             flush_hunk(&mut current, &mut hunk);
             if current.is_none() {
-                // Patch without a `diff --git` header (diff between blobs).
+                // A hunk with no `diff --git` in front. `file_diff_raw`
+                // never produces the shape; the hunk-rewriting tests feed
+                // it to pin the rewriting without header noise, and the
+                // rebuilt patch then starts at the hunk.
                 current = Some(RawFile {
                     header: Vec::new(),
                     hunks: Vec::new(),

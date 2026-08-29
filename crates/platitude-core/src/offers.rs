@@ -192,6 +192,9 @@ impl RefMenuOffers {
 
 /// The offers themselves, off values already in hand — no git runs.
 ///
+/// `full` is the row's whole display name as the chip wears it —
+/// `feat`, or `origin/feat` for a remote reading — not a `refs/…` path
+/// (the UI's vocabulary, not [`crate::refs::RefEntry::name`]'s).
 /// `open` is the tab-lifecycle gate and stays the caller's to answer
 /// (as [`crate::remote::push_standing`] holds it); `op_text` is the
 /// operation badge, empty exactly when nothing is standing — bisect

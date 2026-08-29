@@ -162,17 +162,35 @@ pub async fn sides(
         // Both backends keep the same two files under their own
         // directory; the merge backend is the default and the only one
         // this app starts, but a rebase begun at the command line may be
-        // the other.
-        let mut head_name = String::new();
-        let mut onto = String::new();
-        for dir in ["rebase-merge", "rebase-apply"] {
-            if head_name.is_empty() {
-                head_name = git_file(executor, workdir, &format!("{dir}/head-name"), cancel).await;
-            }
-            if onto.is_empty() {
-                onto = git_file(executor, workdir, &format!("{dir}/onto"), cancel).await;
-            }
+        // the other. One `rev-parse` resolves all four paths (the shape
+        // `opstate::detect` uses) instead of a process per file.
+        let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
+        for rel in [
+            "rebase-merge/head-name",
+            "rebase-merge/onto",
+            "rebase-apply/head-name",
+            "rebase-apply/onto",
+        ] {
+            cmd = cmd.args(["--git-path", rel]);
         }
+        let out = executor.run(cmd, cancel).await?;
+        let mut values = [const { String::new() }; 4];
+        for (slot, line) in values.iter_mut().zip(out.stdout_utf8().lines()) {
+            *slot = std::fs::read_to_string(workdir.join(line.trim_end()))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+        }
+        let [merge_head, merge_onto, apply_head, apply_onto] = values;
+        let head_name = if merge_head.is_empty() {
+            apply_head
+        } else {
+            merge_head
+        };
+        let onto = if merge_onto.is_empty() {
+            apply_onto
+        } else {
+            merge_onto
+        };
         return Ok(Sides {
             ours: name_of(executor, workdir, &onto, cancel).await,
             theirs: short_ref(&head_name),
@@ -525,8 +543,10 @@ pub enum Side {
     Theirs,
 }
 
-/// `git checkout --ours|--theirs` followed by `git add`, which is what
-/// "take this side" means to git.
+/// `git restore --ours|--theirs` followed by `git add`, which is what
+/// "take this side" means to git (restore writes the chosen stage into
+/// the working tree and leaves the path unmerged; the add resolves it —
+/// measured, identical to the older `checkout --ours` spelling).
 ///
 /// Note the reversal during a rebase: the commits being replayed are
 /// "theirs", so `Ours` is the upstream side the caller is landing on.
@@ -545,11 +565,11 @@ pub async fn take_side(
         Side::Theirs => "--theirs",
     };
     let specs: Vec<String> = paths.iter().map(|p| literal_pathspec(p)).collect();
-    let checkout = GitCommand::new()
+    let restore = GitCommand::new()
         .cwd(workdir)
-        .args(["checkout", flag, "--"])
+        .args(["restore", flag, "--"])
         .args(specs.iter().map(String::as_str));
-    executor.run(checkout, cancel).await?;
+    executor.run(restore, cancel).await?;
     let add = GitCommand::new()
         .cwd(workdir)
         .args(["add", "--"])
