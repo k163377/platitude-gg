@@ -4,6 +4,21 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // A name git will not take — the branch beside this one already
+    // carries it. **The box stays open holding what was typed** and git's
+    // own words go under it, where closing it first would have thrown the
+    // typing away and left the answer nowhere but the log
+    // (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断).
+    //
+    // Nothing here is a picture: a box that closed and a box that stayed
+    // open are a frame's colour apart, and the words are in a tooltip.
+    // `tone=warning` is the other half — the gesture is still going, which
+    // is the whole reason the box is still there.
+    Verb {
+        name: "rename-taken",
+        when: &[],
+        plain: "rename_taken open=true refused=true bar=true tone=warning why=",
+    },
     // A tag renamed to its own name in other letters. **git writes a ref
     // as a file**, so on a case-insensitive disk both names would be gone
     // — core refuses it outright, and the box is where that answer belongs

@@ -232,7 +232,8 @@ impl RepoTab {
                     ReportKind::StaleUnstage => "stale-unstage",
                     ReportKind::StaleDiscard => "stale-discard",
                     ReportKind::ConflictedPart => "conflicted-part",
-                    ReportKind::StashHalfRenamed => "stash-half",
+                    ReportKind::RenameRefused => "rename",
+                    ReportKind::HalfRenamed => "half-rename",
                 }
                 .to_string(),
                 report.remote,

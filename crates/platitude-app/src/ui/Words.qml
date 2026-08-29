@@ -74,7 +74,8 @@ QtObject {
         case "stale-unstage": return qsTr("Nothing was unstaged")
         case "stale-discard": return qsTr("Nothing was discarded")
         case "conflicted-part": return qsTr("Nothing was taken from this file")
-        case "stash-half": return qsTr("The rename did not finish")
+        case "rename": return qsTr("%1 was not renamed").arg(name)
+        case "half-rename": return qsTr("The rename did not finish")
         default: return qsTr("The commit was not made")
         }
     }
@@ -90,8 +91,8 @@ QtObject {
             return qsTr("The file changed on disk since these rows were read. It has been read again — make the selection on the rows that are there now.")
         case "conflicted-part":
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
-        case "stash-half":
-            return qsTr("The new entry was stored; the one it replaces is still in the list.")
+        case "half-rename":
+            return qsTr("The new name was made; the old one is still there.")
         default: return ""
         }
     }
@@ -99,9 +100,9 @@ QtObject {
     /// The colour a report's own hairline wears (デザイン規約 §答えの要らない報せ / §状態). **One axis, and the name boxes are
     /// on the other end of it** (`SlimField.refused`, which is `warning`):
     ///
-    ///  - **`warning` — the gesture is still going.** A box is open and one keystroke fixes what is in it, or
-    ///    something was left standing that has to be dealt with. Here that is the rename that fell between its halves,
-    ///    and nothing else.
+    ///  - **`warning` — the gesture is still going.** A box is open and one keystroke fixes what is in it (a rename
+    ///    git would not make: nothing moved, and the box is still holding the name), or something was left standing
+    ///    that has to be dealt with (a rename that fell between its halves).
     ///  - **`danger` — the gesture is over and what was asked for did not happen.** Every other report: by the time a
     ///    bar is down the press has been spent and the screen has moved on (the fetch landed, the diff was read again,
     ///    the row came back), so pressing again is a new gesture rather than a correction of this one
@@ -109,7 +110,7 @@ QtObject {
     ///
     /// **Never nothing**: a press that was turned down says so in colour, whoever turned it down.
     function reportTone(kind) {
-        return kind === "stash-half" ? "warning" : "danger"
+        return kind === "rename" || kind === "half-rename" ? "warning" : "danger"
     }
 
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).

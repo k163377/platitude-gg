@@ -54,32 +54,17 @@ pub enum ReportKind {
     /// pieces, so nothing should ask — this is what a write that got here
     /// anyway says for itself.
     ConflictedPart,
-    /// A stash rename that stopped between its two halves: the new entry
-    /// was stored and the old one is still there.
+    /// A rename git would not make — most often because the new name is
+    /// already taken. **Nothing moved and the box is still open**, so the
+    /// reader is in the middle of the gesture rather than past it
+    /// (デザイン規約 §答えの要らない報せ の色の軸).
+    RenameRefused,
+    /// A rename that stopped between its two halves: the new name was
+    /// made and the old one is still there.
     ///
-    /// **The one report about something half done**, which is why it is
-    /// the one that wears a state colour (デザイン規約 §状態 — 進行中で対処が要る).
-    StashHalfRenamed,
-}
-
-impl ReportKind {
-    /// Whether whoever said no is somewhere outside this application, and
-    /// therefore wrote the words the report quotes.
-    ///
-    /// The rest are this end's own refusals, decided before git was
-    /// asked: they carry no words, because the sentence under the heading
-    /// belongs in the UI's own language rather than in a Rust string
-    /// (app-ui.md「Rust に文言を置かない」).
-    #[must_use]
-    pub fn is_spoken_for(self) -> bool {
-        matches!(
-            self,
-            ReportKind::RemoteDelete
-                | ReportKind::RemoteUpdate
-                | ReportKind::Outdated
-                | ReportKind::Commit
-        )
-    }
+    /// **The reports about something half done**, which is why they wear
+    /// a state colour (デザイン規約 §状態 — 進行中で対処が要る).
+    HalfRenamed,
 }
 
 /// One report: the two halves the screen is made of, and the names the
@@ -101,7 +86,11 @@ pub struct WriteReport {
     /// sentence of its own, and never rewrites it
     /// (デザイン規約 §長さ「詳しい事情は git の出力に出ているので UI 文言で代弁しない」).
     ///
-    /// Empty where nothing was said, which is a report of one line.
+    /// Empty where nothing was said, which is a report of one line —
+    /// **and that is how the screen tells the two apart**: this end's own
+    /// refusals quote nobody, so the sentence under the heading is the
+    /// UI's to write (`Words.writeReportedWhy`, app-ui.md「Rust に文言を
+    /// 置かない」).
     pub reason: String,
 }
 
@@ -109,6 +98,50 @@ pub struct WriteReport {
 /// a report are taken out from behind
 /// ([`crate::remote::push`] reads it; the far side's is `remote:`).
 pub const HINT_PREFIX: &str = "hint:";
+
+/// A rename git would not make, said in git's own words.
+///
+/// Written here rather than in each caller because both of them — a
+/// branch and a tag — read exactly the same way: the name is the one the
+/// row still carries, since nothing moved.
+///
+/// **git ran**, so the command is named and the log keeps its row under a
+/// red edge the way it does for any other refusal — what changes is only
+/// where the reader is told (デザイン規約 §git が言ったことを読む場所).
+#[must_use]
+pub fn rename_refused(
+    from: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    let said = out.failure_message();
+    crate::error::GitError::Reported {
+        command,
+        code: out.code,
+        stderr: said.clone(),
+        report: Box::new(WriteReport::about(ReportKind::RenameRefused, from, said)),
+    }
+}
+
+/// A rename that got as far as the new name and no further.
+///
+/// **Nothing here ran a command of its own** — what failed is one step of
+/// several, and its own error is what the log already holds — so the
+/// message carried for the log names the step rather than pretending to a
+/// command line ([`GitError::Reported`]'s display).
+#[must_use]
+pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::GitError {
+    crate::error::GitError::Reported {
+        command: "rename".to_string(),
+        code: 0,
+        stderr: from.to_string(),
+        report: Box::new(WriteReport::about(
+            ReportKind::HalfRenamed,
+            name,
+            String::new(),
+        )),
+    }
+}
 
 impl WriteReport {
     /// A report about a ref on a remote.
@@ -131,5 +164,45 @@ impl WriteReport {
             name: String::new(),
             reason,
         }
+    }
+
+    /// The same, about one ref of its own — a rename knows the name it
+    /// was about, and the heading is written from it.
+    #[must_use]
+    pub fn about(kind: ReportKind, name: &str, reason: String) -> Self {
+        Self {
+            kind,
+            remote: String::new(),
+            name: name.to_string(),
+            reason,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The half-done rename says what it is about and quotes nobody: what
+    /// failed is a step of this application's own making, and the sentence
+    /// under the heading belongs in the UI's language
+    /// (app-ui.md「Rust に文言を置かない」). What the step said goes to the log
+    /// instead, which is the one place it is any use.
+    #[test]
+    fn a_half_done_rename_names_the_ref_and_quotes_nobody() {
+        let inner = crate::error::GitError::UnexpectedOutput {
+            command: "git rev-parse --verify".to_string(),
+            message: "the stash list moved while renaming".to_string(),
+        };
+        let err = half_renamed("stash@{0}", inner);
+
+        let report = err.report().expect("a report");
+        assert_eq!(report.kind, ReportKind::HalfRenamed);
+        assert_eq!(report.name, "stash@{0}");
+        assert!(report.reason.is_empty());
+        assert!(
+            err.to_string().contains("the stash list moved"),
+            "the step's own words reach the log: {err}"
+        );
     }
 }

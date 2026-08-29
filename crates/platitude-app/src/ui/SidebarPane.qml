@@ -79,6 +79,14 @@ Rectangle {
     function beginRename(kind, id, text) {
         rowGestures.beginRename(kind, id, text)
     }
+    /// git's answer to a rename this pane's box sent (`SidebarRowGestures.submitEdit`): it landed, or git would not
+    /// have the name and says so under the box the name is still in.
+    function noteRenameLanded() {
+        rowGestures.renameLanded()
+    }
+    function noteRenameRefused(why) {
+        rowGestures.renameRefused(why)
+    }
     function beginBranchAt(kind, id, oidHex) {
         rowGestures.beginBranchAt(kind, id, oidHex)
     }

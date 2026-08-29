@@ -67,6 +67,7 @@ QtObject {
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
+            || gestures.editGitRefusal !== ""
             || !(gestures.editKind === "stash"
                  ? GitFacts.validStashMessage(gestures.editText)
                  : GitFacts.validRefName(gestures.editText)))
@@ -82,6 +83,10 @@ QtObject {
         && gestures.editText.trim() !== gestures.editId
         && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
+        // git's own words win: it was asked about this very name and answered, where the rest are what this end
+        // worked out before asking.
+        : gestures.editGitRefusal !== ""
+          ? gestures.editGitRefusal
         : gestures.editText.trim() === ""
           ? qsTr("A name is needed")
           : gestures.editCaseOnly
@@ -113,7 +118,12 @@ QtObject {
         gestures.editKey = ""
         gestures.editText = ""
         gestures.editMode = ""
+        gestures.editWaiting = false
+        gestures.editGitRefusal = ""
     }
+    // What git said is about the name it was asked about. One key on top of it and that is no longer the name in the
+    // box, so the answer goes with it.
+    onEditTextChanged: gestures.editGitRefusal = ""
     function submitEdit(text) {
         const kind = gestures.editKind
         const id = gestures.editId
@@ -126,13 +136,45 @@ QtObject {
         // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
         // not what it shows.
         const was = kind === "remote" ? gestures.remoteBranchHalf(id) : id
-        gestures.stopEdit()
-        if (mode === "branch")
+        if (mode === "branch") {
+            gestures.stopEdit()
             gestures.host.branchAtRequested(oid, text.trim())
-        else if (mode === "tag")
+            return
+        }
+        if (mode === "tag") {
+            gestures.stopEdit()
             gestures.host.tagAtRequested(oid, text.trim())
-        else if (text.trim() !== was)
-            gestures.host.renameSubmitted(kind, id, text.trim())
+            return
+        }
+        // The name it opened holding is not a rename: the box was left as it was found, so this is the way out of it.
+        if (text.trim() === was) {
+            gestures.stopEdit()
+            return
+        }
+        // **A rename keeps its box until git answers** (デザイン規約 §答えの要らない報せ の色の軸): git turns names down that
+        // nothing here could have known about — one that is already taken is the common one — and closing the box
+        // first throws away what was typed and leaves the answer nowhere to go but the log. The page takes it down on
+        // the landing (`RepoPage.absorbWriteResult`).
+        gestures.editWaiting = true
+        gestures.host.renameSubmitted(kind, id, text.trim())
+    }
+    /// A rename is out and git has not answered yet. The box stays as it is, and what comes back either takes it down
+    /// or writes git's own refusal under it (`editGitRefusal`).
+    property bool editWaiting: false
+    /// What git said about the name in the box, kept until the reader types something else — at which point it is
+    /// about a name nobody asked git about.
+    property string editGitRefusal: ""
+    /// The answer to that rename: it landed, so the box has done its job.
+    function renameLanded() {
+        if (gestures.editWaiting)
+            gestures.stopEdit()
+    }
+    /// …or git would not have it, and the box is where that belongs.
+    function renameRefused(why) {
+        if (!gestures.editWaiting)
+            return
+        gestures.editWaiting = false
+        gestures.editGitRefusal = why
     }
     /// A click landed somewhere: any box open elsewhere is walked away from (nothing is asked — what it costs is the
     /// typing). Which row it landed on is the gesture's own to remember — it is what tells its next click apart.

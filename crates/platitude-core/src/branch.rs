@@ -227,6 +227,12 @@ pub async fn delete(
 }
 
 /// Renames a local branch. `force` allows overwriting an existing name.
+///
+/// **A refusal here is a report, not an error** (デザイン規約 §答えの要らない報せ):
+/// nothing moved, git said why, and the box the name was typed into is
+/// still open — so the answer belongs in it rather than in a log the
+/// reader has to go and open ([`crate::report::ReportKind::RenameRefused`]).
+/// The common one is a name that is already taken.
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -239,7 +245,12 @@ pub async fn rename(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["branch", flag, "--", from, to]);
-    executor.run(cmd, cancel).await.map(drop)
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(()),
+        _ => Err(crate::report::rename_refused(from, command, &out)),
+    }
 }
 
 /// Records which remote branch a local one is measured against

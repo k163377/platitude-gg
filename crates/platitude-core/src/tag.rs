@@ -47,11 +47,32 @@ pub async fn rename(
             ),
         });
     }
+    // **The two halves fail differently, and say so differently**
+    // (デザイン規約 §答えの要らない報せ): nothing has moved while the new name is
+    // being made, so a refusal there is one the box the name was typed
+    // into can still answer — most often the name is taken. Once it is
+    // made, a failure to take the old one off leaves both standing, which
+    // is the same half-done rename a stash's has.
     let create = GitCommand::new()
         .cwd(workdir)
         .args(["tag", "--end-of-options", to, from]);
-    executor.run(create, cancel).await?;
-    delete(executor, workdir, from, cancel).await
+    let command = create.describe();
+    let out = executor.run_unchecked(create, cancel).await?;
+    if out.code != 0 {
+        return Err(crate::report::rename_refused(from, command, &out));
+    }
+    delete(executor, workdir, from, cancel)
+        .await
+        .map_err(|error| {
+            // **A session closing is not a half-finished rename.** Cancellation
+            // is how a write is stopped on the way out, and it is told apart
+            // from a failure one layer up (`session::write`); dressed as a
+            // report it would raise a bar over a window that is going away.
+            if error.is_cancelled() || error.report().is_some() {
+                return error;
+            }
+            crate::report::half_renamed(from, error)
+        })
 }
 
 /// Puts `name` on `commit` — a lightweight tag, which is what `git tag`

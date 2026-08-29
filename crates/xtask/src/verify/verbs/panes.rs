@@ -235,7 +235,7 @@ pub(super) const TABLE: &[Verb] = &[
         name: "report-tone",
         when: &[
             (
-                Arg::Is("stash-half"),
+                Arg::Is("half-rename"),
                 "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                  said=The rename did not finish",
             ),

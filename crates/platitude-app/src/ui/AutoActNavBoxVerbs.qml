@@ -73,6 +73,12 @@ Item {
             sidebarPane.beginRename(kind, id, shown)
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
+        } else if (act === "rename-taken") {
+            // A name git will not take, submitted for real: the box stays open holding it, and git's own words go
+            // under it as well as into the bar (デザイン規約 §答えの要らない報せ). The argument is the name to type.
+            sidebarPane.beginRename("branch", workTree.branch, arg)
+            sidebarPane.submitEdit(arg)
+            renameTakenTimer.start()
         } else if (act === "rename-tag-box") {
             // The box opened with the argument already typed in it, the way `rename-remote-box` is — so a name the box
             // itself turns down can be photographed being turned down (デザイン規約 §答えの要らない報せ: 押す前に断る側).
@@ -127,6 +133,26 @@ Item {
             return false
         }
         return true
+    }
+    // The box has to still be there when the picture is taken, and what proves it is the box's own state rather than
+    // the frame: a box that closed and a box that stayed open with a warning frame are two pixels apart. Waited on the
+    // refusal arriving rather than on the write barrier, since the words come back with the answer.
+    SampleTimer {
+        id: renameTakenTimer
+        onTriggered: {
+            // The bar all the way down as well as the box: the words are written on the answer and the height follows
+            // over 200ms, so a picture taken on the refusal alone catches a bar 12px tall (`NoticeBar.settled`,
+            // 実測 2026-08-29 — the first run of this verb framed exactly that).
+            if (repoTab.busyCount !== 0 || !sidebarPane.editRefused || !page.noticeCard.settled)
+                return
+            renameTakenTimer.stop()
+            AppBackend.report("rename_taken open=" + (sidebarPane.editKey !== "")
+                              + " refused=" + sidebarPane.editRefused
+                              + " bar=" + page.noticeCard.open
+                              + " tone=" + page.noticeCard.tone
+                              + " why=" + sidebarPane.editRefusedWhy)
+            driver.complete()
+        }
     }
     // PG_AUTO_ACT=nav-rename-far: the section is opened, scrolled until its first row is out of sight, and only then
     // asked for a box on that row. Each step waits for the one before to have landed — a list still building has no

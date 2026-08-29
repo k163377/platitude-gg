@@ -82,18 +82,16 @@ pub async fn rename(
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
     if found.stdout_utf8().trim() != entry.oid {
-        // The one refusal in this application that leaves something half
-        // done, and the one report that wears a state colour for it
-        // (デザイン規約 §答えの要らない報せ / §状態).
-        return Err(GitError::Reported {
-            command: String::new(),
-            code: 0,
-            stderr: String::new(),
-            report: Box::new(crate::report::WriteReport::local(
-                crate::report::ReportKind::StashHalfRenamed,
-                String::new(),
-            )),
-        });
+        // A rename that got as far as the new entry and no further: the
+        // list moved under it, so which entry to take away is exactly what
+        // could not be worked out (デザイン規約 §答えの要らない報せ / §状態).
+        return Err(crate::report::half_renamed(
+            selector,
+            GitError::UnexpectedOutput {
+                command: "git rev-parse --verify".to_string(),
+                message: "the stash list moved while renaming".to_string(),
+            },
+        ));
     }
     run_selector(executor, workdir, "drop", &shifted, cancel).await
 }

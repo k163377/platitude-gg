@@ -50,9 +50,13 @@ pub(super) fn taking(side: PatchSide) -> ReportKind {
 /// its own language (デザイン規約 §答えの要らない報せ).
 pub(super) fn stale(kind: ReportKind) -> GitError {
     GitError::Reported {
-        command: String::new(),
+        // No command ran, so there is none to name — but the write log
+        // still prints this error when the queue reports the failure, and
+        // a message with nothing in it says nothing at all. The kind is
+        // what there is to say (`session::write`).
+        command: "stage".to_string(),
         code: 0,
-        stderr: String::new(),
+        stderr: format!("{kind:?}"),
         report: Box::new(WriteReport::local(kind, String::new())),
     }
 }

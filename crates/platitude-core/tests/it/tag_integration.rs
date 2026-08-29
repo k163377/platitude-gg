@@ -11,6 +11,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use platitude_core::report::ReportKind;
 use platitude_core::tag;
 
 #[tokio::test]
@@ -116,4 +117,35 @@ async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
         "git's own refusal, not an unrecognised option: {message}"
     );
     assert_eq!(repo.git(&["tag", "--list"]), "");
+}
+
+/// The first half of a rename: nothing has moved yet, so a refusal there
+/// is one the box the name was typed into can still answer
+/// (デザイン規約 §答えの要らない報せ). The second half — the new name made and the
+/// old one still there — is [`platitude_core::report::half_renamed`], which
+/// has no arrangement that reaches it from here.
+#[tokio::test]
+async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["tag", "v1.0"]);
+    repo.git(&["tag", "taken"]);
+    let (exec, cancel) = env();
+
+    let err = tag::rename(&exec, &repo.path, "v1.0", "taken", &cancel)
+        .await
+        .expect_err("git will not put a name that is taken on a second tag");
+    let Some(report) = err.report() else {
+        panic!("a name git would not take is a report: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RenameRefused);
+    assert_eq!(report.name, "v1.0", "the tag still carries the old name");
+    assert!(
+        !report.reason.is_empty(),
+        "git said why, and that goes under the box"
+    );
+    assert!(
+        repo.git(&["tag", "--list"]).contains("v1.0"),
+        "nothing moved"
+    );
 }

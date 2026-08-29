@@ -93,7 +93,32 @@ Rectangle {
         graphArea.namingOpenedWith = text
         graphList.namingOid = oidHex
     }
+    /// A rename is out of this box and git has not answered yet, and what git said about the name still in it — the
+    /// pair the left menu's box carries under its own names (`SidebarRowGestures.editWaiting` / `editGitRefusal`).
+    property bool namingWaiting: false
+    property string namingGitRefusal: ""
+    // What git said is about the name it was asked about; one key on top of it and that is no longer the name in the
+    // box.
+    Connections {
+        target: graphList
+        function onNamingTextChanged() {
+            graphArea.namingGitRefusal = ""
+        }
+    }
+    /// The answer: the box has done its job, or git would not have the name and the box is where that belongs.
+    function renameLanded() {
+        if (graphArea.namingWaiting)
+            graphArea.stopNaming()
+    }
+    function renameRefused(why) {
+        if (!graphArea.namingWaiting)
+            return
+        graphArea.namingWaiting = false
+        graphArea.namingGitRefusal = why
+    }
     function stopNaming() {
+        graphArea.namingWaiting = false
+        graphArea.namingGitRefusal = ""
         // **A box coming down spends the gesture that opened it.** The press that walks away from a box lands before
         // the click it belongs to (`FocusRelease` fires on the press, `MouseArea.clicked` on the release), so by the
         // time the click is answered the box is already gone — and a click that found no box would come up as a
@@ -354,19 +379,23 @@ Rectangle {
             const kind = graphList.namingKind
             const id = graphArea.namingId
             const was = graphArea.namingOpenedWith
-            graphArea.stopNaming()
-            // An empty box is the way out of the offer, not a branch or a tag called nothing.
-            if (name === "")
+            // **A rename keeps its box until git answers** — the same rule the left menu's box follows, and for the
+            // same reason (`SidebarRowGestures.submitEdit`, デザイン規約 §答えの要らない報せ). Everything else is done with its
+            // box the moment it is submitted.
+            if (mode === "rename" && name !== "" && name !== was) {
+                graphArea.namingWaiting = true
+                graphArea.renameSubmitted(kind, id, name)
                 return
-            if (mode === "rename") {
-                // The name it opened holding is not a rename: the box was left as it was found.
-                if (name !== was)
-                    graphArea.renameSubmitted(kind, id, name)
-            } else if (mode === "tag") {
-                graphArea.createTagRequested(oidHex, name)
-            } else {
-                graphArea.createBranchRequested(oidHex, name)
             }
+            graphArea.stopNaming()
+            // An empty box is the way out of the offer, not a branch or a tag called nothing — and a rename that
+            // reaches here is one left holding the name it opened with, which is the same way out.
+            if (name === "" || mode === "rename")
+                return
+            if (mode === "tag")
+                graphArea.createTagRequested(oidHex, name)
+            else
+                graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
         onWheelTaken: graphArea.autoScrolling = false

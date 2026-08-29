@@ -23,7 +23,7 @@ QtObject {
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
-                "rename-branch", "rename-tag", "rename-stash",
+                "rename-branch", "rename-tag", "rename-stash", "rename-taken",
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
@@ -83,6 +83,9 @@ QtObject {
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
                 "report-tone", "rename-tag-box",
+                // The write barrier is behind this one: what it photographs is the box still standing after git's
+                // answer, and the answer is what puts the words in it.
+                "rename-taken",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // The write barrier is in front of this one's claim: the second press is turned away before any
                 // write is made, so the answer to the first is not what the run is waiting for.

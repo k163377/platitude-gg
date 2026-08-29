@@ -826,6 +826,41 @@ async fn a_commit_git_itself_refuses_reads_the_same_way() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");
 }
 
+/// A name git will not take is a report, not an error: nothing moved, and
+/// the box the name was typed into is still open to take the answer
+/// (デザイン規約 §答えの要らない報せ). The name it carries is the one the row still
+/// has, since the rename is exactly what did not happen.
+#[tokio::test]
+async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["branch", "taken"]);
+    let (exec, cancel) = env();
+
+    let err = branch::rename(&exec, &repo.path, "main", "taken", false, &cancel)
+        .await
+        .expect_err("git will not take a name that is already there");
+    let Some(report) = err.report() else {
+        panic!("a name git would not take is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RenameRefused);
+    assert_eq!(report.name, "main", "the row still carries the old name");
+    assert!(
+        report.reason.contains("already exists"),
+        "git said why, and that is what goes under the box: {}",
+        report.reason
+    );
+    assert!(
+        err.to_string().contains("git branch"),
+        "git's whole message is still there for the log: {err}"
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "main",
+        "nothing moved"
+    );
+}
+
 /// Writes one of the repository's own hooks and makes it runnable.
 fn write_hook(repo: &TestRepo, name: &str, body: &str) {
     let hooks = repo.path.join(".git").join("hooks");

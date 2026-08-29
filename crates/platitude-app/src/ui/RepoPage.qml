@@ -596,6 +596,11 @@ Item {
         } else if (kind === "stash") {
             repoTab.renameStash(id, name)
         } else if (kind === "remote") {
+            // **No write goes out here** — this one is asked first, and the question carries both names from now on
+            // (`askRenameRemote`). So the box that sent it has nothing to wait for and comes down, where every other
+            // rename keeps it until git answers (デザイン規約 §答えの要らない報せ). Left waiting, a dismissed question would
+            // leave it standing over the sidebar with nothing coming.
+            page.noteRenameLanded()
             page.askRenameRemote(id, name)
         }
     }
@@ -604,6 +609,18 @@ Item {
     /// name over waits until git says the local rename landed.
     property string pendingRenameRemote: ""
     property string pendingRenameTo: ""
+
+    /// A rename's box stays open until git answers, and these are the two words back to it. **Both boxes are asked**
+    /// and only the one that was waiting acts: a rename comes from the left menu's row or from the chip on the graph,
+    /// and neither knows about the other (デザイン規約 §答えの要らない報せ).
+    function noteRenameLanded() {
+        sidebarPane.noteRenameLanded()
+        graphPane.renameLanded()
+    }
+    function noteRenameRefused(why) {
+        sidebarPane.noteRenameRefused(why)
+        graphPane.renameRefused(why)
+    }
 
     /// Renaming a branch on a remote, which git has no command for: core pushes the new name and deletes the old, so
     /// the question is asked first and its answer is held down rather than clicked — this is the one write here that
@@ -919,6 +936,9 @@ Item {
     readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "" || graphPane.namingMode !== "rename")
             return ""
+        // git was asked about this very name and answered; everything below is what this end works out before asking.
+        if (graphPane.namingGitRefusal !== "")
+            return graphPane.namingGitRefusal
         const typed = graphPane.namingText
         if (typed.trim() === "")
             return qsTr("A name is needed")
@@ -1189,7 +1209,17 @@ Item {
             // where the reader left it (デザイン規約 §答えの要らない報せ). Ahead of the branch delete's own second move:
             // `Delete both` is a branch write whose remote half is what the far side refused, and the row it would
             // morph is about the half that landed.
+            // Anything but the name itself being turned down leaves the box nothing to answer, so it comes down the
+            // way a landing takes it down — a half-finished rename most of all, where the row it was on is exactly
+            // what could not be found.
+            if (repoTab.writeReportKind !== "rename")
+                page.noteRenameLanded()
             if (repoTab.writeReportKind !== "") {
+                // A name git would not take goes back into the box it was typed into as well as into the bar: the
+                // box is still open, holding it (デザイン規約 §答えの要らない報せ). Whichever of the two boxes was waiting
+                // answers; the other is not open and says nothing.
+                if (repoTab.writeReportKind === "rename")
+                    page.noteRenameRefused(repoTab.writeReportReason)
                 page.showReport(repoTab.writeReportKind,
                                 repoTab.writeReportRemote,
                                 repoTab.writeReportName,
@@ -1241,6 +1271,15 @@ Item {
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
             refRowMenu.close()
         }
+        // The name went in, so the box that was holding it has done its job and comes down (デザイン規約 §答えの要らない報せ:
+        // a rename keeps its box until git answers).
+        //
+        // **Only once the queue has drained.** The writes are serialised but a fetch queued ahead of the rename
+        // answers first, and this branch cannot tell whose answer it is holding — closing the box on that one would
+        // take it down before its own refusal arrived, leaving git's words nowhere to go. Nothing else can be in
+        // flight when the rename's own answer lands, so `busyCount` is the gate.
+        if (repoTab.busyCount === 0)
+            page.noteRenameLanded()
         // The branch took its new name here; the remote it speaks for is still under the old one. Asked only now, and
         // only because there is a remote to ask about (デザイン規約 §左メニューの所作).
         if (repoTab.writeBranchOp && page.pendingRenameRemote !== "") {
