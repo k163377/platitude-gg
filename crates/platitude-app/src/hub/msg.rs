@@ -294,3 +294,13 @@ impl DiffMsg {
         }
     }
 }
+
+/// What the details feed carries: the answer, or word that none is
+/// coming — the pane holds a spinner against the oid it asked for, and
+/// only a message can take it down.
+#[derive(Debug)]
+pub enum DetailsMsg {
+    Loaded(Box<platitude_core::details::CommitDetails>),
+    /// The read failed (the failure itself reaches the error surface).
+    Failed { oid_hex: String },
+}

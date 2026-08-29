@@ -137,7 +137,7 @@ pub struct Feeds {
     pub status_nav_staged: Arc<Feed<StatusMsg>>,
     pub stash: Arc<Feed<Vec<StashEntry>>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
-    pub details: Arc<Feed<platitude_core::details::CommitDetails>>,
+    pub details: Arc<Feed<DetailsMsg>>,
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,
 }

@@ -5,7 +5,7 @@ use std::time::Instant;
 use platitude_core::Oid;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::{Feed, Hub};
+use crate::hub::{DetailsMsg, Feed, Hub};
 
 use super::pathtree::DirNode;
 use super::qml_register;
@@ -95,7 +95,7 @@ pub struct DetailsModel {
     loading: bool,
     requested: String,
     requested_at: Option<Instant>,
-    feed: Option<Arc<Feed<platitude_core::details::CommitDetails>>>,
+    feed: Option<Arc<Feed<DetailsMsg>>>,
     tab_id: i32,
 }
 

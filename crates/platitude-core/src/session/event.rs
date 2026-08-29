@@ -186,6 +186,13 @@ pub enum SessionEvent {
     DetailsLoaded {
         details: CommitDetails,
     },
+    /// The details read for `oid` failed. The failure itself goes out as
+    /// [`SessionEvent::OpFailed`] like every read's; this one is for the
+    /// pane showing a spinner against that oid, which nothing else would
+    /// take down.
+    DetailsFailed {
+        oid: Oid,
+    },
     DiffLoaded {
         target: DiffTarget,
         /// Shared with the colouring that follows, which reads the same

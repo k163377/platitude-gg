@@ -91,8 +91,20 @@ impl DetailsModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        let Some(details) = feed.drain().pop() else {
+        let Some(msg) = feed.drain().pop() else {
             return;
+        };
+        let details = match msg {
+            crate::hub::DetailsMsg::Loaded(details) => details,
+            crate::hub::DetailsMsg::Failed { oid_hex } => {
+                // Only the spinner comes down (the failure itself is on
+                // the error surface); an answer already on screen stays.
+                if oid_hex == self.requested {
+                    self.loading = false;
+                    self.changed();
+                }
+                return;
+            }
         };
         let hex = details.oid.to_hex();
         if hex != self.requested {
