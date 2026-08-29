@@ -9,6 +9,9 @@ mod rows;
 mod select;
 mod words;
 
+#[cfg(test)]
+mod rows_tests;
+
 pub use columns::{any_wide, has_wide, widest_columns};
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::fake_pr_set;
