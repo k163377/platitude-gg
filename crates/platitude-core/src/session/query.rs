@@ -252,20 +252,14 @@ impl RepoSession {
     /// The fingerprint the pane was last handed for `target`, or `None`
     /// when what it holds is a diff of something else.
     fn diff_seen(&self, target: &DiffTarget) -> Option<u64> {
-        let slot = match self.last_diff.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let slot = relock(&self.last_diff);
         slot.as_ref()
             .filter(|(held, _)| held == target)
             .map(|(_, fingerprint)| *fingerprint)
     }
 
     fn note_diff(&self, target: &DiffTarget, fingerprint: u64) {
-        let mut slot = match self.last_diff.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut slot = relock(&self.last_diff);
         *slot = Some((target.clone(), fingerprint));
     }
 
@@ -320,10 +314,7 @@ impl RepoSession {
             }
             // The lexer states the last reading of this file left behind
             // (`RepoSession::lex_cache`) ride along and come back grown.
-            let cache = match s.lex_cache.lock() {
-                Ok(mut g) => g.take(),
-                Err(e) => e.into_inner().take(),
-            };
+            let cache = relock(&s.lex_cache).take();
             let (colors, cache) = match tokio::task::spawn_blocking(move || {
                 crate::highlight::colors_cached(&patches, source.as_deref(), cache)
             })
@@ -338,10 +329,7 @@ impl RepoSession {
             // Kept even where the answer is not wanted any more: the
             // states are about the file, not about who asked, and the
             // cache tells a stale source apart on its own.
-            match s.lex_cache.lock() {
-                Ok(mut g) => *g = cache,
-                Err(e) => *e.into_inner() = cache,
-            }
+            *relock(&s.lex_cache) = cache;
             // Asked again: a long colouring can be overtaken while it runs,
             // and the pane would drop the answer anyway.
             if !s.diff_is_current(epoch) {

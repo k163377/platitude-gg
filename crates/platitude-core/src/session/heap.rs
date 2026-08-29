@@ -28,10 +28,7 @@ impl RepoSession {
         ];
         drop(shared);
 
-        let snapshot = match self.last_snapshot.lock() {
-            Ok(g) => g.clone(),
-            Err(e) => e.into_inner().clone(),
-        };
+        let snapshot = relock(&self.last_snapshot).clone();
         let (snap_bytes, snap_refs) = match &snapshot {
             Some(s) => (
                 s.heap_bytes(),
@@ -48,18 +45,12 @@ impl RepoSession {
             index.len(),
         ));
 
-        let marks = match self.eol_marks.lock() {
-            Ok(g) => Arc::clone(&g),
-            Err(e) => Arc::clone(&e.into_inner()),
-        };
+        let marks = Arc::clone(&relock(&self.eol_marks));
         parts.push(Part::new("eol-marks", marks.heap_bytes(), marks.len()));
 
-        let (base_bytes, base_count) = match self.eol_baselines.lock() {
-            Ok(g) => (g.heap_bytes(), g.len()),
-            Err(e) => {
-                let g = e.into_inner();
-                (g.heap_bytes(), g.len())
-            }
+        let (base_bytes, base_count) = {
+            let g = relock(&self.eol_baselines);
+            (g.heap_bytes(), g.len())
         };
         parts.push(Part::new("eol-baselines", base_bytes, base_count));
         parts

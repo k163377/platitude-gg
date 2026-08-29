@@ -21,14 +21,10 @@ impl RepoSession {
             branch: head.branch.clone().unwrap_or_default(),
             on_a_ref: reachable::a_ref_sits_on_head(refs, head),
         });
-        if let Ok(mut slot) = self.head_hold.lock() {
-            *slot = hold;
-        }
+        *relock(&self.head_hold) = hold;
         // Beside the hold, and both are written before anything this
         // read wakes can look.
-        if let Ok(mut slot) = self.head_tip.lock() {
-            *slot = Some(head.oid);
-        }
+        *relock(&self.head_tip) = Some(head.oid);
     }
 
     /// Where the last refs read left HEAD, for a caller that would
@@ -36,10 +32,7 @@ impl RepoSession {
     ///
     /// `None` means no read has landed and there is nothing to go on.
     pub(super) fn known_head_tip(&self) -> Option<Option<Oid>> {
-        match self.head_tip.lock() {
-            Ok(slot) => *slot,
-            Err(e) => *e.into_inner(),
-        }
+        *relock(&self.head_tip)
     }
 
     /// Answers whether the branch HEAD is on is the only thing holding its
@@ -52,7 +45,7 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return;
         };
-        let Ok(Some(hold)) = self.head_hold.lock().map(|slot| slot.clone()) else {
+        let Some(hold) = relock(&self.head_hold).clone() else {
             // No tip (an unborn branch): nothing to lose, nothing to ask.
             self.publish_head_reach(false);
             return;
@@ -90,11 +83,8 @@ impl RepoSession {
     }
 
     fn publish_head_reach(&self, reached_elsewhere: bool) {
-        let moved = self
-            .head_reach_seen
-            .lock()
-            .map(|mut slot| slot.replace(reached_elsewhere) != Some(reached_elsewhere))
-            .unwrap_or(true);
+        let moved =
+            relock(&self.head_reach_seen).replace(reached_elsewhere) != Some(reached_elsewhere);
         if moved {
             self.sink
                 .event(SessionEvent::HeadReachChecked { reached_elsewhere });

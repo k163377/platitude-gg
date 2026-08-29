@@ -233,6 +233,16 @@ pub trait SessionSink: Send + Sync + 'static {
     fn event(&self, event: SessionEvent);
 }
 
+/// Takes a lock, poisoned or not. Every lock in the session guards plain
+/// data that stays usable after a holder panicked, so the guard is
+/// recovered rather than every later reader failing too.
+pub(crate) fn relock<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    match lock.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
 /// One pending file whose change has something to say about line endings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EolMark {

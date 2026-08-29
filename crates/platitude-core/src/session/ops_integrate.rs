@@ -277,17 +277,11 @@ impl RepoSession {
     }
 
     pub(super) fn merge_tool_seen(&self) -> String {
-        match self.merge_tool_seen.lock() {
-            Ok(g) => g.clone(),
-            Err(e) => e.into_inner().clone(),
-        }
+        relock(&self.merge_tool_seen).clone()
     }
 
     pub(super) fn set_merge_tool_seen(&self, tool: String) {
-        match self.merge_tool_seen.lock() {
-            Ok(mut g) => *g = tool,
-            Err(e) => *e.into_inner() = tool,
-        }
+        *relock(&self.merge_tool_seen) = tool;
     }
 
     /// Has the next status read name the merge tool even with nothing

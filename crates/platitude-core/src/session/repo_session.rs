@@ -218,10 +218,7 @@ impl RepoSession {
 
     /// Time budget for fetch / push.
     pub fn network_timeout(&self) -> std::time::Duration {
-        match self.network_timeout.lock() {
-            Ok(g) => *g,
-            Err(e) => *e.into_inner(),
-        }
+        *relock(&self.network_timeout)
     }
 
     /// Raises or lowers the fetch / push time budget. Zero is ignored — a
@@ -230,9 +227,7 @@ impl RepoSession {
         if timeout.is_zero() {
             return;
         }
-        if let Ok(mut guard) = self.network_timeout.lock() {
-            *guard = timeout;
-        }
+        *relock(&self.network_timeout) = timeout;
     }
 
     /// Moves what the command log keeps — whether the reads this session
@@ -289,25 +284,15 @@ impl RepoSession {
     }
 
     pub(super) fn set_info(&self, info: RepoInfo) {
-        if let Ok(mut guard) = self.info.lock() {
-            *guard = Some(info);
-        }
+        *self.lock_info() = Some(info);
     }
 
     pub(super) fn lock_info(&self) -> std::sync::MutexGuard<'_, Option<RepoInfo>> {
-        // A poisoned lock only happens if a holder panicked; the data is a
-        // plain snapshot, safe to keep using.
-        match self.info.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
+        relock(&self.info)
     }
 
     pub(super) fn lock_shared(&self) -> std::sync::MutexGuard<'_, Shared> {
-        match self.shared.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
+        relock(&self.shared)
     }
 }
 

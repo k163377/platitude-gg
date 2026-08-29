@@ -13,17 +13,11 @@ impl RepoSession {
     /// went out would then sit empty until something moved, and "nothing
     /// changed" is the state that lasts longest.
     pub(super) fn published_snapshot(&self) -> Option<Arc<RefsSnapshot>> {
-        match self.last_snapshot.lock() {
-            Ok(slot) => slot.as_ref().map(Arc::clone),
-            Err(e) => e.into_inner().as_ref().map(Arc::clone),
-        }
+        relock(&self.last_snapshot).as_ref().map(Arc::clone)
     }
 
     pub(super) fn share_snapshot(&self, fresh: RefsSnapshot) -> Arc<RefsSnapshot> {
-        let mut slot = match self.last_snapshot.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut slot = relock(&self.last_snapshot);
         if let Some(previous) = slot.as_ref()
             && **previous == fresh
         {

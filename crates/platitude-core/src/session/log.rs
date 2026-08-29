@@ -214,10 +214,7 @@ impl RepoSession {
     }
 
     fn lock_log_options(&self) -> std::sync::MutexGuard<'_, LogOptions> {
-        match self.log_options.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
+        relock(&self.log_options)
     }
 
     /// Restarts the log → graph stream (used by manual full refresh).
@@ -261,12 +258,7 @@ impl RepoSession {
     /// (core.md).
     pub(super) fn take_log_token(&self) -> CancellationToken {
         let run_cancel = self.root_cancel.child_token();
-        if let Some(prev) = self
-            .log_cancel
-            .lock()
-            .map(|mut g| g.replace(run_cancel.clone()))
-            .unwrap_or_default()
-        {
+        if let Some(prev) = relock(&self.log_cancel).replace(run_cancel.clone()) {
             prev.cancel();
         }
         run_cancel

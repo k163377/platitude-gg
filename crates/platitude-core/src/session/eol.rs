@@ -103,10 +103,7 @@ impl RepoSession {
             return;
         };
         let stamp = ConfigStamp::of(&path);
-        let mut seen = match self.config_stamp.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut seen = relock(&self.config_stamp);
         if seen.as_ref() == Some(&stamp) {
             return;
         }
@@ -156,17 +153,13 @@ impl RepoSession {
         cancel: &CancellationToken,
     ) -> Option<eol::Baseline> {
         let key = eol::cache_key(path);
-        if let Ok(cache) = self.eol_baselines.lock()
-            && let Some(hit) = cache.get(&key)
-        {
-            return hit.clone();
+        if let Some(hit) = relock(&self.eol_baselines).get(&key).cloned() {
+            return hit;
         }
         let fresh = eol::baseline(&self.executor, workdir, path, cancel)
             .await
             .unwrap_or_default();
-        if let Ok(mut cache) = self.eol_baselines.lock() {
-            cache.insert(key, fresh.clone());
-        }
+        relock(&self.eol_baselines).insert(key, fresh.clone());
         fresh
     }
 
@@ -183,18 +176,13 @@ impl RepoSession {
     /// that answer before the command, while external moves invalidate it
     /// separately for the next read.
     pub(super) fn forget_eol_derived(&self) {
-        if let Ok(mut cache) = self.eol_baselines.lock() {
-            cache.clear();
-        }
+        relock(&self.eol_baselines).clear();
         self.eol_normalises.forget();
         self.eol_marks_stale.store(true, Ordering::SeqCst);
     }
 
     pub(super) fn eol_marks(&self) -> Arc<Vec<EolMark>> {
-        match self.eol_marks.lock() {
-            Ok(marks) => Arc::clone(&marks),
-            Err(_) => Arc::new(Vec::new()),
-        }
+        Arc::clone(&relock(&self.eol_marks))
     }
 
     /// Which pending files have something to say about their line endings.
@@ -216,9 +204,7 @@ impl RepoSession {
         } else {
             Vec::new()
         });
-        if let Ok(mut slot) = self.eol_marks.lock() {
-            *slot = Arc::clone(&marks);
-        }
+        *relock(&self.eol_marks) = Arc::clone(&marks);
         marks
     }
 

@@ -68,11 +68,7 @@ impl RepoSession {
                 self.remember_head_hold(&refs, &head);
                 let remote_tags = self.remote_tag_index();
                 let key = refs_key(&refs, &head);
-                let previous = self
-                    .refs_key
-                    .lock()
-                    .map(|mut slot| slot.replace(key))
-                    .unwrap_or_default();
+                let previous = relock(&self.refs_key).replace(key);
                 // **The joins have a key of their own** (`join_key`), and
                 // an unmoved repository does not build them at all. It
                 // used to: a quiet tick sorted 53,724 refs into a snapshot
@@ -91,11 +87,7 @@ impl RepoSession {
                     self.worktree_gen.load(Ordering::SeqCst),
                     &remotes,
                 );
-                let seen = self
-                    .join_key
-                    .lock()
-                    .map(|mut slot| slot.replace(inputs))
-                    .unwrap_or_default();
+                let seen = relock(&self.join_key).replace(inputs);
                 if seen == Some(inputs)
                     && let Some(held) = self.published_snapshot()
                 {
@@ -173,19 +165,13 @@ impl RepoSession {
     /// What a standing merge is bringing in, as the last status read left
     /// it (see [`RepoSession::merge_incoming`]).
     pub(super) fn merge_incoming(&self) -> Vec<Oid> {
-        match self.merge_incoming.lock() {
-            Ok(g) => g.clone(),
-            Err(e) => e.into_inner().clone(),
-        }
+        relock(&self.merge_incoming).clone()
     }
 
     /// Records them, answering whether they moved — a merge that started,
     /// finished or was aborted redraws the WIP row's leashes.
     fn set_merge_incoming(&self, incoming: Vec<Oid>) -> bool {
-        let mut slot = match self.merge_incoming.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut slot = relock(&self.merge_incoming);
         let moved = *slot != incoming;
         *slot = incoming;
         moved
@@ -313,11 +299,7 @@ impl RepoSession {
                 // status reads no diffs.
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
                 let key = status_key(&status);
-                let moved = self
-                    .status_key
-                    .lock()
-                    .map(|mut slot| slot.replace(key) != Some(key))
-                    .unwrap_or(true);
+                let moved = relock(&self.status_key).replace(key) != Some(key);
                 let eol_marks = if stale || moved {
                     self.settle_eol_marks(&workdir, &status, &cancel).await
                 } else {

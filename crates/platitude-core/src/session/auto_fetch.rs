@@ -48,10 +48,7 @@ impl RepoSession {
     /// turned automatic fetching off has nothing suspended and nothing to
     /// say about it — the caller uses that to tell the two apart.
     pub fn suspend_auto_fetch(&self) -> bool {
-        let mut guard = match self.auto_fetch.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut guard = relock(&self.auto_fetch);
         match guard.take() {
             Some(previous) => {
                 previous.cancel.cancel();
@@ -151,10 +148,7 @@ impl RepoSession {
     }
 
     fn lock_open_fetch(&self) -> std::sync::MutexGuard<'_, OpenFetchState> {
-        match self.open_fetch.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
+        relock(&self.open_fetch)
     }
 
     /// Whether the repository is known to have no remote at all, in which
@@ -177,24 +171,15 @@ impl RepoSession {
     /// Whether the interval is installed — the permission that every
     /// unasked reach for the network is measured against.
     fn auto_fetch_is_on(&self) -> bool {
-        match self.auto_fetch.lock() {
-            Ok(g) => g.is_some(),
-            Err(e) => e.into_inner().is_some(),
-        }
+        relock(&self.auto_fetch).is_some()
     }
 
     fn lock_auto_fetch_interval(&self) -> std::sync::MutexGuard<'_, Option<std::time::Duration>> {
-        match self.auto_fetch_interval.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
+        relock(&self.auto_fetch_interval)
     }
 
     fn install_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
-        let mut guard = match self.auto_fetch.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut guard = relock(&self.auto_fetch);
         if let Some(previous) = guard.take() {
             previous.cancel.cancel();
         }
@@ -331,10 +316,7 @@ impl RepoSession {
     /// Handle for stepping the running timer, in place of waiting out its
     /// interval — see [`AutoFetchTicker`]. `None` while auto fetch is off.
     pub fn auto_fetch_ticker(&self) -> Option<AutoFetchTicker> {
-        let guard = match self.auto_fetch.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let guard = relock(&self.auto_fetch);
         guard.as_ref().map(|a| AutoFetchTicker(a.ticks.clone()))
     }
 
@@ -349,10 +331,7 @@ impl RepoSession {
     /// returns, or sees the stop and queues nothing. Turning it off leaves
     /// nothing still to come.
     fn auto_fetch_tick(self: &Arc<Self>, cancel: &CancellationToken) -> bool {
-        let _stop = match self.auto_fetch.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let _stop = relock(&self.auto_fetch);
         if cancel.is_cancelled() {
             return false;
         }

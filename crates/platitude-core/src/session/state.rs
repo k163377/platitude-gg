@@ -259,10 +259,7 @@ impl<T: Clone> Derived<T> {
     }
 
     fn lock_state(&self) -> std::sync::MutexGuard<'_, DerivedState<T>> {
-        match self.state.lock() {
-            Ok(state) => state,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        super::relock(&self.state)
     }
 }
 

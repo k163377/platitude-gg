@@ -102,10 +102,7 @@ impl RepoSession {
                 && !answered.iter().any(|a| a == remote)
         });
         let index = RemoteTagIndex::build(kept.chain(fresh.iter().cloned()));
-        let mut slot = match self.remote_tag_index.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut slot = relock(&self.remote_tag_index);
         if **slot == index {
             return false;
         }
@@ -116,10 +113,7 @@ impl RepoSession {
 
     /// The per-remote answers merged into the index the join reads.
     pub(super) fn remote_tag_index(&self) -> Arc<RemoteTagIndex> {
-        match self.remote_tag_index.lock() {
-            Ok(g) => Arc::clone(&g),
-            Err(e) => Arc::clone(&e.into_inner()),
-        }
+        Arc::clone(&relock(&self.remote_tag_index))
     }
 
     /// Sends one tag to one remote. `expect` pins a leased overwrite to

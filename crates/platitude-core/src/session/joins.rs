@@ -381,10 +381,7 @@ impl RepoSession {
         // tag index's is: the set behind it is a snapshot, not a
         // half-written structure, and dropping it would take every mark
         // off the rows for the rest of the session.
-        let mut held = match self.worktree_holders.lock() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
+        let mut held = relock(&self.worktree_holders);
         if **held == fresh {
             return false;
         }
@@ -396,10 +393,7 @@ impl RepoSession {
     /// The set as the last worktree read left it, for the join that marks
     /// the rows with it.
     pub(super) fn worktree_holders(&self) -> Arc<WorktreeHolders> {
-        match self.worktree_holders.lock() {
-            Ok(g) => Arc::clone(&g),
-            Err(e) => Arc::clone(&e.into_inner()),
-        }
+        Arc::clone(&relock(&self.worktree_holders))
     }
 }
 
