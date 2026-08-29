@@ -10,13 +10,13 @@ import platitude.ui
 RowLayout {
     id: avatarRow
 
-    /// The assignment this row shows ({ email, name, url } — `SettingsDialog.assigned`) and its place in the list.
+    /// The assignment this row shows ({ email, name, url } — `SettingsAppPane.assigned`) and its place in the list.
     /// Declared, not inherited: a delegate in a file of its own is only handed the roles it names.
     required property var modelData
     required property int index
     /// The one column every row's name is laid into, as wide as the widest of them (`avatarRepeater.nameColW`).
     property real nameColW: 0
-    /// Stands in for the pointer on one row's Remove, which headless cannot inject (`SettingsDialog.pointedAtRow`).
+    /// Stands in for the pointer on one row's Remove, which headless cannot inject (`SettingsAppPane.pointedAtRow`).
     property int pointedAtRow: -1
 
     spacing: Theme.spaceSm

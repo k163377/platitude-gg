@@ -127,7 +127,7 @@ AppDialog {
             FormField {
                 id: urlField
                 Layout.fillWidth: true
-                placeholderText: "git@github.com:you/your-repo.git"
+                placeholderText: qsTr("git@github.com:you/your-repo.git")
                 onAccepted: remoteDialog.submit()
             }
         }

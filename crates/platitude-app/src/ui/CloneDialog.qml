@@ -127,7 +127,7 @@ AppDialog {
                 id: urlField
                 Layout.fillWidth: true
                 enabled: !cloneDialog.cloning
-                placeholderText: "git@github.com:you/your-repo.git"
+                placeholderText: qsTr("git@github.com:you/your-repo.git")
                 onTextChanged: cloneDialog.settleName()
                 onAccepted: cloneDialog.submit()
             }

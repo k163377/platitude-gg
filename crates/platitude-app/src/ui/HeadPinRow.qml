@@ -61,13 +61,12 @@ Rectangle {
             Layout.preferredHeight: Theme.iconXs
             Layout.alignment: Qt.AlignVCenter
         }
-        Label {
+        CutName {
             Layout.fillWidth: true
             text: headPin.workTree.detached ? qsTr("DETACHED HEAD") : headPin.branchesModel.headName
             color: headPin.workTree.detached ? Theme.warning : Theme.textLink
-            font.weight: Font.DemiBold
-            font.pixelSize: Theme.fontMd
-            elide: Text.ElideMiddle
+            weight: Font.DemiBold
+            pixelSize: Theme.fontMd
         }
         HeadTrack {
             visible: !headPin.workTree.detached && headPin.workTree.upstream !== ""

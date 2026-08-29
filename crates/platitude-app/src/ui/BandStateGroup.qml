@@ -66,9 +66,11 @@ Item {
     /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
     /// names keep three (2026-08-11 ユーザー指示).
     readonly property int stateMinChars: 2
-    readonly property real stateBadgeMinW: Math.ceil(stateFont.advanceWidth("…")
-                                                       + stateGroup.stateMinChars * stateFont.averageCharacterWidth)
-        + 2 * Theme.spaceXs
+    /// Settled by `settleStateBadgeMinW` rather than bound: `advanceWidth`
+    /// is a method and takes no binding dependency, so a binding on it
+    /// holds whatever the *default* font measured (app-ui.md
+    /// 「FontMetrics.advanceWidth も同じ側」).
+    property real stateBadgeMinW: 0
     readonly property bool stateHasAlso: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
     readonly property bool stateHasStep: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
     /// Whole pixels, for the reason the tab names are settled in them (規約 §ウィンドウの縁): a word asks for a fractional
@@ -138,6 +140,12 @@ Item {
 
     signal identityEditRequested()
 
+    function settleStateBadgeMinW() {
+        stateGroup.stateBadgeMinW = Math.ceil(stateFont.advanceWidth("…")
+                                              + stateGroup.stateMinChars * stateFont.averageCharacterWidth)
+            + 2 * Theme.spaceXs
+    }
+
     /// Opens the card; `stateKeep` is what closes it a beat after the last thing asking for it lets go.
     function settleStateCard() {
         if (!stateGroup.stateLit) {
@@ -202,6 +210,11 @@ Item {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
         font.weight: Font.DemiBold
+        // On the metrics' own change signal, so the ellipsis is measured
+        // in the settled font — the initial evaluation still sees the
+        // default one.
+        onFontChanged: stateGroup.settleStateBadgeMinW()
+        Component.onCompleted: stateGroup.settleStateBadgeMinW()
     }
 
     /// The three badges at their natural width, measured off labels that are never drawn.

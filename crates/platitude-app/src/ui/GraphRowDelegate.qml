@@ -56,7 +56,12 @@ Item {
     readonly property string shownLabels: GitFacts.labelsShown(labels, rowItem.goneChips)
     readonly property var labelRecords:
         rowItem.shownLabels === "" ? [] : rowItem.shownLabels.split(String.fromCharCode(31))
-    readonly property var branchRecords: labelRecords.filter(r => r[0] !== "T")
+    // The same reading `RepoPage.branchRecordAt` uses, so the two doors to a row's branch cannot disagree: a tag is
+    // not a branch, and neither is the detached-HEAD marker.
+    readonly property var branchRecords: labelRecords.filter(r => {
+        const kind = GitFacts.recordKind(r)
+        return kind === "branch" || kind === "remote"
+    })
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""

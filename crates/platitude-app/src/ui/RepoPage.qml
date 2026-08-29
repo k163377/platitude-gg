@@ -24,6 +24,8 @@ Item {
     signal avatarSettingsRequested(string name, string email)
     /// PG_AUTO_PERF completion after every requested measurement output.
     signal perfFinished()
+    /// The failed-open screen's "Close tab" button.
+    signal closeTabRequested()
 
     property string selectedOid: ""
 
@@ -2155,9 +2157,6 @@ Item {
                 page.toggleDiff("commit", detailsModel.filePathAt(0), detailsModel.fileOrigPathAt(0))
         }
     }
-
-    /// The failed-open screen's "Close tab" button.
-    signal closeTabRequested()
 
     ColumnLayout {
         anchors.fill: parent

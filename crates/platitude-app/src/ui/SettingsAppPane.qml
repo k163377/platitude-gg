@@ -252,15 +252,21 @@ ColumnLayout {
             /// on the same x down the whole list and the chapter reads
             /// as a table rather than as a stack of sentences. The
             /// same shape `AppMenu.codeColW` uses for its chips.
-            readonly property real nameColW: {
+            ///
+            /// Settled by the rows' own seat changes rather than bound:
+            /// the binding form only re-ran on `count`, and a same-size
+            /// reassignment replaces every row without moving it.
+            property real nameColW: 0
+            function settleNameColW() {
                 let widest = 0
                 for (let i = 0; i < avatarRepeater.count; i++) {
                     const row = avatarRepeater.itemAt(i)
                     if (row && row.nameSeat !== undefined)
                         widest = Math.max(widest, row.nameSeat)
                 }
-                return widest
+                nameColW = widest
             }
+            onItemRemoved: settleNameColW()
             model: pane.assigned
             // One row per assignment (`AvatarAssignRow`); the shared name column and the pointer stand-in
             // are handed down, the rest the row reads off its own record.
@@ -268,6 +274,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 nameColW: avatarRepeater.nameColW
                 pointedAtRow: pane.pointedAtRow
+                onNameSeatChanged: avatarRepeater.settleNameColW()
             }
         }
         RowLayout {
