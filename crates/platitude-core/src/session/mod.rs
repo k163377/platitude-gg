@@ -87,6 +87,7 @@ pub use auto_fetch::OpenFetch;
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use feed::Recording;
+use graph_refresh::GraphPasses;
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };

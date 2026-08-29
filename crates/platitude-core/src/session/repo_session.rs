@@ -20,6 +20,9 @@ pub struct RepoSession {
     pub(super) log_options: Mutex<LogOptions>,
     pub(super) log_gen: AtomicU64,
     pub(super) log_cancel: Mutex<Option<CancellationToken>>,
+    /// The graph passes that could still walk, whether or not the stream
+    /// is still theirs (see [`GraphPasses`]).
+    pub(super) graph_passes: Arc<GraphPasses>,
     /// Which diff read is the current one. Bumped by every
     /// [`RepoSession::load_diff`], and read again just before the colours
     /// for that diff would be worked out: a reader going down a commit's

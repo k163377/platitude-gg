@@ -170,6 +170,17 @@ impl CaptureSink {
             ),
             "the opening graph was available: {outcome:?}"
         );
+        // The ask above took the stream over, and taking it over cancels
+        // the pass that had it rather than ending it: the opening's
+        // tag-inclusive pass stops when it next looks. A baseline read
+        // before that is one the opening is still adding to — a walk it
+        // spawns afterwards lands past the count and reads as work the
+        // test's own subject asked for.
+        crate::support::wait::bounded(
+            "the graph passes the baseline displaced",
+            session.wait_for_graph_passes(),
+        )
+        .await;
         self.settled_pass(total).await
     }
 

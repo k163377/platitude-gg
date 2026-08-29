@@ -63,10 +63,12 @@ impl RepoSession {
         };
 
         let run_cancel = self.take_log_token();
+        let held = self.graph_passes.enter();
 
         let s = Arc::clone(self);
         let options = self.log_options();
         self.runtime.spawn(async move {
+            let _held = held;
             if options.include_tags {
                 let fast = LogOptions {
                     include_tags: false,

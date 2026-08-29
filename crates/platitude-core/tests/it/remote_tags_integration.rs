@@ -419,14 +419,15 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
             |e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")),
         )
     };
-    // The tracked refresh is an explicit completion boundary for all graph
-    // work the test can count. A quiet interval would only guess that an
-    // opening pass was not merely delayed.
-    assert!(matches!(
-        session.refresh_log_tracked().outcome().await,
-        platitude_core::session::RefreshOutcome::Changed
-            | platitude_core::session::RefreshOutcome::Unchanged
-    ));
+    // The whole opening baseline, in the order that closes it: both
+    // snapshots landed, their readers handed the slots back, a tracked
+    // refresh owns the graph, the passes it displaced have stopped, and
+    // the graph it asked for is installed. A tracked refresh on its own
+    // is not that — it *cancels* the opening's tag-inclusive pass, which
+    // stops when it next looks, and the walk that pass had already begun
+    // lands after the count as a walk this test's subject appears to
+    // have asked for.
+    sink.opened_graph(&session, 2).await;
     let (settled_walks, settled_swaps, settled_chips) = (walks(&sink), swaps(&sink), chips(&sink));
     // Which rests on the opening's own reads being recorded (`opened`
     // asks for that when it creates the session): a walk nobody wrote down
