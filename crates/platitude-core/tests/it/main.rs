@@ -9,6 +9,7 @@
 mod support;
 
 mod answer_reads;
+mod clone_integration;
 mod commit_branch_integration;
 mod config_reads;
 mod details_diff;

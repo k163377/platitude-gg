@@ -1,4 +1,4 @@
-//! Remotes: listing, fetch and push.
+//! Remotes: cloning, listing, fetch and push.
 //!
 //! This is the only place the application causes network traffic, and it
 //! causes it the same way a terminal would — by running git. Authentication
@@ -12,6 +12,7 @@
 use std::time::Duration;
 
 mod branch;
+mod clone;
 mod fetch;
 mod list;
 mod marks;
@@ -21,6 +22,7 @@ mod standing;
 mod tags;
 
 pub use self::branch::{RemoteBranchState, branch_tip, delete_remote_branch, rename_remote_branch};
+pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
 pub use self::marks::{
