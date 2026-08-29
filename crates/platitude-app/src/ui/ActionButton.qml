@@ -309,6 +309,24 @@ HoverToolButton {
     leftPadding: actionBtn.folded ? 0 : actionBtn.padding + actionBtn.headAir
     rightPadding: actionBtn.folded ? 0 : actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
 
+    /// **What a button laid out by the band asks for does not move with the shape it is in** — the same rule
+    /// `naturalWidth` and `foldWidth` are written under, said on the one number the style answers for us.
+    ///
+    /// A Control's own `implicitWidth` is its content plus the two paddings, and both of those are answered from the
+    /// width the row handed over (`wordRoom` → `folded` → `slack`). Until the row has set a width of its own — the
+    /// frames on the way up, before the first rearrange — `setImplicitWidth` writes one, so the shape the button chose
+    /// decides the cell that was supposed to decide the shape (実測 2026-08-29: `folded` and `wordRoom` both reported a
+    /// loop, on the two band buttons that wear no frame).
+    ///
+    /// Only where the row lays the cell out. A button measured to its own content **is** its content, and asking for a
+    /// box it was never measured for would leave every wording adrift in it.
+    Binding {
+        target: actionBtn
+        property: "implicitWidth"
+        value: actionBtn.naturalWidth
+        when: actionBtn.wordFloor > 0
+    }
+
     // The row keeps its size while the network call runs — the toolbar must not shuffle under a pointer that is still
     // resting on the button — so nothing here leaves the layout: the word stays where it is and only its colour steps
     // down, and the ring turns inside the seat the icon was already measured into.
