@@ -63,11 +63,12 @@ Item {
         // ceiling.
     }
 
-    // The platform picker completes only once its own window is open.
+    // The picker completes once its dialog is up, and `visible` is the property that says so: `FolderDialog` is
+    // `QtQuick.Dialogs`' own type, not a `Popup`, so the `opened` the dialogs around it answer to is undefined here.
     SampleTimer {
         running: AppBackend.autoAct === "open-picker"
         onTriggered: {
-            if (!folderDialog.opened)
+            if (!folderDialog.visible)
                 return
             stop()
             AppBackend.report("picker folder=" + folderDialog.currentFolder)

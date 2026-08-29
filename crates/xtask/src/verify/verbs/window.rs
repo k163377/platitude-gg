@@ -208,4 +208,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "mark=true tint=warning",
     },
+    // The picker is the platform's own window and stands in neither
+    // photograph — the overlay never holds it (`popups=0`) — so a run
+    // that opened it and one that never did are the same pair of
+    // pictures. The line is the whole of the evidence, and the folder
+    // it names is the verb's own subject: the picker comes up beside
+    // the repository that is already open (rules-refs/app-ui.md).
+    Verb {
+        name: "open-picker",
+        when: &[],
+        plain: "picker folder=",
+    },
 ];
