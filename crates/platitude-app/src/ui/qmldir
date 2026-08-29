@@ -81,6 +81,7 @@ DiffRowDelegate 1.0 DiffRowDelegate.qml
 DiffRowMenu 1.0 DiffRowMenu.qml
 DiffRowWalk 1.0 DiffRowWalk.qml
 DiffScrollPlace 1.0 DiffScrollPlace.qml
+DiffTextMetrics 1.0 DiffTextMetrics.qml
 DiffTextSelect 1.0 DiffTextSelect.qml
 DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
@@ -192,6 +193,7 @@ WindowTabActs 1.0 WindowTabActs.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml
+WindowShotMirrors 1.0 WindowShotMirrors.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipCommitBlock 1.0 WipCommitBlock.qml
 WipBucketPane 1.0 WipBucketPane.qml

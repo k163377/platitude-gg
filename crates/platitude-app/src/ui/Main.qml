@@ -270,66 +270,21 @@ ApplicationWindow {
             autoActLoader.item.begin()
         autoShotDriver.begin()
     }
-    // Popups (dialogs, menus) render in the window overlay, whose C++-created items grabToImage refuses ("no QML
-    // engine"). This QML-declared mirror of the overlay is grabbable, which is what makes popups photographable on the
-    // offscreen platform. Loaded only while a shot directory is set, refreshed once at shot time: AutoShotDriver.
-    Loader {
-        id: overlayMirror
-        active: AppBackend.shotDir !== ""
+    // The two grabbable stand-ins a headless shot is taken from, behind everything the window draws
+    // (`WindowShotMirrors`), and the driver that schedules them.
+    WindowShotMirrors {
+        id: shotMirrors
         anchors.fill: parent
         z: -10000
-        sourceComponent: ShaderEffectSource {
-            sourceItem: root.Overlay.overlay
-            live: false
-        }
-    }
-    // The two laid over each other, for the one question a pair of pictures cannot answer: *where* the thing that
-    // opened stands against the thing it opened off. Two sources rather than one of the window's root item: this
-    // mirror is inside the content, so a mirror of everything would be a mirror of itself. Refreshed only when the
-    // overlay was holding something — with nothing open this picture is app.png again, and a board of doubles is a
-    // board nobody reads.
-    Loader {
-        id: sceneMirror
-        active: AppBackend.shotDir !== ""
-        anchors.fill: parent
-        z: -10001
-        sourceComponent: Item {
-            id: sceneShot
-            /// How many of the two textures are still owed. The refresh is asked for once the app's own picture is
-            /// saved, so what is mirrored here is the scene that picture came out of — ink and all (`AutoShotDriver`).
-            property int owed: 0
-            signal ready()
-            function refresh() {
-                sceneShot.owed = 2
-                uiSource.scheduleUpdate()
-                overlaySource.scheduleUpdate()
-            }
-            function landed() {
-                sceneShot.owed--
-                if (sceneShot.owed === 0)
-                    sceneShot.ready()
-            }
-            ShaderEffectSource {
-                id: uiSource
-                anchors.fill: parent
-                live: false
-                sourceItem: gate.visible ? gate : mainUi
-                onScheduledUpdateCompleted: sceneShot.landed()
-            }
-            ShaderEffectSource {
-                id: overlaySource
-                anchors.fill: parent
-                live: false
-                sourceItem: root.Overlay.overlay
-                onScheduledUpdateCompleted: sceneShot.landed()
-            }
-        }
+        window: root
+        mainUi: mainUi
+        gate: gate
     }
     AutoShotDriver {
         id: autoShotDriver
         window: root
-        overlayMirror: overlayMirror
-        sceneMirror: sceneMirror
+        overlayMirror: shotMirrors.overlayMirror
+        sceneMirror: shotMirrors.sceneMirror
         mainUi: mainUi
         gate: gate
     }

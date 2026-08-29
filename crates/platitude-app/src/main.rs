@@ -144,6 +144,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/DiffRowMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffRowWalk.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffScrollPlace.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffTextMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffTextSelect.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DialogActions.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DotMark.qml", "qt/qml/platitude");
@@ -256,6 +257,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowShape.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowShotMirrors.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipCommitBlock.qml", "qt/qml/platitude");

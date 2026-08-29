@@ -269,60 +269,12 @@ Rectangle {
         return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "")
     }
 
-    /// How wide a line number is: the widest one this diff carries (デザイン規約 §レイアウト初期値). The columns are cut to it
-    /// rather than fixed, so the row reads `gap 140 gap 153 gap }`; a fixed column leaves the slack of the numbers it
-    /// is *not* holding between the two numbers, while the code — which has none — sits one gap away.
-    ///
-    /// Measured with a Label that is never drawn, the way `ActionButton` and `TopBar` measure: `TextMetrics` reports a
-    /// few pixels tighter than the Label the number is actually set in. Whole pixels — two columns and the code's run
-    /// are laid out from this one number.
-    readonly property int numberW: Math.ceil(numberMeasure.implicitWidth)
-    Label {
-        id: numberMeasure
-        visible: false
-        text: diffPane.diffModel.widestNo
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontSm
-    }
-
-    // ---- how far sideways the code goes ------------------------------
-    /// The room between the two numbers where a changed line puts its mark out, and the whole gutter that room sits in.
-    /// Worked out once here: the rows lay themselves out from it, and the pane subtracts it to know how much shows.
-    readonly property int seatW: diffPane.partial ? Theme.iconMd + 2 * Theme.borderWidth : Theme.spaceXs
-    readonly property int gutterW: 2 * (Theme.spaceXs + diffPane.numberW) + diffPane.seatW
-    /// How wide the longest line of this diff is drawn. The model counts the columns (`encode::widest_columns`); one
-    /// measured character turns them into pixels, and the font is mono so that one character speaks for all of them.
-    /// Measured with a never-drawn Label: a metric read off a method is taken once, before the font arrives (app-ui.md).
-    readonly property real codeW: diffPane.diffModel.widestColumns * diffPane.charW + Theme.spaceSm
-    /// One measured column of the mono font. The divisor is however many characters `charMeasure` holds, so the two
-    /// cannot drift apart; everything column-addressed — the code width above, the emphasis wash in the rows —
-    /// multiplies this one number. Measured at regular weight: changed rows draw bold, which JetBrains Mono advances
-    /// identically — a mono family whose bold face advances differently would drift the wash, so a swap of
-    /// `Theme.monoFamily` re-checks that.
-    readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
-    Label {
-        id: charMeasure
-        visible: false
-        // Ten of them, so a single advance's rounding does not multiply up over a two-hundred-column line.
-        text: "0000000000"
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontCode
-    }
-    /// What a wide glyph costs on top of the two columns `encode::columns::step_of` counts it as. Zero wherever the
-    /// mono family carries the wide glyphs itself at two of its own advances; where it is Latin-only they arrive from a
-    /// fallback that advances one em instead (Windows, Cascadia Mono at `fontCode`: charW 8px against a wide advance of
-    /// 13px, so −3px a glyph, which slid the wash that far right of the characters it names). Measured rather than
-    /// assumed, because it is a property of whichever fallback this OS hands the glyphs to.
-    readonly property real wideDelta: wideMeasure.implicitWidth / wideMeasure.text.length - 2 * diffPane.charW
-    Label {
-        id: wideMeasure
-        visible: false
-        // Ten U+65E5, for the same reason charMeasure holds ten. Built from the code point rather than written as the
-        // glyph: this is a ruler and not a word, and a line of Japanese sitting in a `text:` reads like the hardcoded
-        // wording the rules forbid (CLAUDE.md 絶対制約).
-        text: String.fromCharCode(0x65e5).repeat(10)
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontCode
+    // Everything the rows are laid out from — the line-number column, the gutter, one column of the mono font and what
+    // a wide glyph costs over it — measured off three rulers that are never drawn (`DiffTextMetrics`).
+    DiffTextMetrics {
+        id: metrics
+        diffModel: diffPane.diffModel
+        partial: diffPane.partial
     }
 
     color: Theme.bgSurface
@@ -414,13 +366,13 @@ Rectangle {
                 id: diffRow
                 rowWidth: diffList.width
                 codeX: codeScroll.offset
-                charW: diffPane.charW
-                wideDelta: diffPane.wideDelta
-                seatW: diffPane.seatW
+                charW: metrics.charW
+                wideDelta: metrics.wideDelta
+                seatW: metrics.seatW
                 partial: diffPane.partial
                 staged: diffPane.staged
                 busy: diffPane.busy
-                numberW: diffPane.numberW
+                numberW: metrics.numberW
                 sidesTold: diffPane.sidesTold
                 oursColor: diffPane.sideColor("ours")
                 theirsColor: diffPane.sideColor("theirs")
@@ -438,11 +390,11 @@ Rectangle {
         id: textPick
         view: diffList
         diffModel: diffPane.diffModel
-        gutterW: diffPane.gutterW
+        gutterW: metrics.gutterW
         barRoom: diffList.barRoom
         codeX: codeScroll.offset
-        charW: diffPane.charW
-        wideDelta: diffPane.wideDelta
+        charW: metrics.charW
+        wideDelta: metrics.wideDelta
         // One clamp and one shift, the ones every other hand that sends this pane goes through
         // (デザイン規約 §diff を上下に送る / §diff を横へ送る).
         onScrollWanted: (dy, dx) => {
@@ -459,7 +411,7 @@ Rectangle {
         view: diffList
         paneHovered: panePointer.hovered
         file: diffPane.diffModel.title
-        codeWidth: diffPane.codeW
-        roomWidth: Math.max(0, diffList.width - diffPane.gutterW)
+        codeWidth: metrics.codeW
+        roomWidth: Math.max(0, diffList.width - metrics.gutterW)
     }
 }
