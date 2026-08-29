@@ -14,7 +14,7 @@ async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
     sink.wait_for("an automatic fetch", |evs| {
         evs.iter()
             .filter_map(|e| match e {
-                SessionEvent::WriteFinished { op, error }
+                SessionEvent::WriteFinished { op, error, .. }
                     if *op == platitude_core::session::AUTO_FETCH_OP =>
                 {
                     Some(error.clone())
@@ -164,7 +164,9 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     let error = sink
         .wait_for("the push to be refused", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::WriteFinished { op, error } if *op == "push" => Some(error.clone()),
+                SessionEvent::WriteFinished { op, error, .. } if *op == "push" => {
+                    Some(error.clone())
+                }
                 _ => None,
             })
         })
@@ -176,7 +178,7 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
 
     sink.wait_for("the fetch that answers it", |evs| {
         evs.iter()
-            .any(|e| matches!(e, SessionEvent::WriteFinished { op, error: None } if *op == "fetch"))
+            .any(|e| matches!(e, SessionEvent::WriteFinished { op, error: None, .. } if *op == "fetch"))
             .then_some(())
     })
     .await;

@@ -260,7 +260,7 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
 async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
     sink.wait_for("RefsLoaded after the fetch", |evs| {
         let done = evs.iter().position(|e| {
-            matches!(e, SessionEvent::WriteFinished { op, error } if *op == "fetch" && error.is_none())
+            matches!(e, SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" && error.is_none())
         })?;
         evs[done..].iter().find_map(|e| match e {
             SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),

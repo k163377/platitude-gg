@@ -804,3 +804,90 @@ async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
         "and a push that never landed recorded no upstream"
     );
 }
+
+/// Writes a `pre-receive` hook into a bare repository that turns every
+/// push away, in the shape a forge writes its own refusals in.
+///
+/// The hook is how a refusal the far side decides for itself can be had
+/// offline at all: a protected branch, a repository rule and a hook all
+/// reach this end as the same `[remote rejected]`, and only the sentence
+/// underneath differs.
+fn decline_every_push(bare: &TestRepo, said: &str) {
+    let hooks = bare.path.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).expect("create hooks dir");
+    let hook = hooks.join("pre-receive");
+    std::fs::write(
+        &hook,
+        format!("#!/bin/sh\necho \"error: {said}\" >&2\nexit 1\n"),
+    )
+    .expect("write pre-receive hook");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
+            .expect("make the hook executable");
+    }
+}
+
+#[tokio::test]
+async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
+    let (bare, work) = origin_and_clone();
+    let (exec, cancel) = env();
+    decline_every_push(
+        &bare,
+        "GH006: Protected branch update failed for refs/heads/main.",
+    );
+
+    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", NET, &cancel)
+        .await
+        .expect_err("the far side keeps main");
+    let GitError::RemoteRefused { refusal, .. } = &err else {
+        panic!("a refusal the far side made is told apart from a failure of ours: {err}");
+    };
+    assert_eq!(refusal.remote, "origin");
+    assert_eq!(refusal.branch, "main");
+    assert!(refusal.deleting, "what was asked for was the removal");
+    assert_eq!(
+        refusal.reason, "GH006: Protected branch update failed for refs/heads/main.",
+        "the words are the far side's own, without git's framing"
+    );
+    // Under `--porcelain` the per-ref result is on stdout and stderr keeps
+    // the prose, so what the log carries is what a push already carried:
+    // the far side's lines, and git's own last word about the refs.
+    assert!(
+        err.to_string().contains("GH006") && err.to_string().contains("failed to push"),
+        "git's whole message is still there for the log: {err}"
+    );
+}
+
+#[tokio::test]
+async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    decline_every_push(&bare, "Changes must be made through a pull request.");
+    work.commit_file("b.txt", "ours\n", "work of our own");
+
+    let err = remote::push(
+        &exec,
+        &work.path,
+        &PushSpec {
+            remote: "origin".into(),
+            local: "main".into(),
+            remote_branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::None,
+        },
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the hook declines");
+    let GitError::RemoteRefused { refusal, .. } = &err else {
+        panic!("a fast-forward the far side declined is neither outdated nor ours: {err}");
+    };
+    assert!(!refusal.deleting, "this one was sending, not removing");
+    assert_eq!(
+        refusal.reason,
+        "Changes must be made through a pull request."
+    );
+}

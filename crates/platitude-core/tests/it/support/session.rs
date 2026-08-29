@@ -332,7 +332,7 @@ pub fn write_stopped(sink: &CaptureSink, op: &'static str) -> bool {
 pub async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
     sink.wait_for(op, |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::WriteFinished { op: got, error } if *got == op => Some(error.clone()),
+            SessionEvent::WriteFinished { op: got, error, .. } if *got == op => Some(error.clone()),
             _ => None,
         })
     })

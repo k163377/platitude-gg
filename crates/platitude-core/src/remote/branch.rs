@@ -11,7 +11,7 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::push::{PushForce, PushSpec, push};
+use super::push::{self, PushForce, PushSpec, push};
 use super::tags::split_ls_remote_line;
 
 /// What a remote carries under this exact branch name, if anything.
@@ -85,6 +85,12 @@ impl RemoteBranchState {
 
 /// `git push <remote> --delete <branch>`: removes a branch on the remote.
 /// Destructive — the caller confirms first.
+///
+/// Read the same way an ordinary push is (`--porcelain`, then
+/// [`push::refusal`]): the far side is the only thing standing between a
+/// branch and its deletion, and a name it keeps for a rule of its own —
+/// a protected branch, a hook — is a report to pass on rather than a
+/// failure of ours (デザイン規約 §リモートブランチを消す).
 pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -95,9 +101,14 @@ pub async fn delete_remote_branch(
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["push", "--delete", "--", remote, branch])
+        .args(["push", "--porcelain", "--delete", "--", remote, branch])
         .timeout(timeout);
-    executor.run(cmd, cancel).await.map(|_| ())
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 0 {
+        return Ok(());
+    }
+    Err(push::refusal(command, &out, remote, branch, true))
 }
 
 /// Renames a branch on a remote: the composition git has no command for.

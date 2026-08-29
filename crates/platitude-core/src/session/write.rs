@@ -69,8 +69,11 @@ impl RepoSession {
         let result = run(exec, info, cancel).await;
         let rebuild_graph = match result {
             Ok(()) => {
-                self.sink
-                    .event(SessionEvent::WriteFinished { op, error: None });
+                self.sink.event(SessionEvent::WriteFinished {
+                    op,
+                    error: None,
+                    refusal: None,
+                });
                 after == AfterWrite::Graph
             }
             // Cancelled means the session is closing, but the event pair
@@ -81,14 +84,23 @@ impl RepoSession {
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: Some(error.to_string()),
+                    refusal: None,
                 });
                 return;
             }
             Err(error) => {
                 tracing::warn!(op, %error, "write failed");
+                // What the far side refused on its own terms travels
+                // beside git's words: the screen makes a report out of
+                // the one and keeps the other for the log.
+                let refusal = match &error {
+                    GitError::RemoteRefused { refusal, .. } => Some((**refusal).clone()),
+                    _ => None,
+                };
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: Some(error.to_string()),
+                    refusal,
                 });
                 // A half-finished command still changed the repository
                 // (conflicted merge, interrupted rebase, partial apply),

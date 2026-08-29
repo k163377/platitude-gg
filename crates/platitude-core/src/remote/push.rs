@@ -195,19 +195,148 @@ pub async fn push(
     if out.code == 0 {
         return Ok(());
     }
+    Err(refusal(
+        command,
+        &out,
+        &spec.remote,
+        &spec.remote_branch,
+        false,
+    ))
+}
+
+/// A refusal the far side made on its own terms, and what it said for
+/// itself.
+///
+/// Nothing here can be put right from this end: the branch is protected,
+/// a rule stands over it, a `pre-receive` hook turned the push away. The
+/// two ends of the same push — `fetch first` and this — are told apart
+/// because only one of them has a next move
+/// ([`GitError::PushOutdated`]), and this one is a report rather than a
+/// failure of the application's (デザイン規約 §可否・警告の出し場所).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteRefusal {
+    /// The remote as the user named it (`origin`).
+    pub remote: String,
+    /// The branch on the far side the refusal is about.
+    pub branch: String,
+    /// Whether what was asked for was that branch's removal.
+    pub deleting: bool,
+    /// **The far side's own words**, with git's `remote:` framing taken
+    /// off. Written by whoever runs the server, so it is carried across
+    /// rather than interpreted: the screen quotes it under a sentence of
+    /// its own (`Words.remoteRefused`).
+    pub reason: String,
+}
+
+/// Which of the three a non-zero push is: outdated, turned down over
+/// there, or a plain failure.
+pub(super) fn refusal(
+    command: String,
+    out: &crate::process::GitOutput,
+    remote: &str,
+    branch: &str,
+    deleting: bool,
+) -> GitError {
     let stderr = out.failure_message();
-    if is_outdated(&out.stdout_utf8()) {
-        return Err(GitError::PushOutdated {
+    let porcelain = out.stdout_utf8();
+    if is_outdated(&porcelain) {
+        return GitError::PushOutdated {
             command,
             code: out.code,
             stderr,
-        });
+        };
     }
-    Err(GitError::Failed {
+    let Some(reason) = refused_reason(&porcelain, &out.stderr_utf8()) else {
+        return GitError::Failed {
+            command,
+            code: out.code,
+            stderr,
+        };
+    };
+    GitError::RemoteRefused {
         command,
         code: out.code,
         stderr,
+        refusal: Box::new(RemoteRefusal {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+            deleting,
+            reason,
+        }),
+    }
+}
+
+/// Whether the far side is the one that said no, and how it explained
+/// itself.
+///
+/// **`[remote rejected]` is git's own separation** and the whole of what
+/// this reads: `[rejected]` is a refusal this end worked out from what it
+/// holds, and every one of those has a next move here. A host that could
+/// not be reached prints no ref lines at all, so silence answers `None`.
+///
+/// The explanation is the far side's, never ours: its `remote:` lines
+/// where it wrote any, and git's own parenthetical where it wrote none
+/// (a bare `receive-pack` refusing a deletion says nothing else).
+fn refused_reason(porcelain: &str, stderr: &str) -> Option<String> {
+    let mut summary = None;
+    for line in porcelain.lines() {
+        let mut fields = line.split('\t');
+        if fields.next() != Some("!") {
+            continue;
+        }
+        summary = fields.nth(1);
+        if summary.is_some_and(|said| said.contains("[remote rejected]")) {
+            break;
+        }
+        summary = None;
+    }
+    let summary = summary?;
+    let words = remote_words(stderr);
+    Some(if words.is_empty() {
+        bracket_reason(summary)
+    } else {
+        words
     })
+}
+
+/// What the far side said for itself, out of the lines git copies to
+/// stderr under `remote:`.
+///
+/// The `error:` some servers put in front of every line goes with the
+/// framing: what is left is read under a sentence that has already said
+/// what did not happen, and a second word for "this went wrong" there
+/// only makes a report look like a fault of the application's.
+fn remote_words(stderr: &str) -> String {
+    let mut said: Vec<&str> = Vec::new();
+    for line in stderr.lines() {
+        let Some(rest) = line.trim_end().strip_prefix("remote:") else {
+            continue;
+        };
+        let rest = rest.trim();
+        let rest = rest
+            .strip_prefix("error:")
+            .or_else(|| rest.strip_prefix("ERROR:"))
+            .unwrap_or(rest)
+            .trim();
+        if !rest.is_empty() {
+            said.push(rest);
+        }
+    }
+    said.join("\n")
+}
+
+/// git's own reason out of `[remote rejected] (deletion prohibited)` —
+/// what is inside the brackets, or the whole summary where there are
+/// none to read.
+fn bracket_reason(summary: &str) -> String {
+    let inner = summary
+        .split_once('(')
+        .and_then(|(_, rest)| rest.rsplit_once(')'))
+        .map(|(inner, _)| inner.trim());
+    match inner {
+        Some(inner) if !inner.is_empty() => inner.to_string(),
+        _ => summary.trim().to_string(),
+    }
 }
 
 /// Whether a `--porcelain` push result refused a ref for knowing the remote
@@ -219,8 +348,9 @@ pub async fn push(
 /// current branch's upstream), or a lease was pinned to a commit the remote
 /// has since left (`stale info`). All three are answered by fetching.
 ///
-/// Anything else — a hook, a protected branch, an unreachable host — is a
-/// refusal to pass on as it is. A host that could not be reached at all
+/// Anything else — a hook, a protected branch, an unreachable host — is
+/// not something a fetch helps with; whether the far side decided it is
+/// [`refused_reason`]'s question. A host that could not be reached at all
 /// prints no ref lines, so it cannot be mistaken for one of these.
 fn is_outdated(porcelain: &str) -> bool {
     porcelain.lines().any(|line| {
@@ -272,10 +402,54 @@ mod tests {
     /// no ref lines at all.
     #[test]
     fn refusals_a_fetch_cannot_help_with_are_left_alone() {
-        assert!(!is_outdated(
-            "To C:/tmp/remote.git\n\
-             !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n"
-        ));
+        assert!(!is_outdated(REFUSED_BY_THE_FAR_SIDE));
         assert!(!is_outdated(""));
+    }
+
+    /// The same run of git 2.51 against a bare repository whose
+    /// `pre-receive` hook exits non-zero, and the words GitHub writes
+    /// through it (実測 — the two `remote: error:` lines are exactly what
+    /// a protected branch answers a deletion with).
+    const REFUSED_BY_THE_FAR_SIDE: &str = "To C:/tmp/remote.git\n\
+         !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n";
+    const FAR_SIDE_WORDS: &str = "remote: error: GH006: Protected branch update failed for \
+         refs/heads/main.        \nremote: error: Cannot delete a protected branch        \n\
+         remote: \nTo https://github.com/owner/repo.git\n \
+         ! [remote rejected] main (protected branch hook declined)\n\
+         error: failed to push some refs to 'https://github.com/owner/repo.git'\n";
+
+    #[test]
+    fn the_far_sides_own_words_are_what_a_refusal_carries() {
+        assert_eq!(
+            refused_reason(REFUSED_BY_THE_FAR_SIDE, FAR_SIDE_WORDS).as_deref(),
+            Some(
+                "GH006: Protected branch update failed for refs/heads/main.\n\
+                 Cannot delete a protected branch"
+            )
+        );
+    }
+
+    /// A server that says nothing for itself still has to leave the
+    /// screen something to read, and git's own parenthetical is it.
+    #[test]
+    fn a_silent_far_side_leaves_gits_parenthetical() {
+        assert_eq!(
+            refused_reason(REFUSED_BY_THE_FAR_SIDE, "To C:/tmp/remote.git\n").as_deref(),
+            Some("pre-receive hook declined")
+        );
+    }
+
+    /// The refusals this end worked out for itself are not the far side
+    /// speaking, whatever else is on stderr — nor is a host that never
+    /// answered at all.
+    #[test]
+    fn a_refusal_from_this_end_is_not_the_far_side_speaking() {
+        assert_eq!(refused_reason(REFUSED_FETCH_FIRST, FAR_SIDE_WORDS), None);
+        assert_eq!(refused_reason(REFUSED_STALE_LEASE, ""), None);
+        assert_eq!(
+            refused_reason("", "fatal: could not read from remote"),
+            None
+        );
+        assert_eq!(refused_reason(NEW_BRANCH, ""), None);
     }
 }

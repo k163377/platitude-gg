@@ -53,6 +53,26 @@ pub enum GitError {
         stderr: String,
     },
 
+    /// A push the far side turned down under a rule of its own — a
+    /// protected branch, a repository rule, a `pre-receive` hook. Nothing
+    /// here can put it right and nothing was half done, so the screen
+    /// reports it rather than raising git's own words as a failure
+    /// (デザイン規約 §可否・警告の出し場所).
+    ///
+    /// Reads the same as [`GitError::Failed`] wherever it is only being
+    /// logged: `refusal` is the part a report is made out of.
+    ///
+    /// Boxed because every `Result<_, GitError>` in the crate carries the
+    /// widest variant, and four more strings here would put that cost on
+    /// reads that can never be refused by anybody (`result_large_err`).
+    #[error("`{command}` exited with code {code}: {stderr}")]
+    RemoteRefused {
+        command: String,
+        code: i32,
+        stderr: String,
+        refusal: Box<crate::remote::RemoteRefusal>,
+    },
+
     /// The command exceeded its time budget and was killed.
     #[error("`{command}` timed out after {timeout:?}")]
     TimedOut { command: String, timeout: Duration },

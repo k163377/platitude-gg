@@ -261,9 +261,16 @@ pub enum SessionEvent {
     /// A write operation's Git command ended. `error` carries Git's own
     /// message. The queue can still be settling its follow-up snapshots and
     /// graph, so this is deliberately not a queue-idle boundary.
+    ///
+    /// `refusal` is the one failure with something else to be made of it:
+    /// the far side turned the write down under its own rules, and what
+    /// it said for itself is a report rather than an error
+    /// ([`crate::remote::RemoteRefusal`]). It rides beside `error`, which
+    /// goes on carrying git's whole message for the log.
     WriteFinished {
         op: &'static str,
         error: Option<String>,
+        refusal: Option<crate::remote::RemoteRefusal>,
     },
     /// A git subprocess was spawned (command log). Only what the user
     /// asked for, unless background reads were switched on.

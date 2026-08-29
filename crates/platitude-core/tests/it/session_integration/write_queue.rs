@@ -136,7 +136,7 @@ async fn stage_commit_and_branch_through_the_session() {
             let done: Vec<(&str, Option<String>)> = evs
                 .iter()
                 .filter_map(|e| match e {
-                    SessionEvent::WriteFinished { op, error } => Some((*op, error.clone())),
+                    SessionEvent::WriteFinished { op, error, .. } => Some((*op, error.clone())),
                     _ => None,
                 })
                 .collect();
@@ -219,6 +219,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
                 SessionEvent::WriteFinished {
                     op: "rebase",
                     error,
+                    ..
                 } => Some(error.clone()),
                 _ => None,
             })
