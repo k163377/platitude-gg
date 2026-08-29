@@ -3,6 +3,102 @@
 
 use super::*;
 
+/// A graph pass that has begun and has not answered for itself yet.
+///
+/// **A panic is the one way a pass ends without a word.** Every other
+/// ending goes through a `match` that reports it — a git that failed, a
+/// timeout, a cancellation — but a task that panics dies where it stands,
+/// so neither arm runs and nothing is sent. The runtime catches it at the
+/// task boundary and the process carries on, which is what makes it quiet:
+/// the graph is left turning on an empty column, or left standing on a
+/// picture no later ref will ever change (2026-08-29 実測 — a window in the
+/// second state is indistinguishable from a healthy one).
+///
+/// So a pass carries this, and the unwind that kills it drops it. What it
+/// says is what the pass could not.
+struct PassWatch<'a> {
+    session: &'a RepoSession,
+    /// Which of the two ways this pass would have reported itself.
+    told: Told,
+    answered: bool,
+}
+
+/// Where a pass that fell over has to say so, which is wherever it would
+/// have said anything at all.
+enum Told {
+    /// The pass announced itself and reset the graph for its own stream,
+    /// so the column is empty and turning: the answer belongs to that
+    /// stream ([`SessionEvent::LogFailed`]).
+    Stream(u64),
+    /// The pass built off screen and would have replaced the graph at the
+    /// end. Nothing on screen is waiting, and what is standing there is a
+    /// real picture — only older than it should be — so this reads as the
+    /// operation it was ([`RepoSession::fail`]).
+    Operation,
+}
+
+impl<'a> PassWatch<'a> {
+    fn operation(session: &'a RepoSession) -> Self {
+        Self {
+            session,
+            told: Told::Operation,
+            answered: false,
+        }
+    }
+
+    /// The pass has announced its stream: from here an empty column is
+    /// waiting on this generation, and nothing else can answer for it.
+    fn announced(&mut self, generation: u64) {
+        self.told = Told::Stream(generation);
+    }
+
+    /// The pass reported itself, whichever way it went.
+    fn answered(&mut self) {
+        self.answered = true;
+    }
+}
+
+impl Drop for PassWatch<'_> {
+    fn drop(&mut self) {
+        if self.answered {
+            return;
+        }
+        // The runtime is going away and taking its tasks with it. Nothing
+        // is left to read a report, and a window that is closing must not
+        // be told its history could not be read.
+        if self.session.root_cancel.is_cancelled() {
+            return;
+        }
+        tracing::error!("the graph walk ended without an answer");
+        // **Caught, because this runs inside the unwind it is reporting.**
+        // A second panic crossing an unwinding frame is an abort, and the
+        // way out of here reaches a feed and a QML invoker — nothing this
+        // side owns. Failing to report is what the state was before this
+        // guard existed; killing the window is not.
+        let told = &self.told;
+        let session = self.session;
+        let reported = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match told {
+            Told::Stream(generation) => session.sink.event(SessionEvent::LogFailed {
+                generation: *generation,
+                // **No words**: nobody said anything, so the screen says
+                // it in its own language (`Words.graphStopped`,
+                // app-ui.md「Rust に文言を置かない」).
+                error: String::new(),
+            }),
+            Told::Operation => session.fail(
+                "log",
+                GitError::UnexpectedOutput {
+                    command: "git log".to_string(),
+                    message: "the graph walk ended without an answer".to_string(),
+                },
+            ),
+        }));
+        if reported.is_err() {
+            tracing::error!("and the report of it fell over too");
+        }
+    }
+}
+
 impl RepoSession {
     pub fn log_options(&self) -> LogOptions {
         *self.lock_log_options()
@@ -112,6 +208,7 @@ impl RepoSession {
         cancel: &CancellationToken,
     ) -> Result<(), ()> {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut watch = PassWatch::operation(self);
         {
             // Reset graph state for the new stream and announce it under
             // one lock: everything that reads row numbers out of `shared`
@@ -127,6 +224,7 @@ impl RepoSession {
             // shown; the walk is cancelled and would deliver no rows to
             // put back.
             if cancel.is_cancelled() {
+                watch.answered();
                 return Err(());
             }
             shared.builder = GraphBuilder::new();
@@ -139,6 +237,8 @@ impl RepoSession {
             // answer as this one's.
             shared.sent_footer = None;
             self.sink.event(SessionEvent::LogStarted { generation });
+            // From here the column is empty and turning on this stream.
+            watch.announced(generation);
         }
         let started = Instant::now();
         match self.stream_log(workdir, generation, options, cancel).await {
@@ -169,6 +269,7 @@ impl RepoSession {
                     walked: footer.walked,
                     truncated: footer.truncated,
                 });
+                watch.answered();
                 Ok(())
             }
             Err(error) => {
@@ -178,6 +279,9 @@ impl RepoSession {
                         error: error.to_string(),
                     });
                 }
+                // A cancelled pass says nothing on purpose: whoever
+                // cancelled it is the one drawing now.
+                watch.answered();
                 Err(())
             }
         }
@@ -206,6 +310,10 @@ impl RepoSession {
             return RefreshOutcome::Cancelled;
         }
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        // Nothing on screen is waiting on this one: it builds off screen
+        // and replaces the graph at the end, so a pass that never gets
+        // there leaves a real picture standing (`PassWatch`).
+        let mut watch = PassWatch::operation(self);
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
         let mut rows: Vec<LogRow> = Vec::new();
@@ -216,6 +324,7 @@ impl RepoSession {
         let walked = match result {
             Ok(walked) => walked,
             Err(error) => {
+                watch.answered();
                 // The fast pass is already on screen; report quietly.
                 if matches!(error, GitError::Cancelled { .. }) {
                     return RefreshOutcome::Cancelled;
@@ -235,6 +344,7 @@ impl RepoSession {
             // when a pass begins running, which is not the order the
             // asks came in.
             if cancel.is_cancelled() {
+                watch.answered();
                 return RefreshOutcome::Cancelled;
             }
             let elapsed_ms = started.elapsed().as_millis() as u64;
@@ -281,6 +391,7 @@ impl RepoSession {
                 // pass — and this walk numbered its rows the same way, or
                 // it would not have compared equal.
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
+                watch.answered();
                 return RefreshOutcome::Unchanged;
             }
             shared.sent_rows = rows.iter().map(RowPrint::of).collect();
@@ -297,6 +408,7 @@ impl RepoSession {
                 truncated: footer.truncated,
             });
         }
+        watch.answered();
         RefreshOutcome::Changed
     }
 

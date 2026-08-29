@@ -71,6 +71,7 @@ impl GraphModel {
         Notify = stats_changed
     );
     qproperty!("error", Member = error, Notify = stats_changed);
+    qproperty!("failed", Member = failed, Notify = stats_changed);
 
     #[qsignal]
     pub(super) fn stats_changed(&mut self);

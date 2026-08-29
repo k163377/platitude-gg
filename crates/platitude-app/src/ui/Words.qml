@@ -113,6 +113,13 @@ QtObject {
         return kind === "rename" || kind === "half-rename" ? "warning" : "danger"
     }
 
+    /// Why the history column is empty when **nobody said why**: the walk ended without an answer, so there is no
+    /// git message to quote (`session::log::PassWatch`). Said the way the reports are — what did not happen, and no
+    /// guess at the cause, since this end does not have one.
+    function graphStopped() {
+        return qsTr("The history could not be read")
+    }
+
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).
     /// Shown by the diff pane on the conflicts git prints no patch for — the one place the sentence appears; the
     /// headless `conflict_kind` report reads it through `NavItemDelegate.conflictWords`.

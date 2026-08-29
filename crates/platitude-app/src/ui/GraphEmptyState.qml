@@ -30,10 +30,13 @@ Item {
         height: Theme.iconLg
         spinning: emptyState.graphModel.loading && emptyState.graphModel.rowTotal === 0
     }
+    // Why the column is empty, in the words of whoever could not fill it — git's, where git is what failed. **A walk
+    // that ended without an answer has none**, and that is what the second line is for: nobody said anything, so the
+    // screen says it (デザイン規約 §答えの要らない報せ「断ったのがこちら自身なら文もこちら」の同じ配り方).
     NoticeLine {
         anchors.centerIn: parent
-        visible: emptyState.graphModel.error !== ""
-        text: emptyState.graphModel.error
+        visible: emptyState.graphModel.failed
+        text: emptyState.graphModel.error !== "" ? emptyState.graphModel.error : Words.graphStopped()
         color: Theme.danger
         width: parent.width - 2 * Theme.spaceXl
     }

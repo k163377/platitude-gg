@@ -63,6 +63,7 @@ impl GraphModel {
             self.total_ms = -1;
             self.truncated = false;
             self.error = String::new();
+            self.failed = false;
             self.started_at = Some(Instant::now());
         }
     }
@@ -175,6 +176,7 @@ impl GraphModel {
         // answer to whatever failed last.
         self.first_chunk_ms = 0;
         self.error = String::new();
+        self.failed = false;
         tracing::info!(
             total = self.row_total,
             elapsed_ms,
@@ -183,10 +185,16 @@ impl GraphModel {
         );
     }
 
+    /// A pass said it could not draw this graph. `message` is whoever's
+    /// words there are — git's, where git is what failed — and empty for
+    /// the one that has none: a walk that ended without an answer at all
+    /// (`session::log::PassWatch`). The screen tells those two apart by
+    /// `failed` standing without an `error` beside it.
     fn fail_walk(&mut self, generation: u64, message: String) {
         if generation == self.generation {
             self.loading = false;
             self.error = message;
+            self.failed = true;
         }
     }
 

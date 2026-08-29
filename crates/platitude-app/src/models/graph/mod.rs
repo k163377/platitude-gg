@@ -81,6 +81,12 @@ pub struct GraphModel {
     head_avatar_url: String,
     head_geometry: String,
     error: String,
+    /// A pass reported that it could not draw the graph. **Not the same as
+    /// `error` being set**: a walk that ended without an answer at all —
+    /// the task fell over — has nobody's words to show, and the screen
+    /// says that in its own (`Words.graphStopped`, app-ui.md「Rust に文言を
+    /// 置かない」).
+    failed: bool,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,
     tab_id: i32,
