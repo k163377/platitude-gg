@@ -29,6 +29,9 @@ pub const TODO_EDITOR_FLAG: &str = "--todo-editor";
 /// Name of the helper executable, which ships beside the application.
 pub const HELPER_NAME: &str = "pg-todo-editor";
 
+/// Scratch tag of the message files reword `exec` lines read.
+const REWORD_MSG_TAG: &str = "REWORD_MSG";
+
 /// Locates the helper next to the running executable.
 ///
 /// Packaging must keep the two together; without the helper, interactive
@@ -432,7 +435,10 @@ pub async fn rebase_interactive(
     };
 
     // Message files must outlive the rebase: the `exec` lines read them
-    // while git is replaying.
+    // while git is replaying — and a replay that stops part-way keeps the
+    // rest of the todo, so a later `--continue` reads them from another
+    // process entirely. They are only dropped once the rebase is known
+    // not to be standing.
     let mut message_files: Vec<ScratchFile> = Vec::new();
     let mut lines: Vec<TodoLine> = Vec::new();
     for step in steps {
@@ -449,8 +455,9 @@ pub async fn rebase_interactive(
                 message: format!("reword of {} has no message", step.oid),
             });
         };
-        let file = ScratchFile::create(&repo.git_dir, "REWORD_MSG", normalized(message).as_bytes())
-            .map_err(io_error)?;
+        let file =
+            ScratchFile::create(&repo.git_dir, REWORD_MSG_TAG, normalized(message).as_bytes())
+                .map_err(io_error)?;
         lines.push(TodoLine::Exec {
             command: format!(
                 "git commit --amend --cleanup=whitespace --file {}",
@@ -471,10 +478,25 @@ pub async fn rebase_interactive(
     // reads as the failure it is (規約 §終了コードで答える問い合わせ).
     let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code(1);
     let result = executor.run(cmd, cancel).await;
-    // Keep both sets of scratch files alive until git is done with them.
+    // The todo is installed (or refused) by now; only the message files
+    // may still have a reader.
     drop(plan);
-    drop(message_files);
-    crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await
+    let outcome = crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
+    if matches!(outcome, Ok(RebaseOutcome::Stopped)) {
+        // The remaining todo still points at them; they wait for the
+        // `--continue`. Whatever an abort strands is swept below, on the
+        // next rebase that runs to the end — a moment when nothing can be
+        // standing.
+        for file in message_files {
+            file.keep();
+        }
+    } else {
+        drop(message_files);
+        if matches!(outcome, Ok(RebaseOutcome::Done)) {
+            ScratchFile::sweep(&repo.git_dir, REWORD_MSG_TAG);
+        }
+    }
+    outcome
 }
 
 /// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.

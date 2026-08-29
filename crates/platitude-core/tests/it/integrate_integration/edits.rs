@@ -4,7 +4,7 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::helper;
-use platitude_core::integrate::RebaseOptions;
+use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
 // --- one-commit edits (squash into parent / reword) ----------------------
@@ -204,4 +204,70 @@ async fn a_reword_without_a_message_is_refused_before_git_runs() {
     .expect_err("a reword needs a message");
     assert!(err.to_string().contains("no message"), "{err}");
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
+}
+
+/// A reword standing *behind* a conflicting step survives the stop: the
+/// remaining todo's `exec` line reads its message file from the later
+/// `--continue`, a different process entirely, so the file must still be
+/// there — and once a later rebase runs clean, the leftovers are gone.
+#[tokio::test]
+async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "base");
+    repo.git(&["switch", "-c", "side"]);
+    repo.commit_file("f.txt", "side\n", "their line");
+    repo.git(&["switch", "main"]);
+    let conflicting = repo.commit_file("f.txt", "ours\n", "our line");
+    let reworded = repo.commit_file("g.txt", "g\n", "old words");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let steps = vec![
+        RebaseStep::pick(conflicting, "our line"),
+        RebaseStep {
+            action: TodoAction::Reword,
+            oid: reworded,
+            subject: "old words".into(),
+            message: Some("new words".into()),
+        },
+    ];
+    let outcome = sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        "side",
+        &steps,
+        &RebaseOptions::default(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("run the plan");
+    assert!(
+        matches!(outcome, RebaseOutcome::Stopped),
+        "the pick conflicts: {outcome:?}"
+    );
+
+    repo.write_file("f.txt", "settled\n");
+    repo.git(&["add", "--", "f.txt"]);
+    repo.git(&["rebase", "--continue"]);
+    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "new words");
+
+    // A clean rebase over the settled history sweeps what the stop left.
+    let head = repo.git(&["rev-parse", "HEAD"]);
+    let outcome = sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        "HEAD~1",
+        &[RebaseStep::pick(head, "new words")],
+        &RebaseOptions::default(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("a clean run");
+    assert!(matches!(outcome, RebaseOutcome::Done), "{outcome:?}");
+    let leftovers: Vec<_> = std::fs::read_dir(repo.path.join(".git").join("platitude"))
+        .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    assert!(leftovers.is_empty(), "swept: {leftovers:?}");
 }
