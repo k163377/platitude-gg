@@ -33,6 +33,12 @@ Rectangle {
     readonly property real bandTabRun: tabStrip.runAvail
     readonly property real bandTabContent: tabStrip.contentWidth
     readonly property bool bandTabScrolls: tabStrip.contentWidth > tabStrip.tabsWidth
+    /// …and the stand-in for the tab in front, which a picture of a scrolled strip cannot be read for
+    /// (`TabStrip.tabPinShown`).
+    readonly property bool tabPinShown: tabStrip.tabPinShown
+    readonly property bool tabPinRidesLeft: tabStrip.tabPinRidesLeft
+    readonly property bool frontTabWhole: tabStrip.frontTabWhole
+    readonly property bool tabRunTravelling: tabStrip.runTravelling
     /// Automation: the four things that can be the matter here. The group owns the conditions and the hidden
     /// measurements behind them; what the hooks ask the band for comes back through here (`BandStateGroup`).
     readonly property bool opBadgeShown: stateGroup.opBadgeShown
@@ -158,6 +164,8 @@ Rectangle {
     function dropCarriedTab() { tabStrip.dropTab() }
     function runAtEnd() { return tabStrip.runAtEnd() }
     function runOffset() { return tabStrip.runOffset() }
+    function sendTabRunAway() { return tabStrip.sendRunAway() }
+    function pressTabPin() { return tabStrip.pressTabPin() }
     function tabPaths() { return tabStrip.tabPaths() }
     function tabTitles() { return tabStrip.tabTitles() }
     function tabItemCount() { return tabStrip.tabItemCount() }

@@ -17,6 +17,10 @@ Item {
     /// The RepoPage of the active tab (null while no tab is open). The app menu's one live entry is the only thing here
     /// that asks anything of it.
     property var curPage: null
+    /// The tab in front, as this strip's own list built it — pushed by that tab (`TabItemDelegate.frontChanged`)
+    /// rather than looked up, because the item for a row the model has only just gained arrives with the next layout.
+    /// Null while no tab is open. The stand-in at the edge is drawn off it, and the travel to it is measured off it.
+    property Item frontTab: null
 
     /// Automation: the run the tabs were handed, and what they made of it. A picture cannot say which tabs gave way and
     /// which were left alone — every strip that fits looks like every other one — so the widths themselves are the
@@ -33,6 +37,15 @@ Item {
     /// Whether the ☰'s card is standing. The grab run gives up being the window's caption while it is, so that a press
     /// on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: appMenu.opened
+
+    /// Automation: the stand-in for the tab in front (`PG_AUTO_ACT=tab-pin` / `tab-pin-go`) — whether it is standing,
+    /// which edge it took, whether the row it stands for is whole on screen, and whether the strip is still travelling
+    /// towards it. A picture of a scrolled strip reads the same whichever of the four is true. Read off the stand-in
+    /// itself, so a binding that came apart answers with what is drawn rather than with what was asked of it.
+    readonly property bool tabPinShown: tabPin.visible
+    readonly property bool tabPinRidesLeft: tabPin.rideLeft
+    readonly property bool frontTabWhole: tabPin.frontWhole
+    readonly property bool runTravelling: tabRun.travelling
 
     /// The longest and shortest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
     readonly property int tabTitleMaxW: tabMetrics.titleMaxW
@@ -65,10 +78,14 @@ Item {
     /// The left button moves to the tab — and leaves a hand on it that may go on to carry it (`takeTab`) — the middle
     /// one closes it (デザイン規約 §タブの所作). The real press and the smoke hook both come through here.
     function pressTab(index, id, button) {
-        if (button === Qt.MiddleButton)
+        if (button === Qt.MiddleButton) {
             tabStrip.tabsModel.closeTab(id)
-        else
-            tabStrip.tabsModel.setCurrentIndex(index)
+            return
+        }
+        // A press outranks a travel in flight, whatever it goes on to be: the carry that may follow sends the strip
+        // itself (`TabCarry.driftRun`), and two hands on `contentX` is one of them drawing over the other.
+        tabRun.halt()
+        tabStrip.tabsModel.setCurrentIndex(index)
     }
 
     /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
@@ -132,13 +149,26 @@ Item {
         tabCarry.dropTab()
     }
 
-    /// Automation: whether the strip has travelled to its far end, and how far it has travelled (`tab-edge`). A strip
-    /// with nothing to scroll answers false — there is no end to reach.
-    function runAtEnd() {
-        return tabs.contentWidth > tabs.width && tabs.contentX >= tabs.contentWidth - tabs.width - 1
+    /// The strip, travelled until the tab in front is whole on screen — what a press on the stand-in at the edge means
+    /// (デザイン規約 §タブの所作; the travel itself is `TabRun.showTab`).
+    function showFrontTab() {
+        return tabRun.showTab(tabStrip.frontTab)
     }
-    function runOffset() {
-        return Math.round(tabs.contentX)
+
+    /// Automation: where the strip stands in its run and whether it has reached the far end (`tab-edge`), and the run
+    /// sent away from the tab in front so the stand-in has to appear (`tab-pin`). All three are the run's own
+    /// (`TabRun`); the band reaches them through the strip like everything else.
+    function runAtEnd() { return tabRun.atEnd() }
+    function runOffset() { return tabRun.offset() }
+    function sendRunAway() { return tabRun.sendAway(tabStrip.frontTab) }
+
+    /// Automation: the stand-in, pressed (`tab-pin-go`). Put in at its own signal — the press is a pointer's, which no
+    /// headless run has, and everything past it is the road a hand takes.
+    function pressTabPin() {
+        if (!tabPin.visible)
+            return false
+        tabPin.activated()
+        return true
     }
 
     /// Automation: the middle click, landed on the tab at `index` (`PG_AUTO_ACT=middle-close`). Answers whether there
@@ -336,7 +366,9 @@ Item {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: event => {
                 const step = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-                tabs.contentX = Math.max(0, Math.min(tabs.contentWidth - tabs.width, tabs.contentX - step))
+                // A hand on the wheel outranks a travel in flight: the strip goes where it is being sent.
+                tabRun.halt()
+                tabs.contentX = tabRun.clamp(tabs.contentX - step)
             }
         }
         model: tabStrip.tabsModel
@@ -355,6 +387,14 @@ Item {
             onTabTaken: grabX => tabCarry.takeTab(tabItem.index, grabX)
             onTabDragged: sceneX => tabCarry.carryTab(tabItem.index, sceneX)
             onTabDropped: tabCarry.dropTab()
+            // Order-free: leaving one tab and arriving at another are two answers to the same question, and the item
+            // that lost the front only takes the seat away if nobody has claimed it since.
+            onFrontChanged: front => {
+                if (front)
+                    tabStrip.frontTab = tabItem
+                else if (tabStrip.frontTab === tabItem)
+                    tabStrip.frontTab = null
+            }
         }
     }
     // The hand between the taking up and the setting down. Declared after the list it reads: what a carry measures
@@ -367,6 +407,29 @@ Item {
     // The headless run's window onto that same list, declared after it for the same reason.
     TabProbe {
         id: tabProbe
+        view: tabs
+    }
+    // The tab in front, standing at the edge its own row went out of. Beside the list rather than inside it: a
+    // Flickable's declared children are taken by its content item and travel with the scroll, and this is the one
+    // thing in the strip that may not. Declared after the hand so it can ask whether one is on a tab.
+    TabPin {
+        id: tabPin
+        tabsModel: tabStrip.tabsModel
+        metrics: tabMetrics
+        frontTab: tabStrip.frontTab
+        titleCap: tabStrip.tabTitleCap
+        titleEaseW: tabStrip.tabTitleEaseW
+        runX: tabs.x
+        runWidth: tabs.width
+        runOffset: tabs.contentX
+        carrying: tabCarry.heldId >= 0
+        stripHeight: tabStrip.height
+        onActivated: tabStrip.showFrontTab()
+    }
+    // Where the strip stands in its run, and the travel that sends it somewhere. Declared after the list it moves,
+    // for the reason the hand is.
+    TabRun {
+        id: tabRun
         view: tabs
     }
     // Opening one more. Drawn rather than typed: a typed `+` resolves to whatever shape and line weight the platform

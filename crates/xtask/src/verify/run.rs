@@ -49,6 +49,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // A strip that has to overflow: eight of them, against a window
         // the verb puts down on its floor.
         tab_width_repos("8")?
+    } else if opts.verb == "tab-pin" || opts.verb == "tab-pin-go" {
+        // The same floor, four tabs further: what these two photograph is
+        // a stand-in with the strip running underneath it, and eight tabs
+        // leave a run of three pixels on the machine with the wider band
+        // (measured: Linux `run=3` against Windows `run=83`, because the
+        // Linux band carries neither a grab run nor window buttons). The
+        // stand-in stood either way — `must_say` says so — but the
+        // picture was of a strip that had not moved.
+        tab_width_repos("12")?
     } else {
         let presets: Vec<String> = if opts.preset.is_empty() {
             vec!["basic".into()]

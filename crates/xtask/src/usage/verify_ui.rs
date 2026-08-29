@@ -81,6 +81,15 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       cannot show. `tab-edge` opens eight, puts the window down on its
       floor so the strip has to overflow, and holds a tab past the end of
       it until the strip has travelled the whole way.
+      `tab-pin` and `tab-pin-go` put the window on the same floor with
+      twelve tabs and are read as a pair: the first sends the strip to
+      the end furthest from the tab in front and photographs the stand-in
+      that rides the edge that tab went out of, the second presses that
+      stand-in and waits out the travel it starts. Their argument is
+      which tab is in front (default 0, which puts the stand-in on the
+      left edge). Twelve rather than eight because the run has to be
+      worth photographing on both machines — the wider Linux band leaves
+      eight tabs three pixels to travel in.
       `tab-name` opens a strip of a different shape: four repositories
       called `repo` — two of them under a parent they also share — and
       one nobody shares at all, which is what a name that has to grow to

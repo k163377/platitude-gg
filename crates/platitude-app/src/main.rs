@@ -242,7 +242,9 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/TabCarry.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabItemDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabMetrics.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TabPin.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabProbe.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TabRun.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabStrip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
@@ -254,6 +256,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowDialogActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowFrameActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowTabActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowTabPinActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowShape.qml", "qt/qml/platitude");

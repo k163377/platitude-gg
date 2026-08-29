@@ -59,6 +59,11 @@ Rectangle {
     signal tabTaken(real grabX)
     signal tabDragged(real sceneX)
     signal tabDropped()
+    /// This tab has become the one in front, or has stopped being it. The strip's stand-in is drawn off whichever item
+    /// answers true (`TabPin`), and it is pushed rather than looked up: the item for a row the model has only just
+    /// gained arrives with the next layout, so a strip that went looking the moment the front changed would find
+    /// nothing standing there (`TabStrip.middleClickTab` carries the same note).
+    signal frontChanged(bool front)
 
     // The name, the two margins, and the half of the easing that falls outside the row (`tabContent` carries the other
     // half in its spacing). Exact fit: anything the layout cannot hand out lands on the right margin, where nobody
@@ -88,6 +93,10 @@ Rectangle {
     ToolTip.visible: tabItem.pointed && !tabItem.held
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: tabItem.repo_path
+    onCurrentChanged: tabItem.frontChanged(tabItem.current)
+    // The strip's first tab comes up already in front, and a property that was true from the start never announces
+    // itself — the stand-in would have nothing to draw from until the reader moved to some other tab and back.
+    Component.onCompleted: if (tabItem.current) tabItem.frontChanged(true)
     // Which tab the hand is on (デザイン規約 §タブの所作「`✕` が出るのは前に居るタブと、手の下のタブだけ」). A handler
     // because handlers are passive: the mark, the wash and the tab go on answering the one pointer however many
     // children of this tab take hover of their own.

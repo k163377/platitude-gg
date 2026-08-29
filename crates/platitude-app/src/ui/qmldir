@@ -178,7 +178,9 @@ SummaryArea 1.0 SummaryArea.qml
 TabCarry 1.0 TabCarry.qml
 TabItemDelegate 1.0 TabItemDelegate.qml
 TabMetrics 1.0 TabMetrics.qml
+TabPin 1.0 TabPin.qml
 TabProbe 1.0 TabProbe.qml
+TabRun 1.0 TabRun.qml
 TabStrip 1.0 TabStrip.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
@@ -190,6 +192,7 @@ WindowChrome 1.0 WindowChrome.qml
 WindowDialogActs 1.0 WindowDialogActs.qml
 WindowFrameActs 1.0 WindowFrameActs.qml
 WindowTabActs 1.0 WindowTabActs.qml
+WindowTabPinActs 1.0 WindowTabPinActs.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml

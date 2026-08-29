@@ -1,0 +1,141 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Controls.Fusion
+import QtQuick.Layouts
+import platitude.ui
+
+// The tab in front never leaves the strip: while its own row is scrolled off the run, this stand-in rides the edge the
+// row went out of, and it steps aside the moment that row is whole on screen — so the strip never shows one tab twice
+// (デザイン規約 §タブの所作). The sidebar answers the same question about the current branch in the same shape
+// (`HeadPinRow`), and the graph does about the commit HEAD stands on (`GraphHeadPin`).
+//
+// Whoever uses this stands it beside the list rather than declaring it inside: a Flickable's declared children are
+// taken by its content item and travel with the scroll, which is the one thing a stand-in may not do.
+Rectangle {
+    id: tabPin
+
+    /// The strip's own model — the one thing the mark does goes through it.
+    required property var tabsModel
+    /// The strip's shared arithmetic and the run it handed out among the names (`TabStrip.settleTitleCap`). The same
+    /// three the rows are drawn from, so the stand-in cannot be set in a measure the strip is not using.
+    required property var metrics
+    property real titleCap: 0
+    property real titleEaseW: 0
+    /// The tab in front, as the strip's list built it (`TabStrip.frontTab`). Everything drawn here is read off that
+    /// item — where it sits, how wide it came out, what it is called, what it stands on — so the stand-in cannot say
+    /// anything the tab is not saying. Null while no tab is open, and null again for the frame between a tab closing
+    /// and its neighbour coming forward.
+    property Item frontTab: null
+    /// The run the tabs are drawn in: where it begins in the strip, how wide it is, and how far it has travelled.
+    required property real runX
+    required property real runWidth
+    required property real runOffset
+    /// Whether a tab is under a hand. Nothing stands in for one: a carry draws its tab against the edge of the run
+    /// whatever row it has got to (`TabCarry.carryTab`), so the row's own seat stops saying where the reader can see
+    /// it — and the tab in hand is the tab in front (デザイン規約 §タブの所作「移るのは押した時」).
+    property bool carrying: false
+    property real stripHeight: 0
+
+    /// Where the pointer's arrival is written down, in the shape the tabs already use (`TabItemDelegate.pointed`).
+    /// The tip below reads this rather than the handler, so the seat a headless run would write to reach it is cut
+    /// before there is a verb that wants it — hover is the one input no run can make, and a tip wired to a handler
+    /// has to be rewired before it can ever be photographed (verify-ui スキル §hover の絵の撮り方).
+    property bool pointed: false
+
+    /// Pressed: the strip is asked to travel to the row this stands for. The one thing a press on a stand-in can mean
+    /// — the same answer the graph's own gives (`GraphHeadPin`; デザイン規約 §タブの所作).
+    signal activated()
+
+    /// Where the tab in front sits in the strip's content and how wide it came out. Nothing is measured again here:
+    /// a stand-in a pixel off the tab it stands for is a tab the strip does not have.
+    readonly property real seatX: tabPin.frontTab ? tabPin.frontTab.x : 0
+    readonly property real seatWidth: tabPin.frontTab ? tabPin.frontTab.width : 0
+    /// Which edge the row went out of — and, between the two of them, whether it went out at all.
+    readonly property bool rideLeft: tabPin.seatX < tabPin.runOffset
+    readonly property bool rideRight: tabPin.seatX + tabPin.seatWidth > tabPin.runOffset + tabPin.runWidth
+    readonly property bool frontWhole: tabPin.frontTab !== null && !tabPin.rideLeft && !tabPin.rideRight
+    /// The air this name is eased with, the same half-of-the-shortfall the rows are given
+    /// (`TabMetrics.titleEase`). Read off the label's own hint, which is the name at its natural width.
+    readonly property real titleEase:
+        tabPin.metrics.titleEase(pinTitle.implicitWidth, tabPin.titleCap, tabPin.titleEaseW)
+
+    /// The tab this stands for, closed. The whole of it is the target, the way the whole of a tab is
+    /// (デザイン規約 §タブの所作「閉じる的はタブ全体」).
+    function closeFront() {
+        if (tabPin.frontTab)
+            tabPin.tabsModel.closeTab(tabPin.frontTab.tab_id)
+    }
+
+    visible: tabPin.frontTab !== null && !tabPin.carrying && (tabPin.rideLeft || tabPin.rideRight)
+    width: tabPin.seatWidth
+    height: tabPin.stripHeight
+    // Never before the run begins: the ☰ is the other side of that edge, and nothing in this file clips. The strip
+    // hands the run out among the names before it lets one tab past the width of it (`TabStrip.settleTitleCap`), so
+    // this only holds for a layout that has already gone wrong — and it goes wrong towards the edge the stand-in
+    // takes when the row leaves the other way, rather than over a mark that has nothing to do with tabs.
+    x: tabPin.rideLeft ? tabPin.runX
+                       : Math.max(tabPin.runX, tabPin.runX + tabPin.runWidth - tabPin.width)
+    // Dressed as the tab it stands for: the tab in front's own ground, its underline below, its weight in the name.
+    // Opaque, because the strip runs underneath. **No line down the side it runs under** — the sidebar's stand-in
+    // draws one because its ground and its rows' are a step apart, and here the two are different things entirely
+    // (a filled tab against transparent ones). A rule in the band would be the strongest ink in it for as long as the
+    // strip is scrolled, which is the reason the graph's stand-in has none either (規約 §グラフの中で HEAD を見失わない).
+    color: Theme.bgSelected
+    // The repository in full, as the tab it stands for says it (デザイン規約 §hover のツールチップ). Read off `pointed`
+    // for the reason the tabs read it, and it is the stand-in's own: a tip belongs to the thing under the hand.
+    ToolTip.visible: tabPin.pointed
+    ToolTip.delay: Metrics.tipDelayMs
+    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.repo_path : ""
+    HoverHandler {
+        id: pinHover
+        onHoveredChanged: tabPin.pointed = pinHover.hovered
+    }
+    // The left button takes the reader to the row; the middle one closes the tab, as it does anywhere on a tab. The
+    // `✕` does not accept the middle button, so a press on the mark falls through to the same gesture.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+        onClicked: mouse => {
+            if (mouse.button === Qt.MiddleButton)
+                tabPin.closeFront()
+            else
+                tabPin.activated()
+        }
+    }
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 2 * Theme.borderWidth
+        color: Theme.accent
+    }
+    // The tab's own row, at the tab's own margins (`TabItemDelegate` carries what each of the three is for).
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: Theme.spaceXs + tabPin.titleEase / 2
+        anchors.rightMargin: tabPin.metrics.markGap
+        spacing: tabPin.metrics.markGap + tabPin.titleEase / 2
+        Label {
+            id: pinTitle
+            text: tabPin.frontTab ? tabPin.frontTab.title : ""
+            elide: Text.ElideRight
+            Layout.maximumWidth: tabPin.titleCap
+            font.letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
+            Layout.fillHeight: true
+            verticalAlignment: Text.AlignVCenter
+            font.weight: Font.DemiBold
+            color: Theme.textPrimary
+        }
+        // The tab in front always has its mark out (デザイン規約 §タブの所作), and the seat it stands in is part of what
+        // that tab costs — a stand-in drawn without it would be the same width with a hole at the end of it.
+        CloseToolButton {
+            id: pinMark
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: tabPin.metrics.markSeat
+            topInset: (Theme.iconLg - tabPin.metrics.markSeat) / 2
+            bottomInset: pinMark.topInset
+            onClicked: tabPin.closeFront()
+        }
+    }
+}

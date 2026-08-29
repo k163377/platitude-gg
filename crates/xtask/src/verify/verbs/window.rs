@@ -2,7 +2,7 @@
 //! at, which tab was carried where, and the band that gives way when it
 //! is crowded.
 
-use super::Verb;
+use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     // `edge=` rides along in that report but is not judged: whether an
@@ -92,6 +92,34 @@ pub(super) const TABLE: &[Verb] = &[
         name: "tab-edge",
         when: &[],
         plain: "tab_edge landed=true",
+    },
+    // The stand-in for the tab in front, and the press that takes it
+    // away again — read as a pair. A strip whose front tab is genuinely
+    // at the edge of the run frames exactly like one standing in for a
+    // tab that is nowhere on it, so `onScreen=` carries both: the
+    // stand-in is wanted exactly while its row is out of sight, and a
+    // run where both halves agree has the rule backwards.
+    //
+    // Which edge it took is judged only where the run said which tab to
+    // stand behind — the first one, sent away to the far end, rides the
+    // left edge. Any other argument still has to have stood one up.
+    Verb {
+        name: "tab-pin",
+        when: &[(
+            Arg::OneOf(&["", "0"]),
+            "tab_pin stood=true onScreen=false left=true",
+        )],
+        plain: "tab_pin stood=true onScreen=false",
+    },
+    // And the travel, which no picture holds: a settled strip with its
+    // front tab in view is the same photograph whether it travelled
+    // there or was never sent away. `travelled=` is the strip having
+    // moved under the press, `gone=` the stand-in's own answer to
+    // having arrived.
+    Verb {
+        name: "tab-pin-go",
+        when: &[],
+        plain: "tab_pin_go gone=true onScreen=true travelled=true",
     },
     // The ☰'s card, standing. `yield=true` is the half no picture holds:
     // the band's empty run is the platform's caption, and while the card

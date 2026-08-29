@@ -13,7 +13,7 @@ import platitude.ui
 /// handed in below: a file of its own cannot see the window's ids, and naming them in one list is what says how far the
 /// harness reaches into the window.
 ///
-/// The verbs themselves are grouped by the part of the window they answer for and live in the four items at the foot of
+/// The verbs themselves are grouped by the part of the window they answer for and live in the five items at the foot of
 /// this file. Each of those gates itself on `AppBackend.autoAct`, so the grouping is only ever about where a verb is
 /// read: nothing here hands one its turn. The two that stay are the two that cannot — they read the change signals
 /// latched just below, which have to be connected before the verb they belong to starts.
@@ -147,6 +147,12 @@ Item {
         topBar: driver.topBar
         mainUi: driver.mainUi
         gate: driver.gate
+    }
+    WindowTabPinActs {
+        window: driver.window
+        tabsModel: driver.tabsModel
+        pageRepeater: driver.pageRepeater
+        topBar: driver.topBar
     }
     WindowBandActs {
         window: driver.window
