@@ -129,6 +129,10 @@ impl RepoSession {
     }
 
     /// Changes the graph window size (`None` = full history) and restarts.
+    ///
+    /// The window this sets is the one the graph opens with, so the tail's
+    /// step is measured from it (`log_window_step`) — growing the window
+    /// afterwards leaves the step where this put it.
     pub fn set_log_limit(self: &Arc<Self>, limit: Option<u32>) {
         {
             let mut options = self.lock_log_options();
@@ -136,8 +140,76 @@ impl RepoSession {
                 return;
             }
             options.limit = limit;
+            if let Some(initial) = limit {
+                options.step = log_window_step(initial);
+            }
         }
         self.restart_log();
+    }
+
+    /// What one press of the graph's tail would add here.
+    pub fn log_window_step(&self) -> u32 {
+        self.lock_log_options().step
+    }
+
+    /// Widens the graph window by one step and rebuilds it **in place**.
+    ///
+    /// **The swap pass, never `restart_log`.** A restart's direct pass
+    /// clears the graph before it streams (see `run_direct_pass`), and
+    /// this is asked for at the bottom of the window by somebody reading
+    /// it: blanking the rows and sending them back to the top is the one
+    /// answer a press down there must not give. The swap pass builds the
+    /// wider walk off-screen and splices it in, so what is on screen
+    /// stays where it is and the tail grows under it.
+    ///
+    /// Nothing to do on a window that is already the whole history: there
+    /// is no step past the end of it.
+    pub fn grow_log_window(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let (options, was) = {
+            let mut options = self.lock_log_options();
+            let Some(limit) = options.limit else {
+                return;
+            };
+            options.limit = Some(limit.saturating_add(options.step));
+            (*options, limit)
+        };
+        let grown = options.limit;
+
+        let run_cancel = self.take_log_token();
+        let held = self.graph_passes.enter();
+
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let _held = held;
+            // Changed: the wider graph is in, footer and all. Cancelled:
+            // somebody else owns the stream and answers for it. Unchanged
+            // cannot land here — this pass carries a footer the last one
+            // did not. Only a failure leaves the window unanswered:
+            //
+            // the wider walk died, so nothing on screen moved and nothing
+            // told the window that the press it is waiting on is over — a
+            // swap pass reports a failed walk to the tab, not to the
+            // graph (`run_swap_pass` -> `fail`). Put the window back to
+            // the one that is drawn and take the ordinary route, which
+            // does answer the graph.
+            if s.run_swap_pass(&workdir, options, &run_cancel).await == RefreshOutcome::Failed {
+                // **Only if the window is still the one this press set.**
+                // A failure is reported without re-reading the token, so
+                // it can arrive after somebody else has asked for a
+                // window of their own — and putting this press's back
+                // then would walk a history nobody asked for.
+                let mut options = s.lock_log_options();
+                if options.limit != grown {
+                    return;
+                }
+                options.limit = Some(was);
+                drop(options);
+                s.restart_log();
+            }
+        });
     }
 
     fn lock_log_options(&self) -> std::sync::MutexGuard<'_, LogOptions> {

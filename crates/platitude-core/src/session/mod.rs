@@ -141,9 +141,30 @@ pub fn auto_fetch_minutes(minutes: u32) -> u32 {
 }
 
 /// Default cap on the graph window (GitKraken-like initial view). Bounds
-/// memory and stream time on 100k+ commit repositories; the UI shows a
-/// truncation hint when the cap is hit.
+/// memory and stream time on 100k+ commit repositories; the UI shows the
+/// cut, and offers the next step of history, when the cap is hit.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
+
+/// What one press of the graph's tail adds, for a window that opened at
+/// `initial` commits: a quarter of it.
+///
+/// **A fraction of the initial window rather than a number of its own**
+/// (2026-08-29 ユーザー判断) — the initial count is to become a setting,
+/// and the step is meant to move with it.
+///
+/// A quarter is a smaller share than the clients that page their graph
+/// take (GitLens 200 of 500, VS Code Git Graph 100 of 300), and it can
+/// afford to be: this window opens four to eight times wider than
+/// theirs, so a quarter of it is still 500 commits. **What a press costs
+/// is the walk's frontier setup, not the commits** (実測
+/// `JetBrains/kotlin`, 138,915 commits / 46,373 tags, warm: 2,000
+/// commits 623–658ms, 20,000 800–826ms, all of it 1,445–1,479ms — about
+/// 620ms fixed and 6ms per thousand), so the step is a question of how
+/// much a reader wants at once, not of what the walk can afford.
+#[must_use]
+pub const fn log_window_step(initial: u32) -> u32 {
+    if initial < 4 { 1 } else { initial / 4 }
+}
 
 /// What a write invalidates once it succeeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

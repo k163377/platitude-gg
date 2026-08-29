@@ -511,3 +511,114 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     assert!(!whole.truncated, "so nothing is being kept from the user");
     session.close();
 }
+
+/// Growing the window is what the graph's tail offers, and it must land
+/// **without starting the stream over**: the press is made at the bottom
+/// of a graph somebody is reading, and a restart clears the rows and
+/// sends them back to the top (`run_direct_pass`). So the wider walk
+/// arrives as a replacement, spliced in under what is already drawn.
+#[tokio::test(flavor = "multi_thread")]
+async fn growing_the_window_walks_further_without_starting_over() {
+    let mut repo = TestRepo::init();
+    for n in 1..=6 {
+        repo.commit_file("f.txt", &format!("{n}\n"), &format!("commit {n}"));
+    }
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+
+    let full = sink.opened_graph(&session, 6).await;
+    assert!(!full.truncated, "6 commits fit in the default window");
+
+    // A window of four, whose step is therefore one commit.
+    session.set_log_limit(Some(4));
+    let cut = sink.pass_after("the limited window", full.generation).await;
+    assert_eq!(cut.walked, 4);
+    assert!(cut.truncated, "two commits are past the cut");
+
+    let streams = sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
+    session.grow_log_window();
+    let grown = sink.pass_after("the grown window", cut.generation).await;
+    assert_eq!(grown.walked, 5, "the step is a quarter of the window");
+    assert_eq!(grown.total, 5);
+    assert!(grown.truncated, "one commit is still past the cut");
+    assert_eq!(
+        sink.count(|e| matches!(e, SessionEvent::LogStarted { .. })),
+        streams,
+        "the wider walk was spliced in, not streamed over a cleared graph"
+    );
+
+    session.close();
+}
+
+/// The step is measured from the window the graph *opened* with, not
+/// from the one it has grown to: a reader who has pressed four times
+/// gets the same amount on the fifth press as on the first.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.opened_graph(&session, 1).await;
+
+    assert_eq!(
+        session.log_window_step(),
+        platitude_core::session::DEFAULT_LOG_LIMIT / 4,
+        "the default window's own quarter"
+    );
+
+    // The door a setting for the initial count will come through.
+    session.set_log_limit(Some(400));
+    assert_eq!(session.log_window_step(), 100);
+
+    session.grow_log_window();
+    assert_eq!(session.log_options().limit, Some(500), "one step wider");
+    assert_eq!(session.log_window_step(), 100, "and the step did not grow");
+
+    session.grow_log_window();
+    assert_eq!(session.log_options().limit, Some(600));
+    assert_eq!(session.log_window_step(), 100);
+
+    session.close();
+}
+
+/// A window that already holds the whole history has no next step, and
+/// the press that would ask for one is not offered — but the call is
+/// reachable from a graph that finished loading while a hand was on its
+/// way down, so it answers by leaving the window where it is.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unlimited_window_has_no_next_step() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "one");
+
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    sink.opened_graph(&session, 1).await;
+
+    session.set_log_limit(None);
+    session.grow_log_window();
+    assert_eq!(
+        session.log_options().limit,
+        None,
+        "there is nothing past the end of the history to load"
+    );
+
+    session.close();
+}

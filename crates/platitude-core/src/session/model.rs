@@ -14,6 +14,14 @@ pub struct LogOptions {
     pub include_tags: bool,
     /// `None` walks the full history.
     pub limit: Option<u32>,
+    /// What one press of the graph's tail adds to `limit`
+    /// (`RepoSession::grow_log_window`).
+    ///
+    /// **Held rather than derived from `limit`**, which grows with every
+    /// press: the step is a quarter of the window the graph *opened*
+    /// with, so it stays the same size however deep the reader has gone
+    /// (`session::log_window_step`).
+    pub step: u32,
 }
 
 impl Default for LogOptions {
@@ -21,6 +29,7 @@ impl Default for LogOptions {
         Self {
             include_tags: true,
             limit: Some(DEFAULT_LOG_LIMIT),
+            step: log_window_step(DEFAULT_LOG_LIMIT),
         }
     }
 }
