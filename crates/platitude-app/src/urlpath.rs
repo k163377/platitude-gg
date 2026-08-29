@@ -16,13 +16,21 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
     let decoded = percent_decode(rest);
     #[cfg(windows)]
     {
-        // `/C:/Users/...` → `C:/Users/...`; UNC (`//server/share`) keeps
-        // its leading slashes.
-        let trimmed = decoded
+        // `/C:/Users/...` → `C:/Users/...`.
+        if let Some(drive) = decoded
             .strip_prefix('/')
             .filter(|r| r.chars().nth(1) == Some(':'))
-            .unwrap_or(&decoded);
-        PathBuf::from(trimmed)
+        {
+            return PathBuf::from(drive);
+        }
+        // A rest that does not start at `/` names a host — `file://server/
+        // share` is the URL form of a UNC path (what `path_to_file_url`
+        // writes and the FolderDialog returns). Read as-is it would be a
+        // relative path resolving against the working directory.
+        if !decoded.is_empty() && !decoded.starts_with('/') {
+            return PathBuf::from(format!("//{decoded}"));
+        }
+        PathBuf::from(decoded)
     }
     #[cfg(not(windows))]
     {
@@ -244,6 +252,18 @@ mod tests {
             let url = path_to_file_url(Path::new(path));
             assert_eq!(file_url_to_path(&url), PathBuf::from(path), "{url}");
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn unc_urls_survive_the_round_trip() {
+        let url = path_to_file_url(Path::new(r"\\server\share\repo"));
+        assert_eq!(url, "file://server/share/repo");
+        assert_eq!(
+            file_url_to_path(&url),
+            PathBuf::from("//server/share/repo"),
+            "the host segment stays a host, not the head of a relative path"
+        );
     }
 
     #[test]

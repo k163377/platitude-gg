@@ -219,6 +219,13 @@ impl DiffModel {
         self.is_combined = false;
         self.unmerged = false;
         self.loading = false;
+        self.fingerprint = String::new();
+        self.coloured = false;
+        // The parsed patches go with the rows — kept past here they are a
+        // closed pane still holding the whole diff's heap.
+        self.shown = None;
+        self.shown_has_preview = false;
+        self.shown_marks = Default::default();
         self.apply_endings(None);
         self.apply_preview(None);
         self.forget_selection();

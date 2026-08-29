@@ -47,8 +47,12 @@ impl RepoTab {
         if self.merge_tools_loading {
             return;
         }
-        self.merge_tools_loading = true;
-        self.with_session(|s| s.ask_merge_tools());
-        self.changed();
+        // Marked loading only once the ask is actually out: with no
+        // session there is no answer coming, and a mark nothing will
+        // clear would refuse every later ask too.
+        if crate::hub::from_session(self.tab_id, |s| s.ask_merge_tools()).is_some() {
+            self.merge_tools_loading = true;
+            self.changed();
+        }
     }
 }

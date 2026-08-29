@@ -184,20 +184,21 @@ impl GraphModel {
     ///
     /// Assigning one is not a thing git knows about, so nothing about the
     /// repository changed and re-walking the history to find that out
-    /// would be the most expensive way to move a handful of pixels. The
-    /// splice only notifies the rows whose author actually got one.
+    /// would be the most expensive way to move a handful of pixels.
+    /// Written in place (the `remark_notified` shape): only the rows whose
+    /// author actually got one allocate or notify anything.
     #[qslot]
     fn refresh_avatars(&mut self) {
         let avatars = crate::hub::AvatarUrls::current();
-        let rows: Vec<GraphRowItem> = self
-            .rows
-            .iter()
-            .map(|row| GraphRowItem {
-                avatar_url: avatars.url_of(&row.author_email),
-                ..row.clone()
-            })
-            .collect();
-        self.splice_notified(rows);
+        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        for i in 0..self.rows.len() {
+            let url = avatars.url_of(&self.rows[i].author_email);
+            if self.rows[i].avatar_url != url {
+                self.rows[i].avatar_url = url;
+                crate::models::notify::push_run(&mut ranges, i);
+            }
+        }
+        self.notify_runs(ranges);
     }
 
     /// How many loaded rows carry a picture. Automation only: QML cannot

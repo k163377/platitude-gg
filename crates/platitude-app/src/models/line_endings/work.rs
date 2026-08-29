@@ -42,6 +42,10 @@ impl LineEndingsModel {
         // one repository's setting into another.
         self.held = String::new();
         self.effective = String::new();
+        // A write still out belongs to that repository too — its answer
+        // will be dropped by the path check, so waiting for it here would
+        // wait forever, with every later save refused.
+        self.busy = false;
         self.changed();
         self.ask();
     }

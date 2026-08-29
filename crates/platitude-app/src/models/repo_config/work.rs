@@ -31,10 +31,13 @@ impl RepoConfigModel {
         self.effective_name = String::new();
         self.effective_email = String::new();
         // The marks belong to the save that put them there, and that save
-        // was about the repository being left.
+        // was about the repository being left — as is any write still out:
+        // its answer will be dropped by the path check, so waiting for it
+        // here would wait forever, with every later save refused.
         self.write_unsaved = false;
         self.write_name_saved = false;
         self.write_email_saved = false;
+        self.write_busy = false;
         self.changed();
         self.ask(path);
     }

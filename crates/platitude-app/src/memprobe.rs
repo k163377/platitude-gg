@@ -75,7 +75,9 @@ mod counting {
     pub(super) static COUNTS: [AtomicUsize; 32] = [const { AtomicUsize::new(0) }; 32];
 
     pub(super) fn class_of(size: usize) -> usize {
-        (usize::BITS - size.leading_zeros()) as usize % 32
+        // Saturated, not wrapped: a 2^31-byte-and-up allocation belongs in
+        // the top bucket, not relabelled as a small one.
+        ((usize::BITS - size.leading_zeros()) as usize).min(31)
     }
 
     /// Adds relaxed counters in front of [`super::BASE`] and nothing else —
