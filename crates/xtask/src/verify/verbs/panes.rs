@@ -197,7 +197,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "commit-refused",
         when: &[],
-        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made",
     },
     // The same refusal **with a file open in the middle**, which is the
@@ -208,7 +208,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "notice-over-diff",
         when: &[],
-        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made",
     },
     // A part of a file that is not that file any more. **This end is the
@@ -220,13 +220,17 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "stale-part",
         when: &[],
-        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=Nothing was staged",
     },
     // The dress each kind of report wears, asked of the page's own door
     // (`RepoPage.showReport`) so the run reads the same `Words` the answer
     // does. **The colour is a two-pixel hairline** — the whole reason this
     // is a report line rather than something to look for in a picture.
+    //
+    // **The pair is the claim**: every report is `danger` except the one
+    // that left something standing, so a run of the second alone would
+    // pass against an implementation that painted everything warning.
     Verb {
         name: "report-tone",
         when: &[
@@ -237,7 +241,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("update"),
-                "write_notice open=true clears=true why=false tone=none log=false wrong=false \
+                "write_notice open=true clears=true why=false tone=danger log=false wrong=false \
                  said=origin would not update main",
             ),
         ],

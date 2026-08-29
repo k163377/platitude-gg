@@ -47,14 +47,13 @@ Rectangle {
     Behavior on implicitHeight {
         NumberAnimation { duration: 200 }
     }
-    // The band's own hairline. **Almost every report leaves it in the resting colour**: a report is none of the three
-    // states (デザイン規約 §状態 — 「この 3 つに当てはまらない知らせに状態色を使わない」), and a red line over one would say the
-    // application had broken where it had only been told no.
+    // The band's own hairline, and **it always wears one of the two colours**: a press that was turned down has to say
+    // so in colour, whoever turned it down (デザイン規約 §答えの要らない報せ). `danger` where the gesture is over and what was
+    // asked for did not happen, `warning` where it is still going — which here is the rename that stopped between its
+    // halves, and matches the boxes at the other end of the same axis (`SlimField.refused`).
     //
-    // The two that do wear one are the two that are not simply over — a delete whose row went off the screen and came
-    // back, and a rename that stopped between its halves (`Words.reportTone`). **The line is the whole of it**: the
-    // heading and the words under it stay in their own colours, the same way a warned button keeps its word
-    // (§長押し「警告の色は語ではなく枠と印が持つ」).
+    // **The line is the whole of it**: the heading and the words under it stay in their own colours, the same way a
+    // warned button keeps its word (§長押し「警告の色は語ではなく枠と印が持つ」).
     BandRule {
         color: bar.tone === "danger" ? Theme.danger
              : bar.tone === "warning" ? Theme.warning

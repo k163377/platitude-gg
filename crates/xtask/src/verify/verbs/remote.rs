@@ -105,9 +105,9 @@ pub(super) const TABLE: &[Verb] = &[
     // (the mark in the corner is not calling it one). A window that
     // opened the log and closed it again frames exactly like one that
     // never opened it, so neither is a claim the picture can make.
-    // `tone=danger` is the one report whose row left the screen and came
-    // back (デザイン規約 §状態, 2026-08-29 ユーザー指示) — and the hairline that
-    // says so is two pixels of colour, which no picture is judged on.
+    // `tone=danger` is what a press that was turned down and is over wears
+    // (デザイン規約 §答えの要らない報せ) — and the hairline that says so is two
+    // pixels of colour, which no picture is judged on.
     Verb {
         name: "remote-refused",
         when: &[],
@@ -133,7 +133,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "push-outdated",
         when: &[],
-        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=main was not sent to origin",
     },
     // Which remote a push goes to. The mark is one badge on one row:

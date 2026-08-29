@@ -96,20 +96,20 @@ QtObject {
         }
     }
 
-    /// The colour a report's own hairline wears (デザイン規約 §答えの要らない報せ / §状態). **Almost all of them wear none** —
-    /// nothing is stopped and nothing went wrong here. The two that do:
+    /// The colour a report's own hairline wears (デザイン規約 §答えの要らない報せ / §状態). **One axis, and the name boxes are
+    /// on the other end of it** (`SlimField.refused`, which is `warning`):
     ///
-    ///  - a delete the far side would not make is the one report whose row **left the screen and came back**
-    ///    (§消す操作は先に画面から消す), so it is stopped where the others are simply over (`danger`,
-    ///    2026-08-29 ユーザー指示);
-    ///  - a rename that fell between its halves is the one that left something half done, which is what `warning`'s
-    ///    "進行中で対処が要る" is for.
+    ///  - **`warning` — the gesture is still going.** A box is open and one keystroke fixes what is in it, or
+    ///    something was left standing that has to be dealt with. Here that is the rename that fell between its halves,
+    ///    and nothing else.
+    ///  - **`danger` — the gesture is over and what was asked for did not happen.** Every other report: by the time a
+    ///    bar is down the press has been spent and the screen has moved on (the fetch landed, the diff was read again,
+    ///    the row came back), so pressing again is a new gesture rather than a correction of this one
+    ///    (2026-08-29 ユーザー判断).
+    ///
+    /// **Never nothing**: a press that was turned down says so in colour, whoever turned it down.
     function reportTone(kind) {
-        switch (kind) {
-        case "delete": return "danger"
-        case "stash-half": return "warning"
-        default: return ""
-        }
+        return kind === "stash-half" ? "warning" : "danger"
     }
 
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).
