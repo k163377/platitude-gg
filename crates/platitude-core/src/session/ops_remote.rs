@@ -206,17 +206,24 @@ impl RepoSession {
                         // Only an overwrite can land here, and an overwrite
                         // has to say what it takes off — the commit is in
                         // this repository (that is how the comparison was
-                        // answered at all), so the walk can count them.
+                        // answered at all), so the walk can count them. A
+                        // walk that failed anyway must not answer "nothing":
+                        // `theirs` is only trusted under `Refused`.
                         Ok(false) => {
-                            theirs = commit::count_beyond_head(
+                            match commit::count_beyond_head(
                                 &s.executor,
                                 &workdir,
                                 &over_there,
                                 &cancel,
                             )
                             .await
-                            .unwrap_or(0);
-                            remote::RemoteBranchState::Refused
+                            {
+                                Ok(count) => {
+                                    theirs = count;
+                                    remote::RemoteBranchState::Refused
+                                }
+                                Err(_) => remote::RemoteBranchState::Unknown,
+                            }
                         }
                         Err(_) => remote::RemoteBranchState::Unknown,
                     }

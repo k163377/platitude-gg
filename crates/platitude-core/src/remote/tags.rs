@@ -152,6 +152,10 @@ pub struct RemoteTag {
 /// other tag its badge.
 pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
     let mut out: Vec<RemoteTag> = Vec::new();
+    // Pairing by scanning `out` would square the listing (the baseline
+    // repository advertises 45k tags, most of them twice); the index keeps
+    // the pairing O(1) without leaning on the advertised order.
+    let mut by_name: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for line in bytes.split(|b| *b == b'\n') {
         let Some((oid, refname)) = split_ls_remote_line(line) else {
             continue;
@@ -163,20 +167,23 @@ pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
             Some(base) => (base, true),
             None => (name, false),
         };
-        match out.iter_mut().find(|t| t.name == name) {
+        match by_name.get(name) {
             // Two lines for one name means an annotated tag: the pair is
             // the tag object and the commit under it. Only the peeled line
             // carries the commit, so it wins whichever side it arrives on.
-            Some(seen) if !seen.annotated => {
-                seen.commit = oid;
-                seen.annotated = peeled;
+            Some(&seen) if !out[seen].annotated => {
+                out[seen].commit = oid;
+                out[seen].annotated = peeled;
             }
             Some(_) => {}
-            None => out.push(RemoteTag {
-                name: name.into(),
-                commit: oid,
-                annotated: peeled,
-            }),
+            None => {
+                by_name.insert(name, out.len());
+                out.push(RemoteTag {
+                    name: name.into(),
+                    commit: oid,
+                    annotated: peeled,
+                });
+            }
         }
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));

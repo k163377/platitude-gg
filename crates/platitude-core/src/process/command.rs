@@ -33,9 +33,11 @@ pub(super) fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
 pub enum CommandEnd {
     /// The process ran and returned this code (`-1` = killed by a signal).
     Exited(i32),
-    /// The process ran and its non-zero code is the answer that was asked
-    /// for, not a failure (`merge-base --is-ancestor` says "no" with 1).
-    /// The log keeps the row and its code; it just does not raise itself.
+    /// The process ran and its code is one of the answers the command
+    /// named, not a failure (`merge-base --is-ancestor` says "no" with 1;
+    /// a marked command's 0 lands here too, so the log can tell an
+    /// answer-shaped read from a plain success). The log keeps the row
+    /// and its code; it just does not raise itself.
     Answered(i32),
     TimedOut,
     Cancelled,
