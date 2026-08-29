@@ -4,51 +4,54 @@ use super::combined::read_combined_line;
 use super::header::{
     parse_hunk_header, parse_side_path, split_git_header_paths, strip_prefix_a, strip_prefix_b,
 };
-use super::{DiffHunk, DiffLine, DiffLineKind, FilePatch};
+use super::unified::read_unified_line;
+use super::{DiffHunk, FilePatch};
 
-/// Parses `git diff` / `git diff-tree -p` output into per-file patches.
+/// What one pass over a patch is building: the files closed so far, the one
+/// being read, and where each side of its open hunk has got to.
 ///
-/// Unknown lines are skipped (with a trace log) rather than failing: a diff
-/// that renders slightly incomplete beats an empty error pane.
-#[expect(clippy::too_many_lines)]
-pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
-    let text = String::from_utf8_lossy(bytes);
-    let mut files: Vec<FilePatch> = Vec::new();
-    let mut current: Option<FilePatch> = None;
-    let mut hunk: Option<DiffHunk> = None;
-    let mut old_no = 0u32;
-    let mut new_no = 0u32;
-    // Where each parent of the hunk being read has got to. Empty for a
-    // unified diff, which counts its one old side in `old_no`; one entry
-    // per parent for a combined one.
-    let mut parent_no: Vec<u32> = Vec::new();
+/// A record rather than six locals because the walk below has four phases and
+/// each touches a different three or four of them — as locals, every phase
+/// reads as if it could touch all six.
+#[derive(Default)]
+struct Reading {
+    files: Vec<FilePatch>,
+    current: Option<FilePatch>,
+    hunk: Option<DiffHunk>,
+    old_no: u32,
+    new_no: u32,
+    /// Where each parent of the hunk being read has got to. Empty for a
+    /// unified diff, which counts its one old side in `old_no`; one entry
+    /// per parent for a combined one.
+    parent_no: Vec<u32>,
+}
 
-    fn flush_hunk(current: &mut Option<FilePatch>, hunk: &mut Option<DiffHunk>) {
-        if let (Some(file), Some(h)) = (current.as_mut(), hunk.take()) {
+impl Reading {
+    fn flush_hunk(&mut self) {
+        if let (Some(file), Some(h)) = (self.current.as_mut(), self.hunk.take()) {
             file.hunks.push(h);
         }
     }
-    fn flush_file(files: &mut Vec<FilePatch>, current: &mut Option<FilePatch>) {
-        if let Some(f) = current.take() {
-            files.push(f);
+
+    fn flush_file(&mut self) {
+        self.flush_hunk();
+        if let Some(f) = self.current.take() {
+            self.files.push(f);
         }
     }
 
-    // `str::lines` never yields a phantom empty line after the final
-    // newline and strips one trailing `\r` (interior `\r` stays: CRLF file
-    // content is data).
-    for line in text.lines() {
+    /// The three lines that start a new file, and whether this was one.
+    fn opens_file(&mut self, line: &str) -> bool {
         if let Some(rest) = line.strip_prefix("diff --git ") {
-            flush_hunk(&mut current, &mut hunk);
-            flush_file(&mut files, &mut current);
+            self.flush_file();
             let mut file = FilePatch::default();
             // Fallback paths from the header; `---`/`+++` refine them.
             if let Some((a, b)) = split_git_header_paths(rest) {
                 file.old_path = strip_prefix_a(&a);
                 file.new_path = strip_prefix_b(&b);
             }
-            current = Some(file);
-            continue;
+            self.current = Some(file);
+            return true;
         }
 
         // A combined header names one path, not a pair: there is no single
@@ -57,160 +60,142 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
             .strip_prefix("diff --cc ")
             .or_else(|| line.strip_prefix("diff --combined "))
         {
-            flush_hunk(&mut current, &mut hunk);
-            flush_file(&mut files, &mut current);
+            self.flush_file();
             let path = rest.trim().to_string();
-            current = Some(FilePatch {
+            self.current = Some(FilePatch {
                 old_path: Some(path.clone()),
                 new_path: Some(path),
                 is_combined: true,
                 ..FilePatch::default()
             });
-            continue;
+            return true;
         }
 
         if let Some(path) = line.strip_prefix("* Unmerged path ") {
-            flush_hunk(&mut current, &mut hunk);
-            flush_file(&mut files, &mut current);
-            files.push(FilePatch {
+            self.flush_file();
+            self.files.push(FilePatch {
                 old_path: None,
                 new_path: Some(path.trim().to_string()),
                 unmerged: true,
                 ..FilePatch::default()
             });
+            return true;
+        }
+        false
+    }
+
+    /// The pre-hunk header lines that refine the file being read, and
+    /// whether this was one. Asked only while no hunk is open: past that
+    /// point a `--- ` is a removed line whose content starts with dashes.
+    fn reads_header(&mut self, line: &str) -> bool {
+        if let Some(rest) = line.strip_prefix("--- ") {
+            if let Some(f) = self.current.as_mut() {
+                f.old_path = parse_side_path(rest, "a/");
+            }
+            return true;
+        }
+        if let Some(rest) = line.strip_prefix("+++ ") {
+            if let Some(f) = self.current.as_mut() {
+                f.new_path = parse_side_path(rest, "b/");
+            }
+            return true;
+        }
+        if line.starts_with("Binary files ") || line.starts_with("GIT binary patch") {
+            if let Some(f) = self.current.as_mut() {
+                f.is_binary = true;
+            }
+            return true;
+        }
+        false
+    }
+
+    /// A hunk header, which closes whatever hunk was open and starts the
+    /// counting again from what it names.
+    fn opens_hunk(&mut self, line: &str) {
+        self.flush_hunk();
+        if self.current.is_none() {
+            // Patch without a `diff --git` header (plain `git diff`
+            // between blobs); synthesize a file entry.
+            self.current = Some(FilePatch::default());
+        }
+        let Some(h) = parse_hunk_header(line) else {
+            tracing::trace!(line, "unparsable hunk header");
+            return;
+        };
+        self.old_no = h.old_start;
+        self.new_no = h.new_start;
+        self.parent_no = if h.extra_old.is_empty() {
+            Vec::new()
+        } else {
+            std::iter::once(h.old_start)
+                .chain(h.extra_old.iter().map(|(start, _)| *start))
+                .collect()
+        };
+        if !self.parent_no.is_empty()
+            && let Some(f) = self.current.as_mut()
+        {
+            // A combined hunk under a synthesized file entry: the
+            // shape says what the header would have.
+            f.is_combined = true;
+        }
+        self.hunk = Some(h);
+    }
+
+    /// A content line of the open hunk. Header noise outside one — index,
+    /// mode, similarity — reaches here and is dropped, which is what makes
+    /// this the walk's last resort rather than a case of its own.
+    fn reads_body(&mut self, line: &str) {
+        let Some(h) = self.hunk.as_mut() else {
+            return;
+        };
+        if self.parent_no.is_empty() {
+            read_unified_line(h, line, &mut self.old_no, &mut self.new_no);
+        } else {
+            read_combined_line(h, line, &mut self.parent_no, &mut self.new_no);
+        }
+    }
+
+    fn finish(mut self) -> Vec<FilePatch> {
+        self.flush_file();
+        self.files
+    }
+}
+
+/// Parses `git diff` / `git diff-tree -p` output into per-file patches.
+///
+/// Unknown lines are skipped (with a trace log) rather than failing: a diff
+/// that renders slightly incomplete beats an empty error pane.
+pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut reading = Reading::default();
+    // `str::lines` never yields a phantom empty line after the final
+    // newline and strips one trailing CR (an interior one stays: CRLF file
+    // content is data).
+    for line in text.lines() {
+        if reading.opens_file(line) {
             continue;
         }
-
-        if hunk.is_none() {
-            // Pre-hunk header lines of the current file.
-            if let Some(rest) = line.strip_prefix("--- ") {
-                if let Some(f) = current.as_mut() {
-                    f.old_path = parse_side_path(rest, "a/");
-                }
-                continue;
-            }
-            if let Some(rest) = line.strip_prefix("+++ ") {
-                if let Some(f) = current.as_mut() {
-                    f.new_path = parse_side_path(rest, "b/");
-                }
-                continue;
-            }
-            if line.starts_with("Binary files ") || line.starts_with("GIT binary patch") {
-                if let Some(f) = current.as_mut() {
-                    f.is_binary = true;
-                }
-                continue;
-            }
+        if reading.hunk.is_none() && reading.reads_header(line) {
+            continue;
         }
-
         // A body line always opens with its marker columns (` `, `+`, `-`
         // or a lone `\`), so a run of `@` at the head is unambiguously a
         // hunk header — of one `@` per parent plus one.
         if line.starts_with("@@") {
-            flush_hunk(&mut current, &mut hunk);
-            if current.is_none() {
-                // Patch without a `diff --git` header (plain `git diff`
-                // between blobs); synthesize a file entry.
-                current = Some(FilePatch::default());
-            }
-            if let Some(h) = parse_hunk_header(line) {
-                old_no = h.old_start;
-                new_no = h.new_start;
-                parent_no = if h.extra_old.is_empty() {
-                    Vec::new()
-                } else {
-                    std::iter::once(h.old_start)
-                        .chain(h.extra_old.iter().map(|(start, _)| *start))
-                        .collect()
-                };
-                if !parent_no.is_empty()
-                    && let Some(f) = current.as_mut()
-                {
-                    // A combined hunk under a synthesized file entry: the
-                    // shape says what the header would have.
-                    f.is_combined = true;
-                }
-                hunk = Some(h);
-            } else {
-                tracing::trace!(line, "unparsable hunk header");
-            }
+            reading.opens_hunk(line);
             continue;
         }
-
-        let Some(h) = hunk.as_mut() else {
-            continue; // other header noise (index, mode, similarity, ...)
-        };
-        if !parent_no.is_empty() {
-            read_combined_line(h, line, &mut parent_no, &mut new_no);
-            continue;
-        }
-        let mut chars = line.chars();
-        match chars.next() {
-            Some(' ') => {
-                h.lines.push(DiffLine {
-                    kind: DiffLineKind::Context,
-                    old_no: Some(old_no),
-                    new_no: Some(new_no),
-                    text: chars.as_str().to_string(),
-                    markers: String::new(),
-                });
-                old_no += 1;
-                new_no += 1;
-            }
-            Some('+') => {
-                h.lines.push(DiffLine {
-                    kind: DiffLineKind::Addition,
-                    old_no: None,
-                    new_no: Some(new_no),
-                    text: chars.as_str().to_string(),
-                    markers: String::new(),
-                });
-                new_no += 1;
-            }
-            Some('-') => {
-                h.lines.push(DiffLine {
-                    kind: DiffLineKind::Deletion,
-                    old_no: Some(old_no),
-                    new_no: None,
-                    text: chars.as_str().to_string(),
-                    markers: String::new(),
-                });
-                old_no += 1;
-            }
-            Some('\\') => {
-                h.lines.push(DiffLine {
-                    kind: DiffLineKind::NoNewline,
-                    old_no: None,
-                    new_no: None,
-                    text: line.to_string(),
-                    markers: String::new(),
-                });
-            }
-            None => {
-                // A completely empty line inside a hunk is a context line
-                // whose content is empty (git prints a lone space, but some
-                // tools strip trailing whitespace; tolerate).
-                h.lines.push(DiffLine {
-                    kind: DiffLineKind::Context,
-                    old_no: Some(old_no),
-                    new_no: Some(new_no),
-                    text: String::new(),
-                    markers: String::new(),
-                });
-                old_no += 1;
-                new_no += 1;
-            }
-            _ => tracing::trace!(line, "unexpected line inside hunk"),
-        }
+        reading.reads_body(line);
     }
-    flush_hunk(&mut current, &mut hunk);
-    flush_file(&mut files, &mut current);
-    files
+    reading.finish()
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::testkit::PATCH;
+    // The walk itself no longer names the line kinds — `unified` and
+    // `combined` build the lines — but the assertions below still read them.
+    use super::super::DiffLineKind;
     use super::*;
     #[test]
     fn parses_a_multi_file_patch() {
