@@ -29,7 +29,7 @@ mod selection_tests;
 /// Filed here because the test beside `models` names it: a `pub(super)`
 /// written in `rows` would only reach as far as this module (structure.md).
 pub(super) use rows::wanted;
-use rows::work_tree_target;
+use rows::bucket_target;
 
 // ---------------------------------------------------------------------------
 // DiffModel: unified diff lines for one file

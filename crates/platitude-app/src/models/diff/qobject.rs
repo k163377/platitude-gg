@@ -89,7 +89,7 @@ impl DiffModel {
     /// conflicts).
     #[qslot]
     fn request_work_tree(&mut self, bucket: String, path: String, orig_path: String) {
-        let target = work_tree_target(&bucket, &path, orig_path);
+        let target = bucket_target(&bucket, &path, orig_path);
         self.begin_request(path, target);
     }
 
@@ -111,7 +111,7 @@ impl DiffModel {
         if self.loading {
             return false;
         }
-        let target = work_tree_target(&bucket, &path, orig_path);
+        let target = bucket_target(&bucket, &path, orig_path);
         if diff_key(&target) != self.current_key {
             return false;
         }

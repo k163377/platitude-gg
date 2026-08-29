@@ -215,7 +215,7 @@ pub(super) fn line_items(
 /// Which diff one of the working tree's four buckets asks for. Read by
 /// both the request a click makes and the re-read the tick makes, so the
 /// two can never address different files under one name.
-pub(super) fn work_tree_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {
+pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {
     match bucket {
         "staged" => DiffTarget::Staged {
             path: path.to_string(),
