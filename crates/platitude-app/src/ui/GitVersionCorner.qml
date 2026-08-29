@@ -13,14 +13,13 @@ RowLayout {
     /// What the pane under it is leaving bare. Only one pane is on screen at a time and each measures its own file
     /// list, so which of them is answering is the page's to say.
     required property real roomLeft
-    /// Its own box and nothing more — no extra air above: a list's rows are already spaced by their own height
-    /// (2026-08-10 ユーザー報告).
+    /// Its own box and nothing more — no extra air above: a list's rows are already spaced by their own height.
     readonly property real roomNeeded: gitCorner.implicitHeight + Theme.spaceXs
 
     spacing: Theme.spaceXs
-    // Out of the way as soon as the list reaches this corner (2026-08-10 ユーザー報告). Hidden outright rather than held at
+    // Out of the way as soon as the list reaches this corner. Hidden outright rather than held at
     // zero opacity: a Label keeps its implicit height while `visible: false`, so the answer never eats what it read
-    // (qmltestrunner, 2026-08-10 実測).
+    // (qmltestrunner, measured).
     visible: AppBackend.gitVersion !== "" && gitCorner.roomLeft >= gitCorner.roomNeeded
 
     Label {

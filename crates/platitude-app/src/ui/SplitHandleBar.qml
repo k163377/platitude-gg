@@ -5,7 +5,7 @@ import platitude.ui
 // The bar between two panes: the line itself, plus word to the page about
 // when it has the hand.
 //
-// SplitView keeps its drag entirely to itself. Measured 2026-08-11 with a
+// SplitView keeps its drag entirely to itself. Measured with a
 // throwaway qmltestrunner scene: a `MouseArea` filling this delegate never
 // sees the press, a `HoverHandler` on it never fires, and a `PointHandler`
 // on any item *behind* the SplitView never becomes active — so nothing
@@ -38,6 +38,6 @@ Rectangle {
     // whatever `z` the pane is given. Nothing reaches into this strip in the ordinary way (the layout stops each pane
     // at the bar's edge), so this changes nothing until something crosses it deliberately, and the one thing that does
     // is the left menu's name box reaching out past its pane (`NavNameBox`). The bar cut the question in half
-    // (2026-08-21 ユーザー報告). The hand still finds it: an uncovered strip has nothing above it to take the press.
+    //. The hand still finds it: an uncovered strip has nothing above it to take the press.
     z: -1
 }

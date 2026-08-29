@@ -220,7 +220,7 @@ pub enum SessionEvent {
     /// Behind the rows rather than with them. Colouring is the one part of
     /// reading a diff that computes rather than waits, and it is not
     /// small: 6,000 lines of Rust measured 951ms against 3ms for the same
-    /// text under a name nothing can be said about (2026-08-13 実測),
+    /// text under a name nothing can be said about (measured),
     /// which is most of a second on the wrong side of the 100ms an
     /// interaction is allowed. So the rows go out the moment git answers
     /// and the colours follow — a large file reads black and white for a

@@ -22,7 +22,7 @@ Popup {
     /// are passive" holds down a subtree, and the content's children are in the content's subtree, but the background
     /// is not their parent — it is next to them. Measured on `RefListPopup`'s rows: on a row, the content's handler
     /// reads true and the background's reads false; with only the background's, the list called itself empty of the
-    /// pointer the instant the hand reached a row and went out from under it (2026-08-09 report). With only the
+    /// pointer the instant the hand reached a row and went out from under it (observed). With only the
     /// content's, the card shuts in the width of its own padding, which the hand walking in over the border crosses
     /// first.
     readonly property bool pointerInside: cardFace.pointed || card.contentPointed

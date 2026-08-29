@@ -120,7 +120,7 @@ async fn read(
 ///
 /// The pattern is a POSIX ERE (the remotes read relies on `(url|pushurl)`
 /// grouping), and a branch name may hold characters it gives meaning to —
-/// `.` in any dotted name, `+`, braces. 実測 2.55: asking for
+/// `.` in any dotted name, `+`, braces. measured 2.55: asking for
 /// `branch.wip.v2+x.pushremote` unescaped answers with
 /// `branch.wipAv22x.pushremote`, another branch's mark.
 pub(crate) fn regexp_literal(name: &str) -> String {

@@ -10,8 +10,8 @@ import platitude.ui
 /// people a message credits. Hover cannot be injected, so each of these names its target instead.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -21,7 +21,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel

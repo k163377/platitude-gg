@@ -34,14 +34,13 @@ pub fn widest_columns(patches: &[FilePatch]) -> i32 {
 /// two columns [`step_of`] counts it as (`DiffTextMetrics.wideDelta`),
 /// and the only way to have that number is to set one and measure it —
 /// which, on a Latin-only mono family, hands the glyph to whatever
-/// fallback the system has and loads that font. **Measured 2026-08-29 on
-/// Windows: the two rulers that did it unconditionally held 52.6MB in the
-/// working set of a window with no repository open at all** (198.7–199.4
-/// MB against 146.3–146.7). The number they bought is multiplied by a
-/// count of wide glyphs at every place it is used — the wash's x and
-/// width in `DiffRowDelegate`, the stand in [`super::hit_byte`] — so
-/// where a diff has none of them it is multiplied by zero. This is what
-/// the pane asks before it builds the ruler.
+/// fallback the system has and **loads that font: tens of megabytes of
+/// working set, in every window, repository open or not** (measured).
+/// The number it buys is multiplied by a count of wide glyphs at every
+/// place it is used — the wash's x and width in `DiffRowDelegate`, the
+/// stand in [`super::hit_byte`] — so where a diff has none of them it is
+/// multiplied by zero. This is what the pane asks before it builds the
+/// ruler.
 ///
 /// A walk of its own rather than a second answer out of
 /// [`widest_columns`]: both are once per file opened, over text the

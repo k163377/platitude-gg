@@ -22,13 +22,11 @@
 //! **What is searched is what the row is, not everything it has.** Two
 //! things are deliberately out:
 //!
-//! - **The description** (everything after the subject). Measured on this
-//!   repository at 466 commits: searching it too multiplies the hits by
-//!   3–7× for ordinary words — `row` goes from 55 rows to 238, which is
-//!   half the history lit at once. And the description is not on the row,
-//!   so every one of those extra rows is lit for a reason nothing on
-//!   screen gives. Both complaints — too many, and no reason — are the
-//!   same field.
+//! - **The description** (everything after the subject). Searching it
+//!   multiplies the hits several-fold for ordinary words (measured), and
+//!   the description is not on the row, so every extra row is lit for a
+//!   reason nothing on screen gives. Both complaints — too many, and no
+//!   reason — are the same field.
 //! - **The domain half of an address.** Everybody in one repository tends
 //!   to share it, so any part of it lights every row. Addresses match
 //!   from the start instead, which is how somebody pastes one.
@@ -225,10 +223,8 @@ mod tests {
 
     #[test]
     fn the_description_is_not_searched() {
-        // It is not on the row, and searching it multiplies the hits by
-        // 3–7× (module note). A row has no field for it at all, so this
-        // test is here to say the omission is the decision rather than an
-        // oversight: the words below are what such a description holds.
+        // The omission is the decision, not an oversight (module note);
+        // the words below are what such a description holds.
         let r = plain("fix: harden the parser");
         assert!(!hits("the writer too", &r));
     }

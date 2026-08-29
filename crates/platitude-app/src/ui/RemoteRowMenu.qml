@@ -45,7 +45,7 @@ Item {
         }
         // No rule between the two. **A divider is a claim that a group ends here** (`AppMenuSeparator`), and both rows
         // are the same group — what to do with this remote. That one opens a form and the other runs at once is not a
-        // second group; it is what the `…` on the first row already says (2026-08-21 ユーザー判断).
+        // second group; it is what the `…` on the first row already says.
         //
         // Gone rather than greyed on the remote that already holds the mark: git keeps one value, so there is nothing
         // for this row to do there (デザイン規約 §メニュー — 選べない行は消す). Clearing the mark is the box in the form, and moving

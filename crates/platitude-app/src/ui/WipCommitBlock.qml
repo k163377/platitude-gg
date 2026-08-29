@@ -11,7 +11,7 @@ import platitude.ui
 // A surface of its own that scrolls when the pane is too short to hold it. What is in here keeps its height by
 // construction — the editor, the commit button, the exit card a stopped operation puts up — so the list was the
 // only thing that could give, and past zero the rest was simply laid out below the pane's own edge (measured
-// 2026-08-09: in a 320px window a stopped rebase drew `--continue` and `--skip` and left `--quit` and `--abort`
+// Observed: in a 320px window a stopped rebase drew `--continue` and `--skip` and left `--quit` and `--abort`
 // under the window, with nothing to scroll to reach them). The window's floor cannot answer that on its own: the
 // card comes and goes with what git is in the middle of, and a window that grew itself because a rebase stopped
 // would be a stranger thing than a pane that scrolls (規約 §窓の床).
@@ -79,7 +79,7 @@ Flickable {
     function completeOpExit(code) { return opExitCard.completeOpExit(code) }
     function offersOpExit(code) { return opExitCard.offersOpExit(code) }
     /// Moves the block by a wheel a box on it could not use. The boxes cover most of the block, so without this
-    /// the surface they stand on has no way to be reached by wheel at all (2026-08-09 ユーザー報告: the
+    /// the surface they stand on has no way to be reached by wheel at all (observed: the
     /// description box's own scrolling swallowed it and the block would not go down).
     function rollBlock(pixels) {
         const max = Math.max(0, block.contentHeight - block.height)
@@ -186,8 +186,7 @@ Flickable {
                 // **The one button in the pane that is the pane's own action**, and the only one told to fill a
                 // width — so it is measured at the step above the controls beside it (`fontLg`, the size a
                 // commit's summary is typed at) in the band the toolbar's own row stands at. A control-height
-                // box around this wording read as a strip rather than as the thing being reached for
-                // (2026-08-18 報告).
+                // box around this wording read as a strip rather than as the thing being reached for.
                 font.pixelSize: Theme.fontLg
                 implicitHeight: Theme.toolbarHeight
                 /// Something staged says its line endings changed, so the commit is about to carry it. **Only
@@ -200,8 +199,7 @@ Flickable {
                 onEolWarnedChanged: block.cardAsked()
                 // **No mark beside the word.** The label already names the command and the branch it lands on,
                 // which is two things to read; a tick in front of them says nothing a reader did not already
-                // have, and the one mark this button does need — the `!` — has to stand out from it
-                // (2026-08-18 ユーザー判断).
+                // have, and the one mark this button does need — the `!` — has to stand out from it.
                 centred: true
                 // **The word stays plain in both states.** A coloured word is what `Remove` and a stopped fetch
                 // wear, and both of those are held rather than clicked; this one is a click either way, and
@@ -267,7 +265,7 @@ Flickable {
                 // **A stopped merge asks for neither of the other two.** It carries its own message, so an
                 // empty box is not an empty commit message; and a merge whose resolution records nothing at
                 // all still has to be finished, so nothing staged is not nothing to do — git writes the empty
-                // merge commit either way (実測 2.55). This seat is the whole way out of a merge
+                // merge commit either way (measured, 2.55). This seat is the whole way out of a merge
                 // (§進行中の操作から出る), and a way out that will not press is not one.
                 enabled: block.repoTab.busyCount === 0 && block.repoTab.identityReady
                          && block.workTree.conflictCount === 0

@@ -261,7 +261,7 @@ impl NavSectionModel {
     /// **git refuses to move onto, or delete, a branch another worktree
     /// has checked out** — `fatal: 'feat' is already used by worktree at
     /// …` and `error: cannot delete branch 'feat' used by worktree at …`
-    /// (2026-08-21 実測). It refuses that whether or not the worktree is
+    /// (measured). It refuses that whether or not the worktree is
     /// **locked**: a lock stops `worktree remove` and `worktree move`,
     /// which is a different question, so the rows that would try ask this
     /// one and not the lock.

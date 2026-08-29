@@ -129,10 +129,7 @@ fn a_branch_out_in_another_copy_keeps_switch_but_it_asks() {
     );
     assert!(offers.switch_to, "the press goes through to the question");
     assert!(offers.switch_asks);
-    assert!(
-        !offers.delete,
-        "git refuses the delete too (実測 2026-08-21)"
-    );
+    assert!(!offers.delete, "git refuses the delete too (measured)");
 }
 
 #[test]
@@ -355,7 +352,7 @@ fn each_delete_row_needs_the_side_it_names() {
 /// the everyday delete stays, and the rows that need a remote reading
 /// wait for one rather than being offered on a guess — the qualified
 /// `--delete` git needs does not fail on a name the remote has not got
-/// (実測 — `remote::delete_remote_tag`).
+/// (measured — `remote::delete_remote_tag`).
 #[test]
 fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
     let unread = tag_offers("", "origin", 0);

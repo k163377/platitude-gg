@@ -48,7 +48,7 @@ pub(super) const TABLE: &[Verb] = &[
     // other end of the same axis: the author row was given the whole
     // block or it was not, and the hash plate is right-aligned against
     // it, so a row that took only its own width parks the plate against
-    // the end of the name (2026-08-28 ユーザー報告). A picture shows a
+    // the end of the name. A picture shows a
     // plate either way; it does not say which edge it was meant to be
     // on.
     Verb {
@@ -69,7 +69,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // One selection in the window. The pane shipped with every field
     // keeping what it held, so a reader who swept a second value found
-    // the first still lit (2026-08-28 ユーザー報告 — three at once), and
+    // the first still lit (observed — three at once), and
     // no picture of a single run can say that: one lit field frames the
     // same either way. Both halves are claimed, because a pane that had
     // simply cleared everything would answer the first on its own.
@@ -108,7 +108,7 @@ pub(super) const TABLE: &[Verb] = &[
     // that width cuts the name, and a cut is what a picture answers
     // worst — the mark is a few pixels wide, both OSes draw one, and the
     // box around it does not move, so the run that lost the last glyph
-    // frames exactly like the run that kept it (2026-08-23 ユーザー報告:
+    // frames exactly like the run that kept it (observed:
     // Ubuntu drew `Yuki Tana…` where Windows drew `Yuki Tanaka`, in the
     // same 78px of ink). At the window the verbs open, the row has 200px
     // of slack — nothing here is meant to give.
@@ -175,7 +175,7 @@ pub(super) const TABLE: &[Verb] = &[
     // single one. That box is also the one place the window hands a bar
     // to a `ScrollView`, whose flickable never calls itself moving — the
     // lit half is what says the wiring around that is still there
-    // (2026-08-27 ユーザー報告: no bar at all until the bar was told to
+    // (observed: no bar at all until the bar was told to
     // watch the text).
     Verb {
         name: "text-bar",
@@ -214,7 +214,7 @@ pub(super) const TABLE: &[Verb] = &[
     // A part of a file that is not that file any more. **This end is the
     // one that said no**, before git ran, so there is no row in the log to
     // read and never was — which is why it used to raise an empty panel
-    // over the very diff it was about (P3-確認事項, 2026-08-29).
+    // over the very diff it was about (P3-確認事項, observed).
     // `why=true` is this application's own second line arriving through
     // `Words.writeReportedWhy`, since nobody outside wrote one.
     Verb {

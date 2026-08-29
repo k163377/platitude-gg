@@ -5,7 +5,7 @@
 //! is looking at now. Left to hand-pruning it is neither — 263 runs and
 //! 612 pictures piled up in half a day, one label standing twelve times
 //! over, and 88 pictures whose run file somebody had deleted from under
-//! them (measured 2026-08-22). Three rules keep it a working surface,
+//! them (measured). Three rules keep it a working surface,
 //! and none of them reaches a session that is still using its pictures:
 //!
 //! * **A picture retaken replaces the one before it** — one seat's runs
@@ -115,9 +115,9 @@ pub(super) fn prune(scope: &Scope) -> Result<(usize, PathBuf), String> {
     Ok((gone, rebuild(&board)?))
 }
 
-/// 席を外す (CLAUDE.md ビルド・テスト): the seat's branch is on main, so
-/// the pictures that argued for it are nobody's evidence any more.
-/// Answers how many went.
+/// A landed seat's pictures go with it (CLAUDE.md ビルド・テスト,
+/// 席を外す): the seat's branch is on main, so the pictures that argued
+/// for it are nobody's evidence any more. Answers how many went.
 pub(crate) fn seat_freed(seat: &str) -> Result<(usize, PathBuf), String> {
     prune(&Scope::seats(vec![seat.to_string()]))
 }

@@ -89,7 +89,7 @@ AppMenu {
     // **Assembled, not the branch's fixed table.** That table stays and greys out because the current branch's menu
     // would otherwise open empty; a tag always has something to press, so its rows follow the ordinary rule and the
     // ones with nothing to name are gone (デザイン規約 §メニュー). What decides that is the sides the name stands on, not a
-    // guess: the qualified `--delete` git needs does not fail on a name the remote has not got (実測), so a row
+    // guess: the qualified `--delete` git needs does not fail on a name the remote has not got (measured), so a row
     // offered on a hunch would report success for having done nothing.
     AppMenuItem {
         id: refTagDeleteItem

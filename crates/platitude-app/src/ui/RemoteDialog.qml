@@ -21,7 +21,7 @@ AppDialog {
     /// that refusal would arrive after the dialog had closed, with nothing on screen left for it to be about.
     property var taken: []
     /// Whether this remote is the one pushes go to, and whether that is this repository's own to change. A mark set
-    /// for every repository cannot be cleared from here — git has no local spelling for "not set" (実測), and the only
+    /// for every repository cannot be cleared from here — git has no local spelling for "not set" (measured), and the only
     /// move against it is marking another remote.
     property bool marked: false
     property bool markLocal: true

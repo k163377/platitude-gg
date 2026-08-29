@@ -9,7 +9,7 @@ import platitude.ui
 // **It lies under everything the card draws**, in the card's ground rather than over its content, so a press reaches
 // it only where nothing else took one — the padding band, the step between two lines, the room beside a short one, and
 // nothing else. That is what makes "no hit area changed" structural rather than a claim to re-prove: nothing is
-// layered over anything, so a card's own rows, links and badges cannot lose a press to this (実測 qmltestrunner
+// layered over anything, so a card's own rows, links and badges cannot lose a press to this (measured qmltestrunner
 // `tst_cardpad`: a press in the padding reaches this, a press on the words is the words' and never arrives here).
 //
 // **The sibling of `SweepRoom`, and different where the shape is different.** That one serves a row with two values on

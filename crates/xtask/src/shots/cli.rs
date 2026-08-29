@@ -118,10 +118,9 @@ fn add(args: &[String]) -> Result<(), String> {
             "--verb" => verb = rest.next().cloned().unwrap_or_default(),
             "--before" => before = rest.next().map(PathBuf::from),
             "--after" => after = rest.next().map(PathBuf::from),
-            // Named rather than left to the catch-all: this flag existed
-            // for months and is the habit that put six windows on the
-            // screen, so the hand that reaches for it is the one worth
-            // telling where the board is read now.
+            // Named rather than left to the catch-all, so the hand that
+            // reaches for it is told where the board is read instead of
+            // "unknown option".
             "--open" => {
                 return Err(
                     "shots add: --open is gone — the board is read in one window, \
@@ -159,7 +158,7 @@ fn add(args: &[String]) -> Result<(), String> {
     // Where these pictures are read now — in place of the `--open` this
     // line replaces. That flag was the second door onto the board, and
     // between the two of them the windows piled up until nobody could
-    // say which one was the board as it stood (2026-08-27 ユーザー指示).
+    // say which one was the board as it stood.
     if let Some(board) = page.parent() {
         println!("board: {}", window::how_to_see_it(board));
     }

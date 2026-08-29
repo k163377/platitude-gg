@@ -8,8 +8,8 @@ import platitude.ui
 /// way a fetch lands or fails.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -282,7 +282,7 @@ Item {
     /// **A fetch is not admitted the moment it is asked for**: the process is entered a drain later. So between the
     /// drain that finishes one fetch and the drain that admits the next, `busyCount` is 0 and `writeSeq` has already
     /// moved — which reads exactly like a run that has come to rest. `writeBarrier` completed inside that window and
-    /// photographed a single failure for every length asked for (実測 2026-08-19: `fetch-fail 3`, `fetch-fail 4` and
+    /// photographed a single failure for every length asked for (measured, `fetch-fail 3`, `fetch-fail 4` and
     /// `fetch-resume` all came back with the warning shape). What is waited for is the answer to the ask, never the
     /// process alone.
     property int fetchAskSeq: -1
@@ -369,7 +369,7 @@ Item {
     }
     /// `publish-dismiss` is about what the bar wears on the way back up, which no picture of this run can hold: the
     /// 200ms it spends going is over long before the shot, and a bar that turned `warning` and empty for the whole of
-    /// it frames exactly like one that kept its question (2026-08-27 ユーザー報告).
+    /// it frames exactly like one that kept its question.
     ///
     /// The ✕ is pressed through the bar's own handler once the question is both dressed (`publishChecked` — the
     /// remote has answered, so the frame and the pill's word are settled) and all the way down, and the line is read

@@ -8,8 +8,8 @@ import platitude.ui
 /// and setting an upstream.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -43,7 +43,7 @@ Item {
             // The other question a move can raise: landing on a remote branch whose local one holds commits of its
             // own. `move-branch` is the same road past this bar; this one stops on it. Waited on at `AskBar.settled`
             // for the reason `switch-stopped` is — `dbl-remote` completes 18ms after the question opens and
-            // photographs a marked row under no bar at all (2026-08-22 実測).
+            // photographs a marked row under no bar at all (measured).
             page.switchToRef("R", arg)
             moveAskTimer.start()
         } else if (act === "ask-sweep") {
@@ -61,7 +61,7 @@ Item {
             //
             // The argument is `<branch>[:<stashes>]`, and the count is there because **the branch is not the last
             // thing to arrive**: the stash list is read on its own after the move, so a run that stopped at the branch
-            // photographed a carry whose entry was not in the list yet (2026-08-22 実測 — the row reached the graph
+            // photographed a carry whose entry was not in the list yet (measured — the row reached the graph
             // 70ms after the shot).
             const landing = arg.split(":")
             switchLandsTimer.branch = landing[0]
@@ -86,8 +86,7 @@ Item {
             page.switchToRef("R", arg)
         } else if (act === "switch-remote-twice") {
             // The same chip pressed twice, which is what the report was: both `switch --create` left in the same
-            // second and git refused the second one, because the first had already made the branch (2026-08-29
-            // ユーザー報告). **The two presses go out in one turn** — `busyCount` only rises when the queue starts the
+            // second and git refused the second one, because the first had already made the branch (observed). **The two presses go out in one turn** — `busyCount` only rises when the queue starts the
             // write, so a run that waited even a tick between them would be answered by the gate the old build had.
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
@@ -191,7 +190,7 @@ Item {
             switchLandsTimer.stop()
             // `log=` on all three of these: a move that git refused would raise the command log
             // (§git が言ったことを読む場所), and a red panel under a press that had a way out on screen is the thing
-            // this whole road exists to stop (2026-08-22 ユーザー判断). A shut panel and a panel that was never
+            // this whole road exists to stop. A shut panel and a panel that was never
             // raised are the same picture, which is why it is said rather than shown.
             AppBackend.report("switch_landed branch=" + workTree.branch
                               + " stashes=" + stashesModel.total

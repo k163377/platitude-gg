@@ -83,7 +83,7 @@ Item {
 
     // The overlay's own render boundary, and the reason `Main.qml` builds the mirror with `live: false`. A live mirror
     // leaves the shot nothing to wait on -- the grab reads whatever frame happened to have reached the texture, which
-    // for a popup opened in the turn that completed the verb is often none at all (2026-08-16: two of four concurrent
+    // for a popup opened in the turn that completed the verb is often none at all (observed: two of four concurrent
     // `commit-menu` runs photographed a blank overlay and passed, while the same verb run one at a time never did).
     // Asked for one refresh instead, this is the edge that says the refresh landed: from here the texture holds what
     // the overlay held when the shot was called for.
@@ -173,7 +173,7 @@ Item {
     /// finishes when the status arrives finishes in the very turn the working tree's buckets stand up, so their rows
     /// are laid out and their names drawn in the frame the grab is fulfilled in — and their marks are not, because a
     /// `Canvas` cannot draw before the turn after the one that made it (`Ink`). The picture that came out was a list of
-    /// names with an empty seat at the head of every row (2026-08-26 ユーザー報告).
+    /// names with an empty seat at the head of every row.
     ///
     /// So the frame is read for what it is worth and thrown away if the scene still owed ink: `Ink` says when the last
     /// mark has been drawn, and the grab is asked for again from there. A scene that was already drawn when the picture

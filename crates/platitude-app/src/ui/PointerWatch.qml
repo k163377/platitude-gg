@@ -6,7 +6,7 @@ import QtQuick
 /// **Declared straight on the item that parents the content, never on a sheet laid over it.** A `HoverHandler` takes
 /// hover across the whole of the item it is put on and keeps it from everything stacked *under* that item — but its own
 /// subtree is unaffected, so a handler on the parent leaves every row, cell and control below it answering the pointer
-/// exactly as before (2026-08-27 実測 qmltestrunner: with this handler on the root, a cell's own `HoverHandler` and a
+/// exactly as before (measured, qmltestrunner: with this handler on the root, a cell's own `HoverHandler` and a
 /// `ToolButton`'s `hovered` both still stood, and the handler reported the pointer over each of them). The other way
 /// round — a transparent sheet on top — is the shape that puts the rows out (規約 §QML 実装ルール), and a `PointHandler`
 /// laid over everything is no use here: it never becomes active without a press, so a hovering pointer moves under it

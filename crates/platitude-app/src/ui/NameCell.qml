@@ -58,7 +58,7 @@ RowLayout {
     /// and overflows it (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A change code fills its box, so a list
     /// that shows one takes the box outright (`iconMd`); the marks that stand here where no change can — the fold
     /// arrow and the sidebar's state marks — are drawn on the `iconSm` grid and none of them reaches its edge, so that
-    /// seat comes down a step further and the air stops being paid for twice (2026-08-27 ユーザー指示: the widest of them,
+    /// seat comes down a step further and the air stops being paid for twice (by design: the widest of them,
     /// the padlock, spans 9 of the 16, so with the line it carries it fills an `iconXs` seat almost exactly).
     ///
     /// **One answer per list.** `showChange` is a section's kind rather than a row's, so no row's name begins in a
@@ -67,8 +67,7 @@ RowLayout {
     /// amounts of air, and a seat that measured them one row at a time would step the names in and out.
     readonly property int seatSize: nameCell.showChange ? Theme.iconMd : Theme.iconXs
     /// Where a mark stands inside that seat: hard against its left edge, which for the trimmed seat above means the
-    /// box it is drawn in hangs a pixel out on the right. **The air is taken off the right alone** (2026-08-27
-    /// ユーザー指示) — the left of the mark is what the fold's own step reads as nesting, and centring the mark in a seat
+    /// box it is drawn in hangs a pixel out on the right. **The air is taken off the right alone** (observed) — the left of the mark is what the fold's own step reads as nesting, and centring the mark in a seat
     /// narrower than its box would walk it back towards the frame by half of whatever the right gave up. Zero where
     /// the change mark fills its seat: there the box *is* the ink, and the arrow it shares the slot with is centred in
     /// it the way it always was.
@@ -99,12 +98,12 @@ RowLayout {
         }
         // The fold arrow's step, not the change mark's. These stand in the sidebar alone, beside the arrows of the
         // rows they are nested among, and a mark drawn on the wider grid carried a heavier line than the folds it
-        // sits between — weight is what the eye reads as size (`NavIcon.stroke`; 2026-08-27 ユーザー指示). The line
+        // sits between — weight is what the eye reads as size (`NavIcon.stroke`; by design). The line
         // itself is not scaled with the grid: it is levelled *with* the arrow, so both wear the family's own
         // (デザイン規約 §寸法「畳みの山形は 2 階級」).
         //
         // **Placed, not filled.** A mark given the seat's own size takes the seat's top-left corner, and on a row
-        // whose seat is centred in it that reads as a mark riding a step high (2026-08-27 ユーザー報告 — the slip the
+        // whose seat is centred in it that reads as a mark riding a step high (observed — the slip the
         // first pass at this made). So it is centred down the seat and set against its left edge (`seatNudge`).
         NavIcon {
             anchors.centerIn: parent

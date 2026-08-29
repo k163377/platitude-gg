@@ -36,7 +36,7 @@ const FLAGS: usize = 5;
 /// remote has are both somewhere else, and read the same way for it. The
 /// fifth is what makes the chip say a move cannot go here — it mutes and
 /// wears the WORKTREES mark (`RefChip.recHeld`), because git refuses a
-/// `switch` onto a branch another working copy holds (2026-08-21 実測).
+/// `switch` onto a branch another working copy holds (measured).
 ///
 /// **The flags are fixed-width and the name starts after them**
 /// ([`FLAGS`]), so adding one moves every reader; the test at the foot of

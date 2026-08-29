@@ -19,12 +19,12 @@ use super::tags::split_ls_remote_line;
 /// Asked before a first push, because git answers two different ways to a
 /// name that is already over there: it fast-forwards one that our history
 /// contains — silently advancing somebody else's branch — and refuses one
-/// it does not (実測, both). The commit is returned rather than a yes, so
+/// it does not (measured, both). The commit is returned rather than a yes, so
 /// the caller can tell those two apart before anything is sent.
 ///
 /// **The pattern has to be the full `refs/heads/<name>`.** `ls-remote`
 /// matches a bare name against the *tail* of a ref, so asking for `topic`
-/// answers yes when the remote only has `feature/topic` (実測).
+/// answers yes when the remote only has `feature/topic` (measured).
 pub async fn branch_tip(
     executor: &GitExecutor,
     workdir: &Path,
@@ -58,7 +58,7 @@ pub enum RemoteBranchState {
     /// moves it on.
     FastForward,
     /// It is there with commits this history does not have. **git refuses
-    /// this push** (実測), so nothing can happen by pressing.
+    /// this push** (measured), so nothing can happen by pressing.
     Refused,
     /// It is there, and what it holds cannot be read from here — the
     /// commit it names is not in this repository, so the two histories

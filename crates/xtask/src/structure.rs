@@ -11,12 +11,9 @@
 //!   a written reason not to split it, which is the rule's own escape hatch.
 //!   No ceiling applies and no baseline entry is kept: the entry is the
 //!   whole of the standing, and what the file measures is nobody's to
-//!   record. The entry did carry the length once, as a second ceiling that
-//!   ratcheted — the point being that growth would land an edit on the line
-//!   carrying the reason. What it landed instead was a number rewritten
-//!   every time a verb was added to a driver, which is not a reading of the
-//!   reason (2026-08-29 ユーザー判断). The check that remains is that the
-//!   entry names a file that is still there.
+//!   record (a length on the entry would be rewritten on every growth
+//!   without anyone re-reading the reason). The check that remains is
+//!   that the entry names a file that is still there.
 //! * **in the baseline** — over the ceiling from before the count existed,
 //!   pinned at the number it had. It may shrink, and the baseline follows it
 //!   down; it may not grow, which is structure.md's 上限超過ファイルへ追記しない

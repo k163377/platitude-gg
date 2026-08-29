@@ -18,8 +18,6 @@ mod start;
 
 pub use build_id::build_tree;
 
-// The Qt block reads these through `use super::*`, the way the whole file
-// read them before it was one.
 use start::{packed_avatars, with_flag, with_layout, with_window};
 // The directory the application's own configuration reads are made in.
 // Shared with the settings screen's global level, which asks about the

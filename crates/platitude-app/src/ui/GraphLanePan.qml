@@ -47,8 +47,7 @@ MouseArea {
     /// proving (PG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
     ///
     /// **It goes in at the handler's own body**, not beside it: a hook that did what the handler would have done
-    /// stays green while the handler does something else, which is exactly how the gap this proves survived a run
-    /// (2026-08-26).
+    /// stays green while the handler does something else, which is exactly how the gap this proves survived a run.
     function clickAt(x, y) {
         return pan.pressLanded({ "x": x, "y": y }, 0)
     }
@@ -66,7 +65,7 @@ MouseArea {
     // (`GraphRowDelegate`), and this strip covers the whole of the column between the two dividers — the half of the
     // row a reader is most likely to aim at when the graph is wide. Answering it with a copy of half of what a click
     // does is how the name gesture came to do nothing there, in exactly the repositories wide enough to raise this
-    // strip (2026-08-26 ユーザー報告).
+    // strip.
     onDoubleClicked: mouse => {
         const row = pan.rowAt(mouse)
         if (row)

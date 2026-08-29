@@ -100,7 +100,7 @@ mod tests {
     use super::*;
 
     // The constants below are real git output, taken off git 2.55 in
-    // throwaway repositories (probe scripts, 2026-08-08) — from `git
+    // throwaway repositories (probe scripts, observed) — from `git
     // diff` unless a constant says otherwise, and trimmed where only the
     // shape matters.
 

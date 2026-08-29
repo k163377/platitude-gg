@@ -84,14 +84,14 @@ impl AutoCrlf {
     ///
     /// That covers two cases the screen cannot tell apart and does not
     /// need to: a key that is simply not there, and a key holding a word
-    /// git itself refuses (実測 2.55: `INPUT` is accepted, `banana` is
+    /// git itself refuses (measured 2.55: `INPUT` is accepted, `banana` is
     /// `fatal: bad boolean config value`). The second is a configuration
     /// git will not run on at all, so showing it as a fourth value the
     /// picker could return to would be offering to restore a broken file.
     ///
     /// Everything else is git's own boolean vocabulary, matched the way
     /// git matches it — case-insensitively, `input` first, and a valueless
-    /// key as true (実測 2.55: `yes` / `on` / `1` / any non-zero number are
+    /// key as true (measured 2.55: `yes` / `on` / `1` / any non-zero number are
     /// true, `no` / `off` / `0` / an empty value are false).
     fn of_record(value: Option<&str>) -> Option<Self> {
         // A key written with no `=` at all. git reads it as true, the same
@@ -161,7 +161,7 @@ pub async fn held(
 /// On Windows that last part is the common case rather than an edge: the
 /// Git for Windows installer writes `core.autocrlf=true` into the system
 /// configuration, so a global level that sets nothing still converts
-/// (実測, and the trap `attrs::normalises` documents).
+/// (measured, and the trap `attrs::normalises` documents).
 pub async fn effective(
     executor: &GitExecutor,
     workdir: &Path,
@@ -196,7 +196,7 @@ pub struct AutoCrlfWrite {
 /// **What the file already says is read first**, and a file that already
 /// says it is left alone. Not an optimisation: `git config --unset` fails
 /// when there was nothing to unset, and it fails with the *same* exit code
-/// as its refusal to touch a key written more than once (実測 2.55: both
+/// as its refusal to touch a key written more than once (measured 2.55: both
 /// are 5). Asking first is what keeps those two apart — after it, a failed
 /// unset is a real one and is reported as such.
 ///
@@ -231,7 +231,7 @@ pub async fn set(
 /// The key, written or taken out.
 ///
 /// The scope is spelled out on both, though git writes locally by default
-/// (実測 2.55: a bare `--unset` of a key held only in the user's own file
+/// (measured 2.55: a bare `--unset` of a key held only in the user's own file
 /// exits 5 and leaves that file alone). The level a value is read back
 /// from and the level it is written at are then named by the same word,
 /// which is what stops the two from drifting apart later.

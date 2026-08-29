@@ -95,7 +95,7 @@ Rectangle {
     /// Whether the question stands. **Not the words** — what the bar says is `label` and the rest, and those stay put
     /// when it comes down: the bar is on screen for the whole 200ms it spends going back up, and nothing that can be
     /// seen may change while it can be seen. A bar emptied at the press spends that time as a blank band in whatever
-    /// colour its owner's bindings fell back to, which is the flash that was reported (2026-08-27 ユーザー報告).
+    /// colour its owner's bindings fell back to, which is the flash that was reported.
     /// The next question is what replaces the words, not this one ending (`GraphPane.startAsking` dresses the bar and
     /// then raises it; `stopAsking` only lowers it).
     property bool open: false
@@ -248,7 +248,7 @@ Rectangle {
             /// And whether the focus it holds is the one the bar handed it as it opened. **Nobody reached for it**,
             /// so the ring has nothing to report — a question that comes down wearing a blue frame over its own
             /// warning one is saying "the keyboard is here" to a reader who has not touched the keyboard
-            /// (2026-08-22 ユーザー判断). Cleared the moment the focus leaves, so a tab back onto the pill rings.
+            ///. Cleared the moment the focus leaves, so a tab back onto the pill rings.
             property bool tookTheOpening: false
             onActiveFocusChanged: {
                 if (acceptPill.activeFocus)

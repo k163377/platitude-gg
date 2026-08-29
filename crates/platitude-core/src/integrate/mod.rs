@@ -28,7 +28,7 @@ pub(crate) use rebase::{landed, rebase_command};
 /// Reading the two apart is the whole point: an operation that stops on a
 /// conflict is where merging a branch that moved on — or copying a commit
 /// onto one — normally ends up, and calling that a failure puts a red line
-/// over an ordinary afternoon (2026-08-22 ユーザー報告).
+/// over an ordinary afternoon.
 ///
 /// **No exit code tells them apart**, so each command below asks the
 /// repository instead: the operation left standing is the stop, and

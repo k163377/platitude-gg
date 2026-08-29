@@ -134,7 +134,7 @@ async fn a_repository_stands_over_the_global_value_until_it_is_taken_out() {
     );
 }
 
-/// **`--unset` fails when there was nothing to unset** (実測 2.55: exit 5,
+/// **`--unset` fails when there was nothing to unset** (measured 2.55: exit 5,
 /// the same code as its refusal to touch a key written twice), so the
 /// write reads the file first and leaves a level that already says it
 /// alone. Without that, the empty row would report git's failure every

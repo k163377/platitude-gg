@@ -124,7 +124,7 @@ pub(super) fn conflict_staged(repo: &mut DemoRepo) -> Result<(), String> {
 /// The same merge resolved by keeping ours, and staged: the index is back
 /// to what HEAD holds, so `git status` answers empty while `MERGE_HEAD`
 /// stands and the commit button still writes a merge of two parents
-/// (実測 2.55). The only preset where the uncommitted row is drawn over a
+/// (measured, 2.55). The only preset where the uncommitted row is drawn over a
 /// clean tree — nothing to list, and a fork to record.
 pub(super) fn conflict_ours(repo: &mut DemoRepo) -> Result<(), String> {
     conflict(repo)?;

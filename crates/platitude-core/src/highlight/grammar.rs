@@ -260,7 +260,7 @@ mod tests {
     /// The guard above says a query was accepted, which is not the same
     /// as a query that paints: several upstream crates ship their
     /// highlights as a *delta* over another language's — colourless on
-    /// their own (2026-08-23: qmljs, typescript, tsx, cpp and objc all
+    /// their own (observed: qmljs, typescript, tsx, cpp and objc all
     /// did, and a QML diff came out plain end to end). Every entry
     /// answers for its own sample here, so a language added without its
     /// bases fails in this crate rather than on screen.

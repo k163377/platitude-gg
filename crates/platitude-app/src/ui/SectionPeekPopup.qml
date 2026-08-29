@@ -101,7 +101,7 @@ AppCard {
         // and this list comes and goes with the pointer. Kept, it makes
         // the first click of a later peek a second one, which puts the
         // whole list back over the diff the fold was made for
-        // (2026-08-18 ユーザー報告). `gestures` is asked for because
+        //. `gestures` is asked for because
         // closing a tab takes the page's pieces down before this popup.
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.forgetClicks()
@@ -150,7 +150,7 @@ AppCard {
     // rows than the pane can hold would otherwise be laid out from the
     // top edge of the pane, nowhere near the cell it came out of
     // (a repository with 45,000 tags puts every peek up there —
-    // reported 2026-08-08). The rows that do not fit scroll.
+    // observed). The rows that do not fit scroll.
     x: peek.paneW
     y: peek.top
     width: peek.listW

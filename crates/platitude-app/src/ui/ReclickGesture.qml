@@ -38,7 +38,7 @@ QtObject {
     readonly property bool guarded: doubleGuard.running
     /// Whether any target is waiting. What the surface holds still while it runs: a wait is a beat with nothing to
     /// show for it, and anything that opened or closed under it would be the answer to a different question
-    /// (2026-08-26 ユーザー指示 — the hover cards were changing under the wait).
+    /// (by design — the hover cards were changing under the wait).
     readonly property bool armed: renameTimer.running
     function armedFor(key) {
         return renameTimer.running && gesture.armedKey === key

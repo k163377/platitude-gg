@@ -78,12 +78,8 @@ pub struct CommitDetails {
 ///
 /// **One invocation, not two.** `show` prints the file list after the
 /// format expansion, so asking for both together spares the details pane
-/// a second process — and on Windows a process is the expensive part:
-/// `JetBrains/kotlin`, warm cache, measured 25ms for this against 68ms for
-/// the `show --no-patch` + `diff-tree` pair it replaces, which is most of
-/// a 100ms interaction budget. Only the metadata was ever needed to build
-/// the second command (the first parent), so nothing else was gained by
-/// keeping them apart.
+/// a second process — and on Windows the process is the expensive part
+/// of a 100ms interaction budget (measured ~25ms warm for this call).
 pub async fn commit_details(
     executor: &GitExecutor,
     workdir: &Path,

@@ -52,7 +52,7 @@ ActionButton {
         // be done, and both states that grey it out are already said elsewhere on screen: REMOTES counts 0 in
         // the left menu, and another git command running is on this band (デザイン規約 §無効 — ボタンの無効は
         // ツールチップを持たない). Said out loud because a disabled control still takes hover and still opens its
-        // attached ToolTip (実測: rules-refs/app-ui.md §hover).
+        // attached ToolTip (measured, rules-refs/app-ui.md §hover).
         if (!fetchButton.enabled)
             return ""
         const what = fetchButton.stopped

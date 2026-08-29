@@ -10,10 +10,10 @@ import platitude.ui
 // every gap in the row, and nothing else. That is what makes "no hit area changed" structural rather than a claim to
 // re-prove: nothing is layered over anything, so the hash plate, the parent link and the avatar cannot lose a press
 // to this. It is also what closes the dead corners a hand placed patch by patch kept leaving — the air above and
-// below a value, the plate's own empty strip beside the parent hash (2026-08-28 ユーザー報告).
+// below a value, the plate's own empty strip beside the parent hash.
 //
 // **A plain `MouseArea` and not a handler.** A passive `PointHandler` over the row answered one move of a two-move
-// drag inside the pane's Flickable, and none at all once anything else took the press (実測 qmltestrunner
+// drag inside the pane's Flickable, and none at all once anything else took the press (measured qmltestrunner
 // `tst_inflick`); a `TapHandler` never taps at all over a selectable field, which takes the press (`tst_tapselect`).
 // `preventStealing` is what keeps the Flickable from taking the drag away part-way through.
 //

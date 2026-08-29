@@ -8,8 +8,8 @@ import platitude.ui
 /// the parts a row is made of.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
@@ -85,7 +85,7 @@ Item {
         } else if (act === "row-card" || act === "card-sweep") {
             // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
             // row 1, not row 0**: the presets it runs on carry a dirty working tree, whose row stands at the top and
-            // opens a card with no commit in it (2026-08-28 実測 — `subject` empty, the stamp `1970-01-01`).
+            // opens a card with no commit in it (measured — `subject` empty, the stamp `1970-01-01`).
             const at = act === "card-sweep" && arg === "" ? 1 : Number(arg)
             const hovered = graphPane.view.itemAtIndex(at)
             if (hovered)
@@ -185,7 +185,7 @@ Item {
         onTriggered: {
             // **The commit's own words have to be in it first.** A card opens the frame it is asked for and fills in
             // afterwards, and one swept before that hands back `1970-01-01` — a stamp of a commit nobody made
-            // (2026-08-28 実測).
+            // (measured).
             if (!rowCard.opened || rowCard.subject === "")
                 return
             // **And it has to have stopped laying out**, for the reason `details-sweep` waits: a card mid-layout has
@@ -251,7 +251,7 @@ Item {
     property int reclickGraphStep: 0
     /// When the second click went in, so the report can say how long the box made the reader wait. **Not a success
     /// condition** — the wait is the double-click window and the sampler reads through it (app-ui.md §UI 自動化の因果性);
-    /// it is here because a lag is the one thing about this gesture a picture cannot show (2026-08-26 ユーザー報告).
+    /// it is here because a lag is the one thing about this gesture a picture cannot show.
     property real reclickGraphAt: 0
     SampleTimer {
         id: reclickGraphTimer
@@ -261,12 +261,12 @@ Item {
         property string name: ""
         /// Whether the run scrolls the history away between the second click and the box. **The delegate is pooled by
         /// that scroll**, which is what the gesture must not be carried by (`ReclickGesture`) — and the box that
-        /// opens has to be sent back into view (2026-08-26 ユーザー報告「入力モードに切り替わらないケースも有った」).
+        /// opens has to be sent back into view.
         property bool scrolls: false
         /// Whether the run ends inside the wait, on the mark the chip wears while it runs, instead of at the box.
         property bool marks: false
         /// Whether the pointer is rested on the chip first, so the card it opens has a rest running under the wait —
-        /// what the gesture has to hold still (2026-08-26 ユーザー指示).
+        /// what the gesture has to hold still.
         property bool points: false
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
@@ -330,7 +330,7 @@ Item {
                 + " kind=" + graphPane.namingKind
                 + " typed=" + graphPane.namingText
                 // The tree has not moved: the gesture the reader made was not the double-click, and this is the half
-                // of the report a picture of an open box cannot make (2026-08-26 ユーザー報告).
+                // of the report a picture of an open box cannot make.
                 + " branch=" + workTree.branch
                 // Whether the row the box is on is in sight — the whole of the scrolled run's claim, and true of the
                 // plain one for nothing having moved it.
@@ -353,7 +353,7 @@ Item {
     // PG_AUTO_ACT=graph-reclick-lanes: the same gesture put in through **the strip over the lane column** — the half
     // of the row between the two dividers, which has a press-taking layer of its own wherever the lanes overflow their
     // column (`GraphLanePan`). A reader aiming at the middle of a wide graph is aiming at that strip, and a strip that
-    // answered with a copy of half of what a click does left the gesture doing nothing there (2026-08-26 ユーザー報告).
+    // answered with a copy of half of what a click does left the gesture doing nothing there.
     property bool laneClickArmed: false
     property int laneClickStep: 0
     SampleTimer {
@@ -407,7 +407,7 @@ Item {
         property bool picks: false
         /// Whether the two clicks are put in at **different surfaces** — the first at the row, the second at the card
         /// its chip opens into. That is what a reader does without knowing it: the card comes up on the chip's own
-        /// seat after a rest, so the second click at one spot lands somewhere else (2026-08-26 ユーザー報告).
+        /// seat after a rest, so the second click at one spot lands somewhere else.
         property bool across: false
         onTriggered: {
             if (acts.reclickListStep === 0) {

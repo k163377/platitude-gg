@@ -422,7 +422,7 @@ pub async fn rebase_interactive(
     // land on: git moves the branch to the upstream and says so. `--root`
     // is the one with none — it replays onto a placeholder commit git
     // makes up, and with every line dropped that placeholder is what the
-    // branch is left pointing at: an empty tree with no message (実測).
+    // branch is left pointing at: an empty tree with no message (measured).
     if options.root && steps.iter().all(|s| s.action == TodoAction::Drop) {
         return Err(GitError::Rejected {
             message: "dropping every commit would leave the branch with no history".to_string(),
@@ -455,9 +455,12 @@ pub async fn rebase_interactive(
                 message: format!("reword of {} has no message", step.oid),
             });
         };
-        let file =
-            ScratchFile::create(&repo.git_dir, REWORD_MSG_TAG, normalized(message).as_bytes())
-                .map_err(io_error)?;
+        let file = ScratchFile::create(
+            &repo.git_dir,
+            REWORD_MSG_TAG,
+            normalized(message).as_bytes(),
+        )
+        .map_err(io_error)?;
         lines.push(TodoLine::Exec {
             command: format!(
                 "git commit --amend --cleanup=whitespace --file {}",

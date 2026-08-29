@@ -19,7 +19,7 @@ Item {
 
     /// Whether this row was given the whole of the block it stands in. **The hash plate is right-aligned against this
     /// row's edge**, so a row that kept only its own width parks the plate against the end of the name and the pane's
-    /// right column stops being one (2026-08-28 ユーザー報告 — the row became an Item, and a plain item in a layout
+    /// right column stops being one (observed — the row became an Item, and a plain item in a layout
     /// takes its implicit width and stops). A photograph shows a plate either way; it does not say which edge it was
     /// meant to be on. **Judge it where the row is narrower than its block** (--preset authorship: 237 against 388)
     /// — where the content already overflows, a row that never filled is clamped to the same width and answers true.
@@ -122,7 +122,7 @@ Item {
     //
     // The row draws its values on two lines, and a gesture belongs to one of them. **Which one is decided by where
     // the press landed** — reading it off how near the pointer happened to be to one row of glyphs picked the value
-    // above wherever the lines were taller (Ubuntu, 2026-08-28). The border is the middle of the gap between the two
+    // above wherever the lines were taller (Ubuntu, observed). The border is the middle of the gap between the two
     // lines, **measured on the words themselves**: the slack beside them carries no content and so no height of its
     // own, and a border read off one lands wherever a spacer happened to be centred (3 of 9 sweeps, same day).
     readonly property real lineBorder:
@@ -156,7 +156,7 @@ Item {
     // ---- and what a run needs, on top of that (verify-ui) -------------
     /// The field that draws one value, the slack a hand reaches for it through, and how far that value's line runs —
     /// **the whole band, not the words' own height**, because the air above and below a value is the row's too and a
-    /// hand that did not answer there is what the reader ran into (2026-08-28 ユーザー報告).
+    /// hand that did not answer there is what the reader ran into.
     function fieldFor(which) {
         if (which === "author")
             return authorLabel

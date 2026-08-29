@@ -322,7 +322,7 @@ Item {
             }
             AppMenuSeparator {}
             // One row, because there is one screen. A second entry naming a category of it would be a menu telling
-            // the reader about the inside of the thing it opens (2026-08-29 ユーザー報告 — the two rows read as a
+            // the reader about the inside of the thing it opens (observed — the two rows read as a
             // duplicate).
             AppMenuItem {
                 text: qsTr("Settings…")

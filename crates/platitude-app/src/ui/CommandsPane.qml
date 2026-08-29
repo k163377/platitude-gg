@@ -71,10 +71,9 @@ Rectangle {
     }
 
     /// What `Clear` empties: the rows and the line in the header both. The mark is red for either of them, so a Clear
-    /// that left the line standing left the mark red over an empty panel, with nothing on screen left to explain it
-    /// (2026-08-10 報告).
+    /// that left the line standing left the mark red over an empty panel, with nothing on screen left to explain it.
     ///
-    /// And then the panel goes down with them (2026-08-21 ユーザー報告). A panel raised by a failure is read once; the
+    /// And then the panel goes down with them. A panel raised by a failure is read once; the
     /// press that says "I am done with this" is the same press that empties it, and what stays behind otherwise is a
     /// panel saying `Nothing yet` over the graph it pushed out of the way. Reopening is the `>_`, which goes back to
     /// the foot of the left menu with the panel.
@@ -124,12 +123,12 @@ Rectangle {
             color: Theme.bgElevated
             BandRule { z: 1 }
             // No inset of its own at the near end — the seat carries the pane's, so the mark and the name stand in the
-            // columns they stood in at the foot of the list (2026-08-23 ユーザー指示).
+            // columns they stood in at the foot of the list.
             RowLayout {
                 anchors.fill: parent
                 anchors.rightMargin: Theme.spaceMd
                 // The sections' own step, now that this band opens with one of their rows: at `spaceSm` the count sat
-                // twice as far from the name here as `(2)` does from `BRANCHES` (2026-08-23 ユーザー指示).
+                // twice as far from the name here as `(2)` does from `BRANCHES`.
                 spacing: Theme.spaceXs
 
                 // The row this band is: the mark, and the name it has been carrying all along.
@@ -198,8 +197,7 @@ Rectangle {
             model: pane.commandsModel
             // Nothing above the first row: the band is already the edge, and a sliver of ground under it reads as the
             // log hanging off its own header rather than as breathing room — 4 pixels of it stood between the band's
-            // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (2026-08-28
-            // ユーザー報告). The graph keeps a top margin because it has no band over it (`GraphList`).
+            // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (observed). The graph keeps a top margin because it has no band over it (`GraphList`).
             bottomMargin: Theme.spaceXs
 
             /// Whether new rows pull the view along. Reading further up stops that until the end is reached again — the
@@ -211,7 +209,7 @@ Rectangle {
             /// How far a drag may carry the view (`CommandsTextSelect`). `[0, contentHeight - height]` is not that
             /// range: `positionViewAtEnd` over rows of differing heights — a failure brings git's words down with it —
             /// moves the list's own origin, so the top of the log sits at `originY` and not at zero. Measured 55
-            /// pixels of it left out of a drag's reach after one open-and-walk (qmltestrunner 実測 2026-08-28), which
+            /// pixels of it left out of a drag's reach after one open-and-walk (qmltestrunner measured), which
             /// is the top rows of the log. The graph does the same arithmetic for the same reason (`GraphList.clampY`).
             function clampY(y) {
                 const minY = list.originY - list.topMargin
@@ -252,7 +250,7 @@ Rectangle {
     /// them (`DiffPane.wideDelta`).
     ///
     /// The second is measured only once a row carries one (`CommandsModel.hasWide`): setting a wide glyph is what
-    /// loads that fallback, and the font is 52.6MB of working set that every window used to pay — see
+    /// loads that fallback, and the font is tens of megabytes of working set per window — see
     /// `DiffTextMetrics.wideDelta`, which the same measurement and the same reasoning stand behind.
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
     readonly property real wideDelta: wideRuler.item

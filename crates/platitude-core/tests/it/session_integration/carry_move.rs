@@ -390,7 +390,7 @@ async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
 ///
 /// `git rebase --quit` is the one `--quit` that loses something: it
 /// leaves HEAD detached at the half-rewritten line, with every copy it
-/// already made unreferenced (実測 2.55). `--abort` puts the branch back
+/// already made unreferenced (measured, 2.55). `--abort` puts the branch back
 /// where it was, and a replay is not work in hand.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {

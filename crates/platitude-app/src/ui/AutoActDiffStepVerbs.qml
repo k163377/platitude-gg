@@ -8,8 +8,8 @@ import platitude.ui
 /// send the code sideways. Each is a chain of its own, which is why none of them is a branch.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var worktreeModel: driver.worktreeModel
@@ -58,7 +58,7 @@ Item {
                           + " room=" + Math.round(room))
     }
     // One line staged from the diff, then the same file moved from the file list — the diff has to follow both, and
-    // following only the first is the observed failure this verb pins (2026-08-17 ユーザー報告: the line was gone from
+    // following only the first is the observed failure this verb pins (observed: the line was gone from
     // the unstaged side and never came back when the file was unstaged).
     //
     // Three answers in one run, because they are one story: the line goes (the rows shrink), the line comes back (the
@@ -80,7 +80,7 @@ Item {
         }
         /// Whether the write this step asked for has landed. The sequence is read immediately before asking, so its
         /// moving is the whole of the evidence — waiting to *see* `busyCount` rise as well wedges on a write that
-        /// begins and ends inside one tick, which is what the container did while the host did not (2026-08-17 実測:
+        /// begins and ends inside one tick, which is what the container did while the host did not (measured,
         /// `line-back` PASS on Windows, watchdog on Linux).
         function wroteAndSettled() {
             return repoTab.busyCount === 0
@@ -135,7 +135,7 @@ Item {
     // Line after line, the way a hand does it. The pane refuses a press while the rows it would be written against are
     // still coming (`RepoPage.diffSettling`), so this waits for exactly that and no clock — which is also the thing
     // that broke: held on a signal the file list only sends when its rows differ, the pane went quiet for good at the
-    // second line of a file already on both sides, and no `+` anywhere would go in again (2026-08-17 ユーザー報告).
+    // second line of a file already on both sides, and no `+` anywhere would go in again.
     SampleTimer {
         id: lineRunTimer
         readonly property int want: 3
@@ -296,7 +296,7 @@ Item {
     // (規約 §diff の中身をコピーする). The shape is `details-sweep`'s, and so are its two claims:
     //
     // **Nine starts, not one** (`reach=`). A reach that worked from a single place in the ground is exactly the fault
-    // the right pane's values shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告).
+    // the right pane's values shipped with, and the middle is the one place that hides it.
     // Each start is judged on its own, over a board cleared first — a run that read the selection once at the end
     // would report the last try and call the other eight green.
     //

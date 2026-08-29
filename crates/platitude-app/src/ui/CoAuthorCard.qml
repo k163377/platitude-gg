@@ -51,11 +51,11 @@ AppCard {
                 readonly property bool hasAddress: mateRow.parts[1] !== ""
 
                 // Laid out from the start, never on hover: showing the address only under the pointer changed the row's
-                // own size, so the row moved out from under the hand that asked for it and the card shut (2026-08-09
-                // report). Nothing that a hover reveals may resize what is being hovered.
+                // own size, so the row moved out from under the hand that asked for it and the card shut
+                // (observed). Nothing that a hover reveals may resize what is being hovered.
                 //
                 // On a second line rather than beside the name: side by side made the card wider than the pane it opens
-                // in (2026-08-08), and this way the address costs height, which the card has to spare.
+                // in, and this way the address costs height, which the card has to spare.
                 //
                 // **Both wrap rather than being cut**, and for the same reason the height was always the side that gave:
                 // this card is where the names and addresses the date line could not fit are read in full and taken

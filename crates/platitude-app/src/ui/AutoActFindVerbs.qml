@@ -8,8 +8,8 @@ import platitude.ui
 /// the avatar store.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var graphModel: driver.graphModel
@@ -253,7 +253,7 @@ Item {
     // (`ClipboardHelper.lastCopied`). **`perRow=` is the claim**: one line on the clipboard for every row in the
     // panel. Lines that begin with a tab are not counted — a failure brings git's own words down under it, and no run
     // owns which of its commands fail (reading a repository from inside a container answers `not a git repository` for
-    // the working copy the tree really lives in, and that one refusal is three more lines: 2026-08-28 実測).
+    // the working copy the tree really lives in, and that one refusal is three more lines: measured).
     //
     // The write barrier is in front of these rather than behind them (the same wait `dispatchFinished` makes for a
     // plain write act): the two writes that give the log something to hold are still queued when this starts, and a
@@ -266,12 +266,12 @@ Item {
                 return
             // Two rows, because the fixture makes two writes and the drag is about crossing from one row to another:
             // the write barrier alone lets a tick through while an opening read is the only thing in the log, and a
-            // drag inside one row proves the smaller half of the rule (2026-08-28 実測 — `rows=1` on both OS).
+            // drag inside one row proves the smaller half of the rule (measured — `rows=1` on both OS).
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
             commandsPickTimer.stop()
             // The model's own count, not the panel's `(N)` — that one is the view's, and the view is a frame behind
-            // the rows in the tick a press lands in (2026-08-28 実測: 1 against 4 commands on the clipboard).
+            // the rows in the tick a press lands in (measured, 1 against 4 commands on the clipboard).
             const rows = page.pageCommands.rowsHeld()
             page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
             if (AppBackend.autoAct === "commands-select") {
@@ -294,7 +294,7 @@ Item {
     // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
     //
     // **Nine starts, not one.** A reach that worked from a single place in the ground is exactly the fault the right
-    // pane's values shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告). Each start
+    // pane's values shipped with, and the middle is the one place that hides it. Each start
     // is judged on its own, over a board cleared first — a run that read the selection once at the end would report
     // the last try and call the other eight green.
     SampleTimer {

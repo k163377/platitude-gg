@@ -40,7 +40,7 @@ Item {
 
     Rectangle {
         // Drawn to the ink, not to the cell: an elided word paints narrower than the width it was given, and a ground
-        // stretched to that width leaves a tail of chip with nothing on it (2026-08-18 実測).
+        // stretched to that width leaves a tail of chip with nothing on it (measured).
         anchors.left: wordLabel.left
         // The word's own step rather than the label's height, which is the mono family's line box — the one part of
         // this dress each OS settles differently (`ActionButtonLabel` carries the measurements).

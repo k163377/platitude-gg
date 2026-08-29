@@ -185,7 +185,7 @@ async fn setting_the_tool_writes_the_gui_key_and_an_empty_one_clears_it() {
 /// rather than a failure: `git config --unset` says "there was nothing to
 /// unset" with exit 5. Unmarked, that code is a failed row and the command
 /// panel opens itself over it — which is what closing the settings card
-/// did on a machine with no merge tool configured (2026-08-21 ユーザー報告).
+/// did on a machine with no merge tool configured.
 #[tokio::test]
 async fn clearing_a_tool_that_was_never_set_answers_by_code() {
     let repo = TestRepo::init();

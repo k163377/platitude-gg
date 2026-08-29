@@ -23,13 +23,12 @@ smallvec = { version = "1.15.2", features = ["union"] }
 # Syntax colours, the fast path (`highlight::grammar`): tree-sitter and
 # one grammar crate per language. Licenses surveyed on crates.io
 # 2026-08-23: every grammar below is MIT except Elixir (Apache-2.0) —
-# both in the allowed set. These are C build scripts, which this
-# crate's dependencies were once kept clear of; that ban was lifted
-# 2026-08-23 (user decision): the toolchain already demands a C++
-# compiler for Qt, the parsers ship as generated C inside the crates
-# (offline-friendly), and the measured 11x over the regex lexer is what
-# makes the first paint immediate. syntect below stays as the fallback
-# for languages with no grammar crate.
+# both in the allowed set. These carry C build scripts — a user-approved
+# exception: the toolchain already demands a C++ compiler for Qt, the
+# parsers ship as generated C inside the crates (offline-friendly), and
+# the measured order-of-magnitude win over the regex lexer is what makes
+# the first paint immediate. syntect below stays as the fallback for
+# languages with no grammar crate.
 tree-sitter = "0.26"
 tree-sitter-highlight = "0.26"
 tree-sitter-bash = "0.25"
@@ -72,9 +71,8 @@ tree-sitter-yaml = "0.7"
 tree-sitter-zig = "1.1"
 # The regex-based fallback (`highlight` outside `grammar`), for
 # languages with no grammar crate above. fancy-regex rather than
-# syntect's default Oniguruma — onig's Regex is not Send (tried
-# 2026-08-23, 112 Send-bound errors), so it could not leave the UI's
-# runtime at all.
+# syntect's default Oniguruma — onig's Regex is not Send, so it could
+# not leave the UI's runtime at all.
 syntect = { version = "5.3", default-features = false, features = [
     "parsing",
     "regex-fancy",

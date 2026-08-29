@@ -340,10 +340,9 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 /// decides pass or fail on it — and the escapes go around the field name
 /// and the `=`, so `first_chunk_ms=317` reaches a reader as
 /// `first_chunk_ms\e[0m\e[2m=\e[0m317` and no substring search finds it.
-/// The colouring is also invisible in a terminal, which is what let it
-/// quietly cost this measurement three of its numbers: the writer is a
-/// pipe when xtask spawns the app and a file when a shell redirects it,
-/// and only the pipe gets the escapes.
+/// The trap hides in a terminal, where the colouring is invisible: only
+/// a pipe gets the escapes, so a run that looks clean under a shell
+/// redirect still loses its numbers when xtask spawns it.
 fn init_tracing() {
     let level = match std::env::var("PG_LOG").as_deref() {
         Ok("error") => tracing::Level::ERROR,

@@ -109,7 +109,7 @@ Item {
 
     // A tab whose repository would not open. The screen sits where the panes do, not over the whole page, so the log's
     // seat and the panel both stay reachable. The log is not raised on its own: the failed command is a background
-    // read, so the panel would come up empty (実測).
+    // read, so the panel would come up empty (measured).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
     /// Automation: that screen's hand — the one its three lines are dragged over from the air around them
     /// (`PG_AUTO_ACT=open-fail-sweep`). An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
@@ -144,7 +144,7 @@ Item {
     /// A stopped merge opens the box already holding what it is about to record.
     ///
     /// The button under it is what finishes a merge — `git commit` there writes the very commit `--continue` would,
-    /// down to the tree, the two parents and the hooks it runs (実測 2.55) — so the message it will use belongs on
+    /// down to the tree, the two parents and the hooks it runs (measured, 2.55) — so the message it will use belongs on
     /// screen before the press rather than in the log after it (デザイン規約 §進行中の操作から出る).
     ///
     /// **Answered once per message, and never written over a draft.** Text in the boxes is the one thing here that
@@ -205,7 +205,7 @@ Item {
     }
     /// The answer to that pop, whichever way it went. Read before the refusal branch below so both landings pass
     /// through here — and the words only go in where the pop is what answered, and it landed
-    /// (デザイン規約 §変更を退避する. 2026-08-22 ユーザー指示).
+    /// (デザイン規約 §変更を退避する. by design).
     ///
     /// **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
     /// back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
@@ -246,7 +246,7 @@ Item {
     /// it has answered** — core answers a write and only then publishes the refs it moved (`session::write`), and a
     /// listing of fifty thousand refs is the slow half of that. Pressed twice on a remote branch with no local one,
     /// the second press is decided from the very picture the first was and sends the same `switch --create`, which
-    /// git refuses because the first one made the branch (2026-08-29 ユーザー報告).
+    /// git refuses because the first one made the branch.
     ///
     /// So while a move is on its way, the road a press arrives by (`switchToRef`) sends nothing. **What ends the wait
     /// is the move's own landing, not a counter**: HEAD on the branch and that branch in the listing
@@ -290,11 +290,11 @@ Item {
     // rather than a side effect (デザイン規約 §進行中の操作から出る).
     //
     // **One question for both.** The second needs no operation put down, and everything after that is the same two
-    // commands, so it is the same question with one clause fewer (2026-08-22 ユーザー判断).
+    // commands, so it is the same question with one clause fewer.
     //
     // **Asked before anything is sent.** The screen already knows what is standing, so letting git refuse would put a
     // red line in the command log where a question belongs — and leave the reader where they were with nothing to
-    // press (2026-08-22 ユーザー報告).
+    // press.
     function standsInTheWay(leaving) {
         return leaving !== true && workTree.movesBlocked
     }
@@ -327,7 +327,7 @@ Item {
     // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. So the press
     // raises a bar like every other refusal does, and the pill goes there instead: the same road the WORKTREES row
     // takes (`openRepositoryPathRequested`). **The `!` after the word is what says the pill is not the switch that
-    // was pressed** (デザイン規約 §進行中の操作から出る, 2026-08-22 ユーザー判断).
+    // was pressed** (デザイン規約 §進行中の操作から出る, by design).
     function askOpenHolder(local) {
         const held = worktreesModel.worktreeHolding(local)
         if (held === "")
@@ -423,8 +423,8 @@ Item {
         // Whoever was dressing the bar lets go first: a question can be raised over one still standing (a ref clicked
         // in the left menu while the first push asks where it goes), and the flow left behind would go on calling
         // itself the one standing — which is what keeps its check timer firing round trips at a remote nobody is
-        // asking about. Not for the dress: `startAsking`'s assignments beat a live `Binding` outright (実測
-        // 2026-08-27). The flow raising this one turns its own back on after this returns.
+        // asking about. Not for the dress: `startAsking`'s assignments beat a live `Binding` outright
+        // (measured). The flow raising this one turns its own back on after this returns.
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
         page.rowAskRun = run
@@ -499,7 +499,7 @@ Item {
 
     /// One of this page's right-click menus is standing. What the pointer is over then is the menu; the row it was
     /// opened on is behind it, and nothing behind a menu is being hovered — a card or a tip that comes out now is
-    /// drawn over the very rows the hand is reading (2026-08-17 ユーザー報告). The menus are all the page's, so this is
+    /// drawn over the very rows the hand is reading. The menus are all the page's, so this is
     /// the one place that can see all of them.
     readonly property bool menuStanding:
         refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing || remoteRowMenu.showing
@@ -671,7 +671,7 @@ Item {
     // **A delete takes the row away at the press, and git is asked behind it** (デザイン規約 §消す操作は先に画面から消す).
     // The write itself is the short half: `git branch -d` is one process, and everything the reader is actually
     // waiting on comes after it — the refs read, then the walk that rebuilds the graph (kotlin 級で 54ms のあとに
-    // 1.3s、`busyCount` はその先頭しか覆わない — 2026-08-22 実測). Left to those, the row sits there through all of it
+    // 1.3s、`busyCount` はその先頭しか覆わない — measured). Left to those, the row sits there through all of it
     // with nothing to say whether the press even landed.
     //
     // One key per kind, because a delete touches at most one of each; `Delete both` is the one that touches two.
@@ -787,7 +787,7 @@ Item {
     /// git refused the plain delete: the answer lands on the menu row that asked, turning it into a held one (デザイン規約
     /// §左メニューの所作). A refusal does not mean the commits stop being reachable: git measures the branch against its
     /// upstream when it has one, so a branch merged into HEAD but not yet pushed is refused while nothing at all would
-    /// be lost (実測).
+    /// be lost (measured).
     function noteForceDelete(name) {
         // Whichever card asked — the ref menu's or the graph row's — is the one the answer belongs on. They are the
         // same component, and only one of them is ever standing.
@@ -851,7 +851,7 @@ Item {
 
     function openRowMenu(oidHex) {
         // The row's own branch, so the card at the foot of its menu is the card that branch's chip opens — the two
-        // are ways at the same thing (2026-08-26 ユーザー判断).
+        // are ways at the same thing.
         const record = page.branchRecordAt(oidHex)
         commitRowMenu.rowBranchKind = GitFacts.recordKind(record)
         commitRowMenu.rowBranch = record === "" ? "" : GitFacts.recordName(record)
@@ -1236,7 +1236,7 @@ Item {
                 // end travel separate feeds, in no fixed order (`expectedRefusals` is counted for the same reason):
                 // where the row has landed already, taking the mark down is the whole of it; where it has not, it puts
                 // the mark back up when it does — and raises the log with it, over the news this bar is already giving
-                // (2026-08-29 実測: 1 Linux run in 5, and none of 5 on Windows — the picture is identical either way).
+                // (measured, 1 Linux run in 5, and none of 5 on Windows — the picture is identical either way).
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
@@ -1301,7 +1301,7 @@ Item {
         // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and the
         // answer to the press is the working tree: the conflicted rows, and the way out under them (デザイン規約
         // §進行中の操作から出る). Armed rather than done on the spot, for the reason the head landing below is: the
-        // status that will carry those rows has not arrived yet (2026-08-22 ユーザー要望).
+        // status that will carry those rows has not arrived yet (by design).
         if (repoTab.lastWriteStopped)
             page.pendingWipSelect = true
         // The answer is a commit at the tip, and that commit is what was asked for here, not the row or the ref that
@@ -1468,7 +1468,7 @@ Item {
     /// A press addresses the rows it was made on, and carries the fingerprint of the bytes they were read from; git
     /// refuses it against anything else. So from the moment a press goes out until the rows it changed are back, the
     /// pane must not take another one — pressed twice in a row, the second landed on the diff the first had already
-    /// replaced and came back with a refusal in the log (2026-08-17 ユーザー報告).
+    /// replaced and came back with a refusal in the log.
     ///
     /// Three parts, in the order they happen, and **every one of them ends by itself**: the press is out and no answer
     /// has come (`diffAwaits`, armed only when the tab says a write went out, put down by the write's own answer), git
@@ -1477,8 +1477,7 @@ Item {
     ///
     /// **Nothing here waits on a signal that may not come.** Held on "the tree has not been read yet" instead, it
     /// wedged for good the first time a write moved no rows — staging a second line of a file already on both sides —
-    /// because the file list only says `changed` when its rows differ, and then no `+` anywhere would go in again
-    /// (2026-08-17 ユーザー報告).
+    /// because the file list only says `changed` when its rows differ, and then no `+` anywhere would go in again.
     property bool diffAwaits: false
     readonly property bool diffSettling:
         page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading
@@ -1486,7 +1485,7 @@ Item {
     ///
     /// **Whoever wrote it.** This was once asked for by the writes made inside the diff itself, and the file list's own
     /// `+` and `−` moved the same file out from under the pane without a word: a line staged here and then unstaged
-    /// there left the line missing from both sides on screen (2026-08-17 ユーザー報告). The caller already knows the write
+    /// there left the line missing from both sides on screen. The caller already knows the write
     /// was one that moves the tree (`absorbWriteResult`), so being open is the whole of the condition.
     function reloadDiff() {
         if (!page.diffShown || page.diffKind === "commit")
@@ -1499,7 +1498,7 @@ Item {
     /// **The tree moving is not the only way the file moves.** The counts below say a stage or an unstage happened, and
     /// the file list says a file changed state; neither hears an edit that leaves both where they were — a conflict
     /// resolved in another window keeps its two stage letters until it is added, so the pane went on drawing the
-    /// conflict it was opened on (2026-08-22 ユーザー報告). Core answers this with silence unless the bytes moved
+    /// conflict it was opened on. Core answers this with silence unless the bytes moved
     /// (`RepoSession::refresh_diff`), so a quiet file costs one read and no repaint.
     ///
     /// A commit's diff is not asked: what a commit holds is settled. Nor is one still catching up with a write — that
@@ -2032,7 +2031,7 @@ Item {
             page.diffReadAt = -1
             // Something outside this window moved the tree, so the rows on screen — and the fingerprint the next `+`
             // would be written against — are a picture of the file as it was. Pressing one then came back with git's
-            // refusal (2026-08-17 ユーザー報告).
+            // refusal.
             if (moved && !ours)
                 page.reloadDiff()
             page.absorbOpMessage()
@@ -2066,7 +2065,7 @@ Item {
             // one press that always has words in front of it — a stopped merge fills the box itself
             // (`absorbOpMessage`) — is the one that never lands, and the pane stands over a tree it no longer
             // describes while the highlight the working-tree row left behind is inherited by whatever slid into its
-            // place, which after this press is the entry it just made (2026-08-22 ユーザー報告).
+            // place, which after this press is the entry it just made.
             const ourStash = page.stashLanded
             if (worktreeModel.total === 0 && page.wipShown
                     && (ourStash || (wipPane.subjectText === "" && wipPane.bodyText === ""))) {

@@ -49,7 +49,7 @@ fn deep_first(now: u64) -> u64 {
 ///
 /// Written as a single `fast-import` stream rather than a commit at a
 /// time: 2100 git processes cost about a minute of every run that asks
-/// for this shape, and one costs a tenth of a second (2026-08-16 実測
+/// for this shape, and one costs a tenth of a second (measured,
 /// Windows: 92ms for this history). One blob serves every commit — what
 /// this preset is for is the *count*, and a tree that changed on every
 /// step would only make the import bigger.

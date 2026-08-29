@@ -552,7 +552,7 @@ impl RepoTab {
 
     /// `git push <remote> --delete refs/tags/<tag>`. Fully qualified,
     /// because a bare name a branch shares over there is refused and
-    /// neither is deleted (実測 — `remote::delete_remote_tag`).
+    /// neither is deleted (measured — `remote::delete_remote_tag`).
     #[qslot]
     fn delete_remote_tag(&mut self, remote: String, tag: String) {
         self.with_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));

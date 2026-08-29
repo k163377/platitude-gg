@@ -28,7 +28,7 @@ AppCard {
     ///
     /// **A single click does not move.** The card lands on the chip's own seat and opens on a rest, so a hand that
     /// stopped over a branch has one under it a beat later — with a click to go, the click a reader aims at the chip
-    /// switches the working tree instead (2026-08-26 ユーザー報告「予想外に switch される」). These rows answer a click the
+    /// switches the working tree instead. These rows answer a click the
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
     signal picked(string record)
     /// One was clicked once: the row it is on becomes the one being read. **The second click has no signal of its
@@ -63,7 +63,7 @@ AppCard {
     /// **This card's rows are the graph's rows.** It opens on the chip's own seat once the pointer has rested, so a
     /// reader clicking that spot twice clicks the row the first time and this card the second: an answer of its own
     /// would make that second click a first one, and the gesture would read as "sometimes it does nothing"
-    /// (2026-08-26 ユーザー報告). It is one target either way — the card's first row *is* the chip (規約 §グラフ行の
+    ///. It is one target either way — the card's first row *is* the chip (規約 §グラフ行の
     /// ダブルクリック) — so it goes through one door.
     property var rowClicks: null
     property string rowOid: ""
@@ -113,7 +113,7 @@ AppCard {
     /// before the records arrived — measured at 8x8, its padding and nothing else, growing to the real 111x80 a frame
     /// later. That matters because **Qt works out what is hovered from pointer events, not from geometry**: a list that
     /// grows after it appears cannot tell that the hand is already inside it, and the hand that walked down off the
-    /// chip is exactly that hand (2026-08-09 trace — the list took itself down under the pointer). The height is what
+    /// chip is exactly that hand (traced: the list took itself down under the pointer). The height is what
     /// this buys, and the height is what matters: it is the edge the hand crosses. The width still settles a frame
     /// later (measured 97, then 111) because the rows and their column size each other through bindings rather than
     /// through layout — harmless, because it only ever grows, and growing to the right takes no ground away from a hand

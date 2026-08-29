@@ -76,7 +76,7 @@ ColumnLayout {
 
     // The tool is written only where it would change what git answers with. Pressing the field is not choosing
     // anything, and the write for "the same as now" is not free: an empty field asks git to unset a key, which fails
-    // when the key was never there in the first place (2026-08-21 ユーザー報告 — the log raised itself over the
+    // when the key was never there in the first place (observed — the log raised itself over the
     // screen closing).
     function applyTool() {
         if (pane.curPage && toolField.wanted !== pane.mergeTool)

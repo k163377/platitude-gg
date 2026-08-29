@@ -204,7 +204,7 @@ impl CommandsModel {
     /// weigh what a copy handed out against what it was made from
     /// (`PG_AUTO_ACT=commands-copy`). The panel's own count is the view's
     /// (`ListView.count`), which is not the same number in the frame a
-    /// press lands in — 2026-08-28 実測: 1 there against 4 commands on
+    /// press lands in — measured: 1 there against 4 commands on
     /// the clipboard, read microseconds apart in one tick.
     #[qslot]
     fn rows_held(&self) -> i32 {

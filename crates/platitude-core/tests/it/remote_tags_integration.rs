@@ -174,7 +174,7 @@ fn at_origin(work: &mut TestRepo, name: &str) -> String {
 /// **The name is qualified because a bare one is ambiguous.** A remote
 /// carrying a branch and a tag of the same name refuses `--delete <name>`
 /// outright — `error: dst refspec … matches more than one` — and deletes
-/// neither (実測 git 2.55). `refs/tags/<name>` takes the tag and leaves
+/// neither (measured, git 2.55). `refs/tags/<name>` takes the tag and leaves
 /// the branch where it is.
 #[tokio::test]
 async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name() {
@@ -207,7 +207,7 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
 
 /// **git does not refuse a name the remote has not got, in this
 /// spelling.** The qualified form needs no resolution over there, so the
-/// answer is `warning: deleting a non-existent ref` and exit 0 (実測) —
+/// answer is `warning: deleting a non-existent ref` and exit 0 (measured) —
 /// where a bare name would have failed. Whether there is anything to
 /// delete is the menu's to know before it asks (`offers::TagSides`).
 #[tokio::test]

@@ -8,8 +8,8 @@ import platitude.ui
 /// into. Each of these reads where it arrived rather than how far it asked to go.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
@@ -96,7 +96,7 @@ Item {
             changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
             // Moves the view, not a selection (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
-            // than a default window, and even there the room below the fold is two rows (実測) — which is why the plain
+            // than a default window, and even there the room below the fold is two rows (measured) — which is why the plain
             // walk is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
@@ -179,7 +179,7 @@ Item {
     // (`GraphRowWalk.noteStep`), so the first row's details are still in flight when the last row's request goes out.
     // `selected=` is the selection reaching the lit row, `card=` the pane on the right reaching the selection —
     // waiting the first out alone photographs the highlight on the row the walk stopped on beside a card still
-    // holding one it passed through (observed 2026-08-23 on Windows), the wait `file_step` keeps on the diff side.
+    // holding one it passed through (observed on Windows), the wait `file_step` keeps on the diff side.
     SampleTimer {
         id: graphStepReport
         property int from: -1
@@ -406,7 +406,7 @@ Item {
             if (changesFoldTimer.struck < strikes) {
                 // The commit's own files first, and **read only here**: a read landing after a strike puts the rows
                 // back with every fold choice cleared (`DetailsModel::set_files`), so the row swings open under a wait
-                // that then never ends (observed 2026-08-23 — 1 run in a handful reached the watchdog in silence).
+                // that then never ends (observed — 1 run in a handful reached the watchdog in silence).
                 // Read every tick instead, and the verb's own answer would break its own precondition.
                 if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
                     return
@@ -432,7 +432,7 @@ Item {
     //
     // The wait is for the view, not for the model. `diffSettled()` says the rows arrived; it says nothing about the
     // list having laid them out, and a list whose `contentHeight` is still zero clamps every step to where it already
-    // was — the walk then reads exactly like a diff with nothing to scroll (2026-08-16 実測: 1 run in 3 came through with
+    // was — the walk then reads exactly like a diff with nothing to scroll (measured, 1 run in 3 came through with
     // `contentHeight` 0 at the step and 216 by the time it was reported). So what is waited for is the output the step
     // consumes: a view with room to be sent, which is `atEnd` answering false over a laid-out height (app-ui.md §UI
     // 自動化の因果性「まだ答えが無い」と値を分ける).

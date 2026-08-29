@@ -63,7 +63,7 @@ impl TabsModel {
 
     /// Takes a picked folder as a plain path: check first, open second.
     ///
-    /// The check costs one `git rev-parse` (実測 30–36ms on Windows,
+    /// The check costs one `git rev-parse` (measured 30–36ms on Windows,
     /// repository or not), which is why nothing is shown while it runs —
     /// and why the tab is not opened up front and closed again, which
     /// would flash a tab for the length of a frame or two.

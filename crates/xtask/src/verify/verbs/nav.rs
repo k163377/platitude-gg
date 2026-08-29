@@ -8,7 +8,7 @@ pub(super) const TABLE: &[Verb] = &[
     // carries it. **The box stays open holding what was typed** and git's
     // own words go under it, where closing it first would have thrown the
     // typing away and left the answer nowhere but the log
-    // (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断).
+    // (デザイン規約 §答えの要らない報せ, by design).
     //
     // Nothing here is a picture: a box that closed and a box that stayed
     // open are a frame's colour apart, and the words are in a tooltip.
@@ -22,7 +22,7 @@ pub(super) const TABLE: &[Verb] = &[
     // A tag renamed to its own name in other letters. **git writes a ref
     // as a file**, so on a case-insensitive disk both names would be gone
     // — core refuses it outright, and the box is where that answer belongs
-    // (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断). Two runs make the
+    // (デザイン規約 §答えの要らない報せ, by design). Two runs make the
     // pair: the one that has to be turned down, and the one beside it that
     // must not be, since a box that refuses everything frames the same.
     Verb {
@@ -111,7 +111,7 @@ pub(super) const TABLE: &[Verb] = &[
     // the pair is read out loud: `armed=` is the row's own answer to
     // the click it was given, `collapsed=`/`box=` what came of it
     // (the box puts the whole list back over the diff the fold was
-    // made for — 2026-08-18 ユーザー報告).
+    // made for — observed).
     Verb {
         name: "nav-reclick",
         when: &[],

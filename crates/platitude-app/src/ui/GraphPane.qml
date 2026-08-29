@@ -41,7 +41,7 @@ Rectangle {
     signal rowRenameRequested(string oidHex, string record)
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
     /// these rows**, so they go through this door rather than building the same key and the same payload beside it —
-    /// two surfaces that had to agree on what "the same target" means is exactly what was wrong before (2026-08-26).
+    /// two surfaces that had to agree on what "the same target" means is exactly what was wrong before.
     function noteRowClick(oidHex, record, held) {
         return graphList.noteClick(oidHex, record, held)
     }
@@ -122,8 +122,7 @@ Rectangle {
         // **A box coming down spends the gesture that opened it.** The press that walks away from a box lands before
         // the click it belongs to (`FocusRelease` fires on the press, `MouseArea.clicked` on the release), so by the
         // time the click is answered the box is already gone — and a click that found no box would come up as a
-        // second one and open it again a window later, which is the blink that was reported twice (2026-08-26 ユーザー
-        // 報告). Asked here rather than at the click, because this is the one place that knows a box was standing.
+        // second one and open it again a window later, which is the blink that was reported twice (observed). Asked here rather than at the click, because this is the one place that knows a box was standing.
         if (graphList.namingOid !== "")
             graphList.forgetClicks()
         graphList.namingOid = ""
@@ -501,7 +500,7 @@ Rectangle {
     ///
     /// **It stays on the pane itself.** Moved into an item stacked over the list it took the hover away from every row
     /// under it: hover goes to the topmost item that accepts it, and an item carrying a handler accepts it for its
-    /// whole area (2026-08-22 qmltestrunner で実測 — rows that would not light, cards that would not close).
+    /// whole area (measured with qmltestrunner — rows that would not light, cards that would not close).
     property bool pointerInside: false
     HoverHandler {
         onHoveredChanged: graphArea.pointerInside = hovered

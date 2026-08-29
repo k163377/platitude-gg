@@ -5,7 +5,7 @@
 //! that was just taken: F5, and the newest is at the top. A second
 //! window gains nothing and costs the reader the only thing they have to
 //! be sure of — which of the windows in front of them is the board as it
-//! stands now (2026-08-27 ユーザー指示: 窓が何枚も開く).
+//! stands now.
 //!
 //! Prose did not hold it. The rule was written down twice — in the
 //! verify-ui skill and in memory — and the windows piled up anyway,

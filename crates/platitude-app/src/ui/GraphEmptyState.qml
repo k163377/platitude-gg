@@ -30,11 +30,10 @@ Item {
         height: Theme.iconLg
         spinning: emptyState.graphModel.loading && emptyState.graphModel.rowTotal === 0
     }
-    // **A walk that gave up is not said here.** It used to be — centred in a screen that fills the whole pane, which
-    // painted the sentence across the rows a part-finished walk had already drawn (2026-08-30 実測). It is one state,
-    // so it is said in one place: the band's `PARTIAL HISTORY` badge, with whatever was said about it in the card
-    // behind it (`BandStateGroup`, 2026-08-30 ユーザー判断). A badge is in view wherever the reader is standing, which
-    // is what the middle of a column that may be five hundred rows long is not.
+    // **A walk that gave up is not said here** — a screen that fills the whole pane would paint the sentence across
+    // the rows a part-finished walk has already drawn. It is one state, so it is said in one place: the band's
+    // `PARTIAL HISTORY` badge, with whatever was said about it in the card behind it (`BandStateGroup`, by design).
+    // A badge is in view wherever the reader is standing, which the middle of a five-hundred-row column is not.
     // A repository with no history yet. Told in the middle of the column that will hold it, not under the working-tree
     // row: the history has not stopped somewhere (the window cut's footer says that, where it stops) — there is none,
     // so the whole column is what the words are about. Nothing to do here that the app can do, so no button under

@@ -67,8 +67,7 @@ Rectangle {
     /// **A card is what holds a column together**: the frame gathers the rows, and the heading says which operation
     /// they belong to. One button gathers nothing, and its own chip already names the operation, so both would only
     /// draw a box around a box and say `MERGING` twice (the toolbar badge says it first — デザイン規約 §長さ).
-    /// What is left is a red button standing under the one that finishes things, which is what it is
-    /// (2026-08-22 ユーザー判断).
+    /// What is left is a red button standing under the one that finishes things, which is what it is.
     readonly property bool bare: opExitCard.workTree.opMerging
 
     visible: opExitCard.workTree.opText !== ""
@@ -124,7 +123,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
         }
         // **A merge does not get one.** `--continue` there *is* the commit — same tree, same two parents, same
-        // message, same hooks as pressing the button above this card (実測 2.55) — so the card would be offering a
+        // message, same hooks as pressing the button above this card (measured, 2.55) — so the card would be offering a
         // second door onto the seat it is standing under, and the one with no message box attached. Everything else
         // here steps, and continuing a step is not a commit anybody is composing (デザイン規約 §進行中の操作から出る).
         OpExitRow {
@@ -162,7 +161,7 @@ Rectangle {
             code: "--quit"
             text: qsTr("Stop stepping, keep the tree")
             // **The tree it keeps is the conflicted one.** git drops the operation and leaves every unmerged path
-            // exactly where it stood (実測 2.55), so the badge and this card go while the files still wait on a
+            // exactly where it stood (measured, 2.55), so the badge and this card go while the files still wait on a
             // decision — and a move out of here is refused all over again, in git's other wording. Said in the seat
             // `--skip` says its own cost from (デザイン規約 §進行中の操作から出る).
             note: opExitCard.workTree.conflictCount > 0 ? qsTr("conflicts stay") : ""
@@ -187,7 +186,7 @@ Rectangle {
         //
         // **The shape is the commit button's, in red**: a frame of its own, the phrase centred inside it, the hold
         // filling the frame it drew. The two then read as the pair they are — the one that finishes the merge and the
-        // one that puts it back — and neither is a box drawn inside another box (2026-08-22 ユーザー判断).
+        // one that puts it back — and neither is a box drawn inside another box.
         //
         // **The word is red because the gesture is a hold.** Colour on a word is this application's mark of a press
         // that has to be held (§長押し), and taking the hold away would take the colour with it.
@@ -205,7 +204,7 @@ Rectangle {
             phraseHead: "merge --abort"
             // **What happens, not what is lost in general.** The hold's mark already says something goes; the words
             // say where it lands, and that landing is the whole of the answer — nothing done since the merge began
-            // survives it (2026-08-22 ユーザー判断).
+            // survives it.
             text: qsTr("Back to before it started")
             enabled: opExitCard.repoTab.busyCount === 0
             onHeld: opExitCard.repoTab.resolveOperation("abort")

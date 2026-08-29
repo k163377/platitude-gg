@@ -8,8 +8,8 @@ import platitude.ui
 /// so the wait is made once, below, and the verb it belongs to is chosen from there.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var worktreeModel: driver.worktreeModel
@@ -71,7 +71,7 @@ Item {
             // fixture with one changed file in it renders down to the same rows. It parts company at the first write:
             // the tree moves, the list is asked about a path it never held, and the pane closes — correctly — on a
             // reader who was never on a file. What that leaves is a verb reporting rows it never owned, hours after
-            // the argument it wanted was left off (2026-08-18 実測: `line-run` staged one line of nothing and read
+            // the argument it wanted was left off (measured, `line-run` staged one line of nothing and read
             // `rows=0`, `line-back` waited out the watchdog).
             if (wtPath === "") {
                 AppBackend.report("diff_arg act=" + act + " named=false")
@@ -140,7 +140,7 @@ Item {
                           + " lines=" + (text === "" ? 0 : text.split("\n").length))
     }
     // The diff has to arrive before a row of it can be staged. Asked for rather than waited out: a fixed wait
-    // photographs an empty pane the same as a late one (2026-08-13 実測: a verb fired against this repository named no
+    // photographs an empty pane the same as a late one (measured, a verb fired against this repository named no
     // row and passed). The asking has no ceiling: a row that never lands leaves the run without a report line at all,
     // and the watchdog is what ends it.
     Timer {
@@ -320,7 +320,7 @@ Item {
     // PG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
     // taken by the hand laid over the rows (`AppListView.barRoom`). The bar is drawn *over* the rows, so anything
     // covering the frame covers the bar with it, and the hand that picks the text out took every press on the trough
-    // (2026-08-29 ユーザー報告). Two claims:
+    //. Two claims:
     //
     // **`clear=`** — where this hand ends against where the bar begins, read off the two items rather than off the
     // rule that places them. **`reach=`** — the hand still answers at its own last pixel, so the strip was given back

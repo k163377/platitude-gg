@@ -12,7 +12,7 @@ pub(super) const TABLE: &[Verb] = &[
     // **`log=false` is on all three of the move claims.** A move the
     // screen knows git would refuse is never sent, so no refusal can
     // raise the command log — a red panel under a press that has a
-    // way out on screen the whole time (2026-08-22 ユーザー判断).
+    // way out on screen the whole time.
     // A shut panel and a panel that was never raised are the same
     // picture, so this is the half only the report can carry.
     Verb {

@@ -3,7 +3,7 @@
 //! (デザイン規約 §git が言ったことを読む場所).
 //!
 //! **A row is one line, and the line is its columns joined by tabs**
-//! (2026-08-28 ユーザー指示): `12:03:17\tgit switch -- 3.2\t29 ms`. A tab
+//!: `12:03:17\tgit switch -- 3.2\t29 ms`. A tab
 //! is where the eye sees a column break and a space is where it sees one
 //! word after another, so a log pasted into anything that reads tabs comes
 //! out in the three columns it was read in.
@@ -164,7 +164,7 @@ impl CommandsModel {
     /// **Both ends are cut to the line they are on.** A hand that has run
     /// off the end of a row names a byte past it, and every reader of the
     /// pair below indexes a line with it: uncut, `to` addresses nothing
-    /// and the whole selection reads as empty (2026-08-28 実測 — a drag to
+    /// and the whole selection reads as empty (measured — a drag to
     /// the end of the last row copied nothing at all).
     fn taken(&self) -> Option<(usize, usize, usize, usize)> {
         if !self.sel_active {

@@ -7,7 +7,7 @@ use super::repo::{DemoRepo, file_url};
 /// between, and two names on the far side to run into.
 ///
 /// The three names over there are the whole point, because a push meets
-/// each of them differently (実測): `taken` left the trunk with a commit of
+/// each of them differently (measured): `taken` left the trunk with a commit of
 /// its own, so a push there is **refused**; `carried` is behind us on our
 /// own line, so a push there **lands and moves somebody else's branch on**;
 /// `outsider` was pushed from another clone and never fetched here, so
@@ -67,7 +67,7 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
 ///
 /// **The arrangement `remote.pushDefault` cannot stand in for.** git
 /// weighs the branch's mark first and the repository's second
-/// (git-config(5); 実測 2.55), so a destination worked out from the
+/// (git-config(5); measured 2.55), so a destination worked out from the
 /// repository's alone names `origin` here while the push goes to the
 /// fork — and the counts beside it, which are about origin, are then
 /// about somewhere else entirely (`push-target`, デザイン規約 §リモートへ送る).
@@ -213,7 +213,7 @@ pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
     // `Protected tag update failed` over a tag and `Protected branch
     // update failed` over a branch; a fixture that said `branch` while a
     // tag was being refused would put a sentence on screen that this end
-    // could be blamed for writing (実測 — the report quotes it as it came).
+    // could be blamed for writing (measured — the report quotes it as it came).
     // The refs arrive on stdin as `<old> <new> <ref>`.
     std::fs::write(
         &path,

@@ -55,7 +55,7 @@ impl InProgress {
     fn supports(self, continuation: Continuation) -> bool {
         match self {
             // `git merge` steps through nothing, so there is no commit to
-            // leave out. **`--quit` it does take** (実測 2.55: the marker
+            // leave out. **`--quit` it does take** (measured 2.55: the marker
             // goes, the tree stays exactly as it stood) — the exit card
             // still does not offer the row, but that is a decision about
             // what to put in front of a reader, and the way out of a

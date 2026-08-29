@@ -271,7 +271,7 @@ async fn discard_chosen_pulls_a_staged_renames_old_name_from_status() {
 /// A staged copy carries `orig_path` exactly like a rename, and its
 /// source must NOT ride along: the source is a live file with rows and
 /// choices of its own, and pulling it in would reset work the user
-/// never chose (実測: `status.renames=copies` + a copied-from-modified
+/// never chose (measured: `status.renames=copies` + a copied-from-modified
 /// file reports `2 C.` with the source as `orig_path`).
 #[tokio::test]
 async fn discard_chosen_leaves_a_staged_copys_source_alone() {

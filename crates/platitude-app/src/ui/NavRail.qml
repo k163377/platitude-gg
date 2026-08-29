@@ -191,7 +191,7 @@ Rectangle {
                     // have between them: the band's mark sits right on the cell's own top edge, so the top cell pays
                     // one half where every other pair of cells pays two. Put on one side it is the same gap
                     // everywhere — fold block to the first mark, and each number to the next mark
-                    // (2026-08-22 ユーザー指示. デザイン規約 §左メニューを畳む).
+                    // (by design. デザイン規約 §左メニューを畳む).
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
                     anchors.topMargin: Theme.spaceXs
@@ -242,7 +242,7 @@ Rectangle {
                             // downwards it starts at the box's own top. A `spaceXs` off both, back towards the mark it
                             // belongs to: hung off the corner outright it stood on the cell's right edge with the air
                             // all on the other side, and the step up spends the slack the column keeps above it, so
-                            // the badge's own box starts where the cell does (2026-08-22 ユーザー指示). Centred on the
+                            // the badge's own box starts where the cell does. Centred on the
                             // corner, half the badge would stand in the cell above — beside a number that counts a
                             // different section.
                             anchors.horizontalCenter: parent.right

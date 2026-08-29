@@ -93,7 +93,7 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
 ///
 /// Shown one at a time they are not a comparison at all — the reader
 /// holds the first in their head while looking at the second
-/// (2026-08-22 ユーザー指示). One view, one magnifier, and the difference
+///. One view, one magnifier, and the difference
 /// is on the screen instead of in the memory.
 pub(crate) fn record_pair(
     label: &str,

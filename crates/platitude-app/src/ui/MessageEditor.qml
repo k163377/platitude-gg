@@ -122,13 +122,11 @@ ColumnLayout {
     readonly property bool descKeeps: !editor.blockScrolls
     /// What the pane lays the pair out at: the block, plus whatever the grip has pulled. The pane binds this to
     /// `Layout.preferredHeight` on the instance — a layout's own implicitHeight is the engine's to write, so a binding
-    /// there loses to the next recompute and the description box collapses to its 0 implicit height (measured
-    /// 2026-08-16).
+    /// there loses to the next recompute and the description box collapses to its 0 implicit height (measured).
     readonly property real pairHeight: editor.pairBase + descBox.extra
 
     /// A wheel neither box could use, in pixels. The boxes cover most of the block they stand on, so whoever owns that
-    /// block moves it by this — without it the surface under the boxes cannot be reached by wheel at all (2026-08-09
-    /// ユーザー報告).
+    /// block moves it by this — without it the surface under the boxes cannot be reached by wheel at all (observed).
     signal wheelPastEnd(real pixels)
 
     /// Swap in a different message. A pull, and a reading position, belong to the message they were made on — the next

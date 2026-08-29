@@ -85,7 +85,7 @@ impl DemoRepo {
     /// alone cannot tell "stopped where we wanted" from "refused the
     /// command outright": a flag the minimum git does not know exits the
     /// same way, and the preset then builds a repository with nothing
-    /// standing in it (2026-08-23 実測 — 2.43 knows `--empty=ask`, not
+    /// standing in it (measured — 2.43 knows `--empty=ask`, not
     /// its 2.45 rename `stop`, and every rebase-empty run on the Linux
     /// container photographed a resting page). The markers are the proof
     /// — the same ones core reads (`platitude_core::opstate`), spelled

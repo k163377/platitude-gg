@@ -187,7 +187,7 @@ impl RepoSession {
     /// A different question from "is the tree dirty". Resolving every
     /// conflict of a merge as ours and staging it leaves `git status`
     /// empty with `MERGE_HEAD` still standing, and the commit written
-    /// there is still a merge carrying both parents (実測 2.55 — a
+    /// there is still a merge carrying both parents (measured 2.55 — a
     /// cherry-pick in the same state refuses the commit instead, which is
     /// why a stopped sequence is not this row). The row draws the commit
     /// that is about to be written, so it is there whenever there is one.

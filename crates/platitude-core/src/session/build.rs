@@ -128,7 +128,7 @@ pub(super) async fn rewrite_carrying(
 /// The restore is skipped when the rebase stopped part-way, and that is
 /// the whole difference from a move: git will not write into an index
 /// that already holds unmerged paths, so a `pop` there does nothing at
-/// all while reporting the conflict it walked into (実測 — 規約 §`stash
+/// all while reporting the conflict it walked into (measured — 規約 §`stash
 /// pop` の非ゼロを conflict と読んでよいのは). The entry stays in the
 /// stash list, drawn as its own row in the graph, and the person settling
 /// the conflict puts it back when the operation is over — which is where
@@ -171,7 +171,7 @@ async fn carry_across_rewrite(
         Err(error) => {
             // A failure that left something standing is holding the tree
             // — a rebase asked for while another was in progress is the
-            // one measured (実測 2.55) — so the work stays in the stash
+            // one measured (measured, 2.55) — so the work stays in the stash
             // until whatever that is has been dealt with. One that
             // failed without starting leaves the emptied tree, and then
             // the stash was only the room it needed.
@@ -198,12 +198,12 @@ const STASH_TOP: &str = "stash@{0}";
 ///
 /// **git refuses every move while a merge / rebase / cherry-pick / revert
 /// stands** — clean tree, conflicted tree and resolved-and-staged tree all
-/// get the same `cannot switch branch while …` (実測 2.55). What it takes
+/// get the same `cannot switch branch while …` (measured, 2.55). What it takes
 /// to clear the way is not the same for all four:
 ///
 /// - **cherry-pick / revert / merge**: `--quit` puts the operation down
 ///   and keeps everything it has already done — the commits an earlier
-///   step of the sequence made stay on the branch (実測: a two-commit
+///   step of the sequence made stay on the branch (measured: a two-commit
 ///   pick whose second step conflicts keeps the first). What is left is
 ///   an unmerged index, which **`git stash push` cannot write at all**
 ///   (`error: could not write index`), so the conflicted paths are marked
@@ -213,7 +213,7 @@ const STASH_TOP: &str = "stash@{0}";
 ///   far end, because markers belong to the branch they were made on.
 /// - **rebase**: `--quit` is the one that loses something — it leaves
 ///   HEAD detached at the half-rewritten line and every copy it already
-///   made unreferenced (実測 2.55). `--abort` puts the branch back
+///   made unreferenced (measured, 2.55). `--abort` puts the branch back
 ///   exactly where it was, and what it undoes is a replay rather than
 ///   work in hand.
 ///
@@ -221,7 +221,7 @@ const STASH_TOP: &str = "stash@{0}";
 /// way** — what the exit card's own `--quit` row leaves behind — and the
 /// two steps after the quit clear it on their own.
 ///
-/// A clean tree stashes nothing and says so by exiting 0 (実測), so an
+/// A clean tree stashes nothing and says so by exiting 0 (measured), so an
 /// operation that stopped over nothing — a rebase on an emptied commit —
 /// leaves no entry behind.
 pub(super) async fn leave_operation(

@@ -12,7 +12,7 @@ impl DiffModel {
     /// markup and says `dataChanged` over the lot. Swapping the list
     /// instead would be no slower to build (2ms for 6,000 rows), but a
     /// `ListView` handed a new list starts again at the top: measured
-    /// `at=0` where the reader had scrolled to 400 (2026-08-13 実測,
+    /// `at=0` where the reader had scrolled to 400 (measured,
     /// `PG_AUTO_ACT=colour-place`). The colours arrive a second after the
     /// rows do, which is exactly long enough to have started reading.
     pub(super) fn repaint_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {
@@ -240,9 +240,6 @@ pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> Diff
 /// milliseconds where a plain one takes none (`highlight::colors`), so a
 /// slower *earlier* request can land after the one the reader is waiting
 /// for.
-/// Taking the last and testing it left the pane on the file it was on
-/// before, with no second chance — nothing else was ever going to arrive
-/// for that click (2026-08-13 実測).
 ///
 /// In order, so a file asked for twice — which every partial write does —
 /// ends on its latest answer rather than the one it superseded, and so

@@ -8,7 +8,7 @@ import platitude.ui
 // The one that acts is named by a frame, and the frame is the plain one:
 // the accent is kept for the two buttons that write a commit, so a dialog
 // that only ends itself does not borrow the colour they carry
-// (2026-08-29 ユーザー報告). What says it cannot be pressed is the word,
+//. What says it cannot be pressed is the word,
 // which takes the disabled step (`ActionButton.fg`). A dialog that has
 // nothing to undo offers no way out and says so by leaving `cancelText`
 // empty rather than by drawing a button that promises to put something

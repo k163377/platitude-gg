@@ -46,7 +46,7 @@ Rectangle {
     /// (`<card>.background.pad`, the way `tip-copy` reaches `tip.contentItem`).
     property alias pad: sweepHand
     // It stands in the ground rather than over the content, so it is reached only where nothing else took the press
-    // (実測 qmltestrunner `tst_cardpad`).
+    // (measured, qmltestrunner `tst_cardpad`).
     SweepPad {
         id: sweepHand
         anchors.fill: parent

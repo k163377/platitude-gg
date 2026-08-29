@@ -37,7 +37,7 @@ Item {
     /// Whether the pointer is on this row. Written by the handler below rather than by the `MouseArea` that fills the
     /// row: hover goes to the topmost item that takes it, and the stage `+` is a `Control` that takes its own, so the
     /// row stopped being "under the hand" exactly when the hand arrived at the mark (rules-refs/app-ui.md 「行の hover
-    /// を `MouseArea` で取らない」; 実測 qmltestrunner: `containsMouse=false` with the pointer in the middle of the `+`,
+    /// を `MouseArea` で取らない」; measured qmltestrunner: `containsMouse=false` with the pointer in the middle of the `+`,
     /// which took the row's wash out from under the hand reaching for it and closed its line-ending card).
     property bool pointed: false
     /// A right-click menu of the page's is standing over this list.

@@ -188,7 +188,7 @@ async fn the_name_rules_are_the_ones_git_applies() {
 /// A rename that changes only letter case is refused before anything
 /// runs. With the tag packed (the normal state after a clone), the
 /// create+delete pair deletes BOTH names on a case-insensitive disk and
-/// every command exits 0 (実測 2026-08-07 on NTFS).
+/// every command exits 0 (measured, on NTFS).
 #[tokio::test]
 async fn a_case_only_tag_rename_is_refused_before_touching_anything() {
     let mut repo = TestRepo::init();

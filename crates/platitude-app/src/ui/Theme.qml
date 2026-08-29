@@ -94,7 +94,7 @@ QtObject {
     readonly property int fontCode: 13
     // Also off the ramp, and for one place: the name in a graph row's ref chip (デザイン規約 §タイポグラフィ). A branch name is
     // not meta about the row, so it does not go down to `fontSm`; it is not what the row is read for either, so at
-    // `fontMd` it stood level with the subject and read as loud as the message (2026-08-21 ユーザー判断).
+    // `fontMd` it stood level with the subject and read as loud as the message.
     readonly property int fontChip: 13
     readonly property int fontChipLine: 16
     readonly property int fontLg: 16
@@ -106,7 +106,7 @@ QtObject {
     // word set wider and start reading as a different face.
     readonly property real tracking: 0.5
     // Families each OS ships that also carry Japanese: a glyph missing from the named family falls back by OS locale,
-    // which is where kanji turn Chinese (デザイン規約 §タイポグラフィ, 2026-08-08).
+    // which is where kanji turn Chinese (デザイン規約 §タイポグラフィ, observed).
     readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP",
                                          "Noto Sans", "DejaVu Sans"]
     readonly property var fontFamilyMono: ["Cascadia Mono", "Consolas", "Menlo", "Noto Sans Mono CJK JP",

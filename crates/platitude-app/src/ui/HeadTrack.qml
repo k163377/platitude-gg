@@ -7,7 +7,7 @@ import platitude.ui
 ///
 /// `↑` and `↓` are East Asian Ambiguous, so the CJK families this app names hold them in a full-width cell: the space
 /// between arrow and digit was that cell's leftover rather than a token of ours, and each family drew its own arrow
-/// inside it — Windows a thin long one, Ubuntu a heavy one with a small head (measured 2026-08-11). Same reason the
+/// inside it — Windows a thin long one, Ubuntu a heavy one with a small head (measured). Same reason the
 /// parent link's `←` is drawn (デザイン規約 §寸法「印はフォントの字に任せない」).
 RowLayout {
     id: track

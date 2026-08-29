@@ -8,8 +8,8 @@ import platitude.ui
 /// row, stashing, the line-ending card, and the seat a stopped merge is finished from.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -92,7 +92,7 @@ Item {
             //
             // **`stash-lands` is the one that opens it**, because where the reader is standing is its whole subject:
             // the press empties the tree the pane is describing, and the row it is standing on leaves the graph with
-            // the highlight still on it (2026-08-22 ユーザー報告). Pressed from the same button all the same.
+            // the highlight still on it. Pressed from the same button all the same.
             //
             // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
             // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
@@ -201,7 +201,7 @@ Item {
             wipPane.setMessage(arg === "" || arg === "amend" ? "feat: something" : arg, "")
             // **The pointer goes on before the tree has settled**, which is what a real one does — the hand reaches the
             // button while the index is still being written. Waiting for the warning first and pointing after would
-            // photograph the same card while leaving the ordering that actually broke it untested (2026-08-18).
+            // photograph the same card while leaving the ordering that actually broke it untested.
             wipPane.pointAtCommit = true
             eolCommitTimer.start()
         } else if (act === "commit-face") {
@@ -288,7 +288,7 @@ Item {
     }
     // The write barrier's two edges, and then the one this run is actually about: the amend answers before the rebuild
     // it asks for is started, so stopping at the write frames the commit that was replaced — still under the name the
-    // amend was sent to take over (2026-08-21: `--preset authorship` photographed "Yuki Tanaka" on a green run).
+    // amend was sent to take over (observed: `--preset authorship` photographed "Yuki Tanaka" on a green run).
     //
     // Refs answer ahead of the rebuild, so the new tip being named is not the graph holding it — the graph taking the
     // commit in is the edge, and it is read the positive way round. The replaced one going is not the same statement
@@ -365,7 +365,7 @@ Item {
     // **The row that has to go is read here rather than at the dispatch.** The walk prepends the working tree's row
     // only once the status says the tree is stacked on HEAD, and that status can arrive after the graph's first pass —
     // a repository opened onto a stopped merge is the case where it does. Read too early, the verb waits out its
-    // watchdog on the newest *commit*, which was never going anywhere (2026-08-22 実測, `--preset conflict-staged`).
+    // watchdog on the newest *commit*, which was never going anywhere (measured, `--preset conflict-staged`).
     SampleTimer {
         id: stashPressTimer
         /// Whether the press is made from the working tree's own row with the pane that describes it open — the seat
@@ -410,7 +410,7 @@ Item {
             // The commit exists; the picture is of the graph holding it. **Against the id it moved from**, not
             // merely "HEAD is somewhere in the graph": refs and the walk arrive behind the write and behind each
             // other, so the old tip answers that question perfectly well, and the shot came back framing the branch
-            // still on it with a working-tree row above (2026-08-22 実測).
+            // still on it with a working-tree row above (measured).
             if (!branchesModel.refsLoaded || branchesModel.headOid === mergeCommitTimer.headWas
                     || graphModel.rowOf(branchesModel.headOid) < 0
                     || driver.graphTopKind() === "wip")

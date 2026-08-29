@@ -16,7 +16,7 @@ use crate::process::{GitCommand, GitExecutor};
 pub struct PushDefault {
     /// The remote it names. **git does not check that one exists**: a name
     /// no remote holds is taken for a URL, and the push fails at the
-    /// connection instead (実測 2.55: `'nope' does not appear to be a git
+    /// connection instead (measured 2.55: `'nope' does not appear to be a git
     /// repository`).
     pub remote: String,
     /// Whether this repository's own config is what says so.
@@ -24,7 +24,7 @@ pub struct PushDefault {
     /// A value set anywhere else cannot be cleared from here. git has no
     /// local spelling for "not set" — an empty local value is not "unset"
     /// but "no destination at all", and a plain `git push` then fails with
-    /// `No configured push destination.` (実測). Marking another remote is
+    /// `No configured push destination.` (measured). Marking another remote is
     /// the only move a repository has against a global value.
     pub local: bool,
 }
@@ -33,13 +33,13 @@ pub struct PushDefault {
 ///
 /// `--get` answers with the effective value alone, so the pair that comes
 /// back names the level that decided it — the pair, because `-z` writes
-/// `<scope>\0<value>\0` (実測 2.55: `local\0origin\0`; unset is exit 1 with
+/// `<scope>\0<value>\0` (measured 2.55: `local\0origin\0`; unset is exit 1 with
 /// nothing on stdout, which is an answer).
 ///
 /// A key written without a remote name behind it (`remote.pushDefault=`)
 /// answers `None`: no remote is called that, so there is nothing here to
 /// point at. What git does with it is refuse the push outright, and only
-/// git can say that (実測).
+/// git can say that (measured).
 pub async fn push_default(
     executor: &GitExecutor,
     workdir: &Path,
@@ -98,7 +98,7 @@ fn parse_push_default(bytes: &[u8]) -> Option<PushDefault> {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
     /// The branch's own mark, which beats every other (git-config(5); the
-    /// order is [`super::plan_current_push`]'s, 実測 2.55). `None` where
+    /// order is [`super::plan_current_push`]'s, measured 2.55). `None` where
     /// the branch does not mark one.
     pub push_remote: Option<String>,
     /// The repository's mark, with the level that set it.
@@ -109,12 +109,12 @@ pub struct PushMarks {
 ///
 /// `-z --show-scope --get-regexp` writes `<scope>\0<key>\n<value>\0` per
 /// record, every level in precedence order, so the last record per key is
-/// the effective value (実測 2.55:
+/// the effective value (measured 2.55:
 /// `global\0remote.pushdefault\nfork\0local\0remote.pushdefault\nhome\0`
 /// — `home` wins). Keys arrive with section and variable lower-cased and
 /// the branch name spelled as it was written; the pattern embeds the
 /// branch name escaped, because the pattern is a regex and the name may
-/// hold `.` or `+` (`config::regexp_literal` — 実測: unescaped,
+/// hold `.` or `+` (`config::regexp_literal` — measured: unescaped,
 /// `wip.v2+x` answers with `wipAv22x`'s mark). Neither key set is exit 1,
 /// which is an answer.
 pub async fn push_marks(
@@ -155,7 +155,7 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
         .map(String::from_utf8_lossy);
     while let (Some(scope), Some(record)) = (fields.next(), fields.next()) {
         // The separating newline is inside the record; a key written with
-        // no value at all has no newline in its record (実測 2.55: a bare
+        // no value at all has no newline in its record (measured 2.55: a bare
         // `pushDefault` line arrives as `local\0remote.pushdefault\0`).
         let (key, value) = match record.as_ref().split_once('\n') {
             Some((key, value)) => (key, Some(value)),
@@ -183,7 +183,7 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
 /// The old spelling on purpose (規約 git最低バージョン整合: `git config
 /// set` is 2.46). No `--end-of-options`: git stops looking for options
 /// after the key, so a remote actually named `-x` — which `remote add`
-/// will make — is taken as the value (実測 2.55).
+/// will make — is taken as the value (measured, 2.55).
 pub async fn set_push_default(
     executor: &GitExecutor,
     workdir: &Path,
@@ -200,7 +200,7 @@ pub async fn set_push_default(
 /// `git config --unset remote.pushDefault`.
 ///
 /// The key not being set is the state the caller asked for, and git says so
-/// with exit 5 (実測) rather than a failure.
+/// with exit 5 (measured) rather than a failure.
 pub async fn clear_push_default(
     executor: &GitExecutor,
     workdir: &Path,
@@ -278,7 +278,7 @@ mod tests {
     }
 
     /// Levels arrive lowest first, so the last record per key is the
-    /// effective value (実測: local `home` prints after global `fork`).
+    /// effective value (measured, local `home` prints after global `fork`).
     #[test]
     fn the_last_record_per_key_is_the_effective_one() {
         let marks = parse_push_marks(
@@ -293,7 +293,7 @@ mod tests {
 
     /// The two spellings of "nothing here": an empty local value (the
     /// "no destination at all" state) and a key written bare, which
-    /// arrives as a record with no newline in it (実測 2.55). Both must
+    /// arrives as a record with no newline in it (measured, 2.55). Both must
     /// override a level below rather than fall back to it.
     #[test]
     fn an_empty_or_bare_key_names_nothing_and_still_overrides() {
@@ -311,7 +311,7 @@ mod tests {
     }
 
     /// The branch name keeps its case in the key, and the match is exact:
-    /// `Topic`'s mark is not `topic`'s (実測 2.55).
+    /// `Topic`'s mark is not `topic`'s (measured, 2.55).
     #[test]
     fn a_branch_keeps_its_case_and_another_case_is_another_branch() {
         let bytes: &[u8] = b"local\0branch.Topic.pushremote\nfork\0";
@@ -336,7 +336,7 @@ mod tests {
 
     /// The separating newline is inside the record, so a value holding
     /// newlines of its own cannot shift the scope/record pairing
-    /// (実測 2.55: `local\0remote.pushdefault\nfork\nx\0`).
+    /// (measured, 2.55: `local\0remote.pushdefault\nfork\nx\0`).
     #[test]
     fn a_value_holding_a_newline_does_not_shift_the_pairing() {
         let marks = parse_push_marks(

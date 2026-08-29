@@ -7,17 +7,17 @@ import platitude.ui
 
 /// The branch the working tree stands on never leaves the graph: while its own row is scrolled off, this stand-in rides
 /// the edge the row went out of, and it steps aside the moment the row itself is on screen — so the graph never shows
-/// the branch twice. A press on it goes to that row (2026-08-22 ユーザー指示). The sidebar says the same thing about the same
+/// the branch twice. A press on it goes to that row. The sidebar says the same thing about the same
 /// branch in its own list (`HeadPinRow`); this is that answer in the pane where the branch is a chip.
 ///
 /// **It is that commit's row, drawn as a row** — the chip, the lanes and node of its own `GraphLaneCell`, the subject
 /// after the message tick. **Its own, and nothing else's**: a stand-in that borrowed the lanes of whatever happens to be
-/// underneath would claim this commit is on lines it is not (2026-08-22 ユーザー報告).
+/// underneath would claim this commit is on lines it is not.
 ///
 /// **And then it dissolves.** From the node's own edge the graph goes out into the ground; half a row past the row it
 /// is gone and nothing has come back yet; and over the row after that the ground itself goes, so the real rows return
 /// a little at a time. That is what the space between two places in a history looks like, and it is what keeps a hard
-/// edge from cutting the row underneath in two (2026-08-22 ユーザー判断).
+/// edge from cutting the row underneath in two.
 ///
 /// **The pane adopts this, and not the list** (`GraphPane`), which is the other way round from the sidebar's. The lane
 /// column has a press-taking strip of its own over the list (`GraphLanePan`), so a stand-in inside the list would hand
@@ -36,7 +36,7 @@ Rectangle {
     required property real graphFullWidth
     required property real graphXOffset
     /// How much of the right edge belongs to the list's own scroll bar. **What this stand-in takes presses on stops
-    /// short of it** — one that took them there answered the trough with a jump to HEAD (2026-08-22 ユーザー報告 + 実測).
+    /// short of it** — one that took them there answered the trough with a jump to HEAD (observed + measured).
     /// Its ink is a separate question and does not read this: the words stop where a row's words stop, four pixels off
     /// the pane, and the ground is laid under the bar rather than over it (`band`).
     required property real barRoom
@@ -71,14 +71,14 @@ Rectangle {
     // off these four numbers, and each of them flips with the edge this rides.
 
     /// How far past the row the ground stays whole. **The graph has to be gone before the rows start coming back**
-    /// (2026-08-22 ユーザー判断) — without this the two overlap and neither reads, and what is left below the
+    /// — without this the two overlap and neither reads, and what is left below the
     /// stand-in is a row at half strength rather than a stretch of nothing.
     ///
-    /// **A quarter of a row, not half** (2026-08-25 ユーザー判断): the whole going-out sits that much higher, so the
+    /// **A quarter of a row, not half**: the whole going-out sits that much higher, so the
     /// commit directly under the stand-in is most of the way back rather than wiped across its middle. It is still the
     /// only room the lanes have to dissolve in, so it cannot go to nothing — a hard edge is what is on the other side.
     readonly property real hold: Theme.graphRowHeight / 4
-    /// And how long they take coming back. **What the hold gives up, this takes** (2026-08-25 ユーザー判断) — the two
+    /// And how long they take coming back. **What the hold gives up, this takes** — the two
     /// together are a row and a half whatever the split, so the stand-in stands on the same 2.5 rows it always did and
     /// only the shape of the dissolve moves. Shortening the whole instead would put the same drop in brightness across
     /// a shorter distance, which is the one thing a gradient is here to avoid. A row is the floor: less, and the commit
@@ -86,7 +86,7 @@ Rectangle {
     readonly property real fadeRoom: Theme.graphRowHeight * 5 / 4
     readonly property real rowY: pin.rowAbove ? 0 : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
-    /// Where the lane leaves the node — **a hairline past its edge, not the row's** (2026-08-22 ユーザー判断). The row's
+    /// Where the lane leaves the node — **a hairline past its edge, not the row's**. The row's
     /// own cell is cut here and the going-out takes over, so the last full-strength pixel of graph is the
     /// one against the face rather than one at the bottom of a row that is mostly air.
     readonly property real nodeOutY: pin.rowMidY
@@ -106,7 +106,7 @@ Rectangle {
     // **The graph's own ground, and nothing more.** Opaque it has to be where this stands — the rows run under it, and
     // a stand-in they showed through would read as two commits in one band — but a lighter band would be an emphasis
     // that is up for as long as the branch is off screen, and the only thing worth emphasising here is one line of it
-    // (2026-08-22 ユーザー判断). What says "this one is yours" is the colour of its words.
+    //. What says "this one is yours" is the colour of its words.
     //
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
     // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after
@@ -235,8 +235,8 @@ Rectangle {
             /// A lane's colour at `a` of its strength, as a gradient stop.
             ///
             /// **`Theme.graphLane` holds strings, not colours** — the token is a `var` array, so `.r` / `.g` / `.b` off
-            /// one is `undefined` and `Qt.rgba` of that is a transparent black that draws nothing at all (2026-08-22
-            /// 実測). Qt reads `#AARRGGBB`, so the alpha goes on the front of the string the token already is.
+            /// one is `undefined` and `Qt.rgba` of that is a transparent black that draws nothing at all
+            /// (measured). Qt reads `#AARRGGBB`, so the alpha goes on the front of the string the token already is.
             function faded(hex, a) {
                 const v = Math.round(Math.max(0, Math.min(1, a)) * 255)
                 return "#" + (v < 16 ? "0" : "") + v.toString(16) + hex.substring(1)
@@ -267,7 +267,7 @@ Rectangle {
         // **The same box a row gives its message**: from the tick to the pane's own inset (デザイン規約 §余白), so this
         // commit's message is cut at exactly the character it is cut at down in the list. Read off the same numbers
         // rather than off `barRoom` — a stand-in that stopped at the bar's box cut a word earlier than the row it
-        // stands for, and the message changed length as the reader scrolled it off (2026-08-27 ユーザー報告).
+        // stands for, and the message changed length as the reader scrolled it off.
         width: pin.width - subject.x - Theme.spaceXs
         cutAt: "end"
         text: pin.graphModel.headSubject
@@ -275,13 +275,13 @@ Rectangle {
         // The whole of the emphasis, and it is the same blue the chip beside it already writes the current branch in —
         // `textLink` here, on the chip, and on this commit's own row down in the list (`GraphRowDelegate.isHead`).
         //
-        // **A detached HEAD takes it too** (2026-08-22 ユーザー判断): the colour answers "this is the commit you are on",
+        // **A detached HEAD takes it too**: the colour answers "this is the commit you are on",
         // which is as true without a branch as with one. What is different there is said by the chip, which is the one
         // place a state belongs (規約 §状態).
         color: Theme.textLink
     }
 
-    // **No rule along the edge the rows pass under** (2026-08-22 ユーザー判断). The graph has no horizontal
+    // **No rule along the edge the rows pass under**. The graph has no horizontal
     // lines anywhere, and one drawn here would be the loudest thing on the pane for as long as the branch is off
     // screen. What this row is is said by the chip, the colour of its words and the graph going out under them.
 

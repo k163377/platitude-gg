@@ -2,9 +2,9 @@
 //!
 //! Two roads. A language with a grammar ([`grammar`]) has its file
 //! parsed **whole** ([`tree`]) — no walk, no budget, correct from the
-//! first paint, an order of magnitude faster than the lexer (measured
-//! 2026-08-23). Everything below describes the second road: the
-//! regex-lexer fallback for languages no grammar claims.
+//! first paint, an order of magnitude faster than the lexer (measured).
+//! Everything below describes the second road: the regex-lexer fallback
+//! for languages no grammar claims.
 //!
 //! A patch is a few lines out of the middle of a file, and what those
 //! lines mean depends on everything above them. So the file itself is
@@ -26,7 +26,7 @@
 //! unknown) each hunk starts clean instead. That is not merely less
 //! context: the top-of-file rules are *different* rules, so the hunk's
 //! first line comes out coloured in a way the file itself never would
-//! (2026-08-13 実測: QML's `readonly property` reads as storage keywords
+//! (measured, QML's `readonly property` reads as storage keywords
 //! at file scope and as plain identifiers inside an `Item {}`, so the
 //! first line of every hunk disagreed with the rest of it).
 //!

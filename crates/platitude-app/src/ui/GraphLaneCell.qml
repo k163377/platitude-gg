@@ -55,8 +55,7 @@ Item {
     // What the row *is* decides which mark stands on its node — the dashed ring of the working tree, the stash's
     // archive box, or the author's face — and a rebuild writes a different row over the same delegate rather than
     // building a new one (`GraphModel::splice_notified`). Without these two the mark of the row that was there stays:
-    // a stash popped off the top left its box on the working-tree row, and a stash just made wore the dashed ring
-    // (2026-08-21 ユーザー報告).
+    // a stash popped off the top left its box on the working-tree row, and a stash just made wore the dashed ring.
     onIsWipChanged: laneCell.repaintNode()
     onStashRefChanged: laneCell.repaintNode()
     function repaintLanes() {
@@ -70,7 +69,7 @@ Item {
     ///
     /// **The lanes reach `fullWidth`, but only the column is ever on screen while the graph is not sent sideways**,
     /// and a canvas is an image the size of the item it is: at the reference repository that is 852 pixels held for
-    /// 252 shown, on every row that is built, and the same ratio again on every repaint (2026-08-29 実測 — the two
+    /// 252 shown, on every row that is built, and the same ratio again on every repaint (measured — the two
     /// canvases at full width are 42.6MB of the working set once the graph has been scrolled through).
     ///
     /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
@@ -107,7 +106,7 @@ Item {
             // Resizing a canvas scales what it already holds; only a repaint redraws it. Qt asks for that repaint
             // itself, but only for a canvas that is visible — and a row waiting in the ListView's reuse pool is not. So
             // a graph that grows a lane while a row is pooled brings that row back with its lanes and node stretched
-            // sideways (2026-08-08, seen after switching windows: the pool is where rows sit while another window is in
+            // sideways (seen after switching windows: the pool is where rows sit while another window is in
             // front).
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()

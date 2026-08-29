@@ -13,7 +13,7 @@ Item {
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
     /// Whether the window is standing on its floor. Handed in, because the floor is the larger of the band's and the
-    /// page's and only `Main` has both. The group gives up its words there whatever else is true (2026-08-11 ユーザー指示).
+    /// page's and only `Main` has both. The group gives up its words there whatever else is true.
     property bool windowAtFloor: false
     /// Stands in for the pointer where headless cannot put one, so the card can be photographed (`badges-hover` /
     /// `identity-tip`). The real hover writes this same one property — hover is the input that cannot be injected, so
@@ -48,10 +48,8 @@ Item {
     readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
     /// The walk gave up: what is drawn is not the repository's history, whether that is some of it or none.
     ///
-    /// **The only place it is said** (2026-08-30 ユーザー判断). The graph itself used to carry it — centred in the column
-    /// while that column was empty, and painted over the rows when it was not — and one state told in two places is
-    /// two places to keep in step for no gain. A badge is also the only one of them in view wherever the reader
-    /// happens to be standing.
+    /// **The only place it is said**: one state told in two places is two places to keep in step for no gain, and a
+    /// badge is in view wherever the reader happens to be standing — which the middle of the graph column is not.
     ///
     /// **The streaming pass only**, which is what `failed` answers for. A background re-read that dies leaves a
     /// *whole* graph standing that no later ref will change (`session::log::PassWatch` reports it as an operation),
@@ -64,7 +62,7 @@ Item {
                                        || stateGroup.partialBadgeShown
     /// The narrowest a badge is drawn before the group gives up on words. Counted in characters rather than pixels (規約
     /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
-    /// names keep three (2026-08-11 ユーザー指示).
+    /// names keep three.
     readonly property int stateMinChars: 2
     /// Settled by `settleStateBadgeMinW` rather than bound: `advanceWidth`
     /// is a method and takes no binding dependency, so a binding on it
@@ -76,7 +74,7 @@ Item {
     /// Whole pixels, for the reason the tab names are settled in them (規約 §ウィンドウの縁): a word asks for a fractional
     /// width, a box is laid out on a whole one, and a ceiling summed from the fractions is a few pixels under what the
     /// same widths add up to when each is rounded — so the group is handed exactly its natural width and the share-out
-    /// still finds itself short, and every word elides in a band with room to spare (measured 2026-08-11 on Linux:
+    /// still finds itself short, and every word elides in a band with room to spare (measured, on Linux:
     /// `cap=103` with `groupW=270`, which was the natural width).
     readonly property int opBadgeW: Math.ceil(mOpText.implicitWidth
                                                + (stateGroup.stateHasAlso
@@ -123,7 +121,7 @@ Item {
     property real cap: Number.MAX_VALUE
     /// Whether the words have been given up altogether. Bound rather than assigned beside the cap: two of the three
     /// conditions can change without the group's own width moving, and an assignment made in `settleCap` would never be
-    /// asked for again (2026-08-11 報告).
+    /// asked for again.
     readonly property bool tabsScrolling: stateGroup.tabContentWidth > stateGroup.tabRunAvail
     /// How many tabs the strip has room for as they are drawn now. Off their real width rather than their cap: a cap is
     /// a ceiling the names may be nowhere near.
@@ -196,7 +194,7 @@ Item {
     implicitHeight: stateGroup.controlHeight
     // The row hands its leftover out in proportion to what each filling item asked for, so **what is asked for is what
     // decides who gives way** — asking for the mark got this group a sliver, asking with a stretch of 100 got it
-    // everything (both measured 2026-08-11). Asking for the words and no more puts the strip and this group in
+    // everything (both measured). Asking for the words and no more puts the strip and this group in
     // proportion.
     implicitWidth: stateGroup.naturalWidth
 
@@ -221,7 +219,7 @@ Item {
     ///
     /// The badges in the band cannot also be what the cap is measured from. A `RowLayout` that is not being laid out
     /// reports the width it had when it last was, and the row of badges goes away the moment the group folds — so a cap
-    /// read from there makes the fold one that nothing comes back from (measured 2026-08-11: `cap=32` with a 1440-wide
+    /// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide
     /// window, and no width would bring the words back).
     component BadgeWord: Label {
         visible: false

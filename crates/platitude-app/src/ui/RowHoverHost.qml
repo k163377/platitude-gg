@@ -26,7 +26,7 @@ Item {
     /// Any of the page's menus is standing, this pair's own included. The
     /// row's card does not come out behind one: the hand is in the menu,
     /// and a card opened now is drawn over it (the card opens last, so it
-    /// wins the overlay — 2026-08-17 ユーザー報告).
+    /// wins the overlay — observed).
     ///
     /// The chip's list is the exception, and it is `menuStanding` above
     /// that holds it: a ref menu raised from one of its rows is standing
@@ -49,8 +49,7 @@ Item {
     /// opens off the row's own bottom edge, so the hand that walks down
     /// into it to read the message is off the row from that moment, and
     /// the row went dark under a card that is still up — leaving the
-    /// message with nothing on screen saying which commit it is of
-    /// (2026-08-22 ユーザー報告).
+    /// message with nothing on screen saying which commit it is of.
     property string rowCardOid: ""
     /// The chip's list is up, or is about to be. Only one of the two is
     /// ever out, and the chip's is the more particular
@@ -127,7 +126,7 @@ Item {
     /// takes its place. From there it always grows the one way, into the
     /// graph: a card that picked its side by how long the names were
     /// answered the same chip differently on different rows, and the
-    /// reason was not on screen to be read (2026-08-21 ユーザー報告 —
+    /// reason was not on screen to be read (observed —
     /// the same condition §hover のツールチップ turns down for the file
     /// rows). The names' heads hold still instead, which is what a name
     /// is told apart by.

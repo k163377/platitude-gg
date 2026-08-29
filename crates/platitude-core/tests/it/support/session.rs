@@ -34,7 +34,7 @@ pub struct Pass {
 /// points read them after taking the token, so the winner is always the
 /// one holding the new ones).
 ///
-/// A test that waits for one shape is waiting on that race. 実測: a
+/// A test that waits for one shape is waiting on that race. measured: a
 /// window change on a loaded machine landed as `LogReplaced { generation:
 /// 4 }` — the open sequence's dirty-flip `refresh_log` overtook the
 /// stream at generation 3 — and the wait sat out its whole budget.
@@ -102,7 +102,7 @@ impl CaptureSink {
     /// never reaches. A wait for a *future* event can therefore be held
     /// captive by the very park it is supposed to release: no task runs,
     /// no timer serves the captive `Patience`, and the binary sits at 0%
-    /// CPU until the CI kill. 実測: a hook parked on the opening refs
+    /// CPU until the CI kill. measured: a hook parked on the opening refs
     /// delivery plus a wait for the tag-inclusive swap deadlocked exactly
     /// so in the container, deterministically, while passing on Windows.
     pub fn hook_once(
@@ -374,7 +374,7 @@ pub async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String
 /// path to git. Copying straight onto it put one test's write fd under
 /// another's exec — `pg-todo-editor: Text file busy`, reported by the `sh`
 /// git runs `GIT_SEQUENCE_EDITOR` through, on 6 runs out of 8 with a thread
-/// per core (実測 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
+/// per core (measured, 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
 pub fn install_todo_editor() {
     static INSTALLED: std::sync::Once = std::sync::Once::new();
     // Every caller waits for the one copy, so no test reaches git while it

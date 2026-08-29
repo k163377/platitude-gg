@@ -76,7 +76,7 @@ pub async fn unstage_all(
     let cmd = if head_is_unborn(executor, workdir, cancel).await? {
         // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`
         // because an empty index matches nothing and `git rm` calls that
-        // fatal — but "unstage nothing" has succeeded at its job (実測:
+        // fatal — but "unstage nothing" has succeeded at its job (measured:
         // `rm --cached -r -- .` in a fresh `git init` exits 128).
         GitCommand::new().cwd(workdir).args([
             "rm",

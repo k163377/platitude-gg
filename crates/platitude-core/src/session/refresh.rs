@@ -70,12 +70,10 @@ impl RepoSession {
                 let key = refs_key(&refs, &head);
                 let previous = relock(&self.refs_key).replace(key);
                 // **The joins have a key of their own** (`join_key`), and
-                // an unmoved repository does not build them at all. It
-                // used to: a quiet tick sorted 53,724 refs into a snapshot
-                // and 47,715 into a label map, then compared the result
-                // with the last one to be told nothing had changed —
-                // 43.4ms of a core, every tick, for an answer a hash
-                // already had (ci/baseline/refs-join-windows-x64.md).
+                // an unmoved repository does not build them at all —
+                // sorting tens of thousands of refs into a snapshot only
+                // to compare it equal is measurable work on every quiet
+                // tick (ci/baseline/refs-join-windows-x64.md).
                 //
                 // The snapshot still goes out. A consumer that attached
                 // after the last one is waiting for it, and it is the one

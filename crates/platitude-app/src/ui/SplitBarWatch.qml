@@ -4,7 +4,7 @@ import platitude.ui
 
 // ---- a split bar that has run out of room ---------------------------
 // The graph's own dividers know what the hand asked for; a `SplitView`
-// bar cannot (measured 2026-08-11, qmltestrunner: SplitView takes the
+// bar cannot (measured, qmltestrunner: SplitView takes the
 // press before anything inside the delegate sees it, and no observer
 // behind the view ever becomes active). What is knowable is where the
 // pointer went and where the bar stopped, and past a clamp those part

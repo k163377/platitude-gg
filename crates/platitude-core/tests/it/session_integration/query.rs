@@ -571,7 +571,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
 /// **Status cannot see this.** The path is unmerged either way, so every
 /// letter and every count the window watches reads the same before and
 /// after — and the pane went on drawing the conflict it was opened on
-/// (2026-08-22 ユーザー報告). Only the file itself answers.
+///. Only the file itself answers.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_file_typed_over_outside_the_window_is_re_read() {
     let mut repo = crate::support::integrate::conflicting_branches();

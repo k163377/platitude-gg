@@ -25,7 +25,7 @@ pub struct RebaseOptions {
 
 /// What a rebase did — the plain one here and the driven one in
 /// [`crate::sequencer`] answer alike, because git refuses both over a
-/// dirty working tree in the very same words (実測).
+/// dirty working tree in the very same words (measured).
 #[derive(Debug)]
 pub enum RebaseOutcome {
     /// git took the rebase through to the end.
@@ -41,7 +41,7 @@ pub enum RebaseOutcome {
     /// the badge, the exit card and the conflicted rows are the whole of
     /// what happened, and the carried work waits in the stash until the
     /// operation is over (デザイン規約 §未コミット変更がある状態で履歴を
-    /// 書き換える, 2026-08-22 ユーザー判断).
+    /// 書き換える, by design).
     ///
     /// [`super::Landing`] is what this becomes once the carry is behind
     /// it (`session::build::rewrite_carrying`) — a refusal cannot reach
@@ -79,11 +79,11 @@ pub async fn rebase(
 /// answers wear it: the refusal a stash gets past, and the stop that
 /// leaves the rebase standing. The two are told apart by what is on
 /// disk — a refusal touched nothing, a stop left `rebase-merge` behind
-/// (実測 2.55).
+/// (measured, 2.55).
 ///
 /// **The code has to be read as well as the marker.** The one failure
 /// that leaves `rebase-merge` standing is a rebase asked for while
-/// another is already in progress, and git spends 128 on it (実測 2.55)
+/// another is already in progress, and git spends 128 on it (measured, 2.55)
 /// — asking the repository alone would report that as a stop and hide
 /// the sentence telling the person what is actually there. Every other
 /// failure exits 128 with nothing standing.
@@ -142,7 +142,7 @@ pub(crate) async fn landed(
 /// The two wordings are the halves of git's own clean-tree check —
 /// "cannot rebase: You have unstaged changes." and "cannot rebase: Your
 /// index contains uncommitted changes." — and a plain rebase and an
-/// interactive one word them identically (実測 2.55, both in
+/// interactive one word them identically (measured 2.55, both in
 /// `integrate_integration`). Untracked files are not in the way at all: a
 /// rebase over a tree holding only those goes straight through, so
 /// nothing is stashed for them.

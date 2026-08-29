@@ -33,7 +33,7 @@ Item {
 
     // ---- push ------------------------------------------------------
     /// Where the button would send this branch. **A marked remote takes the push from the upstream** — every branch
-    /// goes there under its own name, whatever it tracks (デザイン規約 §リモートを書き留める; git's own order, 実測). Only where
+    /// goes there under its own name, whatever it tracks (デザイン規約 §リモートを書き留める; git's own order, measured). Only where
     /// nothing is marked does the upstream answer.
     ///
     /// The order is core's (`platitude_core::remote::push_target`, through the pure `GitFacts` slot), the same table
@@ -182,7 +182,7 @@ Item {
     /// nothing over there can be lost by pressing — but the bar wears the frame and the mark (デザイン規約 §リモートへ送る).
     readonly property bool publishUnsure:
         publishFlow.publishState === "unknown" || publishFlow.publishState === "unreachable"
-    /// The name is taken by commits this history does not have: a plain push cannot land at all (実測), only an overwrite
+    /// The name is taken by commits this history does not have: a plain push cannot land at all (measured), only an overwrite
     /// can, so the pill becomes the diverged branch's `push -f` — held, warning-coloured (デザイン規約 §リモートへ送る).
     readonly property bool publishRefused: publishFlow.publishState === "refused"
     /// The commit the question showed on the far side, which is what an overwrite leases against: a remote that moved
@@ -209,8 +209,7 @@ Item {
     // **Nothing is put back when they let go** (`RestoreNone`). `publishAsking` drops at the press that walks away —
     // it has to, or the check timer would still be firing a round trip at a remote for a question nobody is asking any
     // more — and a restore there lands on a bar that is still on screen, retracting: the blue frame this question
-    // wears would turn `warning` for the 200ms it takes to go, which is the flash that was reported (2026-08-27
-    // ユーザー報告). Every one of these is written again by `GraphPane.startAsking`, so the next question dresses the bar
+    // wears would turn `warning` for the 200ms it takes to go, which is the flash that was reported (observed). Every one of these is written again by `GraphPane.startAsking`, so the next question dresses the bar
     // whole and there is nothing for a restore to be right about.
     Binding {
         target: publishFlow.graphPane

@@ -192,10 +192,8 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::testkit::PATCH;
-    // The walk itself no longer names the line kinds — `unified` and
-    // `combined` build the lines — but the assertions below still read them.
     use super::super::DiffLineKind;
+    use super::super::testkit::PATCH;
     use super::*;
     #[test]
     fn parses_a_multi_file_patch() {

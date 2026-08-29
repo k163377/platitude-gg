@@ -64,7 +64,7 @@ pub fn set_maximized(maximized: bool) {
 /// up at the same moment and clears `WPF_RESTORETOMAXIMIZED` off the
 /// placement to match (`QWindowsWindow::setWindowState_sys`, Qt 6.10).
 /// The window goes down maximised and comes back an ordinary one
-/// (reported 2026-08-22). Windows minimises on its own command without
+/// (observed). Windows minimises on its own command without
 /// touching the flag, and Qt keeps the maximised bit when it sees the
 /// resize (`SIZE_MINIMIZED` adds to the state it holds rather than
 /// replacing it), so both sides still agree on the way back up.

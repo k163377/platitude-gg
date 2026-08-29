@@ -104,7 +104,7 @@ Item {
     ///
     /// **That is the whole of the proof.** Waiting to *see* `busyCount` rise as well wedges on a write that begins and
     /// ends between two looks at it — which the container did and the host did not, and which taking work out of the
-    /// post-write refresh made likelier still (2026-08-17 実測: `line-back`, then `keep-place`).
+    /// post-write refresh made likelier still (measured, `line-back`, then `keep-place`).
     property int writeSeqBefore: 0
     /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
     /// write barrier alone answers for.
@@ -113,7 +113,7 @@ Item {
     /// publishes status and refs (`session::write::run_write`), and `writeSeq` is counted off that report
     /// (`drain::settle_write`). So a shot taken at the write barrier is a shot of the file list as it was — the same
     /// shape `graphGoneOid` below answers for on the graph. That is how a run whose merge editor resolved a file and a
-    /// run whose editor never started came to save the same picture, down to the sha256 (2026-08-23 ユーザー報告).
+    /// run whose editor never started came to save the same picture, down to the sha256.
     ///
     /// Waited out on the row itself rather than on a status counter, for the reason the graph gives: a counter also
     /// moves for statuses nobody here asked for, while this row moves only for this write.
@@ -167,7 +167,7 @@ Item {
 
     /// Whether the entry now at the top of the list is wearing the summary this run typed. Read off the sidebar's own
     /// model — the reflog subject git wrote — so a name that never left the box answers `false`. git puts its own
-    /// `On <branch>: ` in front of a named entry (実測), which is why this is a tail and not an equality.
+    /// `On <branch>: ` in front of a named entry (measured), which is why this is a tail and not an equality.
     function stashNamed() {
         return driver.stashWanted !== "" && stashesModel.nameAt(0).endsWith(driver.stashWanted)
     }

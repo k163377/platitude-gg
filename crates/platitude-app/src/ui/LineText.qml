@@ -49,7 +49,7 @@ Item {
     property string cutAt: "end"
 
     /// The width ran out and the tail is not on screen. The output side, and what a headless run reads in place of a
-    /// mark it cannot see — the same answer `Text.truncated` used to give from the Label this replaced.
+    /// mark it cannot see — the answer `Text.truncated` gives on a Label.
     readonly property bool clipped: Math.ceil(ruler.implicitWidth) > line.width + 0.5
     /// The half that went off screen is the head, so the words are held against the far edge and the mark stands at
     /// the near one. Only ever true while there is something to cut.
@@ -92,7 +92,7 @@ Item {
     /// A point in another item's coordinates, brought into this field's own line. **The height is clamped**: a
     /// one-line field asked for a position above or below its box answers about the line rather than about the
     /// column, so a sweep that arrived from over or under the words picked the same character at both ends of its
-    /// drag and came away with nothing (2026-08-28 — the fault behind「ドラッグしても青表示にならない」).
+    /// drag and came away with nothing (observed).
     ///
     /// **The answer is in the field's coordinates, not this item's** — they are the same box only while the head is
     /// on screen. A field cutting its head hangs off the near edge (`field.x` is negative), and a column read at this
@@ -161,9 +161,9 @@ Item {
         selectByKeyboard: true
         // **Never `persistentSelection`.** There is one selection in this window, and it belongs to whatever the caret
         // is in: a field that kept its own after the caret left would leave the pane lit in two or three places at
-        // once, which is what the pane did the first day it had fields (2026-08-28 ユーザー報告 — three values washed
+        // once, which is what the pane did the first day it had fields (observed — three values washed
         // blue in one shot). Keeping it was for the camera, and the camera never needed it: a field that has not taken
-        // focus answers `selectedText` after `selectAll()` all the same (実測 qmltestrunner `tst_twofields`).
+        // focus answers `selectedText` after `selectAll()` all the same (measured, qmltestrunner `tst_twofields`).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // A field of its own width, with no room around it: the row's spacing is the row's.

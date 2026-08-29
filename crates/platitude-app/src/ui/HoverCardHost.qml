@@ -8,7 +8,7 @@ import platitude.ui
 // **A beat, not a turn of the event loop.** A card opens flush under what raised it, so walking in takes the pointer
 // off that thing on the way and walking back out puts it on again. The two hovers change in different frames and in no
 // fixed order, and `Qt.callLater` lands between them — the card shut under the hand that was reaching for it
-// (2026-08-09 report; 規約 §hover のツールチップ の罠 (3)).
+// (observed — 規約 §hover のツールチップ の罠 (3)).
 //
 // Not an item: it draws nothing and is placed nowhere. The owner keeps the card, opens it where it belongs, and hands
 // it here to be closed.
@@ -34,7 +34,7 @@ QtObject {
     ///
     /// **The hand reading that tooltip is off this card**: a popup takes the pointer from everything under it, so a
     /// card that watched only `pointerInside` takes itself down under the hand that reached for what it put out — and
-    /// the tooltip goes with it, because the row it hangs off is destroyed (2026-08-27 ユーザー報告: 畳んだ左メニューの
+    /// the tooltip goes with it, because the row it hangs off is destroyed (observed: 畳んだ左メニューの
     /// 覗きで、行のフルネームのツールチップへ手を伸ばすと覗きごと消えた). The card that raised it holds until it goes.
     ///
     /// Read through the tooltip's own `parent`, walked up to this card: the shared instance stands on whatever asked

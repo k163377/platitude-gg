@@ -134,7 +134,7 @@ impl RepoSession {
     ///
     /// An empty name clears it. **That reaches the repository's own config
     /// only** — a value set globally stays, and git has no local spelling
-    /// for "not set" that would shadow it (実測: an empty local value is
+    /// for "not set" that would shadow it (measured: an empty local value is
     /// "no destination", not "unset"). Moving the mark to another remote is
     /// what a repository has against a global one, and that is a set rather
     /// than a clear.
@@ -194,7 +194,7 @@ impl RepoSession {
                 // The name is taken, so what matters now is whether git
                 // would take the push: it does when this history already
                 // contains what the remote holds, and refuses otherwise
-                // (実測). The commit may not be in this repository at all —
+                // (measured). The commit may not be in this repository at all —
                 // a branch never fetched — and then neither answer is
                 // ours to give.
                 Ok(Some(over_there)) => {

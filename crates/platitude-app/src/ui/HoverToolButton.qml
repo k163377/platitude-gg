@@ -22,7 +22,7 @@ ToolButton {
     ///
     /// A `background` handed in replaces this one whole. While the wash was a child of the content it survived that —
     /// every `ActionButton` in the app went on answering the pointer with its own frame drawn underneath — and moving
-    /// the paint here took it from all of them in one go (2026-08-10: fetch, push, the commit button, the hunk
+    /// the paint here took it from all of them in one go (observed: fetch, push, the commit button, the hunk
     /// heading's two and every dialog's pair stopped lighting at all). So the rule lives in one place and the two
     /// backgrounds read it.
     ///

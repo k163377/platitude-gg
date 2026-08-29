@@ -102,7 +102,7 @@ pub struct RepoTab {
     /// nobody is asking any more, and there is one seat for every answer,
     /// so letting it land throws away the answer the pane was waiting
     /// for — which reads on screen as no answer at all, and
-    /// nothing asks a third time (2026-08-25 ユーザー報告: a verified
+    /// nothing asks a third time (observed: a verified
     /// commit whose tick never came). Dropped here instead, which is what
     /// デザイン規約 §署名の表示 asks for: 答えは持ち回らない — 選択が動けば
     /// 捨て、同じ行へ戻ってくれば投げ直す.

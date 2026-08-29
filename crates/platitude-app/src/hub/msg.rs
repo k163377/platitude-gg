@@ -302,5 +302,7 @@ impl DiffMsg {
 pub enum DetailsMsg {
     Loaded(Box<platitude_core::details::CommitDetails>),
     /// The read failed (the failure itself reaches the error surface).
-    Failed { oid_hex: String },
+    Failed {
+        oid_hex: String,
+    },
 }

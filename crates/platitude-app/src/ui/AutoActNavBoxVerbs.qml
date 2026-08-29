@@ -10,8 +10,8 @@ import platitude.ui
 /// puts out. All of them are one box over one row, and all of them close the same three ways.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -21,7 +21,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -145,7 +145,7 @@ Item {
         onTriggered: {
             // The bar all the way down as well as the box: the words are written on the answer and the height follows
             // over 200ms, so a picture taken on the refusal alone catches a bar 12px tall (`NoticeBar.settled`,
-            // 実測 2026-08-29 — the first run of this verb framed exactly that).
+            // measured, — the first run of this verb framed exactly that).
             if (repoTab.busyCount !== 0 || !sidebarPane.editRefused || !page.noticeCard.settled)
                 return
             renameTakenTimer.stop()
@@ -401,7 +401,7 @@ Item {
     }
     // PG_AUTO_ACT=rename-box-out: the ways out of the name box, one route per run. **The claim is what the box and the
     // gesture are left holding**, not how long nothing happened for: a wait still running is the whole of how a box
-    // comes back by itself, so `armed=false` is what says it will not (2026-08-26 ユーザー報告 — the box on a row clicked
+    // comes back by itself, so `armed=false` is what says it will not (observed — the box on a row clicked
     // again closed and reopened a window later).
     property int boxOutStep: 0
     SampleTimer {
@@ -415,7 +415,7 @@ Item {
             if (acts.boxOutStep === 0) {
                 // **The box is opened by the gesture itself, not by the page's own call.** A box put up any other way
                 // leaves the gesture with no memory of the row, and every way out then passes for free — which is how
-                // the blink survived a green run twice (2026-08-26 ユーザー報告). What the reader did is two clicks, and
+                // the blink survived a green run twice. What the reader did is two clicks, and
                 // the second one is what the way out has to be weighed against.
                 item.leftClick(0)
                 acts.boxOutStep = 1
@@ -432,7 +432,7 @@ Item {
                     // **A click on a row is a press and then a release, and the two are answered in different
                     // places**: the box holds the caret, so the press reaches `FocusRelease` first and takes the box
                     // down, and only then does the row see the click. A run that put the click in alone never
-                    // reproduced what a hand does — which is how the blink survived a green run (2026-08-26 ユーザー報告).
+                    // reproduced what a hand does — which is how the blink survived a green run.
                     page.releasePressedAway(null)
                     const row = route === "same-row" ? item : graphPane.view.itemAtIndex(1)
                     if (!row)

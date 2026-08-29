@@ -18,7 +18,7 @@ ListView {
     /// Which bar this list wears, named as the component to build it from. **Handed in, never fitted over the top.**
     /// `ScrollBar.vertical` does not replace the bar a view already had — it only unhooks it — so every list that
     /// wrote the attached property a second time left the first bar alive with nothing to answer for: ten of them on
-    /// every start, one per list wanting the panel's slab (verify-ui 実測 2026-08-28, `Component.onCompleted` reading
+    /// every start, one per list wanting the panel's slab (verify-ui measured, `Component.onCompleted` reading
     /// `view= null parent= null`). Naming the component here is what keeps the count at one. The lists that want the
     /// slab pass `PaneScrollBar` in (`NavList`, `DetailsPane`, `WipBucketPane`); the graph, the diff and the log take
     /// the default (rules-refs/app-ui.md のペインのバーの行).
@@ -31,8 +31,8 @@ ListView {
     /// How much of this list's right edge its own bar is standing on, and nothing while the bar is not out.
     /// **Whatever is laid over these rows takes its presses short of this.** The bar is drawn over the rows rather
     /// than beside them, so anything covering the frame covers the bar too, and a press taken there is a bar that
-    /// cannot be grabbed at all: the graph's stand-in answered the trough with a jump to HEAD (2026-08-22 ユーザー報告),
-    /// and the two hands that pick text out of a list took the whole strip (2026-08-29 ユーザー報告). Read off the bar
+    /// cannot be grabbed at all: the graph's stand-in answered the trough with a jump to HEAD,
+    /// and the two hands that pick text out of a list took the whole strip. Read off the bar
     /// rather than off a token — the width is the style's, and a guess leaves either a strip of trough taken or a
     /// strip of nothing answered.
     readonly property real barRoom: appList.ScrollBar.vertical.visible ? appList.ScrollBar.vertical.width : 0

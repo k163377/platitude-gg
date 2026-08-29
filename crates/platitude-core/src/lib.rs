@@ -55,10 +55,9 @@ pub mod worktrees;
 /// **What it is for.** The resident data of a large repository is mostly
 /// names — one per ref, one per chip — and a `String` puts every one of
 /// them in its own allocation, twenty-odd bytes of payload behind an
-/// allocator header of comparable size. Measured on `JetBrains/kotlin`,
-/// the live heap held 394,355 allocations of 16 to 32 bytes at once, and
-/// a ref name averages 20.2 characters — inside the 24 this type keeps
-/// inline.
+/// allocator header of comparable size. A ref name averages about twenty
+/// characters (measured on the baseline repository) — inside the 24 this
+/// type keeps inline, so hundreds of thousands of allocations fold away.
 ///
 /// **It stays out of the consumer's way.** Reading one needs no mention of
 /// the type (`as_str`, `==` against `&str`, `Display`), so the bridge side

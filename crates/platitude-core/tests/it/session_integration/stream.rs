@@ -298,7 +298,7 @@ async fn a_standing_merge_dots_the_side_it_is_bringing_in() {
 
 /// A merge whose conflicts are all resolved as ours: `git status` comes
 /// back empty with `MERGE_HEAD` still standing, and committing there still
-/// writes a merge (実測 2.55). The row is the commit about to be written,
+/// writes a merge (measured, 2.55). The row is the commit about to be written,
 /// so a clean tree does not take it away — nothing else on screen would
 /// say the next commit has two parents.
 #[tokio::test(flavor = "multi_thread")]

@@ -35,7 +35,7 @@ async fn staging_a_commit_diff_is_rejected() {
 }
 
 /// A fresh `git init` has no HEAD and an empty index; emptying that index
-/// is a no-op, not a fatal (実測 2026-08-07: without --ignore-unmatch,
+/// is a no-op, not a fatal (measured, without --ignore-unmatch,
 /// `git rm --cached -r -- .` exits 128 on "did not match any files").
 #[tokio::test]
 async fn unstage_all_on_an_unborn_empty_index_succeeds() {

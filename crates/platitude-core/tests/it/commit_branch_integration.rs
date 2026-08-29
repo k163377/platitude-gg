@@ -672,7 +672,7 @@ async fn the_upstream_is_the_delete_reference_point() {
 /// What `--set-upstream-to` is given has to be the full remote-tracking
 /// refname. The shorthand git prints is a rev-parse spelling, and a local
 /// branch of that exact name makes it **ambiguous** — git refuses the
-/// whole command rather than choosing (実測), which would leave the
+/// whole command rather than choosing (measured), which would leave the
 /// question answered on screen and nothing written. Pinned with the
 /// collision in place, since that is the only shape the two spellings
 /// disagree on.
@@ -713,7 +713,7 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
 }
 
 /// Configuration about a branch rather than a move onto one: **the branch
-/// another working copy has checked out takes it** (実測), where the same
+/// another working copy has checked out takes it** (measured), where the same
 /// row's delete is refused outright. Which rows that leaves is
 /// `offers::ref_menu`'s answer; this is the half of it git owns.
 #[tokio::test]

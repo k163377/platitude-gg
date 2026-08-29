@@ -147,7 +147,7 @@ impl ResetMode {
 /// an oversight: the minimum git refuses the option here in *every*
 /// position ("must come before non-option arguments", exit 128), alone
 /// among the verbs this crate issues — branch, switch, tag, remote,
-/// rev-parse, log and stash all take it (実測 on 2.43, which is the
+/// rev-parse, log and stash all take it (measured on 2.43, which is the
 /// floor git最低バージョン整合.md sets). Nothing is lost, because what reaches this is an
 /// object id off a graph row and an object id cannot read as an option.
 /// A caller that ever wants to pass a *name* has to resolve it first
@@ -156,7 +156,7 @@ impl ResetMode {
 /// Not a way out of an operation in progress, and the UI does not offer
 /// it as one: mid-merge, `Soft` refuses outright ("Cannot do a soft reset
 /// in the middle of a merge") while the other two drop `MERGE_HEAD`
-/// without a word, abandoning the merge as a side effect (実測).
+/// without a word, abandoning the merge as a side effect (measured).
 pub async fn reset(
     executor: &GitExecutor,
     workdir: &Path,
@@ -247,13 +247,13 @@ pub async fn rename(
 /// **`upstream` has to be the full refname** (`refs/remotes/origin/main`).
 /// The shorthand git prints and takes elsewhere is a rev-parse spelling,
 /// and a local branch literally named `origin/main` makes it *ambiguous*
-/// — git refuses the whole command rather than choosing (実測). The full
+/// — git refuses the whole command rather than choosing (measured). The full
 /// form names one ref and cannot be read two ways; what it writes into
 /// the config is identical either way.
 ///
 /// Nothing about the working tree stands in its way: this is
 /// configuration about a branch, not a move onto it, so **a branch another
-/// working copy has checked out takes it** (実測) — unlike the delete,
+/// working copy has checked out takes it** (measured) — unlike the delete,
 /// which git refuses there.
 pub async fn set_upstream(
     executor: &GitExecutor,

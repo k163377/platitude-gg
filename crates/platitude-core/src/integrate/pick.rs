@@ -14,7 +14,7 @@ use crate::process::{GitCommand, GitExecutor};
 /// such a commit is exactly what was asked for, so it lands as it stands
 /// instead of stopping to ask. Without the flag git stops on those too,
 /// in the same words it uses for the commit that turns out to add
-/// nothing — and those two are not the same answer (実測 2.55).
+/// nothing — and those two are not the same answer (measured, 2.55).
 ///
 /// A conflict is [`Landing::Stopped`], not a failure: copying a commit
 /// onto a branch that has moved on ends there as ordinarily as merging
@@ -129,13 +129,13 @@ async fn skip_past_empty_commits(
 /// The empty stops are already behind this — the loop above answers those
 /// itself — so what arrives here is a conflict, a name git could not
 /// read, or a tree it would not write over. Only the first leaves the
-/// operation standing (実測 2.55: the other two exit 128 with no marker
+/// operation standing (measured 2.55: the other two exit 128 with no marker
 /// of any kind), and that one is the landing the working tree is the
 /// answer to (デザイン規約 §進行中の操作から出る).
 ///
 /// **The code is read as well as the marker**, for the reason rebase's
 /// is: a cherry-pick or a revert asked for while one is *already*
-/// standing exits 128 with its own marker right there (実測 2.55), and
+/// standing exits 128 with its own marker right there (measured, 2.55), and
 /// the marker alone would call that a stop.
 ///
 /// A read that fails answers "no", for the reason merge's does: this is a
@@ -157,7 +157,7 @@ async fn landed(
     // The operation standing has to be *this* one: a rebase stopped on a
     // conflicting pick owns `CHERRY_PICK_HEAD` too, and a cherry-pick
     // asked for over a stopped merge is refused by git rather than
-    // stopped — the marker on disk then belongs to the merge (実測 2.55).
+    // stopped — the marker on disk then belongs to the merge (measured, 2.55).
     let standing = opstate::detect(executor, workdir, cancel)
         .await
         .ok()
@@ -177,7 +177,7 @@ async fn landed(
 /// commit (git refuses the commit before writing `REVERT_HEAD`, and a
 /// single revert never opens a sequence at all), and only the sequence
 /// when it was asked for several. A cherry-pick leaves its marker
-/// either way (実測 2.55).
+/// either way (measured, 2.55).
 ///
 /// Another operation standing there is not this one: a rebase stopped
 /// on a conflicting pick owns both the sequence and `CHERRY_PICK_HEAD`,
@@ -200,7 +200,7 @@ async fn still_stepping(
 ///
 /// Classifies human-facing output under the same exception
 /// [`work_is_in_the_way`] takes. `LC_ALL=C` pins the C-locale wording,
-/// which names the command that stopped (実測 2.55, both wordings in
+/// which names the command that stopped (measured 2.55, both wordings in
 /// `integrate_integration`).
 ///
 /// Anything unrecognised is `false` and travels on as the failure it
@@ -221,7 +221,7 @@ fn left_nothing_to_record(op: InProgress, error: &GitError) -> bool {
     // refused by `git commit` itself, which says so on stdout and leaves
     // stderr empty — which is what [`crate::process::GitOutput::failure_message`]
     // passed through here. Every other way a revert stops writes to
-    // stderr, conflicts included (実測 2.55).
+    // stderr, conflicts included (measured, 2.55).
     op == InProgress::Revert && said.contains("nothing to commit")
 }
 

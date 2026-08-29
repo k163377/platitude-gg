@@ -91,7 +91,7 @@ AppCard {
         //
         // **It stands with the message**, under the mark and ahead of the author: put at the foot of the card it has
         // two lines of somebody else's facts between it and the `…` it answers, and reads as a note about the card
-        // (2026-08-28 ユーザー報告). **Centred, alone among these lines** (2026-08-28 ユーザー指示) — the others begin at
+        //. **Centred, alone among these lines** — the others begin at
         // the left margin because each is a value read down a column, and this one is not a value. **Only when
         // something was cut**: a message that fits has nowhere further to go, and a line under every row the pointer
         // crosses would be the card talking about itself.

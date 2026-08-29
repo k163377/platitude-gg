@@ -363,7 +363,7 @@ impl RepoSession {
     /// enough**: until the join runs again the rows offer a move git will
     /// refuse, and a session's first worktree read lands *after* its
     /// first refs read, so the window is exactly the moment somebody is
-    /// looking at a repository they have just opened (2026-08-21 実測: a
+    /// looking at a repository they have just opened (measured, a
     /// run photographed a second in had no marks on it). The remote-tag
     /// index asks for the same re-read on the same terms.
     pub(super) fn note_worktree_holders(

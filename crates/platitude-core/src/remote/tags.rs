@@ -50,7 +50,7 @@ pub async fn list_tags(
 /// **A refusal here is not the one a fetch answers.** A branch that is
 /// turned down for being behind is put right by fetching; a tag is not —
 /// `--prune` leaves the local tag where it is and `--prune-tags` exits 1
-/// (実測) — so no refusal here is ever read as outdated and nothing is
+/// (measured) — so no refusal here is ever read as outdated and nothing is
 /// queued behind one. `git push` for branches is [`super::push::push`];
 /// the two share no refspec, since a tag's is `refs/tags/` on both sides.
 ///
@@ -92,12 +92,12 @@ pub async fn push_tag(
 /// <name>` is resolved against everything the remote carries, so a name
 /// that is a branch over there as well is refused outright — `error: dst
 /// refspec dup matches more than one`, with neither of the two deleted
-/// (実測 git 2.55). `refs/tags/<name>` names the one ref meant, and the
+/// (measured, git 2.55). `refs/tags/<name>` names the one ref meant, and the
 /// branch beside it is left alone.
 ///
 /// **A name the remote has not got is not an error in this spelling.**
 /// The qualified form needs no resolution over there, so git answers
-/// `warning: deleting a non-existent ref` and exits 0 (実測) — where the
+/// `warning: deleting a non-existent ref` and exits 0 (measured) — where the
 /// bare form would have failed. Whether there is anything to delete is
 /// therefore the caller's to know before it asks (`offers::TagSides`);
 /// git will not be the one to say.

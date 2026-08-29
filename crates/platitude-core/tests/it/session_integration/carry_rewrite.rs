@@ -36,7 +36,7 @@ async fn squash_and_reword_run_through_the_write_queue() {
 /// Matched from the front of the command, not anywhere inside it: the
 /// status refresh that follows a stopped rebase reads its progress with
 /// `rev-parse --git-path rebase-merge/msgnum`, which a plain `contains`
-/// counts as a fourth rebase (実測).
+/// counts as a fourth rebase (measured).
 fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
     let mut out = Vec::new();
     for event in sink.events.lock().unwrap().iter() {
@@ -72,7 +72,7 @@ fn stopped_part_way(repo: &TestRepo) -> bool {
 /// `squash` → `stash pop --index` leaves — **the staged and unstaged
 /// halves still told apart**, which is the one thing `--autostash` cannot
 /// do: it restores with a plain apply and everything comes back unstaged
-/// (実測 2.55).
+/// (measured, 2.55).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
     install_todo_editor();
@@ -132,7 +132,7 @@ fn rebase_onto() -> platitude_core::integrate::RebaseOptions {
 /// depend on which menu row was clicked. Handing this to `--autostash`
 /// instead would restore with a plain apply and bring **everything back
 /// unstaged** — the split below is exactly what that flag cannot keep
-/// (実測 2.55).
+/// (measured, 2.55).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     let mut repo = TestRepo::init();
@@ -184,7 +184,7 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
 /// exactly as a stopped replay's does — no restore is attempted over a
 /// tree git is still holding. This is what the alignment gives up:
 /// `--autostash` would have put the work back itself after `--continue`
-/// or `--abort` (実測), whereas this entry is the person's to pop.
+/// or `--abort` (measured), whereas this entry is the person's to pop.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     let mut repo = TestRepo::init();
@@ -202,7 +202,7 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     assert_eq!(
         write_result(&sink, "rebase").await,
         None,
-        "a stop is not a failed write (2026-08-22 ユーザー判断)"
+        "a stop is not a failed write (by design)"
     );
     assert!(
         write_stopped(&sink, "rebase"),
@@ -224,7 +224,7 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     session.close();
 }
 
-/// Untracked files are not in the way of a replay at all (実測: git takes
+/// Untracked files are not in the way of a replay at all (measured: git takes
 /// the plan and leaves them where they are), so no stash is taken for
 /// them. The route is the whole assertion — a needless stash would still
 /// have ended with the same working tree.
@@ -300,7 +300,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
 /// The replay stops part-way, and then the restore is not attempted: git
 /// will not write into an index that already holds unmerged paths, so a
 /// pop there does nothing while reporting the collision it walked into
-/// (実測 `could not write index` / `needs merge` — 規約 §`stash pop` の
+/// (measured `could not write index` / `needs merge` — 規約 §`stash pop` の
 /// 非ゼロを conflict と読んでよいのは). The work waits in the stash,
 /// drawn as its own row in the graph, until the operation is over.
 #[tokio::test(flavor = "multi_thread")]
@@ -318,7 +318,7 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
     assert_eq!(
         write_result(&sink, "drop").await,
         None,
-        "a stop is not a failed write (2026-08-22 ユーザー判断)"
+        "a stop is not a failed write (by design)"
     );
     assert!(
         write_stopped(&sink, "drop"),

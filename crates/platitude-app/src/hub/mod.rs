@@ -37,10 +37,6 @@ pub use msg::{CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, PickMsg, Stat
 pub use prefs::AvatarUrls;
 pub use tabs::{from_session, with_session};
 
-// The five siblings reach the imports above through `use super::*`,
-// which sees what this module can see -- the block stays whole here
-// rather than being dealt out five ways.
-
 /// The commit message typed into a tab and not committed yet.
 ///
 /// The one thing a tab holds that no repository can be asked for again,

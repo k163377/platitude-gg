@@ -20,7 +20,7 @@ pub enum SwitchAction {
     None,
     /// The branch is checked out in another working copy, and **git
     /// refuses the move outright** (`fatal: '<branch>' is already used by
-    /// worktree at …`, 実測 2026-08-21), locked or not. The only refusal
+    /// worktree at …`, measured), locked or not. The only refusal
     /// no stash can get past and no operation put down can clear — the
     /// branch is simply somewhere else, and the way to it is that copy.
     OpenHolder,
@@ -96,7 +96,7 @@ pub fn switch_action(
 /// two, the screen still says the remote branch has no local one — so a
 /// second press on the same chip is decided from the very picture the
 /// first one was, and sends the same `switch --create`, which git
-/// refuses because the first one made the branch (2026-08-29 ユーザー報告).
+/// refuses because the first one made the branch.
 pub fn move_landed(landing: &str, current_branch: &str, landing_oid: &str) -> bool {
     !landing.is_empty() && landing == current_branch && !landing_oid.is_empty()
 }
@@ -105,7 +105,7 @@ pub fn move_landed(landing: &str, current_branch: &str, landing_oid: &str) -> bo
 /// every `switch` while a merge / rebase / cherry-pick / revert stands**
 /// — clean tree, conflicted tree and resolved-and-staged tree all get
 /// the same `cannot switch branch while …` — and it refuses one over an
-/// unmerged index too, which is what `--quit` leaves behind (実測 2.55).
+/// unmerged index too, which is what `--quit` leaves behind (measured, 2.55).
 /// So the way out is a question raised before anything is sent, never a
 /// refusal read back off the log (デザイン規約 §進行中の操作から出る). Bisect rides
 /// the same gate: it is an operation standing, whatever git would say.
@@ -118,7 +118,7 @@ pub fn moves_blocked(ops: &OpState, counts: &Counts) -> bool {
 ///
 /// **A rebase is the one that does.** `git rebase --quit` leaves HEAD
 /// detached at the half-rewritten line with every copy it already made
-/// unreferenced (実測 2.55), so its way out is `--abort` — and an abort
+/// unreferenced (measured, 2.55), so its way out is `--abort` — and an abort
 /// throws away work in hand. The rest take `--quit`: the commits an
 /// earlier step already made stay, and the tree goes into a stash rather
 /// than into the reflog, so nothing is destroyed.
@@ -141,7 +141,7 @@ pub fn leave_code(op: Option<InProgress>) -> &'static str {
 /// Whether leaving the stopped commit out costs nothing.
 ///
 /// An interactive rebase stops on a commit that came out empty and names
-/// `--skip` as the way past it (実測 —
+/// `--skip` as the way past it (measured —
 /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`).
 /// Nothing is conflicted or staged while it stands there, and a clean
 /// tree under a stopped operation is what tells that stop from every

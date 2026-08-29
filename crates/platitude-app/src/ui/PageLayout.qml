@@ -60,7 +60,7 @@ QtObject {
 
     // ---- how narrow and how short this page may be laid out ------------
     // Under these the panes stop giving: `SplitView` does not shrink an item past its minimum, it lays the rest out
-    // beyond its own edge, and nothing in this window scrolls to reach what went over (measured 2026-08-09: a 640px
+    // beyond its own edge, and nothing in this window scrolls to reach what went over (measured, a 640px
     // window left 32px of the right pane on screen and no way to the other 268). So the window is held to them instead
     // (`Main.floorWidth` / `floorHeight`).
     //

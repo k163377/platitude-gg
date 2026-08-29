@@ -8,8 +8,8 @@ import platitude.ui
 /// and the menus that offer them.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -171,7 +171,7 @@ Item {
         ///
         /// Empty until that answer, and the emptiness is the arm. A press made with the selection already sitting at
         /// the tip — a merge from a ref row, a revert of HEAD — satisfies every other reading below before git has
-        /// done anything, and the run would quit over an untouched repository (2026-08-22 実測: a copy nobody could
+        /// done anything, and the run would quit over an untouched repository (measured, a copy nobody could
         /// see in the picture, `op=` empty in this very report, green).
         property string answeredOp: ""
         function begin() {
@@ -187,7 +187,7 @@ Item {
             // And last the pane the landing sends for. The details of the commit that was selected *before* the press
             // are still on the right until its own round trip comes back, and for a merge from a ref row that commit
             // is the old tip — so the half of this the picture does hold, whose commit fills the right-hand pane,
-            // frames as the repository before the write (2026-08-23 実測: the pane's second round trip landed after
+            // frames as the repository before the write (measured, the pane's second round trip landed after
             // `screenshot saved=true`). Waited out the way `stashLandTimer` waits for it.
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0

@@ -157,7 +157,7 @@ Rectangle {
             // One character along from `git`, not one spacing token: the two are one string with one space in it, and
             // a selection that runs through them has to land on the same pixels the copy names. **Its width is
             // written rather than anchored to the outcome** — an anchor on the right decides the x as well, and this
-            // one has to begin where the command's own column does (2026-08-28 実測: the args went to the far edge).
+            // one has to begin where the command's own column does (measured, the args went to the far edge).
             x: program.x + 4 * row.charW
             width: Math.max(0, outcome.x - Theme.spaceMd - x)
             anchors.verticalCenter: parent.verticalCenter

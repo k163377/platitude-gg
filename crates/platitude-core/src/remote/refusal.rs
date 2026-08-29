@@ -261,7 +261,7 @@ mod tests {
 
     /// The same run of git 2.51 against a bare repository whose
     /// `pre-receive` hook exits non-zero, and the words GitHub writes
-    /// through it (実測 — the two `remote: error:` lines are exactly what
+    /// through it (measured — the two `remote: error:` lines are exactly what
     /// a protected branch answers a deletion with).
     const REFUSED_BY_THE_FAR_SIDE: &str = "To C:/tmp/remote.git\n\
          !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n";

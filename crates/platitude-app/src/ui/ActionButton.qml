@@ -22,7 +22,7 @@ HoverToolButton {
     /// The word stays rather than stepping aside: what a button is waiting on is the thing the button names, and a
     /// ring alone in a bare button leaves nothing on the band to say which action is out. The seat is where the ring
     /// goes because it is the one place already measured for a mark of exactly this size, so the button's width does
-    /// not move (2026-08-19 ユーザー選択).
+    /// not move.
     ///
     /// Dimmed rather than actually disabled: `enabled` would take the focus away, and the press that started the
     /// network call is the very one that may have come from the keyboard.
@@ -229,12 +229,12 @@ HoverToolButton {
     /// How far in from the cell's two ends the frame is drawn. Nothing at all for a button measured to its own
     /// content, where the cell **is** the box; in a folded cell, which fills the band's height the way the ☰ and the
     /// window's three do, the frame keeps the height the button's own box has — **a line drawn along the band's top
-    /// edge is a box glued to the window rather than a frame round a button** (実測 2026-08-25). The wash still fills
+    /// edge is a box glued to the window rather than a frame round a button** (measured). The wash still fills
     /// the whole cell, because that is the target, and the target is what the pointer is answering.
     ///
     /// Read only where the two can differ. A button measured to its own content **is** its implicit height, and a
     /// binding that reads both closes a ring the engine can see from the outside even where the arithmetic cannot
-    /// (実測 2026-08-25: `OpExitCard` / `DiffPaneHeader` reported a loop on this property).
+    /// (measured, `OpExitCard` / `DiffPaneHeader` reported a loop on this property).
     readonly property real frameInset:
         actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.implicitHeight) / 2) : 0
 
@@ -244,8 +244,7 @@ HoverToolButton {
         // focus ring all have to be drawn here.
         //
         // Only while it is answering: a button with git out on the network is as deaf as a disabled one (`live`), and
-        // the hand that started the fetch is still resting on it — the wash must not stay up for the whole call
-        // (2026-08-10 報告).
+        // the hand that started the fetch is still resting on it — the wash must not stay up for the whole call.
         color: actionBtn.live ? actionBtn.washColor : "transparent"
         radius: Theme.radiusSm
         // The frame, and the fill a hold puts inside it. Its own item rather than this one's border, so that a cell
@@ -260,7 +259,7 @@ HoverToolButton {
             // long as the wait lasted.
             //
             // A button with no frame of its own grows none: the ring already says the wait has started, and a frame
-            // drawn around a button that has never worn one reads as a box laid over the band (2026-08-10 報告).
+            // drawn around a button that has never worn one reads as a box laid over the band.
             border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
             border.width: Theme.borderWidth
             radius: Theme.radiusSm
@@ -275,7 +274,7 @@ HoverToolButton {
         //
         // `visualFocus`, which is focus that arrived from the keyboard — not `activeFocus`, which a press gives it as
         // well (`focusPolicy` is StrongFocus and nothing on this band takes it back, so an `activeFocus` ring would
-        // come up on a click and stay — 2026-08-10 報告).
+        // come up on a click and stay).
         Rectangle {
             anchors.fill: parent
             anchors.margins: -Theme.spaceXs / 2
@@ -315,7 +314,7 @@ HoverToolButton {
     /// A Control's own `implicitWidth` is its content plus the two paddings, and both of those are answered from the
     /// width the row handed over (`wordRoom` → `folded` → `slack`). Until the row has set a width of its own — the
     /// frames on the way up, before the first rearrange — `setImplicitWidth` writes one, so the shape the button chose
-    /// decides the cell that was supposed to decide the shape (実測 2026-08-29: `folded` and `wordRoom` both reported a
+    /// decides the cell that was supposed to decide the shape (measured, `folded` and `wordRoom` both reported a
     /// loop, on the two band buttons that wear no frame).
     ///
     /// Only where the row lays the cell out. A button measured to its own content **is** its content, and asking for a

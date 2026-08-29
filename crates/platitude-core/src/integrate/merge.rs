@@ -25,7 +25,7 @@ pub struct MergeOptions {
 /// **The exit code cannot sort the two landings on its own.** `git merge`
 /// spends 1 on both a conflict and a name it cannot merge, keeps 128 for
 /// a `--ff-only` it must refuse and 2 for a tree whose changes would be
-/// overwritten (実測 2.55). So the answer is asked of the repository
+/// overwritten (measured, 2.55). So the answer is asked of the repository
 /// instead: a merge left standing is a stop, and anything else that
 /// exited non-zero is the failure it looks like.
 pub async fn merge(
@@ -72,7 +72,7 @@ pub async fn merge(
 /// `post-commit`); `post-merge` and `pre-merge-commit` belong to a merge
 /// that never stopped and fire for neither. That holds even where the
 /// resolution records nothing at all: git writes the empty merge commit
-/// either way (実測 2.55). So the application can put this in the box
+/// either way (measured, 2.55). So the application can put this in the box
 /// the commit will be made from, and the person sees the message before
 /// it is written rather than after
 /// (デザイン規約 §進行中の操作から出る).
@@ -97,7 +97,7 @@ pub async fn stopped_message(
 /// finished, rather than refusing before it began.
 ///
 /// `--squash` is the one stop this does not see: it writes `SQUASH_MSG`
-/// and no `MERGE_HEAD` (実測 2.55), so git leaves no operation to
+/// and no `MERGE_HEAD` (measured, 2.55), so git leaves no operation to
 /// continue and its conflicts arrive as the failure they read as. Nothing
 /// in the application asks for one — the option is here for completeness
 /// of the command, not for a screen.
@@ -114,7 +114,7 @@ async fn stopped_on_a_conflict(
 ) -> bool {
     // **The code is read as well as the marker.** Exit 1 is what a
     // conflict comes back as; a merge asked for while one is *already*
-    // standing exits 128 with `MERGE_HEAD` right there (実測 2.55, both
+    // standing exits 128 with `MERGE_HEAD` right there (measured 2.55, both
     // wordings — unmerged files, and a resolved index that was never
     // committed). Asking the repository alone would call that a stop and
     // swallow the sentence saying what is really in the way.

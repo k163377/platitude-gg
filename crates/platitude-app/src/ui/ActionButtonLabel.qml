@@ -41,7 +41,7 @@ Item {
         ? btnLabel.headRun + btnLabel.flagRoom : btnLabel.implicitWidth
     /// How far the head reaches: the width it was given, or — once a cut is in it — the ink it actually painted. What
     /// follows the head follows the letters rather than the room they were handed, or the flag stands off in the air
-    /// a `…` left behind (実測 2026-08-25: the chip's ground ended before the flag did).
+    /// a `…` left behind (measured, the chip's ground ended before the flag did).
     readonly property real headRun: btnLabel.capped ? headText.paintedWidth : headText.width
     /// The colour the word is drawn in — the button's own `fg`.
     property color tint: Theme.textPrimary
@@ -67,7 +67,7 @@ Item {
     ///
     /// **The flag is the last thing to give — it does not give at all.** What a cut takes off a wording is the end of
     /// it, and the end of this one is what the reader can be wrong about: `push -f` cut to `push …` is a push with an
-    /// ellipsis after it, which everywhere else in the world means "asks first" (実測 2026-08-25: it read as exactly
+    /// ellipsis after it, which everywhere else in the world means "asks first" (measured, it read as exactly
     /// that). So the command gives and the flag stays — `pu… -f` says a cut command *and* what it would do
     /// (規約 §長押し「警告の色は語ではなく枠と印が持つ」, and the same order the commit phrase gives its parts up in).
     readonly property int flagAt: btnLabel.code ? btnLabel.text.indexOf(" -") : -1
@@ -97,7 +97,7 @@ Item {
     /// **Inside the phrase rather than in the button's own seat.** The seat stands at the row's left edge, and a
     /// phrase is centred in a cell that fills the row — so a mark left out there ends up alone against the far edge,
     /// with the words it is meant to introduce adrift in the middle. §長押し puts the mark immediately ahead of the
-    /// word; here that means ahead of the first chip (2026-08-22 実測: the stranded mark).
+    /// word; here that means ahead of the first chip (measured, the stranded mark).
     property int phraseHoldMs: 0
     property real phraseHoldProgress: 0
     /// Whom the phrase's action will be attributed to, at its end (`… by <face>`). -1 draws nothing at all — this is
@@ -124,7 +124,7 @@ Item {
     readonly property real phraseRoom: btnLabel.phrased ? btnLabel.width : 0
     // ---- what gives, and in what order ---------------------------------
     //
-    // **The ref is what the reader can be wrong about, so it is the last thing to give** (2026-08-18 ユーザー判断).
+    // **The ref is what the reader can be wrong about, so it is the last thing to give**.
     // The parts that never give are the ones with no length of their own: the mark, the command, the count, the face.
     // What gives, weakest first: the `+N`, then the app's own words, then — only if there is still nothing left — the
     // ref itself.
@@ -144,7 +144,7 @@ Item {
                                                 btnLabel.phraseFree - btnLabel.midCap - btnLabel.mateRoom)
     /// **What gives leaves a `…` behind.** Giving is not the same as never having been said: a phrase that drops its
     /// words silently reads as a complete sentence that happens to be terse, and the reader has no way to know a word
-    /// was taken out. So the floor for anything that gives is the mark itself (2026-08-18 ユーザー判断).
+    /// was taken out. So the floor for anything that gives is the mark itself.
     readonly property real cutMark: ellipsis.implicitWidth
     /// The app's own words: what the ref left them, down to the mark.
     readonly property real midCap:
@@ -286,7 +286,7 @@ Item {
         //
         // `iconLg`, which is the step the graph draws a node at beside a `fontMd` subject: a face is read as a picture
         // rather than as a glyph, so it wants the proportion the graph's rows already give it, not the one a mark
-        // beside a word gets (2026-08-18 報告).
+        // beside a word gets.
         AvatarButton {
             id: phraseAvatar
             visible: btnLabel.phraseFace >= 0
@@ -379,9 +379,9 @@ Item {
         x: -Theme.spaceXs / 2
         width: btnLabel.inkWidth + Theme.spaceXs
         // Off the word's own step, never off the cell it stands in: the cell is the mono family's line box, and that
-        // box is the one thing about this dress each OS decides for itself (実測 @14px: Cascadia Mono 16, Noto Sans
+        // box is the one thing about this dress each OS decides for itself (measured @14px: Cascadia Mono 16, Noto Sans
         // Mono CJK JP 21 — a CJK family carries half an em more leading than a Latin one). Left to the cell the same
-        // command wore a wash on Windows and a tag on Ubuntu (2026-08-28 ユーザー報告), while the glyphs themselves sat
+        // command wore a wash on Windows and a tag on Ubuntu, while the glyphs themselves sat
         // on the same rows on both (デザイン規約 §git 用語のコード表記).
         height: btnLabel.fontSize + Theme.spaceXs / 2
         anchors.verticalCenter: parent.verticalCenter

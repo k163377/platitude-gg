@@ -36,7 +36,7 @@ Rectangle {
     /// Written by the handler below rather than by the MouseArea that fills the tab: hover goes to the topmost item
     /// that takes it, and the `✕` is a Control that takes its own, so the tab stopped being "under the hand" exactly
     /// when the hand arrived at the mark — which dropped the mark out from under it (rules-refs/app-ui.md 「行の
-    /// hover を `MouseArea` で取らない」; 実測 qmltestrunner: `pointed=false mark=0` with the pointer in the middle
+    /// hover を `MouseArea` で取らない」; measured qmltestrunner: `pointed=false mark=0` with the pointer in the middle
     /// of the `✕`).
     property bool pointed: false
     /// Automation: whether the mark is out on this tab. Read off the mark itself — reporting what was asked of it would
@@ -174,7 +174,7 @@ Rectangle {
         id: tabContent
         anchors.fill: parent
         // A tab is a dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」;
-        // 2026-08-23 ユーザー指示 = the `spaceSm` step it had was read as too much air on both sides of the name).
+        // by design = the `spaceSm` step it had was read as too much air on both sides of the name).
         //
         // The mark's two sides are seated off its ink rather than off its box (`TabStrip.markGap`), so all three gaps
         // in a tab are the one step: the name from the near edge, the mark from the name, the far edge from the mark.
@@ -183,7 +183,7 @@ Rectangle {
         //
         // A short name's easing goes on either side of the **name** rather than at the tab's two edges: the mark keeps
         // its own step off the far edge whatever the name does, so what opens up is the room the name is set in
-        // (2026-08-23 ユーザー指示 — the seat every short name was padded out to made a row of equal blanks).
+        // (by design — the seat every short name was padded out to made a row of equal blanks).
         anchors.leftMargin: Theme.spaceXs + tabItem.titleEase / 2
         anchors.rightMargin: tabItem.metrics.markGap
         spacing: tabItem.metrics.markGap + tabItem.titleEase / 2

@@ -9,7 +9,7 @@ import platitude.ui
 // **It covers the code column and not the gutter, and it stops short of the list's own bar.** The two numbers and the
 // seat between them are the row's own — the `+` a line puts out there has to keep taking presses — so this starts
 // where they end (`gutterW`); and the bar down the right edge is drawn over the rows, so a hand that ran to the frame
-// took every press on the trough and the bar could not be grabbed at all (`barRoom`, 2026-08-29 ユーザー報告).
+// took every press on the trough and the bar could not be grabbed at all (`barRoom`, observed).
 //
 // **Inside that column every place nobody else takes is a start**, the ground a file shorter than the frame leaves
 // under its last row included (`rowAt`, 規約 §diff の中身をコピーする). The hunk headings are the one exception, and
@@ -22,7 +22,7 @@ import platitude.ui
 //
 // It is a plain `MouseArea` and it is not `hoverEnabled`, which is what lets the rows underneath keep their own hover
 // — the `+` under the pointer, the lit hunk (デザイン規約 §diff の中のステージ; a `HoverHandler` here would take all of it,
-// 2026-08-17 実測).
+// measured).
 //
 // Everything about *where* the press landed in the file is asked of the model: this knows pixels, and only the model
 // holds the lines those pixels are drawn from (`DiffModel::selection`).
@@ -130,8 +130,7 @@ Item {
     }
     /// A content y brought onto the band the rows themselves stand on — the whole of what makes the ground under the
     /// last row a place a selection can start (規約 §diff の中身をコピーする「掴めるのは、誰も取らない所すべて」).
-    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had
-    /// (2026-08-28 ユーザー報告).
+    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
     /// `originY` rather than zero: a list of rows with differing heights moves its own origin once it has been sent
     /// to its end (app-ui.md, `CommandsPane.clampY`). An empty list has no band at all — the clamp then answers above

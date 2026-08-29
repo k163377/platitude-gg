@@ -8,14 +8,13 @@ import platitude.ui
 // commit's worth of lane is all it takes to read as "and it continues" — unless the message needs more than that. It
 // is the only thing explaining the cut, so a narrow subject column grows the footer rather than eliding it.
 //
-// **And the line offers the next step of history rather than only naming the cut** (2026-08-29 ユーザー指示): the whole
+// **And the line offers the next step of history rather than only naming the cut**: the whole
 // footer is the press, worn like a row's own — the same `bgHover` band, and a hand over it. What it loads is a quarter
 // of the window the graph opened with (`session::log_window_step`), and the words lead with that offer, because the
 // fading lanes have already said that this is as far as the graph goes.
 //
 // **And that run of lane goes out rather than stopping.** Full strength where the last row leaves off, gone by the
-// bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground (2026-08-22
-// ユーザー判断). Nothing is added on top — a mark there said the same thing twice, and the line below already names the
+// bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground (observed). Nothing is added on top — a mark there said the same thing twice, and the line below already names the
 // cut in words.
 Item {
     id: tail
@@ -83,7 +82,7 @@ Item {
                     const color = parseInt(t.substring(dot + 1))
                     const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
                     // **The lanes go out rather than stop.** Drawn flat at `dimFade` they put a step between the last
-                    // row and this one exactly where the eye is following a line down (2026-08-22 ユーザー報告). Full
+                    // row and this one exactly where the eye is following a line down. Full
                     // strength where the last row leaves off, gone by the bottom — the history past the cut is not
                     // there to be drawn, so what stands for it fades out.
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
@@ -101,7 +100,7 @@ Item {
             }
             /// A lane's colour at `a` of its strength, as a gradient stop. **`Theme.graphLane` holds strings, not
             /// colours** — the token is a `var` array, so `.r` off one is `undefined` and `Qt.rgba` of that draws
-            /// nothing (2026-08-22 実測). Qt reads `#AARRGGBB`, so the alpha goes on the front of the token's own string.
+            /// nothing (measured). Qt reads `#AARRGGBB`, so the alpha goes on the front of the token's own string.
             function faded(hex, a) {
                 const v = Math.round(Math.max(0, Math.min(1, a)) * 255)
                 return "#" + (v < 16 ? "0" : "") + v.toString(16) + hex.substring(1)
@@ -128,13 +127,13 @@ Item {
         // are the row's own margin, the coloured tick it puts before its message, and the gap after it. Added here in
         // the same shape the stand-in row adds them (`GraphHeadPin`): the footer borrows the rows' geometry for its
         // lanes, and this line is part of the same borrowing. Without the last two steps the words sat 6px left of
-        // every message in the column (2026-08-30 ユーザー報告).
+        // every message in the column.
         leftPadding: Theme.spaceSm + 2 * Theme.borderWidth + Theme.spaceXs
         // And where they stop: the pane's own inset, the same a row's message keeps (規約 §余白).
         rightPadding: Theme.spaceXs
         wrapMode: Text.Wrap
         // What the press loads leads; how far the graph has come follows it in brackets, which is the shape of the two
-        // being an offer and its footnote (2026-08-29 ユーザー判断). The second number is **the walk's own count**, not
+        // being an offer and its footnote. The second number is **the walk's own count**, not
         // the row count: the WIP row and sifted stash parents move rows off the round window limit, and this footer
         // only stands when the walk hit it.
         text: qsTr("Load %L1 more commits (%L2 loaded)")
@@ -144,7 +143,7 @@ Item {
         font.pixelSize: Theme.fontMd
         font.weight: Font.DemiBold
     }
-    // What says the line can be pressed before the hand is anywhere near it (2026-08-30 ユーザー指示). Same words as
+    // What says the line can be pressed before the hand is anywhere near it. Same words as
     // the author line and the hash plate use for the same thing (規約 §author の hover): **at rest `borderStrong` —
     // one step under the words, so it does not compete with them — and up to the words' own colour under the
     // pointer.** No token is added, and the only ink this puts on a resting window is this 1px.

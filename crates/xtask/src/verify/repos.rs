@@ -129,7 +129,7 @@ const SEEDED_TOOL: &str = "demo-editor";
 ///
 /// `sleep` is the blocking command all three machines agree on — git runs
 /// a tool's `cmd` through its own shell, which on Windows is Git for
-/// Windows' `sh` and its `/usr/bin/sleep` (2026-08-23 実測).
+/// Windows' `sh` and its `/usr/bin/sleep` (measured).
 ///
 /// Two seconds, not the thirty the recipe this replaced typed by hand.
 /// The verb is a write act, so its one picture is taken behind
@@ -159,7 +159,7 @@ const TOOL_CMD: &str = "sleep 2";
 /// nothing for `conflict::configured_tool` to answer with, the menu row
 /// becomes the door to the settings instead, and the verb queues no
 /// write. Without `trustExitCode` git asks a closed stdin whether the
-/// merge went well, reads EOF, and calls the file failed (実測).
+/// merge went well, reads EOF, and calls the file failed (measured).
 ///
 /// Whatever repositories the run is about are written to, a `--repo` of
 /// one's own included: the run owns them for its length

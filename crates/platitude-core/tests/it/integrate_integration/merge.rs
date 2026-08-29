@@ -99,7 +99,7 @@ async fn a_name_git_will_not_merge_is_still_a_failure() {
 }
 
 /// `--squash` conflicts are the one stop that reads as a failure: git
-/// writes `SQUASH_MSG` and no `MERGE_HEAD` (実測 2.55), so there is no
+/// writes `SQUASH_MSG` and no `MERGE_HEAD` (measured, 2.55), so there is no
 /// operation standing to be continued. Recorded rather than worked
 /// around — nothing on screen asks for a squashed merge.
 #[tokio::test]
@@ -123,7 +123,7 @@ async fn a_squashed_merge_leaves_nothing_standing_to_continue() {
 
 /// The failure that leaves `MERGE_HEAD` standing: a merge asked for
 /// while one is already in progress. git spends 128 on it with the
-/// marker right there (実測 2.55), so reading the marker without the
+/// marker right there (measured, 2.55), so reading the marker without the
 /// code would call it a stop — and the sentence saying what is really in
 /// the way would never reach the screen.
 #[tokio::test]
@@ -159,7 +159,7 @@ async fn a_conflicting_merge_is_reported_then_aborted() {
     let (exec, cancel) = env();
 
     // Not an error: git stopped and left the merge standing, which is a
-    // landing of its own (2026-08-22 ユーザー報告 — it read as a failure).
+    // landing of its own (observed — it read as a failure).
     assert_eq!(
         integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
             .await
@@ -245,7 +245,7 @@ async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
 
 /// A resolution that puts back exactly what HEAD already had still has a
 /// merge to finish, and a plain commit writes it — the merge commit
-/// records nothing and git makes it anyway (実測 2.55). Which is why the
+/// records nothing and git makes it anyway (measured, 2.55). Which is why the
 /// commit button cannot ask for something staged while a merge stands.
 #[tokio::test]
 async fn a_merge_that_records_nothing_is_still_committed() {

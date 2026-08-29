@@ -145,7 +145,7 @@ pub fn auto_fetch_minutes(minutes: u32) -> u32 {
 /// cut, and offers the next step of history, when the cap is hit.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 
-/// Fewest commits a graph can be told to open with (2026-08-30 ユーザー判断).
+/// Fewest commits a graph can be told to open with.
 ///
 /// Below this the window stops being one worth having: the step a press
 /// adds is a quarter of it ([`log_window_step`]), so a floor any lower
@@ -162,13 +162,12 @@ pub const MIN_LOG_LIMIT: u32 = 500;
 /// anything either door decided on its own would be a difference nothing
 /// on screen would show.
 ///
-/// **There is no ceiling — the type is the ceiling** (2026-08-30
-/// ユーザー判断). What a wider window costs is the walk, and the walk is
-/// nearly flat in the count (実測 `JetBrains/kotlin`, 138,915 commits /
-/// 46,373 tags, warm: 2,000 commits 623–658ms, 20,000 800–826ms, all of
-/// it 1,445–1,479ms), so a number typed on purpose is one this can
-/// afford to answer. Asking for no window at all is `None` rather than a
-/// large number, and does not come through here.
+/// **There is no ceiling — the type is the ceiling.** What a wider
+/// window costs is the walk, and the walk is nearly flat in the count
+/// (measured on the baseline repository: mostly fixed frontier setup,
+/// milliseconds per extra thousand commits), so a number typed on
+/// purpose is one this can afford to answer. Asking for no window at all
+/// is `None` rather than a large number, and does not come through here.
 #[must_use]
 pub const fn log_limit(limit: u32) -> u32 {
     if limit < MIN_LOG_LIMIT {
@@ -182,18 +181,14 @@ pub const fn log_limit(limit: u32) -> u32 {
 /// `initial` commits: a quarter of it.
 ///
 /// **A fraction of the initial window rather than a number of its own**
-/// (2026-08-29 ユーザー判断) — the initial count is a setting
+/// — the initial count is a setting
 /// (`settings::Defaults::initial_commits`), and the step moves with it.
 ///
-/// A quarter is a smaller share than the clients that page their graph
-/// take (GitLens 200 of 500, VS Code Git Graph 100 of 300), and it can
-/// afford to be: this window opens four to eight times wider than
-/// theirs, so a quarter of it is still 500 commits. **What a press costs
-/// is the walk's frontier setup, not the commits** (実測
-/// `JetBrains/kotlin`, 138,915 commits / 46,373 tags, warm: 2,000
-/// commits 623–658ms, 20,000 800–826ms, all of it 1,445–1,479ms — about
-/// 620ms fixed and 6ms per thousand), so the step is a question of how
-/// much a reader wants at once, not of what the walk can afford.
+/// **What a press costs is the walk's frontier setup, not the commits**
+/// (measured: mostly fixed, milliseconds per extra thousand), so the
+/// step is a question of how much a reader wants at once, not of what
+/// the walk can afford — and a quarter of the default window is still
+/// hundreds of commits.
 #[must_use]
 pub const fn log_window_step(initial: u32) -> u32 {
     if initial < 4 { 1 } else { initial / 4 }
@@ -207,18 +202,15 @@ pub enum AfterWrite {
     /// goes, no worktree is added or removed, and what is published is
     /// what it was — so none of those are read again.
     ///
-    /// The saving is per press. Staging one line cost fourteen git
-    /// invocations on a demo repository, ten of which could not have
-    /// changed (2026-08-17 実測, Windows: `for-each-ref` 25ms, two
-    /// `rev-list --count` 54ms, `stash list` + `worktree list` 46ms,
-    /// `config --get-regexp remote` 25ms). On a repository with fifty
-    /// thousand refs the first of those is the whole of the wait.
+    /// The saving is per press: most of the invocations a full refresh
+    /// makes could not have changed (measured — on a repository with
+    /// tens of thousands of refs, `for-each-ref` alone is the whole of
+    /// the wait).
     ///
     /// **What it gives up**: a write does not double as a poll for ref
     /// moves made outside this window. Those land on the next refresh
     /// instead — and staging is done with the graph off screen, where
-    /// there is nothing for a poll to keep current
-    /// (2026-08-17 ユーザー判断).
+    /// there is nothing for a poll to keep current.
     Tree,
     /// Working tree / index / stash only.
     Snapshots,

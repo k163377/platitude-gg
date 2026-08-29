@@ -68,7 +68,7 @@ Item {
     }
 
     // PG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
-    // clearing only the rows left it red over an empty panel (2026-08-10 報告), which is why this verb lives up here. The
+    // clearing only the rows left it red over an empty panel, which is why this verb lives up here. The
     // same mark is read on both sides of the press: `was=` is the half the picture cannot hold.
     //
     // The panel the press takes down with them is the other half. Which is why the standing-panel half of the

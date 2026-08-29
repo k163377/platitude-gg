@@ -4,17 +4,15 @@
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, open_unawaited, write_result};
-use platitude_core::session::{
-    AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, SessionEvent,
-};
+use crate::support::session::{CaptureSink, open_unawaited, opened, write_result};
+use platitude_core::session::{AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, SessionEvent};
 
 /// One hand-stepped tick, under the suite's backstop.
 ///
 /// The tick resolves when the timer task acts on it, and a timer task that
 /// is merely starved has nothing under it at all: no event goes to the
 /// sink, so no [`crate::support::Patience`] is counting, and the binary
-/// sits there until the CI kill with nothing named. 実測 2026-08-29: one
+/// sits there until the CI kill with nothing named. measured, one
 /// copy running beside seven of its own and a Linux container did exactly
 /// that, and what was reported was a run that never ended rather than a
 /// test that failed.
@@ -263,7 +261,7 @@ async fn opening_a_repository_fetches_without_being_asked() {
 /// opening into the two calls after `open` — and what is under test
 /// becomes the ask that arrives second, which
 /// `opening_a_repository_fetches_without_being_asked` owns already
-/// (実測 2026-08-20: that is how the local-only sibling below failed, in
+/// (measured, that is how the local-only sibling below failed, in
 /// a Linux container running beside a host build).
 #[tokio::test]
 async fn an_ask_that_beats_the_opening_is_kept_for_it() {
@@ -312,7 +310,7 @@ async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
 /// A repository with no remote is not fetched from at all.
 ///
 /// Nothing there fails — `fetch --prune --all` with no remote configured
-/// exits clean (実測 git 2.55) — so what an unasked one costs is a process
+/// exits clean (measured, git 2.55) — so what an unasked one costs is a process
 /// an interval, and a fetch button that spins while it is saying it cannot
 /// be pressed. The list this reads is the one the refs listing keeps, which
 /// is also what greys that button out, so the two cannot disagree.

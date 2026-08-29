@@ -9,8 +9,8 @@ import QtQuick
 /// while each of these is one line per verb in a list every verb has to be found in.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 QtObject {
     id: policy
 

@@ -142,11 +142,11 @@ impl SessionSink for BridgeSink {
                 .feeds
                 .details
                 .push_replace(DetailsMsg::Loaded(Box::new(details))),
-            SessionEvent::DetailsFailed { oid } => self.feeds.details.push_replace(
-                DetailsMsg::Failed {
+            SessionEvent::DetailsFailed { oid } => {
+                self.feeds.details.push_replace(DetailsMsg::Failed {
                     oid_hex: oid.to_hex(),
-                },
-            ),
+                })
+            }
             SessionEvent::DiffLoaded {
                 target,
                 patches,

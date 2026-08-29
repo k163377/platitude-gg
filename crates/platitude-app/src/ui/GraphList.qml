@@ -33,10 +33,10 @@ AppListView {
         graphList.forceActiveFocus()
     }
     /// And gives it up when this pane is taken off the screen. Qt leaves active focus on an item it has just made
-    /// invisible, and the keys go on arriving there (qmltestrunner で実測 2026-08-11: a StackLayout child swapped away
+    /// invisible, and the keys go on arriving there (qmltestrunner でmeasured, a StackLayout child swapped away
     /// reports `visible=false activeFocus=true`, and the next Down still fires; `focus = false` is what lets go).
     /// Opening a diff over the graph did exactly that: the arrows walked the selection behind the diff, and moving
-    /// the selection closes the diff — so the screen was pulled back to the graph (2026-08-11 ユーザー報告).
+    /// the selection closes the diff — so the screen was pulled back to the graph.
     onVisibleChanged: {
         if (!graphList.visible)
             graphList.focus = false
@@ -86,7 +86,7 @@ AppListView {
     //   comes back on whatever commit the recycled row is now showing;
     // - **the card opens on the chip's own seat after a rest**, so the reader's two clicks at one spot land on two
     //   different surfaces — the row, then the card. Separate memories make the second one a first click, and the
-    //   gesture reads as "sometimes it does nothing" (2026-08-26 ユーザー報告).
+    //   gesture reads as "sometimes it does nothing".
     //
     // The key is what the reader is pointing at — the ref's kind and name (`GitFacts.recordKey`), which is the same
     // string on both surfaces and does not change when a background pass rewrites the chip's flags.
@@ -101,7 +101,7 @@ AppListView {
         // **A box already standing is not something to open again.** It is what this gesture turns into, so a click
         // while one is up is the reader walking away from it — and the row's own click takes it down
         // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
-        // which reads as a blink (2026-08-26 ユーザー報告). The click still says which target it landed on, so the next
+        // which reads as a blink. The click still says which target it landed on, so the next
         // one is a second click in the ordinary way.
         const nameable = record !== "" && graphList.namingOid === ""
         return reclick.click(record === "" ? "" : GitFacts.recordKey(record),
@@ -121,7 +121,7 @@ AppListView {
     readonly property alias clickGuarded: reclick.guarded
     /// A second click is waiting out the double-click window. **The rows hold what they are showing still while it
     /// runs** (`GraphRowDelegate.settlePointed`): the wait is a beat the reader is already watching one thing through,
-    /// and a card opening or closing in it answers a question nobody asked (2026-08-26 ユーザー指示).
+    /// and a card opening or closing in it answers a question nobody asked.
     readonly property alias renameWaiting: reclick.armed
     function renameArmed(record) {
         return record !== "" && reclick.armedFor(GitFacts.recordKey(record))

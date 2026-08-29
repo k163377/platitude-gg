@@ -11,7 +11,7 @@ import platitude.ui
 // local says which of a remote's branches this one belongs with, and a wrong guess is a branch quietly measured
 // against somebody else's work.
 //
-// **The name is typed, never picked from a list** (2026-08-26 ユーザー判断). A list of what the remote already carries
+// **The name is typed, never picked from a list**. A list of what the remote already carries
 // would put picked names and typed ones in one box, and the two are not the same answer — a picked row is whatever
 // happened to be fetched, which is not what the reader came to say.
 ColumnLayout {

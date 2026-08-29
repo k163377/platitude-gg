@@ -10,7 +10,7 @@ use super::repo::DemoRepo;
 ///
 /// The branches matter as much as the folders: `feature/topic-a` is
 /// checked out over in `topic`, and git refuses both `switch` and
-/// `branch --delete` for a branch another worktree holds (実測), so the
+/// `branch --delete` for a branch another worktree holds (measured), so the
 /// BRANCHES row for it is the one the menu has to answer for.
 pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(

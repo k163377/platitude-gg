@@ -338,7 +338,7 @@ mod tests {
         // short of the end. Both are everyday writing (this repository's
         // own history is full of the first), and slicing a `str` there
         // took the whole walk down with it: the graph never left its
-        // loading ring (2026-08-09, on platitude-gg itself).
+        // loading ring (observed on platitude-gg itself).
         // The guard below is what keeps these honest: hand-counted bytes
         // stop reproducing the moment somebody rewords them.
         let bodies = [

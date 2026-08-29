@@ -247,7 +247,7 @@ AppDialog {
             //
             // **The floating bar, not the panels' slab** (デザイン規約 §スクロールバー / §QML 実装ルール のバーの
             // 選び方). The slab says its idle state with `bgElevated`, which is the step above a *pane's* ground —
-            // and this screen's ground is `bgElevated` itself, so an idle slab here is the ground exactly (実測: the
+            // and this screen's ground is `bgElevated` itself, so an idle slab here is the ground exactly (measured: the
             // five pixels at the edge came back `#0F172A`, and a bar that is meant to dim rather than vanish had
             // vanished). The translucent thumb is the one with a reading over a card, and this edge can take it: the
             // ink reaches eight pixels in, where the combo's chevron starts, and what it passes over below that is

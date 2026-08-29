@@ -59,20 +59,20 @@ impl MessageEdit {
 /// caret from any click that lands in them and the first keystroke is
 /// already the rewrite's first keystroke. GitKraken draws the same line
 /// — the most recent commit is the one its panel lets a click edit
-/// (help.gitkraken.com/gitkraken-desktop/commits, 2026-08-27) — and the
+/// (help.gitkraken.com/gitkraken-desktop/commits, observed) — and the
 /// rewrites that are asked for by name keep their rows in the commit
 /// menu ([`super::commit_menu`]'s `edit_history`).
 ///
 /// **Nothing while an operation stands.** git refuses the amend outright
 /// there: `You are in the middle of a merge -- cannot amend`, the same
 /// sentence for a cherry-pick, and `Committing is not possible because
-/// you have unmerged files` mid-rebase (実測 2.55). A rebase stopped
+/// you have unmerged files` mid-rebase (measured, 2.55). A rebase stopped
 /// clean would take one, but no screen here stops one on purpose yet
 /// (full interactive rebase is unwired), so every stop this app can
 /// reach is one of those refusals.
 ///
 /// **Detached is not a reason.** `git commit --amend` on a detached HEAD
-/// amends as usual (実測 2.55) — unlike the menu's rewrite rows, which
+/// amends as usual (measured, 2.55) — unlike the menu's rewrite rows, which
 /// need a branch to carry the result.
 pub fn message_edit(
     open: bool,

@@ -8,9 +8,9 @@ import platitude.ui
 ///
 /// The style's own bar stays where the reader is over the words themselves: the graph, the diff, and the text boxes
 /// inside the right panel. **A box being typed into keeps the style's bar** — it is the one place a bar is inside the
-/// content rather than at a pane's edge (2026-08-27 ユーザー指示).
+/// content rather than at a pane's edge.
 ///
-/// **Its three states climb the palette from the pane's ground** (2026-08-28 ユーザー指示): `bgElevated` idle, the one
+/// **Its three states climb the palette from the pane's ground**: `bgElevated` idle, the one
 /// step there is between a pane's ground and the lines it divides itself with; `borderDefault` while the view is being
 /// sent, the ink a frame is drawn in; `borderStrong` under a held thumb. The style's see-through bar lands on the same
 /// three over a pane's ground by carrying that much of its one ink, so the two families read alike by two routes — and
@@ -25,7 +25,7 @@ import platitude.ui
 ///    body text, one thumb read as three colours. The gutter already keeps ink from under this bar, so there is
 ///    nothing to read through it, and what it paints is a named colour, flat.
 ///  - **it does not stop short of the ends.** The style keeps a step of padding at both ends of the track, so a view
-///    scrolled hard against its top frame left the slab hanging a step below it (2026-08-27 ユーザー報告). Only the far
+///    scrolled hard against its top frame left the slab hanging a step below it. Only the far
 ///    side keeps its step, where it is grabbing room rather than a gap: the box stays wider than the ink.
 AutoScrollBar {
     id: paneBar

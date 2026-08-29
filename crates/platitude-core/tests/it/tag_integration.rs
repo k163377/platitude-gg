@@ -97,7 +97,7 @@ async fn a_name_git_refuses_makes_no_tag() {
 
 /// A name that starts with a dash reaches git as a name rather than as a
 /// flag (`--end-of-options`), and git turns it down on its own terms:
-/// `fatal: '-dashed' is not a valid tag name.` (実測 git 2.55) —
+/// `fatal: '-dashed' is not a valid tag name.` (measured, git 2.55) —
 /// **`check-ref-format` takes it, `git tag` does not**, so this is one
 /// place where [`tag::is_valid_name`] says yes and the command still
 /// refuses. Left to git rather than added to the box's rules: what a

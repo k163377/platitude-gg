@@ -36,7 +36,7 @@ Item {
     property string remote: ""
     property string branchName: ""
     /// Whether that pair names a remote-tracking branch this repository holds. **git refuses an upstream it cannot
-    /// find** (`fatal: the requested upstream branch … does not exist`, 実測), and the answer is here rather than a
+    /// find** (`fatal: the requested upstream branch … does not exist`, measured), and the answer is here rather than a
     /// git call away — the refs are already on this side — so the pill goes quiet instead of the press failing.
     property bool targetIsThere: false
 

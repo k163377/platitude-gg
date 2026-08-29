@@ -33,9 +33,6 @@ mod walk;
 #[cfg(test)]
 mod walk_tests;
 
-// The siblings reach these through `use super::*`, which sees what this
-// module can see -- so the bindings stay private and nothing leaks out of
-// `nav` but the model itself (`models::mod`).
 //
 // Only the tests read the folded marker itself; production writes it
 // through `fold_state`.

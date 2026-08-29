@@ -29,7 +29,7 @@ use crate::process::{GitCommand, GitExecutor};
 /// the normal state after a clone — the create step sees the new name as
 /// free and writes a loose ref whose *file* collides with the old name;
 /// the delete step then removes both, and every command involved exits 0
-/// (実測 2026-08-07: `tag V1.0 v1.0` + `tag -d v1.0` on packed refs
+/// (measured, `tag V1.0 v1.0` + `tag -d v1.0` on packed refs
 /// leaves no tag at all). Refused everywhere, not just where it breaks:
 /// the same repository may be opened from either kind of filesystem.
 pub async fn rename(

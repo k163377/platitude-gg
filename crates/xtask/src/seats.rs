@@ -3,7 +3,7 @@
 //!
 //! The greeting reports where the seats stood when the session began, and
 //! that snapshot goes stale: a seat it called free was measured minutes
-//! later holding another session's 13 uncommitted files (2026-08-11).
+//! later holding another session's 13 uncommitted files.
 //! This module is the one place a seat is measured, so the command and
 //! the greeting cannot drift apart — and the command is the live answer
 //! to read before entering a seat (CLAUDE.md ビルド・テスト).
@@ -117,7 +117,7 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
 /// asked for: a worktree's admin directory is named after the directory
 /// the tree was first created as, not after the seat — one seat here
 /// sits on .git/worktrees/skillcare — so .git/worktrees/<seat>/index is
-/// a guess that misses (measured 2026-08-11).
+/// a guess that misses (measured).
 fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
     let index = crate::git_query(
         dir,

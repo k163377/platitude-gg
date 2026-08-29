@@ -104,7 +104,7 @@ async fn a_cherry_pick_the_branch_already_has_leaves_nothing_behind() {
 /// A commit that was empty when it was made is what was asked for, so it
 /// lands as it stands. That is what `--allow-empty` buys: without it git
 /// stops on those too, in the very same words as the pick above — and
-/// the two are not the same answer (実測 2.55).
+/// the two are not the same answer (measured, 2.55).
 #[tokio::test]
 async fn a_commit_that_was_always_empty_is_picked_as_it_stands() {
     let mut repo = TestRepo::init();
@@ -152,7 +152,7 @@ async fn the_commits_around_an_empty_pick_still_land() {
 /// A revert with nothing left to undo never reaches the sequencer at
 /// all: git refuses the commit it was about to write and the operation
 /// is over where it stands, so there is nothing to skip. The wording is
-/// `git commit`'s own, on stdout with stderr empty (実測 2.55).
+/// `git commit`'s own, on stdout with stderr empty (measured, 2.55).
 #[tokio::test]
 async fn a_revert_with_nothing_left_to_undo_lands_as_nothing() {
     let mut repo = TestRepo::init();
@@ -269,7 +269,7 @@ async fn a_conflicting_revert_stops_rather_than_failing() {
 
 /// A stop is the one failure that turns into a landing. Everything else
 /// travels on as the failure it looks like — git leaves nothing standing
-/// for those (実測 2.55: exit 128 and no marker of any kind), so the
+/// for those (measured, 2.55: exit 128 and no marker of any kind), so the
 /// screen gets git's own words.
 #[tokio::test]
 async fn a_failure_that_left_nothing_standing_is_still_a_failure() {
@@ -292,7 +292,7 @@ async fn a_failure_that_left_nothing_standing_is_still_a_failure() {
 
 /// The failure that leaves this operation's *own* marker standing: a
 /// cherry-pick asked for while one is already in progress. git spends
-/// 128 on it with `CHERRY_PICK_HEAD` right there (実測 2.55), so reading
+/// 128 on it with `CHERRY_PICK_HEAD` right there (measured, 2.55), so reading
 /// the marker without the code would call it a stop — and the sentence
 /// saying what is really in the way would never reach the screen.
 #[tokio::test]

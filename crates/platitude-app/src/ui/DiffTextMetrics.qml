@@ -66,10 +66,9 @@ Item {
     /// assumed, because it is a property of whichever fallback this OS hands the glyphs to.
     ///
     /// **And measured only where a wide glyph is on screen** (`DiffModel.hasWide`, from `encode::has_wide`). Setting
-    /// one is what loads that fallback, and the font is 52.6MB of working set — a third of what the whole app is
-    /// allowed — which every window used to pay, one with no repository open included (2026-08-29 実測: 198.7–199.4MB
-    /// against 146.3–146.7). Zero is not a stand-in for the unmeasured number: every place this is read multiplies it
-    /// by a count of wide glyphs, so a diff that has none never asks what one would have cost.
+    /// one is what loads that fallback, and the font is tens of megabytes of working set — a third of what the whole
+    /// app is allowed, paid per window (measured). Zero is not a stand-in for the unmeasured number: every place this
+    /// is read multiplies it by a count of wide glyphs, so a diff that has none never asks what one would have cost.
     readonly property real wideDelta: wideRuler.item
         ? wideRuler.item.implicitWidth / wideRuler.item.text.length - 2 * metrics.charW
         : 0

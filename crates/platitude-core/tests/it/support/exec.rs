@@ -141,16 +141,16 @@ pub fn isolated_global(global_config: &Path) -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(vec![
-        (
-            OsString::from("GIT_CONFIG_GLOBAL"),
-            global_config.to_path_buf().into_os_string(),
-        ),
-        (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
-        (
-            OsString::from("XDG_CONFIG_HOME"),
-            isolated_git().xdg_config.clone().into_os_string(),
-        ),
-    ])
+            (
+                OsString::from("GIT_CONFIG_GLOBAL"),
+                global_config.to_path_buf().into_os_string(),
+            ),
+            (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
+            (
+                OsString::from("XDG_CONFIG_HOME"),
+                isolated_git().xdg_config.clone().into_os_string(),
+            ),
+        ])
 }
 
 /// [`isolated_global`] watched by a fresh [`Log`], on the user handle.

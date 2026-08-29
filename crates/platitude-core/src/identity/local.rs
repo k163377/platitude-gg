@@ -83,7 +83,7 @@ pub async fn set_local_identity(
 /// **What the file already says is read first**, and a key that already
 /// says it is left alone. Not an optimisation: `git config --unset` fails
 /// when there was nothing to unset, and it fails with the *same* exit code
-/// as its refusal to touch a key written more than once (実測 git 2.55:
+/// as its refusal to touch a key written more than once (measured git 2.55:
 /// both are 5). Asking first is what keeps those two apart — after it, a
 /// failed unset is a real one and is reported as such.
 async fn write_local_pair(
@@ -126,7 +126,7 @@ async fn write_local_pair(
 /// One key, written or taken out.
 ///
 /// `--local` is spelled out on both, though git already writes there by
-/// default (実測 git 2.55: a bare `--unset` of a key held only in the
+/// default (measured git 2.55: a bare `--unset` of a key held only in the
 /// user's own file exits 5 and leaves that file alone). The level a value
 /// is read back from and the level it is written at are then named by the
 /// same word, which is what stops the two from drifting apart later.

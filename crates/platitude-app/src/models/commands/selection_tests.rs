@@ -203,7 +203,7 @@ fn a_successful_command_never_brings_its_stderr() {
 fn a_hand_that_ran_off_the_end_stops_at_it() {
     // The end names a byte past the line, which is what a drag out to the
     // right of the panel says. Uncut it addresses nothing and the whole
-    // selection reads as empty (2026-08-28 実測).
+    // selection reads as empty (measured).
     let mut model = log(vec![row("add --all", "ok", "", "23 ms", "")]);
     model.start_select(0, 0);
     model.drag_select(0, 9999);

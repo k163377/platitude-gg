@@ -8,8 +8,8 @@ import platitude.ui
 /// is given, and the corner that steps aside for it.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
     readonly property var detailsPane: driver.detailsPane
@@ -73,7 +73,7 @@ Item {
             // both presets this verb is pointed at are (`basic`, `edges`). Landing there puts the WIP pane in
             // front and empties the selection, so the card below can never settle and the run says nothing at all
             // until the watchdog — 120s of `cardSettled=false` with no report of any kind, on both OSes
-            // (2026-08-29. The verb had only ever been run with its row, so this had been red since it was
+            // (The verb had only ever been run with its row, so this had been red since it was
             // written).
             if (arg !== "")
                 page.activateRow(graphModel.oidAt(Number(arg)))
@@ -139,7 +139,7 @@ Item {
             const want = detailsPane.valueRow.shownValue(detailsSelectTimer.which)
             if (detailsSelectTimer.firstWhich !== "") {
                 // The fault this pane shipped with: every field kept what it was holding, so a reader who swept a
-                // second value found the first still lit (2026-08-28 ユーザー報告 — three at once). **Both halves are
+                // second value found the first still lit (observed — three at once). **Both halves are
                 // said**: a run that simply cleared everything would answer `dropped=true` on its own.
                 AppBackend.report("details_select_away dropped="
                                   + (detailsPane.valueRow.selectedValue(detailsSelectTimer.firstWhich) === "")
@@ -174,13 +174,13 @@ Item {
             // draws them, so `cardSettled` alone is not enough: the model's value can still be empty, and a field
             // with no width yet is passed over by the sweep exactly as an absent one is. Either way the run reports
             // an empty selection as a failure of the wiring (3 of 6 runs before this wait, 1 of 10 with only half of
-            // it — 2026-08-28).
+            // it).
             const which = detailsSweepTimer.which
             if (!driver.cardSettled || !detailsPane.valueRow.valueReady(which) || detailsPane.valueRow.shownValue(which) === "")
                 return
             // **And the row has to have stopped moving.** The pane lays out more than once on its way to a commit,
             // and a sweep run against a half-laid-out row starts from a gap of a dozen pixels and lands on the line
-            // above the one it aimed at — every one of its nine tries, in about a fifth of runs (2026-08-28). Two
+            // above the one it aimed at — every one of its nine tries, in about a fifth of runs. Two
             // samples with the same geometry is the settle; no number is written down, so it holds at any pane width.
             const geom = detailsPane.valueRow.valueGeom(which)
             if (geom !== detailsSweepTimer.lastGeom) {
@@ -190,7 +190,7 @@ Item {
             detailsSweepTimer.stop()
             const want = detailsPane.valueRow.shownValue(which)
             // **Every corner of the gap, not just its middle.** A reach that only worked level with the words is the
-            // fault this shipped with, and the middle is the one place that hides it (2026-08-28 ユーザー報告).
+            // fault this shipped with, and the middle is the one place that hides it.
             let reach = 0
             let tries = 0
             let took = true
@@ -246,7 +246,7 @@ Item {
                 return
             // **And the row has to have stopped moving.** The pane lays out more than once on its way to a commit,
             // and mid-way the row and the block it stands in are both some other width — where `fills` compares one
-            // against the other and answers true about a frame nobody sees (`row=173/173`, 2026-08-28).
+            // against the other and answers true about a frame nobody sees (`row=173/173`, observed).
             const geom = detailsPane.valueRow.width + "x" + detailsPane.valueRow.parent.width
             if (geom !== detailsFitTimer.lastGeom) {
                 detailsFitTimer.lastGeom = geom

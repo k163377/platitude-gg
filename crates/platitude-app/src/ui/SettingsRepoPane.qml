@@ -167,7 +167,7 @@ ColumnLayout {
     }
 
     // Where this group's values live, said before its chapter rather than in a line at the foot — and as help text
-    // rather than a warning (2026-08-30 ユーザー判断). The group above wears `warning` because it replaces what every
+    // rather than a warning. The group above wears `warning` because it replaces what every
     // git on the computer reads; this one reaches one repository, which is the reader's own choice and undone by
     // emptying a box. A colour that says "careful" on both would stop saying anything on either.
     Label {
@@ -233,7 +233,7 @@ ColumnLayout {
             // guarded on this would be told "the reader is typing" by its own reload — and the boxes would then stop
             // following git for good. Picking another repository empties them first (`RepoConfigModel::read_repo`),
             // which is exactly such a change, so the screen would sit with empty boxes over a repository that has an
-            // identity — and an empty box here asks for it to be taken out (2026-08-30 実測, `settings-repo 0`).
+            // identity — and an empty box here asks for it to be taken out (measured, `settings-repo 0`).
             onEdited: pane.touched = true
             onSubmitted: pane.submitIdentity()
         }

@@ -128,7 +128,7 @@ Item {
         // The deletes are the branch card's own question, and it works its answers out for itself — the same card the
         // graph row's menu carries, asked the same way (RefBranchMenu).
         branchMenu.offerOn(kind, name, full, oidHex)
-        // Whether another working copy has this row's branch out. **git refuses `switch` for one** (実測), and the
+        // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and the
         // row wears the `!` for it rather than greying — this level's one use of the answer; the delete rows read
         // their own copy inside the card. A remote row lands on the local branch of the same name, so it is that one
         // another copy can be holding.
@@ -173,8 +173,8 @@ Item {
         // cards at the foot hold what is *done to* a ref rather than gone from it.
         //
         // A branch of one's own, started where this row stands, is one of those moves and not a thing done to this
-        // ref: it is where the reader carries on from (2026-08-25 ユーザー判断). Ahead of `switch` rather than beside
-        // it — nothing moves anywhere until a name has been typed (2026-08-17 ユーザー判断) — and the same words in
+        // ref: it is where the reader carries on from. Ahead of `switch` rather than beside
+        // it — nothing moves anywhere until a name has been typed — and the same words in
         // the same seat as the commit menu's row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
         AppMenuItem {
             id: refBranchHereItem
@@ -190,8 +190,7 @@ Item {
             // **Never blocked**, however much stands in the move's way: a branch another copy holds and a tree with
             // unmerged files both press through to a question instead, and the mark is what says so before the press
             // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer, not this one's — a row that cannot be
-            // pressed says why only on hover, and the reader who reached for it is the one who needs to read it
-            // (2026-08-22 ユーザー判断).
+            // pressed says why only on hover, and the reader who reached for it is the one who needs to read it.
             blockedReason: ""
             asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.

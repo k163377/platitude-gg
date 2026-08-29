@@ -8,8 +8,8 @@ import platitude.ui
 /// box a name is typed into.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below, so the code under them reads as it
-/// did when it was all one file.
+/// hangs off that driver; the names it owns are
+/// read back once below so the verbs can name them bare.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
 // and is never given a size.
 Item {
@@ -19,7 +19,7 @@ Item {
     /// the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so what is written under them reads as it did.
+    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
@@ -164,7 +164,7 @@ Item {
         onTriggered: {
             // **Nothing about the footer is read after the press.** The step this preset loads reaches the end of the
             // history, so the footer answers by going — and a wait that kept asking for its height would sit out the
-            // watchdog on the very run that worked (2026-08-29 実測).
+            // watchdog on the very run that worked (measured).
             if (acts.tailWalkedBefore < 0) {
                 if (!tailMoreTimer.press())
                     return
@@ -228,7 +228,7 @@ Item {
         id: graphHeadTimer
         /// Whether the second move — the press, or the scroll back — has been made. The first one is not latched: a
         /// view told to go to its end before it has laid two thousand rows out goes to the end it knows about and stays
-        /// there, so the ask is repeated until the stand-in itself says it arrived (2026-08-22 実測 — one ask, and the
+        /// there, so the ask is repeated until the stand-in itself says it arrived (measured — one ask, and the
         /// run waited out its watchdog at the top of the graph).
         property bool answered: false
         readonly property bool below: AppBackend.autoAct === "graph-head-below"
@@ -397,7 +397,7 @@ Item {
     //
     // This is the one bar the window hands a `ScrollView`, whose flickable is not interactive and never calls itself
     // moving — a box scrolled by the wheel was showing no bar at all until it was told to watch the text instead
-    // (2026-08-27 ユーザー報告). So the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar
+    //. So the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar
     // answers for itself.
     SampleTimer {
         id: textBarTimer
@@ -449,7 +449,7 @@ Item {
     // — and no tick will ever move them.
     //
     // Not "wait for `autoPanning` to go false": the flag is kept for the whole gesture (デザイン規約 §グラフを横へ送る), and nothing
-    // here ends the gesture, so the lane column's own case never completed (2026-08-16 実測: watchdog on both systems,
+    // here ends the gesture, so the lane column's own case never completed (measured, watchdog on both systems,
     // `message` passing beside it because that one never pans).
     SampleTimer {
         id: middleScrollTimer

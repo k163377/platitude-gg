@@ -14,7 +14,7 @@ NavIcon {
     property point at: Qt.point(0, 0)
 
     /// Whether to draw. Set this rather than `visible`, and read it back through this rather than through `visible`:
-    /// read from another file `visible` comes back stale — measured 2026-08-11, a run where the badge's own binding was
+    /// read from another file `visible` comes back stale — measured: a run where the badge's own binding was
     /// already true reported false through both a binding and an alias over it in the same breath. A plain property of
     /// this component's own carries the answer out intact, and `visible` follows it here where nothing has to read it.
     property bool shown: false

@@ -18,7 +18,7 @@ use crate::support::session::publish_helper;
 /// child's `execve` closes the error pipe, so it is already past — but
 /// with a thread per core the suite is forking git constantly and every
 /// neighbour sees it. It belongs to another process's scheduling, and
-/// this one cannot time it (実測: a child made to sleep 300ms between
+/// this one cannot time it (measured: a child made to sleep 300ms between
 /// fork and `execve` refuses a neighbour's exec for exactly that long).
 ///
 /// Hence a retry on the error, not a wait for the window: every attempt

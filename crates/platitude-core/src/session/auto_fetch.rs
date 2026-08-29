@@ -153,7 +153,7 @@ impl RepoSession {
 
     /// Whether the repository is known to have no remote at all, in which
     /// case an unasked fetch has nowhere to go: `fetch --prune --all`
-    /// there exits clean without reaching anything (実測 git 2.55), so
+    /// there exits clean without reaching anything (measured, git 2.55), so
     /// what it costs is a process an interval and a button that spins
     /// while it says it cannot be pressed.
     ///

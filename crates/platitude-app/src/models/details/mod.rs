@@ -15,10 +15,6 @@ mod details_tests;
 mod qobject;
 mod tree;
 
-// The three siblings reach the imports above through `use super::*`, which
-// sees what this module can see -- the block stays whole here rather than
-// being dealt out three ways.
-
 // ---------------------------------------------------------------------------
 // DetailsModel: commit metadata + changed files
 // ---------------------------------------------------------------------------

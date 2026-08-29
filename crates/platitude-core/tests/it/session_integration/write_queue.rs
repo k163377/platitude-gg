@@ -178,7 +178,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
         })
         .await;
     // Not a failure: git stopped and left the rebase standing, which is a
-    // landing of its own (2026-08-22 ユーザー判断). The event that says so
+    // landing of its own. The event that says so
     // has already been published — it goes out between the write's start
     // and the answer just waited for.
     assert_eq!(error, None, "a stop is not a failed write");
@@ -208,7 +208,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     // StatusLoaded" also matches the one this repository emitted when it
     // opened — the wait then returns before the abort has run and the
     // assertion below races it. Windows loses that race slowly enough to
-    // pass; Linux does not (実測).
+    // pass; Linux does not (measured).
     sink.wait_for("clean again", |evs| {
         let aborted = evs
             .iter()

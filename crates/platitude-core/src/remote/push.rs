@@ -51,11 +51,11 @@ pub struct PushSpec {
 /// and only if none of those is set does `fallback_remote` come into it.
 /// Reading just the last of the three sends a fork workflow's pushes to the
 /// repository it forked from, while the same `git push` in a terminal goes
-/// to the fork (実測 2.55).
+/// to the fork (measured, 2.55).
 ///
 /// The branch is pushed under **its own name** wherever it is not going to
 /// the remote it tracks: an upstream names a branch on one remote and says
-/// nothing about any other (実測: the refspec git builds for a triangular
+/// nothing about any other (measured: the refspec git builds for a triangular
 /// push is `<branch>:<branch>`).
 ///
 /// A detached HEAD has no branch to push, and says so rather than guessing.
@@ -113,7 +113,7 @@ pub async fn plan_current_push(
     // makes the *next* push need no decision. A branch that already tracks
     // something keeps tracking it: `--set-upstream` to another remote
     // rewrites `branch.<name>.remote`, and that is where the branch fetches
-    // from (実測 — it is the whole of what a mark on a second remote is
+    // from (measured — it is the whole of what a mark on a second remote is
     // for).
     let set_upstream = tracks.is_none() || merge.is_none();
 

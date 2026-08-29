@@ -112,7 +112,7 @@ fn parse_remote_config(bytes: &[u8]) -> Vec<Remote> {
 ///
 /// Nothing is contacted: git records the URL and reports success even for a
 /// host that does not exist, so a bad URL is only found out by the push that
-/// follows (実測). The remote survives that failure, which is why the UI
+/// follows (measured). The remote survives that failure, which is why the UI
 /// offers a way to correct the URL rather than undoing the add.
 ///
 /// Names are git's to judge — it refuses `bad name` (exit 128) and a name it
@@ -190,7 +190,7 @@ pub(super) async fn config_value(
         }
         // 1 is git's "no such key" — a valid empty answer. Anything else
         // (128 on an unreadable config) must not read as "unset": a push
-        // planned on that misreading rewrites upstreams (実測: a bad
+        // planned on that misreading rewrites upstreams (measured: a bad
         // config line makes `git config --get` exit 128, not 1).
         1 => Ok(None),
         code => Err(GitError::Failed {

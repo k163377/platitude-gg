@@ -589,7 +589,7 @@ async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
 /// A save that asks for what the file already says spawns no write at
 /// all. Not thrift: `git config --unset` fails when there was nothing to
 /// unset, and it fails with the same exit code as its refusal to touch a
-/// key written twice (実測 git 2.55: both are 5), so reading first is what
+/// key written twice (measured, git 2.55: both are 5), so reading first is what
 /// keeps a real failure from passing for a harmless one.
 #[tokio::test]
 async fn a_save_that_changes_nothing_asks_git_to_write_nothing() {

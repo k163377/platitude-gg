@@ -100,7 +100,7 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // **Read as a set of four.** A name held only here must not offer
     // the remote rows (git would report success for deleting nothing —
-    // 実測), one held only over there must not offer the local delete
+    // measured), one held only over there must not offer the local delete
     // (there is nothing to name), one held on both offers all three, and
     // the drifted run is the push row's own second form. Any single one
     // proves none of that.
@@ -185,7 +185,7 @@ pub(super) const TABLE: &[Verb] = &[
     // pushes to `fork`. A label worked out from `remote.pushDefault`
     // and the upstream says `origin/main` here and the push still
     // goes to the fork; git weighs the branch's mark first
-    // (git-config(5); 実測 2.55). `state=elsewhere` is the other half
+    // (git-config(5); measured 2.55). `state=elsewhere` is the other half
     // — the ahead/behind counts are about origin, so they say nothing
     // about where this is going.
     // With neither mark set the upstream is the destination, and the
@@ -227,7 +227,7 @@ pub(super) const TABLE: &[Verb] = &[
     // of this run can hold it**: the bar takes 200ms to go and the shot
     // is taken once it has, so a bar that spent the whole of it as an
     // empty band in the wrong colour frames exactly like one that kept
-    // its question (2026-08-27 ユーザー報告).
+    // its question.
     //
     // Every field is read in the turn the ✕ was pressed in, which is
     // why `shut=false` leads: it is what says the reading was taken

@@ -308,7 +308,7 @@ diff --git a/notes.md b/notes.md
 
 #[test]
 fn qml_agrees_with_itself_wherever_the_hunk_is() {
-    // The problem the regex walk existed for (2026-08-13 実測): QML's
+    // The problem the regex walk existed for (measured): QML's
     // `readonly property` reads as storage keywords at file scope and
     // as plain identifiers inside an `Item {}`. A grammar parses the
     // whole file, so a hunk anywhere reads in its real context.
@@ -339,7 +339,7 @@ diff --git a/A.qml b/A.qml
 fn qml_colours_its_javascript_body_not_just_its_own_words() {
     // The qmljs crate's query is a delta over the JS/TS base queries:
     // alone it knows `property` and friends, and a real file came out
-    // plain end to end (2026-08-23, DetailsPane.qml at 8382160e).
+    // plain end to end (DetailsPane.qml at 8382160e).
     let patch = "\
 diff --git a/A.qml b/A.qml
 --- a/A.qml

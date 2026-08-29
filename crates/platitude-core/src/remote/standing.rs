@@ -15,7 +15,7 @@ pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out.
     Closed,
     /// No commits yet: git refuses the send itself (`error: src refspec
-    /// <branch> does not match any` — 実測 2.55), so the button says so
+    /// <branch> does not match any` — measured 2.55), so the button says so
     /// rather than offering a push that cannot land.
     Unborn,
     /// Never sent, or the tracking ref is gone: where the branch goes is
@@ -56,7 +56,7 @@ impl PushStanding {
 ///
 /// **The branch's own mark beats the repository's** — git's order, and
 /// the first two steps of [`super::plan_current_push`]'s
-/// (git-config(5); 実測 2.55). Reading only the repository's is how a
+/// (git-config(5); measured 2.55). Reading only the repository's is how a
 /// fork workflow, which marks the branch, gets told about the repository
 /// it forked from.
 fn marked_remote<'a>(push_remote: &'a str, push_default: &'a str) -> &'a str {
@@ -101,7 +101,7 @@ fn upstream_is_on<'a>(
 ///
 /// The branch keeps the name its upstream gives it only where it is going
 /// to the remote it tracks. Anywhere else it goes under its own name, as
-/// the refspec git builds for a triangular push does (実測 — the same
+/// the refspec git builds for a triangular push does (measured — the same
 /// rule [`super::plan_current_push`] applies to `branch.<name>.merge`).
 pub fn push_target<'a>(
     branch: &str,

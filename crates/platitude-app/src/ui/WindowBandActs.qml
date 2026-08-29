@@ -304,7 +304,7 @@ Item {
             // Asked for again on every tick rather than once. **What the shape is worth is measured off the wording
             // the button is saying**, and push's wording arrives with the readings that decide it — a width settled
             // on the tick the working tree loaded is one measured for `push`, and the band it lands on is saying
-            // `push -f` (実測 2026-08-25: the run came out a whole step further down than it asked for). Re-asking
+            // `push -f` (measured, the run came out a whole step further down than it asked for). Re-asking
             // costs nothing and closes no ring: the target is read off the wordings and the floor, neither of which
             // the window's width moves.
             const wanted = acts.actionsWidthFor(
@@ -322,7 +322,7 @@ Item {
         }
     }
     /// The width a shape sits at. `fold` is the floor the words are finished by — the window's own, measured with the
-    /// left list open (2026-08-25 ユーザー指示) — and the default is the middle of the cap's travel, which is the one
+    /// left list open — and the default is the middle of the cap's travel, which is the one
     /// stretch where every wording is cut and none is given up. A number passed through is somebody naming a pixel.
     function actionsWidthFor(arg) {
         const wanted = parseInt(arg)
@@ -338,7 +338,7 @@ Item {
         // The narrowest cell that still has a word in it — the last step before the marks.
         //
         // Not the middle of the stretch where the wordings are being cut: **how long that stretch is depends on the
-        // installed fonts, and for a four-letter command it can be nothing at all** (実測 2026-08-25 Linux: `push` and
+        // installed fonts, and for a four-letter command it can be nothing at all** (measured, Linux: `push` and
         // `…` + two characters measure the same 27px, so `push -f` goes from whole to given up with no cut in
         // between). Landing on the last labelled cell is a shape that exists on every machine, and `cut=` rides along
         // to say whether this one had a cut in it.

@@ -208,7 +208,7 @@ async fn the_label_names_the_remote_the_send_uses() {
         ("origin", ""),
     ] {
         // Exit 5 where the key was never there, which is the state asked
-        // for rather than a failure (実測).
+        // for rather than a failure (measured).
         repo.git_ok(&["config", "--unset", "branch.main.pushRemote"]);
         remote::clear_push_default(&exec, &repo.path, &cancel)
             .await
@@ -322,7 +322,7 @@ async fn the_marks_read_back_and_unset_is_an_answer() {
 }
 
 /// A branch named with regex metacharacters reads its own mark and nobody
-/// else's: the name goes into the `--get-regexp` pattern escaped (実測
+/// else's: the name goes into the `--get-regexp` pattern escaped (measured
 /// 2.55: unescaped, `wip.v2+x` answers with `wipAv22x`'s mark), and the
 /// send resolves the same way.
 #[tokio::test]

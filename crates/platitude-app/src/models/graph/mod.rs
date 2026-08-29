@@ -18,9 +18,6 @@ mod item;
 mod qobject;
 mod stream;
 
-// The siblings reach these through `use super::*`, which sees what this
-// module can see — so the row item stays inside `graph` and nothing
-// leaves it but the model itself (`models::mod`).
 use item::{GraphRowItem, to_row_item};
 
 #[derive(Default)]

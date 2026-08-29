@@ -267,7 +267,7 @@ fn wide(word: &str) -> String {
 /// (`encode::columns::step_of`), but a Latin-only mono family hands the
 /// glyph to a fallback that advances one em instead, so a wash laid on
 /// columns alone stands right of the characters it names (measured
-/// 2026-08-24 on Windows: charW 8px against 13px, three of them a glyph).
+/// Measured on Windows: charW 8px against 13px, three of them a glyph).
 ///
 /// Three lines, because it takes three to say it: one with nothing wide in
 /// it, one whose change stands behind wide glyphs, and one whose change is

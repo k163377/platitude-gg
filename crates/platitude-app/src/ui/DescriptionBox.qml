@@ -90,7 +90,7 @@ Rectangle {
     ///
     /// The caret goes first, and it is the half that matters. Assigning `text` leaves the caret at the end of what was
     /// assigned, and a `TextArea` keeps its caret in view by scrolling the flickable it sits in — so a message longer
-    /// than the box opened at its **last** line, mid-sentence, every time (measured 2026-08-15 on a 853-byte body:
+    /// than the box opened at its **last** line, mid-sentence, every time (measured, on a 853-byte body:
     /// `contentY=420 cursor=853`). Putting the caret back to the top is what stops that; setting `contentY` alone does
     /// not, because the scroll happens later, when the text lays itself out.
     function resetForNewMessage() {
@@ -160,15 +160,13 @@ Rectangle {
     }
     // The badge itself is not drawn here. A pull that has run out has the hand somewhere outside this box — below it
     // for the ceiling, above it for the floor — and a badge parented to the box lands outside its own parent, where it
-    // is composited with the box among the pane's children: under the author card, under the file list (2026-08-11
-    // ユーザー報告). The page draws the one badge in a layer over everything, and this only says where the hand is and
+    // is composited with the box among the pane's children: under the author card, under the file list (observed). The page draws the one badge in a layer over everything, and this only says where the hand is and
     // whether it is being refused (`RepoPage`).
     /// A wheel this box had nothing left to do with, in pixels. Whoever put the box on a surface that scrolls moves
     /// that surface by it.
     ///
     /// Without this the box is a hole in the pane behind it: a wheel over it is answered by text that will not move,
-    /// and the box covers most of what it stands on, so the surface underneath cannot be reached by wheel at all
-    /// (2026-08-09 ユーザー報告).
+    /// and the box covers most of what it stands on, so the surface underneath cannot be reached by wheel at all.
     signal wheelPastEnd(real pixels)
     /// Escape was pressed while the caret was in here. What that costs is the text's, not the box's, so whoever owns
     /// the text decides (`MessageEditor`).
@@ -235,11 +233,11 @@ Rectangle {
         // One value on all four sides, the bar's side included — no gutter is taken for it, so the words run under the
         // thumb the way the graph's messages do, and the text stands between two equal margins. **Not narrower on the
         // right**: taken to the frame's own line the text reads as stuck to it, which is the answer the graph's right
-        // edge already gives (2026-08-27 ユーザー指示 — デザイン規約 §余白).
+        // edge already gives (by design — デザイン規約 §余白).
         anchors.margins: Theme.spaceXs
         // A bar handed to a `ScrollView` arrives half-wired: `size` and `position` track the text, but **no geometry
         // comes with it** — it is laid out at `x 0 y 0` at its own implicit 10x10, which draws a dot in the box's top
-        // corner (qmltestrunner 実測 2026-08-27; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So
+        // corner (qmltestrunner measured, ; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So
         // the three numbers are written here, and the flickable it answers for is named (`AutoScrollBar.view`), since
         // the bar is parented to the view rather than to the flickable inside it. `MessageEditor` puts the same block
         // over the summary box.
@@ -254,7 +252,7 @@ Rectangle {
         //
         // `interactive` goes with the hard stop: the flickable answers the wheel itself as well as letting the handler
         // above see it, so the two moved the text twice — the handler's jump, and then the flickable's own animation
-        // settling somewhere else, which reads as the text going up and being dragged back (2026-08-09 ユーザー報告). Off,
+        // settling somewhere else, which reads as the text going up and being dragged back. Off,
         // `rollBy` is the only thing that moves this text, and dragging inside a text box means selecting it anyway.
         Component.onCompleted: {
             contentItem.boundsBehavior = Flickable.StopAtBounds

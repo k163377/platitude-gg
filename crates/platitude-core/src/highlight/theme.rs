@@ -105,7 +105,7 @@ pub(super) fn assets() -> &'static Assets {
 /// rather than loaded: every published theme is drawn for its own ground
 /// and its own idea of how loud code should be, and next to this window's
 /// words all of them read as though the code were the caption
-/// (2026-08-13 実測 — base16-ocean, Catppuccin Mocha, Dracula, Monokai
+/// (measured — base16-ocean, Catppuccin Mocha, Dracula, Monokai
 /// were all tried against the real thing).
 fn palette() -> Theme {
     // Through `super::Rgb::of`, the one place `0xRRGGBB` is taken

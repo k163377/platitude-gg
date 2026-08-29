@@ -47,7 +47,7 @@ Item {
     // ---- the one badge in the window ----------------------------
     // A refused drag has the hand *outside* the thing it was dragging, so
     // a badge parented to the divider's own pane lands outside its parent
-    // and is composited under the page's panes (2026-08-11 ユーザー報告);
+    // and is composited under the page's panes;
     // over the whole page it is above them all. `mapFromItem` is a method
     // and would not re-run on its own, but the point it reads changes on
     // every move of the drag that raised it, which is the only time this

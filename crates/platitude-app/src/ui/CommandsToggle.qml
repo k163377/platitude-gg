@@ -25,7 +25,7 @@ Rectangle {
     property bool ruled: true
     /// The step the mark is drawn at, which is the one whatever it stands among is drawn at: the sections' own marks
     /// where it stands beside a name (`iconMd`), and the fold control's where it stands alone at the end of the rail
-    /// (`iconLg` — that block is what this one is read against down there, 2026-08-23 ユーザー指示. デザイン規約 §寸法).
+    /// (`iconLg` — that block is what this one is read against down there, by design. デザイン規約 §寸法).
     property real markSize: Theme.iconMd
 
     /// The log this tab is filling. Asked of the log rather than of the page: closing a tab takes the page's models
@@ -42,7 +42,7 @@ Rectangle {
     readonly property alias markColor: commandsMark.tint
 
     /// Where the mark stands and where the name begins — a section's row without the fold arrow's column, which is
-    /// what this row has no use for (2026-08-23 ユーザー指示: 「>モードは無いので左に揃えて」). Written as the sum of the
+    /// what this row has no use for. Written as the sum of the
     /// steps rather than as numbers, so the row moves with the pane's own inset when that moves.
     readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
@@ -54,7 +54,7 @@ Rectangle {
     implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
     implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
     // A band's ground, which is what all three of its seats stand on: the sections' headers, the fold control's block
-    // and the log's own band are `bgElevated`, and this row is read against them (2026-08-23 ユーザー指示). In the
+    // and the log's own band are `bgElevated`, and this row is read against them. In the
     // log's band it repaints the value that band already carries, so the row reads the same there with no case for it.
     color: Theme.bgElevated
     // The wash goes over that ground rather than instead of it — `bgHover` is a white at 8% and has nothing of its own

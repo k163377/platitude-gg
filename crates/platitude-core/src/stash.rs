@@ -277,7 +277,7 @@ pub fn is_valid_message(message: &str) -> bool {
 /// The label somebody gave a stash, out of the reflog subject a listing
 /// carries — empty where git wrote the whole subject itself.
 ///
-/// git leaves three shapes on the reflog (実測):
+/// git leaves three shapes on the reflog (measured):
 /// - `WIP on <branch>: <abbrev> <subject>` — its own, for an entry pushed
 ///   with no message. That names the commit the work was standing on, not
 ///   the work, so nobody gave this one a label and it answers empty.

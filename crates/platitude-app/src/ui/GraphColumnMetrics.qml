@@ -42,7 +42,7 @@ QtObject {
     /// mark's ink, not its box** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
     /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark rather than out of
     /// the tokens. It draws nothing: `inkWidth` is arithmetic on the kind, the size and the stroke, and answers the
-    /// same 7.5 with no scene around it (2026-08-22 実測 qmltestrunner: no window, no warning).
+    /// same 7.5 with no scene around it (measured, qmltestrunner: no window, no warning).
     readonly property NavIcon chipHeldMark: NavIcon {
         kind: "tree"
         width: Theme.iconSm
@@ -59,13 +59,13 @@ QtObject {
     /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, the
     /// held mark and the gap after it, and its own padding on either side. **Each one is a term `RefChip` takes off the
     /// name**, so each one is here, and a floor measured on the bare chip leaves the row that wears them with nothing
-    /// but the cut mark (実測).
+    /// but the cut mark (measured).
     ///
     /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
     /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
     /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
     /// held mark alone is 9.5 of the 28 the floor keeps for a name, so a floor that leaves it out gives
-    /// `feature/topic-a` one character where three were promised (2026-08-22 実測).
+    /// `feature/topic-a` one character where three were promised (measured).
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
     /// own padding. Each mark's term is its plain ink and the half gap that follows it; `spaceLg` is the `+N` with its
@@ -84,7 +84,7 @@ QtObject {
     // The chip column does not give when the pane narrows — the lanes do (`graphColWMax`), and the window's floor holds
     // this one's width in reserve (規約 §窓の床). Squeezing it is ruled out: a column narrower than a chip draws a
     // crushed one, and a column that follows the pane changes width whenever the left menu folds, which is a thing
-    // moving on screen that nobody asked to move (2026-08-09 ユーザー報告 — all three reported symptoms traced here).
+    // moving on screen that nobody asked to move (observed — all three reported symptoms traced here).
     //
     // A column somebody dragged is still held inside what the pane can lay out: that one is as wide as a hand made it,
     // and the message column has to survive the window being narrowed afterwards.
@@ -92,7 +92,7 @@ QtObject {
     // Read back rounded — here and in `graphColW` — because the two kinds of reader sit on different grids: the rows'
     // ticks are laid out by RowLayouts, which snap to whole pixels, while the divider hover lines read these raw. On a
     // fractional width (a drag, or a fractional floor) the tick and the line straddle the same half pixel differently
-    // and stop meeting (2026-08-11 報告). Rounding what everyone reads keeps one grid without touching what the drag
+    // and stop meeting. Rounding what everyone reads keeps one grid without touching what the drag
     // wrote down.
     readonly property real labelW: Math.round(labelWManual >= 0
         ? Math.max(labelColWMin, Math.min(labelWManual, labelColWMax))

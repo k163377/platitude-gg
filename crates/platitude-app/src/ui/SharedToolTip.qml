@@ -65,7 +65,7 @@ Item {
     /// a tip held up for a walk nobody is taking is still standing — with the *previous* row's seat — when the run asks
     /// whether this one put one out. Held open that way it also stops the attached property from ever asking again
     /// (`QQuickToolTipAttached` reads the instance back and says "already showing"), so the next row's tip never comes
-    /// (2026-08-27 実測: `nav-tip` waited out its watchdog with the right text and `visible=false`).
+    /// (measured, `nav-tip` waited out its watchdog with the right text and `visible=false`).
     ///
     /// **`hovered` is not the test.** The offscreen platform answers a window-wide `HoverHandler` with a hand at the
     /// origin, so `PointerWatch` reads `seen` there too; what tells the two apart is `handAcross`, the stand-in itself.
@@ -84,7 +84,7 @@ Item {
         // **And the seat is given straight back**, because the two are handed over by different rules: a popup adopts
         // the background whatever it is holding on to, and the content **only if it has no visual parent yet**. Left
         // sitting here the words are owned by the tip, sized by the tip and read back by every run that asks the tip
-        // what it says — and painted at this item's corner, which is nowhere near it (実測 2026-08-29: the ground came
+        // what it says — and painted at this item's corner, which is nowhere near it (measured, the ground came
         // out empty and `path-tip` / `tip-copy` / `tip-sweep` all stayed green). The owner set above is a `QObject`
         // parent and outlives this line, so nothing here is left for the collector.
         const ground = tipGround.createObject(shared)
@@ -122,7 +122,7 @@ Item {
     /// It covers the whole target wherever it is put, so the walk into it is safe from anywhere — which leaves the seat
     /// free to answer the other question a tooltip is always asked: *which of these is it about*. Centred on the hand
     /// it cannot: two neighbouring tabs are a hand's width apart, so the box comes out at very nearly the same x for
-    /// both, and a reader crossing them sees one box quietly change its words (2026-08-27 ユーザー報告 — two
+    /// both, and a reader crossing them sees one box quietly change its words (observed — two
     /// repositories whose tips began within a few pixels of each other). Sat on the target's own corner, it moves by a
     /// whole tab and says whose it is (規約 §hover のツールチップ).
     ///
@@ -163,7 +163,7 @@ Item {
     /// **And again a turn later.** The tip comes out inside the same delivery that moved the pointer, and the window's
     /// watch is another item in that delivery — which of the two Qt reaches first is not written down anywhere (規約
     /// §hover のツールチップ の罠 (3), the same unordered pair the beat exists for). Read from the first one, a tip whose
-    /// site opens it without a rest lands on the target's middle as though there were no hand at all (実測 2026-08-27:
+    /// site opens it without a rest lands on the target's middle as though there were no hand at all (measured,
     /// with `delay: 0` the seat came out at the row's centre, and again at the far edge with a position the hand had
     /// already left). The second read is before anything is drawn, so nothing moves on screen; by then the hand is
     /// still on the target, because the walk into the tip has not begun.
@@ -223,7 +223,7 @@ Item {
     ///
     /// **A turn later, never inside the fall itself.** `Popup` announces the fall from inside its own teardown and is
     /// still holding itself open at that moment, so an `open()` called from the handler is dropped on the floor without
-    /// a word — the tip went and never came back (2026-08-27 実測: one `visible=true`, one `visible=false`, and no third
+    /// a word — the tip went and never came back (measured, one `visible=true`, one `visible=false`, and no third
     /// line). `Qt.callLater` runs before the scene is drawn again, so nothing blinks.
     function reopen() {
         if (!shared.keeping || shared.sharedTip.visible)
@@ -231,7 +231,7 @@ Item {
         // **Without the rest.** The wait before a tip is the question "was that a hand going past, or one that meant
         // it?", and a tip that is already out has been answered (規約 §hover のツールチップ「出ているものの的へ戻る手は
         // 待たせない」). Put back through the delay it would still be counting when the beat below ran out, and the beat
-        // would find nothing on screen to be inside of and take it down under the hand (実測 2026-08-27). The attached
+        // would find nothing on screen to be inside of and take it down under the hand (measured). The attached
         // property writes the delay again on the next real ask, so this heals itself.
         shared.sharedTip.delay = 0
         shared.sharedTip.open()

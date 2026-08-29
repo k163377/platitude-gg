@@ -28,8 +28,7 @@ RowLayout {
     /// The button rather than the row it sits in: red says
     /// what the hand is about to lose, and a word that
     /// reddens while the pointer is still three columns of
-    /// data away is about none of them (2026-08-21 ユーザー
-    /// 選択).
+    /// data away is about none of them (observed).
     readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
         || avatarRow.pointedAtRow === avatarRow.index
     /// Automation reads and works the row through these two rather than reaching inside it: the

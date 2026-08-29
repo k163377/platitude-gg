@@ -16,7 +16,7 @@ Item {
 
     /// The button and the band's double-click have to mean the same thing, so both go to the platform: Qt maximises
     /// a frameless window by resizing it, leaving the platform no maximised state to put back — the button left the
-    /// window large while the platform-handled double-click restored it (reported 2026-08-09). `visibility` still
+    /// window large while the platform-handled double-click restored it (observed). `visibility` still
     /// says what the window *is*, and still carries the state where the platform has no command of its own.
     function toggleMaximized() {
         const wanted = chrome.window.visibility !== Window.Maximized
@@ -27,8 +27,8 @@ Item {
     }
     /// Down onto the taskbar — and through the platform for the same reason the maximise is, only sharper: assigning
     /// `Minimized` hands Qt a state that is *only* minimised, so it reads the maximise as given up and clears the
-    /// platform's restore-to-maximised flag on the way down. The window came back an ordinary one (reported
-    /// 2026-08-22). `visibility` still carries it where there is no platform command.
+    /// platform's restore-to-maximised flag on the way down. The window came back an ordinary one
+    /// (observed). `visibility` still carries it where there is no platform command.
     function minimizeWindow() {
         if (chrome.window.captionMerged)
             AppBackend.minimizeWindow()
@@ -38,7 +38,7 @@ Item {
     /// Whether the scene wants its grab-runs back for a while. They are the parts of the window a press never
     /// reaches — the hit test answers HTCAPTION for them, so the platform takes the press and the scene is told nothing
     /// — and a card that is meant to close on a press outside it would stand through every click landing there
-    /// (2026-08-23 ユーザー報告: the ☰'s menu). While such a card is up the runs are ordinary client area again, so the
+    ///. While such a card is up the runs are ordinary client area again, so the
     /// press closes it; the band gives up drag, snap and the double-click for exactly that long, which is what a
     /// platform menu does with the click that dismisses it.
     ///

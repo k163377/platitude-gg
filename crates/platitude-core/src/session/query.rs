@@ -55,7 +55,7 @@ impl RepoSession {
     pub fn check_publish(self: &Arc<Self>, range: String) {
         // A repository with no commits has nothing published, and that is
         // an answer rather than a read: `rev-list --count HEAD^!` on an
-        // unborn branch is `fatal: ambiguous argument` (実測 2.55), which
+        // unborn branch is `fatal: ambiguous argument` (measured, 2.55), which
         // would turn the command log red on a repository doing nothing
         // wrong.
         if self.known_head_tip() == Some(None) {
@@ -125,7 +125,7 @@ impl RepoSession {
     /// changing its status. A conflict is the shape that shows it: git
     /// reports the same two stage letters whether or not the markers are
     /// still in the file, so a conflict resolved in another tool left the
-    /// pane drawing the conflict it was opened on (2026-08-22 ユーザー報告).
+    /// pane drawing the conflict it was opened on.
     ///
     /// One process on a tick that finds nothing moved — the raw diff, and
     /// the fingerprint that says it is the one already on screen. Only a

@@ -14,7 +14,7 @@ pub(super) struct Outcome {
     /// Whether the app's own watchdog ended the run. It quits cleanly when
     /// it fires, so the parent sees an ordinary exit — and a run that
     /// wedged after its first `grabToImage` came back has a screenshot to
-    /// show for itself as well (2026-08-16: a half-finished shot pair
+    /// show for itself as well (observed: a half-finished shot pair
     /// passed on the strength of `app.png` alone). Reaching the ceiling is
     /// never a pass: it is the harness saying it stopped waiting.
     pub(super) watchdog_expired: bool,

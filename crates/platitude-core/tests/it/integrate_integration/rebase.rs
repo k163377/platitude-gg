@@ -12,7 +12,7 @@ use platitude_core::{opstate, status};
 /// A rebase that stopped part-way is a landing of its own, not a failure
 /// — git left the replay standing, and the badge, the exit card and the
 /// conflicted rows are the whole of what happened
-/// (2026-08-22 ユーザー判断. デザイン規約 §進行中の操作から出る).
+/// (by design. デザイン規約 §進行中の操作から出る).
 fn stopped(outcome: Result<integrate::RebaseOutcome, platitude_core::error::GitError>) {
     match outcome.expect("a stop is an answer, not a failure") {
         integrate::RebaseOutcome::Stopped => {}
@@ -178,7 +178,7 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
 }
 
 /// The one failure that leaves `rebase-merge` standing: a rebase asked
-/// for while one is already in progress. git spends 128 on it (実測
+/// for while one is already in progress. git spends 128 on it (measured
 /// 2.55) — every other failure leaves nothing behind — so reading the
 /// marker without the code would call it a stop, and git's sentence
 /// about what is really there would never reach the screen.

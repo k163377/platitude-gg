@@ -100,13 +100,13 @@ MenuItem {
 
     /// Where a card's name starts its mark — **the mark's ink, not its box**. Shifted left by exactly the seat the
     /// menu leaves for the hold ring and the `!`: where there is one the mark stands in it, where there is none it
-    /// starts on the same x the other rows start their words (2026-08-26 ユーザー指示).
+    /// starts on the same x the other rows start their words.
     readonly property real markX: Theme.spaceSm - menuItem.holdIndent
 
     // A row that names a card carries its whole name in the padding, seated **to the mark's ink and not its box**:
     // `spaceXs` of air behind the ink and no more, with the box's own air on either side not spent a second time. The
     // same seat the copy mark takes beside a hash and the face takes beside a name (`HashPlate`, `CommitAuthorRow` —
-    // デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」, 2026-08-26 ユーザー指示).
+    // デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
     leftPadding: menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
                                 : Theme.spaceSm + menuItem.holdIndent
     topPadding: 0
@@ -158,7 +158,7 @@ MenuItem {
     // **It is not drawn the way the ring is, though — it is drawn the way every other `!` in this app is**: raised by
     // a gap and half a gap into the word's own bearing, hanging off the words rather than sitting centred in a column
     // of its own (`ActionButtonLabel`, `NameCell`, the toolbar's `push -f`). A mark that reads the same wherever it is
-    // met is the whole point of having one shape for it (2026-08-22 ユーザー判断). At the head of the row because the
+    // met is the whole point of having one shape for it. At the head of the row because the
     // words run to the right of it — the same end `ActionButtonLabel` puts it on for a phrase.
     NavIcon {
         x: Theme.spaceXs / 2
@@ -280,7 +280,7 @@ MenuItem {
         // Every row hovers to the same wash (デザイン規約 §メニュー). The held rows could never take the solid accent — their
         // words are the tone, and a face under them would both fight the colour and take the warning away at the moment
         // the pointer arrives — and one menu holding two strengths of highlight read as two different states rather
-        // than one pointer (2026-08-11 ユーザー報告). The list the combo drops has said it this way all along (§選ぶ欄と打つ欄).
+        // than one pointer. The list the combo drops has said it this way all along (§選ぶ欄と打つ欄).
         color: menuItem.highlighted ? Theme.bgHover : "transparent"
         HoldFill {
             progress: menuItem.holdProgress

@@ -218,7 +218,7 @@ Item {
                 // The spelling to ask with, when the run named none, is the strip's own — and the strip is a view: the
                 // item for a row the model has just gained arrives with the next layout. Asking with the "" it answers
                 // until then opens nothing, and nothing opened is what this verb's completion looks like — it went
-                // green having asked for nothing at all (measured 2026-08-17).
+                // green having asked for nothing at all (measured).
                 const path = AppBackend.autoActArg !== "" ? AppBackend.autoActArg : topBar.tabPathAt(0)
                 if (path === "")
                     return

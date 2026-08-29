@@ -236,7 +236,7 @@ Rectangle {
         sidebar.closePeek()
         // And the box goes with the list it stood in: folded, one left
         // open comes back up under the pointer on a row nobody clicked
-        // (2026-08-18 ユーザー報告). `startEdit` puts the list back before
+        //. `startEdit` puts the list back before
         // opening its own box, so that one is never this one.
         sidebar.stopEdit()
         if (sidebar.collapsed) {
@@ -296,7 +296,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         // Folded, it is the fold control's own block at the other end of the rail — same box, same step of mark
-        // (2026-08-23 ユーザー指示). Open, it is one more of the sections' bands.
+        //. Open, it is one more of the sections' bands.
         height: sidebar.collapsed ? Theme.headerHeight : Theme.rowHeight
         captioned: !sidebar.collapsed
         markSize: sidebar.collapsed ? Theme.iconLg : Theme.iconMd

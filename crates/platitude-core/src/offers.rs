@@ -109,7 +109,7 @@ pub struct RefMenuOffers {
     /// The everyday delete. **git refuses to delete the branch the
     /// working tree is on — or one any other working copy has checked
     /// out** (`error: cannot delete branch … used by worktree at …`,
-    /// 実測 2026-08-21), locked or not: a lock stops `worktree remove` /
+    /// measured), locked or not: a lock stops `worktree remove` /
     /// `worktree move`, a different question.
     pub delete: bool,
     /// The branch's remote reading, deleted without touching the local
@@ -126,7 +126,7 @@ pub struct RefMenuOffers {
     /// The tag taken off the remote, leaving whatever is here. Offered
     /// wherever a remote was last heard to carry the name — and only
     /// there, because the qualified `--delete` git needs does not fail on
-    /// a name the remote has not got (実測 — [`crate::remote::
+    /// a name the remote has not got (measured — [`crate::remote::
     /// delete_remote_tag`]), so a row offered on a guess would report
     /// success for having done nothing.
     pub delete_remote_tag: bool,
@@ -137,7 +137,7 @@ pub struct RefMenuOffers {
     /// far side of somebody's, and it has none of its own — and the
     /// answer is a question rather than a lookup, so the row needs a
     /// remote to ask about and nothing else. **The branch the tree is on
-    /// takes it, and so does one another working copy holds** (実測): this
+    /// takes it, and so does one another working copy holds** (measured): this
     /// writes configuration about a branch rather than moving onto it.
     pub set_upstream: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal

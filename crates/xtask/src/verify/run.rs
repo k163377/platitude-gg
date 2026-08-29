@@ -179,7 +179,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // the block whether or not it was told to fill — and a row that
     // never filled answers exactly like one that did. Seeded wide, the
     // same run puts the hash plate 540px short of the pane's edge the
-    // moment the fill is gone (2026-08-28 ユーザー報告).
+    // moment the fill is gone.
     if opts.verb == "details-fit" {
         let state = config_dir.join("state.toml");
         std::fs::write(&state, "version = 1\n\n[layout]\ndetails_width = 800\n")

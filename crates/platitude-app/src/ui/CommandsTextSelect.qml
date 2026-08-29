@@ -5,7 +5,7 @@ import platitude.ui
 
 // The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down
 // (デザイン規約 §git が言ったことを読む場所). There is no menu behind it — the reader drags and presses Ctrl+C, the way a
-// terminal is read (2026-08-28 ユーザー指示).
+// terminal is read.
 //
 // **It is laid over the list rather than declared inside it**, for the two reasons that are the same reason twice: a
 // `Flickable` takes the grab away from its own children once a drag passes the threshold, and `reuseItems` builds a
@@ -18,7 +18,7 @@ import platitude.ui
 // **Every place in the frame that nobody else takes is a start**, the ground a log shorter than its panel leaves under
 // the last row included (`rowAt`, 規約 §git が言ったことを読む場所). Nothing stands over these rows at all, so here that
 // is the whole of the rule — except at the right edge, where the list's own bar is drawn over them and this stops
-// short of it (`barRoom`, 2026-08-29 ユーザー報告 against the diff's hand, which had the same shape).
+// short of it (`barRoom`, observed against the diff's hand, which had the same shape).
 //
 // Everything about *which byte* a press landed on is asked of the model: this knows which of the row's three columns
 // the pointer was over and how far along it, and only the model holds the line those columns are drawn from.
@@ -118,8 +118,7 @@ Item {
     }
     /// A content y brought onto the band the rows themselves stand on — the whole of what makes the ground under the
     /// last row a place a selection can start (規約 §git が言ったことを読む場所「掴めるのは、誰も取らない所すべて」).
-    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had
-    /// (2026-08-28 ユーザー報告).
+    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
     /// `originY` rather than zero: this list is sent to its end over rows of differing heights — a failure brings
     /// git's words down with it — and a view that has been so moves its own origin (`CommandsPane.clampY`). An empty

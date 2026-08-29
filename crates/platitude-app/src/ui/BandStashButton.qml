@@ -31,7 +31,7 @@ ActionButton {
     tip: {
         // Nothing open, or another git command already out. Neither is about stashing, and both are said on
         // this band already (デザイン規約 §無効). Said out loud because a disabled control still takes hover and
-        // still opens its attached ToolTip (実測: rules-refs/app-ui.md §hover).
+        // still opens its attached ToolTip (measured, rules-refs/app-ui.md §hover).
         if (stashButton.mode === "closed" || stashButton.curPage.pageTab.busyCount > 0)
             return ""
         // The three that *are* about the working tree each name what is missing (デザイン規約 §hover のツールチップ).

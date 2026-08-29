@@ -7,9 +7,9 @@ import platitude.ui
 //
 // **A `TextEdit` rather than a `Label`**, because selecting is a text field's doing and a Label has none of it. What
 // that costs is `elide`, which `TextEdit` has no property for — so **this part wraps and the caller caps the width**.
-// That is the answer the cards wanted anyway: every field that used to elide in one of them is a name being shown
-// *because* the row it came from had already cut it (規約 §hover のツールチップ「名前は文ではないので 1 行に収めない」), and a
-// name cut a second time in the place it went to be read is a name nobody can read anywhere.
+// That is the answer the cards want anyway: every field a card shows is a name being shown *because* the row it came
+// from had already cut it (規約 §hover のツールチップ「名前は文ではないので 1 行に収めない」), and a name cut a second
+// time in the place it went to be read is a name nobody can read anywhere.
 //
 // **Two ways in, the pair the right pane's values carry.** Where the pointer is on the words they answer their own
 // press, which is Qt's machinery and needs nothing from us; where it is in the card's own air — the padding band, the
@@ -54,7 +54,7 @@ Item {
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
     /// How many whole lines the cap leaves room for — **a cap is always spent in whole lines**. A height taken at its
     /// word lands inside a line and leaves a row of glyphs cut through the waist, with the mark floating beside it on a
-    /// baseline of its own: not a message that stops, one that broke (2026-08-28 ユーザー報告). Rounded down to the line
+    /// baseline of its own: not a message that stops, one that broke. Rounded down to the line
     /// below, the field ends the way an elide ends — a whole last line with the mark standing on its tail. Never less
     /// than one: a cap shorter than a line still has to show the line it is cutting, or all that is left is a blank
     /// strip with a mark on it.
@@ -120,7 +120,7 @@ Item {
         const p = cardText.inBox(item, x, y)
         // The caret comes here, which is also what takes the selection off whatever field was holding one: a field
         // drops its own the moment it loses focus (nothing here is persistent — one selection in the window). A press
-        // on these words does the same thing on its own (`activeFocusOnPress`, 実測 qmltestrunner `tst_cardpad`).
+        // on these words does the same thing on its own (`activeFocusOnPress`, measured qmltestrunner `tst_cardpad`).
         field.forceActiveFocus()
         cardText.grabAnchor = field.positionAt(p.x, p.y)
         field.select(cardText.grabAnchor, cardText.grabAnchor)
@@ -167,9 +167,9 @@ Item {
         selectByKeyboard: true
         // **Never `persistentSelection`.** There is one selection in this window, and it belongs to whatever the caret
         // is in — a card holding several of these would otherwise stay lit in every line the reader had swept, and so
-        // would the pane behind it (2026-08-28 ユーザー報告, on the pane's own fields). It was kept for the camera, and
+        // would the pane behind it (observed, on the pane's own fields). It was kept for the camera, and
         // the camera never needed it: a field that has not taken focus answers `selectedText` after `selectAll()` all
-        // the same, which is the whole of what `tip-copy` reads (実測 qmltestrunner `tst_twofields`).
+        // the same, which is the whole of what `tip-copy` reads (measured, qmltestrunner `tst_twofields`).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // A field of its own width, with no room around it: the card's padding is the card's.

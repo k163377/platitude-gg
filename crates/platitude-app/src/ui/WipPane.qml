@@ -326,7 +326,7 @@ ColumnLayout {
     /// it. Called on the pointer's edges alone, it answers for the state the pane was in when the pointer arrived, and
     /// a pointer that arrives first is the ordinary case: someone presses `Stage all` and moves to the button while the
     /// index is still being written, so the button is disabled — and therefore not warning — for the whole of the only
-    /// moment it would have been asked (2026-08-18 実測: the card never came). So the warning re-asks too, from both
+    /// moment it would have been asked (measured, the card never came). So the warning re-asks too, from both
     /// sides it can change on: whether it is warning at all, and how many files it is warning about.
     Connections {
         target: wipPane.workTree
@@ -523,7 +523,7 @@ ColumnLayout {
     /// fallback under an empty one *and as text*, put there by `absorbOpMessage` so the press can read it. So it is
     /// held against the standing message rather than against emptiness: a stash pressed over a stopped merge is a
     /// stash of the work, and the entry git names itself says more about it than a merge that no longer exists
-    /// (2026-08-22 実測: the press takes `MERGE_HEAD` with it). One word typed over it makes it the reader's again.
+    /// (measured, the press takes `MERGE_HEAD` with it). One word typed over it makes it the reader's again.
     /// **And never in amend mode**, where the box is holding the message of a commit that already exists
     /// (`absorbHeadMessage`) — a stash called after it would be naming someone else's work.
     ///
@@ -687,7 +687,7 @@ ColumnLayout {
             model: wipPane.worktreeModel
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows
             width: buckets.width
-            // The hairline of the pane's own ground between one bucket and the next (2026-08-17 ユーザー指示): both
+            // The hairline of the pane's own ground between one bucket and the next: both
             // headings wear `bgElevated`, so an emptied bucket stacked straight onto the one below reads as one band
             // with two lines of text in it rather than as two buckets, one of which is empty.
             y: conflictsBucket.visible ? conflictsBucket.height + Theme.borderWidth : 0
@@ -710,7 +710,7 @@ ColumnLayout {
     // The room the buckets were holding, on a clean tree where they stand down. Something has to go on holding it, or
     // the pane has nothing in it that can grow: a layout whose items are all at their own height shares what is left
     // over evenly between them and centres each one in its share, which is a heading band hanging off the pane's top
-    // edge and a commit block adrift in the middle of it (2026-08-22 ユーザー報告). Bare ground, and it stands where the
+    // edge and a commit block adrift in the middle of it. Bare ground, and it stands where the
     // files would have — the block below it does not move when the last change in the tree is committed.
     Item {
         Layout.fillWidth: true
@@ -723,7 +723,7 @@ ColumnLayout {
     //
     // What is in here keeps its height by construction — the editor, the commit button, the exit card a stopped
     // operation puts up — so the list was the only thing that could give, and past zero the rest was simply laid out
-    // below the pane's own edge (measured 2026-08-09: in a 320px window a stopped rebase drew `--continue` and `--skip`
+    // below the pane's own edge (measured, in a 320px window a stopped rebase drew `--continue` and `--skip`
     // and left `--quit` and `--abort` under the window, with nothing to scroll to reach them). The window's floor
     // cannot answer that on its own: the card comes and goes with what git is in the middle of, and a window that grew
     // itself because a rebase stopped would be a stranger thing than a pane that scrolls (規約 §窓の床).

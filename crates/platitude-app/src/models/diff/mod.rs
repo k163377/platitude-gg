@@ -22,14 +22,10 @@ mod selection;
 #[cfg(test)]
 mod selection_tests;
 
-// The two siblings reach the imports above through `use super::*`, which
-// sees what this module can see -- the block stays whole here rather than
-// being dealt out two ways.
-
+use rows::bucket_target;
 /// Filed here because the test beside `models` names it: a `pub(super)`
 /// written in `rows` would only reach as far as this module (structure.md).
 pub(super) use rows::wanted;
-use rows::bucket_target;
 
 // ---------------------------------------------------------------------------
 // DiffModel: unified diff lines for one file

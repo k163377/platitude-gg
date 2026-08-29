@@ -25,7 +25,7 @@ pub struct RepoInfo {
     /// Absolute path of the repository's own config file — the one
     /// `git remote add` writes. A linked worktree shares the common
     /// repository's, which is why this is asked for rather than joined
-    /// onto `git_dir` (実測 2.55: `--git-path config` in a worktree
+    /// onto `git_dir` (measured 2.55: `--git-path config` in a worktree
     /// answers the common `.git/config`).
     pub config_path: PathBuf,
     pub object_format: ObjectFormat,
@@ -113,7 +113,7 @@ pub async fn open(
 /// Whether `path` is a repository git will not give a work tree for.
 ///
 /// Only asked once [`open`] has already failed, so the cost lands on the
-/// folder nobody could open (実測 33ms) rather than on every one that
+/// folder nobody could open (measured, 33ms) rather than on every one that
 /// works. `false` for a folder that is no repository at all, and for a
 /// question git could not answer — the screen falls back to git's own
 /// wording either way.

@@ -28,8 +28,7 @@ Item {
     /// **above the box** on Linux (58 against a box of 52) and the wordings were never drawn at all: an average that
     /// counts a family's full-width glyphs is twice a mono advance, which is harmless where the box is a whole badge
     /// word and fatal where it is one short command. Summed from the parts, it came out a hair under what the same
-    /// three glyphs are laid out at, and the cut that was meant to leave two characters left one (`p…`). Both 実測
-    /// 2026-08-25.
+    /// three glyphs are laid out at, and the cut that was meant to leave two characters left one (`p…`). Both measured.
     ///
     /// In the command family, whichever wording happens to be the widest: what this band says is commands, `Resume`
     /// being the one exception and the state a stopped timer leaves.

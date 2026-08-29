@@ -23,7 +23,7 @@ pub(super) const TABLE: &[Verb] = &[
     // mirror was refreshed for the shot, so a blank overlay.png can
     // only mean nothing was open. Any verb whose subject is a menu, a
     // dialog or a tooltip can be judged the same way — these two are
-    // where it bit (2026-08-16: two of four concurrent `commit-menu`
+    // where it bit (observed: two of four concurrent `commit-menu`
     // runs photographed a blank overlay and passed). `reset-menu`
     // counts two because the submenu is a popup of its own.
     Verb {
@@ -58,7 +58,7 @@ pub(super) const TABLE: &[Verb] = &[
     // run whose hover request never arrived — so the menu is judged
     // with it: `menu=true` says there was something for the card to be
     // behind. Read as a pair with `row-card`, which proves that same
-    // input does open the card (2026-08-17 ユーザー報告).
+    // input does open the card.
     Verb {
         name: "menu-hover",
         when: &[],
@@ -70,7 +70,7 @@ pub(super) const TABLE: &[Verb] = &[
     // it, and the card takes the pointer off the row the moment the
     // hand walks in to read it — so the row went dark while its own
     // card stood, and nothing on screen said which commit the message
-    // was of (2026-08-22 ユーザー報告).
+    // was of.
     Verb {
         name: "row-card",
         when: &[],
@@ -110,8 +110,7 @@ pub(super) const TABLE: &[Verb] = &[
     // the same — and the two are read as one run because the box is
     // what the wait turns into. The card's own run carries `list=` as
     // well: it was standing on the column the box opens in, and one
-    // left up would be covering the whole subject of the shot
-    // (2026-08-26 ユーザー報告「予想外に switch される」).
+    // left up would be covering the whole subject of the shot.
     Verb {
         name: "graph-reclick",
         when: &[],
@@ -137,7 +136,7 @@ pub(super) const TABLE: &[Verb] = &[
     // aim at the middle of a row — and it took presses of its own
     // without handing them to the row, so the gesture did nothing
     // between the two dividers while working either side of them
-    // (2026-08-26 ユーザー報告). `strip=` says the layer was actually up:
+    //. `strip=` says the layer was actually up:
     // with the lanes inside their column there is nothing to prove.
     Verb {
         name: "graph-reclick-lanes",
@@ -148,7 +147,7 @@ pub(super) const TABLE: &[Verb] = &[
     // card's own rest is running under the wait. Nothing may open or
     // close in that beat: the reader has clicked and is watching one
     // spot for the box, and a card that arrived halfway through is a
-    // change they did not ask for (2026-08-26 ユーザー指示). `list=` and
+    // change they did not ask for. `list=` and
     // `card=` are what would have opened — a picture of the box says
     // nothing about what came and went before it.
     Verb {
@@ -158,7 +157,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The mark the chip wears while the second click waits out its
     // window — the one thing on screen between the press and the box
-    // (2026-08-26 ユーザー判断). This run ends inside the wait rather than
+    //. This run ends inside the wait rather than
     // at the box, so the picture frames the mark; `mark=` is the chip's
     // own answer, since a shot taken a beat late frames the box and
     // would read the same either way.
@@ -171,7 +170,7 @@ pub(super) const TABLE: &[Verb] = &[
     // the half that catches the box coming back by itself: a wait left
     // running after the box has been walked away from reopens it a
     // window later, which is what a row clicked while its own box was
-    // up used to do (2026-08-26 ユーザー報告). The picture cannot tell a
+    // up used to do. The picture cannot tell a
     // box that closed for good from one that is about to return.
     Verb {
         name: "rename-box-out",
@@ -186,8 +185,8 @@ pub(super) const TABLE: &[Verb] = &[
     // then the card its chip opens into on the rest between them. That
     // is what a reader's hand does without knowing it, and with a
     // memory per surface the second click comes up as a first one — the
-    // gesture does nothing, and nothing on screen says why (2026-08-26
-    // ユーザー報告「入力モードに切り替わらないケースも有った」).
+    // gesture does nothing, and nothing on screen says why
+    // (observed).
     Verb {
         name: "graph-reclick-across",
         when: &[],

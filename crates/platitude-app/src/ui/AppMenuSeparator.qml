@@ -20,7 +20,7 @@ MenuSeparator {
     // what collapses a run of them down to one line and no more: of the dividers that share an empty stretch, only
     // the last has rows of its own underneath, so only the last draws. Asking for the group *immediately* above
     // instead loses the line altogether when a group in the middle of the card empties out — both dividers around it
-    // find nothing on one side (2026-08-25 実測: the current branch's menu, where `switch` / merge / rebase are all
+    // find nothing on one side (measured, the current branch's menu, where `switch` / merge / rebase are all
     // out and `Create branch here…` ran straight into the BRANCH card).
     //
     // The rows are asked what they are offering, not whether they are visible: a closed menu's list has released them

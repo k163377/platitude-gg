@@ -99,7 +99,7 @@ Rectangle {
     /// rows, and this is what says so (デザイン規約 §diff の中のステージ). Only the heading does it — a pointer resting on a line is
     /// reading, not aiming at the hunk.
     readonly property bool inAimedHunk: diffRow.partial && diffRow.hoverLine < 0 && diffRow.hoverHunk === diffRow.hunk
-    /// The room held between the two line numbers for the mark this line puts out for the hand (2026-08-13 ユーザー指示). A
+    /// The room held between the two line numbers for the mark this line puts out for the hand. A
     /// hairline of air on each side of it: the mark belongs to neither number, and anything wider reads as the new
     /// number having drifted off its own column.
     ///
@@ -189,7 +189,7 @@ Rectangle {
                 // `col:wides:width:wides`. A column is one advance of the mono font, and each wide glyph standing
                 // among them is worth `wideDelta` more than the two columns it was counted as — zero on a family
                 // that draws the wide glyphs itself. Laid on columns alone, the wash sat right of the characters it
-                // names by that much a glyph (measured 2026-08-24 on Windows: −3px each).
+                // names by that much a glyph (measured, on Windows: −3px each).
                 readonly property var run: modelData.split(":")
                 x: -diffRow.codeX + Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta
                 width: Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
@@ -226,7 +226,7 @@ Rectangle {
             elide: diffRow.kind === "hunk" ? Text.ElideRight : Text.ElideNone
             height: parent.height
             verticalAlignment: Text.AlignVCenter
-            // A hunk heading starts at the row's own left edge (2026-08-13 ユーザー指示): the two columns beside it are empty
+            // A hunk heading starts at the row's own left edge: the two columns beside it are empty
             // — a heading has no line to number — so indenting it by them lines the pane's own words up with the
             // file's, behind a gutter that says nothing. One `spaceXs`, the same gap everything else in the gutter
             // stands at.

@@ -94,7 +94,7 @@ pub(super) const TABLE: &[Verb] = &[
     // pane's settled form arriving — the toggle only asks, the read is
     // a git subprocess away, and a pane the answer never reached
     // photographs as a black pane under a DIFF header, which
-    // `screenshot saved=true` is perfectly happy with (2026-08-23 実測:
+    // `screenshot saved=true` is perfectly happy with (measured,
     // with the toggle as the completion, every run shot the header
     // alone). A run fired with no path never opens anything and says
     // `diff_arg named=false` instead, so it fails here too.
@@ -116,7 +116,7 @@ pub(super) const TABLE: &[Verb] = &[
     // Both sides have to be named on some row, and on a file that has
     // been typed over both of them are removals — the half that used
     // to be dropped, which left the legend explaining a distinction
-    // no row was making (2026-08-22 ユーザー報告). A count of zero on
+    // no row was making. A count of zero on
     // either side photographs exactly like a file with nothing to
     // tell apart.
     Verb {
@@ -245,7 +245,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The other end of that same hand: the bar down the side of the
     // list is drawn over the rows, so a hand laid over them covers it,
     // and one that ran to the frame took every press on the trough —
-    // the bar could not be grabbed at all (2026-08-29 ユーザー報告).
+    // the bar could not be grabbed at all.
     // The picture cannot say any of it (a bar that answers nothing is
     // drawn exactly like one that does), so all three are read here:
     //

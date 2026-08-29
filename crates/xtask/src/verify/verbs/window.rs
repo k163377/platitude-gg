@@ -179,7 +179,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // And the end of that road: the words given up for the marks, at
     // the floor the window has with its left list open — which is the
-    // width they have to be finished by (2026-08-25 ユーザー指示). A band
+    // width they have to be finished by. A band
     // whose actions never folded frames as three ordinary buttons,
     // which is what an ordinary band looks like.
     Verb {

@@ -48,7 +48,7 @@ const TAB_WIDTH: usize = 4;
 /// spaces are what keep indentation. `<pre>` would turn the folding off,
 /// but Qt renders what is inside it in a substituted font: thinner
 /// strokes, washed-out colours next to the window's own words
-/// (measured 2026-08-13).
+/// (measured).
 ///
 /// `col` is the column the next character is drawn at, carried across the
 /// calls one line is spelled in; [`step_of`] moves it, so a tab is spelled

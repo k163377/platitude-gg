@@ -48,15 +48,15 @@ Item {
     ///
     /// **Not "which chip is under this point".** The row divides on this column's own edge rather than on the chip's
     /// frame, so the geometry belongs to the row, which is where the column's width already lives. A frame eighteen
-    /// pixels tall in a row of twenty-eight is a boundary nobody can see (2026-08-21 ユーザー報告).
+    /// pixels tall in a row of twenty-eight is a boundary nobody can see.
     ///
-    /// **Every chip answers, stacked or not** (2026-08-21 ユーザー判断): a chip with one name on it is cut to the column
+    /// **Every chip answers, stacked or not**: a chip with one name on it is cut to the column
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
     /// reason a single one does. What comes out is the same card either way.
     readonly property bool hasChip: rowChip.visible
     /// The narrowest the box goes: the whole of what it opened holding. The placeholder is all there is to say what a
     /// box that makes a name is for, so a cut one (`Create branch he…`) asks nothing — and the column is narrower than
-    /// that at every width up to and including its default (2026-08-21 ユーザー指示). A rename measures the name instead:
+    /// that at every width up to and including its default. A rename measures the name instead:
     /// there the box is the name's own seat, and one cut short is a name the reader cannot check before Enter.
     ///
     /// Measured off a label that is never drawn, the way the diff's number column measures (app-ui.md): `TextMetrics`

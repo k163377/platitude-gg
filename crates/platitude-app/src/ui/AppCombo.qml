@@ -135,7 +135,7 @@ ComboBox {
         // Two marks in one seat rather than one mark that changes kind, because an animator **takes** the property it
         // turns: the ring's first frame kills the binding that stands the arrow on end, and nothing puts it back when
         // the ring stops — so the seat kept whatever angle the last frame left, and the arrow that came back pointed
-        // sideways at a list that comes **down** (2026-08-21 ユーザー報告 — the merge editor's seat, after its
+        // sideways at a list that comes **down** (observed — the merge editor's seat, after its
         // `--tool-help` read landed). Invisible in headless, where the ring is held still for the camera and the
         // binding therefore survives. Split, the arrow is never animated and has no angle to lose.
         SpinnerIcon {
@@ -173,7 +173,7 @@ ComboBox {
         // After the release, not inside it. The input owns the exclusive grab of a press this handler is only a passive
         // witness to, and a list opened while that grab is still being unwound is taken straight back down: it reads
         // `opened` true on the next line and false a frame later, so the field answers a press by flickering and
-        // staying shut. One turn of the loop later it stands (2026-08-21 ユーザー報告, measured with an injected click —
+        // staying shut. One turn of the loop later it stands (observed, measured with an injected click —
         // qmltestrunner, since a press cannot be put into the app itself). The chooser above wants none of this: its
         // MouseArea holds the grab itself, so there is nothing to unwind under the list.
         Qt.callLater(combo.offer)

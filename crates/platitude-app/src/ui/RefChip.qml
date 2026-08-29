@@ -30,13 +30,13 @@ Rectangle {
     /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
     /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
     /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
-    /// and the reader is looking straight at this chip while it does (2026-08-26 ユーザー判断).
+    /// and the reader is looking straight at this chip while it does.
     property bool waiting: false
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
     // height. That comes to eighteen, two under the commit node it stands beside: near enough that the row reads as one
-    // band, low enough that the chip is not the loudest thing on it (2026-08-21 ユーザー判断 — the frame was the node's own
+    // band, low enough that the chip is not the loudest thing on it (by design — the frame was the node's own
     // twenty for a day, and against a subject at `fontMd` the chip won the row).
     //
     // A wrapped name adds the family's own line spacing per extra line rather than another `fontChipLine`: the first
@@ -47,7 +47,7 @@ Rectangle {
     // **The frame is drawn on whole pixels.** Every term inside is fractional — glyph advances, and a mark's seat is
     // its ink — so the box lands wherever the sum does, and a box whose width stops just past a whole pixel **loses its
     // right border altogether**: the top and bottom rules and both corners are drawn, and the straight run between them
-    // is not (2026-08-22 実測 — `main +4` came to 71.04 and drew three sides; the same chip at 72 draws four. The chip
+    // is not (measured — `main +4` came to 71.04 and drew three sides; the same chip at 72 draws four. The chip
     // clips, which is what puts its own frame under the cut). Rounded up, so the box is never narrower than what it
     // holds; the pixel that buys goes where a layout's remainder goes anyway, into the padding at the end (§余白).
     width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
@@ -66,7 +66,7 @@ Rectangle {
     readonly property real heldInk: heldMark.inkWidth
     /// The cloud needs the seat more than the tree does: it is drawn 2.0 of the sixteen in from its own left edge, so
     /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
-    /// up (2026-08-22 ユーザー報告).
+    /// up.
     readonly property real badgeInk: badgeMark.inkWidth
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
@@ -79,7 +79,7 @@ Rectangle {
     readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
     readonly property bool recHere: rec.length > 4 && rec[4] === "1"
-    // Another working copy has this branch out, so git refuses a move onto it (2026-08-21 実測). Read off the record
+    // Another working copy has this branch out, so git refuses a move onto it (measured). Read off the record
     // rather than asked of a model: the record is rebuilt whenever the ref joins are, so the chip repaints with the
     // rest of them instead of hanging a binding off a slot (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
@@ -122,7 +122,7 @@ Rectangle {
     ///
     /// A line box is not where a family puts its ink: it keeps more room above its ascender than below its descender,
     /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the border
-    /// (2026-08-20 ユーザー報告). How much room is the family's own — a fixed lift squares one family and opens a gap under
+    ///. How much room is the family's own — a fixed lift squares one family and opens a gap under
     /// the other — so this asks the family instead. When what is left over will not halve, the pixel goes above, where
     /// every ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
     /// headless picture**, which is drawn in a family neither OS uses (verify-ui スキル §Windows での実行・デバッグの罠).
@@ -132,7 +132,7 @@ Rectangle {
     }
     /// Where a label goes to put its ink there. Whole pixels: a label laid out on a half one spreads its antialiasing
     /// into a row it does not own, and that row is the margin. **Each label asks for itself** — the two here are
-    /// different sizes, and one offset for the row hung the smaller from the taller one's top edge (2026-08-20 ユーザー報告).
+    /// different sizes, and one offset for the row hung the smaller from the taller one's top edge.
     function inkY(label, ink) {
         return Math.round(chip.inkTop(ink) - label.baselineOffset - ink.tightBoundingRect.y)
     }
@@ -170,14 +170,14 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
-        // **A whole gap from the frame, half a gap between the things inside it** (2026-08-22 ユーザー判断). Everything in
+        // **A whole gap from the frame, half a gap between the things inside it**. Everything in
         // here — the mark, the name, the count, the badge — is one phrase about one commit, and the frame's own padding
         // is the only wide space in the box; at a whole gap throughout, the `+N` stood off from the name it counts for
         // as far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
         // this spacing that is already the half gap their box-air would otherwise take out of a whole one.
         spacing: Theme.spaceXs / 2
-        // Ahead of the name, and only when there is one to draw: another working copy has this branch out (2026-08-21
-        // ユーザー判断 — the seat is added on the left only when it applies). Same mark and same meaning as the sidebar row's
+        // Ahead of the name, and only when there is one to draw: another working copy has this branch out (observed
+        // — the seat is added on the left only when it applies). Same mark and same meaning as the sidebar row's
         // (`NavItemDelegate`), which is the WORKTREES section's own.
         //
         // **The seat is not held open** the way the sidebar row's is: a chip is measured to its own contents rather
@@ -187,7 +187,7 @@ Rectangle {
         // **And it is seated to its ink, not to its box.** The mark is a head on a stem and fills half the sixteen it
         // is drawn on; a square seat would add that air to the gaps on both sides, and the pair read as a name pushed
         // away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
-        // 2026-08-21 ユーザー報告, measured 114 -> 110 -> 108).
+        // observed, measured 114 -> 110 -> 108).
         Item {
             visible: chip.recHeld
             // The seat is the ink, so the frame keeps its whole gap to the mark and the row's own half gap is all
@@ -238,8 +238,8 @@ Rectangle {
         // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
         // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left.
         // The gap before it would then read as the row's spacing **plus** that — the one place in the chip where two
-        // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白; 2026-08-22
-        // ユーザー報告).
+        // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白;
+        // observed).
         Item {
             visible: chip.hasBadge
             width: chip.badgeInk

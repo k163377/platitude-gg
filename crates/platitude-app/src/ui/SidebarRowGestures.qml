@@ -74,7 +74,7 @@ QtObject {
     /// Only the letters' case differs from the name the row already carries. **git writes a ref as a file**, so on a
     /// case-insensitive disk the new name lands on the old one's and both are gone — core refuses it outright
     /// (`tag::rename`), and asking here is what puts the answer in the box the name was typed into instead of in a log
-    /// with nothing in it (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断).
+    /// with nothing in it (デザイン規約 §答えの要らない報せ, by design).
     ///
     /// **`tag` is the kind here, not the mode** — the mode says which of the box's three questions is being asked
     /// (`rename` / `branch` / `tag`), and this is only about the one that renames something that is already there.
@@ -112,7 +112,7 @@ QtObject {
     function stopEdit() {
         // **A box coming down spends the gesture that opened it** — the same rule the graph's box answers to
         // (`GraphPane.stopNaming`). Without it a row whose box was walked away from is still the row last clicked, so
-        // the very next click on it opens the box again a window later, which reads as a blink (2026-08-26 ユーザー報告).
+        // the very next click on it opens the box again a window later, which reads as a blink.
         if (gestures.editKey !== "")
             gestures.forgetClicks()
         gestures.editKey = ""

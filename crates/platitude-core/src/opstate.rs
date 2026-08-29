@@ -46,7 +46,7 @@ impl OpState {
 /// together — but a revert that turns out to record nothing leaves the
 /// second without the first, because git refuses the commit it was
 /// about to write before any `REVERT_HEAD` exists, and the sequence
-/// stands there with its remaining steps (実測 2.55,
+/// stands there with its remaining steps (measured 2.55,
 /// `integrate_integration`).
 pub async fn sequence_pending(
     executor: &GitExecutor,

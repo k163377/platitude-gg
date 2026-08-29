@@ -20,7 +20,7 @@ fn asked_about_both() -> RepoTab {
 
 // Two reads race, and the one about the selection already left behind
 // can win — a coin flip decided by how long two `ssh-keygen` runs
-// take (2026-08-25 実測: 143µs apart under six concurrent runs). The
+// take (measured, 143µs apart under six concurrent runs). The
 // answer the pane is waiting for had already landed, so letting the
 // late one overwrite it puts the pane back to "nothing has answered"
 // — and nothing asks again, so it stays there.

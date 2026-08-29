@@ -5,11 +5,10 @@ import platitude.ui
 // A name standing in a column narrower than itself: cut in the middle, and cut so that **the column keeps both of its
 // edges**. `Text.ElideMiddle` on its own keeps neither — it hands back whatever fits and the Label draws that from the
 // left, so everything it could not use piles up at the right edge. Down a list of names the pile is a different width
-// on every row and the column's right edge frays: the six hex a generated branch name is told apart by stop lining up
-// (2026-08-26 ユーザー報告).
+// on every row and the column's right edge frays: the six hex a generated branch name is told apart by stop lining up.
 //
 // The leftover is real, and bigger than it looks: the elide gives a character back to *each* end at a time, so it can
-// stop as much as two characters short of what fits (実測 2026-08-26 Yu Gothic UI `fontMd`, boxes 40..240: 1〜18px).
+// stop as much as two characters short of what fits (measured, Yu Gothic UI `fontMd`, boxes 40..240: 1〜18px).
 // So it is moved twice. **The cut is worked out here rather than left to the elide**, one character at a time, until
 // the name fills its column — 規約 §git 用語のコード表記「句は枠いっぱいまで使う — 余りを残して先に省略しない」, read on a
 // name. What is left after that is under one character, and it goes **into the cut**, where the mark already says
@@ -111,7 +110,7 @@ Item {
     }
 
     /// The advance of a piece of the name, measured the way the labels below draw it — `TextMetrics.advanceWidth` and
-    /// `Label.implicitWidth` are the same number here (実測 2026-08-26: eight names, diff 0 at every width). The other
+    /// `Label.implicitWidth` are the same number here (measured, eight names, diff 0 at every width). The other
     /// measures TextMetrics carries are not (`BandWidest`), so nothing else is read off it.
     function inkOf(part) {
         probe.text = part

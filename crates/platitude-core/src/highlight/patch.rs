@@ -15,7 +15,7 @@ use super::{DiffColors, LexCache, LineColors, PatchColors};
 /// How many lines of lexing one ordinary patch may spend, everything
 /// counted — the walk down to each hunk, every row painted inside one,
 /// the other side's readings too. The lexer runs at ~16,000 lines a
-/// second (2026-08-23, release, this repo's own source), so this is
+/// second (measured on a release build, this repo's own source), so this is
 /// about 300ms — as long as opening a diff can spend on colour. Rows
 /// past it go out plain, which is what every file the set does not know
 /// looks like anyway.
@@ -267,9 +267,9 @@ fn unified_colors(
 /// taken where the hunk begins. The fork steps over the context lines
 /// too (they are in both sides), so its own changes stay in context;
 /// what it never sees is this side's changes, which is exactly what the
-/// other side's file never says. The old reading fed both sides through
-/// one walk, and a deleted `/*` would leave everything after it painted
-/// as the inside of a comment that is not there.
+/// other side's file never says. Feeding both sides through one walk
+/// would let a deleted `/*` paint everything after it as the inside of
+/// a comment that is not there.
 ///
 /// Every reading spends one of `budget` — a context line costs two, one
 /// per side. Once it is gone the rest of the hunk goes out plain.
@@ -354,8 +354,8 @@ fn combined_colors(
         };
         let start = start.saturating_sub(1) as usize;
         let mut rows = None;
-        // A combined diff keeps the older, simpler bound — the budget
-        // here caps how deep a hunk the walk will reach for.
+        // A combined diff keeps the simpler bound — the budget here caps
+        // how deep a hunk the walk will reach for.
         if !lines.is_empty() && start <= lines.len() && start <= LEX_LINE_BUDGET {
             while at < start {
                 file.paint(lines[at]);

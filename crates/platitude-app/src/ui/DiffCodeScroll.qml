@@ -7,7 +7,7 @@ import platitude.ui
 // How far sideways the diff's code has been sent, and the hands that send it: the bar along the bottom edge of the rows
 // and the middle-click autoscroll, which carries the rows up and down at the same time (デザイン規約 §diff を横へ送る).
 //
-// **Declared beside the pane's body, not inside the list.** Two measured reasons (2026-08-17, qmltestrunner):
+// **Declared beside the pane's body, not inside the list.** Two measured reasons (measured with qmltestrunner):
 //
 //  - a `HoverHandler` on an overlay laid over the rows takes their hover away entirely — the `+` a line puts out under
 //    the pointer never appears. A plain `MouseArea` does not, so the hand may stay over the rows while the question "is

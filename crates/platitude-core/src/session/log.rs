@@ -11,7 +11,7 @@ use super::*;
 /// so neither arm runs and nothing is sent. The runtime catches it at the
 /// task boundary and the process carries on, which is what makes it quiet:
 /// the graph is left turning on an empty column, or left standing on a
-/// picture no later ref will ever change (2026-08-29 実測 — a window in the
+/// picture no later ref will ever change (measured — a window in the
 /// second state is indistinguishable from a healthy one).
 ///
 /// So a pass carries this, and the unwind that kills it drops it. What it
@@ -366,11 +366,11 @@ impl RepoSession {
         // further down stops a finished pass from installing a graph
         // nobody wants; this one stops it from being walked at all, and
         // the walk is the most expensive read in the app. **The opening
-        // is where that lands**: its tag-inclusive pass waits out the
+        // is where that matters**: its tag-inclusive pass waits out the
         // tag-less one that paints, so anything asking for a rebuild in
-        // between (a write, a poll tick, a test taking its baseline) used
-        // to leave a whole history walk running for a graph that had
-        // already been replaced.
+        // between (a write, a poll tick, a test taking its baseline)
+        // would otherwise leave a whole history walk running for a graph
+        // that has already been replaced.
         if cancel.is_cancelled() {
             return RefreshOutcome::Cancelled;
         }

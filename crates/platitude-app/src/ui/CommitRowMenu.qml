@@ -130,7 +130,7 @@ Item {
         // Words rather than a chip: no one command is what this row runs. It opens a box, and what git is finally
         // spawned with depends on what is typed into it — the ellipsis is that (`Add remote…` / `Open repository…`).
         // The one command that would fit, `switch --create`, is the spelling the ref menu's own `switch` row would
-        // then share, and switching is precisely what this row does not do until a name exists (2026-08-17 ユーザー判断).
+        // then share, and switching is precisely what this row does not do until a name exists.
         //
         // Still no row for landing on the commit itself: that leaves HEAD on no branch (デザイン規約 §ブランチ・コミット
         // への移動). This row is the whole of what the menu offers towards standing here — with a branch under it.
@@ -228,8 +228,7 @@ Item {
         }
         AppMenuSeparator {}
         // **The very card the chip on this row opens** (RefBranchMenu): a row that carries a branch is a way at that
-        // branch, and a right-click on the row has to offer what a right-click on its chip offers (2026-08-26 ユーザー
-        // 判断). The card works its own answers out from the name the page hands it, so the two entrances cannot
+        // branch, and a right-click on the row has to offer what a right-click on its chip offers (observed). The card works its own answers out from the name the page hands it, so the two entrances cannot
         // drift; a row that carries none is handed "" and the card goes with its row.
         RefBranchMenu {
             id: branchCommitMenu

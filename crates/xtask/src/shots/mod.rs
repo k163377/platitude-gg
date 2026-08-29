@@ -54,7 +54,7 @@ pub(crate) struct Run {
     /// What a before/after is for: shown one after the other, the reader
     /// carries the first picture in their head while looking at the
     /// second, and the difference is whatever they remember rather than
-    /// whatever changed (2026-08-22 ユーザー指示). Side by side under one
+    /// whatever changed. Side by side under one
     /// magnifier there is nothing to remember.
     pub(crate) side_by_side: bool,
     pub(crate) shots: Vec<Shot>,

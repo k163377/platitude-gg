@@ -7,7 +7,7 @@ import platitude.ui
 // reader carries on from, and it stands on the level above with the other moves.
 //
 // **One card, two entrances.** The chip on a graph row and the row itself are two ways at the same branch, and what
-// they offer has to be the same thing (2026-08-26 ユーザー判断) — so the card is a component, and it works out its own
+// they offer has to be the same thing — so the card is a component, and it works out its own
 // answers rather than being handed them: `offerOn` freezes them as the menu opens, the way every other menu freezes
 // what it shows (デザイン規約 §メニュー).
 AppMenu {
@@ -189,7 +189,7 @@ AppMenu {
         growsForText: false
         note: refusedRow ? qsTr("not merged") : ""
         // On a branch the three delete forms are a fixed table — rows that cannot be chosen stay and grey out, the
-        // app-menu rule rather than the assembled-menu one (デザイン規約 §メニュー、2026-08-11 ユーザー判断): the current branch
+        // app-menu rule rather than the assembled-menu one (デザイン規約 §メニュー、by design): the current branch
         // keeps its rows, saying why nothing here answers. The other kinds keep the assembled rule.
         offered: branchRow || (heldRow && state.canDelete)
         blockedReason: !branchRow || state.canDelete ? ""
@@ -221,7 +221,7 @@ AppMenu {
         text: state.remoteCounterpart
         growsForText: false
         // In the table only while the branch has a remote reading at all: a row for a target that does not exist keeps
-        // no seat (2026-08-11 ユーザー判断). Grey is for "not now" — busy — not for "no such thing".
+        // no seat. Grey is for "not now" — busy — not for "no such thing".
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
         blockedReason: state.canDeleteRemote ? "" : branchCard.deleteBlockedWhileBusy
         holdMs: Metrics.holdMs

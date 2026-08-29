@@ -71,7 +71,7 @@ Item {
             shape.window.x = x
             shape.window.y = y
         }
-        // The *frame* has to fit, and it is wider than the window says it is (measured 2026-08-09: a remembered 1920
+        // The *frame* has to fit, and it is wider than the window says it is (measured, a remembered 1920
         // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` sees neither number; the platform
         // side moves the window back and says whether it had to. Before the maximise, not after: the shape standing
         // when a window is maximised is the shape a restore comes back to.
