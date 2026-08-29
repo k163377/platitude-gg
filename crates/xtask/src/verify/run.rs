@@ -156,6 +156,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .map_err(|e| format!("could not write {}: {e}", state.display()))?;
         println!("seeded layout: an 800px details pane (wider than the row asks for)");
     }
+    // The band above the diff cuts its path at the head, and a band with
+    // room for the whole path never cuts at all — so the run that has to
+    // say the cut works has to be given a narrow band. Seeded from the
+    // other side: the details pane is what the diff is left over from,
+    // and 1100 of the window's 1440 leaves the band a couple of hundred
+    // pixels, which every path in the presets is longer than.
+    if opts.verb == "diff-band-sweep" {
+        let state = config_dir.join("state.toml");
+        std::fs::write(&state, "version = 1\n\n[layout]\ndetails_width = 1100\n")
+            .map_err(|e| format!("could not write {}: {e}", state.display()))?;
+        println!("seeded layout: an 1100px details pane (so the band has to cut)");
+    }
 
     let arg = match opts.arg.is_empty() {
         true => match body_for(&opts.verb) {
@@ -272,7 +284,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // the mechanism. The name is `settings::LOCK_FILE`; xtask depends on
     // std alone (CLAUDE.md), so it is spelled again here, and a drift
     // shows up as the run reporting `blocked=false` below.
-    let _held = if opts.verb == "solo" {
+    let _held = if opts.verb == "solo" || opts.verb == "gate-sweep" {
         let path = config_dir.join("lock");
         let file = std::fs::OpenOptions::new()
             .read(true)

@@ -31,6 +31,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "move_ask hold=true code= branch=main",
     },
+    // The same bar, swept rather than photographed. `words=true` is the
+    // fixture half: a bar with nothing in it has air and no fields, and
+    // `all=true` off one would be a green run on a screen the reader
+    // never sees.
+    Verb {
+        name: "ask-sweep",
+        when: &[],
+        plain: "ask_sweep all=true caret=true hand=true words=true",
+    },
     Verb {
         name: "rename-remote",
         when: &[],

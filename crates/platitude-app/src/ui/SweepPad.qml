@@ -169,6 +169,36 @@ Item {
         pad.releaseNow()
         return true
     }
+    /// Automation: every place in this pad's air, swept one after another, as the one line the run reports. Seven
+    /// surfaces carry this hand now and each one of them was asking the same four things, so the sentence is written
+    /// here rather than seven times in the two drivers.
+    ///
+    /// **`all=` rather than a count**, because how much air a surface has depends on the words in it and on the
+    /// machine that drew them — but the count rides along as `reach=`, because a reach that works from only one place
+    /// in the air is the fault the right pane shipped with, and a single point is a place that hides it. `miss=` is
+    /// the **first** start that came away with nothing and what the sweep saw while it did: a line reporting only its
+    /// last try is reporting the one that worked.
+    ///
+    /// `extra` is whatever else that verb has to say, and it goes in ahead of the numbers so a `must_say` written
+    /// against the older shape still reads as one run of words (`card_sweep … hand=true open=true`).
+    function sweepAir(steps, extra) {
+        const air = pad.airPoints(steps)
+        let reach = 0
+        let miss = ""
+        for (let i = 0; i < air.length; i++) {
+            if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
+                reach++
+            else if (miss === "")
+                miss = Math.round(air[i].x) + "," + Math.round(air[i].y) + "," + pad.sweptTrace()
+        }
+        return "all=" + (air.length > 0 && reach === air.length)
+            + " caret=" + pad.caretLanded
+            + " hand=" + pad.handStands
+            + (extra ? " " + extra : "")
+            + " reach=" + reach + "/" + air.length
+            + " miss=[" + miss + "]"
+            + " text=" + pad.sweptText()
+    }
     /// Automation: what the sweep came away with.
     function sweptText() {
         return pad.field ? pad.field.selected : ""

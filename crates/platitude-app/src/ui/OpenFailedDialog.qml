@@ -42,37 +42,44 @@ AppDialog {
     // keystroke.
     onOpened: actions.acceptButton.forceActiveFocus()
 
+    /// This one is a block of words rather than a form, so every gap in it — the padding band included — is a place a
+    /// selection can start (規約 §右のペインの字は掴める). **It is also the one failure with no way out to the log**: the
+    /// tab's screen carries the panel's own row at its foot, and a modal window carries nothing, so what is written
+    /// here is the whole of what there is to take away.
+    textContent: failedColumn
+
     contentItem: ColumnLayout {
+        id: failedColumn
         spacing: Theme.spaceLg
 
-        Label {
+        CardText {
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            pixelSize: Theme.fontXl
+            weight: Font.DemiBold
             // One line, and no second one explaining it (§長さ). What git says about parent directories is already
             // carried by "not a repository" — the folder underneath says which. Shared with the tab's failure screen,
             // which says the same three things (Words.openFailure).
             text: Words.openFailure(openFailedDialog.kind)
         }
-        // The picker is gone by now, so the folder it landed on has nothing else left to name it. The middle goes
-        // first: the leaf is what tells two candidates apart.
+        // The picker is gone by now, so the folder it landed on has nothing else left to name it.
+        //
+        // Wrapped rather than cut in the middle: a field has no `elide` to cut with, and a path put through one would
+        // hand the reader a `…` when they dragged over it. There is room to wrap here and nothing beside the line to
+        // carry what a cut would drop, so the whole of it is on screen and the whole of it comes away.
         //
         // In the same place on all three, above git's line rather than under it: which folder this is about is the same
         // question every time, and it should not have to be looked for.
-        Label {
+        CardText {
             Layout.fillWidth: true
             color: Theme.textSecondary
-            elide: Text.ElideMiddle
             text: openFailedDialog.path
         }
         // git's words, and the only red here: the gate that reports a git it cannot use draws the line the same way
         // (Main.qml).
-        Label {
+        CardText {
             Layout.fillWidth: true
             visible: openFailedDialog.kind === "other"
             color: Theme.danger
-            wrapMode: Text.Wrap
             text: openFailedDialog.message
         }
 

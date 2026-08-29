@@ -48,6 +48,9 @@ Rectangle {
     property bool hold: false
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
+    /// The hand the question's words are dragged over from the air around them, named so a run can enter it (the way
+    /// a card is reached at `<card>.background.pad`).
+    property alias pad: askHand
     /// What the question needs in order to have an answer at all — a chooser, a name box. Declared by whoever raises
     /// the question, since only they know what is being asked; the bar just gives it a place under the words and above
     /// nothing (デザイン規約 §可否・警告の出し場所: the answer is given where the question is, not in a window of its own). Null for
@@ -138,6 +141,15 @@ Rectangle {
     BandRule {
         color: bar.tone
     }
+    // The hand the question's own words are dragged over from the air around them (規約 §右のペインの字は掴める) — what
+    // it is about is a branch, a remote or a folder this window is the only place to read, and a reader who has to
+    // retype one of those out of a warning is a reader the bar failed. Under the row rather than over it, so the pill
+    // that answers, the ✕ and whatever the form put up all keep every press they had.
+    SweepPad {
+        id: askHand
+        anchors.fill: parent
+        content: askWords
+    }
     RowLayout {
         id: askRow
         anchors.left: parent.left
@@ -146,6 +158,7 @@ Rectangle {
         anchors.margins: Theme.spaceMd
         spacing: Theme.spaceMd
         ColumnLayout {
+            id: askWords
             Layout.fillWidth: true
             spacing: Theme.spaceXs
             // The question, opened by the command where the act it guards is one (デザイン規約 §git 用語のコード表記) — `push main
@@ -161,20 +174,24 @@ Rectangle {
                     tint: bar.tone
                     weight: Font.DemiBold
                 }
-                Label {
+                // Fields rather than labels: what the question names is this window's own — a branch, a remote, the
+                // folder another working copy is holding — and none of it is written anywhere a reader could take it
+                // from while the bar is standing over the list (規約 §右のペインの字は掴める). Cut at the tail the way
+                // the labels were, since a question is read from its first word.
+                LineText {
                     text: bar.label
                     color: bar.tone
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
+                    pixelSize: Theme.fontMd
+                    weight: Font.DemiBold
+                    ground: Theme.bgElevated
                     Layout.fillWidth: true
                 }
             }
-            Label {
+            LineText {
                 text: bar.detail
                 color: Theme.textSecondary
-                font.pixelSize: Theme.fontSm
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                ground: Theme.bgElevated
                 Layout.fillWidth: true
             }
             // Put down as the next question is dressed rather than as this one comes down, so the pill and the ✕ —

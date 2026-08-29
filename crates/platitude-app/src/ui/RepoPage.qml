@@ -107,6 +107,9 @@ Item {
     // seat and the panel both stay reachable. The log is not raised on its own: the failed command is a background
     // read, so the panel would come up empty (実測).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
+    /// Automation: that screen's hand — the one its three lines are dragged over from the air around them
+    /// (`PG_AUTO_ACT=open-fail-sweep`). An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property alias openFailedHand: failedScreen.pad
 
     property int seenHeadCommitSeq: 0
     property bool wantHeadMessage: false
@@ -2010,6 +2013,7 @@ Item {
 
             // ---- open failed ------------------------------------------
             OpenFailedScreen {
+                id: failedScreen
                 visible: page.openFailed
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: pageLayout.panesMinHeight

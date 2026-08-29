@@ -18,6 +18,13 @@ Rectangle {
     required property bool conflicted
     required property bool busy
 
+    /// The hand the path is dragged over from the band's own air, named so a run can enter it (the way a card is
+    /// reached at `<card>.background.pad`).
+    property alias pad: headerHand
+    /// Whether the band ran out of room for the path and is showing the tail of it. The output side, and the half a
+    /// picture of a wide pane cannot answer.
+    readonly property alias cut: titleField.clipped
+
     signal stageFileRequested()
     signal closeRequested()
 
@@ -25,7 +32,16 @@ Rectangle {
     color: Theme.bgElevated
     // This is the band the hairline was written for: the row under it is a hunk heading of the same colour.
     BandRule { z: 1 }
+    // The hand the path is dragged over from the band's own air (規約 §右のペインの字は掴める): the inset at the near
+    // end, the step either side of the words, the room beside a short path. Under the row rather than over it, so the
+    // word that stages the file and the way out keep every press they had.
+    SweepPad {
+        id: headerHand
+        anchors.fill: parent
+        content: headerRow
+    }
     RowLayout {
+        id: headerRow
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm
         anchors.rightMargin: Theme.spaceSm
@@ -46,14 +62,25 @@ Rectangle {
                 visible: header.title !== ""
                 tint: Theme.textSecondary
             }
-            Label {
+            // The file, in a field the reader can take away with them (規約 §右のペインの字は掴める): this band is
+            // where the eye already is while the diff is being read, and the path here is the same one the list's
+            // own row hands over from its hover.
+            //
+            // **Cut at the head, not in the middle.** A field has no `elide` — that is what selecting costs — and a
+            // path elided into one would hand over `crates/pl…/notes.txt` to whoever dragged it. What a cut may not
+            // take is the leaf, since that is the half that names the file, so the words are held against the far
+            // edge and the mark stands at the near one (`LineText.cutAt`). The whole path stays in the field either
+            // way, so a drag and `Ctrl+A` both come away with all of it.
+            LineText {
+                id: titleField
                 // Takes the slack, so the pair above stays put (FileRowDelegate learned this the hard way).
                 Layout.fillWidth: true
                 text: header.title
-                font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                pixelSize: Theme.fontMd
+                weight: Font.DemiBold
                 color: Theme.textSecondary
-                elide: Text.ElideMiddle
+                cutAt: "start"
+                ground: Theme.bgElevated
             }
         }
         // The file's own word, and the loudest thing in the pane: the pair colour the hunks and the file rows use, a

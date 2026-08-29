@@ -215,6 +215,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_sweep reach=9/9 ground=true ours=false",
     },
+    // The band above those rows, whose path is the one value in it. The
+    // claim is `all=`, not a count, for the reason every `SweepPad` run
+    // makes it: how much air a band has depends on the words in it and
+    // on the machine that drew them. `caret=` is the half a selection
+    // does not say — `Ctrl+C` goes to whatever holds the keyboard — and
+    // `hand=` is the half a sweep cannot say for itself, since a run
+    // enters the pad's functions rather than the pointer and would go
+    // green with the `MouseArea` taken back out.
+    Verb {
+        name: "diff-band-sweep",
+        when: &[],
+        plain: "diff_band_sweep all=true caret=true hand=true cut=true",
+    },
     Verb {
         name: "stage-hunk",
         when: &[],

@@ -326,3 +326,13 @@ fetch の黄 / 赤、通常 push、起動直後の loading を撮る必要があ
 `.git/config` を直接書き換えるのが早い**(`git -C` が通らない worktree セッションでも
 届く)。`--preset diverged` は `push -f` の形をそのまま出すので、**枠のある状態と
 `!` の同居**はこれで撮る。
+
+## 面の掃き(2026-08-29 追加)
+
+**掃きの報告文は 1 本**(`SweepPad.sweepAir`)— 7 面が同じ 4 つを訊いていたので、`all=` / `caret=` / `hand=` / `reach=` / `miss=` / `text=` は部品側が書く。動詞ごとの主張だけが `hand=` の後ろに挟まる(`card_sweep` の `open=` が並ぶ席はそこ)。**`all=` が判定・`reach=` は診断** — 面の余白の箇所数はフォントと機械で変わる。**`hand=` を必ず並べる**(run はポインタでなく関数を叩くので `MouseArea` を消しても掃きは緑になる)。
+
+- `gate-sweep`(**起動ゲートの掃き** = `solo` と同じ仕込み。**xtask が `--config-dir` の `lock` を握ってから**アプリを起こすので、パスの行が出るのは本物の 2 つ目のプロセスだから。**この面だけコマンドログが存在しない** — リポジトリを開く前の画面なので、git の答えと相手の exe のパスがそこにある全部。報告行 `gate_sweep all= caret= hand= held= reach= miss= text=`、must_say は `all=true caret=true hand=true held=true`。**`held=` は仕込みの側** — 空のゲートは余白だけ持って欄を持たず、その掃きは読者が見ない画面の話になる。**git が無い側のゲートには動詞が無い**(PATH から git を外した起動が要る = §Windows での実行・デバッグの罠))
+- `open-dialog-sweep`(**開けなかったフォルダのダイアログの掃き** = `open-not-a-repo` と同じ仕込み(引数なしで xtask がフォルダを作る)。**モーダルなのでログへの出口も無い**。報告行 `open_dialog_sweep all= caret= hand= kind= reach= miss= text=`、must_say は `all=true caret=true hand=true kind=plain`。**`kind=` は掃いた画面の種別** — `plain` には git の行が無いので、3 行のうち 2 行を掃いた主張であることが 1 行で読める)
+- `open-fail-sweep`(**同じ失敗のタブ側画面の掃き** = `open-fail-tab` と同じ仕込み。**こちらは足下に `>_` があるので git の言葉はログで取れる**が、フォルダはどこにも書かれていない側。報告行と must_say は `open_dialog_sweep` と同じ形(`open_fail_sweep …`))
+- `ask-sweep`(**質問バーの掃き** = `move-ask` と同じ仕込み。引数はリモート ref(既定 `origin/main`)、**`--preset diverged` が要る**。**`AskBar.settled` を待つ** — バーは 200ms かけて降りるので、途中の絵の余白を標本化しても意味が無い。報告行 `ask_sweep all= caret= hand= words= reach= miss= text=`、must_say は `all=true caret=true hand=true words=true`。**`words=` は仕込みの側**(言葉の無いバーは欄を持たない))
+- `diff-band-sweep`(**DIFF 帯のパスの掃き**。引数は `diff-file` と同じ `<パス>` か `<bucket>:<パス>`(**必須** — 帯は渡されたファイルしか名乗らない)。**xtask が `--config-dir` に `details_width = 1100` を撒く** — 1440 の窓で帯に 200px 台しか残らないので、**帯は必ず切る**。報告行 `diff_band_sweep all= caret= hand= cut= reach= miss= text=`、must_say は `all=true caret=true hand=true cut=true`。**`cut=true` が主題** — 帯は `LineText.cutAt: "start"` で**頭を切って葉を残す**(規約 §右のペインの字は掴める)ので、`text=` が `es/refs_join_snapshot.rs` のように見えている分だけになるのが正(切れた値は見えている分までしか掃けない)。全文は `Ctrl+A` と一覧の行の hover が持つ。撮るのは `--preset longpaths` の `unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs`)

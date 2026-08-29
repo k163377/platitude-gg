@@ -13,6 +13,33 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "solo blocked=true",
     },
+    // The same screen, with its words taken from the air around them.
+    // This is the surface with nothing behind it: the gate stands
+    // before any repository is open, so the command log that carries
+    // git's words everywhere else does not exist yet. `held=true` is
+    // the fixture half — the path is only on screen while another
+    // build holds the store, and an empty gate has air and no fields.
+    Verb {
+        name: "gate-sweep",
+        when: &[],
+        plain: "gate_sweep all=true caret=true hand=true held=true",
+    },
+    // The two failures a folder that will not open lands on. The
+    // dialog is the one with no way out to the log either — a modal
+    // window carries no seat for the panel — and the tab's screen does
+    // carry one, but only for git's half: the folder is written
+    // nowhere else. `kind=` says which of the three screens was swept,
+    // since only one of them has a line from git in it at all.
+    Verb {
+        name: "open-dialog-sweep",
+        when: &[],
+        plain: "open_dialog_sweep all=true caret=true hand=true kind=plain",
+    },
+    Verb {
+        name: "open-fail-sweep",
+        when: &[],
+        plain: "open_fail_sweep all=true caret=true hand=true kind=plain",
+    },
     // Two ways the pane's column stops being one, and a photograph
     // answers neither. `fits` is the overflow: a child that will not
     // shrink is a floor the whole column sits on, and every box in the

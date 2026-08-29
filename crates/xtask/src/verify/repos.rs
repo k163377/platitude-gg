@@ -222,8 +222,10 @@ pub(super) fn folder_for(
         "open-not-a-repo"
         | "open-not-a-repo-retry"
         | "open-not-a-repo-cancel"
+        | "open-dialog-sweep"
         | "open-fail-tab"
-        | "open-fail-tab-log" => {
+        | "open-fail-tab-log"
+        | "open-fail-sweep" => {
             let dir = made.join("notes");
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             Ok(dir.display().to_string())

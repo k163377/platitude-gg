@@ -27,26 +27,42 @@ Item {
     /// with nothing else on screen to say it the log is the only place it is written (デザイン規約 §git が言ったことを読む場所).
     property var commandsPage: null
 
+    /// The hand this screen's words are dragged over from the air around them, named so a run can enter it
+    /// (the way a card is reached at `<card>.background.pad`).
+    property alias pad: failedHand
+
     /// The "Close tab" button.
     signal closeRequested()
 
+    // The hand this screen's words are dragged over from the air around them (規約 §右のペインの字は掴める). Under the
+    // column rather than over it, so it is reached only where nothing else took the press — the step between two
+    // lines, the room beside a short one — and the `Close tab` button keeps every press it had.
+    SweepPad {
+        id: failedHand
+        anchors.fill: failedColumn
+        content: failedColumn
+    }
     Column {
+        id: failedColumn
         anchors.centerIn: parent
         spacing: Theme.spaceMd
         width: Math.min(700, screen.pageWidth - 2 * Theme.spaceXl)
 
-        Label {
+        CardText {
             text: Words.openFailure(screen.kind)
-            font.pixelSize: Theme.fontLg
-            font.weight: Font.DemiBold
-            anchors.horizontalCenter: parent.horizontalCenter
+            pixelSize: Theme.fontLg
+            weight: Font.DemiBold
+            horizontalAlignment: Text.AlignHCenter
+            width: parent.width
         }
-        Label {
+        // Wrapped rather than cut in the middle: a field has no `elide` to cut with, and a path put through one would
+        // hand the reader a `…` when they dragged over it (規約 §右のペインの字は掴める). Nothing stands beside this line
+        // to carry what a cut would drop, which is the same reason the sentence under it wraps.
+        CardText {
             text: screen.path
             color: Theme.textSecondary
-            elide: Text.ElideMiddle
-            width: parent.width
             horizontalAlignment: Text.AlignHCenter
+            width: parent.width
         }
         // git's words, and the only red on this screen: the gate that reports a git it cannot use draws the line the
         // same way (Main.qml).

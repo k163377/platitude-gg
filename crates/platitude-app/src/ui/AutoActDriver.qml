@@ -191,6 +191,7 @@ Item {
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
+                "diff-band-sweep",
                 "preview", "preview-unstaged", "preview-staged",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
@@ -219,7 +220,7 @@ Item {
                 "rename-remote", "set-upstream",
                 // The write barrier is behind this one: the question is answered from the timer, not before it.
                 "set-upstream-go",
-                "move-ask", "switch-conflicted", "switch-held", "switch-mark",
+                "move-ask", "ask-sweep", "switch-conflicted", "switch-held", "switch-mark",
                 // The write barrier is behind these, not in front of them: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
@@ -253,11 +254,11 @@ Item {
                 "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
-                "open-not-a-repo-cancel", "open-fail-tab",
-                "open-fail-tab-bare", "open-fail-tab-log", "identity",
+                "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",
+                "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
-                "window-fill", "solo", "window-floor",
+                "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "band-actions", "band-actions-none",
                 "band-actions-fold", "band-actions-alert", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
@@ -643,7 +644,10 @@ Item {
             // one it is about (a side's own line, once it has been typed over) is a removal, which is not a changed
             // line of the first hunk. The previews take the settled form too: what they open can be all picture or
             // binary notice and no rows, and no row of it is theirs to name.
-            if (["diff-file", "conflict-sides", "diff-tick",
+            // "diff-band-sweep" is about the band above the rows and not about a row at all, so the settled diff is
+            // the whole of what it waits for — a file with no changed line in its first hunk still has a path in the
+            // band, and demanding one would leave that run waiting out its watchdog.
+            if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep",
                  "preview", "preview-unstaged", "preview-staged"].indexOf(AppBackend.autoAct) >= 0)
                 return diffPane.diffSettled()
             return diffPane.firstChangedLine(0) >= 0
@@ -674,6 +678,16 @@ Item {
                                   + " text=" + Words.lineEndings(
                                       d.endingKind, d.endingFrom, d.endingTo,
                                   d.endingLines, d.endingScope, d.endingExt))
+                driver.complete()
+                return
+            }
+            // The band's own air, once the pane has settled on a file to name in it. The path there is the same one
+            // the list's row hands over from its hover, and this band is where the eye already is while the diff is
+            // being read (規約 §右のペインの字は掴める). `cut=` is the half the picture cannot answer on a wide pane:
+            // whether the field is holding a value longer than the band, which is where the head-side cut is decided.
+            if (act === "diff-band-sweep") {
+                AppBackend.report("diff_band_sweep "
+                    + diffPane.headerHand.sweepAir(7, "cut=" + diffPane.headerCut))
                 driver.complete()
                 return
             }
@@ -1756,6 +1770,22 @@ Item {
             AppBackend.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
                               + " branch=" + workTree.branch)
+            driver.complete()
+        }
+    }
+    // ...and the same bar's words taken from the air around them: the band inside the bar's own inset, the step
+    // between the heading and the line under it, the room beside a short one (規約 §右のペインの字は掴める). Waited on
+    // at `settled` for the reason `move-ask` waits — the bar spends 200ms coming down and a run that sampled the air
+    // of a half-open one would be reporting on a frame nobody sees. `words=` is what the bar is saying while it is
+    // swept, so a green run on an empty bar cannot pass for a green run on a question.
+    SampleTimer {
+        id: askSweepTimer
+        onTriggered: {
+            if (!graphPane.askCard.settled)
+                return
+            askSweepTimer.stop()
+            AppBackend.report("ask_sweep "
+                + graphPane.askCard.pad.sweepAir(7, "words=" + (graphPane.askCard.label !== "")))
             driver.complete()
         }
     }
@@ -3078,22 +3108,13 @@ Item {
             if (!tip.visible || tip.width <= 0)
                 return
             tipSweepTimer.stop()
-            const pad = tip.background.pad
-            const air = pad.airPoints(7)
-            let reach = 0
-            for (let i = 0; i < air.length; i++) {
-                if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
-                    reach++
-            }
             // **`all=` is the claim, not `reach=`**: how many places a tip's air has depends on how long the path is
             // and on which machine drew it, so the number is a diagnosis and "every one of them, and there was at
             // least one" is the judgement. `caret=` is the half a selection does not say — `Ctrl+C` goes to the field
-            // holding the keyboard, so a value picked out without one is not a value the reader can take away.
-            AppBackend.report("tip_sweep all=" + (air.length > 0 && reach === air.length)
-                + " caret=" + pad.caretLanded
-                + " hand=" + pad.handStands
-                + " reach=" + reach + "/" + air.length
-                + " text=" + pad.sweptText())
+            // holding the keyboard, so a value picked out without one is not a value the reader can take away. The
+            // sentence itself is the pad's (`SweepPad.sweepAir`), which is where the seven surfaces that carry this
+            // hand say it once.
+            AppBackend.report("tip_sweep " + tip.background.pad.sweepAir(7))
             driver.complete()
         }
     }
@@ -3416,27 +3437,11 @@ Item {
                 return
             }
             cardSweepTimer.stop()
-            const pad = rowCard.background.pad
-            const air = pad.airPoints(9)
-            let reach = 0
-            let miss = ""
-            for (let i = 0; i < air.length; i++) {
-                if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
-                    reach++
-                else if (miss === "")
-                    // The first start that came away with nothing, and what the sweep saw while it did. Without it the
-                    // line reports only the last try, which is the one that worked.
-                    miss = Math.round(air[i].x) + "," + Math.round(air[i].y) + "," + pad.sweptTrace()
-            }
-            // `all=` rather than a count, for the reason `tip-sweep` carries: how much air a card has depends on the
-            // words in it and on the machine that drew them.
-            AppBackend.report("card_sweep all=" + (air.length > 0 && reach === air.length)
-                + " caret=" + pad.caretLanded
-                + " hand=" + pad.handStands
-                + " open=" + rowCard.opened
-                + " reach=" + reach + "/" + air.length
-                + " miss=[" + miss + "]"
-                + " text=" + pad.sweptText())
+            // The whole of the sweep is the pad's own sentence now (`SweepPad.sweepAir`) — seven surfaces carry this
+            // hand and were each asking it the same four things. `open=` is this verb's own half and goes in where it
+            // always stood.
+            AppBackend.report("card_sweep "
+                + rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened))
             driver.complete()
         }
     }
@@ -4284,6 +4289,14 @@ Item {
             // photographs a marked row under no bar at all (2026-08-22 実測).
             page.switchToRef("R", arg)
             moveAskTimer.start()
+        } else if (act === "ask-sweep") {
+            // The same question `move-ask` raises, swept instead of photographed: what a bar names is a branch, a
+            // remote or the folder another working copy is holding, and while it stands over the list it is the only
+            // place any of those is written (規約 §右のペインの字は掴める). Raised down the road a hand takes for the
+            // reason that verb gives, and waited on at `AskBar.settled` for the same one — a bar still on its way down
+            // has its words at some other width, and the air a run samples is the air of a frame nobody sees.
+            page.switchToRef("R", arg === "" ? "origin/main" : arg)
+            askSweepTimer.start()
         } else if (act === "switch-lands") {
             // A move photographed where it comes to rest. **`switch` cannot do this** — it ends on the write barrier,
             // and core answers a write before the rebuild it asks for (`AfterWrite::Graph`), so that verb's picture is
@@ -5186,6 +5199,7 @@ Item {
                    || act === "code-send" || act === "line-back"
                    || act === "diff-select" || act === "diff-copy"
                    || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
+                   || act === "diff-band-sweep"
                    || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,

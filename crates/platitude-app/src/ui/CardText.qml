@@ -29,6 +29,13 @@ Item {
     property color color: Theme.textPrimary
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
+    /// Spelled in git's own family rather than the window's — a path git printed, a hash (規約 §git 用語のコード表記).
+    /// The pair `LineText` carries, and chosen by name for the same reason: a family handed in from a caller would
+    /// skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
+    property bool mono: false
+    /// How the lines sit across the field's own width. Centred where the surface centres its words — a screen whose
+    /// whole content is the sentence in the middle of it (`NoticeLine`) — and left everywhere a card stacks them.
+    property int horizontalAlignment: Text.AlignLeft
     /// How tall the field may grow before the rest is left behind, as a height. 0 = no cap, which is every one-line
     /// field. Spent in whole lines all the same — see `capLines`.
     property real capHeight: 0
@@ -147,9 +154,10 @@ Item {
         width: cardText.width
         text: cardText.text
         color: cardText.color
-        font.family: Theme.uiFamily
+        font.family: cardText.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cardText.pixelSize
         font.weight: cardText.weight
+        horizontalAlignment: cardText.horizontalAlignment
         wrapMode: Text.Wrap
         // Read, not written: the card is a view of a commit, a file or a person, and none of them is edited from here.
         readOnly: true
@@ -188,8 +196,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: "…"
             color: cardText.color
-            font.family: Theme.uiFamily
-            font.pixelSize: cardText.pixelSize
+            // The field's own, so the mark is cut from the same glyphs as the line it stands on — `mono` moves both.
+            font: field.font
         }
     }
 }

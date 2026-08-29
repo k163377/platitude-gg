@@ -546,6 +546,7 @@ Item {
                                     || AppBackend.autoAct === "open-bare"
                                     || AppBackend.autoAct === "open-not-a-repo-retry"
                                     || AppBackend.autoAct === "open-not-a-repo-cancel"
+                                    || AppBackend.autoAct === "open-dialog-sweep"
     property bool pickStarted: false
     SampleTimer {
         running: driver.pickAct
@@ -563,6 +564,17 @@ Item {
         onTriggered: {
             if (!openFailedDialog.opened)
                 return
+            if (AppBackend.autoAct === "open-dialog-sweep") {
+                pickAnswerTimer.stop()
+                // The one failure with nothing behind it: a modal window carries no seat for the command log, so the
+                // folder it names and git's own answer are the whole of what a reader can take away from here
+                // (規約 §右のペインの字は掴める). `kind=` is what the sweep had to land on — a dialog raised on `plain`
+                // has no line from git at all, and a run that swept one would be claiming less than it looked.
+                AppBackend.report("open_dialog_sweep "
+                    + openFailedDialog.background.pad.sweepAir(7, "kind=" + openFailedDialog.kind))
+                window.finishAutoAct()
+                return
+            }
             if (AppBackend.autoAct === "open-not-a-repo-retry")
                 openFailedDialog.retry()
             else if (AppBackend.autoAct === "open-not-a-repo-cancel")
@@ -596,6 +608,7 @@ Item {
         running: AppBackend.autoAct === "open-fail-tab"
                  || AppBackend.autoAct === "open-fail-tab-bare"
                  || AppBackend.autoAct === "open-fail-tab-log"
+                 || AppBackend.autoAct === "open-fail-sweep"
         onTriggered: {
             if (window.curPage === null || window.curPage.pageTab.state !== "open")
                 return
@@ -620,6 +633,16 @@ Item {
                     return
                 }
             failTabTimer.stop()
+            if (AppBackend.autoAct === "open-fail-sweep") {
+                // The tab's own failure screen, swept instead of photographed. This one *does* carry the log's seat at
+                // its foot, so git's answer is reachable there — but the folder is not, and it is the half a reader
+                // needs to paste back into a shell (規約 §右のペインの字は掴める). `kind=` says which of the three
+                // screens the sweep landed on, since only one of them has a line from git in it at all.
+                AppBackend.report("open_fail_sweep "
+                    + window.curPage.openFailedHand.sweepAir(7, "kind=" + window.curPage.pageTab.errorKind))
+                window.finishAutoAct()
+                return
+            }
             AppBackend.report(
                 "open_fail_tab tabs=" + pageRepeater.count
                 + " state=" + (window.curPage !== null ? window.curPage.pageTab.state : "-")
@@ -997,6 +1020,29 @@ Item {
                 + " held=" + (AppBackend.heldElsewhere !== "")
                 + " gate=" + gate.visible
                 + " main=" + mainUi.visible)
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=gate-sweep: the same screen `solo` photographs, with its words taken from the air around them
+    // (規約 §右のペインの字は掴める). **This is the surface with no way out to the log** — the gate stands before any
+    // repository is open, so git's own answer and the path of the build already holding the settings are the whole of
+    // what there is to take away, and a reader who cannot drag them retypes them.
+    //
+    // The path is only there while another build holds the store, which is the state the harness makes for `solo` (it
+    // takes the real lock before starting this process), so the sweep is run in that one: the other way the gate comes
+    // up — a git that would not answer — has no verb, since it needs a PATH without git on it.
+    SampleTimer {
+        id: gateSweepTimer
+        running: AppBackend.autoAct === "gate-sweep"
+        onTriggered: {
+            if (!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === "")
+                return
+            stop()
+            // `held=` is what the sweep had to land on: an empty gate has air and no fields, and a run that swept one
+            // would be reporting on a screen the reader never sees.
+            AppBackend.report("gate_sweep "
+                + gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
             window.finishAutoAct()
         }
     }

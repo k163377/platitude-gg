@@ -219,6 +219,11 @@ Rectangle {
     /// the way the view is: what a sweep needs of it is four answers, and four forwards here would be four more lines
     /// of this file saying nothing (`readonly property alias view`, the same call).
     readonly property alias textHand: textPick
+    /// Automation: the band's own hand — the one the path at the top is dragged over from the air beside it. Handed
+    /// over whole for the reason `textHand` is (`PG_AUTO_ACT=diff-band-sweep`).
+    readonly property alias headerHand: paneHeader.pad
+    /// Automation: whether that band ran out of room for the path — the half a picture of a wide pane cannot answer.
+    readonly property alias headerCut: paneHeader.cut
     /// Automation: the right-click, at a place in the text — which is where the menu's answer is settled.
     function askCodeMenu(row, at) { textPick.askMenu(row, at) }
     /// Automation: the first row of the view that is a removed line, or -1. The one row the menu's second word is
@@ -348,6 +353,7 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
         DiffPaneHeader {
+            id: paneHeader
             Layout.fillWidth: true
             title: diffPane.diffModel.title
             fromWorkTree: diffPane.fromWorkTree
