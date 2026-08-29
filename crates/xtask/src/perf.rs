@@ -34,6 +34,15 @@ struct Options {
     label: String,
     runs: u32,
     watchdog_ms: u64,
+    /// How long to hold the app after `perf_done` before reading the
+    /// memory one last time, or 0 to read it at once.
+    ///
+    /// What it is for: the peak says what the work cost while it ran, and
+    /// on its own it cannot tell a process that is still holding the
+    /// bytes from one that has already handed them back. The bench
+    /// finishes and the harness ends in the same breath, so without this
+    /// the two look identical.
+    settle_ms: u64,
     scroll: bool,
     select: bool,
     breakdown: bool,
@@ -51,6 +60,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         label: String::new(),
         runs: 3,
         watchdog_ms: 300_000,
+        settle_ms: 0,
         scroll: true,
         select: true,
         breakdown: false,
@@ -78,6 +88,11 @@ fn parse(args: &[String]) -> Result<Options, String> {
                 opts.watchdog_ms = value()?
                     .parse()
                     .map_err(|_| "--watchdog-ms takes a number".to_string())?;
+            }
+            "--settle-ms" => {
+                opts.settle_ms = value()?
+                    .parse()
+                    .map_err(|_| "--settle-ms takes a number".to_string())?;
             }
             "--quit-ms" => {
                 return Err(
@@ -112,6 +127,13 @@ fn parse(args: &[String]) -> Result<Options, String> {
 struct Reading {
     peak_working_set: u64,
     peak_private: u64,
+    /// What the process still held after `--settle-ms`, or 0 where the
+    /// run was not asked to wait. Read beside the peak: the difference
+    /// between them is work the process let go of once it was idle.
+    ///
+    /// The working set alone, because that is the side the budget is read
+    /// against (ci/baseline/perf-windows-x64.md §判定).
+    settled_working_set: u64,
     /// Process start to the first rows being on the model — the budget's
     /// "startup to the graph's first display".
     ///
@@ -266,6 +288,15 @@ fn measure(
         }
         std::thread::sleep(Duration::from_millis(SAMPLE_MS));
     }
+    // Held idle first when the run asked for it, so the last reading is
+    // taken of a process that has stopped working rather than one caught
+    // mid-frame. The background sampler is still running, so whatever the
+    // hold costs still reaches the peak.
+    let settled = if done && opts.settle_ms > 0 {
+        hold_idle(pid, opts.settle_ms)
+    } else {
+        0
+    };
     let final_sample = if done { sample_once(pid) } else { (0, 0) };
     let _ = child.kill();
     let _ = child.wait();
@@ -274,6 +305,7 @@ fn measure(
     reading.perf_done |= done;
     reading.peak_working_set = ws.max(final_sample.0);
     reading.peak_private = private.max(final_sample.1);
+    reading.settled_working_set = settled;
     let _ = std::fs::remove_dir_all(&config_dir);
     if let Some(error) = wait_error {
         return Err(error);
@@ -289,6 +321,24 @@ fn measure(
     }
     missing(&reading, opts)?;
     Ok(reading)
+}
+
+/// Leaves the app alone for `ms` and answers with the last working set
+/// read off it. Sampled the whole way rather than once at the end so a
+/// run that is still settling shows up as a value that is still moving.
+///
+/// **Outside the watchdog on purpose.** The ceiling is there to end a run
+/// that stopped answering, and this hold begins after the run has already
+/// answered — a wait the caller asked for by the second, not one the app
+/// could stretch.
+fn hold_idle(pid: u32, ms: u64) -> u64 {
+    let until = Instant::now() + Duration::from_millis(ms);
+    let mut last = sample_once(pid).0;
+    while Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
+        last = sample_once(pid).0;
+    }
+    last
 }
 
 fn read_app(

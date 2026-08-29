@@ -16,6 +16,18 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
     println!("\n== {} ==", opts.label);
     println!("  working set : {}", spread(&ws));
     println!("  private     : {}", spread(&private));
+    let settled: Vec<f64> = kept
+        .iter()
+        .filter(|r| r.settled_working_set > 0)
+        .map(|r| mb(r.settled_working_set))
+        .collect();
+    if !settled.is_empty() {
+        println!(
+            "  settled     : {} (working set, after {}ms idle)",
+            spread(&settled),
+            opts.settle_ms
+        );
+    }
     let startups: Vec<f64> = kept.iter().filter_map(|r| r.startup_ms).map(f).collect();
     if !startups.is_empty() {
         println!(
@@ -69,7 +81,6 @@ fn spread(values: &[f64]) -> String {
 
 #[cfg(test)]
 mod tests {
-
     use super::spread;
 
     #[test]

@@ -72,6 +72,12 @@ const TAIL: &str = "  perf --repo <path> [--label <name>] [--runs <n>] [--breakd
       options:
         --runs <n>        kept runs after the discarded first (default 3)
         --watchdog-ms <n> outer hang ceiling (default 300000)
+        --settle-ms <n>   hold the app idle this long after it reports,
+                          then read the memory once more and print it
+                          beside the peak. The peak says what the work
+                          cost while it ran; the difference says how much
+                          of that the process handed back once it had
+                          nothing to do (default 0 = read at once)
         --no-scroll       leave the scroll benchmark out
         --no-select       do not select a row or open a diff
         --no-open         start with no repository at all — the window and
