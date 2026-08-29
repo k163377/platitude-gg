@@ -66,6 +66,29 @@ Item {
         laneCanvas.requestPaint()
         nodeCanvas.requestPaint()
     }
+    /// How wide the two canvases below are drawn.
+    ///
+    /// **The lanes reach `fullWidth`, but only the column is ever on screen while the graph is not sent sideways**,
+    /// and a canvas is an image the size of the item it is: at the reference repository that is 852 pixels held for
+    /// 252 shown, on every row that is built, and the same ratio again on every repaint (2026-08-29 実測 — the two
+    /// canvases at full width are 42.6MB of the working set once the graph has been scrolled through).
+    ///
+    /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
+    /// moving the canvas rather than repainting it (`x`), so during a pan it has to already hold what the slide will
+    /// bring in. Widening and narrowing again each cost one repaint of the rows on screen — the same repaint the
+    /// column's own divider drag costs, and taken once at each end of a pan rather than per frame. **Qt asks for that
+    /// repaint itself for a canvas that is visible** (the note on `onWidthChanged` below), so the first frame of a pan
+    /// is the lanes and not the old picture stretched — verified at that frame (`PG_AUTO_ACT=graph-bar`).
+    ///
+    /// A function rather than one property because the two canvases stand in boxes of different widths — the faces'
+    /// clipper leans `spaceSm` further than the lanes' — and the rule about how wide to draw is one rule. It reads
+    /// only properties, so a binding on it takes the dependencies it names (`xOffset`, `fullWidth`, and whatever the
+    /// caller hands in); the rule against binding to a *method* is about the ones that measure and never notify
+    /// (app-ui.md).
+    function inkWidth(box) {
+        return laneCell.xOffset > 0 ? laneCell.fullWidth : Math.min(laneCell.fullWidth, box)
+    }
+
     function loadFace() {
         if (laneCell.avatarUrl !== "")
             nodeCanvas.loadImage(laneCell.avatarUrl)
@@ -79,7 +102,7 @@ Item {
         InkCanvas {
             id: laneCanvas
             x: -laneCell.xOffset
-            width: laneCell.fullWidth
+            width: laneCell.inkWidth(parent.width)
             height: parent.height
             // Resizing a canvas scales what it already holds; only a repaint redraws it. Qt asks for that repaint
             // itself, but only for a canvas that is visible — and a row waiting in the ListView's reuse pool is not. So
@@ -181,7 +204,7 @@ Item {
         InkCanvas {
             id: nodeCanvas
             x: -laneCell.xOffset
-            width: laneCell.fullWidth
+            width: laneCell.inkWidth(parent.width)
             height: parent.height
             // Same resize rule as the lane canvas above.
             onWidthChanged: requestPaint()
