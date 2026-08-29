@@ -235,6 +235,28 @@ Item {
     property string moveLocal: ""
     property string moveStart: ""
 
+    // ---- the same chip, pressed again ------------------------------
+    /// The branch a move already sent is putting HEAD on; `""` while none is on its way.
+    ///
+    /// **A press is decided from what the screen holds, and the screen takes a move in long after the write that made
+    /// it has answered** — core answers a write and only then publishes the refs it moved (`session::write`), and a
+    /// listing of fifty thousand refs is the slow half of that. Pressed twice on a remote branch with no local one,
+    /// the second press is decided from the very picture the first was and sends the same `switch --create`, which
+    /// git refuses because the first one made the branch (2026-08-29 ユーザー報告).
+    ///
+    /// So while a move is on its way, the road a press arrives by (`switchToRef`) sends nothing. **What ends the wait
+    /// is the move's own landing, not a counter**: HEAD on the branch and that branch in the listing
+    /// (`offers::move_landed` — a seq would move for reads nobody asked for). Everything else that can become of a
+    /// move puts it down where it happens, and each of those certainly comes: a refusal (nothing moved, so pressing
+    /// again is the reader's to do) and the question a move can come back as (`absorbMoveAsk`).
+    property string moveLanding: ""
+    function absorbMoveLanding() {
+        if (page.moveLanding !== ""
+                && GitFacts.moveLanded(page.moveLanding, workTree.branch,
+                                       branchesModel.oidOfName(page.moveLanding)))
+            page.moveLanding = ""
+    }
+
     function switchTo(kind, target, local, start, leaving) {
         page.moveKind = kind
         page.moveTarget = target
@@ -247,6 +269,9 @@ Item {
         page.runSwitch(leaving === true)
     }
     function runSwitch(leaving) {
+        // Marked where the move goes out rather than where it was asked for: the question a blocked move raises comes
+        // back through here, and a press held behind a bar has sent nothing yet.
+        page.moveLanding = page.moveLocal
         if (page.moveKind === "branch")
             repoTab.checkoutBranch(page.moveTarget, leaving === true)
         else if (page.moveKind === "remote")
@@ -319,9 +344,15 @@ Item {
             "")
         graphPane.askAlert = true
     }
+    /// Answers whether the press did anything — a move sent, or a question raised in front of one. `false` is a press
+    /// this road turned away, which is what the headless double press reads (動詞 `switch-remote-twice`): the second
+    /// of two presses in one turn has to be turned away, and the gate that turns it away is not something the run can
+    /// see from outside (both presses look alike, and the window after them differs only by a line in the log).
     function switchToRef(kind, name, leaving) {
-        if (repoTab.state !== "open" || repoTab.busyCount > 0)
-            return
+        // `busyCount` alone is not the gate: it rises when the queue starts the write, not when the press is made, and
+        // it is back down while the screen is still catching up with what the write did (`moveLanding`).
+        if (repoTab.state !== "open" || repoTab.busyCount > 0 || page.moveLanding !== "")
+            return false
         // The models hold the lookups — the local branch a remote row lands on is the one another copy can be holding
         // — and which move they add up to is core's rule (offers::switch_action): a tag or the detached marker moves
         // nothing, a tag's row offering a branch at its commit instead (`startNaming`).
@@ -335,23 +366,27 @@ Item {
         // never possible.
         if (action === "holder") {
             page.askOpenHolder(local)
-            return
+            return true
         }
         // Ahead of the branches below rather than inside them: the one that lands on an existing local branch asks git
         // what the move would cost before it moves, and that read is worth nothing while an operation is standing.
         if (page.standsInTheWay(leaving)) {
             page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
-            return
+            return true
         }
         if (action === "switch")
             page.switchTo("branch", name, name, "", leaving)
         else if (action === "materialize")
             page.switchTo("remote", name, local, "", leaving)
-        else if (action === "move")
+        else if (action === "move") {
             // Whether to ask is git's to answer — a branch that only fell behind loses nothing by moving. The question
             // comes back as `moveAskSeq` when something would be lost, and the operation is left standing for the
             // answer to that one to undo (core asks before it aborts, never the other way round).
+            page.moveLanding = local
             repoTab.checkoutMovingBranch(local, name, leaving === true)
+        }
+        // A tag or the detached marker is the one press left: it moves nothing, and it raised nothing either.
+        return action !== ""
     }
 
     // Landing on the remote branch moves the existing local one onto it — the one move here that can leave commits
@@ -411,6 +446,9 @@ Item {
         if (repoTab.moveAskSeq === page.seenMoveAskSeq)
             return
         page.seenMoveAskSeq = repoTab.moveAskSeq
+        // The move came back as a question instead: nothing moved, so nothing is on its way to the screen and the next
+        // press — the one that answers the bar, or the one that raises it again after it is walked away from — goes.
+        page.moveLanding = ""
         page.askMoveBranchOnto(repoTab.moveAskLocal, repoTab.moveAskStart)
     }
 
@@ -1087,6 +1125,9 @@ Item {
         // the same way.
         page.stashLanded = repoTab.writeStashed
         if (repoTab.writeRefused) {
+            // Nothing moved, so nothing is coming to the screen for a move to be recognised by: pressing again is the
+            // reader's to do, and this is the one put-down `moveLanding` cannot wait for a landing for.
+            page.moveLanding = ""
             // Whatever the window took away for this write is still there — git would not do it, or could not reach
             // the far side to. Put back before anything below answers for the refusal, so the row the question is
             // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
@@ -1851,6 +1892,9 @@ Item {
         // already has owes the same landing as one that wrote a commit, and this is the only word that it can be paid.
         function onRefsSettled() {
             page.tryPendingHeadSelect()
+            // The listing is the half a move onto a branch that was not there waits on: the status behind the write
+            // already has HEAD on it, and until this arrives the screen still says no such branch (`moveLanding`).
+            page.absorbMoveLanding()
             // The listing the delete was waiting on: the rows it took away are gone from the model itself now, so the
             // window stops standing in for it (デザイン規約 §消す操作は先に画面から消す).
             page.refsProvedGone()
@@ -1898,6 +1942,8 @@ Item {
             if (moved && !ours)
                 page.reloadDiff()
             page.absorbOpMessage()
+            // ...and the other half of a move's landing: this is what carries the branch HEAD ended up on.
+            page.absorbMoveLanding()
             // The status can be the half a detached landing was waiting on (`tryPendingHeadSelect`'s fallback reads
             // this model, and only a status younger than the arming may answer). **Only the detached half**: with a
             // branch name standing, resolution stays with the refs/graph events — a status that arrives first would

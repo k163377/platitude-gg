@@ -285,6 +285,15 @@ impl GitFacts {
         .to_string()
     }
 
+    /// Whether the move a press already sent has reached the screen
+    /// (`platitude_core::offers::move_landed`) — what `RepoPage` holds
+    /// the next press behind, so a chip pressed twice does not send the
+    /// same command twice.
+    #[qslot]
+    fn move_landed(&self, landing: String, current_branch: String, landing_oid: String) -> bool {
+        platitude_core::offers::move_landed(&landing, &current_branch, &landing_oid)
+    }
+
     /// The address half of a typed identity
     /// (`platitude_core::trailers::split_identity`); `""` where nothing
     /// in the text reads as one.

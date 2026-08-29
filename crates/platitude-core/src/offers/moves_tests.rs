@@ -36,6 +36,19 @@ fn switch_lands_where_the_letter_and_the_local_branch_say() {
 }
 
 #[test]
+fn a_move_has_landed_only_once_head_and_the_listing_both_say_so() {
+    // The gap the guard exists for: the write has answered and the
+    // status behind it already has HEAD on the new branch, but the refs
+    // are still being read, so the listing has no commit for it yet.
+    assert!(!move_landed("feat", "feat", ""));
+    assert!(!move_landed("feat", "main", "abc123"));
+    assert!(move_landed("feat", "feat", "abc123"));
+    // Nothing is on its way, so nothing is waiting to arrive.
+    assert!(!move_landed("", "", ""));
+    assert!(!move_landed("", "main", "abc123"));
+}
+
+#[test]
 fn every_standing_operation_and_an_unmerged_index_block_moves() {
     let clean = Counts::default();
     let conflicted = Counts {

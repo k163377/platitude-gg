@@ -13,7 +13,8 @@ mod moves;
 
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
-    SwitchAction, leave_code, leaving_undoes, moves_blocked, skip_is_free, switch_action,
+    SwitchAction, leave_code, leaving_undoes, move_landed, moves_blocked, skip_is_free,
+    switch_action,
 };
 
 /// The kind of ref a menu row stands on, in the words the chip records

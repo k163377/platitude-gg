@@ -23,6 +23,19 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "switch_landed branch=feature/clash stashes=0 wanted=0 conflicts=0 log=false",
     },
+    // The same landing reached by two presses, where the claim is that
+    // the second one was turned away. **Only the report can say it**: a
+    // build that sent both frames exactly like this one — the branch is
+    // the branch either way — and what it adds is a refused
+    // `switch --create` in a panel nobody opened. The line stops at
+    // `held=` so the rest of it stays readable: the branch is the
+    // argument's local name, and `writes=` counts every answer the queue
+    // gave, which an opening fetch can join.
+    Verb {
+        name: "switch-remote-twice",
+        when: &[],
+        plain: "switch_twice held=true",
+    },
     // Bars with no words in them frame like bars with words: both are
     // judged on the held pill and the absent chip, neither of which a
     // run that photographed the opening could say.

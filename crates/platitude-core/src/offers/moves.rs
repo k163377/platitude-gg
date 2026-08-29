@@ -85,6 +85,22 @@ pub fn switch_action(
     }
 }
 
+/// Whether a move already sent has reached the screen: HEAD stands on
+/// the branch it was landing on, and the ref listing has that branch.
+/// `landing` is the branch that move puts HEAD on — empty is "none is on
+/// its way", which has landed nothing.
+///
+/// **Both halves, because they arrive apart.** A write answers before it
+/// publishes what it moved (`session::write`), and the status comes back
+/// long before a listing of fifty thousand refs does. Read between the
+/// two, the screen still says the remote branch has no local one — so a
+/// second press on the same chip is decided from the very picture the
+/// first one was, and sends the same `switch --create`, which git
+/// refuses because the first one made the branch (2026-08-29 ユーザー報告).
+pub fn move_landed(landing: &str, current_branch: &str, landing_oid: &str) -> bool {
+    !landing.is_empty() && landing == current_branch && !landing_oid.is_empty()
+}
+
 /// Whether a move has to clear the way before it can run. **git refuses
 /// every `switch` while a merge / rebase / cherry-pick / revert stands**
 /// — clean tree, conflicted tree and resolved-and-staged tree all get

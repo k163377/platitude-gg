@@ -215,6 +215,9 @@ Item {
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
+                // The write barrier is in front of this one's claim: the second press is turned away before any
+                // write is made, so the answer to the first is not what the run is waiting for.
+                "switch-remote-twice",
                 // Stops at its question, so the ask bar settling is the completion — a write
                 // never comes (the write half is "-go", which stays a write act above).
                 "rename-remote", "set-upstream",
@@ -1807,6 +1810,27 @@ Item {
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchLandsTimer.stashes
                               + " conflicts=" + workTree.conflictCount
+                              + " log=" + page.commandsOpen)
+            driver.complete()
+        }
+    }
+    // The same landing, reached by two presses instead of one. **The claim is `held=`** — the second press turned
+    // away — because the two builds frame alike: the branch is the branch either way, and what the ungated one adds
+    // is a refused `switch --create` in a panel nobody opened.
+    SampleTimer {
+        id: switchTwiceTimer
+        property string branch: ""
+        property bool held: false
+        property int writesBefore: 0
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || workTree.branch !== switchTwiceTimer.branch)
+                return
+            switchTwiceTimer.stop()
+            // `writes=` is the same claim counted from the other side: one press, one answer. It is read after the
+            // tree has settled, so a second write would have been counted by now.
+            AppBackend.report("switch_twice held=" + switchTwiceTimer.held
+                              + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
+                              + " branch=" + workTree.branch
                               + " log=" + page.commandsOpen)
             driver.complete()
         }
@@ -4350,6 +4374,18 @@ Item {
             switchStoppedTimer.start()
         } else if (act === "switch-remote") {
             page.switchToRef("R", arg)
+        } else if (act === "switch-remote-twice") {
+            // The same chip pressed twice, which is what the report was: both `switch --create` left in the same
+            // second and git refused the second one, because the first had already made the branch (2026-08-29
+            // ユーザー報告). **The two presses go out in one turn** — `busyCount` only rises when the queue starts the
+            // write, so a run that waited even a tick between them would be answered by the gate the old build had.
+            switchTwiceTimer.branch = repoTab.localNameFor(arg)
+            switchTwiceTimer.writesBefore = repoTab.writeSeq
+            page.switchToRef("R", arg)
+            // The road's own answer to the second press, not a copy of its condition: `switchToRef` says whether the
+            // press did anything, and a build with no gate says it did.
+            switchTwiceTimer.held = page.switchToRef("R", arg) === false
+            switchTwiceTimer.start()
         } else if (act === "nav-dbl") {
             // A double-click in the left menu, entered where the row enters it. The argument is `<section>:<name>`.
             const cut = arg.indexOf(":")
