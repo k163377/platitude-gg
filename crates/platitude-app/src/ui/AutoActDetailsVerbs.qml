@@ -67,7 +67,16 @@ Item {
         } else if (act === "details-fit") {
             // Overflow shows as glyphs cut at the window's edge, which headless cannot see, so the pane reports the
             // number. `--preset edges` holds the wall.
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            //
+            // **A run that named no row keeps the one the page opened on** — the newest commit of the current
+            // branch. Not `Number("")`, which is 0: row 0 is the working tree's wherever the tree is dirty, and
+            // both presets this verb is pointed at are (`basic`, `edges`). Landing there puts the WIP pane in
+            // front and empties the selection, so the card below can never settle and the run says nothing at all
+            // until the watchdog — 120s of `cardSettled=false` with no report of any kind, on both OSes
+            // (2026-08-29. The verb had only ever been run with its row, so this had been red since it was
+            // written).
+            if (arg !== "")
+                page.activateRow(graphModel.oidAt(Number(arg)))
             detailsFitTimer.start()
         } else if (act === "corner") {
             // Both sides of the corner's one rule: preset `basic` leaves the corner bare, `long` runs rows into it.
