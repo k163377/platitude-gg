@@ -25,6 +25,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let root = crate::workspace_root();
     let path = crate::qt::path_with_qt()?;
 
+    // A named repository and a preset ask for two different fixtures at
+    // once; refusing beats silently running against the wrong one.
+    if !opts.repo.is_empty() && !opts.preset.is_empty() {
+        return Err("--repo and --preset name different fixtures: pass one of them".into());
+    }
     // Named repositories win outright; otherwise one fresh demo repository
     // per preset, in the order they were asked for — which is the order
     // the tabs come up in.
@@ -79,11 +84,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Fresh preset repositories need no cross-process claim: their creator
     // already gave this run a private directory.
     let mut claimed = BTreeSet::new();
-    let mut _resource_claims = Vec::new();
+    let mut resource_claims = Vec::new();
     if !opts.repo.is_empty() {
         for repo in &repos {
             if let Some(claim) = claim_resource(repo, "repository", &mut claimed)? {
-                _resource_claims.push(claim);
+                resource_claims.push(claim);
             }
         }
     }
@@ -100,7 +105,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some(dir) => {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
             if let Some(claim) = claim_resource(dir, "shot directory", &mut claimed)? {
-                _resource_claims.push(claim);
+                resource_claims.push(claim);
             }
             dir.clone()
         }
@@ -119,7 +124,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if opts.config_dir.is_some()
         && let Some(claim) = claim_resource(&config_dir, "config directory", &mut claimed)?
     {
-        _resource_claims.push(claim);
+        resource_claims.push(claim);
     }
     println!("config dir: {}", config_dir.display());
 

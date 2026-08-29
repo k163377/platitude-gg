@@ -173,9 +173,23 @@ fn kill_pid(pid: u32) -> Result<(), String> {
         c.args(["-9", &pid.to_string()]);
         c
     };
-    // A process that ended between the listing and this line is a success.
-    let _ = crate::run_captured(&mut command)?;
-    Ok(())
+    let output = crate::run_captured(&mut command)?;
+    if output.status.success() {
+        return Ok(());
+    }
+    // A process that ended between the listing and this line is a
+    // success; anything else (access denied, a wedged handle) has to be
+    // reported — "reaped" claimed over a survivor sends the launch
+    // straight into the still-locked exe.
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if said.contains("not found") || said.contains("No such process") {
+        return Ok(());
+    }
+    Err(format!("could not kill pid {pid}: {}", said.trim()))
 }
 
 #[cfg(test)]

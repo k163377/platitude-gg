@@ -151,13 +151,18 @@ fn merge_in(primary: &str, branch: &str) -> Result<(), String> {
     }
     let mut abort = std::process::Command::new("git");
     abort.arg("-C").arg(primary).args(["merge", "--abort"]);
-    if crate::run_captured(&mut abort).is_err() {
-        // The error below already tells the reader the merge stopped;
-        // a failed abort leaves the same conflict for the same hands.
-    }
+    // run_captured only fails on a spawn error — the abort's own exit
+    // code has to be read, or "walked back" is claimed over a primary
+    // still standing mid-merge.
+    let walked_back = crate::run_captured(&mut abort).is_ok_and(|out| out.status.success());
     Err(format!(
-        "the merge into main stopped and was walked back:\n{}{}\n\
+        "the merge into main stopped and was {}:\n{}{}\n\
          resolve it with the user — a conflict on main is not resolved unattended",
+        if walked_back {
+            "walked back"
+        } else {
+            "left standing (the abort failed too — the primary checkout is mid-merge)"
+        },
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     ))

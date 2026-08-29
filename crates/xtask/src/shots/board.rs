@@ -293,10 +293,13 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
 /// mean a dependency, and the board only needs to know how big to say
 /// the picture is.
 fn png_size(path: &Path) -> Result<(u32, u32), String> {
-    let bytes =
-        std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    use std::io::Read;
+    let mut bytes = [0_u8; 24];
+    std::fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut bytes))
+        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
     let header: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-    if bytes.len() < 24 || bytes[..8] != header {
+    if bytes[..8] != header {
         return Err(format!("{} is not a png", path.display()));
     }
     let word = |at: usize| -> u32 {

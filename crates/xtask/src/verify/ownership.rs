@@ -41,20 +41,65 @@ pub(super) fn claim_resource(
     let locks = std::env::temp_dir().join("pg-verify-locks");
     std::fs::create_dir_all(&locks).map_err(|e| e.to_string())?;
     let lock = locks.join(format!("{key:016x}.lock"));
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lock)
-        .map_err(|e| {
-            format!(
-                "{kind} {} is already owned by another verify-ui run: {e}",
-                canonical.display()
-            )
-        })?;
+    let refused = |e: &std::io::Error| {
+        format!(
+            "{kind} {} is already owned by another verify-ui run: {e}",
+            canonical.display()
+        )
+    };
+    let open_new = || {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+    };
+    let mut file = match open_new() {
+        Ok(file) => file,
+        // A lock whose writer is gone is litter, not ownership: the temp
+        // directory outlives every killed run, and without this one
+        // taskkill would refuse the path until a reboot.
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && !holder_alive(&lock) => {
+            let _ = std::fs::remove_file(&lock);
+            open_new().map_err(|e| refused(&e))?
+        }
+        Err(e) => return Err(refused(&e)),
+    };
     writeln!(file, "pid={}\npath={identity}", std::process::id())
         .map_err(|e| format!("could not record verify-ui ownership: {e}"))?;
     claimed.insert(key);
     Ok(Some(ResourceClaim { lock }))
+}
+
+/// Whether the process that wrote `lock` still exists. Unreadable or
+/// half-written locks answer "alive": refusing is the safe side, and the
+/// writer may be between create and write.
+fn holder_alive(lock: &Path) -> bool {
+    let Some(pid) = std::fs::read_to_string(lock).ok().and_then(|text| {
+        text.lines()
+            .find_map(|line| line.strip_prefix("pid=")?.trim().parse::<u32>().ok())
+    }) else {
+        return true;
+    };
+    process_exists(pid)
+}
+
+#[cfg(windows)]
+fn process_exists(pid: u32) -> bool {
+    // tasklist exits 0 found or not; the filter's answer is the output.
+    std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
+        .unwrap_or(true)
+}
+
+#[cfg(not(windows))]
+fn process_exists(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(true)
 }
 
 /// Claim a run-owned directory before any repository, shim, config, or PNG
@@ -114,6 +159,39 @@ mod tests {
         for path in claims {
             std::fs::remove_dir(path).expect("remove empty claimed directory");
         }
+    }
+
+    #[test]
+    fn a_lock_whose_writer_is_gone_is_reclaimed() {
+        let target = super::fresh_shot_dir("stale-claim").expect("target directory");
+        // A pid that has certainly exited: our own child, reaped.
+        let mut probe = if cfg!(windows) {
+            let mut c = std::process::Command::new("cmd");
+            c.args(["/C", "exit 0"]);
+            c
+        } else {
+            std::process::Command::new("true")
+        };
+        let child = probe.spawn().expect("spawn a short-lived child");
+        let dead_pid = child.id();
+        let mut child = child;
+        child.wait().expect("reap the child");
+
+        // First claim writes the lock, then the file is doctored to name
+        // the dead pid — the state a killed run leaves behind.
+        let mut first_set = BTreeSet::new();
+        let first = super::claim_resource(&target, "test resource", &mut first_set)
+            .expect("first claim")
+            .expect("new claim");
+        let lock = first.lock.clone();
+        std::mem::forget(first);
+        std::fs::write(&lock, format!("pid={dead_pid}\npath=doctored\n")).expect("doctor the lock");
+
+        let mut second_set = BTreeSet::new();
+        super::claim_resource(&target, "test resource", &mut second_set)
+            .expect("a stale lock is reclaimed")
+            .expect("new claim over the stale lock");
+        std::fs::remove_dir(target).expect("remove empty target directory");
     }
 
     #[test]

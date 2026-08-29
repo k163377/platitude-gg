@@ -107,15 +107,23 @@ apt-get update -qq >/dev/null 2>&1
 # git first: the product cannot run without it whatever the loader says.
 apt-get install -y -qq --no-install-recommends git >/dev/null 2>&1
 needed="git"
+started=0
+last=""
 for _ in $(seq 1 20); do
   out=$(QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
         PG_AUTO_ACT=band PG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PG_SHOT_DIR={OUT_MOUNT} \
         timeout 60 /built/release/platitude-gg 2>&1)
-  [ $? = 0 ] && break
+  [ $? = 0 ] && started=1 && break
   soname=$(printf '%s' "$out" | sed -n 's/.*error while loading shared libraries: \([^:]*\).*/\1/p' | head -1)
   if [ -z "$soname" ]; then
     echo "stopped without naming a library:"; printf '%s\n' "$out" | head -5; exit 1
   fi
+  # The same blocker twice means the install did nothing (a dead mirror
+  # exits this loop as a lie otherwise — apt errors are swallowed above).
+  if [ "$soname" = "$last" ]; then
+    echo "still stopped on $soname after installing its package"; exit 1
+  fi
+  last="$soname"
   pkg=$(awk -v s="$soname" '$1 == s {{print $2}}' /tmp/map)
   if [ -z "$pkg" ]; then
     echo "no package known for $soname — add it to SONAME_PACKAGES"; exit 1
@@ -124,6 +132,9 @@ for _ in $(seq 1 20); do
   apt-get install -y -qq --no-install-recommends "$pkg" >/dev/null 2>&1
   needed="$needed $pkg"
 done
+if [ "$started" != 1 ]; then
+  echo "never started within 20 rounds — the DECLARE list below is incomplete"; exit 1
+fi
 echo
 echo "DECLARE:$needed"
 echo

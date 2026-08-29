@@ -4,6 +4,10 @@
 /// Returns the first JSON string value for `key` in `input`, unescaped just
 /// enough for paths (\\ \" \/). The payload is machine-produced JSON, so the
 /// first occurrence of a key like "file_path" is the tool input's.
+///
+/// `\uXXXX` is deliberately not decoded: the harness writes non-ASCII as
+/// raw UTF-8, and a wrong four-byte guess would corrupt a path where
+/// passing the escape through merely fails a comparison loudly.
 pub(super) fn string_field(input: &str, key: &str) -> Option<String> {
     let needle = format!("\"{key}\"");
     let after_key = &input[input.find(&needle)? + needle.len()..];

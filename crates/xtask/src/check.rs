@@ -92,8 +92,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
             host.push("--no-build".to_string());
         }
         host_steps.push(host);
+        // The container side reuses its first build too: a fingerprint
+        // check across the host boundary is measurably slow, and paying
+        // it once per verb bought nothing.
         let mut linux = words(&["cargo", "xtask", "linux", "verify-ui"]);
         linux.extend(verb_words.iter().map(|w| (*w).to_string()));
+        if i > 0 {
+            linux.push("--no-build".to_string());
+        }
         linux_steps.push(linux);
     }
     // Last so it reuses the release the container's verify-ui just built.

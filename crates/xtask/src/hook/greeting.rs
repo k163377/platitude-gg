@@ -54,13 +54,17 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
 /// `claude --worktree <letter>` road is covered the same way EnterWorktree
 /// is. A seat locked by somebody else gets a warning, not a fight.
 fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
-    match lock_reason(cwd) {
+    // The lock names the worktree by its top-level path (git resolves the
+    // argument by exact real path); a session started in a subdirectory
+    // would otherwise fail the claim silently.
+    let root = crate::seats::worktree_root(cwd).unwrap_or_else(|| cwd.to_string());
+    match lock_reason(&root) {
         None => {
             // A claim that could not be written is a survey concern, and so
             // is one lost to a race in the moment since the read above: the
             // session is already sitting here either way, and the greeting
             // still says where the seat stands.
-            let _claim = lock_seat(cwd, cwd, session);
+            let _claim = lock_seat(&root, &root, session);
             None
         }
         Some(reason) if !session.is_empty() && reason.contains(session) => None,

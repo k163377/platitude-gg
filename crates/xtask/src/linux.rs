@@ -101,6 +101,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "linux needs a command, e.g. `cargo xtask linux test -p platitude-core`".into(),
         );
     }
+    if shell && !rest.is_empty() {
+        // Silently dropping the command would run bash where a check was
+        // asked for.
+        return Err(format!(
+            "--shell takes no command (got {:?}) — drop --shell to run it, \
+             or drop the command to get the shell",
+            rest.join(" ")
+        ));
+    }
 
     let root = crate::workspace_root();
     // The one verb that is about a different machine rather than a
@@ -353,7 +362,12 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
     if status.success() {
         return Ok(());
     }
-    Err("the command failed".into())
+    // The child's own code, the way the container path reports it — a
+    // runner must not flatten a child's exit into an anonymous failure.
+    Err(match status.code() {
+        Some(code) => format!("the command exited {code}"),
+        None => "the command was killed".into(),
+    })
 }
 
 /// A host path as docker wants it in --volume: forward slashes, drive letter

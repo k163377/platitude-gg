@@ -132,12 +132,18 @@ fn commit(command: &str) -> Option<Commit<'_>> {
 /// Index past the token at `at`, extended to the closing quote when the
 /// token opens one it does not close: a quoted value is one word to the
 /// shell however many words this whitespace split made of it.
+///
+/// Only a quote opening a word (or a `--flag='…` value) spans words. One
+/// inside a word (`it's-notes.md`) must not: swallowing to the line's end
+/// would carry a `git commit` behind it out of this guard's sight.
 fn quoted_span(tokens: &[&str], at: usize) -> usize {
     let Some(first) = tokens.get(at) else {
         return at;
     };
-    let Some(open) = first.find(['"', '\'']) else {
-        return at + 1;
+    let open = match first.find(['"', '\'']) {
+        Some(0) => 0,
+        Some(eq) if first.as_bytes().get(eq.wrapping_sub(1)) == Some(&b'=') => eq,
+        _ => return at + 1,
     };
     let quote = char::from(first.as_bytes()[open]);
     if first[open + 1..].contains(quote) {
@@ -253,6 +259,14 @@ mod tests {
             commit("git add .claude/rules/core.md").is_none(),
             "a line with no commit stages nothing to hold"
         );
+    }
+
+    #[test]
+    fn an_apostrophe_inside_a_path_does_not_swallow_the_commit_behind_it() {
+        let seen = commit("git add it's-notes.md && git commit -m x");
+        assert!(seen.is_some(), "the commit after the odd quote is seen");
+        let named = commit("git add it's.md .claude/rules/core.md && git commit -m x").unwrap();
+        assert!(named.named, "and so is the path after it");
     }
 
     #[test]

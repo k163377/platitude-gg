@@ -25,7 +25,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use report::{mb, report};
-use sampler::{sample_memory, sample_once};
+use sampler::{sample_last, sample_memory, sample_once};
 
 const SAMPLE_MS: u64 = 100;
 
@@ -152,6 +152,11 @@ struct Reading {
     perf_done: bool,
 }
 pub fn run(args: &[String]) -> Result<(), String> {
+    // The samplers answer (0, 0) where they are not implemented, and a
+    // 0MB working set must never pass for a reading.
+    if !cfg!(any(windows, target_os = "linux")) {
+        return Err("memory sampling is not implemented for this OS".into());
+    }
     let opts = parse(args)?;
     let root = crate::workspace_root();
     let path = crate::qt::path_with_qt()?;
@@ -332,13 +337,7 @@ fn measure(
 /// answered — a wait the caller asked for by the second, not one the app
 /// could stretch.
 fn hold_idle(pid: u32, ms: u64) -> u64 {
-    let until = Instant::now() + Duration::from_millis(ms);
-    let mut last = sample_once(pid).0;
-    while Instant::now() < until {
-        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
-        last = sample_once(pid).0;
-    }
-    last
+    sample_last(pid, ms)
 }
 
 fn read_app(

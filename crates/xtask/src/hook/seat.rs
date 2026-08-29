@@ -190,8 +190,12 @@ pub(super) fn session_end(input: &str) -> Result<(), String> {
     if roster_seat(&cwd).is_none() {
         return Ok(());
     }
-    if lock_reason(&cwd).is_some_and(|reason| reason.contains(&session))
-        && git_query(&cwd, &["worktree", "unlock", &cwd]).is_none()
+    // The unlock must name the worktree by its top-level path — git
+    // resolves the argument by exact real path, so a session that ended
+    // standing in a subdirectory would fail it silently.
+    let root = worktree_root(&cwd).unwrap_or(cwd);
+    if lock_reason(&root).is_some_and(|reason| reason.contains(&session))
+        && git_query(&root, &["worktree", "unlock", &root]).is_none()
     {
         // Nobody is left to tell; the stale mark in `cargo xtask seats`
         // is the fallback.

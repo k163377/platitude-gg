@@ -93,6 +93,11 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--old-git" => {
                 opts.old_git = it.next().ok_or("--old-git needs a version")?.clone();
             }
+            // A misspelled flag must not ride on as a verb argument — the
+            // run would go out under different conditions than asked for.
+            other if other.starts_with("--") => {
+                return Err(format!("unknown verify-ui option {other}"));
+            }
             other => positional.push(other),
         }
     }

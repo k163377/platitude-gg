@@ -86,6 +86,47 @@ fn windows_sample_once(pid: u32) -> (u64, u64) {
         .unwrap_or_default()
 }
 
+/// Holds for `ms` and answers the *last* working-set sample — the settled
+/// value, where [`sample_memory`] answers the peak. One resident process
+/// on Windows for the same reason as there: a spawn per 100ms sample
+/// perturbs the very settling this measures (and cannot keep the period).
+pub(super) fn sample_last(pid: u32, ms: u64) -> u64 {
+    #[cfg(windows)]
+    {
+        let script = format!(
+            "$ErrorActionPreference='SilentlyContinue';\
+             $p=Get-Process -Id {pid};\
+             $ws=0;$end=(Get-Date).AddMilliseconds({ms});\
+             while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
+               $p.Refresh();\
+               $ws=$p.WorkingSet64;\
+               Start-Sleep -Milliseconds {SAMPLE_MS};\
+             }};\
+             Write-Output \"$ws\""
+        );
+        let out = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .output();
+        let Ok(out) = out else { return 0 };
+        parse_pair(&String::from_utf8_lossy(&out.stdout)).0
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let until = Instant::now() + Duration::from_millis(ms);
+        let mut last = linux_sample_once(pid).0;
+        while Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(SAMPLE_MS));
+            last = linux_sample_once(pid).0;
+        }
+        last
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let _ = (pid, ms);
+        0
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn linux_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
     let status = format!("/proc/{pid}/status");
