@@ -243,6 +243,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "graph_tail truncated=true shown=true",
     },
+    // The press on that footer, and the four things the camera cannot
+    // answer for. `waiting=` is the ring, which is gone before the
+    // shutter — the press is answered in under a second. Whether the
+    // rows arrived *under* the ones being read is the pair after it:
+    // a window that grew by starting the stream over lands the same row
+    // count and photographs the same. `truncated=false` closes it —
+    // this preset's history is 2100 commits, so one step of 500 past a
+    // window of 2000 reaches the end of it and the footer goes with it.
+    Verb {
+        name: "graph-tail-more",
+        when: &[],
+        plain: "graph_tail_more taken=true waiting=true restarted=false held=true truncated=false",
+    },
     // The dotted edges under the uncommitted row, in the tokens the
     // delegate paints from (uppercase = dashed). Under `--preset
     // conflict` a merge is standing, so the row leashes HEAD and the

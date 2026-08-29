@@ -63,6 +63,8 @@ Item {
                               + " typed=" + nameTyped)
         } else if (act === "graph-tail") {
             graphTailTimer.start()
+        } else if (act === "graph-tail-more") {
+            tailMoreTimer.start()
         } else if (act === "graph-head" || act === "graph-head-below"
                    || act === "graph-head-back" || act === "graph-head-go"
                    || act === "graph-head-lit") {
@@ -141,6 +143,79 @@ Item {
                 + " lanes=" + (graphModel.tailGeometry === ""
                                ? 0 : graphModel.tailGeometry.split(";").length))
             driver.complete()
+        }
+    }
+    // The press on that cut: the footer loads the next step of history (`GraphTailFooter.loadMore`).
+    //
+    // What it has to prove is not that more rows arrived — it is that they arrived **under the ones being read**. So
+    // the run holds on to where the view was and how many times the model had been reset before the press, and the
+    // report leads with the pair: a window that grew by starting the stream over would land the same row count with
+    // `restarted=true`, and it is the same picture.
+    //
+    // The press goes in at the footer's own function — the one line the MouseArea's handler is (verify-ui スキル
+    // 「注入はハンドラ本体そのものへ入れる」). Nothing is waited out here either: the walk answers by taking `growing`
+    // back off, and only then is the count worth reading.
+    property int tailWalkedBefore: -1
+    property int tailResetsBefore: -1
+    property int tailRowBefore: -1
+    property bool tailWaiting: false
+    SampleTimer {
+        id: tailMoreTimer
+        onTriggered: {
+            // **Nothing about the footer is read after the press.** The step this preset loads reaches the end of the
+            // history, so the footer answers by going — and a wait that kept asking for its height would sit out the
+            // watchdog on the very run that worked (2026-08-29 実測).
+            if (acts.tailWalkedBefore < 0) {
+                if (!tailMoreTimer.press())
+                    return
+            }
+            // The wider walk lands as one replacement, so both halves of it — the rows and the footer's own number —
+            // are here on the same frame the wait comes off.
+            if (graphModel.growing || graphModel.walkedTotal === acts.tailWalkedBefore)
+                return
+            tailMoreTimer.stop()
+            AppBackend.report(
+                "graph_tail_more taken=true"
+                + " waiting=" + acts.tailWaiting
+                + " restarted=" + (graphModel.resetCount !== acts.tailResetsBefore)
+                + " held=" + (graphPane.view.firstVisibleRow() === acts.tailRowBefore)
+                + " truncated=" + graphModel.truncated
+                + " step=" + graphModel.windowStep
+                + " walked=" + graphModel.walkedTotal
+                + " was=" + acts.tailWalkedBefore
+                + " rows=" + graphPane.view.count)
+            driver.complete()
+        }
+        /// Gets the cut on screen and presses it, and says whether the press is now out. Everything the press needs
+        /// to be compared against is taken here, on the frame it goes in.
+        function press() {
+            if (graphModel.loading || graphModel.rowTotal === 0)
+                return false
+            // The footer lives at the far end of two thousand rows, and a ListView builds what is near its viewport —
+            // so it is asked for and then looked for, rather than looked for first (`graph-tail`).
+            const tail = graphPane.view.footerItem
+            if (tail === null || tail.height <= 0) {
+                graphPane.view.positionViewAtEnd()
+                return false
+            }
+            const bottom = graphPane.view.contentY + graphPane.view.height
+            if (tail.y + tail.height > bottom + 0.5) {
+                graphPane.view.positionViewAtEnd()
+                return false
+            }
+            acts.tailWalkedBefore = graphModel.walkedTotal
+            acts.tailResetsBefore = graphModel.resetCount
+            acts.tailRowBefore = graphPane.view.firstVisibleRow()
+            if (tail.loadMore()) {
+                // The ring, read off the ring itself on the frame the press went in — the only place it can be read.
+                // It is gone by the time this run is photographed, and on this preset so is the footer under it.
+                acts.tailWaiting = tail.waiting
+                return true
+            }
+            tailMoreTimer.stop()
+            AppBackend.report("graph_tail_more taken=false")
+            driver.complete()
+            return false
         }
     }
     // The stand-in for a HEAD scrolled off the graph (`GraphHeadPin`). It only exists where the row does not, so each
