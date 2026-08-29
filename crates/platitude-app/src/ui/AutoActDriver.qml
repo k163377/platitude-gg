@@ -210,7 +210,9 @@ Item {
     /// anything was pressed. Until [`pressedWrite`] re-arms it, no
     /// sequence reads past this.
     function expectWriteAtPress() {
-        driver.writeSeqBefore = Number.MAX_SAFE_INTEGER
+        // 2^31−1: the property is a QML int, and a wider sentinel wraps
+        // negative — which opens the barrier instead of holding it.
+        driver.writeSeqBefore = 2147483647
     }
     /// The press went in (call it right after the successful press: the
     /// answer that moves `writeSeq` cannot land inside the same tick).
