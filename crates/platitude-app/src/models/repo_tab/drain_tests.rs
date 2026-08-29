@@ -103,7 +103,7 @@ fn an_answer_nobody_asked_for_is_dropped() {
 
 fn settled(op: &str, error: &str) -> RepoTab {
     let mut tab = RepoTab::default();
-    tab.settle_write(op.into(), error.into());
+    tab.settle_write(op.into(), error.into(), None);
     tab
 }
 
@@ -159,7 +159,7 @@ fn a_merge_that_stopped_does_not_claim_the_tip() {
     // The stop arrives before the answer that ends the write
     // (`TabMsg::WriteStopped`), so the flag is already standing.
     tab.last_write_stopped = true;
-    tab.settle_write("merge".into(), String::new());
+    tab.settle_write("merge".into(), String::new(), None);
     assert!(!tab.write_at_tip, "nothing landed at the tip to go to");
 }
 
@@ -189,14 +189,61 @@ fn a_landed_reword_carries_the_saved_message() {
     assert!(!settled("reword", "fatal: bad revision").write_reworded);
 }
 
+/// The far side keeping a branch is a report, not a failure of this
+/// window's — the page reads these four and says so in its own words
+/// (`Words.remoteRefused`).
+#[test]
+fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
+    let mut tab = RepoTab::default();
+    tab.settle_write(
+        "push".into(),
+        "`git push` exited with code 1: remote: error: Cannot delete a protected branch".into(),
+        Some(platitude_core::remote::RemoteRefusal {
+            remote: "origin".into(),
+            branch: "main".into(),
+            deleting: true,
+            reason: "Cannot delete a protected branch".into(),
+        }),
+    );
+    assert!(tab.write_refused, "nothing happened over there");
+    assert_eq!(tab.write_refusal_kind, "delete");
+    assert_eq!(tab.write_refusal_remote, "origin");
+    assert_eq!(tab.write_refusal_branch, "main");
+    assert_eq!(tab.write_refusal_reason, "Cannot delete a protected branch");
+
+    // And it goes with its answer: a report left standing would come
+    // back up under the next write.
+    tab.settle_write("push".into(), String::new(), None);
+    assert_eq!(tab.write_refusal_kind, "");
+    assert_eq!(tab.write_refusal_reason, "");
+}
+
+/// A push that was sending rather than removing says so, since that
+/// is the whole of what the sentence turns on.
+#[test]
+fn a_refused_send_is_told_apart_from_a_refused_delete() {
+    let mut tab = RepoTab::default();
+    tab.settle_write(
+        "push".into(),
+        "! [remote rejected]".into(),
+        Some(platitude_core::remote::RemoteRefusal {
+            remote: "origin".into(),
+            branch: "main".into(),
+            deleting: false,
+            reason: "Changes must be made through a pull request.".into(),
+        }),
+    );
+    assert_eq!(tab.write_refusal_kind, "update");
+}
+
 #[test]
 fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
-    tab.settle_write("stash".into(), String::new());
+    tab.settle_write("stash".into(), String::new(), None);
     assert!(tab.write_stashed);
     // Not a fetch: a failed fetch raises `fetch_first_failed`, and a
     // signal needs the proxy no unit test has.
-    tab.settle_write("checkout".into(), "fatal: invalid reference".into());
+    tab.settle_write("checkout".into(), "fatal: invalid reference".into(), None);
     assert!(!tab.write_stashed, "nothing armed survives the next answer");
     assert!(tab.write_refused);
     assert_eq!(tab.write_seq, 2);

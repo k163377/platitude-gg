@@ -1,0 +1,158 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Controls.Fusion
+import QtQuick.Layouts
+import platitude.ui
+
+// The shape a report takes when there is nothing to decide (デザイン規約 §可否・警告の出し場所): the same bar the standing
+// questions come down in, with the pill turned into the one word that takes it back up.
+//
+// **Nothing here failed and nothing is being asked.** The far side turned a write down under a rule of its own — a
+// protected branch, a hook — and the whole answer is what it said for itself: this end could not have known beforehand
+// and cannot do anything about it now. So the bar wears no state colour, the heading says what did not happen, and the
+// line under it is the far side's own words, quoted rather than rewritten.
+//
+// One report stands at a time, above whatever question is standing: both push the history down rather than covering it.
+Rectangle {
+    id: bar
+
+    /// What did not happen, in this application's words (`Words.remoteRefused`).
+    property string label: ""
+    /// Why, in the far side's — passed through as it came.
+    property string detail: ""
+    /// Whether the report stands. **Not the words**: they stay put while the bar goes back up, since the bar is on
+    /// screen for the whole 200ms it spends going (`AskBar.open` carries the same rule and the reason).
+    property bool open: false
+
+    /// Read and taken down. Nothing else follows from it — the write it is about is long over.
+    signal acknowledged()
+    /// The pill's own handler, named so a headless run presses what a hand presses (verify-ui).
+    function dismiss() {
+        bar.acknowledged()
+    }
+
+    /// The height the words ask for, before the 200ms takes it there — and the two edges a run photographs on: all the
+    /// way down, and all the way back up (`AskBar.settled` / `shut`, same reasoning).
+    readonly property real openHeight: bar.open ? noticeRow.implicitHeight + 2 * Theme.spaceMd : 0
+    readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
+    readonly property bool shut: !bar.open && bar.implicitHeight === 0
+
+    clip: true
+    color: Theme.bgElevated
+    implicitHeight: bar.openHeight
+    Behavior on implicitHeight {
+        NumberAnimation { duration: 200 }
+    }
+    // The band's own hairline, in the resting colour: a report is none of the three states (デザイン規約 §状態 — 「この 3 つに
+    // 当てはまらない知らせに状態色を使わない」), and a red line here would say the application had broken where it had only been
+    // told no.
+    BandRule {}
+
+    // Opening hands the pill the focus, so the keyboard's way out needs no hunting for. A tick later, not now: the
+    // gesture that ran the write is still being delivered, and what it lands on takes the focus back if the pill
+    // claims it first (`AskBar`).
+    onOpenChanged: if (bar.open) {
+        okPill.tookTheOpening = true
+        Qt.callLater(okPill.forceActiveFocus)
+    }
+
+    RowLayout {
+        id: noticeRow
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: Theme.spaceMd
+        spacing: Theme.spaceMd
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spaceXs
+            Label {
+                Layout.fillWidth: true
+                text: bar.label
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontMd
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+            // The far side's own sentences, run together into the one line a report is allowed (デザイン規約 §長さ — 見出し
+            // 1 行 + 1 行). A forge writes two or three of them (`GH006: …` and then the rule that was broken) and they
+            // fit; whatever does not is read in the log with the command that was refused (§git が言ったことを読む場所).
+            Label {
+                Layout.fillWidth: true
+                text: bar.detail
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSm
+                maximumLineCount: 1
+                elide: Text.ElideRight
+            }
+        }
+        // The one thing on the bar that acts, and it only takes the bar away.
+        Rectangle {
+            id: okPill
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: okWord.implicitWidth + 2 * Theme.spaceMd
+            implicitHeight: Theme.controlHeight
+            radius: Theme.radiusSm
+            color: okMouse.containsMouse ? Theme.bgHover : "transparent"
+            border.color: Theme.borderDefault
+            border.width: Theme.borderWidth
+            activeFocusOnTab: true
+            // Closed, it leaves the tab order by going disabled rather than by dropping `activeFocusOnTab` — Qt
+            // refuses to clear that on the item holding the focus, and warns (`AskBar`).
+            enabled: bar.open
+            Accessible.role: Accessible.Button
+            Accessible.name: okWord.text
+            /// Whether the focus this pill holds is the one the bar handed it as it opened, or one a hand brought.
+            /// **Nobody reached for it** in the first case, so the ring has nothing to report (`AskBar`).
+            property bool tookAPress: false
+            property bool tookTheOpening: false
+            onActiveFocusChanged: {
+                if (okPill.activeFocus)
+                    return
+                okPill.tookAPress = false
+                okPill.tookTheOpening = false
+            }
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -Theme.spaceXs / 2
+                color: "transparent"
+                border.color: Theme.borderFocus
+                border.width: Theme.borderWidth
+                radius: Theme.radiusMd
+                visible: okPill.activeFocus && !okPill.tookAPress && !okPill.tookTheOpening
+            }
+            Label {
+                id: okWord
+                anchors.centerIn: parent
+                text: qsTr("OK")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontMd
+            }
+            MouseArea {
+                id: okMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onPressed: okPill.tookAPress = true
+                // `released` inside the pill rather than `clicked`, the same as the ask bar's: Qt stops emitting
+                // `clicked` once its press-and-hold timer has gone off, so a pill held down would answer nothing.
+                onReleased: if (containsMouse) bar.dismiss()
+            }
+            Keys.onPressed: event => {
+                if (event.key !== Qt.Key_Space && event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
+                    return
+                bar.dismiss()
+                event.accepted = true
+            }
+        }
+    }
+    // Escape says the same thing as the pill: read, take it away. Heard as a shortcut rather than as a key handler,
+    // because the focus may have been taken back by the list underneath (`AskBar`).
+    Shortcut {
+        // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the single
+        // form takes only the first of them (Qt warns about exactly this).
+        sequences: [StandardKey.Cancel]
+        enabled: bar.open
+        onActivated: bar.acknowledged()
+    }
+}

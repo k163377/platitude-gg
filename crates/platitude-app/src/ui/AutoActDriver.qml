@@ -162,7 +162,7 @@ Item {
                 "rename-branch", "rename-tag", "rename-stash",
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
-                "delete-remote-go", "delete-force", "delete-branch-refused",
+                "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
                 "set-upstream-go",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
@@ -213,7 +213,7 @@ Item {
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both",
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
-                "delete-branch-refused", "chip-menu", "chip-menu-current",
+                "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // Stops at its question, so the ask bar settling is the completion — a write
                 // never comes (the write half is "-go", which stays a write act above).
@@ -2041,6 +2041,29 @@ Item {
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The report a refusal the far side made comes down as. **Waited on all the way down** (`NoticeBar.settled`), not
+    // at the write barrier: the answer to the write is what raises the bar, so a picture taken on the answer catches a
+    // bar whose words are written and whose height is still nothing (the edge `AskBar.settled` names, for the same
+    // reason). The words themselves are reported rather than photographed for the far side's half — git's sentence
+    // wraps, and a report line cannot hold what the picture holds.
+    SampleTimer {
+        id: remoteRefusedTimer
+        onTriggered: {
+            if (!graphPane.noticeCard.settled)
+                return
+            remoteRefusedTimer.stop()
+            // `log=` and `wrong=` are the other half of the claim, and the half no picture can make on its own: the
+            // panel did not raise itself over the same news, and the mark in the corner is not calling it an error
+            // (デザイン規約 §可否・警告の出し場所). A window that never opened the log frames exactly like one that opened and
+            // closed it.
+            AppBackend.report("remote_notice open=" + graphPane.noticeCard.open
+                              + " said=" + graphPane.noticeCard.label
+                              + " why=" + (graphPane.noticeCard.detail !== "")
+                              + " log=" + page.commandsOpen
+                              + " wrong=" + page.commandsWrong)
             driver.complete()
         }
     }
@@ -4546,7 +4569,7 @@ Item {
                              stashesModel.oidOfName(stashesModel.nameAt(0)))
             if (act === "delete-stash-go")
                 refStashDropItem.completeHold()
-        } else if (act === "delete-remote" || act === "delete-remote-go") {
+        } else if (act === "delete-remote" || act === "delete-remote-go" || act === "remote-refused") {
             // Named outright (`origin/feature/x`) because those rows sit behind a fold — opened here so the row is
             // under the menu. The remote's own name may hold `/`, so the cut is the configured one
             // (`GitFacts.remoteOfRef`), the same as the rows the verbs drive.
@@ -4555,8 +4578,12 @@ Item {
             refMenu.openSub(refBranchCard)
             AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)
-            if (act === "delete-remote-go")
+            if (act === "delete-remote-go" || act === "remote-refused")
                 refDeleteItem.completeHold()
+            // The far side keeps the branch (`--preset protected`): what comes back is a report rather than a
+            // failure, and the bar it comes down in is what this one photographs.
+            if (act === "remote-refused")
+                remoteRefusedTimer.start()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-refused") {

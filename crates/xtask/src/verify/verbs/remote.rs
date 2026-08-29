@@ -92,6 +92,25 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "sides=here local_del=true remote_del=false both_del=false",
     },
+    // The far side keeping a branch. **The picture cannot judge this**:
+    // a bar saying nothing frames exactly like a bar saying the right
+    // thing, and the whole claim is that the sentence was built out of
+    // what core classified — which remote, which branch, and that it was
+    // a deletion rather than a send. `why=true` is the other half: the
+    // far side's own words came across as well, and a report without
+    // them is a report of nothing (デザイン規約 §可否・警告の出し場所).
+    //
+    // It is also the run that proves no error was raised — `log=false`
+    // (the panel did not come up over the same news) and `wrong=false`
+    // (the mark in the corner is not calling it one). A window that
+    // opened the log and closed it again frames exactly like one that
+    // never opened it, so neither is a claim the picture can make.
+    Verb {
+        name: "remote-refused",
+        when: &[],
+        plain: "remote_notice open=true said=origin would not delete main why=true \
+                log=false wrong=false",
+    },
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was
     // never wired", and `local=true` is what says the repository's own

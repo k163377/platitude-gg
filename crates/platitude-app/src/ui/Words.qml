@@ -54,6 +54,18 @@ QtObject {
         }
     }
 
+    /// What did not happen when the far side turned a write down under a rule of its own, from the kind core answered
+    /// with (`delete` / `update` — `RepoTab.writeRefusalKind`). Why is the far side's to say, and the bar quotes it
+    /// underneath (デザイン規約 §可否・警告の出し場所).
+    ///
+    /// **The remote is the subject**, because it is the one that decided: nothing here failed, and a sentence in this
+    /// application's own voice ("could not delete…") would read as one that did.
+    function remoteRefused(kind, remote, branch) {
+        return kind === "delete"
+            ? qsTr("%1 would not delete %2").arg(remote).arg(branch)
+            : qsTr("%1 would not update %2").arg(remote).arg(branch)
+    }
+
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).
     /// Shown by the diff pane on the conflicts git prints no patch for — the one place the sentence appears; the
     /// headless `conflict_kind` report reads it through `NavItemDelegate.conflictWords`.

@@ -287,7 +287,7 @@ impl SessionSink for BridgeSink {
                     announce: op == AUTO_FETCH_OP,
                 });
             }
-            SessionEvent::WriteFinished { op, error }
+            SessionEvent::WriteFinished { op, error, .. }
                 if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP =>
             {
                 self.feeds.tab.push(TabMsg::AutoFetch {
@@ -301,9 +301,17 @@ impl SessionSink for BridgeSink {
                 op: op.to_string(),
                 running: true,
                 error: String::new(),
+                refusal: None,
             }),
-            SessionEvent::WriteFinished { op, error } => {
-                if let Some(message) = &error {
+            SessionEvent::WriteFinished { op, error, refusal } => {
+                // A refusal the far side made on its own terms is not an
+                // error of this window's: the page reports it in words of
+                // its own, and the red line that would say "something
+                // went wrong here" is left for the failures nothing else
+                // answers (デザイン規約 §可否・警告の出し場所).
+                if let Some(message) = &error
+                    && refusal.is_none()
+                {
                     self.feeds.tab.push(TabMsg::OpError {
                         message: format!("{op}: {message}"),
                     });
@@ -312,6 +320,7 @@ impl SessionSink for BridgeSink {
                     op: op.to_string(),
                     running: false,
                     error: error.unwrap_or_default(),
+                    refusal,
                 });
             }
         }

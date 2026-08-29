@@ -166,6 +166,24 @@ impl CommandsModel {
         self.changed();
     }
 
+    /// The last failure has been answered somewhere else on screen: the
+    /// far side turned a write down under a rule of its own, and the page
+    /// brought its words down in a report (デザイン規約 §可否・警告の出し場所).
+    ///
+    /// **Only the mark goes quiet.** It is the one thing here that
+    /// fetches somebody — a failure nothing else has said — and there is
+    /// nothing left for it to fetch them to. The row keeps git's words
+    /// and its red edge: that is the record, and the record is what the
+    /// panel is for.
+    #[qslot]
+    fn note_answered(&mut self) {
+        if !self.failed {
+            return;
+        }
+        self.failed = false;
+        self.changed();
+    }
+
     /// How many rows the log is holding, for the automation that has to
     /// weigh what a copy handed out against what it was made from
     /// (`PG_AUTO_ACT=commands-copy`). The panel's own count is the view's

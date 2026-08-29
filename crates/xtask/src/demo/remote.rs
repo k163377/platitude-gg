@@ -133,3 +133,41 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("b.txt", "ours\n", "feat: work of our own")?;
     Ok(())
 }
+
+/// A remote that keeps what it holds: every push to it is turned away by a
+/// `pre-receive` hook, in the words a forge writes over a protected branch.
+///
+/// **A hook is the only way to have that refusal offline.** A protected
+/// branch, a repository rule and a hook all reach this end as the same
+/// `[remote rejected]`, and the sentence underneath is whatever the far
+/// side chose to say — which is exactly what the report shows, so the
+/// hook's message is written the way GitHub writes its own.
+pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["switch", "--create", "feature/topic-a"])?;
+    repo.commit("src/app.txt", "app v2\n", "feat: carry on with the app")?;
+    repo.git(&["push", "origin", "feature/topic-a"])?;
+    repo.git(&["switch", "main"])?;
+
+    let hook = repo.root.join("origin.git").join("hooks");
+    std::fs::create_dir_all(&hook).map_err(|e| e.to_string())?;
+    let path = hook.join("pre-receive");
+    std::fs::write(
+        &path,
+        "#!/bin/sh\n\
+         echo \"error: GH006: Protected branch update failed for refs/heads/main.\" >&2\n\
+         echo \"error: Cannot delete a protected branch\" >&2\n\
+         exit 1\n",
+    )
+    .map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

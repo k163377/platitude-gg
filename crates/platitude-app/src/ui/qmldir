@@ -115,6 +115,7 @@ NavNameBox 1.0 NavNameBox.qml
 NavRail 1.0 NavRail.qml
 NavRowBody 1.0 NavRowBody.qml
 NavSections 1.0 NavSections.qml
+NoticeBar 1.0 NoticeBar.qml
 NoticeButton 1.0 NoticeButton.qml
 NoticeLine 1.0 NoticeLine.qml
 OpExitCard 1.0 OpExitCard.qml

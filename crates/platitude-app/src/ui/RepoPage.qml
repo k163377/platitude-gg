@@ -1099,6 +1099,30 @@ Item {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
             }
+            // The far side turned it down under a rule of its own — a protected branch, a hook. Nothing here could
+            // have known beforehand and nothing here can answer it, so what it said comes down as a report and the log
+            // stays where the reader left it (デザイン規約 §可否・警告の出し場所). Ahead of the branch delete's own second move:
+            // `Delete both` is a branch write whose remote half is what the far side refused, and the row it would
+            // morph is about the half that landed.
+            if (repoTab.writeRefusalKind !== "") {
+                graphPane.showNotice(
+                    Words.remoteRefused(repoTab.writeRefusalKind,
+                                        repoTab.writeRefusalRemote,
+                                        repoTab.writeRefusalBranch),
+                    repoTab.writeRefusalReason)
+                // …and the mark in the corner goes quiet with it: it is there to fetch somebody to a failure nothing
+                // else has said, and the bar has just said this one (デザイン規約 §git が言ったことを読む場所). The row keeps
+                // git's words under its red edge — that is the record, and the record is what the panel is for.
+                commandsModel.noteAnswered()
+                page.pendingDeleteBranch = ""
+                page.pendingRenameRemote = ""
+                page.pendingRenameTo = ""
+                if (AppBackend.autoAct !== "")
+                    AppBackend.report("remote_refused kind=" + repoTab.writeRefusalKind
+                                      + " ref=" + repoTab.writeRefusalRemote
+                                      + "/" + repoTab.writeRefusalBranch)
+                return
+            }
             // The one refusal this page has a second move for: a branch delete git would not do on its own.
             if (repoTab.writeBranchOp && page.pendingDeleteBranch !== "") {
                 const refused = page.pendingDeleteBranch
@@ -2121,6 +2145,7 @@ Item {
                         onOpenRepositoryRequested: page.openRepositoryPicker()
                         onAskConfirmed: page.answerRowAsk()
                         onAskCancelled: page.stopRowAsk()
+                        onNoticeAcknowledged: graphPane.hideNotice()
                     }
 
                     DiffPane {
@@ -2259,9 +2284,16 @@ Item {
     // stays up — closing it is the reader's call, not the next success's. Unless this page asked for the refusal and
     // turned it into a question: then the bar is already saying it, and the log would say it twice while pushing the
     // graph out of the way.
+    //
+    // And unless a write is in flight, whose own answer decides instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は
+    // 「操作」の答えで下し、コマンド 1 本の終了コードでは下さない). One operation is several commands, so a non-zero one part
+    // way through is not a failure yet; and the answer is the only thing that knows whether the far side turned it
+    // down with something to report rather than to raise (`absorbWriteResult`, which raises the log itself).
     Connections {
         target: commandsModel
         function onFailure() {
+            if (repoTab.writeRunning)
+                return
             if (page.expectedRefusals > 0) {
                 page.expectedRefusals--
                 return

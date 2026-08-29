@@ -97,6 +97,9 @@ commands:
         unpublished  a branch never sent anywhere, two remotes, one taken name
         forkmark  a fork checkout: fetches from origin, and the branch's
                   own mark sends every push of it to the fork instead
+        protected an origin that keeps what it holds: every push to it is
+                  turned away the way a forge turns one away from a
+                  protected branch (remote-refused)
         noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E
@@ -179,6 +182,7 @@ commands:
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
                           fetch-recover, fetch-resume, push-retry,
+                          remote-refused,
                           band-actions-alert, and push / publish-new-go
                           against an unreachable
                           remote). A replay that stops part-way is not

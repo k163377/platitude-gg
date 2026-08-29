@@ -48,10 +48,17 @@ pub enum TabMsg {
     /// `OpError`, so the existing error surface needs no special case;
     /// `error` is here as well so an editor can tell whether the write it
     /// asked for is the one that failed.
+    ///
+    /// **Except the one failure that is not this window's to report**:
+    /// where the far side turned the write down under a rule of its own,
+    /// `refusal` carries what it said and no `OpError` is sent, because
+    /// the page answers it with a notice instead
+    /// (デザイン規約 §可否・警告の出し場所).
     WriteState {
         op: String,
         running: bool,
         error: String,
+        refusal: Option<platitude_core::remote::RemoteRefusal>,
     },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {

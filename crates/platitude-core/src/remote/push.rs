@@ -306,6 +306,14 @@ fn refused_reason(porcelain: &str, stderr: &str) -> Option<String> {
 /// framing: what is left is read under a sentence that has already said
 /// what did not happen, and a second word for "this went wrong" there
 /// only makes a report look like a fault of the application's.
+///
+/// **The lines are joined into one.** What reads them is a report with a
+/// heading of its own, and a report is a heading and one line under it
+/// (デザイン規約 §長さ) — so they run on as the sentences they are, and
+/// what does not fit is read in the log with the command it came from.
+/// Which of them carries the rule is not something this end can know: a
+/// forge writes the summary first and the rule it broke after it, a hook
+/// writes whatever its author wrote.
 fn remote_words(stderr: &str) -> String {
     let mut said: Vec<&str> = Vec::new();
     for line in stderr.lines() {
@@ -322,7 +330,7 @@ fn remote_words(stderr: &str) -> String {
             said.push(rest);
         }
     }
-    said.join("\n")
+    said.join(" ")
 }
 
 /// git's own reason out of `[remote rejected] (deletion prohibited)` —
@@ -423,7 +431,7 @@ mod tests {
         assert_eq!(
             refused_reason(REFUSED_BY_THE_FAR_SIDE, FAR_SIDE_WORDS).as_deref(),
             Some(
-                "GH006: Protected branch update failed for refs/heads/main.\n\
+                "GH006: Protected branch update failed for refs/heads/main. \
                  Cannot delete a protected branch"
             )
         );

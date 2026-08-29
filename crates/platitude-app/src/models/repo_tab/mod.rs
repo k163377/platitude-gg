@@ -239,6 +239,26 @@ pub struct RepoTab {
     /// toolbar button's push stays the flow's own slot to say
     /// (`PublishFlow.pushSentBranch`).
     write_pushed: bool,
+    /// The far side turned that write down under a rule of its own — a
+    /// protected branch, a repository rule, a hook. Nothing here can put
+    /// it right and nothing was half done, so the page reports it rather
+    /// than raising the log over it (デザイン規約 §可否・警告の出し場所).
+    ///
+    /// `kind` is what was being asked for (`delete` / `update`), which is
+    /// what the sentence turns on; the words are the far side's own and
+    /// are shown as they came. Empty `kind` is "no refusal in this
+    /// answer" — the whole group is rewritten by every answer.
+    write_refusal_kind: String,
+    write_refusal_remote: String,
+    write_refusal_branch: String,
+    write_refusal_reason: String,
+    /// A write the user asked for is in flight. **The log does not raise
+    /// itself for a command that fails inside one**: an operation is
+    /// several commands and only its own answer says whether it failed,
+    /// or whether the far side turned it down with something to report
+    /// instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は操作の
+    /// 答えで下し、コマンド 1 本の終了コードでは下さない).
+    write_running: bool,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.
     move_ask_local: String,

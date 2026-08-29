@@ -145,15 +145,24 @@ impl RepoTab {
                 // Arrives between this write's start and its end, so the
                 // flag is already standing when the answer below is read.
                 TabMsg::WriteStopped => self.last_write_stopped = true,
-                TabMsg::WriteState { op, running, error } => {
+                TabMsg::WriteState {
+                    op,
+                    running,
+                    error,
+                    refusal,
+                } => {
                     if running {
                         self.busy_count += 1;
+                        // A command that fails inside a write is not the
+                        // write's answer, and only that answer knows what
+                        // to make of it (`write_running`).
+                        self.write_running = true;
                         self.busy_op = op;
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(op, error);
+                        self.settle_write(op, error, refusal);
                     }
                 }
             }
@@ -194,11 +203,34 @@ impl RepoTab {
     /// answer rewrites the whole group, so nothing stays armed for a
     /// later write to trip over; `write_seq` says which answer the
     /// group describes.
-    pub(super) fn settle_write(&mut self, op: String, error: String) {
+    pub(super) fn settle_write(
+        &mut self,
+        op: String,
+        error: String,
+        refusal: Option<platitude_core::remote::RemoteRefusal>,
+    ) {
         self.busy_count = (self.busy_count - 1).max(0);
         if self.busy_count == 0 {
             self.busy_op = String::new();
         }
+        self.write_running = self.busy_count > 0;
+        // What the far side said, and what it was asked for — the two
+        // halves the notice is made of. Rewritten by every answer, like
+        // the rest of the group: a report nobody took down would
+        // otherwise come back up under the next write.
+        let (kind, remote, branch, reason) = match refusal {
+            Some(refusal) => (
+                if refusal.deleting { "delete" } else { "update" }.to_string(),
+                refusal.remote,
+                refusal.branch,
+                refusal.reason,
+            ),
+            None => (String::new(), String::new(), String::new(), String::new()),
+        };
+        self.write_refusal_kind = kind;
+        self.write_refusal_remote = remote;
+        self.write_refusal_branch = branch;
+        self.write_refusal_reason = reason;
         // A fetch the user asked for counts the same way the timer's do:
         // what the button says is about fetching, not about who started
         // it.
