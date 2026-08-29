@@ -1,6 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For AppBackend (the argument-conditioned exceptions below): the name resolves per file, and without this
+// import the first verb to reach one of them dies on a ReferenceError inside the completion lookup.
+import platitude
 
 /// Which verbs write, and which of them hand their completion to somebody else — the two questions
 /// `AutoActDriver.prepareCompletion` asks before a verb runs, and the two lists nothing else reads.
