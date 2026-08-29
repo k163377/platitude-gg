@@ -183,4 +183,8 @@ Item {
         folderDialog: driver.folderDialog
         settingsDialog: driver.settingsDialog
     }
+    WindowSettingsActs {
+        window: driver.window
+        settingsDialog: driver.settingsDialog
+    }
 }

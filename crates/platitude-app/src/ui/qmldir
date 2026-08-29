@@ -197,6 +197,7 @@ WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowBandActs 1.0 WindowBandActs.qml
 WindowChrome 1.0 WindowChrome.qml
 WindowDialogActs 1.0 WindowDialogActs.qml
+WindowSettingsActs 1.0 WindowSettingsActs.qml
 WindowFrameActs 1.0 WindowFrameActs.qml
 WindowTabActs 1.0 WindowTabActs.qml
 WindowTabPinActs 1.0 WindowTabPinActs.qml

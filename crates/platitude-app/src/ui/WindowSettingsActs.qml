@@ -1,0 +1,175 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import platitude
+import platitude.ui
+
+/// The settings screen's half of the window's PG_AUTO_ACT harness: the merge editor's list, the repository group,
+/// the rail between the categories, and the avatar card.
+///
+/// A file of its own because these are the verbs that reach into one dialog and nothing else — every one of them
+/// wants `settingsDialog` and none of them wants a tab, a page or the band. Built by `WindowAutoActDriver` beside
+/// `WindowDialogActs`, which keeps the ones that reach into the rest of the window.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
+// never given a size.
+Item {
+    id: acts
+
+    required property var window
+    required property var settingsDialog
+
+    // The tools popup has two separately latched output states: a real loading edge and the populated, settled
+    // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
+    // the same door the menu entry uses.
+    SampleTimer {
+        running: AppBackend.autoAct === "settings-tools"
+                 || AppBackend.autoAct === "settings-tools-loading"
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("git")
+                return
+            }
+            const ready = AppBackend.autoAct === "settings-tools-loading"
+                        ? settingsDialog.autoToolsLoadingReady
+                        : settingsDialog.autoToolsSettledReady
+            if (!ready)
+                return
+            stop()
+            settingsDialog.reportTool()
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
+    // repository the reader is looking at, and with the chooser's list down. The argument picks a row of the strip for
+    // the run that wants a repository other than the front one — through the same call a pick from the list makes,
+    // not by writing the model's path (規約 §UI 自動化の因果性).
+    //
+    // Waited on: the read git answers with (`state === "ready"`), and the list's own `opened`. Not the category, which
+    // is what the run set on the way in.
+    SampleTimer {
+        id: repoSettingsTimer
+        running: AppBackend.autoAct === "settings-repo" || AppBackend.autoAct === "settings-repo-pick"
+        /// The row of the strip has been picked and the list, where one is wanted, pressed down.
+        property bool acted: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("git")
+                return
+            }
+            if (!repoSettingsTimer.acted) {
+                // A repository has to be there to pick before anything is asked of it, and the strip's rows arrive
+                // with the window rather than with the screen.
+                if (settingsDialog.autoRepoRows === 0)
+                    return
+                // **The screen has to be showing one repository before another is picked.** The screen lands on the
+                // one the reader is in as it opens (`SettingsDialog.onOpened`), and waiting for that read makes the
+                // argument below a *switch* — boxes already carrying values, replaced by another repository's —
+                // rather than a first look that happens to name a row. The two are not the same road.
+                if (!settingsDialog.autoRepoReady)
+                    return
+                if (AppBackend.autoActArg !== ""
+                        && !settingsDialog.autoShowRepoAt(Number(AppBackend.autoActArg)))
+                    return
+                if (AppBackend.autoAct === "settings-repo-pick")
+                    settingsDialog.autoOfferRepos()
+                repoSettingsTimer.acted = true
+            }
+            if (!settingsDialog.autoRepoReady)
+                return
+            if (AppBackend.autoAct === "settings-repo-pick" && !settingsDialog.autoRepoComboOpen)
+                return
+            repoSettingsTimer.stop()
+            settingsDialog.reportRepo()
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
+    // the screen. Opened on the application category and pressed onto the other through the row's own handler
+    // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
+    // and would leave a dead rail green. What the report reads back is the chapters, not `category` — that is the
+    // input side, and a run that read it would be reporting its own press.
+    SampleTimer {
+        id: categorySwitchTimer
+        running: AppBackend.autoAct === "settings-switch"
+        /// The press has been made, so what had to be true before it is not read again.
+        property bool acted: false
+        /// The application category was standing first — half the claim, and the half the picture cannot hold.
+        property bool wasApp: false
+        onTriggered: {
+            if (!categorySwitchTimer.acted) {
+                if (!settingsDialog.opened) {
+                    settingsDialog.openAt("app")
+                    return
+                }
+                if (!settingsDialog.autoAppShown)
+                    return
+                categorySwitchTimer.wasApp = true
+                if (!settingsDialog.autoTapCategory("git"))
+                    return
+                categorySwitchTimer.acted = true
+            }
+            if (!settingsDialog.autoGitShown)
+                return
+            categorySwitchTimer.stop()
+            AppBackend.report("settings_switch was_app=" + categorySwitchTimer.wasApp
+                              + " app=" + settingsDialog.autoAppShown
+                              + " git=" + settingsDialog.autoGitShown)
+            window.finishAutoAct()
+        }
+    }
+
+    // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
+    // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
+    // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
+    // length (`Metrics.holdMs`). Nothing here reads a clock.
+    SampleTimer {
+        id: avatarCardTimer
+        running: AppBackend.autoAct === "avatar-settings" || AppBackend.autoAct === "avatar-row-lit"
+                 || AppBackend.autoAct === "avatar-combo" || AppBackend.autoAct === "avatar-remove"
+        /// Raised once this verb's own move has been made, so nothing after it re-reads what had to be true before it.
+        /// The removal's answer is a row going away, and a gate still wanting that row would never let go of it (the
+        /// wait `middle-close` describes).
+        property bool acted: false
+        /// How many rows the hold was made against, read in the branch that presses and nowhere else.
+        property int rowsBefore: -1
+        onTriggered: {
+            const act = AppBackend.autoAct
+            if (!avatarCardTimer.acted) {
+                if (!settingsDialog.opened)
+                    return
+                // A run that filed a picture on its way in has to have it in the list before any of this means
+                // anything; one that filed nothing — the round-trip read — has whatever the store gave it.
+                if (AppBackend.autoActArg !== "" && !settingsDialog.autoAvatarRowPainted(0))
+                    return
+                if (act === "avatar-row-lit") {
+                    if (!settingsDialog.autoAvatarRowLit(0))
+                        return
+                } else if (act === "avatar-combo") {
+                    // Asked again while it is still shut: the field defers the list by a turn of the loop, and a list
+                    // taken back down under an unwinding grab has to be asked for a second time (`AppCombo.pressField`).
+                    if (!settingsDialog.autoAvatarComboOpen) {
+                        settingsDialog.autoAvatarOfferCombo()
+                        return
+                    }
+                } else if (act === "avatar-remove") {
+                    if (!settingsDialog.autoAvatarHoldRemove(0))
+                        return
+                    avatarCardTimer.rowsBefore = settingsDialog.autoAvatarRows
+                }
+                avatarCardTimer.acted = true
+            }
+            // The hold is the one move whose answer arrives after it: the store has to have let the row go.
+            if (act === "avatar-remove" && settingsDialog.autoAvatarRows >= avatarCardTimer.rowsBefore)
+                return
+            avatarCardTimer.stop()
+            AppBackend.report("avatar_card rows=" + settingsDialog.autoAvatarRows
+                              + " painted=" + settingsDialog.autoAvatarRowPainted(0)
+                              + " lit=" + settingsDialog.autoAvatarRowLit(0)
+                              + " combo=" + settingsDialog.autoAvatarComboOpen
+                              + " removed=" + (avatarCardTimer.rowsBefore > settingsDialog.autoAvatarRows))
+            window.finishAutoAct()
+        }
+    }
+}

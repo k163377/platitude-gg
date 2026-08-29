@@ -261,6 +261,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowBandActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowChrome.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowDialogActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowSettingsActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowFrameActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowTabActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowTabPinActs.qml", "qt/qml/platitude");
