@@ -54,13 +54,13 @@ fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
     bare.git_in(&bare_path, &["config", "core.bare", "true"]);
 
     let mut work = TestRepo::init();
-    let root = work.commit_file("a.txt", "one\n", "root");
+    let root = work.commit_file_id("a.txt", "one\n", "root");
     work.git(&["remote", "add", "origin", &bare.file_url()]);
     work.git(&["tag", "-a", "v-both", "-m", "release"]);
     work.git(&["tag", "v-drift"]);
     work.git(&["push", "origin", "main", "v-both", "v-drift"]);
 
-    let head = work.commit_file("a.txt", "two\n", "second");
+    let head = work.commit_file_id("a.txt", "two\n", "second");
     work.git(&["push", "origin", "main"]);
     // Made here and never pushed…
     work.git(&["tag", "v-local"]);
@@ -234,7 +234,7 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
     // Somebody else moves it while the menu stands, and to a third commit
     // — not to where this repository has it, which would leave the push
     // with nothing to send and exit 0 on those grounds instead.
-    let third = work.commit_file("c.txt", "three\n", "third");
+    let third = work.commit_file_id("c.txt", "three\n", "third");
     work.git(&[
         "push",
         "--force",
@@ -273,7 +273,7 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
 /// Opens the session and waits until it is open. A write queued before
 /// that is dropped for having no repository to run in, so the fetch has to
 /// come after.
-async fn opened(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
     // Recording is part of how this session is created, not something
     // switched on once it exists: graph baselines here count the opening's
@@ -315,7 +315,7 @@ fn tag<'a>(snapshot: &'a RefsSnapshot, name: &str) -> &'a TagItem {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
 
     // Before anything reaches the remote there is nothing to say: no local
     // ref records where a remote keeps its tags, so every one of them is
@@ -380,7 +380,7 @@ fn some_tag_has_a_remote(tags: &[TagItem]) -> bool {
 #[tokio::test(flavor = "multi_thread")]
 async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
     tags_loaded(&sink, some_tag_has_a_remote).await;
@@ -405,7 +405,7 @@ async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
 #[tokio::test(flavor = "multi_thread")]
 async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_graph() {
     let (mut bare, work, root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
     session.set_auto_fetch(Some(Duration::from_secs(600)));
     // The first look settles the badges. Counting from before it would
     // race the interval this session opened with.
@@ -476,7 +476,7 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
 #[tokio::test(flavor = "multi_thread")]
 async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
     session.set_auto_fetch(None);
 
     assert!(
@@ -498,7 +498,7 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
 #[tokio::test(flavor = "multi_thread")]
 async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (_sink, session) = opened(&work).await;
+    let (_sink, session) = opened_recording(&work).await;
     session.set_include_tags(false);
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
@@ -517,7 +517,7 @@ async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_remote_tag_completion_returns_its_single_flight_slot() {
     let (_bare, work, _root, _head) = tag_scenario();
-    let (_sink, session) = opened(&work).await;
+    let (_sink, session) = opened_recording(&work).await;
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
     // `Opened` is delivered before its eager catch-up is started, so that
@@ -556,7 +556,7 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_drifted_tag_puts_its_name_on_both_rows() {
     let (_bare, work, root, head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
     session.fetch(Some("origin".into()));
     snapshot_after_the_fetch(&sink).await;
 
@@ -592,7 +592,7 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
 #[tokio::test]
 async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
     let (_bare, work, root, _head) = tag_scenario();
-    let (sink, session) = opened(&work).await;
+    let (sink, session) = opened_recording(&work).await;
     session.fetch(Some("origin".into()));
     let snapshot = snapshot_after_the_fetch(&sink).await;
 

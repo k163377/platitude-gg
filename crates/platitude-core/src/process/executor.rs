@@ -133,6 +133,16 @@ impl GitExecutor {
         self
     }
 
+    /// Replaces the stock time budget for every command that did not set
+    /// one of its own. The test harness raises it to its overall failure
+    /// backstop rather than lifting it: a wedged git then fails the
+    /// awaiting test by name instead of hanging the binary to the CI
+    /// kill.
+    pub fn with_stock_timeout(mut self, budget: Duration) -> Self {
+        self.stock_timeout = Some(budget);
+        self
+    }
+
     /// Returns an executor with environment defaults applied to every Git
     /// subprocess. Per-command [`GitCommand::env`] values take precedence.
     pub fn with_env<I, K, V>(mut self, vars: I) -> Self

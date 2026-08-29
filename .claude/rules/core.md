@@ -19,7 +19,7 @@ paths:
 - **複数コマンドの合成は 1 手目が失敗したら止める**(`?` で伝播。途中まで進めた状態で次を撃たない)。落とし穴は**失敗が `Ok` に化ける経路** — `switch` の拒否(`CheckoutOutcome::Blocked`)と `stash pop` の非ゼロ終了は成功として返るので、そこだけは明示的に判定し、**戻せるものは戻す**(`session::carry_across`)。失敗後に走ってよいのは読み取りだけ(`catch_up_after` の fetch)
 - 対話エディタを開かせない(`GIT_EDITOR` / `GIT_SEQUENCE_EDITOR` を非対話に固定して rebase 等を駆動する)
 - **ASCII のキーで前方一致する時も `str` を byte index で切らない**(`l[..KEY.len()]` は本文の文字がその 1 バイトを跨いだ瞬間に落ちる)。`l.as_bytes().get(..KEY.len())` + `eq_ignore_ascii_case` にする。**落ちた先が walk のワーカだと、グラフはローディングのリングのまま止まり、エラー表示にもコマンドログにも何も出ない** — 「サイドバーは出るのにグラフだけ空」はまず stderr のパニックを疑う
-- 全実行にタイムアウトとキャンセルを付ける。auto fetch は多重起動を防ぐ(**例外は統合テストの executor** — 負荷が壁時計を破るので stock timeout を外し、待ち側の backstop で失敗を検出する。rules-refs/core.md の同項)
+- 全実行にタイムアウトとキャンセルを付ける。auto fetch は多重起動を防ぐ(**例外は統合テストの executor** — 負荷が壁時計を破るので stock timeout を外さず **suite の backstop(`OVERALL_BUDGET`)まで上げる**: セッション系は Patience が先に効き、executor を直接 await するテストでも wedged git がテスト名付きの赤になる。rules-refs/core.md の同項)
 - Windows ではコンソールウィンドウを出さない(`CREATE_NO_WINDOW`)
 - UI(Qt)スレッドでサブプロセスの完了を待たない — git 実行は常にバックグラウンド
 - **新しいオプションは最低 git バージョンのマニュアルで存在確認してから使う** — 開発機の git は最新なので、`config get`(2.46)のように手元で動いて最低版に無いものが素通りする。照合の記録と手順は [git最低バージョン整合.md](../../internal-docs/git最低バージョン整合.md)

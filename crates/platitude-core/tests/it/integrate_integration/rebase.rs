@@ -374,7 +374,7 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "a\n", "root");
     repo.git(&["checkout", "-b", "topic"]);
-    let doomed = repo.commit_file("f.txt", "a\nX\n", "adds X");
+    let doomed = repo.commit_file_id("f.txt", "a\nX\n", "adds X");
     repo.commit_file("h.txt", "keep\n", "keeper");
     repo.git(&["checkout", "main"]);
     // Same net line, different patch: not a clean cherry-pick of `doomed`,

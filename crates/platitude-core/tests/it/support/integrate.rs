@@ -12,6 +12,23 @@ pub fn helper() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"))
 }
 
+/// Runs whatever `plan_edit` produced, the way the session does.
+pub async fn apply(repo: &TestRepo, plan: &platitude_core::sequencer::EditPlan) {
+    let (exec, cancel) = env();
+    let repo_info = crate::support::info(repo).await;
+    platitude_core::sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("run the plan");
+}
+
 /// main and side both change the same line of `f.txt`.
 pub fn conflicting_branches() -> TestRepo {
     let mut repo = TestRepo::init();

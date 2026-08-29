@@ -10,10 +10,10 @@ use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
 /// subject and an empty-message-ish subject case.
 fn scenario() -> (TestRepo, Vec<String>) {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("f.txt", "0\n", "root commit");
-    let a = repo.commit_file("f.txt", "1\n", "日本語のメッセージ 🎌 with spaces");
+    let root = repo.commit_file_id("f.txt", "0\n", "root commit");
+    let a = repo.commit_file_id("f.txt", "1\n", "日本語のメッセージ 🎌 with spaces");
     repo.git(&["checkout", "-b", "side", &root]);
-    let b = repo.commit_file("g.txt", "s\n", "side work");
+    let b = repo.commit_file_id("g.txt", "s\n", "side work");
     repo.git(&["checkout", "main"]);
     repo.git(&["merge", "--no-ff", "-m", "merge side into main", "side"]);
     let m = repo.git(&["rev-parse", "HEAD"]);

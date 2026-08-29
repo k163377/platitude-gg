@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, is_stream_event, scenario};
+use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, scenario};
 use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
 
 /// A write rebuilds the graph exactly once. Committing turns a dirty tree
@@ -16,13 +16,7 @@ async fn a_write_rebuilds_the_graph_once() {
     repo.commit_file("root.txt", "0\n", "root");
     repo.write_file("new.txt", "content\n");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     // Wait until the WIP row is on screen (root + WIP = 2 rows) behind an
     // explicit opening boundary, so the commit below is the transition
     // that removes it and every later stream event is a reaction to a write.
@@ -91,13 +85,7 @@ async fn a_write_rebuilds_the_graph_once() {
 /// a quiet interval.
 async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
     let (repo, _) = scenario();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 5).await;
     let baseline = sink.count(is_stream_event);
     (repo, sink, session, baseline)
@@ -214,17 +202,11 @@ async fn an_external_ref_move_rebuilds_the_graph() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn chips_read_from_one_graph_do_not_land_on_another() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("f.txt", "0\n", "root");
+    let root = repo.commit_file_id("f.txt", "0\n", "root");
     repo.commit_file("f.txt", "1\n", "middle");
-    let head = repo.commit_file("f.txt", "2\n", "head");
+    let head = repo.commit_file_id("f.txt", "2\n", "head");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 3).await;
 
     // Something for the read to find, on the last row of the graph it
@@ -315,13 +297,7 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     repo.commit_file("f.txt", "1\n", "middle");
     repo.commit_file("f.txt", "2\n", "head");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 3).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
@@ -383,13 +359,7 @@ async fn a_poll_rebuilds_the_graph_once() {
     repo.commit_file("root.txt", "0\n", "root");
     repo.write_file("new.txt", "content\n");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     // root + WIP row.
     sink.opened_graph(&session, 2).await;
 

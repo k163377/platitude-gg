@@ -17,7 +17,7 @@ use platitude_core::tag;
 #[tokio::test]
 async fn a_tag_lands_on_the_commit_it_was_given() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "a\n", "root");
+    let root = repo.commit_file_id("a.txt", "a\n", "root");
     repo.commit_file("b.txt", "b\n", "second");
     let (exec, cancel) = env();
 
@@ -44,7 +44,7 @@ async fn a_tag_lands_on_the_commit_it_was_given() {
 async fn no_commit_is_head() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "a\n", "root");
-    let head = repo.commit_file("b.txt", "b\n", "second");
+    let head = repo.commit_file_id("b.txt", "b\n", "second");
     let (exec, cancel) = env();
 
     tag::create(&exec, &repo.path, "here", "", &cancel)
@@ -60,9 +60,9 @@ async fn no_commit_is_head() {
 #[tokio::test]
 async fn a_name_already_taken_is_refused_and_nothing_moves() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "a\n", "root");
+    let root = repo.commit_file_id("a.txt", "a\n", "root");
     repo.git(&["tag", "-a", "v1.0", "-m", "first release"]);
-    let head = repo.commit_file("b.txt", "b\n", "second");
+    let head = repo.commit_file_id("b.txt", "b\n", "second");
     let (exec, cancel) = env();
 
     let refused = tag::create(&exec, &repo.path, "v1.0", &head, &cancel).await;
@@ -106,7 +106,7 @@ async fn a_name_git_refuses_makes_no_tag() {
 #[tokio::test]
 async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
     let mut repo = TestRepo::init();
-    let head = repo.commit_file("a.txt", "a\n", "root");
+    let head = repo.commit_file_id("a.txt", "a\n", "root");
     let (exec, cancel) = env();
 
     let refused = tag::create(&exec, &repo.path, "-dashed", &head, &cancel).await;

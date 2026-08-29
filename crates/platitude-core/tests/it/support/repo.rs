@@ -174,11 +174,18 @@ impl TestRepo {
         std::fs::write(p, content).expect("write file");
     }
 
-    /// Writes + stages + commits a file; returns the commit id.
-    pub fn commit_file(&mut self, rel: &str, content: &str, message: &str) -> String {
+    /// Writes + stages + commits a file. Two spawns; the suite makes some
+    /// four hundred of these, so the commit id is a separate ask
+    /// ([`Self::commit_file_id`]) rather than a third spawn nobody reads.
+    pub fn commit_file(&mut self, rel: &str, content: &str, message: &str) {
         self.write_file(rel, content);
         self.git(&["add", "--", rel]);
         self.git(&["commit", "-m", message]);
+    }
+
+    /// [`Self::commit_file`], answering the new commit's id.
+    pub fn commit_file_id(&mut self, rel: &str, content: &str, message: &str) -> String {
+        self.commit_file(rel, content, message);
         self.git(&["rev-parse", "HEAD"])
     }
 

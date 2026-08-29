@@ -2,7 +2,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
-use crate::support::integrate::current_op;
+use crate::support::integrate::{conflicting_branches, current_op};
 use platitude_core::integrate::{self, Continuation, InProgress, Landing};
 use platitude_core::opstate;
 
@@ -27,7 +27,7 @@ async fn cherry_pick_and_revert() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.git(&["checkout", "-b", "side"]);
-    let picked = repo.commit_file("b.txt", "two\n", "wanted elsewhere");
+    let picked = repo.commit_file_id("b.txt", "two\n", "wanted elsewhere");
     repo.git(&["checkout", "main"]);
     let (exec, cancel) = env();
 
@@ -63,7 +63,7 @@ async fn a_cherry_pick_the_branch_already_has_leaves_nothing_behind() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
     repo.git(&["checkout", "-b", "side"]);
-    let picked = repo.commit_file("f.txt", "base\nsame\n", "the change");
+    let picked = repo.commit_file_id("f.txt", "base\nsame\n", "the change");
     repo.git(&["checkout", "main"]);
     // main arrives at the identical content under a commit of its own,
     // so replaying `picked` here has nothing left to write.
@@ -132,9 +132,9 @@ async fn the_commits_around_an_empty_pick_still_land() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
     repo.git(&["checkout", "-b", "side"]);
-    let first = repo.commit_file("a.txt", "one\n", "before");
-    let empty = repo.commit_file("f.txt", "base\nsame\n", "the change");
-    let last = repo.commit_file("c.txt", "three\n", "after");
+    let first = repo.commit_file_id("a.txt", "one\n", "before");
+    let empty = repo.commit_file_id("f.txt", "base\nsame\n", "the change");
+    let last = repo.commit_file_id("c.txt", "three\n", "after");
     repo.git(&["checkout", "main"]);
     repo.commit_file("f.txt", "base\nsame\n", "the same change, arrived at here");
     let (exec, cancel) = env();
@@ -157,7 +157,7 @@ async fn the_commits_around_an_empty_pick_still_land() {
 async fn a_revert_with_nothing_left_to_undo_lands_as_nothing() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\n", "root");
-    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    let added = repo.commit_file_id("f.txt", "one\ntwo\n", "adds the line");
     repo.commit_file("f.txt", "one\n", "takes it back by hand");
     let before = repo.git(&["rev-parse", "HEAD"]);
     let (exec, cancel) = env();
@@ -181,9 +181,9 @@ async fn a_revert_with_nothing_left_to_undo_lands_as_nothing() {
 async fn the_commits_around_an_empty_revert_still_land() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\n", "root");
-    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    let added = repo.commit_file_id("f.txt", "one\ntwo\n", "adds the line");
     repo.commit_file("f.txt", "one\n", "takes it back by hand");
-    let keeps = repo.commit_file("k.txt", "keep\n", "adds k");
+    let keeps = repo.commit_file_id("k.txt", "keep\n", "adds k");
     let (exec, cancel) = env();
 
     integrate::revert(&exec, &repo.path, &[added, keeps], &cancel)
@@ -197,15 +197,10 @@ async fn the_commits_around_an_empty_revert_still_land() {
     nothing_in_progress(&repo).await;
 }
 
-/// Two branches that changed the same line, so replaying either onto the
-/// other stops.
+/// [`conflicting_branches`], and the commit a pick of `side` replays.
 fn conflicting_sides() -> (TestRepo, String) {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "root");
-    repo.git(&["checkout", "-b", "side"]);
-    let picked = repo.commit_file("f.txt", "side\n", "side change");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("f.txt", "main\n", "main change");
+    let mut repo = conflicting_branches();
+    let picked = repo.git(&["rev-parse", "side"]);
     (repo, picked)
 }
 
@@ -243,7 +238,7 @@ async fn a_conflicting_revert_stops_rather_than_failing() {
 
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\n", "root");
-    let added = repo.commit_file("f.txt", "one\ntwo\n", "adds the line");
+    let added = repo.commit_file_id("f.txt", "one\ntwo\n", "adds the line");
     // The line the revert wants to take away is not the line that is
     // there any more, so undoing that commit collides.
     repo.commit_file("f.txt", "one\nrewritten\n", "says it another way");

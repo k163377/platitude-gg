@@ -53,13 +53,15 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
 ///
-/// No stock wall-clock budget: under a loaded suite one git round trip
-/// measures ~25× its lone cost (`wait.rs`), so a fixed cap decides by
-/// load, not correctness. Cancellation still bounds every command, and
-/// `Patience` is the suite's failure-detection backstop.
+/// The stock wall-clock budget is raised to the suite's overall backstop,
+/// not lifted: under a loaded suite one git round trip measures ~25× its
+/// lone cost (`wait.rs`), so the everyday cap would decide by load — but
+/// a *wedged* git must still fail the awaiting test by name. Session
+/// waits have `Patience` under this; a test that awaits the executor
+/// directly has nothing else.
 pub fn isolated() -> GitExecutor {
     GitExecutor::new()
-        .without_stock_timeouts()
+        .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(isolated_env())
 }
 
@@ -136,7 +138,9 @@ pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
 /// isolation [`isolated`] gives is a single file for the whole suite, and
 /// the suite runs in parallel.
 pub fn isolated_global(global_config: &Path) -> GitExecutor {
-    GitExecutor::new().without_stock_timeouts().with_env(vec![
+    GitExecutor::new()
+        .with_stock_timeout(super::wait::OVERALL_BUDGET)
+        .with_env(vec![
         (
             OsString::from("GIT_CONFIG_GLOBAL"),
             global_config.to_path_buf().into_os_string(),

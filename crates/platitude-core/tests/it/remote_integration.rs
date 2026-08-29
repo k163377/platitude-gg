@@ -6,6 +6,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::remote::origin_and_clone;
 use platitude_core::GitError;
 use platitude_core::commit;
 use platitude_core::remote::{self, PushForce, PushSpec};
@@ -13,20 +14,6 @@ use platitude_core::report::ReportKind;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
-
-/// A bare repository serving as `origin`, plus a working clone of it.
-fn origin_and_clone() -> (TestRepo, TestRepo) {
-    let mut seed = TestRepo::init();
-    seed.commit_file("a.txt", "one\n", "root");
-
-    let mut bare = TestRepo::init();
-    // Reuse the temp dir machinery, then turn the repo into a bare mirror.
-    let bare_path = bare.path.clone();
-    bare.git_in(&bare_path, &["config", "core.bare", "true"]);
-    seed.git(&["remote", "add", "origin", &bare.file_url()]);
-    seed.git(&["push", "origin", "main"]);
-    (bare, seed)
-}
 
 #[tokio::test]
 async fn lists_remotes_from_config() {

@@ -13,7 +13,7 @@ async fn squash_and_reword_run_through_the_write_queue() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "keep me");
-    let fold = repo.commit_file("c.txt", "three\n", "fold me in");
+    let fold = repo.commit_file_id("c.txt", "three\n", "fold me in");
 
     let (sink, session) = opened(&repo).await;
     session.squash_into_parent(fold);
@@ -79,7 +79,7 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "keep me");
-    let fold = repo.commit_file("c.txt", "three\n", "fold me in");
+    let fold = repo.commit_file_id("c.txt", "three\n", "fold me in");
     repo.write_file("a.txt", "staged edit\n");
     repo.git(&["add", "--", "a.txt"]);
     repo.write_file("b.txt", "unstaged edit\n");
@@ -233,7 +233,7 @@ async fn untracked_files_alone_are_replayed_straight_over() {
     install_todo_editor();
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
-    let gone = repo.commit_file("b.txt", "two\n", "drop me");
+    let gone = repo.commit_file_id("b.txt", "two\n", "drop me");
     repo.commit_file("c.txt", "three\n", "keep me");
     repo.write_file("u.txt", "untracked\n");
 
@@ -264,7 +264,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     install_todo_editor();
     let mut repo = TestRepo::init();
     repo.commit_file("file.txt", "a\nb\nc\n", "root");
-    let gone = repo.commit_file("file.txt", "a\nmiddle\nc\n", "drop me");
+    let gone = repo.commit_file_id("file.txt", "a\nmiddle\nc\n", "drop me");
     repo.commit_file("other.txt", "side\n", "keep me");
     // Touches the same line the dropped commit did, and nothing the
     // replay itself has to apply.
@@ -309,7 +309,7 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "base\n", "root");
     repo.commit_file("file.txt", "one\n", "one");
-    let gone = repo.commit_file("file.txt", "one\ntwo\n", "drop me");
+    let gone = repo.commit_file_id("file.txt", "one\ntwo\n", "drop me");
     repo.commit_file("file.txt", "one\ntwo\nthree\n", "needs the one before");
     repo.write_file("base.txt", "uncommitted\n");
 

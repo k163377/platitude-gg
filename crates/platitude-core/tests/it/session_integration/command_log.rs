@@ -1,24 +1,12 @@
 //! The command log holds what the user asked for, and not the background.
 
-use crate::support::session::{CaptureSink, scenario};
-use platitude_core::session::{Recording, RepoSession, SessionEvent};
+use crate::support::session::{opened, scenario};
+use platitude_core::session::{Recording, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_command_log_holds_what_the_user_asked_for() {
     let (repo, _head) = scenario();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
     sink.opened_graph(&session, 5).await;
     assert_eq!(
         sink.count(|e| matches!(e, SessionEvent::CommandStarted { .. })),

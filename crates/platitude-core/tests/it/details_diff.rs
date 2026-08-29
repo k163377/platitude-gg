@@ -47,7 +47,7 @@ async fn details_of_a_merge_commit_use_the_first_parent() {
 #[tokio::test]
 async fn details_of_the_root_commit_show_created_files() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("first.txt", "hello\n", "root commit");
+    let root = repo.commit_file_id("first.txt", "hello\n", "root commit");
 
     let (executor, cancel) = env();
     let oid = Oid::from_hex_str(&root).unwrap();
@@ -66,7 +66,7 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     // The spelling tools actually write is `Co-Authored-By`; the one the
     // convention documents is `Co-authored-by`. git's `key=` matches
     // either, and both have to land here.
-    let sha = repo.commit_file(
+    let sha = repo.commit_file_id(
         "a.txt",
         "one\n",
         "feat: two hands on it\n\nbody\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\
@@ -95,7 +95,7 @@ async fn details_of_a_commit_without_the_trailer_credit_nobody() {
     // A `Co-authored-by` in the middle of the prose is not a trailer, and
     // git is the one that decides that -- this is the case that would go
     // wrong if the message were scanned by hand instead.
-    let sha = repo.commit_file(
+    let sha = repo.commit_file_id(
         "a.txt",
         "one\n",
         "feat: alone\n\nI wrote Co-authored-by: nobody <n@e.com> in the body\n\nand kept going.",
@@ -154,7 +154,7 @@ async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
     // The metadata and the changed files arrive from one `git show`, so
     // the boundary between them has to be the NUL count and nothing else.
     // A commit is free to describe its own diff in prose.
-    let sha = repo.commit_file(
+    let sha = repo.commit_file_id(
         "real.txt",
         "one\n",
         "docs: explain the notation\n\nA\tinvented/one.txt\nM\tinvented/two.txt",

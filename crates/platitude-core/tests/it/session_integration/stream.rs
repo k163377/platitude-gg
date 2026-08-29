@@ -1,19 +1,13 @@
 //! Opening a repository, and the log stream that comes out of it.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, scenario};
+use crate::support::session::{CaptureSink, open_unawaited, scenario};
 use platitude_core::session::{RepoSession, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn open_streams_the_full_pipeline() {
     let (repo, head) = scenario();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     sink.wait_for("Opened", |evs| {
         evs.iter().find_map(|e| match e {
@@ -102,13 +96,7 @@ async fn open_streams_the_full_pipeline() {
 #[tokio::test(flavor = "multi_thread")]
 async fn restart_log_delivers_a_new_generation() {
     let (repo, _) = scenario();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     // The restart must answer for itself, so the opening settles first:
     // an opening rebuild still in flight could supersede the restarted
@@ -147,13 +135,7 @@ async fn restart_log_delivers_a_new_generation() {
 #[tokio::test(flavor = "multi_thread")]
 async fn unborn_repository_finishes_with_zero_rows() {
     let repo = TestRepo::init();
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     let pass = sink.pass_after("the opening pass", 0).await;
     assert_eq!(pass.total, 0);
@@ -224,13 +206,7 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     // shaped that way proves nothing.
     repo.commit_file("f.txt", "3\n", "fourth");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     let pass = sink.pass_after("the opening pass", 0).await;
     assert_eq!(pass.total, 5, "four on main plus the orphan");
 

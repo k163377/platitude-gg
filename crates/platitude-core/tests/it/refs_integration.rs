@@ -90,7 +90,7 @@ async fn lists_branches_tags_and_remotes() {
 #[tokio::test]
 async fn head_state_on_branch_and_detached() {
     let mut repo = TestRepo::init();
-    let sha = repo.commit_file("a.txt", "1\n", "initial");
+    let sha = repo.commit_file_id("a.txt", "1\n", "initial");
     let (executor, cancel) = env();
 
     let on_branch = refs::head_state(&executor, &repo.path, &cancel)

@@ -12,7 +12,7 @@ use platitude_core::{stage, status};
 #[tokio::test]
 async fn staging_a_commit_diff_is_rejected() {
     let mut repo = TestRepo::init();
-    let oid = repo.commit_file("f.txt", "x\n", "root");
+    let oid = repo.commit_file_id("f.txt", "x\n", "root");
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
 

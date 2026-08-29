@@ -41,7 +41,7 @@ async fn renaming_a_tag_keeps_the_object_it_names() {
 #[tokio::test]
 async fn a_lightweight_tag_renames_too() {
     let mut repo = TestRepo::init();
-    let head = repo.commit_file("a.txt", "a\n", "root");
+    let head = repo.commit_file_id("a.txt", "a\n", "root");
     repo.git(&["tag", "nightly"]);
     let (exec, cancel) = env();
 

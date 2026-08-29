@@ -2,8 +2,8 @@
 //! reported and refreshed like any other.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, write_result};
-use platitude_core::session::{RepoSession, SessionEvent};
+use crate::support::session::{opened, write_result};
+use platitude_core::session::SessionEvent;
 
 /// Writes are serialized per session: a burst of concurrent stage requests
 /// must all land. Without the lock they race on `.git/index.lock` and some
@@ -17,19 +17,7 @@ async fn concurrent_writes_are_serialized() {
         repo.write_file(&format!("f{n}.txt"), "content\n");
     }
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     for n in 0..COUNT {
         session.stage_paths(vec![format!("f{n}.txt")]);
@@ -68,19 +56,7 @@ async fn concurrent_writes_are_serialized() {
 async fn a_failed_write_reports_and_refreshes() {
     let mut repo = TestRepo::init();
     repo.commit_file("root.txt", "0\n", "root");
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     session.delete_branch("does-not-exist".into(), false);
     let error = sink
@@ -110,19 +86,7 @@ async fn stage_commit_and_branch_through_the_session() {
     repo.commit_file("root.txt", "0\n", "root");
     repo.write_file("new.txt", "content\n");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     session.stage_paths(vec!["new.txt".into()]);
     session.commit(
@@ -164,7 +128,7 @@ async fn stage_commit_and_branch_through_the_session() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reset_moves_the_branch_through_the_write_queue() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("f.txt", "0\n", "root");
+    let root = repo.commit_file_id("f.txt", "0\n", "root");
     repo.commit_file("f.txt", "1\n", "second");
 
     let (sink, session) = opened(&repo).await;
@@ -194,19 +158,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     repo.commit_file("f.txt", "main\n", "main change");
     repo.git(&["checkout", "topic"]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     session.rebase(
         "main".into(),

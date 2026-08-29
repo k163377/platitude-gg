@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, opened_with, write_result};
 use platitude_core::details::DiffTarget;
-use platitude_core::session::{DiffRefreshOutcome, Recording, RepoSession, SessionEvent};
+use platitude_core::session::{DiffRefreshOutcome, Recording, SessionEvent};
 
 /// Opening a repository asks for a read, and so does the window becoming
 /// active a moment later; on a large repository that pair would be two
@@ -123,7 +123,7 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_detached_head_is_still_read_correctly() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("f.txt", "0\n", "root");
+    let root = repo.commit_file_id("f.txt", "0\n", "root");
     repo.commit_file("g.txt", "1\n", "second");
     repo.git(&["checkout", "--detach", &root]);
 
@@ -482,19 +482,7 @@ async fn publish_check_answers_through_the_session() {
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     session.check_publish("HEAD~1..HEAD".into());
     let state = sink

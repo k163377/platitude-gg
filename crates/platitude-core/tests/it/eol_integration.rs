@@ -161,7 +161,7 @@ async fn dropping_the_trailing_newline_is_not_an_ending_change() {
 async fn a_flip_that_was_committed_reads_out_of_history() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\ntwo\n", "root");
-    let flipped = repo.commit_file("f.txt", "one\r\ntwo\r\n", "endings");
+    let flipped = repo.commit_file_id("f.txt", "one\r\ntwo\r\n", "endings");
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
     assert_eq!(

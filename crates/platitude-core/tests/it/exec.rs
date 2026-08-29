@@ -142,9 +142,9 @@ async fn failed_commands_surface_gits_stderr() {
 #[tokio::test]
 async fn streaming_delivers_all_stdout_chunks() {
     let mut repo_dir = TestRepo::init();
-    let c1 = repo_dir.commit_file("a.txt", "1\n", "one");
-    let c2 = repo_dir.commit_file("a.txt", "2\n", "two");
-    let c3 = repo_dir.commit_file("a.txt", "3\n", "three");
+    let c1 = repo_dir.commit_file_id("a.txt", "1\n", "one");
+    let c2 = repo_dir.commit_file_id("a.txt", "2\n", "two");
+    let c3 = repo_dir.commit_file_id("a.txt", "3\n", "three");
 
     let (executor, cancel) = env();
     let cmd = GitCommand::new()
@@ -191,8 +191,8 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     use std::sync::Arc;
 
     let mut repo_dir = TestRepo::init();
-    let c1 = repo_dir.commit_file("a.txt", "1\n", "one");
-    let c2 = repo_dir.commit_file("a.txt", "2\n", "two");
+    let c1 = repo_dir.commit_file_id("a.txt", "1\n", "one");
+    let c2 = repo_dir.commit_file_id("a.txt", "2\n", "two");
 
     let ends = Arc::new(Ends::default());
     let (executor, cancel) = observed_env(ends.clone(), true);

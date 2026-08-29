@@ -4,9 +4,9 @@
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, write_result};
+use crate::support::session::{CaptureSink, opened, open_unawaited, write_result};
 use platitude_core::session::{
-    AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, RepoSession, SessionEvent,
+    AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, SessionEvent,
 };
 
 /// One hand-stepped tick, under the suite's backstop.
@@ -272,13 +272,7 @@ async fn an_ask_that_beats_the_opening_is_kept_for_it() {
     let mut clone = TestRepo::init();
     clone.git(&["remote", "add", "origin", &origin.file_url()]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        clone.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&clone);
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(
         session.fetch_on_open(),
@@ -350,13 +344,7 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
     let mut only = TestRepo::init();
     only.commit_file("f.txt", "0\n", "root");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        only.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&only);
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(
         session.fetch_on_open(),

@@ -302,6 +302,19 @@ pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     opened_with(repo, crate::support::exec::isolated()).await
 }
 
+/// [`opened`] without the wait — for a test whose first assertion is about
+/// an event before, or instead of, `Opened`.
+pub fn open_unawaited(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+    );
+    (sink, session)
+}
+
 /// [`opened`] on an executor of the caller's own — for a session that has
 /// to see the repository's private `--global` file
 /// (`exec::isolated_global`), or one watched by an observer.

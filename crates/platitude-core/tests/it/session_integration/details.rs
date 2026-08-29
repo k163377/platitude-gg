@@ -2,11 +2,11 @@
 //! colours over that diff, and its signature.
 
 use crate::support::TestRepo;
-use crate::support::session::CaptureSink;
+use crate::support::session::opened;
 use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::identity::SignatureStatus;
-use platitude_core::session::{RepoSession, SessionEvent};
+use platitude_core::session::SessionEvent;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn details_and_diff_round_trip_through_the_session() {
@@ -16,19 +16,7 @@ async fn details_and_diff_round_trip_through_the_session() {
     repo.git(&["commit", "-am", "edit f"]);
     let head = repo.git(&["rev-parse", "HEAD"]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     let oid = Oid::from_hex_str(&head).unwrap();
     session.load_details(oid);
@@ -81,19 +69,7 @@ async fn a_diff_arrives_before_the_colours_for_it() {
     repo.commit_file("src/f.rs", "fn one() -> u32 {\n    1\n}\n", "add f");
     repo.write_file("src/f.rs", "fn one() -> u32 {\n    2\n}\n");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     session.load_diff(DiffTarget::Unstaged {
         path: "src/f.rs".to_string(),
@@ -139,19 +115,7 @@ async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
     repo.write_file("src/a.rs", "fn a() -> u32 {\n    2\n}\n");
     repo.write_file("src/b.rs", "fn b() -> u32 {\n    2\n}\n");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     // Two clicks, the second before the first has been answered.
     session.load_diff(DiffTarget::Unstaged {
@@ -218,19 +182,7 @@ async fn a_signature_answer_names_the_commit_it_is_about() {
     repo.commit_file("f.txt", "one\n", "add f");
     let head = repo.git(&["rev-parse", "HEAD"]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::Opened { .. }))
-            .then_some(())
-    })
-    .await;
+    let (sink, session) = opened(&repo).await;
 
     let oid = Oid::from_hex_str(&head).unwrap();
     session.check_signature(oid);

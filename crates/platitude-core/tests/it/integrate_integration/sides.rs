@@ -126,7 +126,7 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
     repo.git(&["checkout", "-b", "gone"]);
-    let orphan = repo.commit_file("f.txt", "orphan\n", "off on its own");
+    let orphan = repo.commit_file_id("f.txt", "orphan\n", "off on its own");
     repo.git(&["checkout", "main"]);
     repo.commit_file("f.txt", "main\n", "main change");
     // The branch goes; the commit stays reachable only by its hash.

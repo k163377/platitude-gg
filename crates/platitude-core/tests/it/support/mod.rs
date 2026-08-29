@@ -9,6 +9,7 @@
 pub mod exec;
 pub mod graph;
 pub mod integrate;
+pub mod remote;
 pub mod repo;
 pub mod session;
 pub mod stage;

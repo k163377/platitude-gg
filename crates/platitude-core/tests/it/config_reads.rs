@@ -19,6 +19,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{Log, assert_answered, logged};
+use crate::support::remote::origin_and_clone;
 use platitude_core::process::CommandEnd;
 use platitude_core::remote::{self, PushForce};
 use platitude_core::{conflict, eol, identity};
@@ -30,19 +31,6 @@ const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 /// spellings (`--get`, `--get-regexp`) and no writes.
 fn config_reads(log: &Log) -> Vec<CommandEnd> {
     log.ends_of(&[" config ", "--get"])
-}
-
-/// A bare repository serving as `origin`, plus a working clone of it.
-fn origin_and_clone() -> (TestRepo, TestRepo) {
-    let mut seed = TestRepo::init();
-    seed.commit_file("a.txt", "one\n", "root");
-
-    let mut bare = TestRepo::init();
-    let bare_path = bare.path.clone();
-    bare.git_in(&bare_path, &["config", "core.bare", "true"]);
-    seed.git(&["remote", "add", "origin", &bare.file_url()]);
-    seed.git(&["push", "origin", "main"]);
-    (bare, seed)
 }
 
 /// The identity and signing keys, read on every refresh. A machine with no

@@ -41,7 +41,7 @@ async fn commits_staged_content_with_a_multiline_message() {
 #[tokio::test]
 async fn amend_replaces_the_head_commit() {
     let mut repo = TestRepo::init();
-    let first = repo.commit_file("a.txt", "one\n", "original subject");
+    let first = repo.commit_file_id("a.txt", "one\n", "original subject");
     repo.write_file("b.txt", "two\n");
     repo.git(&["add", "--", "b.txt"]);
     let (exec, cancel) = env();
@@ -291,7 +291,7 @@ async fn branch_create_switch_rename_delete() {
 #[tokio::test]
 async fn a_detached_head_switches_back_onto_a_branch() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "one\n", "root");
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
     repo.commit_file("a.txt", "two\n", "second");
     let (exec, cancel) = env();
     repo.git(&["checkout", "--detach", &root]);
@@ -314,7 +314,7 @@ async fn a_detached_head_switches_back_onto_a_branch() {
 /// where each reset takes the branch back to.
 fn one_commit_back() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "one\n", "root");
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
     repo.commit_file("a.txt", "two\n", "second");
     (repo, root)
 }

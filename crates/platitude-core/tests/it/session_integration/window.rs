@@ -2,8 +2,8 @@
 //! moving the window lands.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, pass_of};
-use platitude_core::session::{LabelKind, RefreshOutcome, RepoSession, SessionEvent};
+use crate::support::session::{open_unawaited, pass_of};
+use platitude_core::session::{LabelKind, RefreshOutcome, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tag_only_commits_follow_the_include_tags_option() {
@@ -19,13 +19,7 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     // for on its own.
     repo.git(&["tag", "onmain"]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     // Tags are walked by default → the tag-only commit has a row. The
     // tag-inclusive pass differs from the fast pass here, so it arrives
@@ -178,13 +172,7 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "base");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     let base = sink.opened_graph(&session, 1).await;
 
     // A ref moves outside the session: the walk can reach it, the label
@@ -259,13 +247,7 @@ async fn log_limit_truncates_the_window() {
     repo.commit_file("f.txt", "2\n", "two");
     repo.commit_file("f.txt", "3\n", "three");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     // The opening pass, whichever shape landed it — and the footer read
     // off the very pass the rest of the test anchors on.
@@ -294,13 +276,7 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     repo.write_file("f.txt", "wip\n");
     repo.git(&["stash", "push", "-m", "wip stash"]);
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     // Full pass first: stash row + three commits, nothing truncated —
     // whichever shape landed it.
@@ -339,13 +315,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
     repo.commit_file("f.txt", "2\n", "two");
     repo.write_file("f.txt", "wip\n"); // dirty → synthetic WIP row
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     // Wait until the dirty state is reflected and the stream settles, so
     // the next pass is the reaction to the limit change.
@@ -390,13 +360,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
     repo.commit_file("f.txt", "1\n", "one");
     repo.commit_file("f.txt", "2\n", "two");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 2).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
@@ -459,13 +423,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     repo.commit_file("f.txt", "1\n", "one");
     repo.commit_file("f.txt", "2\n", "two");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     let first_gen = sink.opened_graph(&session, 2).await.generation;
 
     // A window exactly as wide as the history: every commit is shown, and
@@ -524,13 +482,7 @@ async fn growing_the_window_walks_further_without_starting_over() {
         repo.commit_file("f.txt", &format!("{n}\n"), &format!("commit {n}"));
     }
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
 
     let full = sink.opened_graph(&session, 6).await;
     assert!(!full.truncated, "6 commits fit in the default window");
@@ -564,13 +516,7 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "1\n", "one");
 
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 1).await;
 
     assert_eq!(
@@ -595,27 +541,10 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
     assert_eq!(session.log_options().limit, Some(600));
     assert_eq!(session.log_window_step(), 100);
 
-    session.close();
-}
-
-/// A window that already holds the whole history has no next step, and
-/// the press that would ask for one is not offered — but the call is
-/// reachable from a graph that finished loading while a hand was on its
-/// way down, so it answers by leaving the window where it is.
-#[tokio::test(flavor = "multi_thread")]
-async fn an_unlimited_window_has_no_next_step() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "1\n", "one");
-
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    sink.opened_graph(&session, 1).await;
-
+    // A window widened to the whole history has no next step, and the
+    // press that would ask for one is not offered — but the call stays
+    // reachable from a graph that finished loading while a hand was on
+    // its way down, so it answers by leaving the window where it is.
     session.set_log_limit(None);
     session.grow_log_window();
     assert_eq!(

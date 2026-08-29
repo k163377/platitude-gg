@@ -3,35 +3,17 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
-use crate::support::integrate::helper;
+use crate::support::integrate::{apply, helper};
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
 // --- one-commit edits (squash into parent / reword) ----------------------
-
-/// Runs whatever `plan_edit` produced, the way the session does.
-async fn apply(repo: &TestRepo, plan: &sequencer::EditPlan) {
-    let (exec, cancel) = env();
-    let repo_info = info(repo).await;
-    sequencer::rebase_interactive(
-        &exec,
-        &repo_info,
-        &plan.upstream,
-        &plan.steps,
-        &plan.options(),
-        &helper(),
-        &cancel,
-    )
-    .await
-    .expect("run the plan");
-}
-
 #[tokio::test]
 async fn squash_into_parent_folds_one_commit_and_keeps_the_rest() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "keep me");
-    let target = repo.commit_file("c.txt", "three\n", "fold me in");
+    let target = repo.commit_file_id("c.txt", "three\n", "fold me in");
     repo.commit_file("d.txt", "four\n", "after");
     let (exec, cancel) = env();
 
@@ -62,7 +44,7 @@ async fn squash_into_parent_folds_one_commit_and_keeps_the_rest() {
 async fn squashing_the_second_commit_reaches_back_to_the_root() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
-    let target = repo.commit_file("b.txt", "two\n", "second");
+    let target = repo.commit_file_id("b.txt", "two\n", "second");
     let (exec, cancel) = env();
 
     let plan = sequencer::plan_edit(
@@ -85,7 +67,7 @@ async fn squashing_the_second_commit_reaches_back_to_the_root() {
 #[tokio::test]
 async fn the_first_commit_has_nothing_to_fold_into() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "one\n", "root");
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
     let (exec, cancel) = env();
 
@@ -105,7 +87,7 @@ async fn the_first_commit_has_nothing_to_fold_into() {
 async fn rewording_an_older_commit_replaces_only_its_message() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
-    let target = repo.commit_file("b.txt", "two\n", "old subject");
+    let target = repo.commit_file_id("b.txt", "two\n", "old subject");
     repo.commit_file("c.txt", "three\n", "after");
     let (exec, cancel) = env();
 
@@ -131,7 +113,7 @@ async fn rewording_an_older_commit_replaces_only_its_message() {
 #[tokio::test]
 async fn rewording_the_root_commit_works_through_root_mode() {
     let mut repo = TestRepo::init();
-    let root = repo.commit_file("a.txt", "one\n", "root");
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
     let (exec, cancel) = env();
 
@@ -159,7 +141,7 @@ async fn a_commit_outside_the_current_branch_is_refused() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.git(&["checkout", "-b", "side"]);
-    let elsewhere = repo.commit_file("s.txt", "side\n", "side work");
+    let elsewhere = repo.commit_file_id("s.txt", "side\n", "side work");
     repo.git(&["checkout", "main"]);
     repo.commit_file("m.txt", "main\n", "main work");
     let (exec, cancel) = env();
@@ -217,8 +199,8 @@ async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
     repo.git(&["switch", "-c", "side"]);
     repo.commit_file("f.txt", "side\n", "their line");
     repo.git(&["switch", "main"]);
-    let conflicting = repo.commit_file("f.txt", "ours\n", "our line");
-    let reworded = repo.commit_file("g.txt", "g\n", "old words");
+    let conflicting = repo.commit_file_id("f.txt", "ours\n", "our line");
+    let reworded = repo.commit_file_id("g.txt", "g\n", "old words");
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
 
