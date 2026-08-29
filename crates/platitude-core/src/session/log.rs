@@ -192,6 +192,19 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
     ) -> RefreshOutcome {
+        // Superseded before it began: somebody took the stream over
+        // between this pass being asked for and its first read. The check
+        // further down stops a finished pass from installing a graph
+        // nobody wants; this one stops it from being walked at all, and
+        // the walk is the most expensive read in the app. **The opening
+        // is where that lands**: its tag-inclusive pass waits out the
+        // tag-less one that paints, so anything asking for a rebuild in
+        // between (a write, a poll tick, a test taking its baseline) used
+        // to leave a whole history walk running for a graph that had
+        // already been replaced.
+        if cancel.is_cancelled() {
+            return RefreshOutcome::Cancelled;
+        }
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let started = Instant::now();
         let mut builder = GraphBuilder::new();

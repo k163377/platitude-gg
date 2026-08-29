@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, scenario};
-use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
 
 /// A write rebuilds the graph exactly once. Committing turns a dirty tree
 /// clean, which removes the WIP row; reacting to that separately from the
@@ -431,10 +431,74 @@ async fn a_poll_rebuilds_the_graph_once() {
     session.close();
 }
 
+/// A rebuild taken over before it started does not walk.
+///
+/// Asking for one cancels the pass that held the stream, and a cancelled
+/// pass has nobody left to answer: what it would build is a graph that
+/// has already been replaced. The walk is the most expensive read in the
+/// app, so starting it to find that out is the whole of it spent.
+///
+/// **The opening is where this lands.** Its tag-inclusive pass waits out
+/// the tag-less one that paints (`restart_log`), so a write, a poll tick
+/// or a test closing its baseline in between used to leave a full history
+/// walk running — and that walk's command turns up *after* the boundary
+/// that was meant to close the opening, which is what made
+/// `remote_tags_integration::learning_what_the_remotes_carry_…` fail
+/// under load and nowhere else.
+///
+/// The single-threaded runtime is what makes the order a fact rather than
+/// a race: a spawned pass is not polled until this test awaits, so the
+/// second ask is known to arrive before the first has read anything.
+#[tokio::test]
+async fn a_rebuild_taken_over_before_it_started_never_walks() {
+    let (_repo, sink, session, _baseline) = settled_graph().await;
+    // From here the background reads are in the command log, so what the
+    // two asks below spend is countable — and the opening's own passes
+    // are behind this line, both closed by the baseline.
+    session.set_recording(Recording::WithBackground);
+    let walks = || {
+        sink.count(
+            |e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")),
+        )
+    };
+    assert_eq!(walks(), 0, "nothing is recorded from before the baseline");
+
+    let taken_over = session.refresh_log_tracked();
+    let winner = session.refresh_log_tracked();
+    assert_eq!(
+        taken_over.outcome().await,
+        RefreshOutcome::Cancelled,
+        "the second ask owns the stream"
+    );
+    assert_eq!(winner.outcome().await, RefreshOutcome::Unchanged);
+    session.wait_for_graph_passes().await;
+    assert_eq!(
+        walks(),
+        1,
+        "only the pass that still owned the stream walked: {:?}",
+        commands(&sink)
+    );
+    session.close();
+}
+
 fn position_of(events: &[SessionEvent], op: &str) -> Option<usize> {
     events
         .iter()
         .position(|e| matches!(e, SessionEvent::WriteFinished { op: got, .. } if *got == op))
+}
+
+/// What the session actually spawned, for a failure that is about the
+/// commands rather than about the graph they built.
+fn commands(sink: &CaptureSink) -> Vec<String> {
+    sink.events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn log_starts(events: &[SessionEvent]) -> usize {
