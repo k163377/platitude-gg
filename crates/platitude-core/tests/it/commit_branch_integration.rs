@@ -143,7 +143,8 @@ async fn head_message_and_merge_detection() {
 
     let head = commit::head_commit(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit");
+        .expect("head commit")
+        .expect("HEAD exists");
     assert_eq!(head.message, "subject\n\nbody line");
     // Author and message come out of one command, NUL-separated: a
     // multi-line message may not be told apart by anything printable.
@@ -165,6 +166,19 @@ async fn head_message_and_merge_detection() {
             .await
             .expect("merge check")
     );
+}
+
+/// An unborn branch answers `None`: there is nothing to amend, and the
+/// blank prefill must be distinguishable from a read that failed (a
+/// failure would blank a real message).
+#[tokio::test]
+async fn head_commit_on_an_unborn_branch_is_no_commit_not_an_error() {
+    let repo = TestRepo::init();
+    let (exec, cancel) = env();
+    let head = commit::head_commit(&exec, &repo.path, &cancel)
+        .await
+        .expect("asking is not an error");
+    assert_eq!(head, None);
 }
 
 #[tokio::test]
@@ -200,7 +214,8 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     .expect("amend");
     let head = commit::head_commit(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit");
+        .expect("head commit")
+        .expect("HEAD exists");
     assert_eq!(head.author_name, "Other Person");
     assert_eq!(head.author_email, "other@example.com");
 
@@ -219,7 +234,8 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     .expect("amend --reset-author");
     let head = commit::head_commit(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit");
+        .expect("head commit")
+        .expect("HEAD exists");
     assert_eq!(head.author_name, "Test User");
     assert_eq!(head.author_email, "test@example.com");
 }

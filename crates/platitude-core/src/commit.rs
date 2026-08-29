@@ -172,14 +172,27 @@ pub struct HeadCommit {
 }
 
 /// Reads HEAD's message and author, for prefilling an amend editor.
+/// `None` on an unborn branch: nothing to amend is a state, not a failure.
 ///
-/// One command for both, NUL-separated: a message spans lines, so it has
-/// to come last and no printable separator would be safe in front of it.
+/// One command for both fields, NUL-separated: a message spans lines, so
+/// it has to come last and no printable separator would be safe in front
+/// of it.
 pub async fn head_commit(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<HeadCommit, GitError> {
+) -> Result<Option<HeadCommit>, GitError> {
+    // Exit 1 is the answer "no HEAD yet" (rules-refs: HEAD の読み). Asked
+    // first, so a failure of the log read below stays a failure.
+    let probe = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "HEAD",
+    ]);
+    if executor.run_unchecked(probe, cancel).await?.code != 0 {
+        return Ok(None);
+    }
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["log", "-1", "--format=%an%x00%ae%x00%B"]);
@@ -191,11 +204,11 @@ pub async fn head_commit(
     };
     let (author_name, rest) = text.split_once('\0').ok_or_else(unexpected)?;
     let (author_email, message) = rest.split_once('\0').ok_or_else(unexpected)?;
-    Ok(HeadCommit {
+    Ok(Some(HeadCommit {
         message: message.trim_end_matches('\n').to_string(),
         author_name: author_name.to_string(),
         author_email: author_email.to_string(),
-    })
+    }))
 }
 
 /// True when HEAD exists and is a merge commit (amending one is a

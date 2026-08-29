@@ -49,18 +49,15 @@ impl RepoSession {
     /// On demand rather than with every refresh: only the amend path wants
     /// them, and a repository refresh already runs several commands.
     pub fn load_head_commit(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            // An unborn branch has no HEAD to amend; that is a state, not a
-            // failure worth an error banner.
+        self.spawn_read("head-commit", |s, workdir, cancel| async move {
+            // An unborn branch has no HEAD to amend; the empty prefill is
+            // that state's answer. A read that failed outright must not
+            // look the same — an amend started from a blank it trusts
+            // would commit the blank — so it goes to the error surface.
             let head = commit::head_commit(&s.executor, &workdir, &cancel)
-                .await
+                .await?
                 .unwrap_or_default();
-            s.sink.event(SessionEvent::HeadCommitLoaded { head });
+            Ok(SessionEvent::HeadCommitLoaded { head })
         });
     }
 }
