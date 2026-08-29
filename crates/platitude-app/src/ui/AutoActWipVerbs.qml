@@ -107,11 +107,14 @@ Item {
                 driver.stashWanted = "feat: write the summary"
                 wipPane.setMessage(driver.stashWanted, "")
             }
+            // The press is ticks away; the barrier must not pass on a
+            // fetch that answered in between (`expectWriteAtPress`).
+            driver.expectWriteAtPress()
             stashPressTimer.fromWip = act === "stash-lands"
             stashPressTimer.start()
         } else if (act === "stash-file") {
             wipPane.chooseOnly("unstaged", arg)
-            page.openFileMenu("unstaged", arg, "")
+            page.openFileMenu("unstaged", arg)
             fileRowMenu.sendPaths([arg])
             repoTab.stashPaths(wipPane.stashName)
         } else if (act === "amend-author") {
@@ -123,10 +126,15 @@ Item {
             amendAuthorTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The row menu on the first stash's row; the argument "go" holds the delete row down.
-            page.openRowMenu(stashesModel.oidOfName(stashesModel.nameAt(0)))
+            const menuOid = stashesModel.oidOfName(stashesModel.nameAt(0))
+            page.openRowMenu(menuOid)
             AppBackend.report("row_menu stash=" + commitMenuState.menuStashRef)
-            if (act === "delete-stash-row" && arg === "go")
+            if (act === "delete-stash-row" && arg === "go") {
+                // The drop takes this row off the graph — the same second
+                // barrier stash-pop-row waits on, for the same reason.
+                driver.graphGoneOid = menuOid
                 stashDeleteItem.completeHold()
+            }
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
             const stashOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRowMenu(stashOid)
@@ -373,6 +381,7 @@ Item {
             }
             if (!page.pageBand.stashNow())
                 return
+            driver.pressedWrite()
             driver.graphGoneOid = going
             stashPressTimer.stop()
         }

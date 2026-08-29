@@ -73,11 +73,16 @@ Item {
             if (act === "delete-tag-go")
                 refTagDeleteItem.completeHold()
         } else if (act === "delete-stash" || act === "delete-stash-go") {
+            const dropOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRefMenu("stash", stashesModel.nameAt(0),
-                             stashesModel.fullAt(0),
-                             stashesModel.oidOfName(stashesModel.nameAt(0)))
-            if (act === "delete-stash-go")
+                             stashesModel.fullAt(0), dropOid)
+            if (act === "delete-stash-go") {
+                // The drop takes the entry's row off the graph; the write
+                // barrier alone would photograph the graph still holding
+                // it (the same edge stash-pop-row waits on).
+                driver.graphGoneOid = dropOid
                 refStashDropItem.completeHold()
+            }
         } else if (act === "delete-remote" || act === "delete-remote-go" || act === "remote-refused") {
             // Named outright (`origin/feature/x`) because those rows sit behind a fold — opened here so the row is
             // under the menu. The remote's own name may hold `/`, so the cut is the configured one
@@ -305,7 +310,9 @@ Item {
                               + " push=" + refPushTagItem.offered
                               + " code=" + refPushTagItem.code
                               + " held=" + (refPushTagItem.holdMs > 0)
-                              + " lease=" + refRowMenu.tagDriftOid
+                              // The model's own reading (the same one ready() polls) — not a page id: the driver's
+                              // property list is this family's whole reach (`AutoActDriver`).
+                              + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
                               + " text=" + refPushTagItem.text)
             if (tagMenuTimer.press === "") {
                 driver.complete()

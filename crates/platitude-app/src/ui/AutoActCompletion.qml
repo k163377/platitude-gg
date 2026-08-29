@@ -46,6 +46,9 @@ QtObject {
             // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
             // and a run held at the write barrier for one waits out the watchdog in silence.
             && !(act === "nav-dbl" && AppBackend.autoActArg.startsWith("tag:"))
+            // The bare form opens the menu's hold row and stops there; only the `go` argument carries the
+            // hold through to a write, so a bare run held at the write barrier would wait out the watchdog.
+            && !(act === "delete-stash-row" && AppBackend.autoActArg !== "go")
     }
 
     function defersCompletion(act) {
@@ -70,13 +73,17 @@ QtObject {
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 "nav-branch-box", "nav-rename-box", "nav-tag-box",
+                // All five end in the rail sampler; without this the render barrier is a second
+                // completion owner and photographs the pane before the fold has landed.
+                "diff-fold", "diff-unfold", "diff-fold-by-hand", "diff-fold-by-rename",
+                "diff-keep-folded",
                 // The write barrier is behind this one: the row it makes is put in the sidebar by the read that
                 // follows the write, and the write answers first.
                 "create-tag",
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
                 // there — so the barrier is behind the wait rather than in front of it.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
-                "nav-add-remote", "push-default", "remote-menu", "remote-url",
+                "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
                 // The bar is what these wait for, and it comes down after the write's own answer.
@@ -93,6 +100,9 @@ QtObject {
                 // Stops at its question, so the ask bar settling is the completion — a write
                 // never comes (the write half is "-go", which stays a write act above).
                 "rename-remote", "set-upstream",
+                // A write does come, but the subject is the question its answer raises,
+                // so the bar settling is the completion (the bar takes 200ms to come down).
+                "rename-local-upstream",
                 // The write barrier is behind this one: the question is answered from the timer, not before it.
                 "set-upstream-go",
                 "move-ask", "ask-sweep", "switch-conflicted", "switch-held", "switch-mark",
@@ -101,7 +111,7 @@ QtObject {
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
-                "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
+                "ref-list", "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
@@ -123,6 +133,7 @@ QtObject {
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
+                "avatar-rest", "avatar-hover",
                 "find", "find-next", "find-prev", "find-drop",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page must never photograph their intermediate state before the

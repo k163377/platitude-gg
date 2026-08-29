@@ -43,12 +43,18 @@ Item {
                    || act === "avatar-assign" || act === "avatar-badge") {
             // The first ordinary commit — row 0 is WIP.
             page.activateRow(graphModel.oidAt(1))
-            if (act === "avatar-hover" || act === "avatar-assign")
+            if (act === "avatar-assign") {
                 detailsPane.avatarPointedAt = true
-            if (act === "avatar-assign")
                 avatarAssignTimer.start()
-            if (act === "avatar-badge")
+            } else if (act === "avatar-badge") {
                 avatarBadgeTimer.start()
+            } else {
+                // The picture is of the details pane, which arrives a git
+                // subprocess later — the same wait avatar-badge takes; a
+                // shot at the ask frames a loading pane.
+                avatarShownTimer.hovers = act === "avatar-hover"
+                avatarShownTimer.start()
+            }
         } else if (act === "avatar-settings" || act === "avatar-combo"
                    || act === "avatar-row-lit" || act === "avatar-remove") {
             // Each run starts with an empty store, so a picture to look at has to be filed first — the argument is the
@@ -114,6 +120,20 @@ Item {
             return false
         }
         return true
+    }
+    // The details pane the resting/hovered face sits in, waited to settle before the shot; the hover mark
+    // goes on once the face it marks is there.
+    SampleTimer {
+        id: avatarShownTimer
+        property bool hovers: false
+        onTriggered: {
+            if (!driver.cardSettled)
+                return
+            avatarShownTimer.stop()
+            if (avatarShownTimer.hovers)
+                detailsPane.avatarPointedAt = true
+            renderedBarrier.begin()
+        }
     }
     // Automation: the details have to land before the author card can be worked, since it is that author the picture is
     // filed against.

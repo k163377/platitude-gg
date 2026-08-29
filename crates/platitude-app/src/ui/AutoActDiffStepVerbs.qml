@@ -165,9 +165,10 @@ Item {
             }
             // A row is named by walking the list's own items, and the list builds them a frame after the model hands
             // the rows over: read too early it names nothing, which is not the same as there being nothing
-            // (`keep-place` learned it too). So an empty answer is waited on — but not for ever, since a fixture with
-            // fewer changed lines than this asks for is the run's own fault and has to show as one rather than as a
-            // watchdog.
+            // (`keep-place` learned it too). So an empty answer is waited on — but not for ever. **The 5s cut-off is
+            // a deliberate exception to the no-fixed-time rule** (app-ui.md §UI 自動化の因果性): it never passes a run
+            // as green — the report says `staged=n want=m` and the judge fails the shortfall — it only converts "the
+            // fixture has fewer changed lines than the run asks for" from a silent watchdog into a diagnosable line.
             const line = diffPane.firstChangedLine(0)
             if (line < 0) {
                 lineRunTimer.waited += lineRunTimer.interval

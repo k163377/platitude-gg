@@ -121,11 +121,13 @@ Item {
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
     ///
     /// A write answers before the rebuild it asks for is even started (core's `AfterWrite::Graph`), so a shot taken at
-    /// the write barrier is a shot of the graph as it was. That is how two rows wearing the wrong mark went out under
-    /// green runs: a stash popped off the top left its archive box on the working-tree row, and a stash just made wore
-    /// the working tree's dashed ring (2026-08-21 ユーザー報告). Waiting on the row itself — gone from the model —
-    /// rather than on a pass counter keeps the wait about this write: the counter also moves for passes nobody here
-    /// asked for.
+    /// the write barrier is a shot of the graph as it was — two rows can wear each other's marks in it (a popped
+    /// stash's archive box on the working-tree row, the dashed ring on the entry just made). Waiting on the row itself
+    /// — gone from the model — rather than on a pass counter keeps the wait about this write: the counter also moves
+    /// for passes nobody here asked for.
+    ///
+    /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
+    /// that set this would wait out the watchdog. Widen the barrier before pointing a new verb at it.
     property string graphGoneOid: ""
     /// How many entries the stash list held before that write. The list is read after the rebuild rather than with it,
     /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
@@ -200,6 +202,21 @@ Item {
     function complete() {
         page.Window.window.finishAutoAct()
     }
+
+    /// Holds the write barrier for a verb whose press goes in from a
+    /// sampler, tick(s) after the dispatch: the fetch a repository does on
+    /// the way open moves `writeSeq` on its own, so a barrier armed with
+    /// the dispatch-time sequence can pass — and photograph — before
+    /// anything was pressed. Until [`pressedWrite`] re-arms it, no
+    /// sequence reads past this.
+    function expectWriteAtPress() {
+        driver.writeSeqBefore = Number.MAX_SAFE_INTEGER
+    }
+    /// The press went in (call it right after the successful press: the
+    /// answer that moves `writeSeq` cannot land inside the same tick).
+    function pressedWrite() {
+        driver.writeSeqBefore = repoTab.writeSeq
+    }
     /// Past the end of any line these fixtures carry: `hit_byte` clamps, so a drag that means "to the end of the row"
     /// can say so without measuring the row.
     readonly property int pastLineEnd: 9999
@@ -214,8 +231,9 @@ Item {
         }
     }
     readonly property alias barrierRendered: renderedBarrier
-    // A write has two separate causal edges. `busyCount` proves the process was actually admitted, and `writeSeq`
-    // proves its answer was absorbed. Both must precede the final rendered state.
+    // `writeSeq` moving past the armed sequence proves the write's answer was absorbed; `busyCount === 0` is the
+    // quiet condition on top — nothing else this run started is still in flight. (Waiting for busy to *rise* would
+    // wedge: the answer can be absorbed before this sampler ever sees the flag up.)
     SampleTimer {
         id: writeBarrier
         onTriggered: {
@@ -293,7 +311,6 @@ Item {
             driver.afterTreeSettled()
         }
     }
-    readonly property alias barrierTree: treeBarrier
     // The rebuild that follows a write, read off the graph rather than off the clock: the row the write took away is
     // still in the model until the rebuilt one lands, so its absence is the edge — and the marks the rows wear are
     // only right once that has happened (see `graphGoneOid`).
@@ -315,7 +332,6 @@ Item {
                 renderedBarrier.begin()
         }
     }
-    readonly property alias barrierGraph: graphBarrier
     // Where the press left the reader, once the graph the row went out of has settled. The selection is the whole
     // subject, so it is waited for on the far side of the rebuild and read the way the reader would: the pane that was
     // describing the working tree is gone, the commit under it is the one the branch points at, the details pane is
@@ -413,7 +429,7 @@ Item {
         driver.prepareCompletion(act)
         // First family to know the verb runs it — the same first match the one chain had, and no verb is
         // named by two of them.
-        void (
+        const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)
             || navVerbs.run(act, arg)
@@ -428,7 +444,15 @@ Item {
             || detailsVerbs.run(act, arg)
             || historyVerbs.run(act, arg)
             || findVerbs.run(act, arg)
-            || diffVerbs.run(act, arg))
+            || diffVerbs.run(act, arg)
+        if (!known && !driver.completionDeferred && !driver.writeExpected) {
+            // Not a page verb, and not in the completion ledger either —
+            // window verbs are (they defer to Main's own driver), so this
+            // is a misspelling. It must not pass as a green run of the
+            // plain screen: say so and leave the run to the watchdog.
+            AppBackend.report("auto_act unknown=" + act)
+            return
+        }
         AppBackend.report("auto_act ran=" + act)
         // The file-row acts have not acted yet — they are waiting on their rows (`fileRowsTimer`),
         // and finishing here would photograph the scene before the menu is up. Their sampler

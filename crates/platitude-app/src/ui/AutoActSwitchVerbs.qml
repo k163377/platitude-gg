@@ -97,11 +97,13 @@ Item {
             switchTwiceTimer.held = page.switchToRef("R", arg) === false
             switchTwiceTimer.start()
         } else if (act === "rename-local-upstream") {
-            // The question about carrying the name over comes back only when git says the local rename landed (so the
-            // shot is late).
+            // The question about carrying the name over comes back only when git says the local rename landed — the
+            // write's own answer is what raises the bar, so the completion is the bar settling, not the write barrier
+            // (a shot taken there catches a bar whose words are written and whose height is still nothing).
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
+            localUpstreamAskTimer.start()
         } else if (act === "set-upstream" || act === "set-upstream-go") {
             // `<branch>[:<name to answer with>]` — `:` cannot be in a ref name (`check-ref-format`), so it separates
             // the two without ambiguity. Without the second half the question stands as it opened, on whatever the
@@ -144,6 +146,19 @@ Item {
             // ordinary voice (規約 §git 用語のコード表記). `code=` being empty is part of the claim.
             AppBackend.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
+                              + " branch=" + workTree.branch)
+            driver.complete()
+        }
+    }
+    // The carry-the-upstream question, waited on the way every ask is: the bar has to have finished coming down
+    // before its words — or its height — mean anything.
+    SampleTimer {
+        id: localUpstreamAskTimer
+        onTriggered: {
+            if (!graphPane.askCard.settled)
+                return
+            localUpstreamAskTimer.stop()
+            AppBackend.report("rename_upstream_ask hold=" + graphPane.askHold
                               + " branch=" + workTree.branch)
             driver.complete()
         }

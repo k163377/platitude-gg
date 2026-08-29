@@ -35,15 +35,13 @@ Item {
             // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
             // property a real pointer writes (`GraphRowDelegate.pointerRowX`) and leaves every decision after that to
             // the row — **the point of the verb is the decision**, so reaching past it to `chipExpandRequested` (which
-            // is what `ref-list` does) would prove nothing about the boundary.
+            // is what `ref-list` does) would prove nothing about the boundary. The probe itself runs from the sampler:
+            // the delegate is born a layout after the model row, and an early miss must retry, not go silent.
             const parts = arg.split(":")
-            const probed = graphPane.view.itemAtIndex(Number(parts[0]))
-            if (probed) {
-                rowPartReport.want = parts[2]
-                rowPartReport.x = Number(parts[1])
-                probed.pointerRowX = rowPartReport.x
-                rowPartTimer.start()
-            }
+            rowPartReport.row = Number(parts[0])
+            rowPartReport.want = parts[2]
+            rowPartReport.x = Number(parts[1])
+            rowPartTimer.start()
         } else if (act === "graph-reclick-lanes") {
             // The argument is the row the presses land on.
             laneClickTimer.row = Number(arg === "" ? "0" : arg)
@@ -60,6 +58,10 @@ Item {
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
+            if (act === "graph-rename")
+                // The submit is ticks away; the barrier must not pass on a
+                // fetch that answered in between (`expectWriteAtPress`).
+                driver.expectWriteAtPress()
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The argument
@@ -69,22 +71,17 @@ Item {
             reclickListTimer.card = listParts.length > 1 ? Number(listParts[1]) : 0
             reclickListTimer.picks = act === "ref-list-pick"
             reclickListTimer.across = act === "graph-reclick-across"
+            if (reclickListTimer.picks)
+                driver.expectWriteAtPress()
             reclickListTimer.start()
         } else if (act === "ref-list" || act === "ref-list-card") {
-            // Hover cannot be injected, so this enters where the hover timer would. `-card` walks row → card → chip →
-            // asked again from under the list: both card closes have to hold, and either failing leaves `open=true`.
-            const stacked = graphPane.view.itemAtIndex(Number(arg))
-            if (stacked) {
-                if (act === "ref-list-card")
-                    graphPane.view.rowHoverRequested(stacked, true)
-                graphPane.view.chipExpandRequested(
-                    stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
-                if (act === "ref-list-card") {
-                    graphPane.view.rowHoverRequested(stacked, true)
-                    rowCardTimer.row = Number(arg)
-                    rowCardTimer.start()
-                }
-            }
+            // Hover cannot be injected, so this enters where the hover timer would — from the sampler, because the
+            // row's delegate is born a layout after the model row and an early miss must retry, not pass on the
+            // plain screen. `-card` walks row → card → chip → asked again from under the list: both card closes have
+            // to hold, and either failing leaves `open=true`.
+            refListOpenTimer.row = Number(arg)
+            refListOpenTimer.cards = act === "ref-list-card"
+            refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
             // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
             // row 1, not row 0**: the presets it runs on carry a dirty working tree, whose row stands at the top and
@@ -113,6 +110,41 @@ Item {
             return false
         }
         return true
+    }
+    // The chip expansion, entered once the row's delegate exists. The bare verb then ends on the opened
+    // list; `-card` hands over to `rowCardTimer`, which owns its report.
+    SampleTimer {
+        id: refListOpenTimer
+        property int row: 0
+        property bool cards: false
+        onTriggered: {
+            const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
+            if (!stacked)
+                return
+            refListOpenTimer.stop()
+            if (refListOpenTimer.cards)
+                graphPane.view.rowHoverRequested(stacked, true)
+            graphPane.view.chipExpandRequested(
+                stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
+            if (refListOpenTimer.cards) {
+                graphPane.view.rowHoverRequested(stacked, true)
+                rowCardTimer.row = refListOpenTimer.row
+                rowCardTimer.start()
+            } else {
+                refListShownTimer.start()
+            }
+        }
+    }
+    // The bare verb's own end: the list is up. Waited on `opened` — an unopened popup frames as the
+    // plain screen, which is exactly the miss this family retries against.
+    SampleTimer {
+        id: refListShownTimer
+        onTriggered: {
+            if (!refList.opened)
+                return
+            refListShownTimer.stop()
+            renderedBarrier.begin()
+        }
     }
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
     SampleTimer {
@@ -176,8 +208,10 @@ Item {
     // answer is which of the two cards came out of it.
     QtObject {
         id: rowPartReport
+        property int row: 0
         property string want: ""
         property real x: 0
+        property bool probed: false
     }
     // Waits for either card rather than for the one that was expected: a boundary that moved opens the other one, and
     // waiting for the right answer would spend the whole watchdog finding that out. The rest is a real `tipDelayMs`,
@@ -185,6 +219,14 @@ Item {
     SampleTimer {
         id: rowPartTimer
         onTriggered: {
+            if (!rowPartReport.probed) {
+                const item = graphPane.view.itemAtIndex(rowPartReport.row)
+                if (!item)
+                    return
+                item.pointerRowX = rowPartReport.x
+                rowPartReport.probed = true
+                return
+            }
             if (!refList.opened && !rowCard.opened)
                 return
             rowPartTimer.stop()
@@ -304,6 +346,7 @@ Item {
                 // Through to git, by the path the field's own Enter takes. The write barrier finishes this one.
                 graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
                                                reclickGraphTimer.name, graphPane.namingMode)
+                driver.pressedWrite()
             }
         }
     }
@@ -384,6 +427,7 @@ Item {
                 if (reclickListTimer.picks) {
                     if (!refList.doubleClickRow(reclickListTimer.card))
                         return
+                    driver.pressedWrite()
                     reclickListTimer.stop()
                     AppBackend.report("ref_list_pick row=" + reclickListTimer.row
                                       + " card=" + reclickListTimer.card

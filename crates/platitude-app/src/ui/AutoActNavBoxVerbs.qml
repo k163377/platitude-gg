@@ -87,7 +87,7 @@ Item {
             // and a box that took the name frames the same as one that would not. `was=` is the name it is being
             // weighed against, so a run that opened the box on the wrong row says so instead of passing.
             sidebarPane.beginRename("tag", tagsModel.nameAt(0), arg)
-            AppBackend.report("name_box was=" + tagsModel.nameAt(0)
+            AppBackend.report("tag_name_box was=" + tagsModel.nameAt(0)
                               + " typed=" + arg
                               + " refused=" + sidebarPane.editRefused
                               + " why=" + sidebarPane.editRefusedWhy)
@@ -108,7 +108,10 @@ Item {
                                     act === "rename-remote-box" ? parts[1] : was)
             if (act === "rename-remote-box") {
                 renderedBarrier.begin()
-                return
+                // A known verb answers true even on its early way out —
+                // falsy would send the dispatch on asking every other
+                // family about it.
+                return true
             }
             sidebarPane.submitEdit(parts[1])
             if (act === "rename-remote-go")

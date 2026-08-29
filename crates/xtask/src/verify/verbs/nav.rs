@@ -29,9 +29,9 @@ pub(super) const TABLE: &[Verb] = &[
         name: "rename-tag-box",
         when: &[(
             Arg::Is("v1.0"),
-            "name_box was=v0.3-local typed=v1.0 refused=false why=",
+            "tag_name_box was=v0.3-local typed=v1.0 refused=false why=",
         )],
-        plain: "name_box was=v0.3-local typed=V0.3-LOCAL refused=true \
+        plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL refused=true \
                 why=Only the letter case differs — on this disk that deletes both names",
     },
     // The row taken away before git answered for it, held open for

@@ -139,7 +139,7 @@ Item {
             if (other)
                 wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
             AppBackend.report("chosen count=" + wipPane.chosenCount)
-            page.openFileMenu(other ? other.bucket : "unstaged", arg, "")
+            page.openFileMenu(other ? other.bucket : "unstaged", arg)
             AppBackend.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
@@ -150,7 +150,7 @@ Item {
             const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"
                              : act === "file-menu-conflict" ? "conflicts" : "untracked"
             wipPane.chooseOnly(menuBucket, arg)
-            page.openFileMenu(menuBucket, arg, "")
+            page.openFileMenu(menuBucket, arg)
             if (menuBucket === "conflicts") {
                 const row = wipPane.rowFor(arg)
                 AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
@@ -159,7 +159,7 @@ Item {
             }
         } else if (act === "take-side-ours" || act === "take-side-theirs") {
             wipPane.chooseOnly("conflicts", arg)
-            page.openFileMenu("conflicts", arg, "")
+            page.openFileMenu("conflicts", arg)
             fileMenu.close()
             // Read before the press, for the reason the merge editor below gives: a row that is not conflicted takes
             // no side, and a barrier armed anyway waits on a bucket this run never wrote to.
@@ -171,7 +171,7 @@ Item {
             // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
             // wait on screen.
             wipPane.chooseOnly("conflicts", arg)
-            page.openFileMenu("conflicts", arg, "")
+            page.openFileMenu("conflicts", arg)
             fileMenu.close()
             // The name comes from config and the paths from the choice, so the name alone cannot say whether
             // anything was handed over. A file that is already resolved — a fixture a previous run consumed —

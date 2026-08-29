@@ -76,7 +76,9 @@ Item {
             if (wtPath === "") {
                 AppBackend.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
-                return
+                // A known verb answers true even on this early way out —
+                // falsy would read as "not mine" to the dispatch chain.
+                return true
             }
             page.toggleDiff(named ? head : "unstaged", wtPath,
                             worktreeModel.origOf(wtPath))
