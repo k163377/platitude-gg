@@ -121,6 +121,18 @@ pub struct AppBackend {
     auto_fetch_minutes: i32,
     /// Ceiling the settings input enforces.
     auto_fetch_max: i32,
+    /// Commits a graph opens with; 0 is the whole history, which the
+    /// screen asks for with a box rather than a number. Application-wide
+    /// for the same reason the interval is: the answer is about how much
+    /// history this person reads at once.
+    initial_commits: i32,
+    /// Floor the settings input enforces. There is no ceiling of ours —
+    /// the property's own type is the only one (`session::log_limit`).
+    initial_commits_min: i32,
+    /// What an empty input falls back to, and what the input shows behind
+    /// a reader who has not typed one. Held rather than spelled out in
+    /// QML: the number is core's (`session::DEFAULT_LOG_LIMIT`).
+    initial_commits_default: i32,
     /// Assigned pictures, packed one per record: address, name, URL.
     /// The settings list is the only reader, and it is a handful of rows.
     avatars: String,

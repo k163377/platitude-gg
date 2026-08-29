@@ -79,6 +79,17 @@ impl AppBackend {
         Notify = settings_changed
     );
     qproperty!("autoFetchMaxMinutes", Member = auto_fetch_max, Constant);
+    qproperty!(
+        "initialCommits",
+        Member = initial_commits,
+        Notify = settings_changed
+    );
+    qproperty!("initialCommitsMin", Member = initial_commits_min, Constant);
+    qproperty!(
+        "initialCommitsDefault",
+        Member = initial_commits_default,
+        Constant
+    );
     qproperty!("avatars", Member = avatars, Notify = avatars_changed);
     qproperty!(
         "avatarError",
@@ -174,6 +185,30 @@ impl AppBackend {
         }
         self.auto_fetch_minutes = minutes;
         Hub::with(|hub| hub.set_auto_fetch_minutes(asked));
+        self.settings_changed();
+    }
+
+    /// Sets how much history every graph opens with. Zero is the whole of
+    /// it: the screen's own box rather than a number anyone types.
+    ///
+    /// The floor is core's to apply (`session::log_limit`) — the field
+    /// this writes is the one a hand-written `settings.toml` writes, so a
+    /// floor spelled out here as well would be a second answer to the
+    /// same question.
+    #[qslot]
+    fn set_initial_commits(&mut self, commits: i32) {
+        let asked = match commits.max(0).unsigned_abs() {
+            0 => None,
+            count => Some(platitude_core::session::log_limit(count)),
+        };
+        // Saturating rather than wrapping: `settings.toml` can hold a
+        // count no `i32` can, and the property is what the screen shows.
+        let commits = asked.map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX));
+        if self.initial_commits == commits {
+            return;
+        }
+        self.initial_commits = commits;
+        Hub::with(|hub| hub.set_initial_commits(asked));
         self.settings_changed();
     }
 

@@ -89,6 +89,11 @@ impl Default for AppBackend {
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
+            initial_commits: Hub::with(|hub| hub.settings().defaults.initial_commits)
+                .unwrap_or(Some(platitude_core::session::DEFAULT_LOG_LIMIT))
+                .map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX)),
+            initial_commits_min: platitude_core::session::MIN_LOG_LIMIT as i32,
+            initial_commits_default: platitude_core::session::DEFAULT_LOG_LIMIT as i32,
             avatars: packed_avatars(),
             avatar_error: String::new(),
             avatar_patterns: platitude_core::avatar::EXTENSIONS

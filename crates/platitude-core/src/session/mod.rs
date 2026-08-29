@@ -145,12 +145,45 @@ pub fn auto_fetch_minutes(minutes: u32) -> u32 {
 /// cut, and offers the next step of history, when the cap is hit.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 
+/// Fewest commits a graph can be told to open with (2026-08-30 ユーザー判断).
+///
+/// Below this the window stops being one worth having: the step a press
+/// adds is a quarter of it ([`log_window_step`]), so a floor any lower
+/// buys a graph that has to be pressed before it says anything.
+pub const MIN_LOG_LIMIT: u32 = 500;
+
+/// The window that will actually open, for a number a person asked for.
+/// Below the floor, the floor is what a smaller number means — nearer to
+/// what was asked for than the default is.
+///
+/// The one place the floor is applied, for the reason
+/// [`auto_fetch_minutes`] is the one place its ceiling is: the settings
+/// screen and a hand-written `settings.toml` write the same field, so
+/// anything either door decided on its own would be a difference nothing
+/// on screen would show.
+///
+/// **There is no ceiling — the type is the ceiling** (2026-08-30
+/// ユーザー判断). What a wider window costs is the walk, and the walk is
+/// nearly flat in the count (実測 `JetBrains/kotlin`, 138,915 commits /
+/// 46,373 tags, warm: 2,000 commits 623–658ms, 20,000 800–826ms, all of
+/// it 1,445–1,479ms), so a number typed on purpose is one this can
+/// afford to answer. Asking for no window at all is `None` rather than a
+/// large number, and does not come through here.
+#[must_use]
+pub const fn log_limit(limit: u32) -> u32 {
+    if limit < MIN_LOG_LIMIT {
+        MIN_LOG_LIMIT
+    } else {
+        limit
+    }
+}
+
 /// What one press of the graph's tail adds, for a window that opened at
 /// `initial` commits: a quarter of it.
 ///
 /// **A fraction of the initial window rather than a number of its own**
-/// (2026-08-29 ユーザー判断) — the initial count is to become a setting,
-/// and the step is meant to move with it.
+/// (2026-08-29 ユーザー判断) — the initial count is a setting
+/// (`settings::Defaults::initial_commits`), and the step moves with it.
 ///
 /// A quarter is a smaller share than the clients that page their graph
 /// take (GitLens 200 of 500, VS Code Git Graph 100 of 300), and it can

@@ -176,6 +176,7 @@ impl Hub {
             tab = id,
             auto_fetch_minutes = applied.auto_fetch_minutes,
             network_timeout_secs = applied.network_timeout_secs,
+            initial_commits = applied.initial_commits.unwrap_or(0),
             "opened repository tab"
         );
     }
@@ -327,4 +328,9 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
 fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
+    // Restarts the walk when it changes something, and on the way in it
+    // changes nothing that has to be walked twice: a session this new has
+    // no workdir yet, so the restart returns without a pass and the
+    // opening's own `restart_log` is the one that reads this.
+    session.set_log_limit(applied.initial_commits);
 }

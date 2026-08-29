@@ -192,6 +192,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.defaults.auto_fetch_minutes = 5;
         settings.defaults.network_timeout_secs = 300;
+        settings.defaults.initial_commits = Some(4000);
 
         let state = State {
             window: WindowState {
@@ -241,6 +242,7 @@ mod tests {
             defaults: Defaults {
                 auto_fetch_minutes: 5,
                 network_timeout_secs: 300,
+                initial_commits: Some(4000),
             },
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();

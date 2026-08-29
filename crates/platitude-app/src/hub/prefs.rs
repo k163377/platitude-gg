@@ -55,6 +55,20 @@ impl Hub {
         }
     }
 
+    /// Records how much history a graph opens with and puts it in force on
+    /// every open tab, which restarts each of their walks
+    /// (`RepoSession::set_log_limit`). `None` is the whole history.
+    ///
+    /// Takes a count that has already been through `session::log_limit`,
+    /// which is where the floor lives.
+    pub fn set_initial_commits(&mut self, commits: Option<u32>) {
+        self.settings.defaults.initial_commits = commits;
+        self.reapply_settings();
+        if let Err(error) = self.store.save_settings(&self.settings) {
+            tracing::warn!(%error, "settings not saved");
+        }
+    }
+
     // -- avatars ------------------------------------------------------------
 
     /// A `file:` URL for the picture assigned to an address, or empty —

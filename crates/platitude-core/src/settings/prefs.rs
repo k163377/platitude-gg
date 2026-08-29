@@ -3,21 +3,28 @@
 use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
-use super::toml::{clamp_to_i64, minutes, sub_table, timeout_secs};
+use super::toml::{clamp_to_i64, initial_commits, minutes, sub_table, timeout_secs};
 
-/// The values that decide how the application talks to remotes, read from
-/// and written back to the `[defaults]` table this is named after.
+/// The values a person decided once and every repository is opened with,
+/// read from and written back to the `[defaults]` table this is named
+/// after.
 ///
 /// **One set, for every repository.** How often this computer reaches the
-/// network, and how long it waits when it does, are answers about the
-/// machine and the line it is on rather than about whichever repository is
-/// in front. A person who wants to be left alone turns the interval off,
-/// and that is the whole of the vocabulary — there is no way to say it
-/// about one repository and not another.
+/// network, how long it waits when it does, and how much history a graph
+/// opens with are answers about the machine and the person at it rather
+/// than about whichever repository is in front. A person who wants to be
+/// left alone turns the interval off, and that is the whole of the
+/// vocabulary — there is no way to say it about one repository and not
+/// another.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Defaults {
     pub auto_fetch_minutes: u32,
     pub network_timeout_secs: u64,
+    /// Commits the graph opens with, `None` for the whole history —
+    /// the same vocabulary [`crate::session::LogOptions::limit`] speaks,
+    /// because this is what is written into it on open
+    /// (`RepoSession::set_log_limit`).
+    pub initial_commits: Option<u32>,
 }
 
 impl Default for Defaults {
@@ -25,6 +32,7 @@ impl Default for Defaults {
         Self {
             auto_fetch_minutes: crate::session::AUTO_FETCH_DEFAULT_MINUTES,
             network_timeout_secs: crate::remote::DEFAULT_NETWORK_TIMEOUT.as_secs(),
+            initial_commits: Some(crate::session::DEFAULT_LOG_LIMIT),
         }
     }
 }
@@ -55,6 +63,8 @@ impl Settings {
                     .unwrap_or(fallback.auto_fetch_minutes),
                 network_timeout_secs: timeout_secs(t, "network_timeout_secs")
                     .unwrap_or(fallback.network_timeout_secs),
+                initial_commits: initial_commits(t, "initial_commits")
+                    .unwrap_or(fallback.initial_commits),
             },
             None => fallback,
         };
@@ -78,6 +88,13 @@ impl Settings {
         defaults.insert(
             "network_timeout_secs".into(),
             Value::Integer(clamp_to_i64(self.defaults.network_timeout_secs)),
+        );
+        // The whole history is written as `0`, the one count no window
+        // could mean: a key left out would read as the default instead,
+        // which is the opposite answer.
+        defaults.insert(
+            "initial_commits".into(),
+            Value::Integer(self.defaults.initial_commits.map_or(0, i64::from)),
         );
         root.insert("defaults".into(), Value::Table(defaults));
 
@@ -161,6 +178,64 @@ network_timeout_secs = 9
         assert_eq!(
             settings.defaults.auto_fetch_minutes,
             Defaults::default().auto_fetch_minutes
+        );
+    }
+
+    fn commits_from(text: &str) -> Option<u32> {
+        Settings::from_table(&text.parse::<Table>().expect("parse"))
+            .defaults
+            .initial_commits
+    }
+
+    /// The whole history and "nobody said" are different answers, and `0`
+    /// is what tells them apart in the file. Pinned because collapsing the
+    /// two is silent: a reader who asked for all of it would come back to
+    /// the default window and see a cut they had turned off.
+    #[test]
+    fn the_whole_history_is_zero_in_the_file_and_survives_a_round_trip() {
+        assert_eq!(commits_from("[defaults]\ninitial_commits = 0\n"), None);
+
+        let settings = Settings {
+            defaults: Defaults {
+                initial_commits: None,
+                ..Defaults::default()
+            },
+            ..Settings::default()
+        };
+        let written = settings.to_table();
+        assert_eq!(Settings::from_table(&written), settings, "{written}");
+    }
+
+    /// A window smaller than the floor means the floor, whichever door it
+    /// arrived through — the settings screen cannot offer one, so a file
+    /// written by hand is the only door there is.
+    #[test]
+    fn a_count_under_the_floor_is_the_floor() {
+        assert_eq!(
+            commits_from("[defaults]\ninitial_commits = 1\n"),
+            Some(crate::session::MIN_LOG_LIMIT)
+        );
+    }
+
+    /// And past `u32` is the largest count there is rather than the
+    /// default: the reader asked for as much history as could be had.
+    #[test]
+    fn a_count_past_u32_is_the_largest_there_is() {
+        let text = format!("[defaults]\ninitial_commits = {}\n", i64::MAX);
+        assert_eq!(commits_from(&text), Some(u32::MAX));
+    }
+
+    /// A number that is not a count at all falls back on its own, so one
+    /// mistyped key costs only itself.
+    #[test]
+    fn a_negative_count_falls_back_to_the_default() {
+        assert_eq!(
+            commits_from("[defaults]\ninitial_commits = -1\n"),
+            Defaults::default().initial_commits
+        );
+        assert_eq!(
+            commits_from("[defaults]\ninitial_commits = \"lots\"\n"),
+            Defaults::default().initial_commits
         );
     }
 }

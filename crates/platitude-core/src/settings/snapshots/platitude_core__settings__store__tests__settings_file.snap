@@ -11,4 +11,5 @@ name = "Ada Lovelace"
 
 [defaults]
 auto_fetch_minutes = 5
+initial_commits = 4000
 network_timeout_secs = 300

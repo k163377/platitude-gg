@@ -158,6 +158,30 @@ pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
         .map(crate::session::auto_fetch_minutes)
 }
 
+/// The commits a graph opens with: `0` is the whole history, and anything
+/// else is at least the floor `session::log_limit` puts under it.
+///
+/// **Two layers of `Option` because two different things are missing.**
+/// The outer one is this file's usual "the key said nothing usable", which
+/// sends the value to its default; the inner one is an answer — the reader
+/// who wants no window at all. Flattening them would make a hand-written
+/// `initial_commits = 0` mean 2,000.
+pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
+    table
+        .get(key)
+        .and_then(Value::as_integer)
+        .filter(|v| *v >= 0)
+        .map(|v| match u32::try_from(v) {
+            Ok(0) => None,
+            Ok(count) => Some(crate::session::log_limit(count)),
+            // Saturating past `u32` rather than failing, like `minutes`:
+            // a number that large is still a count of commits, and the
+            // largest one there is is nearer to what it asked for than
+            // the default is.
+            Err(_) => Some(u32::MAX),
+        })
+}
+
 pub(super) fn timeout_secs(table: &Table, key: &str) -> Option<u64> {
     table
         .get(key)

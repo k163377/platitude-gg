@@ -136,6 +136,8 @@ AppDialog {
 
     onOpened: {
         fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
+        wholeHistoryBox.checked = AppBackend.initialCommits === 0
+        commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
         gitPane.loadIdentity()
         gitPane.loadTool()
         // Headless has no pointer to put on a row's Remove, and the lit
@@ -180,10 +182,20 @@ AppDialog {
     function applyFetch() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
     }
+    // Two controls, one value: the box asks for no window at all (core's `0`), and the field answers only while the
+    // box is clear. Written from here for the same reason the interval is — a validator with a floor calls an empty
+    // string unacceptable, so `onEditingFinished` never fires for one, and an emptied field would otherwise never be
+    // written back. Empty is the default rather than a third meaning; the placeholder is that number.
+    function applyCommits() {
+        AppBackend.setInitialCommits(wholeHistoryBox.checked ? 0
+                                     : commitsField.text === "" ? AppBackend.initialCommitsDefault
+                                     : Number(commitsField.text))
+    }
     // Only the way out writes both: the two categories have separate owners, and a field finished with in one of them
     // has no business queueing a `git config` for the other.
     function applyFields() {
         settingsDialog.applyFetch()
+        settingsDialog.applyCommits()
         gitPane.applyTool()
     }
 
@@ -304,6 +316,57 @@ AppDialog {
                         font.pixelSize: Theme.fontSm
                         text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Empty means off; %1 minutes is the longest interval.")
                               .arg(AppBackend.autoFetchMaxMinutes)
+                    }
+                }
+
+                SettingsSection {
+                    visible: settingsDialog.category === "app"
+                    caption: qsTr("COMMIT GRAPH")
+                    LabeledField {
+                        caption: qsTr("Initial commits")
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.spaceSm
+                            FormField {
+                                id: commitsField
+                                implicitWidth: 160
+                                // The number does not apply while the whole history is asked for, and §無効 is how
+                                // that is said. The text stays put, so unchecking gives the reader their own number
+                                // back rather than a blank.
+                                enabled: !wholeHistoryBox.checked
+                                // What an empty field will be read as, shown rather than explained.
+                                placeholderText: String(AppBackend.initialCommitsDefault)
+                                inputMethodHints: Qt.ImhDigitsOnly
+                                // No `top`: the ceiling is the property's own type (`session::log_limit`), so a
+                                // number a person typed on purpose is one the walk answers.
+                                validator: IntValidator {
+                                    bottom: AppBackend.initialCommitsMin
+                                }
+                                onEditingFinished: settingsDialog.applyCommits()
+                                onAccepted: settingsDialog.close()
+                            }
+                            Label {
+                                text: qsTr("commits")
+                                color: commitsField.enabled ? Theme.textSecondary : Theme.textMuted
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                    }
+                    // The other answer a count of commits can have, and it is not a number — so it is not spelled as
+                    // one. An empty field would have had to carry it, and an empty field already means "the default"
+                    // in the box right above (規約 §設定の画面).
+                    AppCheckBox {
+                        id: wholeHistoryBox
+                        text: qsTr("Load the whole history")
+                        onToggled: settingsDialog.applyCommits()
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSm
+                        text: qsTr("How much history a graph opens with. The rest is loaded from the row at the bottom of it, a quarter of this at a time — with the whole history there is no such row. %1 is the smallest window.")
+                              .arg(AppBackend.initialCommitsMin)
                     }
                 }
 

@@ -579,7 +579,11 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
         "the default window's own quarter"
     );
 
-    // The door a setting for the initial count will come through.
+    // The door the setting for the initial count comes through
+    // (`settings::Defaults::initial_commits`). Under the floor the
+    // settings screen offers, because the floor is applied on the way in
+    // rather than here — what this pins is that the step follows whatever
+    // number arrives.
     session.set_log_limit(Some(400));
     assert_eq!(session.log_window_step(), 100);
 

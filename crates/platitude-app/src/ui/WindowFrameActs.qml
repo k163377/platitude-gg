@@ -225,6 +225,7 @@ Item {
                     window.curPage.setDetailsWidth(520)
                     window.curPage.setGraphColumns(190, 300)
                     AppBackend.setAutoFetchMinutes(7)
+                    AppBackend.setInitialCommits(3000)
                 }
                 if (AppBackend.autoActArg === "minimize")
                     window.visibility = Window.Maximized
@@ -274,7 +275,8 @@ Item {
                 + " windowW=" + AppBackend.startWindowWidth()
                 + " windowH=" + AppBackend.startWindowHeight()
                 + " windowMax=" + AppBackend.startWindowMaximized()
-                + " autoFetch=" + AppBackend.autoFetchMinutes)
+                + " autoFetch=" + AppBackend.autoFetchMinutes
+                + " initialCommits=" + AppBackend.initialCommits)
             // Back up for the shot: `grabToImage` has nothing to hand back from a window that is down. Windowed rather
             // than maximised, so the picture is the size every other verb's is — the offscreen platform maximises to
             // its own 800x800 screen, and a shot that shape is a shot of the harness.
