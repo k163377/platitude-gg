@@ -43,6 +43,9 @@ AppCard {
     property bool conflictShown: false
     property bool identityShown: false
     property bool oldGitShown: false
+    property bool partialShown: false
+    /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
+    property string partialWhy: ""
 
     /// The one row that is also a way somewhere. The badge it replaced was pressable, and folding the band must not
     /// cost the way back to the setup screen after "Not now" (規約 §identity).
@@ -54,7 +57,8 @@ AppCard {
     readonly property real badgeRun: Math.max(stateCard.opShown ? opBadge.implicitWidth : 0,
                                                stateCard.conflictShown ? conflictBadge.implicitWidth : 0,
                                                stateCard.identityShown ? identityBadge.implicitWidth : 0,
-                                               stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
+                                               stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0,
+                                               stateCard.partialShown ? partialBadge.implicitWidth : 0)
 
     /// Automation: which rows the card actually laid out, in band order. Read off the rows themselves rather than off
     /// the flags above — asking for a row and getting one are different things, and only one of them is what the
@@ -69,6 +73,8 @@ AppCard {
             out.push("identity")
         if (oldGitRow.visible)
             out.push("old-git")
+        if (partialRow.visible)
+            out.push("partial")
         return out.join(",")
     }
 
@@ -261,6 +267,39 @@ AppCard {
             CardText {
                 text: qsTr("git %1 is older than the %2 this app is built for")
                           .arg(stateCard.gitVersion).arg(stateCard.minimumGit)
+                color: Theme.textSecondary
+                pixelSize: Theme.fontSm
+            }
+        }
+        // The walk gave up with rows already drawn. **What is missing is not known** — the walk stopped, so there is
+        // no count to give the way the window cut has one — and the line under it is whoever's words there are: git's
+        // where git failed, and none at all where the pass simply fell over.
+        RowLayout {
+            id: partialRow
+            visible: stateCard.partialShown
+            spacing: Theme.spaceSm
+            Rectangle {
+                id: partialBadge
+                color: "transparent"
+                border.color: Theme.danger
+                border.width: Theme.borderWidth
+                radius: Theme.radiusSm
+                implicitHeight: Theme.iconLg
+                implicitWidth: partialLabel.implicitWidth + 2 * Theme.spaceXs
+                Layout.preferredWidth: stateCard.badgeRun
+                Label {
+                    id: partialLabel
+                    anchors.centerIn: parent
+                    text: Words.badgePartial
+                    color: Theme.danger
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
+            }
+            CardText {
+                text: stateCard.partialWhy !== ""
+                      ? stateCard.partialWhy
+                      : qsTr("The graph stops where the history could not be read")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }

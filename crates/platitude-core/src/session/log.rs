@@ -80,8 +80,9 @@ impl Drop for PassWatch<'_> {
         let reported = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match told {
             Told::Stream(generation) => session.sink.event(SessionEvent::LogFailed {
                 generation: *generation,
-                // **No words**: nobody said anything, so the screen says
-                // it in its own language (`Words.graphStopped`,
+                // **No words**: nobody said anything, so what the screen
+                // shows is its own — the sentence behind the band's
+                // `PARTIAL HISTORY` badge (`BandStateCard`,
                 // app-ui.md「Rust に文言を置かない」).
                 error: String::new(),
             }),

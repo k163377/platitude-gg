@@ -30,16 +30,11 @@ Item {
         height: Theme.iconLg
         spinning: emptyState.graphModel.loading && emptyState.graphModel.rowTotal === 0
     }
-    // Why the column is empty, in the words of whoever could not fill it — git's, where git is what failed. **A walk
-    // that ended without an answer has none**, and that is what the second line is for: nobody said anything, so the
-    // screen says it (デザイン規約 §答えの要らない報せ「断ったのがこちら自身なら文もこちら」の同じ配り方).
-    NoticeLine {
-        anchors.centerIn: parent
-        visible: emptyState.graphModel.failed
-        text: emptyState.graphModel.error !== "" ? emptyState.graphModel.error : Words.graphStopped()
-        color: Theme.danger
-        width: parent.width - 2 * Theme.spaceXl
-    }
+    // **A walk that gave up is not said here.** It used to be — centred in a screen that fills the whole pane, which
+    // painted the sentence across the rows a part-finished walk had already drawn (2026-08-30 実測). It is one state,
+    // so it is said in one place: the band's `PARTIAL HISTORY` badge, with whatever was said about it in the card
+    // behind it (`BandStateGroup`, 2026-08-30 ユーザー判断). A badge is in view wherever the reader is standing, which
+    // is what the middle of a column that may be five hundred rows long is not.
     // A repository with no history yet. Told in the middle of the column that will hold it, not under the working-tree
     // row: the history has not stopped somewhere (the window cut's footer says that, where it stops) — there is none,
     // so the whole column is what the words are about. Nothing to do here that the app can do, so no button under

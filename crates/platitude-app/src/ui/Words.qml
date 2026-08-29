@@ -22,6 +22,10 @@ QtObject {
     readonly property string badgeConflicts: qsTr("CONFLICTS")
     readonly property string badgeSetIdentity: qsTr("SET IDENTITY")
     readonly property string badgeOldGit: qsTr("OLD GIT")
+    /// The walk gave up, so **what is drawn is not the history** — some of it, or none. Unlike the window cut nothing
+    /// says how much is missing, because the walk stopped rather than reached its end. **The only place this state is
+    /// said**: the graph column carries none of it (2026-08-30 ユーザー判断), and the words behind it are in the card.
+    readonly property string badgePartial: qsTr("PARTIAL HISTORY")
 
     /// The one way a commit's moment is written down: the rows carry epoch seconds, and the display side makes the
     /// `yyyy-MM-dd HH:mm` out of them (デザイン規約 — 行が持つのは epoch 秒). The commands panel's `HH:mm:ss` clock
@@ -111,13 +115,6 @@ QtObject {
     /// **Never nothing**: a press that was turned down says so in colour, whoever turned it down.
     function reportTone(kind) {
         return kind === "rename" || kind === "half-rename" ? "warning" : "danger"
-    }
-
-    /// Why the history column is empty when **nobody said why**: the walk ended without an answer, so there is no
-    /// git message to quote (`session::log::PassWatch`). Said the way the reports are — what did not happen, and no
-    /// guess at the cause, since this end does not have one.
-    function graphStopped() {
-        return qsTr("The history could not be read")
     }
 
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).
