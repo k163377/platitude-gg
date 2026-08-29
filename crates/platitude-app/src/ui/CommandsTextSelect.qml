@@ -17,7 +17,8 @@ import platitude.ui
 //
 // **Every place in the frame that nobody else takes is a start**, the ground a log shorter than its panel leaves under
 // the last row included (`rowAt`, 規約 §git が言ったことを読む場所). Nothing stands over these rows at all, so here that
-// is the whole of the rule.
+// is the whole of the rule — except at the right edge, where the list's own bar is drawn over them and this stops
+// short of it (`barRoom`, 2026-08-29 ユーザー報告 against the diff's hand, which had the same shape).
 //
 // Everything about *which byte* a press landed on is asked of the model: this knows which of the row's three columns
 // the pointer was over and how far along it, and only the model holds the line those columns are drawn from.
@@ -28,6 +29,9 @@ Item {
     required property var view
     /// Where the selection lives.
     required property var commandsModel
+    /// How much of the right edge belongs to the list's own scroll bar, which is where this frame ends
+    /// (`AppListView.barRoom`).
+    required property real barRoom
     /// One measured column of the mono font and what a wide glyph costs beyond its two — the same pair the wash is
     /// placed with, so the hit and the wash agree.
     required property real charW
@@ -38,7 +42,7 @@ Item {
 
     x: pick.view.x
     y: pick.view.y
-    width: pick.view.width
+    width: Math.max(0, pick.view.width - pick.barRoom)
     height: pick.view.height
 
     /// Which column a press landed in, as `CommandsModel` numbers them: the three the row draws, the two tabs between

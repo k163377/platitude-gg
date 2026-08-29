@@ -28,6 +28,15 @@ ListView {
         AutoScrollBar {}
     }
 
+    /// How much of this list's right edge its own bar is standing on, and nothing while the bar is not out.
+    /// **Whatever is laid over these rows takes its presses short of this.** The bar is drawn over the rows rather
+    /// than beside them, so anything covering the frame covers the bar too, and a press taken there is a bar that
+    /// cannot be grabbed at all: the graph's stand-in answered the trough with a jump to HEAD (2026-08-22 ユーザー報告),
+    /// and the two hands that pick text out of a list took the whole strip (2026-08-29 ユーザー報告). Read off the bar
+    /// rather than off a token — the width is the style's, and a guess leaves either a strip of trough taken or a
+    /// strip of nothing answered.
+    readonly property real barRoom: appList.ScrollBar.vertical.visible ? appList.ScrollBar.vertical.width : 0
+
     clip: true
     reuseItems: true
     // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).

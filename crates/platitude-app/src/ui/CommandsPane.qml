@@ -271,6 +271,7 @@ Rectangle {
         id: textPick
         view: list
         commandsModel: pane.commandsModel
+        barRoom: list.barRoom
         charW: pane.charW
         wideDelta: pane.wideDelta
         onScrollWanted: dy => list.contentY = list.clampY(list.contentY + dy)

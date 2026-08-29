@@ -242,6 +242,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_band_sweep all=true caret=true hand=true cut=true",
     },
+    // The other end of that same hand: the bar down the side of the
+    // list is drawn over the rows, so a hand laid over them covers it,
+    // and one that ran to the frame took every press on the trough —
+    // the bar could not be grabbed at all (2026-08-29 ユーザー報告).
+    // The picture cannot say any of it (a bar that answers nothing is
+    // drawn exactly like one that does), so all three are read here:
+    //
+    //  - `clear=true` — where the hand ends against where the bar
+    //    begins, read off the two items rather than off the rule that
+    //    places them. Taking the strip back out of `DiffTextSelect`
+    //    turns this false.
+    //  - `reach=true` — and the hand still answers at its own last
+    //    pixel, so the strip went to the bar rather than being eaten
+    //    out of the code.
+    //  - `out=true` — the fixture is half the claim, as it is for
+    //    `diff-sweep`: a diff that fits its frame has no bar to be kept
+    //    clear of (`--preset manyhunks` の `notes.txt` = 320 rows).
+    Verb {
+        name: "diff-bar",
+        when: &[],
+        plain: "diff_bar out=true clear=true reach=true",
+    },
     Verb {
         name: "stage-hunk",
         when: &[],

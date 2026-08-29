@@ -470,6 +470,7 @@ Rectangle {
         view: diffList
         diffModel: diffPane.diffModel
         gutterW: diffPane.gutterW
+        barRoom: diffList.barRoom
         codeX: codeScroll.offset
         charW: diffPane.charW
         wideDelta: diffPane.wideDelta

@@ -449,9 +449,9 @@ Rectangle {
         graphColWidth: graphArea.graphColW
         graphFullWidth: graphArea.graphFullW
         graphXOffset: graphArea.graphX
-        // The list's own bar, which this lies on top of. Read off the bar rather than off the token: the width is the
-        // style's, and a guess would leave either a strip of trough taken or a strip of stand-in that answers nothing.
-        barRoom: graphList.ScrollBar.vertical.visible ? graphList.ScrollBar.vertical.width : 0
+        // The list's own bar, which this lies on top of — the strip every hand laid over a list gives back
+        // (`AppListView.barRoom`).
+        barRoom: graphList.barRoom
         onActivated: row => {
             graphList.takeKeyboard()
             graphArea.jumpToRow(row)

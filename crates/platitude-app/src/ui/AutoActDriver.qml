@@ -191,7 +191,7 @@ Item {
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
-                "diff-band-sweep",
+                "diff-band-sweep", "diff-bar",
                 "preview", "preview-unstaged", "preview-staged",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
@@ -753,6 +753,13 @@ Item {
                 diffSweepTimer.start()
                 return
             }
+            // The strip the list's own bar stands on, which the hand over the rows gives back (`AppListView.barRoom`).
+            // The rows have arrived by here; the bar comes out once the view has laid them out, which is what the
+            // timer waits for.
+            if (act === "diff-bar") {
+                diffBarTimer.start()
+                return
+            }
             // Reading part way down a long diff and then writing: the rebuild has to come back to the same place.
             if (act === "keep-place") {
                 keepPlaceTimer.begin(line)
@@ -1284,6 +1291,34 @@ Item {
                               + " ours=" + ours
                               + " hunkRow=" + hunkRow
                               + " " + diffPane.pickTally())
+            renderedBarrier.begin()
+        }
+    }
+    // PG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
+    // taken by the hand laid over the rows (`AppListView.barRoom`). The bar is drawn *over* the rows, so anything
+    // covering the frame covers the bar with it, and the hand that picks the text out took every press on the trough
+    // (2026-08-29 ユーザー報告). Two claims:
+    //
+    // **`clear=`** — where this hand ends against where the bar begins, read off the two items rather than off the
+    // rule that places them. **`reach=`** — the hand still answers at its own last pixel, so the strip was given back
+    // to the bar and not eaten out of the code. And `out=` is the run's own honesty: a diff that fits its frame has
+    // no bar to be kept clear of.
+    SampleTimer {
+        id: diffBarTimer
+        /// What the view looked like at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // The rows arrive a frame ahead of the view that lays them out, and a bar that is not out yet is a bar
+            // this cannot say anything about (`diff-sweep`, the same wait).
+            if (diffPane.view.count <= 0 || !diffPane.textHand.barOut)
+                return
+            const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
+            if (geom !== diffBarTimer.lastGeom) {
+                diffBarTimer.lastGeom = geom
+                return
+            }
+            diffBarTimer.stop()
+            AppBackend.report("diff_bar " + diffPane.textHand.barTally())
             renderedBarrier.begin()
         }
     }
@@ -5262,7 +5297,7 @@ Item {
                    || act === "code-send" || act === "line-back"
                    || act === "diff-select" || act === "diff-copy"
                    || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
-                   || act === "diff-band-sweep"
+                   || act === "diff-band-sweep" || act === "diff-bar"
                    || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,

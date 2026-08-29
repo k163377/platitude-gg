@@ -6,8 +6,10 @@ import platitude.ui
 // The hand that picks the diff's text out of its rows: a drag selects, a right-click asks for the menu, and a plain
 // click puts the selection down (デザイン規約 §diff の中身をコピーする).
 //
-// **It covers the code column and not the gutter.** The two numbers and the seat between them are the row's own —
-// the `+` a line puts out there has to keep taking presses — so this starts where they end (`gutterW`).
+// **It covers the code column and not the gutter, and it stops short of the list's own bar.** The two numbers and the
+// seat between them are the row's own — the `+` a line puts out there has to keep taking presses — so this starts
+// where they end (`gutterW`); and the bar down the right edge is drawn over the rows, so a hand that ran to the frame
+// took every press on the trough and the bar could not be grabbed at all (`barRoom`, 2026-08-29 ユーザー報告).
 //
 // **Inside that column every place nobody else takes is a start**, the ground a file shorter than the frame leaves
 // under its last row included (`rowAt`, 規約 §diff の中身をコピーする). The hunk headings are the one exception, and
@@ -33,6 +35,9 @@ Item {
     required property var diffModel
     /// How wide the gutter is, which is where the code column starts.
     required property real gutterW
+    /// How much of the right edge belongs to the list's own scroll bar, which is where the code column ends
+    /// (`AppListView.barRoom` — the same strip the graph's stand-in gives back, `GraphHeadPin.barRoom`).
+    required property real barRoom
     /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character under it,
     /// not on the one that would be there at rest.
     required property real codeX
@@ -48,7 +53,7 @@ Item {
 
     x: pick.view.x + pick.gutterW
     y: pick.view.y
-    width: Math.max(0, pick.view.width - pick.gutterW)
+    width: Math.max(0, pick.view.width - pick.gutterW - pick.barRoom)
     height: pick.view.height
 
     /// Whether a drag is running. The press that started it is still held, so this and `hand.pressed` say the same
@@ -178,6 +183,37 @@ Item {
                 return i
         }
         return -1
+    }
+    /// Automation: whether the list's own bar is standing at all — the run's own honesty, since a diff that fits its
+    /// frame has no bar and proves nothing about the strip under one.
+    readonly property bool barOut: pick.barRoom > 0
+    /// Automation: that strip, and whether this hand gives it back (`PG_AUTO_ACT=diff-bar`). A press cannot be
+    /// injected, so what is read is the frame the press would land in — where this hand ends against where the bar
+    /// begins — and the edge answering right beside it. The three that are judged stand together at the head, since
+    /// `must_say` only takes words that are neighbours (`graph-head`, the same shape); the strip's own width follows
+    /// as the diagnostic it is.
+    function barTally() {
+        const handRight = Math.round(pick.x + pick.width)
+        const barLeft = Math.round(pick.view.x + pick.view.width - pick.barRoom)
+        return "out=" + pick.barOut
+             + " clear=" + (pick.barOut && handRight <= barLeft)
+             + " reach=" + pick.pressAtRightEdge()
+             + " strip=" + Math.round(pick.barRoom)
+    }
+    /// Automation: a press on the very last pixel this hand covers, on the first row that takes one. What lies beyond
+    /// it is the bar's strip (`barRoom`), and this is the half that says the strip was given back to the bar and not
+    /// eaten out of the code: an edge that answers is an edge that stops in the right place
+    /// (`PG_AUTO_ACT=diff-bar`). Nothing is left standing — a press that never moved selected nothing.
+    function pressAtRightEdge() {
+        for (let i = 0; i < pick.view.count; i++) {
+            const item = pick.view.itemAtIndex(i)
+            if (!item || item.kind === "hunk")
+                continue
+            const took = pick.takeAt(pick.width - 1, item.y - pick.view.contentY + item.height / 2, Qt.LeftButton)
+            pick.releaseText()
+            return took
+        }
+        return false
     }
     /// Automation: the other half — a press on a hunk's heading is still the hunk's, ground or no ground. The two
     /// words there act on the hunk (規約 §diff の中のステージ), and this is what says their face kept every press.
