@@ -311,6 +311,34 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
     session.close();
 }
 
+/// An apply whose restore conflicts is read the way a conflicting pop is:
+/// the work is across and waiting to be settled, and the entry was
+/// staying either way.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_conflicting_apply_is_not_a_failure_either() {
+    let mut repo = colliding_branches();
+    repo.write_file("both.txt", "mine\n");
+    repo.git(&["stash", "push", "-u"]);
+    repo.git(&["switch", "other"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.stash_apply("stash@{0}".into());
+    assert_eq!(
+        write_result(&sink, "stash").await,
+        None,
+        "the restore landed; it just needs settling"
+    );
+
+    let both = std::fs::read_to_string(repo.path.join("both.txt")).unwrap();
+    assert!(both.contains("<<<<<<<") && both.contains("mine"), "{both}");
+    assert!(
+        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+        "left unmerged to be settled"
+    );
+    assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
+    session.close();
+}
+
 /// Moving out of a stopped cherry-pick: the operation is put down, the
 /// tree it left goes into a stash, and the move lands — one write.
 ///

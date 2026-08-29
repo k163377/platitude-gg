@@ -422,12 +422,27 @@ impl RepoSession {
     }
 
     /// `git stash apply <selector>` (keeps the stash).
+    ///
+    /// A restore that conflicts is read the way [`Self::stash_pop`] reads
+    /// one: the work is across and waiting to be settled, so the working
+    /// tree decides whether the non-zero exit was that or a refusal that
+    /// did nothing.
     pub fn stash_apply(self: &Arc<Self>, selector: String) {
         self.write(
             "stash",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::apply(&exec, &repo.workdir, &selector, &cancel).await
+                let settled_first = !conflicts_now(&exec, &repo, &cancel).await?;
+                match stash::apply(&exec, &repo.workdir, &selector, &cancel).await {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        if settled_first && conflicts_now(&exec, &repo, &cancel).await? {
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    }
+                }
             },
         );
     }

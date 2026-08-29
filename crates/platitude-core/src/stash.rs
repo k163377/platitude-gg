@@ -247,13 +247,22 @@ pub async fn pop_with_index(
 }
 
 /// `git stash apply <selector>`: restores and keeps the entry.
+///
+/// Answers by code for the same reason [`pop`] does: exit 1 covers both a
+/// restore that landed conflicted and one that did nothing, so it is data
+/// for the caller to weigh against the working tree, not a failure to
+/// report on sight.
 pub async fn apply(
     executor: &GitExecutor,
     workdir: &Path,
     selector: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    run_selector(executor, workdir, "apply", selector, cancel).await
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code(1)
+        .args(["stash", "apply", selector]);
+    executor.run(cmd, cancel).await.map(|_| ())
 }
 
 /// Whether a string can be a stash's label.
