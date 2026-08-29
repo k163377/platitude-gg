@@ -162,6 +162,7 @@ RepoPageStack 1.0 RepoPageStack.qml
 RowHoverHost 1.0 RowHoverHost.qml
 SampleTimer 1.0 SampleTimer.qml
 SectionPeekPopup 1.0 SectionPeekPopup.qml
+SettingsAppPane 1.0 SettingsAppPane.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SettingsGitPane 1.0 SettingsGitPane.qml
 SettingsSection 1.0 SettingsSection.qml
