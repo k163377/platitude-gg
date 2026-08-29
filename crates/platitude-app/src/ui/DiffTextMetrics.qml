@@ -7,6 +7,10 @@ import platitude.ui
 // font comes out, and how far a wide glyph runs past the two columns it counts
 // as. Three rulers that are never drawn, and the six numbers read off them.
 //
+// **The third is built only where a wide glyph is on screen** — setting one is
+// what loads the fallback font, and that font is 52.6MB (`wideDelta`). So two
+// of the three stand here and the last is behind a `Loader`.
+//
 // An `Item`, not a `QtObject`: the rulers are Labels, and a `QtObject` has
 // nowhere to put a child (rules-refs/structure.md).
 Item {
