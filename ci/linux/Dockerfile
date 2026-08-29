@@ -3,7 +3,7 @@
 #
 # ubuntu:24.04 earns the base twice over. It is what CI's ubuntu-latest
 # resolves to, so a failure here is reproducible there and the other way
-# round. And its git is 2.43 — the oldest version 要望.md promises to
+# round. And its git is 2.43 — the oldest version git最低バージョン整合.md promises to
 # support, which no other machine in this project runs. Green here is the
 # floor, not just "some Linux".
 #

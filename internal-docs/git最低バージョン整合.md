@@ -12,7 +12,7 @@
 実バイナリでの実測ではなく**マニュアル照合**(git-scm.com のバージョン付きマニュアル + git.git の v タグ付きドキュメントソース)。実バイナリでの一巡は [P5-確認事項.md](P5-確認事項.md) §6。
 
 - 洗い出し: `platitude-core/src` の `GitCommand` 構築の全数(`-c` 固定引数・環境変数・pathspec magic 含む)。app 側に git 実行は無い(core に集約)ことも確認済み
-- 照合日: 2026-08-10(コード状態: main c4e4a4a)
+- 照合日: 全数洗い出しは 2026-08-10(コード状態: main c4e4a4a)時点。以後に増えたコマンド・オプションは §新オプション追加時の手順で行単位に追記(全数の再洗い出しは P5 §6 の実バイナリ一巡と併せて行う)
 - 判定基準: 2.43.0 のマニュアルに記載があれば ✓。git-scm.com が旧版へ redirect する場合は旧版で確認(旧版に在れば 2.43 にも在る)。2.30 より前からある古参は導入バージョンの知見で確定し「古参」と記す
 
 ## 結論
@@ -49,6 +49,7 @@
 | `restore` | `--ours` / `--theirs`(conflict 用) | 2.43.0 ✓(v2.43.0 の git-restore.txt に記載を確認) |
 | `cherry-pick` | `--no-edit` / `--continue` `--abort` `--skip` `--quit` | 2.39.3 ✓。**`--no-edit` のみ個別マニュアル外** → gitcli §Negating options でカバー |
 | `clean` | `-f` `-d` | 古参 |
+| `clone` | `[--] <repository> <directory>` | 古参(v2.43.0 の synopsis に `[--]` を確認) |
 | `commit` | `--amend` / `--allow-empty` / `--reset-author` / `--no-edit` / `--cleanup=whitespace` / `--file` | 2.43.0 ✓ |
 | `commit-tree` | `-p` / `-m` | 古参(1.7.6) |
 | `config` | `--get` / `--get-regexp` / `-z` / `--global` / `--show-scope` / `--unset` / 書き込みは旧形式 `config <key> <value>` | 古参 + **`--show-scope` は 2.26** ✓(`remote.pushDefault` を「どの階層が決めたか」ごと読む 1 本)。`--unset` の exit 5(元から無い)も 2.43 実測 |

@@ -52,7 +52,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ## PG_AUTO_ACT 動詞表
 
-**全動詞の正本は [verbs.md](verbs.md)** — 動確の前に、使う動詞の項を必ず読む(引数・preset・報告行の読み方・`must_say` が動詞ごとに違い、引数を省くと何も撮れない動詞がある)。一覧は 1 動詞 1 行 = 動詞名の Grep で該当行だけ引ける。動詞ごとの仕込み(preset・リポジトリの建て方・`--config-dir` の 2 回実行)も全部そこ。**動詞を足したら verbs.md へ追記する**(一覧は 1 行・仕込みは段落)。**報告行で判定すると書いたら `verify/verbs.rs` の表にも行を足す** — verbs.md の `must_say` は散文で、機械はそちらを読まない。表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る(2026-08-29 に 3 件: `open-picker` は 120s の watchdog、`open-mergetool` / `graph-rename` は緑のまま。突き合わせは verbs.md の `must_say` 行の動詞名を `crates/xtask/src/verify/verbs/*.rs` の `name:` と付き合わせるだけ)。
+**全動詞の正本は [verbs.md](verbs.md)** — 動確の前に、使う動詞の項を必ず読む(引数・preset・報告行の読み方・`must_say` が動詞ごとに違い、引数を省くと何も撮れない動詞がある)。一覧は 1 動詞 1 行 = 動詞名の Grep で該当行だけ引ける。動詞ごとの仕込み(preset・リポジトリの建て方・`--config-dir` の 2 回実行)も全部そこ。**動詞を足したら verbs.md へ追記する**(一覧は 1 行・仕込みは段落)。**報告行で判定すると書いたら `crates/xtask/src/verify/verbs/*.rs` の表にも行を足す** — verbs.md の `must_say` は散文で、機械はそちらを読まない。表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る(観測済み — 突き合わせは verbs.md の `must_say` 行の動詞名を同表の `name:` と付き合わせるだけ)。
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `PG_SHOT_DIR` 指定時、`Main.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(offscreen で成立・ロック状態と無関係 — 2026-08-05 実測)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。アンロック中の `PrintWindow` も引き続き可(実 hover 等、実ウィンドウが要る検証のみ)。
 
