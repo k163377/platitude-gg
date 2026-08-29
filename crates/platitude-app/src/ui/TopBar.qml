@@ -12,17 +12,16 @@ Rectangle {
     required property var tabsModel
     // The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// Whether this band is the window's title bar. When it is, the band carries the window's own buttons, and tells
-    /// the platform where its empty runs sit — the gestures on those (drag, snap, the double-click, the window menu)
-    /// are the platform's own, because the hit test calls them caption (`AppBackend.setCaptionStrips`).
+    /// Whether this band is the window's title bar. When it is, the band carries the window's own buttons and tells the
+    /// platform where its empty runs sit — the gestures on those (drag, snap, the double-click, the window menu) are
+    /// the platform's own, because the hit test calls them caption (`AppBackend.setCaptionStrips`).
     property bool captionMerged: false
     /// Which shape the middle button is in.
     property bool windowMaximized: false
 
     /// Automation: what the band came out to. A layout change can lose the window's own buttons, or the run of band
     /// left to take hold of, or push either off the end — and none of that shows in a screenshot taken where the
-    /// platform draws no buttons at all. The strip's own readings come back through here because the hooks ask the band
-    /// rather than the strip (`WindowAutoActDriver`).
+    /// platform draws no buttons at all. The strip's readings come back through the band (`WindowAutoActDriver`).
     readonly property real bandGrabRun: tabStrip.grabRun
     /// …and the band's other run, which a picture holds no better: the divider is drawn the same whether or not the
     /// hit test was ever told about the stretch it stands in.
@@ -43,8 +42,7 @@ Rectangle {
     readonly property real stateBadgeMinW: stateGroup.stateBadgeMinW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
-    /// came back with (`PG_AUTO_ACT=badges` / `badges-hover`). The group is what makes them; the hooks come to the band
-    /// to read them (`BandStateGroup`).
+    /// came back with (`PG_AUTO_ACT=badges` / `badges-hover`). The group makes them; the band is where they are read.
     readonly property bool stateWordsShown: stateGroup.stateWordsShown
     readonly property bool stateMarkShown: stateGroup.stateMarkShown
     readonly property color stateMarkColor: stateGroup.stateMarkColor
@@ -54,15 +52,13 @@ Rectangle {
     readonly property string stateCardRows: stateGroup.stateCardRows
     readonly property string stateCardSize: stateGroup.stateCardSize
     /// Whether the window is standing on its floor. Handed in, because the floor is the larger of this band's and the
-    /// page's and only `Main` has both. The group gives up its words there whatever else is true (2026-08-11 ユーザー指示).
+    /// page's and only `Main` has both. The group gives up its words there whatever else is true.
     property bool windowAtFloor: false
     /// The width the window may not be laid out under **with the left list open**, whether or not it is open now
     /// (`Main.floorWidth` measured on `RepoPage.openFloorWidth`). The three actions finish giving their words up
-    /// exactly there (2026-08-25 ユーザー指示「左サイドパネル展開状態の横幅底表示時点で縮退が完了すること」).
-    ///
-    /// The open floor rather than the floor of the moment: folding the list lowers the real floor, and a schedule read
-    /// off that would put the words back on screen as the rail took the list's place — a thing nobody asked to see
-    /// move (規約 §窓の床).
+    /// exactly there. The open floor rather than the floor of the moment: folding the list lowers the real floor, and
+    /// a schedule read off that would put the words back on screen as the rail took the list's place — a thing nobody
+    /// asked to see move (規約 §窓の床).
     property real windowFloorWidth: 0
     /// Stands in for the pointer where headless cannot put one, so the card can be photographed (`badges-hover` /
     /// `identity-tip`). The real hover writes this same one property — hover is the input that cannot be injected, so
@@ -94,8 +90,7 @@ Rectangle {
     readonly property real floorWidth: bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
     /// Automation: run the push button's hold to its end. The busy visual is latched only after the real RepoTab
-    /// reports that push started; this makes an intentionally intermediate screenshot causal even when the subprocess
-    /// completes before grabToImage runs.
+    /// reports that push started, which is what makes an intentionally intermediate screenshot causal.
     property bool autoPushBusyLatched: false
     /// Automation: the same latch for the button the wait was designed on — the bare one. `framed` rides along in the
     /// report because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
@@ -104,22 +99,18 @@ Rectangle {
     readonly property string pushMode: pushButton.mode
     /// Automation: what the Stash button read the working tree as, and the edge `stash-state` waits on.
     readonly property string stashMode: stashButton.mode
-    /// PG_AUTO_ACT=stash-state: which answer the button settled on and what the band did with it.
-    ///
-    /// The reading is a binding over a HEAD and four counts, and a photograph of a dim button carries none of them —
-    /// every refusal frames the same way. `tip=` is the string the button would open rather than a ToolTip caught
-    /// open, for the reason `fetch-tip` gives below.
+    /// PG_AUTO_ACT=stash-state: which answer the button settled on and what the band did with it. The reading is a
+    /// binding over a HEAD and four counts, and a photograph of a dim button carries none of them — every refusal
+    /// frames the same way. `tip=` is the string the button would open, for the reason `fetch-tip` gives below.
     function reportStashState() {
         AppBackend.report("stash_state mode=" + stashButton.mode
                           + " enabled=" + stashButton.enabled
                           + " tip=" + (stashButton.tip !== ""))
     }
     /// Automation: the Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
-    /// so what answers is the band's real wiring and not a second way in written for the run.
-    ///
-    /// **Answers whether the press went in.** The band refuses it while the tab is busy — the fetch a repository does
-    /// on the way open is one — and a shot fired at nothing is not one to latch: the caller keeps offering it, the way
-    /// a hand waits for the button to come alive.
+    /// so what answers is the band's real wiring and not a second way in written for the run. **Answers whether the
+    /// press went in**: the band refuses it while the tab is busy — the fetch a repository does on the way open is one
+    /// — and a shot fired at nothing is not one to latch, so the caller keeps offering it.
     function stashNow() {
         if (!stashButton.enabled)
             return false
@@ -136,11 +127,9 @@ Rectangle {
         AppBackend.report("fetch_busy busy=" + topBar.autoFetchBusyLatched
                           + " fails=" + fetchButton.fails + " framed=" + fetchButton.framed)
     }
-    /// PG_AUTO_ACT=fetch-tip: whether the fetch button has anything to say under a pointer.
-    ///
-    /// `tip=` is the string the button would open rather than a ToolTip caught open: a pointer cannot be injected,
-    /// and a disabled control takes hover and opens its attached ToolTip like any other one (実測 —
-    /// rules-refs/app-ui.md §hover), so the binding that decides is the whole of what a run can read here.
+    /// PG_AUTO_ACT=fetch-tip: whether the fetch button has anything to say under a pointer. `tip=` is the string the
+    /// button would open rather than a ToolTip caught open: a pointer cannot be injected, and a disabled control takes
+    /// hover and opens its attached ToolTip like any other one (rules-refs/app-ui.md §hover).
     function reportFetchTip() {
         AppBackend.report("fetch_tip enabled=" + fetchButton.enabled
                           + " tip=" + (fetchButton.tip !== "")
@@ -195,35 +184,33 @@ Rectangle {
     readonly property real actionWordFloor: widest.wordFloor
     /// The narrowest cell that still holds a word, for the **set**: the widest of the three floors, since a cell that
     /// only fits the shortest wording's floor cuts the longest one past its own (`ActionButton.foldWidth`). It moves
-    /// with what the buttons are saying — a branch that has diverged makes push's wording longer, and a longer
-    /// wording gives up sooner, which is the same rule the shared box is measured under.
+    /// with what the buttons are saying — a longer wording gives up sooner, which is the rule the shared box is under.
     readonly property real actionFold: Math.max(fetchButton.foldWidth,
                                                 pushButton.foldWidth,
                                                 stashButton.foldWidth)
-    /// The widest a button may be drawn at the width the window is standing at now.
-    ///
-    /// **The three give what they have over the last of the window's own travel**: their room between them is exactly
-    /// what a window narrowing towards its floor has left to take, so that is the stretch the giving is spread over.
-    /// One stretch above the floor every wording is whole; on the floor every one of them is a mark in an end cell;
-    /// between the two the cap comes down evenly and each wording elides into what is left (`ActionButtonLabel.cap`).
+    /// The widest a button may be drawn at the width the window is standing at now. **The three give what they have
+    /// over the last of the window's own travel**: their room between them is exactly what a window narrowing towards
+    /// its floor has left to take, so that is the stretch the giving is spread over. One stretch above the floor every
+    /// wording is whole; on the floor every one of them is a mark in an end cell; between the two the cap comes down
+    /// evenly and each wording elides into what is left (`ActionButtonLabel.cap`).
     ///
     /// Read off the window's width rather than off what the row has spare: the row's leftover is a question about how
-    /// many tabs are open and how long their names are, and the width at which this has to be finished is not
-    /// (2026-08-25 ユーザー指示). The row still takes more when the tabs need it — the cap is a ceiling, and the share-out
-    /// underneath it can come down to the end cell on its own.
+    /// many tabs are open and how long their names are, and the width this has to be finished at is not. The row still
+    /// takes more when the tabs need it — the cap is a ceiling, and the share-out underneath it can come down to the
+    /// end cell on its own.
     readonly property real actionCap:
         topBar.actionGive <= 0 ? fetchButton.naturalWidth
         : Math.max(Theme.railWidth,
                    Math.min(fetchButton.naturalWidth,
                             fetchButton.naturalWidth
                             - (topBar.windowFloorWidth + 3 * topBar.actionGive - topBar.width) / 3))
-    /// Where the words go. Said once for the set rather than left to each button's own arithmetic: three cells the row
-    /// rounded differently must not come out in two different shapes.
+    /// Where the words go. Said once for the set: three cells the row rounded differently must not come out in two
+    /// different shapes.
     readonly property bool actionsFolded: topBar.actionCap < topBar.actionFold
 
-    /// Automation: the two ends of the cap's travel and what the band made of it at this width
-    /// (`PG_AUTO_ACT=band-actions`). A photograph of the band says which shape landed but not which arithmetic put it
-    /// there, and the widths the three shapes sit at are a question about the installed fonts.
+    /// Automation: the two ends of the cap's travel and what the band made of it at this width (`band-actions`). A
+    /// photograph says which shape landed but not which arithmetic put it there, and the widths the three shapes sit
+    /// at are a question about the installed fonts.
     readonly property int actionNaturalW: Math.round(fetchButton.naturalWidth)
     readonly property int actionFoldW: Math.round(topBar.actionFold)
     readonly property int actionCapW: Math.round(topBar.actionCap)
@@ -237,15 +224,14 @@ Rectangle {
     /// The cell width at which that wording starts being cut: itself, plus everything the cell holds around a word.
     readonly property int actionCutW:
         Math.round(fetchButton.naturalWidth - fetchButton.wordBox + topBar.actionWantW)
-    /// …and what one button came out as. Read off push, which is the one that says the longest wording and wears the
-    /// frame, the `!` and the hold when its branch has diverged (`BandPushButton`).
+    /// …and what one button came out as. Read off push — the one that says the longest wording and wears the frame,
+    /// the `!` and the hold when its branch has diverged (`BandPushButton`).
     readonly property int actionCellW: Math.round(pushButton.width)
     readonly property int actionCellH: Math.round(pushButton.height)
     readonly property int actionWordW: Math.round(pushButton.wordRoom)
     readonly property int actionInkW: Math.round(pushButton.wordInk)
     /// Whether any of the three had to cut its wording. Asked of the set rather than of push: the cell is shared, so
-    /// the widest wording is the first to be cut, and which of the three is saying it is a question about the fonts
-    /// (`BandWidest`).
+    /// the widest wording is the first to be cut, and which of the three is saying it is a question about the fonts.
     readonly property bool actionWordCut:
         fetchButton.wordCut || pushButton.wordCut || stashButton.wordCut
     /// Whether either of the two that can wear a `!` is wearing one. Asked of the pair rather than of push: the run
@@ -279,8 +265,8 @@ Rectangle {
         id: bandRow
         anchors.fill: parent
         // The band's own right edge is not the window's: the client area reaches past what is drawn, so a row flush
-        // with it puts the close button's last few pixels off screen and its wash reads as clipped (measured: the cell
-        // ended 4.5px beyond the visible edge). `spaceXs` lands it flush instead.
+        // with it puts the close button's last few pixels off screen and its wash reads as clipped. `spaceXs` lands it
+        // flush instead.
         anchors.rightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
         spacing: Theme.spaceXs
         TabStrip {
@@ -291,9 +277,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumWidth: tabStrip.tabStripFloorW
-            // The band's order when it runs short: the tab names narrow together, then the state group's words do, then
-            // the strip scrolls, then the group becomes a mark (2026-08-11 ユーザー指示) — a stretch this much larger than
-            // the group's puts the strip at the front of both queues.
+            // The band's order when it runs short: the tab names narrow together, then the state group's words do,
+            // then the strip scrolls, then the group becomes a mark — a stretch this much larger than the group's puts
+            // the strip at the front of both queues.
             Layout.horizontalStretchFactor: 100
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
             onIdentityEditRequested: topBar.identityEditRequested()
@@ -306,16 +292,14 @@ Rectangle {
             curPage: topBar.curPage
             windowAtFloor: topBar.windowAtFloor
             pointedAt: topBar.statePointedAt
-            // The group folds off the strip's width as well as its own, and the two do not always change in the same
-            // frame.
+            // The group folds off the strip's width as well as its own, and the two do not always change together.
             tabContentWidth: tabStrip.contentWidth
             tabRunAvail: tabStrip.runAvail
             tabCount: tabStrip.tabCount
             // Measured off the pair beside it rather than written to tokens of its own: what sets how big a target is
             // here is the padding a Fusion `ToolButton` keeps around its content — a number the theme does not have.
             // The button's `padding` rather than the two sides it settles to: those carry the shared box's slack as
-            // well (`ActionButton.slack`), so reading them would move this group every time the fetch button changed
-            // its wording.
+            // well (`ActionButton.slack`), so reading them would move this group whenever fetch changed its wording.
             controlPadding: fetchButton.padding
             controlHeight: fetchButton.implicitHeight
             cellFolded: topBar.actionsFolded
@@ -337,13 +321,11 @@ Rectangle {
             wordFloor: topBar.actionWordFloor
             foldRequested: topBar.actionsFolded
             // Laid out by the row rather than measured to its own content, so the band can take its width back as it
-            // runs short. **The three ask for the same three numbers**, and each of the three is a stable measurement
-            // — the box the set shares, the band's end cell, and the cap the window's width settles. None of them
-            // moves with the shape the button is in, so giving the word up cannot change the width that decided to.
-            //
-            // The floor is the **folded** width, the way the state group's is (規約 §窓の床「帯の床は畳んだ姿で数える」): a floor
-            // counted with a word still on it would rise the moment the words came back, and a window standing on it
-            // would be grown by its own band.
+            // runs short. **The three ask for the same three numbers** — the box the set shares, the band's end cell,
+            // and the cap the window's width settles — and none of them moves with the shape the button is in, so
+            // giving the word up cannot change the width that decided to. The floor is the **folded** width, the way
+            // the state group's is (規約 §窓の床「帯の床は畳んだ姿で数える」): one counted with a word still on it would rise
+            // the moment the words came back, and a window standing on it would be grown by its own band.
             Layout.fillWidth: true
             Layout.fillHeight: fetchButton.folded
             Layout.preferredWidth: fetchButton.naturalWidth
@@ -414,9 +396,8 @@ Rectangle {
 
     // The run the divider stands in: the line, and the band's own spacing either side of it — which together are the
     // whole stretch between the last thing the app can be asked and the first thing the window can. The hit test
-    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here
-    // is the platform's own gesture rather than a press that lands on nothing (2026-08-23 ユーザー指示: 掴み代と同じ
-    // 挙動。Qt's own hit test called it caption until the window took the message over — 59a7754f).
+    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here is
+    // the platform's own gesture rather than a press that lands on nothing.
     //
     // Outside the row, so that measuring the row's own layout does not become part of it: a child of a `RowLayout` is
     // laid out, and this one only wants to know where two of the row's items came to rest. `bandRow` fills the band,

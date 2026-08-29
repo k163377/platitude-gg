@@ -13,36 +13,30 @@ ApplicationWindow {
     width: 1440
     height: 900
     visible: true
-    /// Whether the tab row is the window's title bar.
-    ///
-    /// Decided by platform, not read back from the hints: hints are read when the window is created, and a window
-    /// that came up without a way to close it cannot be taken back. Only Windows is known to work; everywhere else
-    /// keeps the platform's own title bar above an ordinary tab row (P3-確認事項 §ウィンドウ chrome). `PG_PLAIN_CHROME=1`
-    /// asks for the other shape from here.
+    /// Whether the tab row is the window's title bar. Decided by platform, not read back from the hints: hints are read
+    /// when the window is created, and a window that came up without a way to close it cannot be taken back. Only
+    /// Windows is known to work; everywhere else keeps the platform's own title bar above an ordinary tab row
+    /// (P3-確認事項 §ウィンドウ chrome). `PG_PLAIN_CHROME=1` asks for the other shape from here.
     readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.plainChrome
 
     // No frame at all: an expanded client area over the caption still leaves a real non-client frame — inflated past
-    // the screen when maximised (measured: it covered eight columns of the next monitor), a white pixel no DWM
-    // attribute moves, a remembered size coming back too wide. `FramelessWindowHint` deletes the whole area; the edge
-    // is drawn in the scene (below), and the resize edges and grab run stay with the subclass
-    // (`winframe::take_frame_hit_test` — Qt 6.10's own custom-chrome answer synthesises input from a poll and loses
-    // track of it: the dead first click and the frozen hover). `keepWindowGestures` puts back the system's
-    // minimise/maximise/menu style bits, and the subclass pins a maximise to the work area (`clamp_maximized`) because
-    // Windows would otherwise maximise a frameless window over the whole monitor. No shadow: the drawn edge stands in.
+    // the screen when maximised, a white pixel no DWM attribute moves, a remembered size coming back too wide.
+    // `FramelessWindowHint` deletes the whole area; the edge is drawn in the scene (below), and the resize edges and
+    // grab run stay with the subclass (`winframe::take_frame_hit_test` — Qt 6.10's own custom-chrome answer synthesises
+    // input from a poll and loses track of it: the dead first click and the frozen hover). `keepWindowGestures` puts
+    // back the system's minimise/maximise/menu style bits, and the subclass pins a maximise to the work area
+    // (`clamp_maximized`), which Windows would otherwise take to the whole monitor. No shadow: the drawn edge stands in.
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: Words.appName
     color: Theme.bgBase
 
     // ---- the floor the window may not be dragged under --------------------
     // Past the minimums, `SplitView` and the layouts here lay items out over their own edge, and nothing scrolls
-    // sideways to reach what went over (measured 2026-08-09: at 640px the right pane had 32 of its 300 on screen).
-    //
-    // Read off what is on screen because the list folding and the command log opening both move it. Qt grows a
-    // window when a floor rises under it, which is the way back from fold → shrink → unfold.
-    //
-    // `minimumWidth` alone only covers a dragged edge: `QWindow::resize` hands the size straight to the platform
-    // without reading the hints (measured: asked for 200x150 against the floor, the window took it). So every size
-    // this application sets itself goes through `holdFloor` below.
+    // sideways to reach what went over. Read off what is on screen, because the list folding and the command log
+    // opening both move it; Qt grows a window when a floor rises under it, which is the way back from
+    // fold → shrink → unfold. `minimumWidth` alone only covers a dragged edge — `QWindow::resize` hands the size
+    // straight to the platform without reading the hints — so every size this application sets itself goes through
+    // `holdFloor` below.
     /// The page the floor is read off. Not `curPage`: with no tab open that is null while the window is showing the
     /// blank page, which has the same three panes with the same minimums.
     readonly property var floorPage: root.curPage !== null ? root.curPage : blankPage.item
@@ -73,9 +67,8 @@ ApplicationWindow {
         windowShape.reportState()
     }
 
-    // ---- what a title bar does, now that this band is one ----------------
-    // Maximise, minimise, the grab-run's whereabouts and the window's dressing (`WindowChrome`). Only this file
-    // calls them, so the names live on the chrome rather than being forwarded.
+    // What a title bar does, now that this band is one: maximise, minimise, the grab-run's whereabouts and the
+    // window's dressing (`WindowChrome`). Only this file calls them, so the names live on the chrome.
     WindowChrome {
         id: chrome
         window: root
@@ -87,9 +80,8 @@ ApplicationWindow {
     font.pixelSize: Theme.fontMd
 
     // A color written here without a group lands in *all three* groups — and, being a binding, it settles after the
-    // groups' own bindings and overwrites them (measured: with `windowText` set both group-less and under `disabled`,
-    // the disabled group kept the group-less color). So a role either never changes and is written once, or it changes
-    // and is written out in every group. Never both.
+    // groups' own bindings and overwrites them. So a role either never changes and is written once, or it changes and
+    // is written out in every group. Never both.
     palette {
         // Same whatever state a control is in.
         window: Theme.bgBase
@@ -98,8 +90,8 @@ ApplicationWindow {
         placeholderText: Theme.textMuted
         // The two roles Fusion paints a scroll bar's thumb with, and in this window they paint nothing else: every
         // other place the style reaches for `mid` (a Popup's border, a Dialog's, a SplitView's handle) is a background
-        // this app supplies itself (`AppCardFace` / `SplitHandleBar`). So they are the thumb's own colors, and they
-        // are translucent — the graph's rows run under the bar (デザイン規約 §スクロールバー).
+        // this app supplies itself. So they are the thumb's own colors, and they are translucent — the graph's rows
+        // run under the bar (デザイン規約 §スクロールバー).
         mid: Theme.scrollBarThumb
         dark: Theme.scrollBarThumbHeld // Fusion: a scroll bar's held handle
         light: Theme.borderDefault
@@ -145,8 +137,7 @@ ApplicationWindow {
     FocusRelease {
         window: root
         // The left menu's name box is held open by nothing but the keyboard it took, so the press that took the
-        // keyboard away is what walks away from it (デザイン規約 §左メニューの所作). Only the tab on screen has one: a
-        // box in a tab nobody is looking at was not what the press landed away from.
+        // keyboard away is what walks away from it (デザイン規約 §左メニューの所作). Only the tab on screen has one.
         onPressedAway: scenePos => {
             if (root.curPage !== null)
                 root.curPage.releasePressedAway(scenePos)
@@ -209,7 +200,6 @@ ApplicationWindow {
 
     // Every way in goes through here so the picker opens beside the repository that is already open — left to itself
     // the dialog reopens inside the folder it last accepted, and the next pick is always a level up from there.
-    //
     // `nearUrl` names a folder to start at instead: a second try after a folder that was not a repository opens where
     // that one sits, which is where the one being looked for usually is.
     function openRepositoryPicker(nearUrl) {
@@ -224,8 +214,7 @@ ApplicationWindow {
     }
     // ---- smoke hooks -----------------------------------------------
     // The whole of the window's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none
-    // of it. A file of its own cannot see this one's ids, so everything the verbs act on is handed over here — an
-    // automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    // of it. A file of its own cannot see this one's ids, so everything the verbs act on is handed over here.
     Loader {
         id: autoActLoader
         active: AppBackend.autoAct !== ""
@@ -255,8 +244,7 @@ ApplicationWindow {
         host: mainUi
         hand: hand
         // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would
-        // have been. A quarter across the target: far enough off its middle that the picture says which of the two the
-        // seat was read from (`SharedToolTip.handAcross`).
+        // have been. A quarter across the target, so the picture says which of the two the seat was read from.
         handAcross: AppBackend.autoAct !== "" ? 0.25 : -1
     }
 
@@ -284,8 +272,7 @@ ApplicationWindow {
     }
     // Popups (dialogs, menus) render in the window overlay, whose C++-created items grabToImage refuses ("no QML
     // engine"). This QML-declared mirror of the overlay is grabbable, which is what makes popups photographable on the
-    // offscreen platform, where no OS window exists to shoot from outside. Loaded only while a shot directory is set,
-    // and refreshed once at shot time: AutoShotDriver.
+    // offscreen platform. Loaded only while a shot directory is set, refreshed once at shot time: AutoShotDriver.
     Loader {
         id: overlayMirror
         active: AppBackend.shotDir !== ""
@@ -297,13 +284,10 @@ ApplicationWindow {
         }
     }
     // The two laid over each other, for the one question a pair of pictures cannot answer: *where* the thing that
-    // opened stands against the thing it opened off. app.png has the row and no tooltip; overlay.png has the tooltip
-    // over nothing. Neither says whether the hand could walk from one to the other, which is the whole of what a hover
-    // seat is judged on.
-    //
-    // Two sources rather than one of the window's root item: this mirror is inside the content, so a mirror of
-    // everything would be a mirror of itself. Refreshed only when the overlay was holding something — with nothing open
-    // this picture is app.png again, and a board of doubles is a board nobody reads.
+    // opened stands against the thing it opened off. Two sources rather than one of the window's root item: this
+    // mirror is inside the content, so a mirror of everything would be a mirror of itself. Refreshed only when the
+    // overlay was holding something — with nothing open this picture is app.png again, and a board of doubles is a
+    // board nobody reads.
     Loader {
         id: sceneMirror
         active: AppBackend.shotDir !== ""
@@ -350,31 +334,28 @@ ApplicationWindow {
         gate: gate
     }
 
-    // ---- the two ways the window has nothing to show ---------------------
-    // No git to ask, or another process already has the files. The id stays here: the shot driver and the window's
-    // harness both reach for it by name (`AutoShotDriver.gate`).
+    // The two ways the window has nothing to show: no git to ask, or another process already has the files. The id
+    // stays here — the shot driver and the window's harness both reach for it by name (`AutoShotDriver.gate`).
     StartupGate {
         id: gate
         anchors.fill: parent
         onCloseRequested: root.close()
     }
 
-    // ---- identity dialog -------------------------------------------------
     IdentityGate {
         id: identityGate
         anchors.fill: parent
     }
 
-    // ---- settings --------------------------------------------------------
     SettingsDialog {
         id: settingsDialog
         curPage: root.curPage
     }
 
     // The window's own edge: a frameless window has no non-client area for the platform to put a line around, so the
-    // line the design asks for (規約 §ウィンドウの縁) is drawn in the client. Not while the window fills the screen — a line
-    // there would separate the app from nothing. The bottom side is the floor rectangle's at the end of the column
-    // below; windowed, the two coincide and the four sides read as one outline.
+    // line the design asks for (規約 §ウィンドウの縁) is drawn in the client. Not while the window fills the screen — a
+    // line there would separate the app from nothing. The bottom side is the floor rectangle's at the end of the
+    // column below; windowed, the two coincide and the four sides read as one outline.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -389,10 +370,10 @@ ApplicationWindow {
     ColumnLayout {
         id: mainUi
         // ApplicationWindow keeps its content item inside the window's safe area, which with the client area expanded
-        // starts below the title bar (measured on Windows: y = 31). The chrome reaches back up over that inset with a
-        // negative top margin — the content item does not clip, so both painting and input carry. Not by reparenting
-        // onto the window's root item: content outside the content item never wakes the render loop, so every change
-        // waited for the next input event to be painted (measured: "the first click did nothing").
+        // starts below the title bar (Windows: y = 31). The chrome reaches back up over that inset with a negative top
+        // margin — the content item does not clip, so both painting and input carry. Not by reparenting onto the
+        // window's root item: content outside the content item never wakes the render loop, so every change waited for
+        // the next input event to be painted.
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         spacing: 0
@@ -412,11 +393,10 @@ ApplicationWindow {
             captionMerged: root.captionMerged
             windowMaximized: root.visibility === Window.Maximized
             // Standing on the floor is the one width with nothing left to share out, and the band's state group gives
-            // up its words there (`TopBar.windowAtFloor`). Read here because the floor is the larger of the band's and
-            // the page's.
+            // up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of band's and page's.
             windowAtFloor: root.width <= Math.ceil(root.floorWidth)
             // …and the width the three actions have to be down to their marks by, which is that floor with the list
-            // open (2026-08-25 ユーザー指示). Read here for the same reason: only this window has both halves of it.
+            // open. Read here for the same reason: only this window has both halves of it.
             windowFloorWidth: root.openFloorWidth
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onIdentityEditRequested: identityGate.identityEditing = true
@@ -470,8 +450,7 @@ ApplicationWindow {
         }
 
         // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in borderDefault
-        // doing both. Unlike the edge, drawn while the window fills the screen too: this side still has the taskbar
-        // under it.
+        // doing both. Drawn while the window fills the screen too: this side still has the taskbar under it.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth

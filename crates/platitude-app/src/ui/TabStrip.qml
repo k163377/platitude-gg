@@ -43,7 +43,7 @@ Item {
     /// (`settleTitleCap`).
     property real tabTitleCap: tabStrip.tabTitleMaxW
     /// What the strip would take with nothing cut (`settleTitleCap`), and the least it is ever laid out at. Two tabs,
-    /// not one (2026-08-11 ユーザー指示、規約 §ウィンドウの縁).
+    /// not one (規約 §ウィンドウの縁).
     property real tabsWantWidth: 0
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabMetrics.tabFixedW + tabStrip.tabTitleMinW)
@@ -72,11 +72,9 @@ Item {
     }
 
     /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
-    /// pointer's, which no headless run has; everything after it — the settling, the order, the tab that comes out in
-    /// front — is the same road a hand takes.
-    ///
-    /// Carried to exactly where it comes to rest: its trailing edge on the far edge of the tab it is going to, or its
-    /// leading edge on the near one. Anywhere in that place passes every tab in between and none beyond it.
+    /// pointer's, which no headless run has; everything after it is the same road a hand takes. Carried to exactly
+    /// where it comes to rest: its trailing edge on the far edge of the tab it is going to, or its leading edge on
+    /// the near one — anywhere in that place passes every tab in between and none beyond it.
     function dragTabTo(from, to) {
         const tab = tabs.itemAtIndex(from)
         const dest = tabs.itemAtIndex(to)
@@ -92,8 +90,7 @@ Item {
     }
 
     /// Automation: the tab at `index`, taken up and carried half its own width without being set down
-    /// (`PG_AUTO_ACT=tab-hold`). The one thing a settled strip cannot show: a tab drawn away from its own row, with
-    /// the hand still on it.
+    /// (`PG_AUTO_ACT=tab-hold`) — the one thing a settled strip cannot show.
     function holdTabAt(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -116,8 +113,7 @@ Item {
     }
 
     /// Automation: the tab at `index`, carried against the far end of the run and left there (`PG_AUTO_ACT=tab-edge`).
-    /// Held one and a half tab widths past the run — the distance is the speed, so the hook names it in the strip's own
-    /// terms rather than in pixels.
+    /// Held past the run — the distance is the speed, so the hook names it in tab widths rather than in pixels.
     function carryTabPastEnd(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -147,8 +143,7 @@ Item {
 
     /// Automation: the middle click, landed on the tab at `index` (`PG_AUTO_ACT=middle-close`). Answers whether there
     /// was an item under it to press: the strip is a view, and the item for a row the model has only just gained
-    /// arrives with the next layout. A caller that read the asking as a press would go on waiting for a tab nobody
-    /// touched.
+    /// arrives with the next layout — a caller reading the asking as a press would wait for a tab nobody touched.
     function middleClickTab(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -168,11 +163,10 @@ Item {
     function pointAtTab(index) { tabProbe.pointAtTab(index) }
     function tabMarks() { return tabProbe.tabMarks() }
 
-    /// Hands the run out among the tab names, the longest giving way last (デザイン規約 §ウィンドウの縁); below `tabTitleMinW` the
-    /// strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of items, and a binding
-    /// cannot see one of those arrive. Whole pixels throughout: a strip sized off fractional widths comes out a pixel
-    /// over the run it was told to fit in, which is a strip that scrolls when nothing is out of room (実測 content=897
-    /// against run=896 without the rounding).
+    /// Hands the run out among the tab names, the longest giving way last (デザイン規約 §ウィンドウの縁); below `tabTitleMinW`
+    /// the strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of items, and a
+    /// binding cannot see one of those arrive. Whole pixels throughout — a strip sized off fractional widths comes out
+    /// a pixel over the run it was told to fit in, which is a strip that scrolls when nothing is out of room.
     function settleTitleCap() {
         let nat = []
         for (let i = 0; i < titleMeasure.count; i++) {
@@ -181,11 +175,9 @@ Item {
                 nat.push(Math.min(Math.ceil(label.implicitWidth), tabStrip.tabTitleMaxW))
         }
         // What the row is asked for, so the band's leftover is shared with the state group in proportion — asking for
-        // the floor instead had the tabs down to three characters beside two whole badges (reported 2026-08-11).
-        // Measured off the same hidden labels the cap is, so it does not move with the run it is about to be handed.
-        //
-        // The air a short name is eased with is counted here as a cost like the mark, not as part of what the names
-        // share out: it is spent whatever the cap comes to, and a name long enough to be cut has none of it.
+        // the floor instead has the tabs down to three characters beside two whole badges. Measured off the same
+        // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
+        // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
         tabStrip.tabTitleEaseW = tabMetrics.titleEaseW()
         const eased = nat.reduce(
             (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
@@ -216,9 +208,9 @@ Item {
         id: tabMetrics
     }
 
-    /// The names at their natural width, off screen. The strip's own labels are the ones being capped, so they cannot
-    /// also be what the cap is measured from. These carry the font the strip draws in — the heavier weight the current
-    /// tab is set in included, which is wider — so what comes back is the width the strip will ask for.
+    /// The names at their natural width, off screen: the strip's own labels are the ones being capped, so they cannot
+    /// also be what the cap is measured from. These carry the font the strip draws in, the current tab's heavier
+    /// weight included, so what comes back is the width the strip will ask for.
     Repeater {
         id: titleMeasure
         model: tabStrip.tabsModel
@@ -238,10 +230,9 @@ Item {
         }
     }
 
-    // App menu; most entries are placeholders until their phases land. Sized as the head of the folded sidebar's column
-    // — `railWidth` wide, the rail cells' wash, and this band's own full height, which is the run those cells answer
-    // over as well (`NavRail.cellHeight`). The mark inside is a step under theirs: this one stands alone in a band,
-    // theirs are the cells themselves (デザイン規約 §寸法).
+    // App menu; most entries are placeholders until their phases land. Sized as the head of the folded sidebar's
+    // column — `railWidth` wide, the rail cells' wash, and this band's own full height (`NavRail.cellHeight`). The
+    // mark inside is a step under theirs: this one stands alone in a band, theirs are the cells (デザイン規約 §寸法).
     ToolButton {
         id: menuButton
         width: Theme.railWidth
@@ -264,18 +255,15 @@ Item {
             }
         }
         // The mark is the way in and the way out: a press on it while the card stands takes the card down, the way a
-        // press anywhere else in the window does. Written as a toggle rather than as `open()` because `open()` on a
-        // card that is already up does nothing at all — and under the default close policy the press had already taken
-        // it down, so the pair read as a mark that could never be pressed a second time (2026-08-23 ユーザー報告).
+        // press anywhere else in the window does. Written as a toggle rather than as `open()` — `open()` on a card
+        // already up does nothing, which reads as a mark that can never be pressed a second time.
         onClicked: appMenu.opened ? appMenu.close() : appMenu.open()
         AppMenu {
             id: appMenu
             // Outside the ☰ itself, not outside the card. The default policy calls the mark's own press "outside" and
             // closes on it — and the click that follows the same press opens the card again, so the second press never
-            // shuts anything (measured with an injected click — qmltestrunner, since a press cannot be put into the
-            // app itself; the same reading `AppCombo.popup` was written from). Every press elsewhere in the window
-            // still takes the card down, including the one on the band's own empty run: that run stops being the
-            // platform's caption while the card stands (`WindowChrome.captionYielded`).
+            // shuts anything (`AppCombo.popup` was written from the same reading). Every press elsewhere in the window
+            // still takes the card down, the band's own empty run included (`WindowChrome.captionYielded`).
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
             // A full-height cell ends where the band does, so the card would otherwise open on top of the divider.
             y: menuButton.height + Theme.splitterWidth
@@ -322,14 +310,13 @@ Item {
         height: tabStrip.height
         /// Band the tabs may not grow into: the empty run past the last tab is the only place left to take hold of the
         /// window, so opening one more tab may not squeeze it to nothing. One end cell plus the band's own margin —
-        /// the width Chrome keeps between its own `+` and its window buttons, in this theme's tokens (2026-08-23
-        /// ユーザー指示; measured off Chrome at 100%: 52px between the two boxes).
+        /// the width Chrome keeps between its own `+` and its window buttons (52px at 100%), in this theme's tokens.
         readonly property real grabRun: tabStrip.captionMerged ? Theme.railWidth + Theme.spaceMd : 0
         /// The run the tabs share out between them; the width below and the cap both read this one expression.
         //
         // `tabs.grabRun` stays qualified: an unqualified name here reads whatever id happens to share it — ids outrank
-        // the enclosing object's own properties — and an Item minus a number is NaN, which took the whole strip's width
-        // with it once (no tabs drawn, nothing said why).
+        // the enclosing object's own properties — and an Item minus a number is NaN, which takes the strip's width
+        // with it (no tabs drawn, nothing said why).
         readonly property real runAvail:
             Math.max(0, tabStrip.width - menuButton.width - plusButton.width - tabs.grabRun)
         onRunAvailChanged: tabStrip.settleTitleCap()
@@ -339,12 +326,10 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         clip: true
         // Wheel only. Left interactive, the view watches every press for a drag and steals the grab at the platform's
-        // threshold (4px on Windows), so a click with a little sideways motion cancels the tab's own MouseArea instead
-        // of switching (reported as "the tab stopped taking the first click").
+        // threshold (4px on Windows), so a click with a little sideways motion cancels the tab's own MouseArea.
         interactive: false
         // Every delegate stays alive however far the strip is scrolled: the automation walks the items (`tabPaths` /
-        // `middleClickTab`), and a released delegate answers with null. Tabs are counted in ones, so this costs
-        // nothing.
+        // `middleClickTab`), and a released delegate answers with null. Tabs are counted in ones, so this is free.
         cacheBuffer: 65536
         // A plain wheel only ever reports "vertical", so either axis moves the strip sideways.
         WheelHandler {
@@ -384,23 +369,19 @@ Item {
         id: tabProbe
         view: tabs
     }
-    // Opening one more. Drawn rather than typed: a `+` is in every family the chain names, so nothing here ever looked
-    // broken — but its shape and the weight of its line were whatever the platform resolved, where every other mark in
-    // the window holds `Metrics.iconStroke` wherever it stands (デザイン規約 §寸法「印はフォントの字に任せない」).
+    // Opening one more. Drawn rather than typed: a typed `+` resolves to whatever shape and line weight the platform
+    // has, where every other mark in the window holds `Metrics.iconStroke` (デザイン規約 §寸法「印はフォントの字に任せない」).
     //
     // The mark is a step below its seat. The band's own marks are its two ends — the ☰ and the window buttons, each a
-    // `railWidth` cell the full height of it (§ウィンドウの縁) — and this is not one of those: it follows the last tab, so
-    // what it is level with is the `✕` standing in the tabs beside it. That is the ink the typed `+` carried anyway
-    // (measured on Windows, offscreen: 8px against `iconSm`'s 8.25), so the band reads as it did.
+    // `railWidth` cell its full height (§ウィンドウの縁) — and this is not one of those: it follows the last tab, so what
+    // it is level with is the `✕` standing in the tabs beside it, which is the ink the typed `+` carried anyway.
     //
     // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
-    // in the band's depth — a bare `iconLg` box has to be aimed at (2026-08-22 ユーザー報告).
-    // The one part of that depth the scene never sees is the resize edge Windows keeps at the top of a window that is
-    // not maximised, which is the band's own affair rather than this button's (`winframe::hit_test`).
-    // Only the hit area reaches that far: the wash keeps a square box of its own, since paint carried to the band's
-    // edges would read as one of the two end cells the band does own (§当たり判定「広げるのは判定だけ」). That box is `iconXl`,
-    // a step over the seat every icon button sits in — unlike the `✕` beside it, which stands inside a tab that washes
-    // as a whole, this mark answers the pointer with nothing but itself.
+    // in the band's depth — a bare `iconLg` box has to be aimed at. The one part of that depth the scene never sees is
+    // the resize edge Windows keeps at the top of an unmaximised window, which is the band's own affair
+    // (`winframe::hit_test`). Only the hit area reaches that far: the wash keeps a square `iconXl` box of its own,
+    // since paint carried to the band's edges would read as one of the two end cells the band does own
+    // (§当たり判定「広げるのは判定だけ」).
     //
     // Both the ink and the wash are written as padding and inset rather than as sizes of their own: a `Control`
     // stretches its `contentItem` over whatever the padding leaves and places its `background` inside the insets, so a
@@ -414,14 +395,13 @@ Item {
         bottomPadding: plusButton.topPadding
         topInset: Math.round((plusButton.height - Theme.iconXl) / 2)
         bottomInset: plusButton.topInset
-        // The seat's width, held to the box exactly. The typed `+` came out a pixel wider than a box (Fusion's own
-        // padding around a glyph — 21 measured), and three of this strip's width expressions read `plusButton` — as
+        // The seat's width, held to the box exactly: three of this strip's width expressions read `plusButton` — as
         // does `grabArea.x` — so a seat that drifts moves the run the tabs share out and the grab run with it.
         implicitWidth: Theme.iconXl
         implicitHeight: Theme.iconXl
-        // What the label was saying for it: a ToolButton names itself by its text, and this one no longer has any. The
-        // words the menu's own row uses, since it raises the same request — the mark is idiomatic and the answer comes
-        // straight out, so it gets a name and no tip, like the ☰ and the three at the far end (デザイン規約 §hover のツールチップ).
+        // A ToolButton names itself by its text, and this one has none. The words the menu's own row uses, since it
+        // raises the same request — the mark is idiomatic, so it gets a name and no tip, like the ☰ and the three at
+        // the far end (デザイン規約 §hover のツールチップ).
         Accessible.name: Words.openRepository
         contentItem: NavIcon {
             kind: "plus"
@@ -431,7 +411,7 @@ Item {
     }
     // The run of empty band past the last tab. The hit test answers HTCAPTION for this rectangle
     // (`winframe::hit_test`), so a press here never reaches the scene and every gesture is the platform's own. No
-    // handlers — the scene's only job is saying where the run is.
+    // handlers: the scene's only job is saying where the run is.
     Item {
         id: grabArea
         x: plusButton.x + plusButton.width

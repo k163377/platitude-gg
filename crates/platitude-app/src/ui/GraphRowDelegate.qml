@@ -47,13 +47,10 @@ Item {
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
     // Chip records are separated by U+001F (see encode.rs), and arrive in the order the chip reads them out: HEAD →
     // local → remote → tag. One chip for the row, so a commit that is both a branch tip and a release shows the branch
-    // — the tag is behind the "+N", where the hover card has it.
-    // A chip the window has already said is gone is left out of every one of them (`encode::labels_shown` applies the
-    // set): the row still carries it, because the ref only leaves the model when the walk that follows the delete
-    // lands (デザイン規約 §消す操作は先に画面から消す).
-    // Read off the model rather than mirrored onto the view, because that is where it belongs — the same list that
-    // hands out `labels` says which of their names the window is standing in for, and the sidebar's own sections
-    // hold theirs the same way (`NavSectionModel::set_hidden`).
+    // — the tag is behind the "+N", where the hover card has it. A chip the window has already said is gone is left
+    // out (`encode::labels_shown` applies the set): the row still carries it, because the ref only leaves the model
+    // when the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す). Read off the model rather than
+    // mirrored onto the view — the same list that hands out `labels` says which names the window stands in for.
     readonly property string goneChips:
         rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : ""
     readonly property string shownLabels: GitFacts.labelsShown(labels, rowItem.goneChips)
@@ -64,8 +61,7 @@ Item {
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
     // The commit the working tree is standing on. Asked of the row number the model settled rather than of the chips
-    // this row carries: a detached HEAD is the same answer and the chip that says so is a different kind
-    // (`models::graph::head`).
+    // this row carries: a detached HEAD is the same answer and says so with a different kind (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
     // to. Empty means the row shows no branch, which is the offer to put one there.
@@ -73,8 +69,7 @@ Item {
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
     // What the spaced second click names: the chip's own first record, whatever kind it is. **Not `primaryRecord`** —
     // that one answers "where does this row lead", and a tag leads nowhere while still being a name that can be
-    // changed (the same split the sidebar's TAGS rows make: デザイン規約 §左メニューの所作). The HEAD marker names no ref at
-    // all, so it answers `""` and the row has nothing to rename.
+    // changed (デザイン規約 §左メニューの所作). The HEAD marker names no ref, so it answers `""`.
     readonly property string renameRecord:
         rowItem.labelRecords.length > 0 && GitFacts.recordKind(rowItem.labelRecords[0]) !== ""
             ? rowItem.labelRecords[0] : ""
@@ -118,9 +113,8 @@ Item {
     }
 
     // A row coming back out of the reuse pool has to redraw even when none of its roles differs from the row it was
-    // last used for: what it holds is the picture it was left with, and the graph may have grown a lane in the meantime
-    // — see GraphLaneCell's canvases. The attached `ListView` only exists on the delegate's root, so the asking is done
-    // from here rather than in the cell.
+    // last used for: what it holds is the picture it was left with, and the graph may have grown a lane meanwhile.
+    // The attached `ListView` only exists on the delegate's root, so the asking is done here, not in the cell.
     ListView.onReused: {
         laneCell.loadFace()
         laneCell.repaintLanes()
@@ -172,20 +166,16 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // Where the message stops: the pane's own inset, the same the chip column keeps against the pane on the
-            // other side (デザイン規約 §余白). The mark is held on this edge rather than trailing the words, so without it
-            // every row would end in ink against the frame beside it (2026-08-27 ユーザー報告). **Not the bar's gutter** —
-            // the thumb reaches twice as far in and is drawn thin enough to read the tail through.
+            // Where the message stops: the pane's own inset, the same the chip column keeps on the other side
+            // (デザイン規約 §余白). Without it every row would end in ink against the frame beside it. **Not the bar's
+            // gutter** — the thumb reaches twice as far in and is drawn thin enough to read the tail through.
             Layout.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            // The tick goes with the message, not with the lanes: it stands in the subject column and belongs to this
-            // row alone.
+            // The tick goes with the message, not with the lanes: it stands in the subject column, this row's alone.
             opacity: rowItem.dimmed ? Metrics.dimFade : 1
             // Short colored tick before the message: separates rows visually (deliberately not a continuous line) and
-            // echoes the commit's chain color.
-            //
-            // These three steps — this margin, this width, the layout's spacing — are what `GraphPane.subjectTextX`
-            // adds up, since that is where the find bar's cap is measured from.
+            // echoes the commit's chain color. These three steps — this margin, this width, the layout's spacing —
+            // are what `GraphPane.subjectTextX` adds up, since that is where the find bar's cap is measured from.
             Rectangle {
                 Layout.leftMargin: Theme.spaceSm
                 implicitWidth: 2 * Theme.borderWidth
@@ -207,16 +197,14 @@ Item {
                 pixelSize: Theme.fontMd
                 // The commit the working tree is standing on writes its message in the branch's own blue — the same
                 // `textLink` the chip on it uses, and the same the stand-in uses while this row is scrolled off
-                // (規約 §グラフの中で HEAD を見失わない). One rule for the one commit, so nothing changes under the reader when
-                // they go there and the stand-in steps aside (2026-08-22 ユーザー判断).
+                // (規約 §グラフの中で HEAD を見失わない). One rule for the one commit, so nothing changes as it steps aside.
                 color: rowItem.isWip ? Theme.textSecondary
                        : rowItem.isHead ? Theme.textLink
                        : Theme.textPrimary
             }
             // **Only on the row they belong to.** A nested layout defaults to `Layout.fillWidth: true`, so left up on
             // every commit row this takes a share of the free space even with all six counts at zero and nothing drawn
-            // — measured 67px of a 400px row, which is that much of the message cut off for a column holding nothing
-            // (qmltestrunner 実測 2026-08-27). The margins and the layout's spacing go with it.
+            // (67px of a 400px row, measured), which is that much of the message cut off for a column holding nothing.
             WipTallyRow {
                 visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm
@@ -248,14 +236,11 @@ Item {
     //
     // **The row is divided once, and everything the pointer does on it reads that one answer** — the two things a rest
     // opens, and the two menus a right-click opens. The division is the chip column's own edge: on that side of it is
-    // the chip, on the other side the commit.
-    //
-    // The chip's frame is the wrong line to divide on: it is drawn eighteen pixels tall in a row of twenty-eight and
-    // stops where the name stops, so the margin around it — inside the column, plainly part of "the branch" to anyone
-    // looking — answers with the commit's card instead (2026-08-21 ユーザー報告). **The column's edge is a line that is
-    // actually drawn** (the divider), which is what makes
-    // it a boundary a reader can hold. The chip is alone in that column, so opening from the whole of it costs nothing
-    // — the exception デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」 now names.
+    // the chip, on the other side the commit. The chip's frame is the wrong line to divide on — it is drawn eighteen
+    // pixels tall in a row of twenty-eight and stops where the name stops, so the margin around it, plainly part of
+    // "the branch" to anyone looking, would answer with the commit's card. **The column's edge is a line that is
+    // actually drawn** (the divider), which is what makes it a boundary a reader can hold, and the chip is alone in
+    // that column — the exception デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」 names.
 
     /// Where along the row the pointer is, or -1 for "not on this row". Written by the area below.
     property real pointerRowX: -1
@@ -285,20 +270,17 @@ Item {
                                           ? rowItem.ListView.view.rowCardOid === rowItem.oid_hex : false
     /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
     /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
-    /// pointer off it at once (`RowHoverHost`), and a row that goes dark under its own open card leaves the message
-    /// with nothing on screen saying which commit it is of (2026-08-22 ユーザー報告).
+    /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
     readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
 
     // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
-    // opening where it lands flashes one card out and back per row (2026-08-09 報告. 規約 §hover のツールチップ).
-    //
-    // **Only one of the two is ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
-    // rather than in a beat's time — the beat is for walking into what is open, and what is being left is not it.
+    // opening where it lands flashes one card out and back per row (規約 §hover のツールチップ). **Only one of the two is
+    // ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now rather than in a beat's
+    // time — the beat is for walking into what is open, and what is being left is not it.
     onPointedPartChanged: rowItem.settlePointed()
     /// A second click is waiting out its window somewhere in this graph. **Nothing hover opens or closes while it
     /// runs**: the reader has clicked and is waiting for the box, and a card that came or went in that beat is a
-    /// change they did not ask for (2026-08-26 ユーザー指示). What the pointer did in the meantime is settled the moment
-    /// the wait ends — the box that opens is what the row shows by then, and the rest catches up with it.
+    /// change they did not ask for. What the pointer did meanwhile is settled the moment the wait ends.
     readonly property bool renameWaiting: rowItem.ListView.view ? rowItem.ListView.view.renameWaiting : false
     onRenameWaitingChanged: if (!rowItem.renameWaiting) rowItem.settlePointed()
     function settlePointed() {
@@ -311,9 +293,9 @@ Item {
         if (rowItem.pointedPart !== "row")
             view.rowHoverRequested(rowItem, false)
         if (rowItem.pointedPart === "chip" && rowItem.listOnThisChip) {
-            // Already out, and the hand walked down into it and came back. The rest is the question "did you mean to
-            // point at this", and it has been answered — re-hold now, or the settle closes the list at `hoverKeepMs`
-            // and the rest opens it again at `tipDelayMs`, which reads as a blink (規約「戻る手は待たせない」).
+            // Already out, and the hand walked down into it and came back. The rest asks "did you mean to point at
+            // this", and it has been answered — re-hold now, or it closes at `hoverKeepMs` and reopens at
+            // `tipDelayMs`, which reads as a blink (規約「戻る手は待たせない」).
             rowItem.openPointed()
         } else if (rowItem.pointedPart !== "") {
             restDelay.restart()
@@ -356,8 +338,7 @@ Item {
     }
     /// A double-click, as this row answers one. Named for the same reason `leftClick` is: **the lane column has a
     /// strip of its own over the list** (`GraphLanePan`, up wherever the lanes overflow their column), and where a row
-    /// leads — and what a second click on it means — has to be decided in one place, or the half of the row between
-    /// the two dividers answers differently from the two halves either side of it (2026-08-26 ユーザー報告).
+    /// leads has to be decided in one place, or the part under that strip answers differently from the rest.
     function doubleClick() {
         // The second click came inside the window after all, so the gesture was the double-click and not the name.
         // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
@@ -367,8 +348,8 @@ Item {
         rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
     }
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
-    /// picked (規約 §矢印で履歴を辿る). Taken by the list rather than by this row: the delegate is recycled the moment the
-    /// row scrolls off, and either button is the same claim.
+    /// picked (規約 §矢印で履歴を辿る). Taken by the list, not by this row: the delegate is recycled when the row scrolls
+    /// off, and either button is the same claim.
     function claimRow() {
         rowItem.ListView.view.takeKeyboard()
         rowItem.ListView.view.currentIndex = rowItem.index
@@ -425,10 +406,9 @@ Item {
                 return
             }
             // The list opens *on* the chip, so this area loses the pointer the instant it is drawn — a row under a
-            // popup sees no hover at all. That leave says nothing about where the hand went, and answering it takes the
-            // list down under the hand that asked for it. **Only the row the list is standing on skips it**, and only
-            // while it stands: the hand walking off anywhere else lands on another row, which reports a real point and
-            // puts the list away, and the card holds itself once it has the pointer (`RowHoverHost`).
+            // popup sees no hover at all. That leave says nothing about where the hand went, and answering it takes
+            // the list down under the hand that asked for it. **Only the row the list is standing on skips it**, and
+            // only while it stands: a hand walking off elsewhere lands on another row, which reports a real point.
             if (rowItem.listOnThisChip)
                 return
             rowItem.pointerRowX = -1
