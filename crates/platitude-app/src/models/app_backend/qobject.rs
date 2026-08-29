@@ -141,43 +141,23 @@ impl AppBackend {
     /// the settings list — because none of them can be told apart from
     /// the repository not having changed, which it did not.
     #[qsignal]
-    fn avatars_changed(&mut self);
+    pub(super) fn avatars_changed(&mut self);
 
-    /// Files a picture against an address. `file_url` comes from the
-    /// picker, so it arrives as a URL rather than a path.
-    ///
-    /// Writes at once. There is no Save on the card this is reached from
-    /// and no Cancel to undo it — the gesture that takes one away is a
-    /// hold instead (デザイン規約 §長押し).
+    // The three below hand their bodies to `avatars.rs` (structure.md
+    // §分割 Qt): the slot has to be declared here, what it does does not.
     #[qslot]
     fn assign_avatar(&mut self, email: String, name: String, file_url: String) {
-        let source = crate::urlpath::file_url_to_path(&file_url);
-        self.avatar_error =
-            Hub::with(|hub| hub.assign_avatar(&email, &name, &source)).unwrap_or_default();
-        if !self.avatar_error.is_empty() {
-            tracing::warn!(error = %self.avatar_error, "avatar not assigned");
-        }
-        self.reload_avatars();
+        self.file_avatar(&email, &name, &file_url);
     }
 
     #[qslot]
     fn remove_avatar(&mut self, email: String) {
-        Hub::with(|hub| hub.remove_avatar(&email));
-        self.avatar_error.clear();
-        self.reload_avatars();
+        self.unfile_avatar(&email);
     }
 
-    /// The picture for an address, or empty. For the one place that asks
-    /// about a person it is not already showing: the settings card, when
-    /// an avatar's own badge opened it.
     #[qslot]
     fn avatar_url_for(&self, email: String) -> String {
-        Hub::with(|hub| hub.avatar_url(&email)).unwrap_or_default()
-    }
-
-    fn reload_avatars(&mut self) {
-        self.avatars = packed_avatars();
-        self.avatars_changed();
+        self.avatar_url(&email)
     }
 
     /// Sets how often every open repository fetches, in minutes. Zero (the

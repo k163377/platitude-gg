@@ -9,6 +9,7 @@ use crate::hub::{Feed, Hub};
 
 use super::qml_register;
 
+mod avatars;
 mod build_id;
 mod lifecycle;
 mod persist;
