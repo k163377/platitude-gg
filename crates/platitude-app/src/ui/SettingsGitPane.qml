@@ -15,11 +15,23 @@ ColumnLayout {
     /// This category is the one on screen, and the screen is open. What the slow candidate read waits for — a reader
     /// who opened the application category never asked for it.
     property bool showing: false
+    /// The screen is open, whichever category it is on. **What the boxes follow git by** — not `showing`: git can
+    /// answer while the reader is in the other category (a status refresh names the tool wherever something is
+    /// conflicted), and a box that stopped following there would be written back on close as though the reader had
+    /// emptied it (`applyTool`).
+    property bool screenOpen: false
 
     /// Enter in the tool box. The way out belongs to the screen, so it is asked for rather than taken.
     signal accepted()
 
-    onShowingChanged: if (pane.showing) pane.askTools()
+    // Asking is the showing category's; forgetting the latch is the closing screen's, so that neither the open edge's
+    // two handlers nor their order can take away what the other just put there.
+    onShowingChanged: {
+        if (pane.showing)
+            pane.askTools()
+        else
+            pane.autoToolLoadingLatched = false
+    }
 
     // ---- the merge editor ------------------------------------------------
     readonly property string mergeTool: pane.curPage ? pane.curPage.pageWt.mergeTool : ""
@@ -60,11 +72,11 @@ ColumnLayout {
         if (pane.curPage && toolField.wanted !== pane.mergeTool)
             pane.curPage.pageTab.setMergeTool(toolField.wanted)
     }
-    /// Puts the box back to what git says, for the screen that just opened.
+    /// Puts the box back to what git says, for the screen that just opened. The latch is not this one's to clear —
+    /// it belongs to the closing screen (`onShowingChanged`), because this runs off the same edge that raises it.
     function loadTool() {
         toolField.wanted = pane.mergeTool
         pane.toolTouched = false
-        pane.autoToolLoadingLatched = false
     }
     /// The door a press uses, so the list comes down the way it does under a hand (`AppCombo.pressField`).
     function pressToolField() {
@@ -84,7 +96,9 @@ ColumnLayout {
     }
     onToolChoicesChanged: pane.reportTool()
     onMergeToolChanged: {
-        if (pane.showing && !pane.toolTouched) {
+        // `screenOpen`, not `showing`: see the property. A box that stopped following in the other category would be
+        // carrying a value git has already moved past, and `applyTool` would write it back on the way out.
+        if (pane.screenOpen && !pane.toolTouched) {
             toolField.wanted = pane.mergeTool
             pane.toolTouched = false
         }
@@ -99,9 +113,9 @@ ColumnLayout {
     }
 
     // ---- the identity ----------------------------------------------------
-    /// A write is in flight that this screen asked for. The notification is shared with the startup check, so nothing
-    /// here reads an answer it did not ask for.
-    property bool saving: false
+    // Nothing here waits on the answer. The gate keeps a `saving` flag because a landed save is what closes it; this
+    // screen was not opened to answer that one question, so it stays standing either way and the marks the fields
+    // carry are the whole of what a save has to say here (`IdentityFields`).
     function loadIdentity() {
         identityFields.load()
     }
@@ -111,18 +125,7 @@ ColumnLayout {
     function submitIdentity() {
         if (!identityActions.acceptEnabled)
             return
-        pane.saving = true
         AppBackend.saveIdentity(identityFields.nameText, identityFields.emailText)
-    }
-    Connections {
-        target: AppBackend
-        function onIdentityChanged() {
-            if (!pane.saving || AppBackend.identityBusy)
-                return
-            // Nothing closes: this screen was not opened to answer that one question, so a landed save leaves it
-            // standing with the marks the fields carry (`IdentityFields`).
-            pane.saving = false
-        }
     }
 
     Layout.fillWidth: true

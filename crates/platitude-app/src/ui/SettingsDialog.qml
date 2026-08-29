@@ -34,6 +34,23 @@ AppDialog {
         settingsDialog.open()
     }
 
+    /// Automation: the rail row for `which`, pressed through its own handler (`settings-switch`). Answers whether
+    /// there was such a row — the run waits rather than counting a press it never made.
+    function autoTapCategory(which) {
+        for (let i = 0; i < categoryRepeater.count; i++) {
+            const row = categoryRepeater.itemAt(i)
+            if (row && row.modelData.key === which) {
+                row.tap()
+                return true
+            }
+        }
+        return false
+    }
+    /// Automation: which chapters the screen is actually showing, for the verb that presses the rail — the category
+    /// property is the input side, and a run that read it back would be reporting its own press.
+    readonly property bool autoAppShown: fetchField.visible
+    readonly property bool autoGitShown: gitPane.visible
+
     // ---- what the git category answers for, forwarded ---------------------
     // The half of the screen that talks to git lives in `SettingsGitPane`; the window's harness asks the screen, so
     // the screen passes the question on. `opened` is the screen's to add — a pane that is only hidden still answers.
@@ -160,8 +177,13 @@ AppDialog {
     }
     // An empty field is the off switch — nothing to type is the
     // clearest way to say "do not do this".
-    function applyFields() {
+    function applyFetch() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
+    }
+    // Only the way out writes both: the two categories have separate owners, and a field finished with in one of them
+    // has no business queueing a `git config` for the other.
+    function applyFields() {
+        settingsDialog.applyFetch()
         gitPane.applyTool()
     }
 
@@ -188,11 +210,17 @@ AppDialog {
                 Layout.alignment: Qt.AlignTop
                 spacing: 0
                 Repeater {
+                    id: categoryRepeater
                     model: [{ key: "app", word: qsTr("Application") }, { key: "git", word: qsTr("Git") }]
                     delegate: Rectangle {
                         id: categoryRow
                         required property var modelData
                         readonly property bool current: settingsDialog.category === categoryRow.modelData.key
+                        /// What a press on this row does. The handler below is one line onto it so a run enters the
+                        /// same road a hand does (規約 §UI 自動化の因果性).
+                        function tap() {
+                            settingsDialog.category = categoryRow.modelData.key
+                        }
                         Layout.fillWidth: true
                         implicitHeight: Theme.rowHeight
                         color: categoryRow.current
@@ -209,7 +237,7 @@ AppDialog {
                             id: categoryHover
                         }
                         TapHandler {
-                            onTapped: settingsDialog.category = categoryRow.modelData.key
+                            onTapped: categoryRow.tap()
                         }
                     }
                 }
@@ -259,7 +287,7 @@ AppDialog {
                                 // Written when the field is done with — on Enter, and
                                 // on the focus leaving it — rather than per keystroke,
                                 // which would run through "1" on the way to "10".
-                                onEditingFinished: settingsDialog.applyFields()
+                                onEditingFinished: settingsDialog.applyFetch()
                                 onAccepted: settingsDialog.close()
                             }
                             Label {
@@ -359,8 +387,10 @@ AppDialog {
                     visible: settingsDialog.category === "git"
                     curPage: settingsDialog.curPage
                     // Its slow read is asked for by this, and by nothing else — being hidden is what says the reader
-                    // did not ask for it (規約 §設定の画面).
+                    // did not ask for it (規約 §設定の画面). Following git is the other one: that goes on wherever the
+                    // reader is standing.
                     showing: settingsDialog.opened && settingsDialog.category === "git"
+                    screenOpen: settingsDialog.opened
                     onAccepted: settingsDialog.close()
                 }
                 Item { Layout.fillHeight: true }

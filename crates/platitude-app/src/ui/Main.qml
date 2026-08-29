@@ -300,6 +300,7 @@ ApplicationWindow {
     IdentityGate {
         id: identityGate
         anchors.fill: parent
+        settingsOpen: settingsDialog.opened
     }
 
     SettingsDialog {
@@ -307,13 +308,17 @@ ApplicationWindow {
         curPage: root.curPage
     }
     // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
-    // otherwise a menu action. It lands where the menu entry lands.
+    // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,
+    // and every later answer git gives about the identity is not a second press.
+    property bool identityEditShown: false
     Connections {
         target: AppBackend
-        enabled: AppBackend.autoIdentity === "edit"
+        enabled: AppBackend.autoIdentity === "edit" && !root.identityEditShown
         function onIdentityChanged() {
-            if (AppBackend.identityState === "ready" && !settingsDialog.opened)
-                settingsDialog.openAt("git")
+            if (AppBackend.identityState !== "ready")
+                return
+            root.identityEditShown = true
+            settingsDialog.openAt("git")
         }
     }
 

@@ -227,6 +227,7 @@
 - `old-git-fold`(黄だけが立った窓を床まで縮めた `…` = 印が `warning` で塗られている報告。must_say)
 - `state`(設定・画面状態の永続化。`--config-dir` を渡した 2 回目に `--restore`)
 - `settings-git`(設定画面の `Git` の分類 — IDENTITY / MERGE EDITOR の 2 章。引数なし。`Application` の側は `settings <分>`)
+- `settings-switch`(**左の分類の列を押して `Application` → `Git` へ移る**。他の設定動詞は全部「開く前に分類を決める」経路なので、**列が死んでも緑になるのはこの動詞だけが防ぐ**。引数なし。報告行 `settings_switch was_app= app= git=` で、must_say は **`was_app=true app=false git=true`** —— `was_app=` が「押す前は反対側が立っていた」、残り 2 つが「押した後にどの章が出ているか」。**読むのは章の `visible` であって `category` ではない**(後者は入力側で、読み返すと自分の押下を報告することになる)。押下は行自身の `tap()`(`TapHandler` は 1 行でそれを呼ぶ))
 - `settings-tools`(設定画面の `Git` の Merge editor 候補一覧を開いたまま)
 - `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別)
 - `amend-author`(amend の著者引き継ぎ表示。**作業ツリーの行を選んでから**箱を入れる — commit 欄は未コミット行が選択の時しか画面に無く、選ばずに撃つと詳細ペインを撮って amend の行について何も言わない。報告行 `amend_author differs= name=` を待って撮るので、**チェック済みの箱と未チェックの箱が 1 枚に並ぶ唯一の席**。`differs=true` には HEAD の author が identity と違うリポジトリが要る = `demo-repo authorship --at <worktree>/<名前>` で建てて中のファイルを 1 つ触り、`--repo` で渡す(`--preset authorship` は木が綺麗なので未コミット行が無い))

@@ -140,7 +140,7 @@ QtObject {
                 "old-git-fold", "state", "middle-close", "open-again",
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
                 "stash-state",
-                "settings-tools", "settings-tools-loading",
+                "settings-tools", "settings-tools-loading", "settings-switch",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
     }
 }

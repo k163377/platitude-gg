@@ -59,6 +59,41 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the two categories that is not a door into
+    // the screen. Opened on the application category and pressed onto the other through the row's own handler
+    // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
+    // and would leave a dead rail green. What the report reads back is the chapters, not `category` — that is the
+    // input side, and a run that read it would be reporting its own press.
+    SampleTimer {
+        id: categorySwitchTimer
+        running: AppBackend.autoAct === "settings-switch"
+        /// The press has been made, so what had to be true before it is not read again.
+        property bool acted: false
+        /// The application category was standing first — half the claim, and the half the picture cannot hold.
+        property bool wasApp: false
+        onTriggered: {
+            if (!categorySwitchTimer.acted) {
+                if (!settingsDialog.opened) {
+                    settingsDialog.openAt("app")
+                    return
+                }
+                if (!settingsDialog.autoAppShown)
+                    return
+                categorySwitchTimer.wasApp = true
+                if (!settingsDialog.autoTapCategory("git"))
+                    return
+                categorySwitchTimer.acted = true
+            }
+            if (!settingsDialog.autoGitShown)
+                return
+            categorySwitchTimer.stop()
+            AppBackend.report("settings_switch was_app=" + categorySwitchTimer.wasApp
+                              + " app=" + settingsDialog.autoAppShown
+                              + " git=" + settingsDialog.autoGitShown)
+            window.finishAutoAct()
+        }
+    }
+
     // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own

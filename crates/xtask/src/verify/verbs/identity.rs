@@ -60,6 +60,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settled=true loading=false open=true typing=true",
     },
+    // The rail is the one way between the two categories that no other
+    // verb travels: the rest name a category before the screen is up. A
+    // picture of the git chapters cannot say which of the two put them
+    // there, so both halves are said in the line.
+    Verb {
+        name: "settings-switch",
+        when: &[],
+        plain: "settings_switch was_app=true app=false git=true",
+    },
     // The same card's avatar half. Only this one of its four wants a
     // line: the other three cannot reach the camera with the wrong
     // state, because each waits on the state itself — a filed picture

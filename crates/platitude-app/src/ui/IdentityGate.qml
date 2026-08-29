@@ -16,6 +16,12 @@ Item {
     /// The dialog itself, for the window's harness (`WindowAutoActDriver.identityDialog`).
     readonly property alias dialog: identityDialog
 
+    /// The settings screen is standing. The identity is edited there too, and its save can half-land the same way —
+    /// so without this the gate would raise itself over the screen the reader is making that very write in, asking
+    /// for what is already on their screen. It stands once the screen is out of the way, which is where the reader
+    /// left it half-landed.
+    property bool settingsOpen: false
+
     property bool identityDismissed: false
     // A half-landed save leaves an identity that *is* set, so `missing` alone takes the screen away at the one moment
     // it has something to say (measured: the state flipped to `ready` on the name that did land, and this window
@@ -23,7 +29,7 @@ Item {
     readonly property bool identityWanted: AppBackend.gitState === "ok"
                                            && (AppBackend.identityState === "missing"
                                                || AppBackend.identityUnsaved)
-                                           && !identityDismissed
+                                           && !identityDismissed && !settingsOpen
     function dismissIdentity() {
         identityDismissed = true
     }
