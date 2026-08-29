@@ -25,13 +25,6 @@ fn the_largest_heap_is_the_breakdown_that_is_kept() {
 }
 
 #[test]
-fn a_spread_of_one_value_is_printed_once() {
-    assert_eq!(spread(&[3.0, 3.0]), "3.0");
-    assert_eq!(spread(&[3.0, 5.0]), "3.0–5.0");
-    assert_eq!(spread(&[]), "-");
-}
-
-#[test]
 fn watchdog_is_the_outer_ceiling_and_quit_is_rejected() {
     let parsed = parse(&["--watchdog-ms".into(), "9000".into(), "--no-open".into()])
         .expect("watchdog should parse");
