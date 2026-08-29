@@ -5,7 +5,22 @@ use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, write_result};
-use platitude_core::session::{OPEN_FETCH_OP, OpenFetch, RepoSession, SessionEvent};
+use platitude_core::session::{
+    AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, RepoSession, SessionEvent,
+};
+
+/// One hand-stepped tick, under the suite's backstop.
+///
+/// The tick resolves when the timer task acts on it, and a timer task that
+/// is merely starved has nothing under it at all: no event goes to the
+/// sink, so no [`crate::support::Patience`] is counting, and the binary
+/// sits there until the CI kill with nothing named. 実測 2026-08-29: one
+/// copy running beside seven of its own and a Linux container did exactly
+/// that, and what was reported was a run that never ended rather than a
+/// test that failed.
+async fn stepped(ticker: &AutoFetchTicker, what: &str) -> bool {
+    crate::support::wait::bounded(what, ticker.tick()).await
+}
 
 /// Waits for the `nth` automatic fetch to finish and returns git's error,
 /// if any. Telling them apart is the point: only the second one can be laid
@@ -46,7 +61,10 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     // fetch that follows is that tick's doing and nothing else's.
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
-    assert!(hourly.tick().await, "the running timer took the tick");
+    assert!(
+        stepped(&hourly, "the running timer's tick").await,
+        "the running timer took the tick"
+    );
     assert_eq!(
         auto_fetch_done(&sink, 1).await,
         None,
@@ -61,7 +79,7 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     // fetch can only be the new interval's.
     session.set_auto_fetch(Some(Duration::from_millis(120)));
     assert!(
-        !hourly.tick().await,
+        !stepped(&hourly, "the replaced timer's refusal").await,
         "setting an interval stops the timer it replaces"
     );
     let ticking = session.auto_fetch_ticker().expect("auto fetch is on");
@@ -73,7 +91,7 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
 
     session.set_auto_fetch(None);
     assert!(
-        !ticking.tick().await,
+        !stepped(&ticking, "the stopped timer's refusal").await,
         "turning it off stops the timer, so no further fetch can start"
     );
     session.close();
@@ -106,7 +124,7 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
     let before = session.auto_fetch_ticker().expect("auto fetch is on");
     assert!(session.suspend_auto_fetch(), "there was a timer to stop");
     assert!(
-        !before.tick().await,
+        !stepped(&before, "the suspended timer's refusal").await,
         "the suspended timer refuses the tick it would have taken"
     );
     assert!(
@@ -122,7 +140,10 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
     let after = session
         .auto_fetch_ticker()
         .expect("resume put the interval back");
-    assert!(after.tick().await, "the timer that came back takes a tick");
+    assert!(
+        stepped(&after, "the resumed timer's tick").await,
+        "the timer that came back takes a tick"
+    );
     assert_eq!(
         auto_fetch_done(&sink, 1).await,
         None,
@@ -376,7 +397,10 @@ async fn the_timer_queues_nothing_where_there_is_no_remote() {
     sink.opening_snapshots().await;
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
-    assert!(hourly.tick().await, "the timer took the tick and stayed on");
+    assert!(
+        stepped(&hourly, "the local-only timer's tick").await,
+        "the timer took the tick and stayed on"
+    );
 
     // Asked for by hand, the same fetch runs: the gate is on what nobody
     // asked for, not on the button.
@@ -435,7 +459,10 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     .await;
 
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
-    assert!(hourly.tick().await, "the running timer took the tick");
+    assert!(
+        stepped(&hourly, "the running timer's tick").await,
+        "the running timer took the tick"
+    );
     assert_eq!(auto_fetch_done(&sink, 1).await, None);
     assert_eq!(
         only.git(&["rev-parse", "origin/main"]),
