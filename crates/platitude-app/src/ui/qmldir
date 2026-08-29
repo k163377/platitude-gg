@@ -193,6 +193,7 @@ WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
+WipCommitBlock 1.0 WipCommitBlock.qml
 WipBucketPane 1.0 WipBucketPane.qml
 WipPane 1.0 WipPane.qml
 WipTallyRow 1.0 WipTallyRow.qml
