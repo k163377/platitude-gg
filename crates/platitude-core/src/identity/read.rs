@@ -103,15 +103,13 @@ pub async fn load(
 pub(super) fn parse_config(bytes: &[u8]) -> AuthorConfig {
     let mut parsed = AuthorConfig::default();
     for record in config::parse_z_records(bytes) {
-        // A valueless key (`[commit] gpgsign`) means true, so it reads as
-        // an empty value rather than being skipped.
         let value = record.value().unwrap_or_default().trim();
         match record.key().trim() {
             "user.name" => parsed.identity.name = non_empty(value),
             "user.email" => parsed.identity.email = non_empty(value),
             "user.signingkey" => parsed.signing.key = non_empty(value),
-            "commit.gpgsign" => parsed.signing.sign_commits = parse_bool(value),
-            "tag.gpgsign" => parsed.signing.sign_tags = parse_bool(value),
+            "commit.gpgsign" => parsed.signing.sign_commits = parse_bool(record.value()),
+            "tag.gpgsign" => parsed.signing.sign_tags = parse_bool(record.value()),
             "gpg.format" => parsed.signing.format = SignatureFormat::parse(value),
             _ => {}
         }
@@ -123,12 +121,23 @@ pub(super) fn non_empty(value: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 
-/// git's boolean spelling; a key present with no value is true.
-fn parse_bool(value: &str) -> bool {
-    matches!(
-        value.trim().to_ascii_lowercase().as_str(),
-        "" | "true" | "yes" | "on" | "1"
-    )
+/// git's boolean vocabulary (measured, 2.55): a valueless key
+/// (`[commit] gpgsign`, reaching a `-z` read with no value at all) is
+/// true, an empty value (`gpgsign =`) is false, and a number reads by
+/// its zeroness — so the two shapes must be told apart, not defaulted
+/// into each other.
+fn parse_bool(value: Option<&str>) -> bool {
+    let Some(value) = value else {
+        return true;
+    };
+    let value = value.trim();
+    if ["true", "yes", "on"]
+        .iter()
+        .any(|word| value.eq_ignore_ascii_case(word))
+    {
+        return true;
+    }
+    value.parse::<i64>().is_ok_and(|n| n != 0)
 }
 
 #[cfg(test)]
@@ -172,17 +181,22 @@ mod tests {
 
     #[test]
     fn understands_gits_boolean_spellings() {
-        for truthy in ["true", "yes", "on", "1", "TRUE", ""] {
-            assert!(parse_bool(truthy), "{truthy:?} is true to git");
+        // Measured against git 2.55: any non-zero number is true, and an
+        // empty *value* is false — only a value-less key is true.
+        for truthy in ["true", "yes", "on", "1", "TRUE", "42", "-1"] {
+            assert!(parse_bool(Some(truthy)), "{truthy:?} is true to git");
         }
-        for falsy in ["false", "no", "off", "0"] {
-            assert!(!parse_bool(falsy), "{falsy:?} is false to git");
+        for falsy in ["false", "no", "off", "0", "", "banana"] {
+            assert!(!parse_bool(Some(falsy)), "{falsy:?} is not true to git");
         }
+        assert!(parse_bool(None), "a value-less key is true to git");
     }
 
     #[test]
-    fn a_valueless_key_means_true() {
+    fn a_valueless_key_means_true_and_an_empty_value_means_false() {
         let config = parse_config(&z(&["commit.gpgsign"]));
         assert!(config.signing.sign_commits);
+        let config = parse_config(&z(&["commit.gpgsign\n"]));
+        assert!(!config.signing.sign_commits);
     }
 }
