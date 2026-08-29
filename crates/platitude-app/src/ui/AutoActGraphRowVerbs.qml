@@ -35,8 +35,8 @@ Item {
             // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
             // property a real pointer writes (`GraphRowDelegate.pointerRowX`) and leaves every decision after that to
             // the row — **the point of the verb is the decision**, so reaching past it to `chipExpandRequested` (which
-            // is what `ref-list` does) would prove nothing about the boundary. The probe itself runs from the sampler:
-            // the delegate is born a layout after the model row, and an early miss must retry, not go silent.
+            // is what `ref-list` does) would prove nothing about the boundary. The probe runs from the sampler, so an
+            // early `itemAtIndex` miss retries.
             const parts = arg.split(":")
             rowPartReport.row = Number(parts[0])
             rowPartReport.want = parts[2]
@@ -49,23 +49,21 @@ Item {
         } else if (act === "graph-reclick" || act === "graph-rename"
                    || act === "graph-reclick-scrolled" || act === "graph-reclick-mark"
                    || act === "graph-reclick-still") {
-            // The gesture at the row itself. The argument is `<行>[:<付ける名前>]` — the first row is the default, and a
-            // run that wants a chip on it says which (`--preset tags`). `graph-rename` carries the same gesture
-            // through to git; without a name there is nothing to carry.
+            // The gesture at the row itself. The argument is `<行>[:<付ける名前>]` — the first row is the default; a
+            // run that wants a chip says which (`--preset tags`). `graph-rename` carries the gesture through to git.
             const renameCut = arg.indexOf(":")
             reclickGraphTimer.row = Number(renameCut < 0 ? (arg === "" ? "0" : arg) : arg.substring(0, renameCut))
             reclickGraphTimer.name = renameCut < 0 ? "" : arg.substring(renameCut + 1)
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
+            // The submit is ticks away; the barrier is held until it (`expectWriteAtPress`).
             if (act === "graph-rename")
-                // The submit is ticks away; the barrier must not pass on a
-                // fetch that answered in between (`expectWriteAtPress`).
                 driver.expectWriteAtPress()
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
-            // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The argument
-            // is `<行>[:<カードの行>]` — the card's first row is the one sitting on the chip's own seat.
+            // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The
+            // argument `<行>[:<カードの行>]` defaults to the card's first row — the one on the chip's own seat.
             const listParts = arg.split(":")
             reclickListTimer.row = listParts[0] === "" ? 0 : Number(listParts[0])
             reclickListTimer.card = listParts.length > 1 ? Number(listParts[1]) : 0
@@ -75,10 +73,9 @@ Item {
                 driver.expectWriteAtPress()
             reclickListTimer.start()
         } else if (act === "ref-list" || act === "ref-list-card") {
-            // Hover cannot be injected, so this enters where the hover timer would — from the sampler, because the
-            // row's delegate is born a layout after the model row and an early miss must retry, not pass on the
-            // plain screen. `-card` walks row → card → chip → asked again from under the list: both card closes have
-            // to hold, and either failing leaves `open=true`.
+            // Hover cannot be injected, so this enters where the hover timer would — from the sampler, so an early
+            // `itemAtIndex` miss retries. `-card` walks row → card → chip → asked again from under the list: both
+            // card closes have to hold, and either failing leaves `open=true`.
             refListOpenTimer.row = Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
@@ -111,8 +108,7 @@ Item {
         }
         return true
     }
-    // The chip expansion, entered once the row's delegate exists. The bare verb then ends on the opened
-    // list; `-card` hands over to `rowCardTimer`, which owns its report.
+    // The chip expansion, entered once the row's delegate exists; `-card` hands over to `rowCardTimer`.
     SampleTimer {
         id: refListOpenTimer
         property int row: 0
@@ -130,13 +126,11 @@ Item {
                 graphPane.view.rowHoverRequested(stacked, true)
                 rowCardTimer.row = refListOpenTimer.row
                 rowCardTimer.start()
-            } else {
+            } else
                 refListShownTimer.start()
-            }
         }
     }
-    // The bare verb's own end: the list is up. Waited on `opened` — an unopened popup frames as the
-    // plain screen, which is exactly the miss this family retries against.
+    // The bare verb's own end: the list is up (an unopened popup frames as the plain screen).
     SampleTimer {
         id: refListShownTimer
         onTriggered: {
@@ -213,9 +207,8 @@ Item {
         property real x: 0
         property bool probed: false
     }
-    // Waits for either card rather than for the one that was expected: a boundary that moved opens the other one, and
-    // waiting for the right answer would spend the whole watchdog finding that out. The rest is a real `tipDelayMs`,
-    // which this samples through — the verb is judged on `agrees`, not on how long it took.
+    // Waits for either card, not the expected one: a boundary that moved opens the other, and waiting for the right
+    // answer would spend the watchdog finding that out. The verb is judged on `agrees`, not on how long it took.
     SampleTimer {
         id: rowPartTimer
         onTriggered: {

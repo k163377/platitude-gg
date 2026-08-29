@@ -29,8 +29,9 @@ pub use select::{diff_key, hunk_selection, worktree_target};
 pub use words::{ending_words, human_size, image_data_url, rename_source};
 
 /// Record separator for the packed lists QML unpacks itself: label chips
-/// and co-authors. Neither a refname, a person's name nor an address can
-/// hold it.
+/// and co-authors. A refname cannot hold it (git refuses control
+/// characters), and a person's name or address carrying this unprintable
+/// would at worst split its own record — no real one does.
 pub const RECORD_SEP: char = '\u{1f}';
 
 /// Field separator inside one record — a chip's name from the remotes it

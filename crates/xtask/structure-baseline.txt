@@ -11,6 +11,5 @@
 # outranks the ceiling and needs no entry here.
 #
 # <physical lines> <path from the workspace root>
-644 crates/platitude-core/src/conflict.rs
-758 crates/platitude-core/src/patch.rs
-664 crates/platitude-core/src/sequencer.rs
+579 crates/platitude-core/src/conflict.rs
+542 crates/platitude-core/src/sequencer.rs

@@ -10,6 +10,8 @@ pub mod branch;
 pub mod commit;
 pub(crate) mod config;
 pub mod conflict;
+#[cfg(test)]
+mod conflict_tests;
 pub mod details;
 pub mod eol;
 pub mod error;
@@ -26,6 +28,8 @@ pub mod oid;
 pub mod opstate;
 pub mod parse;
 pub mod patch;
+#[cfg(test)]
+mod patch_tests;
 pub mod picture;
 pub mod preview;
 pub mod process;
@@ -37,6 +41,8 @@ pub mod repo;
 pub mod report;
 pub mod scratch;
 pub mod sequencer;
+#[cfg(test)]
+mod sequencer_tests;
 pub mod session;
 pub mod settings;
 pub mod stage;

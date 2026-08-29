@@ -153,6 +153,10 @@ impl TestRepo {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("XDG_CONFIG_HOME", &self.xdg_config)
             .env("GIT_TERMINAL_PROMPT", "0")
+            // Nothing a fixture runs may open an editor: a continue that
+            // wants a message must take the recorded one (`true` exits 0
+            // without writing — the same pin the executor under test uses).
+            .env("GIT_EDITOR", "true")
             .env("LC_ALL", "C")
             // Deterministic identities and times.
             .env("GIT_AUTHOR_NAME", "Test User")
