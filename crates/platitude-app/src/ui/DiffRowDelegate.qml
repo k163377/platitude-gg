@@ -31,6 +31,10 @@ Rectangle {
     required property string emph
     /// One of git's conflict fences (`encode::DiffRow`).
     required property bool fence
+    /// This line ends the file without a newline, on the side its own numbers name (`encode::DiffRow`). git says it in
+    /// a note of its own between the two sides; the row says it at the end of the line the note was about
+    /// (デザイン規約 §行末の改行が無いこと).
+    required property bool no_newline
     /// Where the reader's own selection falls on this row (`DiffModel.sel`): `"*"` for a line taken end to end —
     /// which is what almost every selected row is — and otherwise the same `col:wides:width:wides` runs `emph`
     /// carries, for the one or two rows a drag cuts through.
@@ -252,6 +256,36 @@ Rectangle {
             color: diffRow.fence ? Theme.textMuted
                    : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg : diffRow.kind === "meta" ? Theme.textMuted
                    : Theme.textPrimary
+        }
+        // git's `\ No newline at end of file`, said where the thing it is about is: at the end of this line
+        // (デザイン規約 §行末の改行が無いこと). As a row it stood between the removed line and the added one and parted the
+        // pair the eye reads as one change; as a mark it travels with the text, so it is at the end of the line
+        // whichever way the pane has been sent.
+        NavIcon {
+            id: noEolMark
+            visible: diffRow.no_newline
+            kind: "no-entry"
+            // A mark that stands at the end of a line of words (デザイン規約 §寸法), with the stroke dropped to that step
+            // so it carries the weight of the letters beside it rather than 4/3 of it.
+            width: Theme.iconSm
+            height: Theme.iconSm
+            stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+            tint: Theme.danger
+            // Off the ink, not the box: the mark's square holds air past its ring, and a whole `spaceXs` on top of
+            // that would leave the last character further from this than any other pair in the row (§余白).
+            x: codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (width - inkWidth) / 2
+            anchors.verticalCenter: parent.verticalCenter
+            // The words the note used to carry, kept where a mark can still hand them over. It takes no button: the
+            // press over the code belongs to the hand picking text out of the rows (`DiffTextSelect`).
+            ToolTip.visible: noEolHover.containsMouse
+            ToolTip.delay: Metrics.tipDelayMs
+            ToolTip.text: qsTr("No newline at end of file")
+            MouseArea {
+                id: noEolHover
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                hoverEnabled: true
+            }
         }
     }
     // Hunk-level staging. The row carries the hunk index the patch builder needs, so what is staged is exactly what is

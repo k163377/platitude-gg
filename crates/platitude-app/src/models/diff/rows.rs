@@ -202,6 +202,7 @@ pub(super) fn line_items(
             rich: r.rich,
             emph: r.emph,
             fence: r.fence,
+            no_newline: r.no_newline,
             hunk: r.hunk,
             line: r.line,
             patch: r.patch,

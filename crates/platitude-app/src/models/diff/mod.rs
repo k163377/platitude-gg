@@ -55,6 +55,11 @@ pub struct DiffLineItem {
     /// below: that says which side a line came from, this says the line
     /// is not the file talking at all (see `encode::DiffRow`).
     fence: bool,
+    /// This line ends the file without a newline, on the side its own
+    /// numbers name. git says it in a note of its own; the pane says it
+    /// as a mark at the end of this line, which is the line the note was
+    /// about (デザイン規約 §行末の改行が無いこと. See `encode::DiffRow`).
+    no_newline: bool,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,

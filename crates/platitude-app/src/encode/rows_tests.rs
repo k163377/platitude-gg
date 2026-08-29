@@ -265,3 +265,83 @@ fn a_unified_hunk_heading_is_unchanged_by_the_combined_form() {
     assert_eq!(rows[0].text, "@@ -1,2 +1,2 @@");
     assert!(rows.iter().all(|r| r.markers.is_empty()));
 }
+
+#[test]
+fn a_no_newline_note_rides_the_line_above_it_instead_of_taking_a_row() {
+    // What the old side lacked, the new side gained: git says so between
+    // the two, and the note is about the one it follows.
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,1 +1,1 @@
+-}
+\\ No newline at end of file
++}
+";
+    let rows = flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    );
+    assert_eq!(
+        rows.iter().map(|r| r.kind).collect::<Vec<_>>(),
+        ["hunk", "del", "add"],
+        "the note is no row of its own: {rows:?}"
+    );
+    assert!(rows[1].no_newline, "it is the removed line that lacked one");
+    assert!(!rows[2].no_newline);
+}
+
+#[test]
+fn a_note_on_each_side_marks_each_side() {
+    // Both sides end without a newline, and the line changed — so git
+    // prints the note twice, once after each side's own last line.
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,1 +1,1 @@
+-old
+\\ No newline at end of file
++new
+\\ No newline at end of file
+";
+    let rows = flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    );
+    assert_eq!(
+        rows.iter().map(|r| r.kind).collect::<Vec<_>>(),
+        ["hunk", "del", "add"]
+    );
+    assert!(rows[1].no_newline && rows[2].no_newline);
+}
+
+#[test]
+fn a_note_after_an_unchanged_line_marks_that_line() {
+    // Neither side gained or lost the newline, so the note follows a
+    // context line and belongs to it on both sides.
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,2 +1,2 @@
+-old
++new
+ tail
+\\ No newline at end of file
+";
+    let rows = flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    );
+    assert_eq!(
+        rows.iter().map(|r| r.kind).collect::<Vec<_>>(),
+        ["hunk", "del", "add", "ctx"]
+    );
+    assert!(rows[3].no_newline);
+    assert!(rows[1..3].iter().all(|r| !r.no_newline));
+}

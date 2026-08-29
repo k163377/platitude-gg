@@ -20,7 +20,7 @@ pub struct DiffRow {
     pub text: String,
     /// Whether [`DiffRow::text`] is markup. False wherever the theme had
     /// nothing to say — a language the set has never heard of, a hunk
-    /// heading, git's own `\ No newline` note, a conflict marker.
+    /// heading, the binary note, a conflict marker.
     pub rich: bool,
     /// Display columns of what changed inside this row —
     /// `"col:wides:width:wides,…"`: where each run starts and how far it
@@ -36,6 +36,14 @@ pub struct DiffRow {
     /// `>>>>>>>`); the pane drops its voice for these
     /// (デザイン規約 §シンタックスハイライト).
     pub fence: bool,
+    /// This line is the last of its side and ends without a newline —
+    /// git's `\ No newline at end of file`, folded onto the row it is
+    /// about instead of standing as a row of its own
+    /// (デザイン規約 §行末の改行が無いこと). The note is never on both
+    /// sides of one line at once: git prints one per side, after that
+    /// side's own last line, so the row it lands on already says which
+    /// side is being talked about.
+    pub no_newline: bool,
     /// Which hunk of the file this row belongs to, and which line of that
     /// hunk it is (-1 on the hunk header). These are the same indices
     /// [`platitude_core::patch::HunkSelect`] addresses, so a row can be
@@ -125,6 +133,7 @@ pub fn flatten_patches(
                     rich: false,
                     emph: String::new(),
                     fence: false,
+                    no_newline: false,
                     hunk: -1,
                     line: -1,
                     patch: -1,
@@ -149,17 +158,32 @@ pub fn flatten_patches(
                 rich: false,
                 emph: String::new(),
                 fence: false,
+                no_newline: false,
                 hunk: hunk_no,
                 line: -1,
                 patch: patch_no,
                 markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
+                // git's note about the line above it rather than a line
+                // of the file, so it rides that row instead of taking one
+                // (デザイン規約 §行末の改行が無いこと). A note with no line
+                // in front of it is git talking about nothing: there is
+                // no row to carry it and none is invented.
+                if line.kind == DiffLineKind::NoNewline {
+                    if let Some(row) = rows.last_mut()
+                        && row.kind != "hunk"
+                    {
+                        row.no_newline = true;
+                    }
+                    continue;
+                }
                 let kind = match line.kind {
                     DiffLineKind::Context => "ctx",
                     DiffLineKind::Addition => "add",
                     DiffLineKind::Deletion => "del",
-                    DiffLineKind::NoNewline => "meta",
+                    // Folded above; a note never reaches here.
+                    DiffLineKind::NoNewline => continue,
                 };
                 let read = colors.line(patch_index, hunk_index, line_index);
                 let markup = styled(&line.text, &read.spans);
@@ -174,6 +198,7 @@ pub fn flatten_patches(
                         display_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
                     }),
                     fence: read.fence,
+                    no_newline: false,
                     hunk: hunk_no,
                     line: i32::try_from(line_index).unwrap_or(-1),
                     patch: patch_no,

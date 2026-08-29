@@ -45,6 +45,9 @@ InkCanvas {
         case "branch": return 9.6
         // A square of 7.2 turned an eighth of a turn about the middle, so it spans its own diagonal.
         case "tag": return 10.18
+        // Ring and bar are the same diameter, 2.5 to 13.5. Asked for because this one stands at the end of a line of
+        // code and the gap to the last character is measured to the ink (§余白).
+        case "no-entry": return 11
         default: return 16
         }
     }
@@ -412,6 +415,15 @@ InkCanvas {
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
             ctx.moveTo(4.11 * s, 4.11 * s)
             ctx.lineTo(11.89 * s, 11.89 * s)
+            ctx.stroke()
+        } else if (icon.kind === "no-entry") {
+            // The same ring `no` wears with the bar laid flat instead of struck across: the road sign, which is what
+            // says "this ends here" rather than "your hand will not be taken" (規約 §行末の改行が無いこと). Both are one
+            // diameter of the same circle, so the two read as the same hand at different angles.
+            ctx.beginPath()
+            ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
+            ctx.moveTo(2.5 * s, 8 * s)
+            ctx.lineTo(13.5 * s, 8 * s)
             ctx.stroke()
         } else if (icon.kind === "clock") {
             ctx.beginPath()
