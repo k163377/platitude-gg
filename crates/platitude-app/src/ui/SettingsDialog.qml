@@ -319,15 +319,14 @@ AppDialog {
                     // 与える). No article: the row names a kind about to be
                     // chosen, not something already on screen (§長さ).
                     text: qsTr("Choose avatar…")
-                    // Opened from an avatar this already holds the focus,
-                    // so the whole errand is one press and the picker —
-                    // and the accent says so, since the frame is what
-                    // names the affirmative here (規約 §肯定側のボタン).
-                    // Away from the accent it keeps a plain frame rather
-                    // than going bare: bare is for the answer standing
-                    // beside a framed one, read as the pair it is in, and
-                    // this one stands in a form row next to a combo.
-                    frameColor: settingsDialog.prefillEmail !== "" && enabled ? Theme.accent : Theme.borderDefault
+                    // A plain frame rather than bare: bare is for the
+                    // answer standing beside a framed one, read as the
+                    // pair it is in, and this one stands in a form row
+                    // next to a combo (規約 §肯定側のボタン). Opened from
+                    // an avatar, what says which errand this is is the
+                    // combo beside it already carrying that name — not a
+                    // colour on the button.
+                    frameColor: Theme.borderDefault
                     activeFocusOnTab: true
                     enabled: settingsDialog.chosenEmail !== ""
                     onActivated: avatarPicker.open()
@@ -380,10 +379,6 @@ AppDialog {
         // button carries no check.
         DialogActions {
             acceptText: qsTr("OK")
-            // The accent goes to whichever of the two the dialog was
-            // opened for, and the other keeps a plain frame — the same one
-            // expression, read the other way round (`chooseAvatar`).
-            acceptAccented: settingsDialog.prefillEmail === ""
             onAccepted: settingsDialog.close()
         }
     }

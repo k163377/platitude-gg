@@ -5,11 +5,14 @@ import platitude.ui
 // The row a dialog ends on: the way out on the left, the thing the dialog
 // is for on the right, both against the right edge.
 //
-// The accent is on the one that acts, and it is dropped while that one
-// cannot be pressed — a lit button that does nothing is a lie
-// (デザイン規約 §状態). A dialog that has nothing to undo offers no way
-// out and says so by leaving `cancelText` empty rather than by drawing a
-// button that promises to put something back.
+// The one that acts is named by a frame, and the frame is the plain one:
+// the accent is kept for the two buttons that write a commit, so a dialog
+// that only ends itself does not borrow the colour they carry
+// (2026-08-29 ユーザー報告). What says it cannot be pressed is the word,
+// which takes the disabled step (`ActionButton.fg`). A dialog that has
+// nothing to undo offers no way out and says so by leaving `cancelText`
+// empty rather than by drawing a button that promises to put something
+// back.
 RowLayout {
     id: actions
 
@@ -21,10 +24,6 @@ RowLayout {
     /// word (`NavIcon.kind`).
     property string acceptKind: ""
     property bool acceptEnabled: true
-    /// Whether the acting button wears the accent. Follows what it can
-    /// do, which is right wherever the dialog has one thing to offer;
-    /// a dialog whose accent depends on why it was opened writes it.
-    property bool acceptAccented: actions.acceptEnabled
 
     /// The acting button itself, for a dialog that opens with the focus
     /// already on it.
@@ -48,7 +47,7 @@ RowLayout {
         implicitHeight: Theme.controlHeight
         kind: actions.acceptKind
         besideWord: actions.acceptKind !== ""
-        frameColor: actions.acceptAccented ? Theme.accent : Theme.borderDefault
+        frameColor: Theme.borderDefault
         activeFocusOnTab: true
         text: actions.acceptText
         enabled: actions.acceptEnabled
