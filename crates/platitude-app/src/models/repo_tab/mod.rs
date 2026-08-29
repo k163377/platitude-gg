@@ -10,6 +10,8 @@ use crate::urlpath::picker_folder_url;
 use super::qml_register;
 
 mod drain;
+#[cfg(test)]
+mod drain_tests;
 mod ops_config;
 mod ops_conflict;
 mod ops_remote;
