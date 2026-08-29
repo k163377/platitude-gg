@@ -118,6 +118,7 @@ HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
 InkCanvas 1.0 InkCanvas.qml
 IdentityDialog 1.0 IdentityDialog.qml
+IdentityFields 1.0 IdentityFields.qml
 IdentityGate 1.0 IdentityGate.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
 LabeledField 1.0 LabeledField.qml
@@ -161,6 +162,8 @@ RowHoverHost 1.0 RowHoverHost.qml
 SampleTimer 1.0 SampleTimer.qml
 SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsDialog 1.0 SettingsDialog.qml
+SettingsGitPane 1.0 SettingsGitPane.qml
+SettingsSection 1.0 SettingsSection.qml
 SharedToolTip 1.0 SharedToolTip.qml
 SidebarFilterRow 1.0 SidebarFilterRow.qml
 SidebarPane 1.0 SidebarPane.qml

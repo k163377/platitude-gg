@@ -314,7 +314,9 @@ Item {
             }
             AppMenuSeparator {}
             AppMenuItem {
-                text: qsTr("Identity…")
+                // Named for where the values are kept rather than for the first of them: the screen behind this row
+                // writes into git's own configuration, and the identity is one chapter of it.
+                text: qsTr("Git settings…")
                 onTriggered: tabStrip.identityEditRequested()
             }
             AppMenuItem {

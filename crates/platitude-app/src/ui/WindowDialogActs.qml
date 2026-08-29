@@ -37,11 +37,17 @@ Item {
         }
     }
 
-    // The tools popup has two separately latched output states: a real loading edge and the populated, settled choices.
+    // The tools popup has two separately latched output states: a real loading edge and the populated, settled
+    // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
+    // the same door the menu entry uses.
     SampleTimer {
         running: AppBackend.autoAct === "settings-tools"
                  || AppBackend.autoAct === "settings-tools-loading"
         onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("git")
+                return
+            }
             const ready = AppBackend.autoAct === "settings-tools-loading"
                         ? settingsDialog.autoToolsLoadingReady
                         : settingsDialog.autoToolsSettledReady

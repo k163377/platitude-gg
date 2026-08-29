@@ -33,13 +33,12 @@ Item {
     function run(act, arg) {
         if (act === "open-picker") {
             page.openRepositoryPicker()
-        } else if (act === "settings" || act === "settings-tools"
-                   || act === "settings-tools-loading") {
-            // `-tools` goes on to open the candidate list from inside the dialog, and leaves the fetch interval where
-            // it was.
+        } else if (act === "settings") {
             page.settingsDialogRequested()
-            if (act === "settings")
-                AppBackend.setAutoFetchMinutes(Number(arg))
+            AppBackend.setAutoFetchMinutes(Number(arg))
+        } else if (act === "settings-git") {
+            // The screen's other category, entered by the door the conflict menu and the app menu both use.
+            page.gitSettingsRequested()
         } else if (act === "avatar-rest" || act === "avatar-hover"
                    || act === "avatar-assign" || act === "avatar-badge") {
             // The first ordinary commit — row 0 is WIP.

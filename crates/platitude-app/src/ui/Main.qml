@@ -306,6 +306,16 @@ ApplicationWindow {
         id: settingsDialog
         curPage: root.curPage
     }
+    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
+    // otherwise a menu action. It lands where the menu entry lands.
+    Connections {
+        target: AppBackend
+        enabled: AppBackend.autoIdentity === "edit"
+        function onIdentityChanged() {
+            if (AppBackend.identityState === "ready" && !settingsDialog.opened)
+                settingsDialog.openAt("git")
+        }
+    }
 
     // The window's own edge: a frameless window has no non-client area for the platform to put a line around, so the
     // line the design asks for (規約 §ウィンドウの縁) is drawn in the client. Not while the window fills the screen — a
@@ -354,8 +364,8 @@ ApplicationWindow {
             // open. Read here for the same reason: only this window has both halves of it.
             windowFloorWidth: root.openFloorWidth
             onOpenRepositoryRequested: root.openRepositoryPicker()
-            onIdentityEditRequested: identityGate.identityEditing = true
-            onSettingsRequested: settingsDialog.open()
+            onIdentityEditRequested: settingsDialog.openAt("git")
+            onSettingsRequested: settingsDialog.openAt("app")
             onMaximizeToggleRequested: chrome.toggleMaximized()
             onMinimizeRequested: chrome.minimizeWindow()
             onCloseRequested: root.close()
@@ -395,12 +405,13 @@ ApplicationWindow {
             focusEpoch: root.focusEpoch
             onScreen: root.onScreen
             onOpenRepositoryPicker: root.openRepositoryPicker()
-            onSettingsDialogRequested: settingsDialog.open()
+            onSettingsDialogRequested: settingsDialog.openAt("app")
+            onGitSettingsRequested: settingsDialog.openAt("git")
             // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
             onAvatarSettingsRequested: (name, email) => {
                 settingsDialog.prefillName = name
                 settingsDialog.prefillEmail = email
-                settingsDialog.open()
+                settingsDialog.openAt("app")
             }
         }
 

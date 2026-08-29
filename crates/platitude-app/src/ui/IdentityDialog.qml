@@ -4,14 +4,16 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// Author-identity form: opens on startup when git has no name and email to put on a commit, and on demand from the app
-// menu or the toolbar badge. The owner decides when to open and close it (the dialog reports dismissal); "Not now"
-// leaves the app fully usable — reading a repository needs no identity.
+// The gate that stands on startup when git has no name and email to put on a commit. It asks for that one thing and
+// nothing else — the rest of git's configuration is not what the reader was stopped for, and it is a click away in
+// the settings screen's git chapter (`SettingsDialog`), which is where an identity that is already set is edited.
+//
+// A card rather than the settings screen's full window: this is a question waiting for an answer, not a screen to
+// read. The owner decides when to open and close it (the dialog reports dismissal); "Not now" leaves the app fully
+// usable — reading a repository needs no identity.
 AppDialog {
     id: identityDialog
 
-    // Changes the cancel wording: editing an identity that exists vs being asked for one on first run.
-    property bool editing: false
     signal dismissed()
 
     onClosed: identityDialog.dismissed()
@@ -24,13 +26,12 @@ AppDialog {
         if (!actions.acceptEnabled)
             return
         identityDialog.saving = true
-        AppBackend.saveIdentity(nameField.text, emailField.text)
+        AppBackend.saveIdentity(fields.nameText, fields.emailText)
     }
 
     onOpened: {
-        nameField.text = AppBackend.identityName
-        emailField.text = AppBackend.identityEmail
-        nameField.forceActiveFocus()
+        fields.load()
+        fields.focusName()
         if (AppBackend.autoIdentity !== "")
             Qt.callLater(identityDialog.applyAutoIdentity)
     }
@@ -46,8 +47,8 @@ AppDialog {
         if (AppBackend.autoIdentity === "edit")
             return
         const parts = AppBackend.autoIdentity.split("|")
-        nameField.text = parts[0]
-        emailField.text = parts.length > 1 ? parts[1] : ""
+        fields.nameText = parts[0]
+        fields.emailText = parts.length > 1 ? parts[1] : ""
         if (AppBackend.autoIdentitySave)
             identityDialog.submit()
     }
@@ -69,7 +70,7 @@ AppDialog {
         spacing: Theme.spaceLg
 
         Label {
-            text: AppBackend.identityState === "ready" ? qsTr("Your identity") : qsTr("Set up your identity")
+            text: qsTr("Set up your identity")
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
         }
@@ -80,83 +81,17 @@ AppDialog {
             text: qsTr("git records a name and an email address on every commit you make. They are stored in your git configuration — Platitude GG keeps no copy of them.")
         }
 
-        LabeledField {
-            caption: qsTr("Name")
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceSm
-                FormField {
-                    id: nameField
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("Ada Lovelace")
-                    onAccepted: identityDialog.submit()
-                    // Not validation — these are the characters git drops when it builds an author line, and keeping
-                    // them out stops the configuration from disagreeing with what commits show. Everything else is the
-                    // user's business.
-                    validator: RegularExpressionValidator {
-                        regularExpression: /[^<>\r\n]*/
-                    }
-                }
-                // The mark is only ever seen next to a field whose neighbour has none: a save where both landed closes
-                // this dialog. `opacity` keeps the field the same width whether or not it is showing.
-                NavIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    kind: "check"
-                    tint: Theme.success
-                    opacity: AppBackend.identityUnsaved && AppBackend.identityNameSaved ? 1 : 0
-                }
-            }
-        }
-        LabeledField {
-            caption: qsTr("Email address")
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceSm
-                FormField {
-                    id: emailField
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("ada@example.com")
-                    onAccepted: identityDialog.submit()
-                    validator: RegularExpressionValidator {
-                        regularExpression: /[^<>\r\n]*/
-                    }
-                }
-                NavIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    kind: "check"
-                    tint: Theme.success
-                    opacity: AppBackend.identityUnsaved && AppBackend.identityEmailSaved ? 1 : 0
-                }
-            }
-        }
-
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
-            text: qsTr("Saved for every repository on this computer (user.name and user.email).")
-        }
-        // git's own message, unedited — and where a write took nowhere without git raising anything, a sentence of our
-        // own, because there is no message to pass through and the marks alone do not say why one of them is missing.
-        Label {
-            Layout.fillWidth: true
-            visible: text !== ""
-            wrapMode: Text.Wrap
-            color: Theme.danger
-            text: AppBackend.identityError !== ""
-                  ? AppBackend.identityError
-                  : AppBackend.identityUnsaved
-                    ? qsTr("git still reports a different identity. A setting in the repository this window was started in can sit over this one.")
-                    : ""
+        IdentityFields {
+            id: fields
+            onSubmitted: identityDialog.submit()
         }
 
         DialogActions {
             id: actions
-            cancelText: identityDialog.editing ? qsTr("Cancel") : qsTr("Not now")
+            cancelText: qsTr("Not now")
             acceptKind: "check"
             acceptText: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
-            acceptEnabled: !AppBackend.identityBusy && nameField.text.trim() !== "" && emailField.text.trim() !== ""
+            acceptEnabled: !AppBackend.identityBusy && fields.filled
             onCancelled: identityDialog.close()
             onAccepted: identityDialog.submit()
         }

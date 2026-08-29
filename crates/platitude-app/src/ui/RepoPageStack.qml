@@ -34,6 +34,7 @@ StackLayout {
 
     signal openRepositoryPicker()
     signal settingsDialogRequested()
+    signal gitSettingsRequested()
     signal avatarSettingsRequested(string name, string email)
 
     /// The page in front — what the window's toolbar acts on, and null while no tab is.
@@ -92,6 +93,7 @@ StackLayout {
                 onOpenRepositoryPicker: stack.openRepositoryPicker()
                 onOpenRepositoryPathRequested: path => stack.tabsModel.openRepositoryPath(path)
                 onSettingsDialogRequested: stack.settingsDialogRequested()
+                onGitSettingsRequested: stack.gitSettingsRequested()
                 onAvatarSettingsRequested: (name, email) => stack.avatarSettingsRequested(name, email)
                 onCloseTabRequested: stack.tabsModel.closeTab(seat.tab_id)
             }

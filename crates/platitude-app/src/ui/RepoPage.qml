@@ -18,6 +18,8 @@ Item {
     signal openRepositoryPathRequested(string path)
     /// PG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
+    /// A conflicted file has nowhere to be opened: the git settings screen is where the merge editor is named.
+    signal gitSettingsRequested()
     /// The settings card, opened from an avatar and carrying whom it was opened on.
     signal avatarSettingsRequested(string name, string email)
     /// PG_AUTO_PERF completion after every requested measurement output.
@@ -805,7 +807,7 @@ Item {
         repoTab: repoTab
         workTree: workTree
         wipPane: wipPane
-        onMergeToolWanted: page.settingsDialogRequested()
+        onMergeToolWanted: page.gitSettingsRequested()
         onCopyRequested: text => clipboard.copy(text)
     }
 

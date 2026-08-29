@@ -181,6 +181,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/IdentIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/InkCanvas.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentityDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/IdentityFields.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/IdentityGate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ImagePreviewCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/LabeledField.qml", "qt/qml/platitude");
@@ -225,6 +226,8 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SampleTimer.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SectionPeekPopup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SettingsGitPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SettingsSection.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SharedToolTip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarFilterRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarPane.qml", "qt/qml/platitude");
