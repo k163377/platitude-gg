@@ -49,7 +49,8 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           it does not sink the run (delete-branch-refused,
                           commands-fail, commands-clear, fetch-fail,
                           fetch-recover, fetch-resume, push-retry,
-                          remote-refused,
+                          remote-refused, tag-refused, push-outdated,
+                          commit-refused, notice-over-diff,
                           band-actions-alert, and push / publish-new-go
                           against an unreachable
                           remote). A replay that stops part-way is not

@@ -142,6 +142,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("seeded window: 320x240 (under every floor)");
     }
 
+    // The one verb whose arrangement the window would destroy on its way
+    // in: a push is only out of date while this end has not looked at the
+    // remote, and opening a tab fetches once (デザイン規約 §リモートから取り込む).
+    // Turning the timer off turns that one off with it, which is also
+    // what leaves the toolbar offering a plain `push` — an end that had
+    // fetched would know it was diverged and offer the overwrite instead.
+    if opts.verb == "push-outdated" {
+        let settings = config_dir.join("settings.toml");
+        std::fs::write(
+            &settings,
+            "version = 1\n\n[defaults]\nauto_fetch_minutes = 0\n",
+        )
+        .map_err(|e| format!("could not write {}: {e}", settings.display()))?;
+        println!("seeded settings: auto fetch off (so the window opens without looking)");
+    }
+
     // The other side of the same idea: `details-fit` is about the pane's
     // right column, and half of what it claims only bites where the
     // author row is narrower than the block it stands in. At the default

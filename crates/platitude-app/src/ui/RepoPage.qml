@@ -1103,6 +1103,31 @@ Item {
         }
     }
 
+    // ---- a report with nothing to answer ----------------------------
+    // A write that did not happen, and whoever said no. It comes down over the middle of the page — over whichever of
+    // the graph and the diff is showing — and goes back up on the one word it offers (デザイン規約 §答えの要らない報せ).
+
+    /// Raises the report. `label` is what did not happen, `detail` whoever said no in their own words.
+    function showNotice(label, detail) {
+        // Dressed, then raised — so nothing on a bar the reader can see is ever written (`NoticeBar.open`).
+        noticeBar.label = label
+        noticeBar.detail = detail
+        noticeBar.open = true
+    }
+    /// Only lowered: the words stay where they are for the 200ms it spends going up.
+    function hideNotice() {
+        noticeBar.open = false
+    }
+    /// The bar itself — automation-only exposure, like `GraphPane.askCard` (app-ui.md). A headless run reads
+    /// `settled` / `shut` / `label` off it and presses its one control through `dismiss()`.
+    readonly property alias noticeCard: noticeBar
+    /// Automation: whether the middle of the page is standing **under** the report rather than behind it — the whole
+    /// of what moving the bar out of the graph was for, and the one thing about it a picture cannot settle (a bar
+    /// drawn over a pane frames exactly like a bar the pane was moved down for, since what it covers is the pane's
+    /// own top edge either way). Read in page coordinates, so it holds whichever of the two panes is showing.
+    readonly property bool noticeClears:
+        centreStack.mapToItem(page, 0, 0).y >= noticeBar.mapToItem(page, 0, noticeBar.height).y
+
     // A finished write the editor asked for: clear it only once git says the commit landed, so a rejected one keeps its
     // text.
     property int seenWriteSeq: 0
@@ -1140,17 +1165,18 @@ Item {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
             }
-            // The far side turned it down under a rule of its own — a protected branch, a hook. Nothing here could
-            // have known beforehand and nothing here can answer it, so what it said comes down as a report and the log
-            // stays where the reader left it (デザイン規約 §可否・警告の出し場所). Ahead of the branch delete's own second move:
+            // The write did not happen and something outside this application said so — a protected branch, a hook
+            // over there or here, a remote this end had only an older picture of. Nothing here could have known
+            // beforehand and nothing here can answer it, so what it said comes down as a report and the log stays
+            // where the reader left it (デザイン規約 §答えの要らない報せ). Ahead of the branch delete's own second move:
             // `Delete both` is a branch write whose remote half is what the far side refused, and the row it would
             // morph is about the half that landed.
-            if (repoTab.writeRefusalKind !== "") {
-                graphPane.showNotice(
-                    Words.remoteRefused(repoTab.writeRefusalKind,
-                                        repoTab.writeRefusalRemote,
-                                        repoTab.writeRefusalBranch),
-                    repoTab.writeRefusalReason)
+            if (repoTab.writeReportKind !== "") {
+                page.showNotice(
+                    Words.writeReported(repoTab.writeReportKind,
+                                        repoTab.writeReportRemote,
+                                        repoTab.writeReportName),
+                    repoTab.writeReportReason)
                 // …and the mark in the corner goes quiet with it: it is there to fetch somebody to a failure nothing
                 // else has said, and the bar has just said this one (デザイン規約 §git が言ったことを読む場所). The row keeps
                 // git's words under its red edge — that is the record, and the record is what the panel is for.
@@ -1159,9 +1185,9 @@ Item {
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
                 if (AppBackend.autoAct !== "")
-                    AppBackend.report("remote_refused kind=" + repoTab.writeRefusalKind
-                                      + " ref=" + repoTab.writeRefusalRemote
-                                      + "/" + repoTab.writeRefusalBranch)
+                    AppBackend.report("write_reported kind=" + repoTab.writeReportKind
+                                      + " ref=" + repoTab.writeReportRemote
+                                      + "/" + repoTab.writeReportName)
                 return
             }
             // The one refusal this page has a second move for: a branch delete git would not do on its own.
@@ -2145,80 +2171,101 @@ Item {
                     onAddRemoteRequested: publishFlow.startAddRemote()
                 }
 
-                // Center: commit graph ⇄ file diff
-                StackLayout {
+                // Center: a report over the whole of it, and under that the commit graph ⇄ file diff.
+                //
+                // **The report is above the pair rather than inside either**: it answers a write, and a write is
+                // answered wherever the reader happens to be standing — a push refused while a diff is open has the
+                // same news to give (デザイン規約 §答えの要らない報せ). Put in one of them it would be silent in the other, and
+                // put over them it would cover what it is about.
+                //
+                // **So the middle steps down for it.** The bar takes its own row of the column and the pair takes what
+                // is left, which is the same thing the graph did for it when the bar lived inside that pane: nothing is
+                // covered, and a closed bar has no height to give.
+                ColumnLayout {
                     SplitView.fillWidth: true
                     // Not a number of its own: what the graph's own columns come to once they have both given
                     // everything they can, held up to a side pane's width so the middle never reads as the thinnest of
                     // the three (`PageLayout.centreMinWidth`).
                     SplitView.minimumWidth: pageLayout.centreMinWidth
-                    currentIndex: page.diffShown ? 1 : 0
+                    spacing: 0
 
-                    GraphPane {
-                        id: graphPane
-                        graphModel: graphModel
-                        workTree: workTree
-                        blank: page.blank
-                        chipListAnchor: rowHost.refListAnchor
-                        rowCardOid: rowHost.rowCardOid
-                        onRowActivated: (oidHex, atRow) => page.activateRow(oidHex, atRow)
-                        // The bar moves between matches, not between commits — landing on the same row twice changes
-                        // nothing and costs no git.
-                        onFindLanded: oidHex => {
-                            if (oidHex !== "" && oidHex !== page.selectedOid)
-                                page.activateRow(oidHex)
-                        }
-                        onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
-                        onChipMenuOpenRequested: (oidHex, record) => page.openRecordMenu(record, oidHex)
-                        onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
-                        onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
-                        onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
-                        namingRefused: page.graphNameRefusedWhy !== ""
-                        namingRefusedWhy: page.graphNameRefusedWhy
-                        onChipExpandRequested: (oidHex, atRow, records, anchor) =>
-                            rowHost.openRefList(oidHex, atRow, records, anchor)
-                        onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
-                        onRowHoverRequested: (row, inside) => {
-                            rowHost.rowCardWanted = inside
-                            if (inside)
-                                rowHost.openRowCard(row)
-                            else
-                                rowHost.settleRowCard()
-                        }
-                        onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
-                        // Nothing moves: a tag is left on the commit and the tree stays where it is.
-                        onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
-                        onOpenRepositoryRequested: page.openRepositoryPicker()
-                        onAskConfirmed: page.answerRowAsk()
-                        onAskCancelled: page.stopRowAsk()
-                        onNoticeAcknowledged: graphPane.hideNotice()
+                    NoticeBar {
+                        id: noticeBar
+                        Layout.fillWidth: true
+                        onAcknowledged: page.hideNotice()
                     }
 
-                    DiffPane {
-                        id: diffPane
-                        diffModel: diffModel
-                        fromWorkTree: page.diffFromWt
-                        staged: page.diffStaged
-                        conflicted: page.diffKind === "conflicts"
-                        conflictChange: page.diffChange
-                        // The two swap over during a rebase; the model is where that is already answered.
-                        sideOurs: workTree.sideOurs
-                        sideTheirs: workTree.sideTheirs
-                        sideColorOurs: page.sideColorOurs
-                        sideColorTheirs: page.sideColorTheirs
-                        busy: page.diffSettling
-                        menuStanding: page.menuStanding
-                        onCloseRequested: page.closeDiff()
-                        onCopyRequested: text => clipboard.copy(text)
-                        onCodeMenuRequested: page.openCodeMenu()
-                        onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
-                        onStageFileRequested: {
-                            if (page.diffStaged)
-                                repoTab.unstagePath(page.diffPath)
-                            else
-                                repoTab.stagePath(page.diffPath)
+                    StackLayout {
+                        id: centreStack
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        currentIndex: page.diffShown ? 1 : 0
+
+                        GraphPane {
+                            id: graphPane
+                            graphModel: graphModel
+                            workTree: workTree
+                            blank: page.blank
+                            chipListAnchor: rowHost.refListAnchor
+                            rowCardOid: rowHost.rowCardOid
+                            onRowActivated: (oidHex, atRow) => page.activateRow(oidHex, atRow)
+                            // The bar moves between matches, not between commits — landing on the same row twice changes
+                            // nothing and costs no git.
+                            onFindLanded: oidHex => {
+                                if (oidHex !== "" && oidHex !== page.selectedOid)
+                                    page.activateRow(oidHex)
+                            }
+                            onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
+                            onChipMenuOpenRequested: (oidHex, record) => page.openRecordMenu(record, oidHex)
+                            onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
+                            onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
+                            onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
+                            namingRefused: page.graphNameRefusedWhy !== ""
+                            namingRefusedWhy: page.graphNameRefusedWhy
+                            onChipExpandRequested: (oidHex, atRow, records, anchor) =>
+                                rowHost.openRefList(oidHex, atRow, records, anchor)
+                            onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
+                            onRowHoverRequested: (row, inside) => {
+                                rowHost.rowCardWanted = inside
+                                if (inside)
+                                    rowHost.openRowCard(row)
+                                else
+                                    rowHost.settleRowCard()
+                            }
+                            onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
+                            // Nothing moves: a tag is left on the commit and the tree stays where it is.
+                            onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
+                            onOpenRepositoryRequested: page.openRepositoryPicker()
+                            onAskConfirmed: page.answerRowAsk()
+                            onAskCancelled: page.stopRowAsk()
                         }
-                        onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
+
+                        DiffPane {
+                            id: diffPane
+                            diffModel: diffModel
+                            fromWorkTree: page.diffFromWt
+                            staged: page.diffStaged
+                            conflicted: page.diffKind === "conflicts"
+                            conflictChange: page.diffChange
+                            // The two swap over during a rebase; the model is where that is already answered.
+                            sideOurs: workTree.sideOurs
+                            sideTheirs: workTree.sideTheirs
+                            sideColorOurs: page.sideColorOurs
+                            sideColorTheirs: page.sideColorTheirs
+                            busy: page.diffSettling
+                            menuStanding: page.menuStanding
+                            onCloseRequested: page.closeDiff()
+                            onCopyRequested: text => clipboard.copy(text)
+                            onCodeMenuRequested: page.openCodeMenu()
+                            onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
+                            onStageFileRequested: {
+                                if (page.diffStaged)
+                                    repoTab.unstagePath(page.diffPath)
+                                else
+                                    repoTab.stagePath(page.diffPath)
+                            }
+                            onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
+                        }
                     }
                 }
 

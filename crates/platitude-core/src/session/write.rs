@@ -72,7 +72,7 @@ impl RepoSession {
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: None,
-                    refusal: None,
+                    report: None,
                 });
                 after == AfterWrite::Graph
             }
@@ -84,23 +84,20 @@ impl RepoSession {
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: Some(error.to_string()),
-                    refusal: None,
+                    report: None,
                 });
                 return;
             }
             Err(error) => {
                 tracing::warn!(op, %error, "write failed");
-                // What the far side refused on its own terms travels
-                // beside git's words: the screen makes a report out of
-                // the one and keeps the other for the log.
-                let refusal = match &error {
-                    GitError::RemoteRefused { refusal, .. } => Some((**refusal).clone()),
-                    _ => None,
-                };
+                // A write that did not happen and has something to say
+                // for itself travels beside git's words: the screen makes
+                // a report out of the one and keeps the other for the log.
+                let report = error.report().cloned();
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: Some(error.to_string()),
-                    refusal,
+                    report,
                 });
                 // A half-finished command still changed the repository
                 // (conflicted merge, interrupted rebase, partial apply),

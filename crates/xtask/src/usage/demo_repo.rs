@@ -37,12 +37,18 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         detached  HEAD detached at a tag
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
+        outrun    the same, NOT fetched, with a commit of our own on top:
+                  a plain push git will not send until the remote has been
+                  read again (push-outdated)
         unpublished  a branch never sent anywhere, two remotes, one taken name
         forkmark  a fork checkout: fetches from origin, and the branch's
                   own mark sends every push of it to the fork instead
         protected an origin that keeps what it holds: every push to it is
                   turned away the way a forge turns one away from a
-                  protected branch (remote-refused)
+                  protected branch, and it holds a tag as well
+                  (remote-refused, tag-refused)
+        hooked    a pre-commit hook that says no, over something staged
+                  for it to say it about (commit-refused, notice-over-diff)
         noremote  commits and no remote at all: the first push writes one down
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E

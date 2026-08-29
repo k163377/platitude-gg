@@ -107,8 +107,59 @@ pub async fn commit(
         _scratch = scratch;
     }
 
-    executor.run(cmd, cancel).await?;
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code != 0 {
+        return Err(refused(command, &out));
+    }
     head_oid(executor, &repo.workdir, cancel).await
+}
+
+/// A commit that was not made, as something to report rather than a
+/// failure of the application's (デザイン規約 §答えの要らない報せ).
+///
+/// **Every refusal this end could answer has already been taken away**
+/// before the button can be pressed: an identity is asked for at the gate,
+/// an empty message is refused above, and nothing staged leaves nothing to
+/// press. So a non-zero `git commit` is always something outside this
+/// application saying no — a `pre-commit` or `commit-msg` hook, a signing
+/// key that would not sign, another git holding the index — and none of
+/// them leaves half a commit behind: git writes the object or it does not.
+/// There is no next move here either, since `--no-verify` is never passed
+/// (this module's own rule).
+///
+/// **So the kind is not worked out from what git said.** A hook writes
+/// whatever its author wrote and git prints nothing of its own for one, so
+/// there is no machine-readable line to tell the reasons apart — and none
+/// of them would be shown differently if there were.
+///
+/// The words under the heading are **both streams**: git writes its own
+/// refusals to stderr, and a hook writes to whichever it likes (a linter
+/// wrapped in one usually writes its complaint to stdout and its own
+/// diagnostics to stderr, so taking stderr alone would quote the wrapper
+/// and drop the complaint).
+fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
+    let stderr = out.stderr_utf8();
+    let stdout = out.stdout_utf8();
+    let mut said = String::new();
+    for part in [stderr.trim(), stdout.trim()] {
+        if part.is_empty() {
+            continue;
+        }
+        if !said.is_empty() {
+            said.push(' ');
+        }
+        said.push_str(&part.split_whitespace().collect::<Vec<_>>().join(" "));
+    }
+    GitError::Reported {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+        report: Box::new(crate::report::WriteReport::local(
+            crate::report::ReportKind::Commit,
+            said,
+        )),
+    }
 }
 
 /// What an amend starts from: HEAD's message and the identity recorded

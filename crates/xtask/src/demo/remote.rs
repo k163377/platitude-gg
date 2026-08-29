@@ -120,6 +120,54 @@ pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The remote moved on and **this end still does not know**: a commit of
+/// its own is sitting on a branch git will not send until the remote has
+/// been read again.
+///
+/// [`behind`] with work of our own on top, and nothing fetched since. The
+/// window has to open without fetching for the arrangement to survive to
+/// the press (`verify::run` writes the settings that stop the timer), and
+/// that is also what makes the toolbar offer a plain `push`: an end that
+/// had fetched would know it was diverged and offer the overwrite instead.
+pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
+    behind(repo)?;
+    repo.commit("b.txt", "ours\n", "feat: work of our own")?;
+    Ok(())
+}
+
+/// A repository whose own `pre-commit` hook says no, with something
+/// staged for it to say it about.
+///
+/// **A hook is the only way to have that refusal offline**, and it is
+/// also the honest one: a linter wrapped in a hook is what most of these
+/// are, so it writes its complaint to stdout and its own noise to stderr —
+/// the arrangement that says whether both streams reach the report
+/// (`commit::refused`).
+pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.write("src/app.txt", "app v2\t\n")?;
+
+    let hook = repo.work.join(".git").join("hooks");
+    std::fs::create_dir_all(&hook).map_err(|e| e.to_string())?;
+    let path = hook.join("pre-commit");
+    std::fs::write(
+        &path,
+        "#!/bin/sh\n\
+         echo \"src/app.txt:1: trailing whitespace\"\n\
+         echo \"style: 1 problem found, nothing committed\" >&2\n\
+         exit 1\n",
+    )
+    .map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Both sides moved on, and this repository has already seen it happen:
 /// the fetch is part of the preset, so the toolbar offers the overwrite
 /// (`push -f`) from the moment the window opens rather than after a verb.
@@ -151,15 +199,33 @@ pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/app.txt", "app v2\n", "feat: carry on with the app")?;
     repo.git(&["push", "origin", "feature/topic-a"])?;
     repo.git(&["switch", "main"])?;
+    // A tag on both sides, put over **before** the hook goes in: a forge
+    // that protects its release tags refuses taking one off exactly the
+    // way it refuses a branch, and the row that asks for that is only
+    // offered where the remote is known to hold the name (`tag-refused`).
+    repo.git(&["tag", "v1.0"])?;
+    repo.git(&["push", "origin", "refs/tags/v1.0"])?;
 
     let hook = repo.root.join("origin.git").join("hooks");
     std::fs::create_dir_all(&hook).map_err(|e| e.to_string())?;
     let path = hook.join("pre-receive");
+    // **The words follow the ref, the way a forge's do.** GitHub writes
+    // `Protected tag update failed` over a tag and `Protected branch
+    // update failed` over a branch; a fixture that said `branch` while a
+    // tag was being refused would put a sentence on screen that this end
+    // could be blamed for writing (実測 — the report quotes it as it came).
+    // The refs arrive on stdin as `<old> <new> <ref>`.
     std::fs::write(
         &path,
         "#!/bin/sh\n\
-         echo \"error: GH006: Protected branch update failed for refs/heads/main.\" >&2\n\
-         echo \"error: Cannot delete a protected branch\" >&2\n\
+         while read -r old new ref; do\n\
+         case \"$ref\" in\n\
+         refs/tags/*) kind=tag ;;\n\
+         *) kind=branch ;;\n\
+         esac\n\
+         echo \"error: GH006: Protected $kind update failed for $ref.\" >&2\n\
+         echo \"error: Cannot delete a protected $kind\" >&2\n\
+         done\n\
          exit 1\n",
     )
     .map_err(|e| e.to_string())?;

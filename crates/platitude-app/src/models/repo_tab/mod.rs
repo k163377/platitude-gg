@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use platitude_core::ReportKind;
 use qtbridge::{QObjectHolder, qobject};
 
 use crate::hub::{Feed, Hub, TabMsg};
@@ -239,19 +240,22 @@ pub struct RepoTab {
     /// toolbar button's push stays the flow's own slot to say
     /// (`PublishFlow.pushSentBranch`).
     write_pushed: bool,
-    /// The far side turned that write down under a rule of its own — a
-    /// protected branch, a repository rule, a hook. Nothing here can put
-    /// it right and nothing was half done, so the page reports it rather
-    /// than raising the log over it (デザイン規約 §可否・警告の出し場所).
+    /// That write did not happen, and something outside this application
+    /// said so — a protected branch, a repository rule, a hook over there
+    /// or here, a remote this end had only an older picture of. Nothing
+    /// here can put it right and nothing was half done, so the page
+    /// reports it rather than raising the log over it
+    /// (デザイン規約 §答えの要らない報せ).
     ///
-    /// `kind` is what was being asked for (`delete` / `update`), which is
-    /// what the sentence turns on; the words are the far side's own and
-    /// are shown as they came. Empty `kind` is "no refusal in this
+    /// `kind` is which report this is (`delete` / `update` / `outdated` /
+    /// `commit`), which is what the sentence turns on; `remote` and
+    /// `name` are what it is written about, and the words are whoever
+    /// said no, shown as they came. Empty `kind` is "no report in this
     /// answer" — the whole group is rewritten by every answer.
-    write_refusal_kind: String,
-    write_refusal_remote: String,
-    write_refusal_branch: String,
-    write_refusal_reason: String,
+    write_report_kind: String,
+    write_report_remote: String,
+    write_report_name: String,
+    write_report_reason: String,
     /// A write the user asked for is in flight. **The log does not raise
     /// itself for a command that fails inside one**: an operation is
     /// several commands and only its own answer says whether it failed,

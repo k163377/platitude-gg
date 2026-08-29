@@ -34,6 +34,7 @@ pub mod reachable;
 pub mod refs;
 pub mod remote;
 pub mod repo;
+pub mod report;
 pub mod scratch;
 pub mod sequencer;
 pub mod session;
@@ -72,4 +73,5 @@ pub use process::{
     CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput,
 };
 pub use repo::{ObjectFormat, RepoInfo};
+pub use report::{ReportKind, WriteReport};
 pub use version::{GitVersion, MINIMUM_GIT};

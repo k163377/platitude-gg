@@ -108,8 +108,30 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "remote-refused",
         when: &[],
-        plain: "remote_notice open=true said=origin would not delete main why=true \
-                log=false wrong=false",
+        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+                said=origin would not delete main",
+    },
+    // The same refusal over a tag, which used to be the one that did not
+    // come down in the bar at all: `push_tag` and `delete_remote_tag`
+    // returned a plain failure whatever the far side had said, so the log
+    // went up over news the branch beside it reported quietly. `said=`
+    // naming the tag is the whole of the claim — a run that classified
+    // nothing frames identically, with the panel up instead.
+    Verb {
+        name: "tag-refused",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+                said=origin would not delete v1.0",
+    },
+    // A push git itself will not send. **The next move is already made**
+    // — the session fetches on this one — so it is a report like the
+    // others, and `why=true` is git's own advice arriving with its
+    // `hint:` framing off.
+    Verb {
+        name: "push-outdated",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+                said=main was not sent to origin",
     },
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was

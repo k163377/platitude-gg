@@ -229,6 +229,37 @@ Item {
         }
     }
     readonly property alias barrierWrite: writeBarrier
+    /// The report a write that did not happen comes down in — **waited on all the way down**
+    /// (`NoticeBar.settled`), not at the write barrier: the answer to the write is what raises the bar, so a picture
+    /// taken on the answer catches a bar whose words are written and whose height is still nothing (the edge
+    /// `AskBar.settled` names, for the same reason).
+    ///
+    /// **One barrier for every kind of report** (`Words.writeReported`) — a tag the far side keeps, a commit a hook
+    /// declined, a push that is only out of date — because what each of those runs claims is the same three things:
+    /// the bar came down, it was written out of what core classified, and no error was raised beside it.
+    ///
+    /// The words themselves are reported rather than photographed for the second half: whoever said no writes
+    /// sentences that wrap, and a report line cannot hold what the picture holds.
+    SampleTimer {
+        id: noticeBarrier
+        onTriggered: {
+            if (!page.noticeCard.settled)
+                return
+            noticeBarrier.stop()
+            // `log=` and `wrong=` are the other half of the claim, and the half no picture can make on its own: the
+            // panel did not raise itself over the same news, and the mark in the corner is not calling it an error
+            // (デザイン規約 §答えの要らない報せ). A window that never opened the log frames exactly like one that opened and
+            // closed it.
+            AppBackend.report("write_notice open=" + page.noticeCard.open
+                              + " clears=" + page.noticeClears
+                              + " why=" + (page.noticeCard.detail !== "")
+                              + " log=" + page.commandsOpen
+                              + " wrong=" + page.commandsWrong
+                              + " said=" + page.noticeCard.label)
+            driver.complete()
+        }
+    }
+    readonly property alias barrierNotice: noticeBarrier
     /// What the chain does once the working tree has answered — or straight away, for the verbs that name no row of
     /// it: the graph rebuild for the verbs whose write takes a row off the graph, and the shot for everyone else.
     function afterTreeSettled() {

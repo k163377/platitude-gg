@@ -49,16 +49,16 @@ pub enum TabMsg {
     /// `error` is here as well so an editor can tell whether the write it
     /// asked for is the one that failed.
     ///
-    /// **Except the one failure that is not this window's to report**:
-    /// where the far side turned the write down under a rule of its own,
-    /// `refusal` carries what it said and no `OpError` is sent, because
-    /// the page answers it with a notice instead
-    /// (デザイン規約 §可否・警告の出し場所).
+    /// **Except the failures that are not this window's to report**:
+    /// where the write did not happen and something outside this
+    /// application said so, `report` carries what it said and no
+    /// `OpError` is sent, because the page answers it with a notice
+    /// instead (デザイン規約 §答えの要らない報せ).
     WriteState {
         op: String,
         running: bool,
         error: String,
-        refusal: Option<platitude_core::remote::RemoteRefusal>,
+        report: Option<platitude_core::WriteReport>,
     },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {

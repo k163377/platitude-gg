@@ -149,7 +149,7 @@ impl RepoTab {
                     op,
                     running,
                     error,
-                    refusal,
+                    report,
                 } => {
                     if running {
                         self.busy_count += 1;
@@ -162,7 +162,7 @@ impl RepoTab {
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(op, error, refusal);
+                        self.settle_write(op, error, report);
                     }
                 }
             }
@@ -207,30 +207,39 @@ impl RepoTab {
         &mut self,
         op: String,
         error: String,
-        refusal: Option<platitude_core::remote::RemoteRefusal>,
+        report: Option<platitude_core::WriteReport>,
     ) {
         self.busy_count = (self.busy_count - 1).max(0);
         if self.busy_count == 0 {
             self.busy_op = String::new();
         }
         self.write_running = self.busy_count > 0;
-        // What the far side said, and what it was asked for — the two
-        // halves the notice is made of. Rewritten by every answer, like
-        // the rest of the group: a report nobody took down would
-        // otherwise come back up under the next write.
-        let (kind, remote, branch, reason) = match refusal {
-            Some(refusal) => (
-                if refusal.deleting { "delete" } else { "update" }.to_string(),
-                refusal.remote,
-                refusal.branch,
-                refusal.reason,
+        // Who said no and what about — the halves the notice is made of.
+        // **The kind is named here**, on this side of the bridge, so the
+        // page picks its sentence without ever branching on core's types
+        // or on git vocabulary (app-ui.md: no business logic in QML).
+        // Rewritten by every answer, like the rest of the group: a report
+        // nobody took down would otherwise come back up under the next
+        // write.
+        let (kind, remote, name, reason) = match report {
+            Some(report) => (
+                match report.kind {
+                    ReportKind::RemoteDelete => "delete",
+                    ReportKind::RemoteUpdate => "update",
+                    ReportKind::Outdated => "outdated",
+                    ReportKind::Commit => "commit",
+                }
+                .to_string(),
+                report.remote,
+                report.name,
+                report.reason,
             ),
             None => (String::new(), String::new(), String::new(), String::new()),
         };
-        self.write_refusal_kind = kind;
-        self.write_refusal_remote = remote;
-        self.write_refusal_branch = branch;
-        self.write_refusal_reason = reason;
+        self.write_report_kind = kind;
+        self.write_report_remote = remote;
+        self.write_report_name = name;
+        self.write_report_reason = reason;
         // A fetch the user asked for counts the same way the timer's do:
         // what the button says is about fetching, not about who started
         // it.

@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::report::{ReportKind, WriteReport};
+
 /// Errors produced while locating, spawning or running the git CLI.
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
@@ -38,39 +40,27 @@ pub enum GitError {
         stderr: String,
     },
 
-    /// A push git refused because what this window knows about the remote is
-    /// older than the remote itself (`fetch first` on a plain push, `stale
-    /// info` on a lease pinned to a commit the remote has left). Fetching is
-    /// what unblocks it, so it is told apart from a refusal nothing can be
-    /// done about — a hook, a protected branch, an unreachable host.
-    ///
-    /// Reads the same as [`GitError::Failed`]: it is the same failure to
-    /// whoever is looking at it, only actionable.
-    #[error("`{command}` exited with code {code}: {stderr}")]
-    PushOutdated {
-        command: String,
-        code: i32,
-        stderr: String,
-    },
-
-    /// A push the far side turned down under a rule of its own — a
-    /// protected branch, a repository rule, a `pre-receive` hook. Nothing
-    /// here can put it right and nothing was half done, so the screen
-    /// reports it rather than raising git's own words as a failure
-    /// (デザイン規約 §可否・警告の出し場所).
+    /// A write that did not happen and has something to say for itself:
+    /// the far side turned it down under a rule of its own, a hook here
+    /// did, or git worked out from what this end holds that it could not
+    /// stand. Nothing was half done and there is nothing here to put
+    /// right, so the screen reports it rather than raising git's own
+    /// words as a failure (デザイン規約 §答えの要らない報せ).
     ///
     /// Reads the same as [`GitError::Failed`] wherever it is only being
-    /// logged: `refusal` is the part a report is made out of.
+    /// logged: `report` is the part the screen is made out of, and which
+    /// of them this is lives in [`ReportKind`] rather than in git's
+    /// wording.
     ///
     /// Boxed because every `Result<_, GitError>` in the crate carries the
     /// widest variant, and four more strings here would put that cost on
     /// reads that can never be refused by anybody (`result_large_err`).
     #[error("`{command}` exited with code {code}: {stderr}")]
-    RemoteRefused {
+    Reported {
         command: String,
         code: i32,
         stderr: String,
-        refusal: Box<crate::remote::RemoteRefusal>,
+        report: Box<WriteReport>,
     },
 
     /// The command exceeded its time budget and was killed.
@@ -109,5 +99,22 @@ impl GitError {
     /// True when the error is a cooperative cancellation, not a failure.
     pub fn is_cancelled(&self) -> bool {
         matches!(self, GitError::Cancelled { .. })
+    }
+
+    /// What this failure has to say for itself, where it is one of the
+    /// ones that does.
+    pub fn report(&self) -> Option<&WriteReport> {
+        match self {
+            GitError::Reported { report, .. } => Some(report),
+            _ => None,
+        }
+    }
+
+    /// Whether git would not send because what this end holds about the
+    /// remote is older than the remote itself — the one report with a
+    /// move behind it (`RepoSession::push` fetches on it).
+    pub fn is_outdated(&self) -> bool {
+        self.report()
+            .is_some_and(|report| report.kind == ReportKind::Outdated)
     }
 }

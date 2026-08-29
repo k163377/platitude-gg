@@ -44,6 +44,20 @@ Item {
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             page.commitNow()
+        } else if (act === "commit-refused" || act === "notice-over-diff") {
+            // The same press against a repository whose `pre-commit` hook says no (`--preset hooked`). Nothing is
+            // half written and `--no-verify` is never passed, so the hook's own words come down as a report
+            // (デザイン規約 §答えの要らない報せ).
+            //
+            // `notice-over-diff` runs it **with a file open in the middle**, which is the one arrangement that tells
+            // a bar standing over the page apart from one living inside the graph: the second says nothing at all
+            // here, and the picture of a window whose middle is a diff is the same either way.
+            repoTab.stageAll()
+            wipPane.setMessage("chore: something the hook will not have", "")
+            if (act === "notice-over-diff")
+                page.openDiff("staged", arg, "")
+            page.commitNow()
+            driver.barrierNotice.start()
         } else if (act === "amend") {
             // The message is supplied, so skip the prefill request that would otherwise land on top of it.
             wipPane.setAmendChecked(true)

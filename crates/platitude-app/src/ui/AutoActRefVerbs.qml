@@ -92,7 +92,7 @@ Item {
             // The far side keeps the branch (`--preset protected`): what comes back is a report rather than a
             // failure, and the bar it comes down in is what this one photographs.
             if (act === "remote-refused")
-                remoteRefusedTimer.start()
+                driver.barrierNotice.start()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-refused") {
@@ -158,6 +158,11 @@ Item {
                 graphPane.view.namingSubmitted(acts.createTagOid, arg, "tag")
                 createTagTimer.start()
             }
+        } else if (act === "tag-refused") {
+            // The same row as `delete-remote-tag`, against a remote that keeps its tags (`--preset protected`).
+            // The far side turns a tag down the way it turns a branch down, and the two used to reach the screen
+            // differently — one as a report, one as an error over the log (デザイン規約 §答えの要らない報せ).
+            tagMenuTimer.begin(arg, "remote-refuse")
         } else if (act === "tag-menu" || act === "push-tag"
                    || act === "delete-remote-tag" || act === "delete-tag-both") {
             // The rows a tag's menu grew, and the press that runs one of them. The suffix on the argument says what
@@ -307,6 +312,12 @@ Item {
                 return
             }
             driver.writeSeqBefore = repoTab.writeSeq
+            if (tagMenuTimer.press === "remote-refuse") {
+                // Nothing moves, so there is no reading of this name to wait for: what the run waits on is the bar.
+                refRemoteTagDeleteItem.completeHold()
+                driver.barrierNotice.start()
+                return
+            }
             if (tagMenuTimer.press === "remote-delete" || tagMenuTimer.press === "both-delete") {
                 // What a delete is judged on is the sidebar afterwards, and **the write answers before the read that
                 // rebuilds it** (core `AfterWrite::Graph`) — stopping at the write barrier photographs the list as it
@@ -365,29 +376,6 @@ Item {
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)
                                        + " note=" + refDeleteItem.note)
-            driver.complete()
-        }
-    }
-    // The report a refusal the far side made comes down as. **Waited on all the way down** (`NoticeBar.settled`), not
-    // at the write barrier: the answer to the write is what raises the bar, so a picture taken on the answer catches a
-    // bar whose words are written and whose height is still nothing (the edge `AskBar.settled` names, for the same
-    // reason). The words themselves are reported rather than photographed for the far side's half — git's sentence
-    // wraps, and a report line cannot hold what the picture holds.
-    SampleTimer {
-        id: remoteRefusedTimer
-        onTriggered: {
-            if (!graphPane.noticeCard.settled)
-                return
-            remoteRefusedTimer.stop()
-            // `log=` and `wrong=` are the other half of the claim, and the half no picture can make on its own: the
-            // panel did not raise itself over the same news, and the mark in the corner is not calling it an error
-            // (デザイン規約 §可否・警告の出し場所). A window that never opened the log frames exactly like one that opened and
-            // closed it.
-            AppBackend.report("remote_notice open=" + graphPane.noticeCard.open
-                              + " said=" + graphPane.noticeCard.label
-                              + " why=" + (graphPane.noticeCard.detail !== "")
-                              + " log=" + page.commandsOpen
-                              + " wrong=" + page.commandsWrong)
             driver.complete()
         }
     }

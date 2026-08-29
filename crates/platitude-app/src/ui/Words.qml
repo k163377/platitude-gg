@@ -54,16 +54,24 @@ QtObject {
         }
     }
 
-    /// What did not happen when the far side turned a write down under a rule of its own, from the kind core answered
-    /// with (`delete` / `update` — `RepoTab.writeRefusalKind`). Why is the far side's to say, and the bar quotes it
-    /// underneath (デザイン規約 §可否・警告の出し場所).
+    /// What did not happen, for a write that did not happen and has something to say for itself — from the kind core
+    /// answered with (`delete` / `update` / `outdated` / `commit` — `RepoTab.writeReportKind`). Why is whoever said no
+    /// to say, and the bar quotes it underneath (デザイン規約 §答えの要らない報せ).
     ///
-    /// **The remote is the subject**, because it is the one that decided: nothing here failed, and a sentence in this
-    /// application's own voice ("could not delete…") would read as one that did.
-    function remoteRefused(kind, remote, branch) {
-        return kind === "delete"
-            ? qsTr("%1 would not delete %2").arg(remote).arg(branch)
-            : qsTr("%1 would not update %2").arg(remote).arg(branch)
+    /// **Whoever decided is the subject.** For the two the far side decided that is the remote: nothing here failed,
+    /// and a sentence in this application's own voice ("could not delete…") would read as one that did. For the other
+    /// two nobody over there decided anything — git worked the refusal out from what this end holds, or a hook here
+    /// said no — so the subject is the thing that did not move.
+    ///
+    /// A name is all these take. Which of them is a tag and which a branch is not said: the row that was pressed is
+    /// still on screen saying so, and the far side's own answer names neither.
+    function writeReported(kind, remote, name) {
+        switch (kind) {
+        case "delete": return qsTr("%1 would not delete %2").arg(remote).arg(name)
+        case "update": return qsTr("%1 would not update %2").arg(remote).arg(name)
+        case "outdated": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
+        default: return qsTr("The commit was not made")
+        }
     }
 
     /// What the two sides each did to a conflicted file, from the two stage letters git reports (デザイン規約 §conflict の種別).

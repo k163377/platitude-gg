@@ -94,6 +94,12 @@ Item {
                 remoteUrlTimer.start()
         } else if (act === "push") {
             page.pushNow()
+        } else if (act === "push-outdated") {
+            // The same press, against a remote that has moved on since this end last looked (`--preset outrun`).
+            // git will not send, and **the next move is already being made** — the session fetches on this refusal —
+            // so what comes back is a report rather than an error (デザイン規約 §答えの要らない報せ).
+            page.pushNow()
+            driver.barrierNotice.start()
         } else if (act === "force-push") {
             page.forcePush()
         } else if (act === "push-retry") {

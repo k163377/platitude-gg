@@ -301,16 +301,17 @@ impl SessionSink for BridgeSink {
                 op: op.to_string(),
                 running: true,
                 error: String::new(),
-                refusal: None,
+                report: None,
             }),
-            SessionEvent::WriteFinished { op, error, refusal } => {
-                // A refusal the far side made on its own terms is not an
-                // error of this window's: the page reports it in words of
-                // its own, and the red line that would say "something
-                // went wrong here" is left for the failures nothing else
-                // answers (デザイン規約 §可否・警告の出し場所).
+            SessionEvent::WriteFinished { op, error, report } => {
+                // A write that did not happen and has something to say
+                // for itself is not an error of this window's: the page
+                // reports it in words of its own, and the red line that
+                // would say "something went wrong here" is left for the
+                // failures nothing else answers
+                // (デザイン規約 §答えの要らない報せ).
                 if let Some(message) = &error
-                    && refusal.is_none()
+                    && report.is_none()
                 {
                     self.feeds.tab.push(TabMsg::OpError {
                         message: format!("{op}: {message}"),
@@ -320,7 +321,7 @@ impl SessionSink for BridgeSink {
                     op: op.to_string(),
                     running: false,
                     error: error.unwrap_or_default(),
-                    refusal,
+                    report,
                 });
             }
         }

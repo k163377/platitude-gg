@@ -47,7 +47,7 @@ impl RepoSession {
     /// other fetch. The push still fails: nothing is retried, and the next
     /// move is whoever is looking at it to make.
     fn catch_up_after(self: &Arc<Self>, result: &Result<(), GitError>, remote: String) {
-        if matches!(result, Err(GitError::PushOutdated { .. })) {
+        if result.as_ref().is_err_and(|error| error.is_outdated()) {
             self.fetch(Some(remote));
         }
     }

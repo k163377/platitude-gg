@@ -212,26 +212,6 @@ Rectangle {
     signal askConfirmed()
     signal askCancelled()
 
-    // ---- a report with nothing to answer ----------------------------
-    // The far side turned a write down under a rule of its own. It comes down in the same place a question does and
-    // goes back up on the one word it offers (デザイン規約 §可否・警告の出し場所).
-
-    /// Raises the report. `label` is what did not happen, `detail` the far side's own words for why.
-    function showNotice(label, detail) {
-        // Dressed, then raised — so nothing on a bar the reader can see is ever written (`NoticeBar.open`).
-        noticeBar.label = label
-        noticeBar.detail = detail
-        noticeBar.open = true
-    }
-    /// Only lowered: the words stay where they are for the 200ms it spends going up.
-    function hideNotice() {
-        noticeBar.open = false
-    }
-    /// The bar itself — automation-only exposure, like `askCard` (app-ui.md). A headless run reads `settled` / `shut`
-    /// / `label` off it and presses its one control through `dismiss()`.
-    readonly property alias noticeCard: noticeBar
-    signal noticeAcknowledged()
-
     /// The list itself — for automation hooks (bench / scroll-to / screenshot flows) only; app code goes through the
     /// functions.
     readonly property alias view: graphList
@@ -299,24 +279,17 @@ Rectangle {
         color: Theme.borderStrong
         visible: columnDividers.graphLineWanted
     }
-    // The list starts under the bars — the graph moves down rather than losing its top rows behind them.
+    // The list starts under the question — the graph moves down rather than losing its top rows behind it. A closed
+    // bar has no height at all, so it costs nothing while none stands.
     //
-    // The report stands above the question because it is about something already over: a question the reader is in the
-    // middle of answering must not be pushed off the top of the pane by news of an earlier write. A closed bar has no
-    // height at all, so the pair costs nothing while neither stands.
-    NoticeBar {
-        id: noticeBar
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        z: 3
-        onAcknowledged: graphArea.noticeAcknowledged()
-    }
+    // **The report is not here.** It is about a write, and a write can be answered while the reader is looking at a
+    // file rather than at the history, so it stands above the whole middle of the page rather than inside this pane
+    // (`RepoPage`, デザイン規約 §答えの要らない報せ). What is left here is the question, which is always about the rows below it.
     AskBar {
         id: askBar
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: noticeBar.bottom
+        anchors.top: parent.top
         z: 3
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
@@ -326,10 +299,7 @@ Rectangle {
     // already standing keeps the place, since it is one gesture from being over.
     GraphFind {
         id: findBar
-        // Under the report, not over it: this card hangs over the list rather than above it, and a report can come
-        // down while it is open (it answers a write, not a gesture). With no report standing the bar has no height and
-        // this is the top of the pane, which is where the card has always hung.
-        anchors.top: noticeBar.bottom
+        anchors.top: parent.top
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceLg
         z: 4

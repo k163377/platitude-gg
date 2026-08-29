@@ -9,6 +9,7 @@ use crate::support::exec::env;
 use platitude_core::GitError;
 use platitude_core::commit;
 use platitude_core::remote::{self, PushForce, PushSpec};
+use platitude_core::report::ReportKind;
 use platitude_core::stash::{self, PushOptions};
 use platitude_core::status;
 
@@ -363,7 +364,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         "git's own rejection is passed through: {err}"
     );
     assert!(
-        matches!(err, GitError::PushOutdated { .. }),
+        err.is_outdated(),
         "a refusal a fetch would answer is told apart from one it would not: {err}"
     );
 
@@ -379,7 +380,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     let err = remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect_err("stale lease");
-    assert!(matches!(err, GitError::PushOutdated { .. }), "{err}");
+    assert!(err.is_outdated(), "{err}");
 
     // Plain force wins.
     let forced = PushSpec {
@@ -514,7 +515,7 @@ async fn a_rename_whose_push_fails_deletes_nothing() {
     .await
     .expect_err("the push is refused");
     assert!(
-        matches!(error, GitError::PushOutdated { .. }) || matches!(error, GitError::Failed { .. }),
+        error.is_outdated() || matches!(error, GitError::Failed { .. }),
         "{error:?}"
     );
     assert!(
@@ -694,7 +695,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         .expect("plan publish");
     let sent = remote::push(&exec, &work.path, &spec, NET, &cancel).await;
     assert!(
-        matches!(sent, Err(GitError::PushOutdated { .. })),
+        sent.as_ref().is_err_and(GitError::is_outdated),
         "git turns a first push that is not a fast-forward down: {sent:?}"
     );
     assert_eq!(
@@ -841,14 +842,18 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
     let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", NET, &cancel)
         .await
         .expect_err("the far side keeps main");
-    let GitError::RemoteRefused { refusal, .. } = &err else {
+    let Some(report) = err.report() else {
         panic!("a refusal the far side made is told apart from a failure of ours: {err}");
     };
-    assert_eq!(refusal.remote, "origin");
-    assert_eq!(refusal.branch, "main");
-    assert!(refusal.deleting, "what was asked for was the removal");
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "main");
     assert_eq!(
-        refusal.reason, "GH006: Protected branch update failed for refs/heads/main.",
+        report.kind,
+        ReportKind::RemoteDelete,
+        "what was asked for was the removal"
+    );
+    assert_eq!(
+        report.reason, "GH006: Protected branch update failed for refs/heads/main.",
         "the words are the far side's own, without git's framing"
     );
     // Under `--porcelain` the per-ref result is on stdout and stderr keeps
@@ -882,12 +887,108 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     )
     .await
     .expect_err("the hook declines");
-    let GitError::RemoteRefused { refusal, .. } = &err else {
+    let Some(report) = err.report() else {
         panic!("a fast-forward the far side declined is neither outdated nor ours: {err}");
     };
-    assert!(!refusal.deleting, "this one was sending, not removing");
     assert_eq!(
-        refusal.reason,
+        report.kind,
+        ReportKind::RemoteUpdate,
+        "this one was sending, not removing"
+    );
+    assert_eq!(
+        report.reason,
         "Changes must be made through a pull request."
+    );
+}
+
+/// The same refusal over a tag, which used to reach the screen as a plain
+/// failure while the branch beside it came down as a report
+/// (デザイン規約 §答えの要らない報せ). **Both halves of a tag's traffic are read
+/// the same way** — sending one and taking one off the far side are
+/// different commands here (`push` against `push --delete`), so one being
+/// classified says nothing about the other.
+#[tokio::test]
+async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["tag", "v1.0"]);
+    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
+        .await
+        .expect("the tag goes over while nothing is standing over it");
+    decline_every_push(&bare, "Tag protection rules prevent this.");
+
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", NET, &cancel)
+        .await
+        .expect_err("the far side keeps the tag");
+    let Some(report) = err.report() else {
+        panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RemoteDelete);
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "v1.0", "the tag names itself, not a branch");
+    assert_eq!(report.reason, "Tag protection rules prevent this.");
+
+    work.commit_file("c.txt", "more\n", "something to tag");
+    work.git(&["tag", "v1.1"]);
+    let err = remote::push_tag(&exec, &work.path, "origin", "v1.1", "", NET, &cancel)
+        .await
+        .expect_err("the far side keeps its tags");
+    let Some(report) = err.report() else {
+        panic!("a tag the far side would not take is a report as well: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RemoteUpdate);
+    assert_eq!(report.name, "v1.1");
+    assert_eq!(report.reason, "Tag protection rules prevent this.");
+    assert!(
+        !err.is_outdated(),
+        "nothing about a tag is answered by fetching, whatever the refusal was"
+    );
+}
+
+/// The refusal a fetch answers says so in git's own words, which is what
+/// separates a report with a move behind it from one without.
+#[tokio::test]
+async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+
+    // Somebody else pushes while this end is not looking.
+    let mut other = TestRepo::init();
+    other.git(&["remote", "add", "origin", &bare.file_url()]);
+    other.git(&["fetch", "origin"]);
+    other.git(&["checkout", "-b", "main", "origin/main"]);
+    other.commit_file("theirs.txt", "theirs\n", "pushed while you slept");
+    other.git(&["push", "origin", "main"]);
+    work.commit_file("ours.txt", "ours\n", "work of our own");
+
+    let err = remote::push(
+        &exec,
+        &work.path,
+        &PushSpec {
+            remote: "origin".into(),
+            local: "main".into(),
+            remote_branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::None,
+        },
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the remote holds what we have not got");
+    let Some(report) = err.report() else {
+        panic!("being out of date is a report of its own: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::Outdated);
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "main");
+    assert!(
+        !report.reason.is_empty(),
+        "git says why in advice of its own, and that is what goes under the heading"
+    );
+    assert!(
+        !report.reason.contains("hint:"),
+        "git's framing comes off the way the far side's does: {}",
+        report.reason
     );
 }

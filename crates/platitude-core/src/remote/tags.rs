@@ -50,10 +50,16 @@ pub async fn list_tags(
 /// **A refusal here is not the one a fetch answers.** A branch that is
 /// turned down for being behind is put right by fetching; a tag is not —
 /// `--prune` leaves the local tag where it is and `--prune-tags` exits 1
-/// (実測) — so this returns [`GitError::Failed`] whatever the refusal was
-/// and nothing is queued behind it. `git push` for branches is
-/// [`super::push::push`]; the two share no refspec, since a tag's is
-/// `refs/tags/` on both sides.
+/// (実測) — so no refusal here is ever read as outdated and nothing is
+/// queued behind one. `git push` for branches is [`super::push::push`];
+/// the two share no refspec, since a tag's is `refs/tags/` on both sides.
+///
+/// **What the far side turned down under a rule of its own reads the
+/// same as it does for a branch** (`super::refusal::refused`): a forge that
+/// protects its release tags, a `pre-receive` hook that keeps them, both
+/// reach this end as the same `[remote rejected]`, and a report is what
+/// they are (デザイン規約 §答えの要らない報せ). `--porcelain` is what makes that
+/// readable, and it is the reason this asks for it.
 pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -77,11 +83,7 @@ pub async fn push_tag(
     if out.code == 0 {
         return Ok(());
     }
-    Err(GitError::Failed {
-        command,
-        code: out.code,
-        stderr: out.failure_message(),
-    })
+    Err(super::refusal::refused(command, &out, remote, tag, false))
 }
 
 /// Takes one tag off one remote. Nothing here is touched.
@@ -99,6 +101,10 @@ pub async fn push_tag(
 /// bare form would have failed. Whether there is anything to delete is
 /// therefore the caller's to know before it asks (`offers::TagSides`);
 /// git will not be the one to say.
+///
+/// **The far side may still keep it**, and says so the same way it does
+/// over a branch — so this asks in `--porcelain` and reads the answer
+/// through the same classifier ([`push_tag`]).
 pub async fn delete_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -111,13 +117,19 @@ pub async fn delete_remote_tag(
         .cwd(workdir)
         .args([
             "push",
+            "--porcelain",
             "--delete",
             "--",
             remote,
             &format!("refs/tags/{tag}"),
         ])
         .timeout(timeout);
-    executor.run(cmd, cancel).await.map(drop)
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 0 {
+        return Ok(());
+    }
+    Err(super::refusal::refused(command, &out, remote, tag, true))
 }
 
 /// One tag as a remote advertises it.

@@ -187,4 +187,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "text_bar ink=0.3",
     },
+    // A commit a hook would not have. **The picture cannot judge this**
+    // for the same reason the far side's refusals cannot be: a bar
+    // saying nothing frames exactly like a bar saying the right thing,
+    // and the whole claim is that the sentence was built out of what
+    // core classified. `why=true` is the hook's own words arriving, and
+    // `log=false wrong=false` the half that says nothing was raised as
+    // an error beside them (デザイン規約 §答えの要らない報せ).
+    Verb {
+        name: "commit-refused",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+                said=The commit was not made",
+    },
+    // The same refusal **with a file open in the middle**, which is the
+    // arrangement the bar was moved out of the graph pane for: a bar
+    // that lived in that pane says nothing at all here, and the two
+    // windows photograph the same. `clears=true` is the claim itself —
+    // the middle is standing under the bar rather than behind it.
+    Verb {
+        name: "notice-over-diff",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+                said=The commit was not made",
+    },
 ];

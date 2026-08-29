@@ -191,31 +191,31 @@ fn a_landed_reword_carries_the_saved_message() {
 
 /// The far side keeping a branch is a report, not a failure of this
 /// window's — the page reads these four and says so in its own words
-/// (`Words.remoteRefused`).
+/// (`Words.writeReported`).
 #[test]
 fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     let mut tab = RepoTab::default();
     tab.settle_write(
         "push".into(),
         "`git push` exited with code 1: remote: error: Cannot delete a protected branch".into(),
-        Some(platitude_core::remote::RemoteRefusal {
-            remote: "origin".into(),
-            branch: "main".into(),
-            deleting: true,
-            reason: "Cannot delete a protected branch".into(),
-        }),
+        Some(platitude_core::WriteReport::on_remote(
+            ReportKind::RemoteDelete,
+            "origin",
+            "main",
+            "Cannot delete a protected branch".into(),
+        )),
     );
     assert!(tab.write_refused, "nothing happened over there");
-    assert_eq!(tab.write_refusal_kind, "delete");
-    assert_eq!(tab.write_refusal_remote, "origin");
-    assert_eq!(tab.write_refusal_branch, "main");
-    assert_eq!(tab.write_refusal_reason, "Cannot delete a protected branch");
+    assert_eq!(tab.write_report_kind, "delete");
+    assert_eq!(tab.write_report_remote, "origin");
+    assert_eq!(tab.write_report_name, "main");
+    assert_eq!(tab.write_report_reason, "Cannot delete a protected branch");
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
     tab.settle_write("push".into(), String::new(), None);
-    assert_eq!(tab.write_refusal_kind, "");
-    assert_eq!(tab.write_refusal_reason, "");
+    assert_eq!(tab.write_report_kind, "");
+    assert_eq!(tab.write_report_reason, "");
 }
 
 /// A push that was sending rather than removing says so, since that
@@ -226,14 +226,54 @@ fn a_refused_send_is_told_apart_from_a_refused_delete() {
     tab.settle_write(
         "push".into(),
         "! [remote rejected]".into(),
-        Some(platitude_core::remote::RemoteRefusal {
-            remote: "origin".into(),
-            branch: "main".into(),
-            deleting: false,
-            reason: "Changes must be made through a pull request.".into(),
-        }),
+        Some(platitude_core::WriteReport::on_remote(
+            ReportKind::RemoteUpdate,
+            "origin",
+            "main",
+            "Changes must be made through a pull request.".into(),
+        )),
     );
-    assert_eq!(tab.write_refusal_kind, "update");
+    assert_eq!(tab.write_report_kind, "update");
+}
+
+/// The other two reports reach the same four properties: nobody over
+/// there said anything about either, and the page still has to tell them
+/// apart to pick its sentence.
+#[test]
+fn a_stale_push_and_a_refused_commit_name_themselves_too() {
+    let mut tab = RepoTab::default();
+    tab.settle_write(
+        "push".into(),
+        "! [rejected] (fetch first)".into(),
+        Some(platitude_core::WriteReport::on_remote(
+            ReportKind::Outdated,
+            "origin",
+            "main",
+            "Updates were rejected because the remote contains work that you do not have.".into(),
+        )),
+    );
+    assert_eq!(tab.write_report_kind, "outdated");
+    assert_eq!(tab.write_report_remote, "origin");
+    assert_eq!(tab.write_report_name, "main");
+
+    tab.settle_write(
+        "commit".into(),
+        "`git commit` exited with code 1".into(),
+        Some(platitude_core::WriteReport::local(
+            ReportKind::Commit,
+            "lint found 1 problem".into(),
+        )),
+    );
+    assert_eq!(tab.write_report_kind, "commit");
+    assert_eq!(
+        (
+            tab.write_report_remote.as_str(),
+            tab.write_report_name.as_str()
+        ),
+        ("", ""),
+        "nothing over a network and no ref"
+    );
+    assert_eq!(tab.write_report_reason, "lint found 1 problem");
 }
 
 #[test]

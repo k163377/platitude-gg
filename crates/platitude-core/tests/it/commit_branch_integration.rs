@@ -7,6 +7,7 @@ use crate::support::exec::env;
 use crate::support::{TestRepo, info};
 use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget, ResetMode};
 use platitude_core::commit::{self, CommitOptions};
+use platitude_core::report::ReportKind;
 
 #[tokio::test]
 async fn commits_staged_content_with_a_multiline_message() {
@@ -730,4 +731,111 @@ async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {
             .as_deref(),
         Some("refs/remotes/origin/main")
     );
+}
+
+/// A hook that says no is not a failure of this application's: nothing was
+/// half written, and `--no-verify` is never passed, so there is no next
+/// move here either (デザイン規約 §答えの要らない報せ).
+///
+/// **The hook's own words are what goes under the heading, from both
+/// streams.** A linter wrapped in a hook writes its complaint to stdout
+/// and its own noise to stderr, so reading stderr alone quotes the wrapper
+/// and drops the complaint.
+#[tokio::test]
+async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.write_file("a.txt", "content\n");
+    repo.git(&["add", "--", "a.txt"]);
+    write_hook(
+        &repo,
+        "pre-commit",
+        "echo \"a.txt:1 trailing whitespace\"\necho \"lint found 1 problem\" >&2\nexit 1\n",
+    );
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let err = commit::commit(
+        &exec,
+        &repo_info,
+        "feat: something the hook will not have",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect_err("the hook declines");
+
+    let Some(report) = err.report() else {
+        panic!("a commit a hook refused is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::Commit);
+    assert!(
+        report.remote.is_empty() && report.name.is_empty(),
+        "nothing over a network and no ref: {report:?}"
+    );
+    assert!(
+        report.reason.contains("lint found 1 problem")
+            && report.reason.contains("a.txt:1 trailing whitespace"),
+        "both streams come across: {}",
+        report.reason
+    );
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        "root",
+        "the commit was not made"
+    );
+    assert!(
+        err.to_string().contains("git commit"),
+        "git's whole message is still there for the log: {err}"
+    );
+}
+
+/// The same door for a commit git itself refuses: nothing here can answer
+/// a signing key that will not sign, so it reads the same way a hook does.
+#[tokio::test]
+async fn a_commit_git_itself_refuses_reads_the_same_way() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.write_file("a.txt", "content\n");
+    repo.git(&["add", "--", "a.txt"]);
+    // A signing program that is not there: git's own refusal, on stderr,
+    // with no hook in sight.
+    repo.git(&["config", "commit.gpgsign", "true"]);
+    repo.git(&["config", "gpg.program", "no-such-signer-here"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let err = commit::commit(
+        &exec,
+        &repo_info,
+        "feat: something that cannot be signed",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect_err("nothing can sign this");
+
+    let Some(report) = err.report() else {
+        panic!("a commit git would not make is a report as well: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::Commit);
+    assert!(
+        !report.reason.is_empty(),
+        "git said why, and that is what goes under the heading"
+    );
+    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");
+}
+
+/// Writes one of the repository's own hooks and makes it runnable.
+fn write_hook(repo: &TestRepo, name: &str, body: &str) {
+    let hooks = repo.path.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).expect("create hooks dir");
+    let hook = hooks.join(name);
+    std::fs::write(&hook, format!("#!/bin/sh\n{body}")).expect("write the hook");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
+            .expect("make the hook executable");
+    }
 }

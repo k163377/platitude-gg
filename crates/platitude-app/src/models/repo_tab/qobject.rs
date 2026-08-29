@@ -142,26 +142,27 @@ impl RepoTab {
     qproperty!("writeStashed", Member = write_stashed, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
     qproperty!("writePushed", Member = write_pushed, Notify = changed);
-    // What the far side refused, in its own words — the page makes a
-    // notice out of these rather than an error (デザイン規約 §可否・警告の出し場所).
+    // What a write that did not happen has to say for itself — the page
+    // makes a notice out of these rather than an error
+    // (デザイン規約 §答えの要らない報せ).
     qproperty!(
-        "writeRefusalKind",
-        Member = write_refusal_kind,
+        "writeReportKind",
+        Member = write_report_kind,
         Notify = changed
     );
     qproperty!(
-        "writeRefusalRemote",
-        Member = write_refusal_remote,
+        "writeReportRemote",
+        Member = write_report_remote,
         Notify = changed
     );
     qproperty!(
-        "writeRefusalBranch",
-        Member = write_refusal_branch,
+        "writeReportName",
+        Member = write_report_name,
         Notify = changed
     );
     qproperty!(
-        "writeRefusalReason",
-        Member = write_refusal_reason,
+        "writeReportReason",
+        Member = write_report_reason,
         Notify = changed
     );
     qproperty!("writeRunning", Member = write_running, Notify = changed);

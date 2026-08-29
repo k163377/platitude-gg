@@ -17,7 +17,8 @@ QtObject {
 
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
-                "publish-new-go", "commit", "amend", "amend-reset-author",
+                "publish-new-go", "commit", "commit-refused", "notice-over-diff",
+                "amend", "amend-reset-author",
                 "stash", "stash-lands", "stash-file", "stage-many-go",
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
@@ -36,7 +37,8 @@ QtObject {
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
                 "stage-all", "unstage-all", "resolve-all",
-                "push", "force-push", "push-retry", "fetch", "fetch-ref-list",
+                "push", "push-outdated", "tag-refused",
+                "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-select", "commands-copy", "commands-sweep",
                 "commands-fail", "commands-clear",
                 "fetch-recover",
@@ -73,10 +75,12 @@ QtObject {
                 "create-tag",
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
                 // there — so the barrier is behind the wait rather than in front of it.
-                "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both",
+                "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "nav-add-remote", "push-default", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
+                // The bar is what these wait for, and it comes down after the write's own answer.
+                "commit-refused", "notice-over-diff", "push-outdated",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // The write barrier is in front of this one's claim: the second press is turned away before any
                 // write is made, so the answer to the first is not what the run is waiting for.
