@@ -641,6 +641,9 @@ Item {
     /// was rather than raising itself over the same news (デザイン規約 §git が言ったことを読む場所). Counted rather than flagged
     /// because the refusal and the write result arrive on separate paths, in no fixed order.
     property int expectedRefusals: 0
+    /// The same, for the failures a report has already answered — armed by the report when the row it is about has
+    /// not reached the log yet (`absorbWriteResult`), spent by that row's own arrival.
+    property int answeredFailures: 0
 
     // ---- what the window is already showing as gone ------------------
     //
@@ -1180,6 +1183,14 @@ Item {
                 // …and the mark in the corner goes quiet with it: it is there to fetch somebody to a failure nothing
                 // else has said, and the bar has just said this one (デザイン規約 §git が言ったことを読む場所). The row keeps
                 // git's words under its red edge — that is the record, and the record is what the panel is for.
+                //
+                // **The row it is about may not have reached the log yet.** The write's answer and the command's own
+                // end travel separate feeds, in no fixed order (`expectedRefusals` is counted for the same reason):
+                // where the row has landed already, taking the mark down is the whole of it; where it has not, it puts
+                // the mark back up when it does — and raises the log with it, over the news this bar is already giving
+                // (2026-08-29 実測: 1 Linux run in 5, and none of 5 on Windows — the picture is identical either way).
+                if (!commandsModel.failed)
+                    page.answeredFailures++
                 commandsModel.noteAnswered()
                 page.pendingDeleteBranch = ""
                 page.pendingRenameRemote = ""
@@ -2387,6 +2398,13 @@ Item {
         function onFailure() {
             if (repoTab.writeRunning)
                 return
+            // The report that answers this one is already standing; this is only its row arriving late. The mark goes
+            // back down and the log stays where the reader left it (デザイン規約 §答えの要らない報せ).
+            if (page.answeredFailures > 0) {
+                page.answeredFailures--
+                commandsModel.noteAnswered()
+                return
+            }
             if (page.expectedRefusals > 0) {
                 page.expectedRefusals--
                 return
