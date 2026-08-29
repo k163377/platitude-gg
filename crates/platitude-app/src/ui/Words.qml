@@ -70,7 +70,45 @@ QtObject {
         case "delete": return qsTr("%1 would not delete %2").arg(remote).arg(name)
         case "update": return qsTr("%1 would not update %2").arg(remote).arg(name)
         case "outdated": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
+        case "stale-stage": return qsTr("Nothing was staged")
+        case "stale-unstage": return qsTr("Nothing was unstaged")
+        case "stale-discard": return qsTr("Nothing was discarded")
+        case "conflicted-part": return qsTr("Nothing was taken from this file")
+        case "stash-half": return qsTr("The rename did not finish")
         default: return qsTr("The commit was not made")
+        }
+    }
+
+    /// The second line for the reports **nobody outside answered** — this end refused them itself, before git was
+    /// asked, so the words are ours and belong here rather than in a Rust string (app-ui.md「Rust に文言を置かない」).
+    /// Empty for the reports that quote somebody else; the page uses what came across instead.
+    function writeReportedWhy(kind) {
+        switch (kind) {
+        case "stale-stage":
+        case "stale-unstage":
+        case "stale-discard":
+            return qsTr("The file changed on disk since these rows were read. It has been read again — make the selection on the rows that are there now.")
+        case "conflicted-part":
+            return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
+        case "stash-half":
+            return qsTr("The new entry was stored; the one it replaces is still in the list.")
+        default: return ""
+        }
+    }
+
+    /// The colour a report's own hairline wears (デザイン規約 §答えの要らない報せ / §状態). **Almost all of them wear none** —
+    /// nothing is stopped and nothing went wrong here. The two that do:
+    ///
+    ///  - a delete the far side would not make is the one report whose row **left the screen and came back**
+    ///    (§消す操作は先に画面から消す), so it is stopped where the others are simply over (`danger`,
+    ///    2026-08-29 ユーザー指示);
+    ///  - a rename that fell between its halves is the one that left something half done, which is what `warning`'s
+    ///    "進行中で対処が要る" is for.
+    function reportTone(kind) {
+        switch (kind) {
+        case "delete": return "danger"
+        case "stash-half": return "warning"
+        default: return ""
         }
     }
 

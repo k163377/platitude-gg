@@ -63,6 +63,10 @@ Rectangle {
     }
     property alias activeKey: rowGestures.activeKey
     property alias editKey: rowGestures.editKey
+    /// Whether what is typed in that box cannot be taken, and the line the box says so with — automation-only
+    /// exposures (app-ui.md), since the frame is a colour and the line is in a tooltip.
+    readonly property bool editRefused: rowGestures.editRefused
+    readonly property string editRefusedWhy: rowGestures.editRefusedWhy
     /// A menu raised from one of the folded list's rows is standing over
     /// it. The page's to set — the menus are its.
     property alias menuOpen: rowGestures.menuOpen

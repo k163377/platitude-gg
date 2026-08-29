@@ -253,6 +253,7 @@ Item {
             AppBackend.report("write_notice open=" + page.noticeCard.open
                               + " clears=" + page.noticeClears
                               + " why=" + (page.noticeCard.detail !== "")
+                              + " tone=" + (page.noticeCard.tone === "" ? "none" : page.noticeCard.tone)
                               + " log=" + page.commandsOpen
                               + " wrong=" + page.commandsWrong
                               + " said=" + page.noticeCard.label)

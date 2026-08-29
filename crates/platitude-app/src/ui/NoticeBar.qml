@@ -19,8 +19,11 @@ Rectangle {
 
     /// What did not happen, in this application's words (`Words.remoteRefused`).
     property string label: ""
-    /// Why, in the far side's — passed through as it came.
+    /// Why, in the words of whoever said no — passed through as it came where that was somebody else, said by this
+    /// application where it refused the write itself (`Words.writeReportedWhy`).
     property string detail: ""
+    /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
+    property string tone: ""
     /// Whether the report stands. **Not the words**: they stay put while the bar goes back up, since the bar is on
     /// screen for the whole 200ms it spends going (`AskBar.open` carries the same rule and the reason).
     property bool open: false
@@ -44,10 +47,19 @@ Rectangle {
     Behavior on implicitHeight {
         NumberAnimation { duration: 200 }
     }
-    // The band's own hairline, in the resting colour: a report is none of the three states (デザイン規約 §状態 — 「この 3 つに
-    // 当てはまらない知らせに状態色を使わない」), and a red line here would say the application had broken where it had only been
-    // told no.
-    BandRule {}
+    // The band's own hairline. **Almost every report leaves it in the resting colour**: a report is none of the three
+    // states (デザイン規約 §状態 — 「この 3 つに当てはまらない知らせに状態色を使わない」), and a red line over one would say the
+    // application had broken where it had only been told no.
+    //
+    // The two that do wear one are the two that are not simply over — a delete whose row went off the screen and came
+    // back, and a rename that stopped between its halves (`Words.reportTone`). **The line is the whole of it**: the
+    // heading and the words under it stay in their own colours, the same way a warned button keeps its word
+    // (§長押し「警告の色は語ではなく枠と印が持つ」).
+    BandRule {
+        color: bar.tone === "danger" ? Theme.danger
+             : bar.tone === "warning" ? Theme.warning
+             : Theme.borderSubtle
+    }
 
     // Opening hands the pill the focus, so the keyboard's way out needs no hunting for. A tick later, not now: the
     // gesture that ran the write is still being delivered, and what it lands on takes the focus back if the pill

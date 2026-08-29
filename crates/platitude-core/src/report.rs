@@ -34,6 +34,52 @@ pub enum ReportKind {
     /// left is always something outside it saying no: a hook, a signing
     /// key, another git holding the index.
     Commit,
+
+    /// A part of a file that was not taken, because the file is not the
+    /// one the selection was made on any more (デザイン規約 §答えの要らない報せ).
+    ///
+    /// **This end is the one that said no**, before git was asked: the
+    /// bytes carry a fingerprint and it did not match, or the hunk the
+    /// selection indexes is no longer in the diff. Nothing was written
+    /// either way, and the next move is already made — the pane reads the
+    /// file again on this answer — so it is a report like the rest.
+    ///
+    /// Three of them because the heading says what did not happen and
+    /// these are three different things not happening.
+    StaleStage,
+    StaleUnstage,
+    StaleDiscard,
+    /// A part of a conflicted file, which has more than one old side and
+    /// so cannot be cut into a patch that applies. The pane withholds the
+    /// pieces, so nothing should ask — this is what a write that got here
+    /// anyway says for itself.
+    ConflictedPart,
+    /// A stash rename that stopped between its two halves: the new entry
+    /// was stored and the old one is still there.
+    ///
+    /// **The one report about something half done**, which is why it is
+    /// the one that wears a state colour (デザイン規約 §状態 — 進行中で対処が要る).
+    StashHalfRenamed,
+}
+
+impl ReportKind {
+    /// Whether whoever said no is somewhere outside this application, and
+    /// therefore wrote the words the report quotes.
+    ///
+    /// The rest are this end's own refusals, decided before git was
+    /// asked: they carry no words, because the sentence under the heading
+    /// belongs in the UI's own language rather than in a Rust string
+    /// (app-ui.md「Rust に文言を置かない」).
+    #[must_use]
+    pub fn is_spoken_for(self) -> bool {
+        matches!(
+            self,
+            ReportKind::RemoteDelete
+                | ReportKind::RemoteUpdate
+                | ReportKind::Outdated
+                | ReportKind::Commit
+        )
+    }
 }
 
 /// One report: the two halves the screen is made of, and the names the

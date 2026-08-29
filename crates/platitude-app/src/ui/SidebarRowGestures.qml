@@ -66,12 +66,26 @@ QtObject {
     /// ref name).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
+            || gestures.editCaseOnly
             || !(gestures.editKind === "stash"
                  ? GitFacts.validStashMessage(gestures.editText)
                  : GitFacts.validRefName(gestures.editText)))
+    /// Only the letters' case differs from the name the row already carries. **git writes a ref as a file**, so on a
+    /// case-insensitive disk the new name lands on the old one's and both are gone — core refuses it outright
+    /// (`tag::rename`), and asking here is what puts the answer in the box the name was typed into instead of in a log
+    /// with nothing in it (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断).
+    ///
+    /// **`tag` is the kind here, not the mode** — the mode says which of the box's three questions is being asked
+    /// (`rename` / `branch` / `tag`), and this is only about the one that renames something that is already there.
+    readonly property bool editCaseOnly:
+        gestures.editKind === "tag" && gestures.editMode === "rename"
+        && gestures.editText.trim() !== gestures.editId
+        && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
         : gestures.editText.trim() === ""
           ? qsTr("A name is needed")
+          : gestures.editCaseOnly
+            ? qsTr("Only the letter case differs — on this disk that deletes both names")
           : gestures.editTaken
             ? qsTr("%1 already has a branch called that").arg(gestures.editRemote)
             : gestures.editKind === "stash"

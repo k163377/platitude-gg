@@ -197,7 +197,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "commit-refused",
         when: &[],
-        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
                 said=The commit was not made",
     },
     // The same refusal **with a file open in the middle**, which is the
@@ -208,7 +208,39 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "notice-over-diff",
         when: &[],
-        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
                 said=The commit was not made",
+    },
+    // A part of a file that is not that file any more. **This end is the
+    // one that said no**, before git ran, so there is no row in the log to
+    // read and never was — which is why it used to raise an empty panel
+    // over the very diff it was about (P3-確認事項, 2026-08-29).
+    // `why=true` is this application's own second line arriving through
+    // `Words.writeReportedWhy`, since nobody outside wrote one.
+    Verb {
+        name: "stale-part",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
+                said=Nothing was staged",
+    },
+    // The dress each kind of report wears, asked of the page's own door
+    // (`RepoPage.showReport`) so the run reads the same `Words` the answer
+    // does. **The colour is a two-pixel hairline** — the whole reason this
+    // is a report line rather than something to look for in a picture.
+    Verb {
+        name: "report-tone",
+        when: &[
+            (
+                Arg::Is("stash-half"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=The rename did not finish",
+            ),
+            (
+                Arg::Is("update"),
+                "write_notice open=true clears=true why=false tone=none log=false wrong=false \
+                 said=origin would not update main",
+            ),
+        ],
+        plain: "write_notice open=true clears=true tone=danger",
     },
 ];

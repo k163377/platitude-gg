@@ -228,6 +228,11 @@ impl RepoTab {
                     ReportKind::RemoteUpdate => "update",
                     ReportKind::Outdated => "outdated",
                     ReportKind::Commit => "commit",
+                    ReportKind::StaleStage => "stale-stage",
+                    ReportKind::StaleUnstage => "stale-unstage",
+                    ReportKind::StaleDiscard => "stale-discard",
+                    ReportKind::ConflictedPart => "conflicted-part",
+                    ReportKind::StashHalfRenamed => "stash-half",
                 }
                 .to_string(),
                 report.remote,

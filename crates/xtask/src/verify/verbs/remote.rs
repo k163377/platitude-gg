@@ -105,10 +105,13 @@ pub(super) const TABLE: &[Verb] = &[
     // (the mark in the corner is not calling it one). A window that
     // opened the log and closed it again frames exactly like one that
     // never opened it, so neither is a claim the picture can make.
+    // `tone=danger` is the one report whose row left the screen and came
+    // back (デザイン規約 §状態, 2026-08-29 ユーザー指示) — and the hairline that
+    // says so is two pixels of colour, which no picture is judged on.
     Verb {
         name: "remote-refused",
         when: &[],
-        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=origin would not delete main",
     },
     // The same refusal over a tag, which used to be the one that did not
@@ -120,7 +123,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "tag-refused",
         when: &[],
-        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=origin would not delete v1.0",
     },
     // A push git itself will not send. **The next move is already made**
@@ -130,7 +133,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "push-outdated",
         when: &[],
-        plain: "write_notice open=true clears=true why=true log=false wrong=false \
+        plain: "write_notice open=true clears=true why=true tone=none log=false wrong=false \
                 said=main was not sent to origin",
     },
     // Which remote a push goes to. The mark is one badge on one row:

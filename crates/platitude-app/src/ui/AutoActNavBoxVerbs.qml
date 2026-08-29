@@ -73,6 +73,19 @@ Item {
             sidebarPane.beginRename(kind, id, shown)
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
+        } else if (act === "rename-tag-box") {
+            // The box opened with the argument already typed in it, the way `rename-remote-box` is — so a name the box
+            // itself turns down can be photographed being turned down (デザイン規約 §答えの要らない報せ: 押す前に断る側).
+            //
+            // **The picture cannot judge this**: the answer is the frame's colour and a line that lives in a tooltip,
+            // and a box that took the name frames the same as one that would not. `was=` is the name it is being
+            // weighed against, so a run that opened the box on the wrong row says so instead of passing.
+            sidebarPane.beginRename("tag", tagsModel.nameAt(0), arg)
+            AppBackend.report("name_box was=" + tagsModel.nameAt(0)
+                              + " typed=" + arg
+                              + " refused=" + sidebarPane.editRefused
+                              + " why=" + sidebarPane.editRefusedWhy)
+            renderedBarrier.begin()
         } else if (act === "rename-remote" || act === "rename-remote-box"
                    || act === "rename-remote-go") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves

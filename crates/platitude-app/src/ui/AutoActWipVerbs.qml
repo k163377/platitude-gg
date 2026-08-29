@@ -58,6 +58,21 @@ Item {
                 page.openDiff("staged", arg, "")
             page.commitNow()
             driver.barrierNotice.start()
+        } else if (act === "stale-part") {
+            // A part of a file that is not the file any more: the same press the diff's own marks make, carrying a
+            // fingerprint the bytes cannot match. Nothing is written and the pane reads the file again, so what comes
+            // back is a report (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`.
+            const cut = arg.indexOf(":")
+            stalePartTimer.bucket = arg.substring(0, cut)
+            stalePartTimer.path = arg.substring(cut + 1)
+            page.openDiff(stalePartTimer.bucket, stalePartTimer.path, "")
+            stalePartTimer.start()
+        } else if (act === "report-tone") {
+            // The dress a kind of report wears, entered through the page's own door (`showReport`) so the run reads
+            // the same `Words` the answer does. **Only the kind is handed in** — which report arrived is what the
+            // other verbs prove.
+            page.showReport(arg, "origin", "main", "")
+            driver.barrierNotice.start()
         } else if (act === "amend") {
             // The message is supplied, so skip the prefill request that would otherwise land on top of it.
             wipPane.setAmendChecked(true)
@@ -203,6 +218,21 @@ Item {
     // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.
     // The row is put there by the pass behind the status read — the same read that says what a standing merge is
     // bringing in — so the wait is for the row itself to lead the graph, not for the tree to be loaded.
+    // The press has to land on rows that are actually on screen, so the diff has to have been read first — and the
+    // fingerprint handed in is one the bytes cannot have, which is the whole of the arrangement.
+    SampleTimer {
+        id: stalePartTimer
+        property string bucket: ""
+        property string path: ""
+        onTriggered: {
+            if (!page.diffShown || driver.diffPane.diffModel.loading)
+                return
+            stalePartTimer.stop()
+            driver.writeSeqBefore = repoTab.writeSeq
+            repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
+            driver.barrierNotice.start()
+        }
+    }
     SampleTimer {
         id: wipLanesTimer
         onTriggered: {

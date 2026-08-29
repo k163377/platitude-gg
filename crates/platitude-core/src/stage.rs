@@ -15,6 +15,7 @@ use crate::patch::{self, HunkSelect, PatchSide};
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::refs;
 use crate::repo::RepoInfo;
+use crate::report::{ReportKind, WriteReport};
 use crate::scratch::ScratchFile;
 use crate::status::{self, StatusItem};
 
@@ -302,7 +303,7 @@ pub async fn apply_partial(
         DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse, Some(seen), None),
         DiffTarget::Untracked { path } => {
             let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
-            verify_fingerprint(&raw, seen)?;
+            verify_fingerprint(&raw, seen, taking(PatchSide::Forward))?;
             let cmd = GitCommand::new()
                 .cwd(workdir)
                 .args(["add", "--intent-to-add", "--"])
@@ -350,25 +351,40 @@ pub async fn apply_partial(
 /// patch fragment nobody wrote.
 fn refuse_combined(raw: &[u8]) -> Result<(), GitError> {
     if patch::is_combined(raw) {
-        return Err(GitError::Rejected {
-            message: "this file is still conflicted; \
-                      it has to be resolved before parts of it can be taken"
-                .to_string(),
-        });
+        return Err(stale(ReportKind::ConflictedPart));
     }
     Ok(())
 }
 
 /// Refuses a diff whose bytes are not the ones the selection indexed.
-fn verify_fingerprint(raw: &[u8], seen: u64) -> Result<(), GitError> {
+fn verify_fingerprint(raw: &[u8], seen: u64, kind: ReportKind) -> Result<(), GitError> {
     if details::fingerprint(raw) == seen {
         return Ok(());
     }
-    Err(GitError::Rejected {
-        message: "the file changed since its diff was read; \
-                  the selection no longer addresses what was on screen"
-            .to_string(),
-    })
+    Err(stale(kind))
+}
+
+/// Which way a part was being taken, which is the whole of what the
+/// heading turns on: a part taken off the staged side is being unstaged,
+/// and saying "nothing was staged" for it would name the wrong direction
+/// (デザイン規約 §答えの要らない報せ). Discarding never comes through here.
+fn taking(side: PatchSide) -> ReportKind {
+    match side {
+        PatchSide::Reverse => ReportKind::StaleUnstage,
+        PatchSide::Forward => ReportKind::StaleStage,
+    }
+}
+
+/// A refusal this end made before git was asked. Nothing ran, so there is
+/// no command to name and no words to quote: the screen says both lines in
+/// its own language (デザイン規約 §答えの要らない報せ).
+fn stale(kind: ReportKind) -> GitError {
+    GitError::Reported {
+        command: String::new(),
+        code: 0,
+        stderr: String::new(),
+        report: Box::new(WriteReport::local(kind, String::new())),
+    }
 }
 
 /// The staging half of [`apply_partial`], once the target is one a diff
@@ -387,18 +403,14 @@ async fn apply_prepared(
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     if let Some(seen) = verify {
-        verify_fingerprint(&raw, seen)?;
+        verify_fingerprint(&raw, seen, taking(side))?;
     }
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
         // The selection indexes a diff that no longer holds it — the file
         // changed under the open diff. Doing nothing must not read as the
         // write having landed.
-        return Err(GitError::Rejected {
-            message: "the file changed on disk; the selected part is no longer \
-                      in its diff"
-                .to_string(),
-        });
+        return Err(stale(taking(side)));
     };
 
     let scratch = ScratchFile::create(&repo.git_dir, "stage.patch", &built).map_err(|source| {
@@ -453,16 +465,12 @@ pub async fn discard_partial(
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     // Destructive and index-addressed: bytes that drifted since the
     // selection was made would throw away the wrong lines.
-    verify_fingerprint(&raw, seen)?;
+    verify_fingerprint(&raw, seen, ReportKind::StaleDiscard)?;
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
         // As in apply_partial: a vanished selection is a refusal, not a
         // discard that quietly did nothing.
-        return Err(GitError::Rejected {
-            message: "the file changed on disk; the selected part is no longer \
-                      in its diff"
-                .to_string(),
-        });
+        return Err(stale(ReportKind::StaleDiscard));
     };
 
     let scratch =

@@ -922,6 +922,11 @@ Item {
         const typed = graphPane.namingText
         if (typed.trim() === "")
             return qsTr("A name is needed")
+        // The same rule the left menu's box asks (`SidebarRowGestures.editCaseOnly`): a tag renamed to its own name in
+        // other letters takes both names with it on a case-insensitive disk.
+        if (graphPane.namingKind === "tag" && typed.trim() !== graphPane.namingId
+            && typed.trim().toLowerCase() === graphPane.namingId.toLowerCase())
+            return qsTr("Only the letter case differs — on this disk that deletes both names")
         if (page.graphNameTaken)
             return qsTr("%1 already has a branch called that").arg(page.graphRenameRemote)
         return GitFacts.validRefName(typed) ? "" : qsTr("git will not take this as a name")
@@ -1110,11 +1115,21 @@ Item {
     // A write that did not happen, and whoever said no. It comes down over the middle of the page — over whichever of
     // the graph and the diff is showing — and goes back up on the one word it offers (デザイン規約 §答えの要らない報せ).
 
-    /// Raises the report. `label` is what did not happen, `detail` whoever said no in their own words.
-    function showNotice(label, detail) {
+    /// Raises the report for one write that did not happen — **the one door**, so a headless run that hands it a kind
+    /// enters the same body the answer does (verify-ui). `reason` is what whoever said no wrote; empty where this end
+    /// refused the write itself, and then the second line is ours (`Words.writeReportedWhy`).
+    function showReport(kind, remote, name, reason) {
+        page.showNotice(Words.writeReported(kind, remote, name),
+                        reason !== "" ? reason : Words.writeReportedWhy(kind),
+                        Words.reportTone(kind))
+    }
+    /// Raises the report. `label` is what did not happen, `detail` whoever said no in their own words, `tone` the
+    /// state it is in if it is in one at all.
+    function showNotice(label, detail, tone) {
         // Dressed, then raised — so nothing on a bar the reader can see is ever written (`NoticeBar.open`).
         noticeBar.label = label
         noticeBar.detail = detail
+        noticeBar.tone = tone
         noticeBar.open = true
     }
     /// Only lowered: the words stay where they are for the 200ms it spends going up.
@@ -1175,11 +1190,10 @@ Item {
             // `Delete both` is a branch write whose remote half is what the far side refused, and the row it would
             // morph is about the half that landed.
             if (repoTab.writeReportKind !== "") {
-                page.showNotice(
-                    Words.writeReported(repoTab.writeReportKind,
-                                        repoTab.writeReportRemote,
-                                        repoTab.writeReportName),
-                    repoTab.writeReportReason)
+                page.showReport(repoTab.writeReportKind,
+                                repoTab.writeReportRemote,
+                                repoTab.writeReportName,
+                                repoTab.writeReportReason)
                 // …and the mark in the corner goes quiet with it: it is there to fetch somebody to a failure nothing
                 // else has said, and the bar has just said this one (デザイン規約 §git が言ったことを読む場所). The row keeps
                 // git's words under its red edge — that is the record, and the record is what the panel is for.

@@ -82,10 +82,17 @@ pub async fn rename(
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
     if found.stdout_utf8().trim() != entry.oid {
-        return Err(GitError::Rejected {
-            message: "the stash list moved while renaming: the new entry was \
-                      stored, and the one it replaces is still there"
-                .to_string(),
+        // The one refusal in this application that leaves something half
+        // done, and the one report that wears a state colour for it
+        // (デザイン規約 §答えの要らない報せ / §状態).
+        return Err(GitError::Reported {
+            command: String::new(),
+            code: 0,
+            stderr: String::new(),
+            report: Box::new(crate::report::WriteReport::local(
+                crate::report::ReportKind::StashHalfRenamed,
+                String::new(),
+            )),
         });
     }
     run_selector(executor, workdir, "drop", &shifted, cancel).await

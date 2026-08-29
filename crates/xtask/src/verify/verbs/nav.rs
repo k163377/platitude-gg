@@ -4,6 +4,21 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // A tag renamed to its own name in other letters. **git writes a ref
+    // as a file**, so on a case-insensitive disk both names would be gone
+    // — core refuses it outright, and the box is where that answer belongs
+    // (デザイン規約 §答えの要らない報せ, 2026-08-29 ユーザー判断). Two runs make the
+    // pair: the one that has to be turned down, and the one beside it that
+    // must not be, since a box that refuses everything frames the same.
+    Verb {
+        name: "rename-tag-box",
+        when: &[(
+            Arg::Is("v1.0"),
+            "name_box was=v0.3-local typed=v1.0 refused=false why=",
+        )],
+        plain: "name_box was=v0.3-local typed=V0.3-LOCAL refused=true \
+                why=Only the letter case differs — on this disk that deletes both names",
+    },
     // The row taken away before git answered for it, held open for
     // the picture. `row=-1` is the sidebar without it and `chips=true`
     // the graph without its chip — **both halves at once** is the whole

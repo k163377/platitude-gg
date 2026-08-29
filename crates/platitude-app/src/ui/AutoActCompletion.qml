@@ -18,7 +18,7 @@ QtObject {
     function isWriteAct(act) {
         return ["publish", "publish-taken", "publish-add", "publish-go",
                 "publish-new-go", "commit", "commit-refused", "notice-over-diff",
-                "amend", "amend-reset-author",
+                "stale-part", "amend", "amend-reset-author",
                 "stash", "stash-lands", "stash-file", "stage-many-go",
                 "discard-many-go", "take-side-ours", "take-side-theirs",
                 "open-mergetool", "discard-file-go", "delete-file-go",
@@ -80,7 +80,9 @@ QtObject {
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
                 // The bar is what these wait for, and it comes down after the write's own answer.
-                "commit-refused", "notice-over-diff", "push-outdated",
+                "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
+                // Dress only: nothing is written, and the bar is raised through the page's own door.
+                "report-tone", "rename-tag-box",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // The write barrier is in front of this one's claim: the second press is turned away before any
                 // write is made, so the answer to the first is not what the run is waiting for.

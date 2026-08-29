@@ -6,6 +6,7 @@ use crate::support::stage::{buckets, fp};
 use crate::support::{TestRepo, info};
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
+use platitude_core::report::ReportKind;
 use platitude_core::{stage, status};
 
 #[tokio::test]
@@ -70,7 +71,7 @@ async fn a_vanished_selection_is_an_error_not_a_silent_success() {
     )
     .await
     .expect_err("hunk 99 is not in the diff");
-    assert!(format!("{err}").contains("no longer"), "{err}");
+    assert!(err.report().is_some(), "{err}");
 
     let err = stage::discard_partial(
         &exec,
@@ -82,7 +83,7 @@ async fn a_vanished_selection_is_an_error_not_a_silent_success() {
     )
     .await
     .expect_err("same refusal on the discarding side");
-    assert!(format!("{err}").contains("no longer"), "{err}");
+    assert!(err.report().is_some(), "{err}");
 }
 
 /// A failed partial stage of an untracked file must not leave the
@@ -145,7 +146,17 @@ async fn a_selection_from_a_stale_diff_is_refused() {
     )
     .await
     .expect_err("stale fingerprint is refused");
-    assert!(format!("{err}").contains("changed since"), "{err}");
+    // **The direction is what the heading turns on**, so it is what the
+    // refusal has to carry: this one was staging (デザイン規約 §答えの要らない報せ).
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::StaleStage),
+        "{err}"
+    );
+    assert!(
+        err.report().is_some_and(|r| r.reason.is_empty()),
+        "nobody outside said anything — the words are the screen's own"
+    );
 
     let err = stage::discard_partial(
         &exec,
@@ -157,11 +168,38 @@ async fn a_selection_from_a_stale_diff_is_refused() {
     )
     .await
     .expect_err("stale fingerprint refuses the discard too");
-    assert!(format!("{err}").contains("changed since"), "{err}");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::StaleDiscard),
+        "{err}"
+    );
 
     let (staged, unstaged, _) = buckets(&repo).await;
     assert!(staged.is_empty(), "nothing was staged: {staged:?}");
     assert_eq!(unstaged, vec!["a.txt"], "nothing was discarded");
+
+    // And the other direction: a part taken off the staged side is being
+    // unstaged, which is a third thing not happening.
+    repo.git(&["add", "--", "a.txt"]);
+    let staged_side = DiffTarget::Staged {
+        path: "a.txt".into(),
+        orig_path: None,
+    };
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &staged_side,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("the fingerprint is a different file's either way");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::StaleUnstage),
+        "{err}"
+    );
 }
 
 /// An untracked partial stage checks the fingerprint against the same
@@ -192,7 +230,11 @@ async fn a_stale_untracked_selection_is_refused_before_the_mark() {
     )
     .await
     .expect_err("stale fingerprint is refused");
-    assert!(format!("{err}").contains("changed since"), "{err}");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::StaleStage),
+        "{err}"
+    );
 
     let (staged, unstaged, untracked) = buckets(&repo).await;
     assert!(
@@ -236,7 +278,11 @@ async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
     )
     .await
     .expect_err("a combined diff cannot be staged in pieces");
-    assert!(format!("{err}").contains("still conflicted"), "{err}");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::ConflictedPart),
+        "{err}"
+    );
 
     let err = stage::discard_partial(
         &exec,
@@ -248,7 +294,11 @@ async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
     )
     .await
     .expect_err("nor thrown away in pieces");
-    assert!(format!("{err}").contains("still conflicted"), "{err}");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::ConflictedPart),
+        "{err}"
+    );
 
     // Refused, not half-done: the path is still exactly as git left it.
     let s = status::load(&exec, &repo.path, &cancel)
