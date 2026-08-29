@@ -94,6 +94,25 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     assert!(!map.labels_of(&oid(1), true)[0].held_elsewhere);
 }
 
+/// `set-url` moves no ref, so the URL's only road to the screen is the
+/// snapshot — the join key has to move for it, or the held snapshot is
+/// resent with the old URL on it.
+#[test]
+fn a_changed_remote_url_moves_the_join_key() {
+    let remotes = |url: &str| crate::remote::Remotes {
+        list: vec![crate::remote::Remote {
+            name: "origin".to_string(),
+            fetch_url: url.to_string(),
+            push_url: url.to_string(),
+        }],
+        push_default: None,
+    };
+    assert_ne!(
+        joins::join_key(1, 0, 0, &remotes("https://old.example/repo")),
+        joins::join_key(1, 0, 0, &remotes("https://new.example/repo")),
+    );
+}
+
 /// A tag both sides agree on is one tag: the local label carries the
 /// cloud and the remote's reading adds no second chip.
 #[test]

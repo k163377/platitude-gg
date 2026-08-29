@@ -229,6 +229,9 @@ pub(super) fn join_key(
     remotes.push_default.hash(&mut hasher);
     for r in &remotes.list {
         r.name.hash(&mut hasher);
+        // The URL rides in the snapshot too (the settings screen reads it
+        // from there), and `set-url` moves no ref.
+        r.fetch_url.hash(&mut hasher);
     }
     hasher.finish()
 }
