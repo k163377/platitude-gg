@@ -9,6 +9,7 @@
 //! - `#[derive(QModelItem)]` requires `HashMap` in scope (macro hygiene).
 
 mod app_backend;
+mod clone;
 mod commands;
 mod details;
 mod diff;
@@ -27,6 +28,7 @@ mod tabs_tests;
 mod worktree;
 
 pub use app_backend::{AppBackend, build_tree};
+pub use clone::CloneModel;
 pub use commands::CommandsModel;
 pub use details::DetailsModel;
 pub use diff::DiffModel;

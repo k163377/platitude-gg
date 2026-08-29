@@ -21,6 +21,8 @@ Item {
     required property Item gate
     required property OpenFailedDialog openFailedDialog
     required property IdentityDialog identityDialog
+    required property CloneModel cloneModel
+    required property CloneDialog cloneDialog
     required property var folderDialog
     required property var settingsDialog
 
@@ -145,6 +147,91 @@ Item {
                               + " removed=" + (avatarCardTimer.rowsBefore > settingsDialog.autoAvatarRows))
             window.finishAutoAct()
         }
+    }
+
+    // PG_AUTO_ACT=clone-dialog / clone-go / clone-refused: the box that fetches a repository, entered through the ☰'s
+    // own row (`TabStrip.clickCloneRow`) so the two signal relays between the row and the window are part of what runs.
+    //
+    // **The far side is the repository this run opened.** A folder on this machine is a URL git takes, so no remote has
+    // to be built for these and the same verb works on both operating systems (the avatar family's problem —
+    // an argument that is a path cannot be handed to both). Which of the two answers comes back is decided by the
+    // folder name alone: a name of its own lands beside the source, the source's own name lands **on** it, and git
+    // refuses that one for the destination being taken.
+    readonly property bool cloneAct: AppBackend.autoAct === "clone-dialog"
+                                     || AppBackend.autoAct === "clone-go"
+                                     || AppBackend.autoAct === "clone-refused"
+    /// What to fetch from: whatever the verb was given, or the repository already open.
+    readonly property string cloneFrom: AppBackend.autoActArg !== ""
+                                        ? AppBackend.autoActArg
+                                        : AppBackend.autoOpen.split(";")[0]
+    SampleTimer {
+        id: cloneTimer
+        running: acts.cloneAct
+        /// The row has been pressed; nothing re-reads what had to be true before it.
+        property bool opened: false
+        /// The clone has been asked for, and what the strip held when it was — the half the picture cannot hold,
+        /// since a window with one more tab looks like a window that always had it.
+        property bool asked: false
+        property int tabsBefore: -1
+        onTriggered: {
+            const act = AppBackend.autoAct
+            if (!cloneTimer.asked) {
+                if (!cloneTimer.opened) {
+                    if (window.curPage === null || window.curPage.pageTab.state !== "open")
+                        return
+                    topBar.clickCloneRow()
+                    cloneTimer.opened = true
+                    return
+                }
+                if (!cloneDialog.opened)
+                    return
+                if (act === "clone-dialog") {
+                    cloneTimer.stop()
+                    acts.reportClone()
+                    window.finishAutoAct()
+                    return
+                }
+                // The name is typed rather than left to follow the URL: one of these two has to land where the
+                // source is not, and the other exactly on it.
+                cloneDialog.setFields(acts.cloneFrom,
+                                      act === "clone-go"
+                                      ? "cloned-here" : GitFacts.cloneFolderName(acts.cloneFrom))
+                if (!cloneDialog.canSubmit)
+                    return
+                cloneTimer.tabsBefore = pageRepeater.count
+                cloneDialog.submit()
+                cloneTimer.asked = true
+                return
+            }
+            if (cloneModel.cloning)
+                return
+            // git's answer, whichever it was: the line that quotes it, or the tab the clone became — and, for the
+            // tab, the page finished reading it, since that is what the picture is of.
+            if (act === "clone-refused"
+                ? cloneDialog.refusal === ""
+                : (pageRepeater.count <= cloneTimer.tabsBefore
+                   || window.curPage === null || window.curPage.pageTab.state !== "open"))
+                return
+            cloneTimer.stop()
+            acts.reportClone()
+            window.finishAutoAct()
+        }
+    }
+    /// What the clone verbs have to show for themselves. `dialog=` is the box's own `opened` — up for the two that
+    /// stay, down for the one that landed — `said=` is git's line standing in it, and `grew=` is the strip gaining the
+    /// tab the clone became.
+    ///
+    /// **The four the table judges are written first and in one run**: `must_say` matches a run of the line, so a
+    /// field none of the verbs judges must not stand between two that they do (verbs.md).
+    function reportClone() {
+        AppBackend.report("clone dialog=" + cloneDialog.opened
+                          + " said=" + (cloneDialog.refusal !== "")
+                          + " cloning=" + cloneModel.cloning
+                          + " grew=" + (cloneTimer.tabsBefore >= 0
+                                        && pageRepeater.count > cloneTimer.tabsBefore)
+                          + " folder=" + (cloneDialog.parentUrl !== "")
+                          + " tabs=" + pageRepeater.count
+                          + " name=" + cloneDialog.wantedName)
     }
 
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own

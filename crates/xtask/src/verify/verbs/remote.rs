@@ -9,6 +9,36 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // Fetching a repository that has no tab yet. The three verbs are one
+    // road stopped at three places, and none of the three stops can be
+    // read off the picture: a box that never opened and one that opened
+    // empty are both a window with a card in front of it, a clone that
+    // landed and a strip that always had that tab frame alike, and a
+    // refusal is one line of git's in a box that is up either way.
+    //
+    // `folder=` is the half nobody presses for: the box is opened with a
+    // destination already in it, and one that opened without one would
+    // sit there refusing its own accept button with nothing to say why.
+    Verb {
+        name: "clone-dialog",
+        when: &[],
+        plain: "clone dialog=true said=false cloning=false grew=false folder=true",
+    },
+    // The clone that landed: the box is down, git is not out any more,
+    // said nothing against it, and the strip gained the tab it became.
+    Verb {
+        name: "clone-go",
+        when: &[],
+        plain: "clone dialog=false said=false cloning=false grew=true",
+    },
+    // The clone git would not make — the destination is the source's own
+    // folder, which is taken. The box stays up and quotes the answer,
+    // and no tab was made out of it.
+    Verb {
+        name: "clone-refused",
+        when: &[],
+        plain: "clone dialog=true said=true cloning=false grew=false",
+    },
     // The `+` on a REMOTES band that has gone unavailable around it.
     // The picture holds the band; it cannot hold whether the mark
     // still answers, and a `+` wired to nothing frames exactly like

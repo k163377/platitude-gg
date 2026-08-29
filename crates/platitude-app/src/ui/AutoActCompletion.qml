@@ -129,6 +129,7 @@ QtObject {
                 // window-level predicate has answered.
                 "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover",
+                "clone-dialog", "clone-go", "clone-refused",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",

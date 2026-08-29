@@ -24,6 +24,12 @@ RowLayout {
     /// word (`NavIcon.kind`).
     property string acceptKind: ""
     property bool acceptEnabled: true
+    /// git is out on the network for what this button asked for: the ring
+    /// turns in the mark's own seat, the word stays and steps down, and
+    /// nothing here answers a press (`ActionButton.busy` —
+    /// デザイン規約 §進行中・長押しの定数). The way out beside it stays live:
+    /// it is what stops the call.
+    property alias busy: accept.busy
 
     /// The acting button itself, for a dialog that opens with the focus
     /// already on it.

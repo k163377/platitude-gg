@@ -13,8 +13,8 @@ mod winframe;
 
 use hub::Hub;
 use models::{
-    AppBackend, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel, NavSectionModel,
-    RepoTab, TabsModel, WorkTreeModel,
+    AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel,
+    NavSectionModel, RepoTab, TabsModel, WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
@@ -221,6 +221,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/ReclickGesture.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPageStack.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CloneDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CloseToolButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RowHoverHost.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SampleTimer.qml", "qt/qml/platitude");
@@ -274,6 +275,7 @@ fn main() {
         .register::<AppBackend>()
         .register::<GitFacts>()
         .register::<TabsModel>()
+        .register::<CloneModel>()
         .register::<RepoTab>()
         .register::<GraphModel>()
         .register::<NavSectionModel>()

@@ -35,6 +35,8 @@ Item {
     property Item gate
     property OpenFailedDialog openFailedDialog
     property IdentityDialog identityDialog
+    property CloneModel cloneModel
+    property CloneDialog cloneDialog
     property var folderDialog
     property var settingsDialog
     // Negative/error states can be shorter than a polling cadence when a later background command also finishes.
@@ -176,6 +178,8 @@ Item {
         gate: driver.gate
         openFailedDialog: driver.openFailedDialog
         identityDialog: driver.identityDialog
+        cloneModel: driver.cloneModel
+        cloneDialog: driver.cloneDialog
         folderDialog: driver.folderDialog
         settingsDialog: driver.settingsDialog
     }

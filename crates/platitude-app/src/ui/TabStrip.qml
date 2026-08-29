@@ -62,6 +62,7 @@ Item {
         menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabMetrics.tabFixedW + tabStrip.tabTitleMinW)
 
     signal openRepositoryRequested()
+    signal cloneRepositoryRequested()
     signal settingsRequested()
     /// The grab-run moved or changed size in the strip's own layout. `Main` folds in the shifts this strip cannot see
     /// from here (the maximised inset, the window resizing) and reports the strip on.
@@ -72,6 +73,13 @@ Item {
     /// toggle this verb is about lives on the button's own handler.
     function clickAppMenu() {
         menuButton.clicked()
+    }
+
+    /// Automation: the ☰'s `Clone repository…` row (`PG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
+    /// press on it emits — so the handler that runs is the row's, and everything it reaches from there is the wiring a
+    /// hand goes through.
+    function clickCloneRow() {
+        cloneRow.triggered()
     }
 
     /// The left button moves to the tab — and leaves a hand on it that may go on to carry it (`takeTab`) — the middle
@@ -301,8 +309,9 @@ Item {
                 onTriggered: tabStrip.openRepositoryRequested()
             }
             AppMenuItem {
+                id: cloneRow
                 text: qsTr("Clone repository…")
-                enabled: false
+                onTriggered: tabStrip.cloneRepositoryRequested()
             }
             AppMenuSeparator {}
             // A local re-read (no network), for where the on-tick refresh cannot reach.

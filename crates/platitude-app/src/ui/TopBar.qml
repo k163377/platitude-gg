@@ -75,6 +75,7 @@ Rectangle {
     readonly property bool fetchLive: fetchButton.enabled
 
     signal openRepositoryRequested()
+    signal cloneRepositoryRequested()
     signal identityEditRequested()
     signal settingsRequested()
     signal maximizeToggleRequested()
@@ -155,6 +156,7 @@ Rectangle {
     /// Automation: the strip's own hooks, handed on. What `Main` and `WindowAutoActDriver` hold is the band, so the way
     /// in stays here after the tabs themselves have gone (`TabStrip`).
     function clickAppMenu() { tabStrip.clickAppMenu() }
+    function clickCloneRow() { tabStrip.clickCloneRow() }
     function middleClickTab(index) { return tabStrip.middleClickTab(index) }
     function dragTabTo(from, to) { return tabStrip.dragTabTo(from, to) }
     function holdTabAt(index) { return tabStrip.holdTabAt(index) }
@@ -290,6 +292,7 @@ Rectangle {
             // the strip at the front of both queues.
             Layout.horizontalStretchFactor: 100
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
+            onCloneRepositoryRequested: topBar.cloneRepositoryRequested()
             onSettingsRequested: topBar.settingsRequested()
             onCaptionStripMoved: topBar.captionStripMoved()
         }

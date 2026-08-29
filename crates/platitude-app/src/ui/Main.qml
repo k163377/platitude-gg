@@ -198,6 +198,47 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
+    // Fetching a repository that has no tab yet, and the folder chooser that belongs to it. A second FolderDialog
+    // rather than the one above: the two ask different questions ("which repository" / "which folder to put one in"),
+    // and sharing one would carry each answer into the other's next opening.
+    CloneModel {
+        id: cloneModel
+        // The clone landed, so the box that asked for it goes and the strip does what it always does with a folder
+        // that opens. The two objects are joined here rather than to each other: fetching a repository happens before
+        // there is a tab, and opening one is the strip's ordinary job (`models/clone.rs`).
+        onCloneDone: path => {
+            cloneDialog.landed()
+            tabsModel.openRepositoryPath(path)
+        }
+        onCloneFailed: message => cloneDialog.said(message)
+    }
+    CloneDialog {
+        id: cloneDialog
+        cloning: cloneModel.cloning
+        onSubmitted: (url, parentUrl, name) => cloneModel.cloneRepository(url, parentUrl, name)
+        // Every road out of the box comes through here, Escape included: a clone still on the network is stopped by
+        // the same press that takes away the only place its answer could have landed.
+        onCancelled: cloneModel.cancelClone()
+        onChooseFolder: near => {
+            if (near !== "")
+                cloneFolderDialog.currentFolder = near
+            cloneFolderDialog.open()
+        }
+    }
+    FolderDialog {
+        id: cloneFolderDialog
+        title: qsTr("Where to put it")
+        onAccepted: cloneDialog.setFolder(selectedFolder.toString())
+    }
+
+    /// The clone box, opened beside the repository that is already open — a second working copy usually goes where the
+    /// first one is, which is the reading `openRepositoryPicker` starts from as well. With no tab open there is
+    /// nothing to be beside, and the platform dialog's own folder is what stands in.
+    function startClone() {
+        const near = root.curPage !== null ? root.curPage.pageTab.pickerFolderUrl : ""
+        cloneDialog.start(near !== "" ? near : cloneFolderDialog.currentFolder.toString())
+    }
+
     // Every way in goes through here so the picker opens beside the repository that is already open — left to itself
     // the dialog reopens inside the folder it last accepted, and the next pick is always a level up from there.
     // `nearUrl` names a folder to start at instead: a second try after a folder that was not a repository opens where
@@ -228,6 +269,8 @@ ApplicationWindow {
             gate: gate
             openFailedDialog: openFailedDialog
             identityDialog: identityGate.dialog
+            cloneModel: cloneModel
+            cloneDialog: cloneDialog
             folderDialog: folderDialog
             settingsDialog: settingsDialog
         }
@@ -369,6 +412,7 @@ ApplicationWindow {
             // open. Read here for the same reason: only this window has both halves of it.
             windowFloorWidth: root.openFloorWidth
             onOpenRepositoryRequested: root.openRepositoryPicker()
+            onCloneRepositoryRequested: root.startClone()
             onIdentityEditRequested: settingsDialog.openAt("git")
             onSettingsRequested: settingsDialog.openAt("app")
             onMaximizeToggleRequested: chrome.toggleMaximized()

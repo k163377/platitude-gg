@@ -21,6 +21,22 @@ pub enum PickMsg {
     },
 }
 
+/// What became of a clone, which has no tab to report into: the dialog
+/// that asked for it is still standing, and it is the whole of what there
+/// is on screen about it (デザイン規約 §リポジトリを取り寄せる).
+#[derive(Debug)]
+pub enum CloneMsg {
+    /// It came down. The path is the folder that was named, which is the
+    /// one to open — git was told where to put it rather than left to
+    /// print where it did.
+    Done { path: PathBuf },
+    /// It did not, and `message` is git's own answer. Nothing here reads
+    /// it: a destination that is taken, a URL nothing answers and a
+    /// refused credential all come back the same way, and the dialog
+    /// quotes what git said.
+    Failed { message: String },
+}
+
 /// Tab-level messages (open lifecycle + background errors + write state).
 #[derive(Debug)]
 pub enum TabMsg {

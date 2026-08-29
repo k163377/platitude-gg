@@ -294,6 +294,25 @@ impl GitFacts {
         platitude_core::offers::move_landed(&landing, &current_branch, &landing_oid)
     }
 
+    /// What to call the folder a clone of `url` would land in
+    /// (`platitude_core::remote::folder_name_for`) — the name the box is
+    /// offered before anybody types one. `""` where the URL carries none,
+    /// which is what leaves the accept button refusing.
+    #[qslot]
+    fn clone_folder_name(&self, url: String) -> String {
+        platitude_core::remote::folder_name_for(&url)
+    }
+
+    /// The local path a `file://` folder URL names
+    /// (`urlpath::file_url_to_path`) — what a chooser shows once the
+    /// platform's dialog has answered with one.
+    #[qslot]
+    fn folder_path(&self, url: String) -> String {
+        crate::urlpath::file_url_to_path(&url)
+            .to_string_lossy()
+            .into_owned()
+    }
+
     /// The address half of a typed identity
     /// (`platitude_core::trailers::split_identity`); `""` where nothing
     /// in the text reads as one.

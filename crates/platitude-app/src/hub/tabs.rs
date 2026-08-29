@@ -108,6 +108,46 @@ impl Hub {
         true
     }
 
+    /// Fetches a repository into `into`, which becomes a tab once it is
+    /// there. Answers with the token that stops it, or `None` where there
+    /// is no runtime to run it on.
+    ///
+    /// Outside every session, because there is no repository yet to have
+    /// one: the dialog that asked is the whole of what is on screen about
+    /// this, and it stands until the answer comes back
+    /// (デザイン規約 §リポジトリを取り寄せる). The budget is the same one
+    /// every other network command is given, so a clone over a slow line
+    /// is raised in the same place as a slow fetch (the settings screen's
+    /// network timeout).
+    pub fn clone_repo(
+        &self,
+        url: String,
+        into: PathBuf,
+        feed: Arc<Feed<CloneMsg>>,
+    ) -> Option<tokio_util::sync::CancellationToken> {
+        let handle = self.runtime_handle()?;
+        let executor = self.executor();
+        let timeout = std::time::Duration::from_secs(self.settings.defaults.network_timeout_secs);
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let token = cancel.clone();
+        handle.spawn(async move {
+            let msg = match platitude_core::remote::clone(&executor, &url, &into, timeout, &cancel)
+                .await
+            {
+                Ok(()) => CloneMsg::Done { path: into },
+                // A clone the reader stopped is not something to report
+                // back at: the dialog it was asked in has gone with the
+                // press that stopped it.
+                Err(e) if e.is_cancelled() => return,
+                Err(e) => CloneMsg::Failed {
+                    message: git_said(&e),
+                },
+            };
+            feed.push(msg);
+        });
+        Some(token)
+    }
+
     /// Opens a repository in a new tab; returns the tab id.
     pub fn open_tab(&mut self, path: PathBuf) -> Option<i32> {
         let id = self.reserve_tab(path)?;
@@ -301,6 +341,26 @@ impl Hub {
             .collect();
         open.sort_by_key(|(id, _)| *id);
         open
+    }
+}
+
+/// What git said, without the command line this application built around
+/// it — the half a screen quotes (デザイン規約: 赤は git の文言だけ).
+///
+/// The `Display` of a failed command spells the whole invocation out
+/// first, which belongs in the command log and not in a dialog. Where git
+/// itself said nothing (it never started, or it was killed by the
+/// budget), the error's own words are all there is.
+fn git_said(e: &platitude_core::GitError) -> String {
+    let stderr = match e {
+        platitude_core::GitError::Failed { stderr, .. }
+        | platitude_core::GitError::Reported { stderr, .. } => stderr.trim(),
+        _ => "",
+    };
+    if stderr.is_empty() {
+        e.to_string()
+    } else {
+        stderr.to_string()
     }
 }
 
