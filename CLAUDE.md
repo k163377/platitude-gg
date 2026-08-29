@@ -65,7 +65,7 @@
 
 ## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
 
-- 性能 4 項目は基準リポジトリで全て予算内: [実測](ci/baseline/perf-windows-x64.md)(余白が薄いのはメモリ)
+- 性能 4 項目のうち**メモリだけが予算超過**(基準リポジトリで 383–385MB / 予算 300MB): [実測](ci/baseline/perf-windows-x64.md)。**超過分はグラフを流している間に積まれる**(ベンチ無しなら 298–299MB)— 残件は [P3-確認事項.md](internal-docs/P3-確認事項.md) §app。起動・応答・fps は予算内
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。本ファイルは未配線だけを持つ — **未配線はフル interactive rebase 画面のみ**
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済み・**push するまで実行しない**。初回検証は配布準備期(P5)。CI も軽量(段 2)/ 完全性(段 3)に分ける([P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
