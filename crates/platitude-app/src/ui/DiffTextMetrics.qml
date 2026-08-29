@@ -60,15 +60,26 @@ Item {
     /// fallback that advances one em instead (Windows, Cascadia Mono at `fontCode`: charW 8px against a wide advance of
     /// 13px, so −3px a glyph, which slid the wash that far right of the characters it names). Measured rather than
     /// assumed, because it is a property of whichever fallback this OS hands the glyphs to.
-    readonly property real wideDelta: wideMeasure.implicitWidth / wideMeasure.text.length - 2 * metrics.charW
-    Label {
-        id: wideMeasure
-        visible: false
-        // Ten U+65E5, for the same reason charMeasure holds ten. Built from the code point rather than written as the
-        // glyph: this is a ruler and not a word, and a line of Japanese sitting in a `text:` reads like the hardcoded
-        // wording the rules forbid (CLAUDE.md 絶対制約).
-        text: String.fromCharCode(0x65e5).repeat(10)
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontCode
+    ///
+    /// **And measured only where a wide glyph is on screen** (`DiffModel.hasWide`, from `encode::has_wide`). Setting
+    /// one is what loads that fallback, and the font is 52.6MB of working set — a third of what the whole app is
+    /// allowed — which every window used to pay, one with no repository open included (2026-08-29 実測: 198.7–199.4MB
+    /// against 146.3–146.7). Zero is not a stand-in for the unmeasured number: every place this is read multiplies it
+    /// by a count of wide glyphs, so a diff that has none never asks what one would have cost.
+    readonly property real wideDelta: wideRuler.item
+        ? wideRuler.item.implicitWidth / wideRuler.item.text.length - 2 * metrics.charW
+        : 0
+    Loader {
+        id: wideRuler
+        active: metrics.diffModel.hasWide
+        sourceComponent: Label {
+            visible: false
+            // Ten U+65E5, for the same reason charMeasure holds ten. Built from the code point rather than written as
+            // the glyph: this is a ruler and not a word, and a line of Japanese sitting in a `text:` reads like the
+            // hardcoded wording the rules forbid (CLAUDE.md 絶対制約).
+            text: String.fromCharCode(0x65e5).repeat(10)
+            font.family: Theme.monoFamily
+            font.pixelSize: Theme.fontCode
+        }
     }
 }

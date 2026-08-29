@@ -80,6 +80,10 @@ impl DiffModel {
         // markup, and the length of `<font color="#…">` is not the length
         // of anything on screen.
         self.widest_columns = widest_columns(&patches);
+        // Read off the patches for the same reason: the wide glyph the
+        // pane's ruler stands for is one of the file's own characters,
+        // and a coloured row spells it inside markup.
+        self.has_wide = has_wide(&patches);
         self.extend_notified(rows);
         if crate::memprobe::enabled() {
             crate::memprobe::note("diff-lines", self.tab_id, &self.lines);
@@ -117,6 +121,7 @@ impl DiffModel {
             self.unmerged = false;
             self.widest_no = 0;
             self.widest_columns = 0;
+            self.has_wide = false;
             self.forget_selection();
             self.shown_marks = Default::default();
             self.apply_preview(None);

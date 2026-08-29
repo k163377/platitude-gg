@@ -27,6 +27,41 @@ pub fn widest_columns(patches: &[FilePatch]) -> i32 {
     i32::try_from(widest).unwrap_or(i32::MAX)
 }
 
+/// Whether any line of the diff carries a glyph the mono font draws two
+/// columns wide.
+///
+/// What it is for: the pane needs what such a glyph advances *past* the
+/// two columns [`step_of`] counts it as (`DiffTextMetrics.wideDelta`),
+/// and the only way to have that number is to set one and measure it —
+/// which, on a Latin-only mono family, hands the glyph to whatever
+/// fallback the system has and loads that font. **Measured 2026-08-29 on
+/// Windows: the two rulers that did it unconditionally held 52.6MB in the
+/// working set of a window with no repository open at all** (198.7–199.4
+/// MB against 146.3–146.7). The number they bought is multiplied by a
+/// count of wide glyphs at every place it is used — the wash's x and
+/// width in `DiffRowDelegate`, the stand in [`super::hit_byte`] — so
+/// where a diff has none of them it is multiplied by zero. This is what
+/// the pane asks before it builds the ruler.
+///
+/// A walk of its own rather than a second answer out of
+/// [`widest_columns`]: both are once per file opened, over text the
+/// encoder has already walked, and the two questions read better apart
+/// than as a pair nobody unpacks.
+pub fn has_wide(patches: &[FilePatch]) -> bool {
+    patches
+        .iter()
+        .flat_map(|p| p.hunks.iter())
+        .flat_map(|h| h.lines.iter())
+        .any(|l| any_wide(&l.text))
+}
+
+/// Whether one piece of text carries such a glyph — [`has_wide`] for a
+/// line that arrives on its own, which is how the command log's rows
+/// come (`models::commands`).
+pub fn any_wide(text: &str) -> bool {
+    text.chars().any(is_wide)
+}
+
 /// How many columns one line takes, walked a character at a time by
 /// [`step_of`]. An approximation on purpose — it decides how far the
 /// reader may send the text, and being a column out at the end of the
@@ -136,6 +171,40 @@ mod tests {
         assert_eq!(step_of('日', 0, TAB_COLUMNS), 2);
         assert_eq!(columns_of("日本語\t"), TAB_COLUMNS);
         assert_eq!(columns_of("日本語版\t"), 2 * TAB_COLUMNS);
+    }
+
+    #[test]
+    fn only_a_diff_with_a_wide_glyph_in_it_asks_for_the_ruler() {
+        let wide = "\
+--- a/f
++++ b/f
+@@ -1,2 +1,2 @@
+-ascii only
++日本語版
+";
+        // The heading is not a line of code, and neither is the file
+        // header: a wide glyph up there stands at the viewport's own edge
+        // and no wash is ever laid on it.
+        let heading_only = "\
+--- a/f
++++ b/f
+@@ -1,1 +1,1 @@ 日本語版
+ ascii only
+";
+        assert!(has_wide(&parse_patch(wide.as_bytes())));
+        assert!(!has_wide(&parse_patch(heading_only.as_bytes())));
+        assert!(!has_wide(&[]));
+    }
+
+    #[test]
+    fn a_tab_is_two_columns_wide_without_being_a_wide_glyph() {
+        // `step_of(..) == 2` is a different question: what the ruler
+        // measures is the fallback's advance, and a tab has none.
+        assert_eq!(step_of('\t', 6, TAB_COLUMNS), 2);
+        assert!(!any_wide("\tab"));
+        assert!(any_wide("日"));
+        assert!(!any_wide("Tomášek"));
+        assert!(!any_wide(""));
     }
 
     #[test]

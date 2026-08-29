@@ -9,7 +9,7 @@ mod rows;
 mod select;
 mod words;
 
-pub use columns::widest_columns;
+pub use columns::{any_wide, has_wide, widest_columns};
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::fake_pr_set;
 pub use labels::{

@@ -10,6 +10,7 @@ use super::*;
 impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
     qproperty!("widestColumns", Member = widest_columns, Notify = changed);
+    qproperty!("hasWide", Member = has_wide, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
@@ -211,6 +212,7 @@ impl DiffModel {
         self.current_key = String::new();
         self.widest_no = 0;
         self.widest_columns = 0;
+        self.has_wide = false;
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;

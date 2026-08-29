@@ -250,8 +250,14 @@ Rectangle {
     /// beyond the two columns it is counted as. The same pair the diff places its wash with, measured the same way:
     /// the mono family is Latin-only on some machines, so a kanji comes from a fallback that need not advance two of
     /// them (`DiffPane.wideDelta`).
+    ///
+    /// The second is measured only once a row carries one (`CommandsModel.hasWide`): setting a wide glyph is what
+    /// loads that fallback, and the font is 52.6MB of working set that every window used to pay — see
+    /// `DiffTextMetrics.wideDelta`, which the same measurement and the same reasoning stand behind.
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
-    readonly property real wideDelta: wideMeasure.implicitWidth / wideMeasure.text.length - 2 * pane.charW
+    readonly property real wideDelta: wideRuler.item
+        ? wideRuler.item.implicitWidth / wideRuler.item.text.length - 2 * pane.charW
+        : 0
     Text {
         id: charMeasure
         visible: false
@@ -259,12 +265,17 @@ Rectangle {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
     }
-    Text {
-        id: wideMeasure
-        visible: false
-        text: "あああああ"
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontSm
+    Loader {
+        id: wideRuler
+        active: pane.commandsModel.hasWide
+        sourceComponent: Text {
+            visible: false
+            // Five U+3042, built from the code point rather than written as the glyph: this is a ruler and not a
+            // word (CLAUDE.md 絶対制約, as in `DiffTextMetrics`).
+            text: String.fromCharCode(0x3042).repeat(5)
+            font.family: Theme.monoFamily
+            font.pixelSize: Theme.fontSm
+        }
     }
 
     CommandsTextSelect {

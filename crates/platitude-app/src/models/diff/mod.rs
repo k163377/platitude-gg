@@ -9,8 +9,8 @@ use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
-    DiffRow, diff_key, display_ranges, flatten_patches, hit_byte, human_size, image_data_url,
-    is_combined, is_new_file, is_unmerged_only, widest_columns,
+    DiffRow, diff_key, display_ranges, flatten_patches, has_wide, hit_byte, human_size,
+    image_data_url, is_combined, is_new_file, is_unmerged_only, widest_columns,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -105,6 +105,12 @@ pub struct DiffModel {
     /// (`encode::widest_columns`). The pane turns it into how far sideways
     /// the code may be sent; 0 is a diff with nowhere to go.
     widest_columns: i32,
+    /// Whether any line carries a glyph the mono font draws two columns
+    /// wide (`encode::has_wide`). The pane measures what one of those
+    /// advances only where one is on screen: the ruler that measures it
+    /// sets a wide glyph, and on a Latin-only mono family that loads a
+    /// fallback font this process otherwise has no reason to hold.
+    has_wide: bool,
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it

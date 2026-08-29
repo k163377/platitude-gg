@@ -5,7 +5,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use platitude_core::session::Recording;
 
-use crate::encode::{display_ranges, hit_byte};
+use crate::encode::{any_wide, display_ranges, hit_byte};
 use crate::hub::{CommandMsg, Feed};
 
 use super::{impl_notify_runs, push_run, qml_register};
@@ -68,6 +68,20 @@ pub struct CommandsModel {
     /// Whether the last command that ended failed. Cleared by the next
     /// one that does not.
     failed: bool,
+    /// Whether any row the reader can drag over carries a glyph the mono
+    /// font draws two columns wide (`encode::any_wide`). The pane
+    /// measures what one of those advances only once this is true: the
+    /// ruler that measures it sets a wide glyph, and on a Latin-only mono
+    /// family that loads a fallback font this process otherwise has no
+    /// reason to hold (`encode::has_wide` says the same for a diff).
+    ///
+    /// Only the command line is asked. The three strings the column walk
+    /// reads are the clock, `git …`, and the two words about how it went
+    /// (`selection::Line`): the first is digits and the last is written
+    /// here in English, so a path or a ref name is the only way a wide
+    /// glyph reaches the row. It stays true once set — a row that has
+    /// fallen off the end took nothing back.
+    has_wide: bool,
     background_reads: bool,
     /// Minutes to add to local time to reach UTC, as the display side
     /// reads it off the machine (`Date.getTimezoneOffset()`). What stamps
@@ -112,6 +126,7 @@ impl QListModel for CommandsModel {
     fn reset_unnotified(&mut self) {
         self.rows.clear();
         self.ids.clear();
+        self.has_wide = false;
     }
 }
 
@@ -131,6 +146,7 @@ fn humanize(ms: i64) -> String {
 impl CommandsModel {
     qproperty!("running", Member = running, Notify = changed);
     qproperty!("failed", Member = failed, Notify = changed);
+    qproperty!("hasWide", Member = has_wide, Notify = changed);
     qproperty!(
         "backgroundReads",
         Member = background_reads,
@@ -284,12 +300,14 @@ impl CommandsModel {
                         self.shift_selection(gone);
                     }
                     self.ids.push(id);
+                    let args = display
+                        .split_once(' ')
+                        .map(|(_, rest)| rest.to_string())
+                        .unwrap_or(display);
+                    self.has_wide |= any_wide(&args);
                     self.push(CommandItem {
                         clock: clock_of(at_ms, self.zone_minutes),
-                        args: display
-                            .split_once(' ')
-                            .map(|(_, rest)| rest.to_string())
-                            .unwrap_or(display),
+                        args,
                         full,
                         state: "running".to_string(),
                         ..Default::default()
