@@ -14,7 +14,7 @@ mod winframe;
 use hub::Hub;
 use models::{
     AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel,
-    NavSectionModel, RepoTab, TabsModel, WorkTreeModel,
+    NavSectionModel, RepoConfigModel, RepoTab, TabsModel, WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
@@ -229,6 +229,8 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SettingsAppPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsGitPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SettingsGroup.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SettingsRepoPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsSection.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SharedToolTip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SidebarFilterRow.qml", "qt/qml/platitude");
@@ -277,6 +279,7 @@ fn main() {
         .register::<GitFacts>()
         .register::<TabsModel>()
         .register::<CloneModel>()
+        .register::<RepoConfigModel>()
         .register::<RepoTab>()
         .register::<GraphModel>()
         .register::<NavSectionModel>()

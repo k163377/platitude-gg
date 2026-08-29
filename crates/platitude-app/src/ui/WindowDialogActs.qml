@@ -61,7 +61,52 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the two categories that is not a door into
+    // PG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
+    // repository the reader is looking at, and with the chooser's list down. The argument picks a row of the strip for
+    // the run that wants a repository other than the front one — through the same call a pick from the list makes,
+    // not by writing the model's path (規約 §UI 自動化の因果性).
+    //
+    // Waited on: the read git answers with (`state === "ready"`), and the list's own `opened`. Not the category, which
+    // is what the run set on the way in.
+    SampleTimer {
+        id: repoSettingsTimer
+        running: AppBackend.autoAct === "settings-repo" || AppBackend.autoAct === "settings-repo-pick"
+        /// The row of the strip has been picked and the list, where one is wanted, pressed down.
+        property bool acted: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("git")
+                return
+            }
+            if (!repoSettingsTimer.acted) {
+                // A repository has to be there to pick before anything is asked of it, and the strip's rows arrive
+                // with the window rather than with the screen.
+                if (settingsDialog.autoRepoRows === 0)
+                    return
+                // **The screen has to be showing one repository before another is picked.** The screen lands on the
+                // one the reader is in as it opens (`SettingsDialog.onOpened`), and waiting for that read makes the
+                // argument below a *switch* — boxes already carrying values, replaced by another repository's —
+                // rather than a first look that happens to name a row. The two are not the same road.
+                if (!settingsDialog.autoRepoReady)
+                    return
+                if (AppBackend.autoActArg !== ""
+                        && !settingsDialog.autoShowRepoAt(Number(AppBackend.autoActArg)))
+                    return
+                if (AppBackend.autoAct === "settings-repo-pick")
+                    settingsDialog.autoOfferRepos()
+                repoSettingsTimer.acted = true
+            }
+            if (!settingsDialog.autoRepoReady)
+                return
+            if (AppBackend.autoAct === "settings-repo-pick" && !settingsDialog.autoRepoComboOpen)
+                return
+            repoSettingsTimer.stop()
+            settingsDialog.reportRepo()
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
     // the screen. Opened on the application category and pressed onto the other through the row's own handler
     // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
     // and would leave a dead rail green. What the report reads back is the chapters, not `category` — that is the

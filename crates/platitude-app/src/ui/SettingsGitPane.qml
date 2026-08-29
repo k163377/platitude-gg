@@ -4,14 +4,24 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The settings screen's `Git` category: the two things this app writes into git's own configuration, and the sentence
-// that says so (規約 §設定の画面). A file of its own because it is the half of the screen that talks to git — it asks
-// git what it would launch, hands git the identity, and nothing in it is Platitude GG's to keep.
+// The settings screen's `Git` category: everything this app writes into git's own configuration, in the two groups
+// git itself keeps it in (規約 §設定の画面). A file of its own because it is the half of the screen that talks to git
+// — it asks git what it would launch, hands git the identity, and nothing in it is Platitude GG's to keep.
+//
+// **The groups are how far a value reaches, not what it is.** `GLOBAL` is what git reads everywhere on this computer;
+// `REPOSITORY OVERRIDE` is what the repository picked below writes into its own file, standing over the first. The
+// chapters repeat across them where the setting exists at both levels — the identity does, the merge editor does not
+// (`conflict::set_merge_tool`: which editor someone reaches for is a property of their desk).
+//
+// The pair is not symmetric on purpose: the second group is not a peer of the first, it sits on top of it, and the
+// word `override` is what says so (規約 §設定の画面).
 ColumnLayout {
     id: pane
 
     /// The tab git is read through. The settings are global; "what would git launch here" is not.
     property var curPage: null
+    /// The strip, for the group that writes into one repository (`SettingsRepoPane`).
+    required property TabsModel tabsModel
     /// This category is the one on screen, and the screen is open. What the slow candidate read waits for — a reader
     /// who opened the application category never asked for it.
     property bool showing: false
@@ -128,72 +138,106 @@ ColumnLayout {
         AppBackend.saveIdentity(identityFields.nameText, identityFields.emailText)
     }
 
+    // ---- what the repository group answers for, forwarded ------------------
+    // The second group lives in `SettingsRepoPane`; the window's harness asks the screen, the screen asks this, and
+    // this passes it on — one more link than the tools have, and the same shape.
+    readonly property bool autoRepoReady: repoPane.autoRepoReady
+    readonly property bool autoRepoComboOpen: repoPane.autoRepoComboOpen
+    readonly property int autoRepoRows: repoPane.autoRepoRows
+    function autoOfferRepos() {
+        repoPane.autoOfferRepos()
+    }
+    function autoShowRepoAt(at) {
+        return repoPane.showRepoAt(at)
+    }
+    function reportRepo() {
+        repoPane.reportRepo()
+    }
+    /// Lands the second group on the repository the reader is looking at, for the screen that just opened.
+    function landOnFront() {
+        repoPane.landOnFront()
+    }
+
     Layout.fillWidth: true
     spacing: Theme.spaceXl
 
-    // Where this category's values live, said before the chapters rather than in a line at the foot — and said in
-    // `warning`, because a write here reaches outside this window (規約 §状態 / §設定の画面). Both chapters write
-    // with `--global` (`identity` / `conflict` in core), so what is being replaced is the configuration every
-    // repository on this account is read through — the one kind of reach the state colours are for. Not `fontSm`:
-    // the application category's line is help text, this one is the warning.
-    Label {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        color: Theme.warning
-        text: qsTr("Saved to your global git configuration, replacing what is set there. Every other git on this computer, in every repository, reads the same values.")
-    }
+    SettingsGroup {
+        caption: qsTr("GLOBAL")
 
-    SettingsSection {
-        caption: qsTr("IDENTITY")
-        IdentityFields {
-            id: identityFields
-            // How far the write reaches is the warning's line above; this one is left with the pair of keys, the way
-            // the merge editor's line names `merge.guitool`.
-            note: qsTr("Written as user.name and user.email.")
-            onSubmitted: pane.submitIdentity()
-        }
-        // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for them.
-        // Everything else on the screen writes as it is finished with, which is why the screen's own way out is an OK
-        // and not a Save.
-        DialogActions {
-            id: identityActions
-            acceptKind: "check"
-            acceptText: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
-            acceptEnabled: !AppBackend.identityBusy && identityFields.filled
-            onAccepted: pane.submitIdentity()
-        }
-    }
-
-    SettingsSection {
-        caption: qsTr("MERGE EDITOR")
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceSm
-            // As wide as the chapter gives it: a tool's name has no fixed length, and an input only takes a fixed
-            // width when its content does (デザイン規約 §レイアウト初期値).
-            AppCombo {
-                id: toolField
-                Layout.fillWidth: true
-                placeholder: qsTr("none")
-                // The popup is opened by the screen's own `opened` edge. Loading stays latched only for the
-                // automation verb that deliberately photographs it.
-                loading: pane.autoToolLoadingLatched || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
-                model: pane.toolChoices
-                onWantedChanged: pane.toolTouched = true
-                // A row picked from the list is a finished answer; free text waits for Enter or for the screen to
-                // close.
-                onActivated: pane.applyTool()
-                onAccepted: pane.accepted()
-            }
-        }
+        // Where this group's values live, said before its chapters rather than in a line at the foot — and said in
+        // `warning`, because a write here reaches outside this window (規約 §状態 / §設定の画面). Both chapters
+        // write with `--global` (`identity` / `conflict` in core), so what is being replaced is the configuration
+        // every repository on this account is read through — the one kind of reach the state colours are for. Not
+        // `fontSm`: the application category's line is help text, this one is the warning.
         Label {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
-            // Named rather than picked from a list: the only way to enumerate them is `git mergetool --tool-help`,
-            // whose output is laid out for a person to read.
-            text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
+            color: Theme.warning
+            text: qsTr("Saved to your global git configuration, replacing what is set there. Every other git on this computer, in every repository, reads the same values.")
+        }
+
+        SettingsSection {
+            caption: qsTr("IDENTITY")
+            IdentityFields {
+                id: identityFields
+                // How far the write reaches is the warning's line above; this one is left with the pair of keys, the
+                // way the merge editor's line names `merge.guitool`.
+                note: qsTr("Written as user.name and user.email.")
+                onSubmitted: pane.submitIdentity()
+            }
+            // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for
+            // them. Everything else on the screen writes as it is finished with, which is why the screen's own way
+            // out is an OK and not a Save.
+            DialogActions {
+                id: identityActions
+                acceptKind: "check"
+                acceptText: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
+                acceptEnabled: !AppBackend.identityBusy && identityFields.filled
+                onAccepted: pane.submitIdentity()
+            }
+        }
+
+        SettingsSection {
+            caption: qsTr("MERGE EDITOR")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                // As wide as the chapter gives it: a tool's name has no fixed length, and an input only takes a fixed
+                // width when its content does (デザイン規約 §レイアウト初期値).
+                AppCombo {
+                    id: toolField
+                    Layout.fillWidth: true
+                    placeholder: qsTr("none")
+                    // The popup is opened by the screen's own `opened` edge. Loading stays latched only for the
+                    // automation verb that deliberately photographs it.
+                    loading: pane.autoToolLoadingLatched || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
+                    model: pane.toolChoices
+                    onWantedChanged: pane.toolTouched = true
+                    // A row picked from the list is a finished answer; free text waits for Enter or for the screen to
+                    // close.
+                    onActivated: pane.applyTool()
+                    onAccepted: pane.accepted()
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSm
+                // Named rather than picked from a list: the only way to enumerate them is `git mergetool
+                // --tool-help`, whose output is laid out for a person to read.
+                text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
+            }
+        }
+    }
+
+    SettingsGroup {
+        caption: qsTr("REPOSITORY OVERRIDE")
+        SettingsRepoPane {
+            id: repoPane
+            tabsModel: pane.tabsModel
+            screenOpen: pane.screenOpen
+            onAccepted: pane.accepted()
         }
     }
 }

@@ -5,9 +5,10 @@ import platitude
 import platitude.ui
 
 // Every setting this app can change, on one screen with the categories down the left: what Platitude GG keeps in its
-// own file, and what it writes into git's configuration for every other git on this computer to read. The two are
-// kept apart because where a value is stored is the one thing about it a reader cannot see — so it is the split the
-// screen is built on, and each category says it in a line of its own.
+// own file, and what it writes into git's. The two are kept apart because where a value is stored is the one thing
+// about it a reader cannot see — so it is the split the screen is built on, and each category says it in a line of
+// its own. **How far a git value reaches is a level below that**, inside the git category: `GLOBAL` and
+// `REPOSITORY OVERRIDE` are groups of chapters there, not categories of their own (規約 §設定の画面).
 //
 // The whole window, not a card: a settings screen is read rather than answered, and a card sized to its own content
 // grows a scrollbar as soon as one chapter does. The one card left in this family is the identity gate
@@ -17,7 +18,7 @@ AppDialog {
 
     fills: true
 
-    /// Which category is showing — `"app"` or `"git"`. The two entries in the app menu are two doors into this one
+    /// Which category is showing — `"app"` or `"git"`. The entries that name a category are doors into this one
     /// screen, and the door decides which of them the reader lands on.
     property string category: "app"
 
@@ -25,6 +26,11 @@ AppDialog {
     /// working tree. The settings themselves are global, but "whose commits are these" and "what would git launch"
     /// are read where the person is.
     property var curPage: null
+
+    /// The strip, for the git category's repository group: it offers the repositories standing in it, and lands on
+    /// the one the reader is looking at. Not `curPage` — that is the tab in front, and that group is the one place in
+    /// the window where the answer may be about a repository nobody is looking at.
+    required property TabsModel tabsModel
 
     /// Opens the screen on one category. The only way in — an `open()` that left the category where the last reader
     /// put it would answer a different question than the one the entry asked.
@@ -69,12 +75,36 @@ AppDialog {
     }
 
     // ---- what the git category answers for, forwarded ---------------------
-    // The half of the screen that talks to git lives in `SettingsGitPane`; the window's harness asks the screen, so
-    // the screen passes the question on. `opened` is the screen's to add — a pane that is only hidden still answers.
+    // The half of the screen that talks to git lives in `SettingsGitPane`, both of its groups; the window's harness
+    // asks the screen, so the screen passes the question on. `opened` is the screen's to add — a pane that is only
+    // hidden still answers.
     readonly property bool autoToolsLoadingReady: settingsDialog.opened && gitPane.autoToolsLoadingReady
     readonly property bool autoToolsSettledReady: settingsDialog.opened && gitPane.autoToolsSettledReady
     function reportTool() {
         gitPane.reportTool()
+    }
+    readonly property bool autoRepoReady: settingsDialog.opened && gitPane.autoRepoReady
+    readonly property bool autoRepoComboOpen: gitPane.autoRepoComboOpen
+    readonly property int autoRepoRows: gitPane.autoRepoRows
+    function autoOfferRepos() {
+        gitPane.autoOfferRepos()
+    }
+    /// Automation: shows the repository standing at `at` in the strip, through the same call a pick from the list
+    /// makes. Answers whether there was such a row.
+    function autoShowRepoAt(at) {
+        return gitPane.autoShowRepoAt(at)
+    }
+    function reportRepo() {
+        gitPane.reportRepo()
+        // Whether every chapter can be got to: they fit, or the bar that sends them is standing. **A photograph
+        // cannot say it** — a column cut off at the window's edge is drawn exactly like one that ends there (the
+        // blind spot `details-fit` exists for), and the one thing that silently breaks it is a content height read
+        // off implicit sizes that a wrapping label under-reports.
+        AppBackend.report("settings_fit reach="
+                          + (chapterCol.implicitHeight <= chapters.height || chaptersBar.visible)
+                          + " content=" + Math.round(chapterCol.implicitHeight)
+                          + " view=" + Math.round(chapters.height)
+                          + " bar=" + chaptersBar.visible)
     }
 
     /// The author an avatar's badge was pressed on. The screen opens
@@ -87,6 +117,12 @@ AppDialog {
         appPane.load()
         gitPane.loadIdentity()
         gitPane.loadTool()
+        // The git category's repository group lands on the one the reader is looking at, and does it here rather than
+        // on the category showing: "first, the repository I am in" is about the screen opening, not about which
+        // category is read first — and coming back to the category would otherwise throw away the repository they had
+        // chosen. Two `git config` reads, which is the same order of cost as the identity read above; the
+        // eight-second one (`--tool-help`) still waits for the category itself.
+        gitPane.landOnFront()
         // Opened from an avatar, the caret is already spoken for and the screen has none left to place.
         if (!appPane.focusPrefill()) {
             if (settingsDialog.category === "git")
@@ -181,33 +217,58 @@ AppDialog {
                 color: Theme.borderSubtle
             }
 
-            ColumnLayout {
+            // The chapters, sent when they do not fit. A screen that fills the window is still a fixed height, and the
+            // git category is two groups deep — so the thing a card was avoided for (規約 §設定の画面) arrives here
+            // anyway, and this is where it can be answered without the screen resizing itself under the reader.
+            //
+            // **The floating bar, not the panels' slab** (デザイン規約 §スクロールバー / §QML 実装ルール のバーの
+            // 選び方). The slab says its idle state with `bgElevated`, which is the step above a *pane's* ground —
+            // and this screen's ground is `bgElevated` itself, so an idle slab here is the ground exactly (実測: the
+            // five pixels at the edge came back `#0F172A`, and a bar that is meant to dim rather than vanish had
+            // vanished). The translucent thumb is the one with a reading over a card, and this edge can take it: the
+            // ink reaches eight pixels in, where the combo's chevron starts, and what it passes over below that is
+            // the inside of a box near its own right frame.
+            Flickable {
+                id: chapters
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.leftMargin: Theme.spaceSm
-                spacing: Theme.spaceXl
+                clip: true
+                contentWidth: width
+                contentHeight: chapterCol.implicitHeight
+                // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: AutoScrollBar { id: chaptersBar }
 
-                SettingsAppPane {
-                    id: appPane
-                    visible: settingsDialog.category === "app"
-                    curPage: settingsDialog.curPage
-                    prefillName: settingsDialog.prefillName
-                    prefillEmail: settingsDialog.prefillEmail
-                    onAccepted: settingsDialog.close()
-                }
+                ColumnLayout {
+                    id: chapterCol
+                    // Width rather than a margin: a `Flickable`'s content item is not a layout, so `Layout.*` on this
+                    // one would be read by nobody. No gutter — a floating bar does not take one (規約 §余白).
+                    width: chapters.width
+                    spacing: Theme.spaceXl
 
-                SettingsGitPane {
-                    id: gitPane
-                    visible: settingsDialog.category === "git"
-                    curPage: settingsDialog.curPage
-                    // Its slow read is asked for by this, and by nothing else — being hidden is what says the reader
-                    // did not ask for it (規約 §設定の画面). Following git is the other one: that goes on wherever the
-                    // reader is standing.
-                    showing: settingsDialog.opened && settingsDialog.category === "git"
-                    screenOpen: settingsDialog.opened
-                    onAccepted: settingsDialog.close()
+                    SettingsAppPane {
+                        id: appPane
+                        visible: settingsDialog.category === "app"
+                        curPage: settingsDialog.curPage
+                        prefillName: settingsDialog.prefillName
+                        prefillEmail: settingsDialog.prefillEmail
+                        onAccepted: settingsDialog.close()
+                    }
+
+                    SettingsGitPane {
+                        id: gitPane
+                        visible: settingsDialog.category === "git"
+                        curPage: settingsDialog.curPage
+                        tabsModel: settingsDialog.tabsModel
+                        // Its slow read is asked for by this, and by nothing else — being hidden is what says the reader
+                        // did not ask for it (規約 §設定の画面). Following git is the other one: that goes on wherever the
+                        // reader is standing.
+                        showing: settingsDialog.opened && settingsDialog.category === "git"
+                        screenOpen: settingsDialog.opened
+                        onAccepted: settingsDialog.close()
+                    }
                 }
-                Item { Layout.fillHeight: true }
             }
         }
         // One button, because there is only one thing left for a button to

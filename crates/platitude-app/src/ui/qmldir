@@ -165,6 +165,8 @@ SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsAppPane 1.0 SettingsAppPane.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SettingsGitPane 1.0 SettingsGitPane.qml
+SettingsGroup 1.0 SettingsGroup.qml
+SettingsRepoPane 1.0 SettingsRepoPane.qml
 SettingsSection 1.0 SettingsSection.qml
 SharedToolTip 1.0 SharedToolTip.qml
 SidebarFilterRow 1.0 SidebarFilterRow.qml

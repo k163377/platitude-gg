@@ -2,7 +2,7 @@
 //! and its badge, the signature, the caret in a message box, and the
 //! settings card the avatar list comes down inside.
 
-use super::Verb;
+use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     // The caret is the whole of these two, and a hook that never
@@ -68,6 +68,37 @@ pub(super) const TABLE: &[Verb] = &[
         name: "settings-switch",
         when: &[],
         plain: "settings_switch was_app=true app=false git=true",
+    },
+    // The git category's two groups, which is the tallest this screen
+    // gets. **The pair splits the claim**, because a row is one
+    // substring and there are two things a picture cannot say.
+    //
+    // This one takes the reach: a column cut off at the window's edge is
+    // drawn exactly like one that ends there, and the way it silently
+    // breaks is a content height read off implicit sizes that a wrapping
+    // label under-reports — which leaves the chapters clipped *and* the
+    // bar down.
+    // With an argument it is a *switch*: the screen has already landed on
+    // the repository the reader is in, and the run picks another. What
+    // must hold then is that the boxes followed — a screen still showing
+    // the repository it was on, or showing nothing, is one offering to
+    // write the wrong thing into the one now named above it, and both
+    // photograph as an ordinary form.
+    Verb {
+        name: "settings-repo",
+        when: &[(Arg::Is(""), "settings_fit reach=true")],
+        plain: "repo_config rows=2 state=ready matches=true",
+    },
+    // And this one takes the read and the list. `state=ready` is what
+    // empty boxes cannot say for themselves — "this repository sets
+    // nothing of its own" and "the read never landed" look alike —
+    // while `rows=2` says both open repositories reached the chooser,
+    // since a chooser offering only the one it landed on is a chooser
+    // nobody can use.
+    Verb {
+        name: "settings-repo-pick",
+        when: &[],
+        plain: "repo_config rows=2 state=ready matches=true open=true",
     },
     // The same card's avatar half. Only this one of its four wants a
     // line: the other three cannot reach the camera with the wrong

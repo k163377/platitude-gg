@@ -95,6 +95,7 @@ impl TabsModel {
     /// [`settle_current`]: TabsModel::settle_current
     pub(super) fn report(&mut self) {
         self.settle_current();
+        self.settle_open_repos();
         // Named the way the file names it. The store normalises separators
         // on the way out anyway, so handing it the raw path would leave the
         // state held here unequal to the one on disk — harmless today only
@@ -107,6 +108,35 @@ impl TabsModel {
             .collect::<Vec<_>>();
         let active = usize::try_from(self.current_index).unwrap_or(0);
         Hub::with(|hub| hub.set_tabs_state(platitude_core::settings::TabsState { paths, active }));
+    }
+
+    /// Packs the strip for the readers that want it whole (`open_repos`).
+    ///
+    /// From [`report`], which every act on the strip ends with — so a tab
+    /// opened, closed, renamed against a new namesake or carried past its
+    /// neighbour all land here, and those are the four things that can
+    /// change what the list says. The path is the row's own spelling
+    /// rather than the store's: it is what the reader hands back when
+    /// they pick a name, and git is run in it.
+    ///
+    /// Silent when nothing came out different — the act that ends here is
+    /// usually a switch, which moves neither a name nor an order.
+    ///
+    /// [`report`]: TabsModel::report
+    fn settle_open_repos(&mut self) {
+        let mut packed = String::new();
+        for item in &self.items {
+            if !packed.is_empty() {
+                packed.push(RECORD_SEP);
+            }
+            packed.push_str(&item.title);
+            packed.push(FIELD_SEP);
+            packed.push_str(&item.repo_path);
+        }
+        if packed != self.open_repos {
+            self.open_repos = packed;
+            self.open_repos_changed();
+        }
     }
 }
 

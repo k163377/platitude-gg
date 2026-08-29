@@ -22,8 +22,20 @@ impl TabsModel {
         Notify = current_index_changed
     );
 
+    // Every tab, packed — see the member. Its own signal rather than the
+    // row one: this changes on a name settling and on a carry across the
+    // strip, neither of which moves the tab in front.
+    qproperty!(
+        "openRepos",
+        Member = open_repos,
+        Notify = open_repos_changed
+    );
+
     #[qsignal]
     pub(super) fn current_index_changed(&mut self);
+
+    #[qsignal]
+    pub(super) fn open_repos_changed(&mut self);
 
     /// The row at `index` is about to stop being the one in front.
     ///

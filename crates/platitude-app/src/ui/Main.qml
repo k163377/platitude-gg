@@ -349,6 +349,7 @@ ApplicationWindow {
     SettingsDialog {
         id: settingsDialog
         curPage: root.curPage
+        tabsModel: tabsModel
     }
     // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
     // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,

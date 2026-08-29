@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
+use crate::encode::{FIELD_SEP, RECORD_SEP};
 use crate::hub::{Feed, Hub, PickMsg};
 use crate::urlpath::file_url_to_path;
 
@@ -43,6 +44,17 @@ pub struct TabsModel {
     /// opened repository that will not read itself again (measured: the
     /// graph stayed empty and `middle-close` waited out its watchdog).
     current_tab_id: i32,
+    /// The strip as a list rather than as rows: one record per tab, the
+    /// name it is shown by and then its work tree path, packed the way
+    /// every other list QML unpacks itself is.
+    ///
+    /// For the readers that want the whole strip at once rather than a
+    /// row at a time — the settings screen's repository chooser, which
+    /// offers exactly the repositories standing in the strip and calls
+    /// each of them what the tab does. A view can walk the rows; a list
+    /// bound to a property cannot, and a name a reader picked has to lead
+    /// back to a path.
+    open_repos: String,
     /// Answers about folders the picker handed over. Attached on the
     /// first question rather than at startup: a window that never opens
     /// the picker never has one to hear.
@@ -58,6 +70,7 @@ impl Default for TabsModel {
             // not exist, and the UI reads "no repository open" as < 0.
             current_index: -1,
             current_tab_id: -1,
+            open_repos: String::new(),
             picks: Arc::new(Feed::default()),
             attached: false,
         }
