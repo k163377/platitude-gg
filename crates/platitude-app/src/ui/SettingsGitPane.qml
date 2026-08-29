@@ -128,20 +128,25 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceXl
 
-    // Where this category's values live, said before the chapters rather than in a line at the foot — and said as an
-    // overwrite, because that is what it is (規約 §設定の画面).
+    // Where this category's values live, said before the chapters rather than in a line at the foot — and said in
+    // `warning`, because a write here reaches outside this window (規約 §状態 / §設定の画面). Both chapters write
+    // with `--global` (`identity` / `conflict` in core), so what is being replaced is the configuration every
+    // repository on this account is read through — the one kind of reach the state colours are for. Not `fontSm`:
+    // the application category's line is help text, this one is the warning.
     Label {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
-        text: qsTr("Written straight into your git configuration, over whatever is set there now. Platitude GG keeps no copy: every other git on this computer reads the same values.")
+        color: Theme.warning
+        text: qsTr("Saved to your global git configuration, replacing what is set there. Every other git on this computer, in every repository, reads the same values.")
     }
 
     SettingsSection {
         caption: qsTr("IDENTITY")
         IdentityFields {
             id: identityFields
+            // How far the write reaches is the warning's line above; this one is left with the pair of keys, the way
+            // the merge editor's line names `merge.guitool`.
+            note: qsTr("Written as user.name and user.email.")
             onSubmitted: pane.submitIdentity()
         }
         // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for them.

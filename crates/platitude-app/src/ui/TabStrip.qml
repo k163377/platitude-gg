@@ -62,7 +62,6 @@ Item {
         menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabMetrics.tabFixedW + tabStrip.tabTitleMinW)
 
     signal openRepositoryRequested()
-    signal identityEditRequested()
     signal settingsRequested()
     /// The grab-run moved or changed size in the strip's own layout. `Main` folds in the shifts this strip cannot see
     /// from here (the maximised inset, the window resizing) and reports the strip on.
@@ -313,12 +312,9 @@ Item {
                 onTriggered: tabStrip.curPage.pageTab.refreshAll()
             }
             AppMenuSeparator {}
-            AppMenuItem {
-                // Named for where the values are kept rather than for the first of them: the screen behind this row
-                // writes into git's own configuration, and the identity is one chapter of it.
-                text: qsTr("Git settings…")
-                onTriggered: tabStrip.identityEditRequested()
-            }
+            // One row, because there is one screen. A second entry naming a category of it would be a menu telling
+            // the reader about the inside of the thing it opens (2026-08-29 ユーザー報告 — the two rows read as a
+            // duplicate).
             AppMenuItem {
                 text: qsTr("Settings…")
                 onTriggered: tabStrip.settingsRequested()

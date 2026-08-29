@@ -19,6 +19,10 @@ ColumnLayout {
     /// Both boxes hold something. What a Save is enabled by, wherever that button stands.
     readonly property bool filled: nameField.text.trim() !== "" && emailField.text.trim() !== ""
 
+    /// The line under the boxes. The default says how far the write reaches, for the gate, which has nothing above it
+    /// that does; the settings screen's warning already says it, so there the line only names the two keys.
+    property string note: qsTr("Saved for every repository on this computer (user.name and user.email).")
+
     /// Enter was pressed in one of the boxes.
     signal submitted()
 
@@ -88,7 +92,7 @@ ColumnLayout {
         wrapMode: Text.Wrap
         color: Theme.textMuted
         font.pixelSize: Theme.fontSm
-        text: qsTr("Saved for every repository on this computer (user.name and user.email).")
+        text: fields.note
     }
     // git's own message, unedited — and where a write took nowhere without git raising anything, a sentence of our
     // own, because there is no message to pass through and the marks alone do not say why one of them is missing.

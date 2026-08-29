@@ -290,7 +290,6 @@ Rectangle {
             // the strip at the front of both queues.
             Layout.horizontalStretchFactor: 100
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
-            onIdentityEditRequested: topBar.identityEditRequested()
             onSettingsRequested: topBar.settingsRequested()
             onCaptionStripMoved: topBar.captionStripMoved()
         }
