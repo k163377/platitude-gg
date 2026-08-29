@@ -76,25 +76,29 @@ impl RepoSession {
         workdir: &Path,
         cancel: &CancellationToken,
     ) -> Result<remote::Remotes, GitError> {
-        self.forget_remotes_if_config_moved();
+        self.forget_what_the_config_decides();
         self.remotes
             .get_or_try_init(|| remote::read(&self.executor, workdir, cancel))
             .await
     }
 
-    /// Drops the remote list when the file it was read from has been
-    /// written since — `git remote add` in a terminal moves no ref and
-    /// lands no write, so nothing else here would notice it.
+    /// Drops the answers read out of the repository's own configuration
+    /// when that file has been written since — the remote list and
+    /// `core.autocrlf`. `git remote add` in a terminal moves no ref and
+    /// lands no write, and neither does the settings screen writing the
+    /// line-ending setting for this repository (`models::line_endings`
+    /// spawns against a path rather than through a session), so nothing
+    /// else here would notice either of them.
     ///
     /// A stat rather than a `git config`: this runs on every poll tick,
-    /// and the reason the list is kept at all is that a process per tick
-    /// was too much to pay for it. What it watches is the repository's
-    /// own config (a linked worktree shares the common one, which is what
-    /// `--git-path config` answers) — a remote written into the user's
-    /// global config is still only seen on the next write or ref move.
-    /// The push mark is the exception: the status tick reads it in every
-    /// scope and hands it to [`RepoSession::note_push_default`].
-    fn forget_remotes_if_config_moved(&self) {
+    /// and the reason those answers are kept at all is that a process per
+    /// tick was too much to pay for them. What it watches is the
+    /// repository's own config (a linked worktree shares the common one,
+    /// which is what `--git-path config` answers) — a value written into
+    /// the user's global config is still only seen on the next write or
+    /// ref move. The push mark is the exception: the status tick reads it
+    /// in every scope and hands it to [`RepoSession::note_push_default`].
+    fn forget_what_the_config_decides(&self) {
         let Some(path) = self.config_path() else {
             return;
         };
@@ -110,6 +114,11 @@ impl RepoSession {
         // the read below is about to take the current one anyway.
         if seen.is_some() {
             self.remotes.forget();
+            // The marks go with it: whether git decides the stored
+            // endings is what turns a notice on and off, so a repository
+            // that has just been told to convert has to stop warning
+            // about the files it now converts.
+            self.forget_eol_derived();
         }
         *seen = Some(stamp);
     }

@@ -373,6 +373,60 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     session.close();
 }
 
+/// The line-ending setting written into this repository's own file
+/// reaches the notices by the poll.
+///
+/// The settings screen writes it against a work tree path rather than
+/// through a session (`models::line_endings`, so that it can name a
+/// repository nobody is looking at), which moves no ref and lands no write
+/// in here — exactly like `git config core.autocrlf` typed in a terminal.
+/// So the stat the remotes cache already makes on every tick has to notice
+/// it (`RepoSession::forget_what_the_config_decides`). Without that, a
+/// repository told to convert its line endings keeps warning about the
+/// files git now converts, until the next commit or ref move.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\n", "root");
+    // Every line's ending flips, which is the one reading the patch bytes
+    // settle on their own — and it is silenced by the setting rather than
+    // by the bytes, which is what this is about.
+    std::fs::write(repo.path.join("f.txt"), "one\r\ntwo\r\n").expect("rewrite with CRLF");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    // **The last status read, not any of them.** Waiting on "some status
+    // said nothing" would be answered by the one the session sends before
+    // it has settled any marks at all, which is the same shape as the
+    // answer this is looking for.
+    let marked = |events: &[SessionEvent]| {
+        events.iter().rev().find_map(|e| match e {
+            SessionEvent::StatusLoaded { eol_marks, .. } => Some(eol_marks.len()),
+            _ => None,
+        })
+    };
+    sink.wait_for("the flip warned about", |evs| {
+        (marked(evs) == Some(1)).then_some(())
+    })
+    .await;
+
+    repo.git(&["config", "--local", "core.autocrlf", "true"]);
+    let polled = session.refresh_poll_tracked().outcome().await;
+    assert!(
+        matches!(
+            polled,
+            platitude_core::session::RefreshOutcome::Changed
+                | platitude_core::session::RefreshOutcome::Unchanged
+        ),
+        "the poll ran: {polled:?}"
+    );
+
+    sink.wait_for("the notice withdrawn", |evs| {
+        (marked(evs) == Some(0)).then_some(())
+    })
+    .await;
+    session.close();
+}
+
 /// Whether git normalises line endings is repository configuration, so
 /// concurrent diff reads share one in-flight settings query.
 #[tokio::test(flavor = "multi_thread")]

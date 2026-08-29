@@ -86,8 +86,8 @@ pub struct RepoSession {
     /// it drops both — two cells would be two things to remember to
     /// forget.
     pub(super) remotes: Derived<remote::Remotes>,
-    /// How the config file looked when the remotes above were last read
-    /// (see [`RepoSession::forget_remotes_if_config_moved`]). `None`
+    /// How the config file looked when what is read out of it was last
+    /// read (see [`RepoSession::forget_what_the_config_decides`]). `None`
     /// until the first look.
     pub(super) config_stamp: Mutex<Option<ConfigStamp>>,
     /// Pending paths whose change has something to say about line endings,
