@@ -9,13 +9,14 @@
 //!
 //! * **on the ledger** — .claude/rules-refs/structure.md 分割しない判断 holds
 //!   a written reason not to split it, which is the rule's own escape hatch.
-//!   The 500-line ceiling does not apply and no baseline entry is kept for
-//!   it; the `(N 行)` the entry itself records does apply, and ratchets the
-//!   same way — it follows the file down on its own, and growth past it
-//!   fails until somebody writes the new number in. That edit is the point:
-//!   it lands on the line carrying the reason, so the reason is re-read at
-//!   the moment it stops describing the file. An exemption nobody measures
-//!   is one that quietly turns into a licence.
+//!   No ceiling applies and no baseline entry is kept: the entry is the
+//!   whole of the standing, and what the file measures is nobody's to
+//!   record. The entry did carry the length once, as a second ceiling that
+//!   ratcheted — the point being that growth would land an edit on the line
+//!   carrying the reason. What it landed instead was a number rewritten
+//!   every time a verb was added to a driver, which is not a reading of the
+//!   reason (2026-08-29 ユーザー判断). The check that remains is that the
+//!   entry names a file that is still there.
 //! * **in the baseline** — over the ceiling from before the count existed,
 //!   pinned at the number it had. It may shrink, and the baseline follows it
 //!   down; it may not grow, which is structure.md's 上限超過ファイルへ追記しない
@@ -30,7 +31,6 @@
 //! already knows where functions begin and end.
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 /// Ceilings in physical lines (.claude/rules/structure.md §上限).
@@ -69,41 +69,20 @@ struct Counted {
     ceiling: usize,
 }
 
-/// One ledger bullet, which exempts the file it names from the ceiling.
-struct Ledgered {
-    path: String,
-    /// The `(N 行)` the bullet records, and where those digits sit in the
-    /// ledger file so a shrink can rewrite them where they stand. `None`
-    /// when the bullet records no length at all, which is a failure and
-    /// not a free pass — an unmeasured exemption is the hole this closes.
-    recorded: Option<(usize, Range<usize>)>,
-}
-
-/// A ledger number to be pulled down: its digits, and what to put there.
-type Shrink = (Range<usize>, usize);
-
 pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
         return Err(format!("unknown option {unknown:?} (structure takes none)"));
     }
     let root = crate::workspace_root();
-    let (ledger_path, ledger_text, ledger) = read_ledger(&root)?;
+    let ledger = read_ledger(&root)?;
     let counted = scan(&root)?;
 
-    let (mut failures, shrunk) = check_ledger(&ledger, &counted);
-    if !shrunk.is_empty() {
-        let followed = shrunk.len();
-        rewrite_ledger(&ledger_path, &ledger_text, shrunk)?;
-        println!(
-            "structure: {LEDGER} 分割しない判断 followed {followed} file(s) down — commit it \
-             with the change that earned it"
-        );
-    }
+    let mut failures = check_ledger(&ledger, &counted);
 
     let (ledgered, rest): (Vec<&Counted>, Vec<&Counted>) = counted
         .iter()
         .filter(|file| file.lines > file.ceiling)
-        .partition(|file| ledger.iter().any(|entry| names(&entry.path, &file.path)));
+        .partition(|file| ledger.iter().any(|entry| names(entry, &file.path)));
     let (pinned, over) = check_baseline(&root, &rest, counted.len())?;
     failures.extend(over);
 
@@ -271,7 +250,7 @@ fn relative(root: &Path, file: &Path) -> String {
 /// 分割しない判断 section counts — the sections above it name files as
 /// examples of a trap, not as permission to be long, and reading the whole
 /// document would quietly excuse them.
-fn read_ledger(root: &Path) -> Result<(PathBuf, String, Vec<Ledgered>), String> {
+fn read_ledger(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(LEDGER);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let at = text
@@ -284,116 +263,53 @@ fn read_ledger(root: &Path) -> Result<(PathBuf, String, Vec<Ledgered>), String> 
                 path.display()
             )
         })?;
-    let entries = ledger_entries(&text[at..], at);
-    Ok((path, text, entries))
+    Ok(ledger_entries(&text[at..]))
 }
 
-/// The entries a ledger section holds, up to the next heading, with their
-/// offsets shifted by where that section starts in the whole file.
-fn ledger_entries(section: &str, base: usize) -> Vec<Ledgered> {
-    let section = section.split("\n## ").next().unwrap_or(section);
-    let mut entries = Vec::new();
-    let mut at = base;
-    for line in section.split_inclusive('\n') {
-        if let Some(entry) = ledger_bullet(line, at) {
-            entries.push(entry);
-        }
-        at += line.len();
-    }
-    entries
+/// The entries a ledger section holds, up to the next heading.
+fn ledger_entries(section: &str) -> Vec<String> {
+    section
+        .split("\n## ")
+        .next()
+        .unwrap_or(section)
+        .lines()
+        .filter_map(ledger_bullet)
+        .collect()
 }
 
 /// The file one bullet exempts, if it is one of the bullets that do.
 ///
 /// A bullet exempts the file it is *about*, and that is the one it opens
-/// with in bold: ``- **`path`(N 行)は割らない** — …``. The same section
-/// also carries bullets about one long function inside a file, which name
-/// their file in passing and must not hand the whole file a ceiling
-/// exemption; leading on the file in bold is what tells the two apart.
-/// Losing the bold costs an exemption and turns the count red, which is
-/// the direction a formatting slip should fail in.
-fn ledger_bullet(line: &str, at: usize) -> Option<Ledgered> {
-    let trimmed = line.trim_start();
-    let rest = trimmed.strip_prefix("- **")?.strip_prefix('`')?;
-    let (raw, after) = rest.split_once('`')?;
+/// with in bold: ``- **`path` は割らない** — …``. The same section also
+/// carries bullets about one long function inside a file, which name their
+/// file in passing and must not hand the whole file a ceiling exemption;
+/// leading on the file in bold is what tells the two apart. Losing the bold
+/// costs an exemption and turns the count red, which is the direction a
+/// formatting slip should fail in.
+fn ledger_bullet(line: &str) -> Option<String> {
+    let rest = line.trim_start().strip_prefix("- **")?.strip_prefix('`')?;
+    let (raw, _) = rest.split_once('`')?;
     if !(raw.ends_with(".rs") || raw.ends_with(".qml")) {
         return None;
     }
-    let after_at = at + (line.len() - trimmed.len()) + "- **`".len() + raw.len() + '`'.len_utf8();
-    Some(Ledgered {
-        path: raw.replace('\\', "/"),
-        recorded: recorded_lines(after, after_at),
-    })
+    Some(raw.replace('\\', "/"))
 }
 
-/// The `(N 行)` that follows the path, and where its digits sit.
-///
-/// It has to follow the path immediately: entries carry further
-/// parenthesised asides further along the line, and the length is the one
-/// number that may not be picked out of them by guesswork.
-fn recorded_lines(after: &str, at: usize) -> Option<(usize, Range<usize>)> {
-    let (open, body) = ['(', '(']
-        .into_iter()
-        .find_map(|paren| Some((paren, after.strip_prefix(paren)?)))?;
-    let (digits, tail) = body.split_at(body.find(|c: char| !c.is_ascii_digit())?);
-    if !tail.trim_start().starts_with('行') {
-        return None;
-    }
-    let start = at + open.len_utf8();
-    Some((digits.parse().ok()?, start..start + digits.len()))
-}
-
-/// The ledger's own ratchet: what each entry records against what the file
-/// it names measures now.
-fn check_ledger(ledger: &[Ledgered], counted: &[Counted]) -> (Vec<String>, Vec<Shrink>) {
-    let mut failures = Vec::new();
-    let mut shrunk = Vec::new();
-    for entry in ledger {
-        let Some(file) = counted.iter().find(|file| names(&entry.path, &file.path)) else {
-            failures.push(format!(
+/// That every entry still names a file, which is the one thing about a
+/// permanent exemption a machine can hold: a file that was split away
+/// leaves its entry behind, and the entry goes on excusing a name.
+fn check_ledger(ledger: &[String], counted: &[Counted]) -> Vec<String> {
+    ledger
+        .iter()
+        .filter(|entry| !counted.iter().any(|file| names(entry, &file.path)))
+        .map(|entry| {
+            format!(
                 "{LEDGER} 分割しない判断: `{}` names no file under crates/ — if it was split \
                  away, the entry goes with it (行が消えたら分割済み)",
-                entry.path
-            ));
-            continue;
-        };
-        let Some((recorded, digits)) = entry.recorded.clone() else {
-            failures.push(format!(
-                "{LEDGER} 分割しない判断: `{}` records no `(N 行)` — the exemption is \
-                 permanent, so the length is the part the ledger has to hold ({} lines now)",
-                entry.path, file.lines
-            ));
-            continue;
-        };
-        if file.lines > recorded {
-            failures.push(format!(
-                "{}: {} lines, {} more than the {recorded} its {LEDGER} 分割しない判断 entry \
-                 records — write the new number in, and say again on that line why it is \
-                 still not split ({RULES} §上限)",
-                file.path,
-                file.lines,
-                file.lines - recorded
-            ));
-        } else if file.lines < recorded {
-            shrunk.push((digits, file.lines));
-        }
-    }
-    (failures, shrunk)
-}
-
-/// Pulls the ledger's numbers down to what the files measure, touching the
-/// digits and nothing else — the reasons around them are somebody's prose.
-fn rewrite_ledger(path: &Path, text: &str, mut shrunk: Vec<Shrink>) -> Result<(), String> {
-    shrunk.sort_by_key(|(digits, _)| digits.start);
-    let mut out = String::with_capacity(text.len());
-    let mut at = 0;
-    for (digits, lines) in shrunk {
-        out.push_str(&text[at..digits.start]);
-        out.push_str(&lines.to_string());
-        at = digits.end;
-    }
-    out.push_str(&text[at..]);
-    std::fs::write(path, out).map_err(|e| format!("{}: {e}", path.display()))
+                entry
+            )
+        })
+        .collect()
 }
 
 /// Whether a ledger entry names this file — as the whole path, or as the

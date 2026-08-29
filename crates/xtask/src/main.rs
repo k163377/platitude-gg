@@ -49,12 +49,10 @@ commands:
       tests 1000, physical lines) over crates/**/*.rs and *.qml — first
       step of `check`, and a second or two on its own. Three standings:
       a file the ledger (.claude/rules-refs/structure.md 分割しない判断)
-      gives a written reason not to split trades the ceiling for the
-      (N 行) its own entry records, which ratchets the same way — the run
-      pulls it down when the file shrinks, and fails when the file grows
-      past it, so the number is rewritten on the line that carries the
-      reason; a file already over when this went in is pinned by
-      crates/xtask/structure-baseline.txt
+      gives a written reason not to split has no ceiling at all, and the
+      run asks only that the entry still names a file that is there —
+      the entry goes when the file is split away; a file already over
+      when this went in is pinned by crates/xtask/structure-baseline.txt
       at the length it had, free to shrink (the pin follows it down) and
       not to grow; everything else meets the ceiling as written, so a file
       that crosses it for the first time fails the run that sees it. The
