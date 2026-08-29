@@ -124,6 +124,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "conflict_sides combined=true told=true both=true",
     },
+    // Where the merge editor left the row it was handed. The shot waits
+    // for that row to leave the conflicts bucket
+    // (`AutoActDriver.treeBarrier`), so a tool that never started ends
+    // at the watchdog — but a tool that took the row anywhere else
+    // empties that bucket just the same, and a list one conflict
+    // shorter frames the same either way. `landed=staged` is the half
+    // that says the resolution reached git: the seeded editor exits 0
+    // and `trustExitCode` has it added (verbs.md, which has been
+    // naming this line as what judges the verb).
+    Verb {
+        name: "open-mergetool",
+        when: &[],
+        plain: "tree_settled from=conflicts landed=staged",
+    },
     // The tick that asks whether the open file still reads the way it
     // did. What it is asking about did not move during the run, so
     // the read is answered with silence — the ask is the only edge

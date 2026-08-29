@@ -117,6 +117,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true",
     },
+    // The same gesture carried through to git. The name lands and the
+    // row wears it whichever way the box was opened, so the write is
+    // no answer about the gesture: this half asks for the two the
+    // plain form does.
+    Verb {
+        name: "graph-rename",
+        when: &[],
+        plain: "armed=true box=true",
+    },
     Verb {
         name: "graph-reclick-list",
         when: &[],
