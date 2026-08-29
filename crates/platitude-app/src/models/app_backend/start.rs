@@ -41,10 +41,12 @@ pub(super) fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) ->
     Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))
 }
 
-/// Directory the identity check runs in. git resolves configuration from a
-/// directory, and outside a repository that is exactly the user's own
-/// (global + system) configuration — what a first-run prompt is about.
-pub(super) fn app_workdir() -> std::path::PathBuf {
+/// Directory the application's own configuration reads run in. git
+/// resolves configuration from a directory, and outside a repository that
+/// is exactly the user's own (global + system) configuration — what a
+/// first-run prompt is about, and what the settings screen's global
+/// chapters write into (`models::line_endings`).
+pub(crate) fn app_workdir() -> std::path::PathBuf {
     std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
 }
 

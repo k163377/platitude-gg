@@ -14,7 +14,7 @@ mod winframe;
 use hub::Hub;
 use models::{
     AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel,
-    NavSectionModel, RepoConfigModel, RepoTab, TabsModel, WorkTreeModel,
+    LineEndingsModel, NavSectionModel, RepoConfigModel, RepoTab, TabsModel, WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
@@ -185,6 +185,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/IdentityGate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ImagePreviewCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/LabeledField.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/LineEndingField.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageActionsRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MessageEditor.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/MiddleAutoScroll.qml", "qt/qml/platitude");
@@ -281,6 +282,7 @@ fn main() {
         .register::<TabsModel>()
         .register::<CloneModel>()
         .register::<RepoConfigModel>()
+        .register::<LineEndingsModel>()
         .register::<RepoTab>()
         .register::<GraphModel>()
         .register::<NavSectionModel>()

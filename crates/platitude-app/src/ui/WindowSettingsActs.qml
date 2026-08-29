@@ -85,6 +85,50 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
+    // row, in git's own spelling (`true` / `input` / `false`) or `inherited` for the row that writes nothing.
+    //
+    // **Only the repository level is ever driven.** The chapter above it writes `--global`, which is the developer's
+    // own configuration file on the machine the run happens to be on — a run that wrote there would be changing
+    // something no run owns (規約 §UI 自動化の因果性 「harness は … その harness が所有する値だけを設定する」). The
+    // global chapter's own read is reported beside it, since a picture is the only other evidence for it.
+    //
+    // Waited on: the read that fills the chooser (a pick before it would be picking against an empty field), then the
+    // read that *follows* the write — the write's own `busy` falls before that one lands, so a run that stopped at it
+    // would photograph the value it had just replaced.
+    SampleTimer {
+        id: endingsTimer
+        running: AppBackend.autoAct === "settings-eol"
+        /// The row has been picked.
+        property bool acted: false
+        /// The argument as the model spells it: the row that writes nothing is empty there.
+        readonly property string wanted: AppBackend.autoActArg === "inherited" ? "" : AppBackend.autoActArg
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("git")
+                return
+            }
+            if (!endingsTimer.acted) {
+                // A repository has to be there to write into, and the strip's rows arrive with the window rather
+                // than with the screen.
+                if (settingsDialog.autoRepoRows === 0 || !settingsDialog.autoRepoEndingsReady)
+                    return
+                if (!settingsDialog.autoPickRepoEnding(endingsTimer.wanted))
+                    return
+                endingsTimer.acted = true
+            }
+            if (!settingsDialog.autoRepoEndingsReady
+                    || settingsDialog.autoRepoEndingHeld !== endingsTimer.wanted
+                    || !settingsDialog.autoGlobalEndingsAnswered)
+                return
+            endingsTimer.stop()
+            // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.
+            settingsDialog.autoShowChapterFoot()
+            settingsDialog.reportRepoEndings()
+            window.finishAutoAct()
+        }
+    }
+
     // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
     // the screen. Opened on the application category and pressed onto the other through the row's own handler
     // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up

@@ -89,6 +89,27 @@ AppDialog {
     function autoOfferRepos() {
         gitPane.autoOfferRepos()
     }
+    // The line-ending chapter of that same group. **Only the repository level is ever driven**: the group above it
+    // writes `--global`, which is the machine's own file and not a run's to touch (verify-ui スキル).
+    readonly property bool autoRepoEndingsReady: settingsDialog.opened && gitPane.autoRepoEndingsReady
+    readonly property string autoRepoEndingHeld: gitPane.autoRepoEndingHeld
+    /// The global chapter's own read has answered. Reported beside the repository one rather than driven: the two
+    /// chapters are one wiring asked at two levels, and the level nothing may write is the level a picture is the
+    /// only other evidence for.
+    readonly property bool autoGlobalEndingsAnswered: settingsDialog.opened && gitPane.autoEndingsAnswered
+    function autoPickRepoEnding(value) {
+        return gitPane.autoPickRepoEnding(value)
+    }
+    /// Sends the chapters to their foot, where the group this run is about stands. The screen is two groups deep and
+    /// the window is not that tall (`settings_fit`), so a run that photographed the resting position would be
+    /// photographing the group above the one it just wrote into.
+    function autoShowChapterFoot() {
+        chapters.contentY = Math.max(0, chapterCol.implicitHeight - chapters.height)
+    }
+    function reportRepoEndings() {
+        gitPane.reportEndings()
+        gitPane.reportRepoEndings()
+    }
     /// Automation: shows the repository standing at `at` in the strip, through the same call a pick from the list
     /// makes. Answers whether there was such a row.
     function autoShowRepoAt(at) {
@@ -117,6 +138,9 @@ AppDialog {
         appPane.load()
         gitPane.loadIdentity()
         gitPane.loadTool()
+        // One `git config` against the user's own file, so it rides the screen opening rather than the category
+        // showing — the same order of cost as the identity read above.
+        gitPane.loadEndings()
         // The git category's repository group lands on the one the reader is looking at, and does it here rather than
         // on the category showing: "first, the repository I am in" is about the screen opening, not about which
         // category is read first — and coming back to the category would otherwise throw away the repository they had

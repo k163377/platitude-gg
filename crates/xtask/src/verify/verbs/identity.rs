@@ -100,6 +100,34 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "repo_config rows=2 state=ready matches=true open=true",
     },
+    // The same group's line-ending chapter, picked. **The picture is a
+    // chooser holding one of four sentences of the same shape**, so it
+    // cannot say whether the pick moved anything: `were=` is what the
+    // repository held before it, and it is `false` because that is what
+    // every demo repository is built with (`demo::repo`).
+    //
+    // Only the repository level has rows here. The chapter above it
+    // writes `--global` — the developer's own file on whatever machine
+    // the run is on — and no run owns that, so there is no verb that
+    // touches it.
+    Verb {
+        name: "settings-eol",
+        when: &[
+            (
+                Arg::Is("input"),
+                "line_endings scope=local state=ready were=false held=input",
+            ),
+            // The row that writes nothing. What it falls back to is the
+            // machine's, so the line stops before `effective=` — the
+            // trailing space is what keeps `held=` from matching a held
+            // value that merely starts where this one ends.
+            (
+                Arg::Is("inherited"),
+                "line_endings scope=local state=ready were=false held= ",
+            ),
+        ],
+        plain: "line_endings scope=local state=ready were=false",
+    },
     // The same card's avatar half. Only this one of its four wants a
     // line: the other three cannot reach the camera with the wrong
     // state, because each waits on the state itself — a filed picture

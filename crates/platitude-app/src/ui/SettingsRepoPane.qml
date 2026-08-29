@@ -53,7 +53,14 @@ ColumnLayout {
         chooser.wanted = repo.name
         pane.touched = false
         repoConfig.look(repo.path)
+        repoEndings.look(repo.path)
         return true
+    }
+    /// Asks git again what git is doing about line endings in the repository already on screen, keeping what the
+    /// chapter is showing. The group above writes the value this one inherits, so a write there moves the sentence
+    /// under this chooser and nothing else on the screen would say so.
+    function rereadEndings() {
+        repoEndings.reread()
     }
     /// Lands on the repository the reader is looking at. Called when the screen opens, and only then: the screen is
     /// answering "these settings, for this repository", and the one the reader is standing in is the answer to the
@@ -90,6 +97,37 @@ ColumnLayout {
     function autoOfferRepos() {
         chooser.pressField()
     }
+    /// The line-ending read has landed and nothing is out, so the row showing is one git named.
+    readonly property bool autoEndingsReady: repoEndings.state === "ready" && !repoEndings.busy
+    /// What that repository's own file holds now, in git's spelling. **What a run waits on after a pick** — the
+    /// write's own `busy` falls before the read that follows it lands, so a run that stopped there would report the
+    /// value it had just replaced.
+    readonly property string autoEndingHeld: repoEndings.held
+    /// What that repository held before the run picked — the half of the claim a photograph cannot hold, since a
+    /// chooser showing the picked row looks the same whether the pick moved anything or not.
+    property string endingsWere: ""
+    /// Picks the row for `value` through the same call a pick from the list makes (`LineEndingField.pick`). Answers
+    /// whether the list holds such a row, so a run waits rather than counting a pick it never made.
+    function autoPickEnding(value) {
+        const at = endingsField.rowOf(value)
+        if (at < 0)
+            return false
+        pane.endingsWere = repoEndings.held
+        endingsField.pick(at)
+        return true
+    }
+    function reportEndings() {
+        AppBackend.report("line_endings scope=local state=" + repoEndings.state
+                          + " were=" + pane.endingsWere
+                          + " held=" + repoEndings.held
+                          + " effective=" + repoEndings.effective
+                          // The row the chooser is actually showing. **A photograph cannot check it** — the words are
+                          // sentences of the same length and shape, and one left over from another repository reads
+                          // exactly like the one git named.
+                          + " shown=" + endingsField.words[endingsField.heldRow]
+                          + " busy=" + repoEndings.busy
+                          + " error=" + repoEndings.error)
+    }
     function reportRepo() {
         AppBackend.report("repo_config rows=" + pane.autoRepoRows
                           + " state=" + repoConfig.state
@@ -109,6 +147,14 @@ ColumnLayout {
 
     RepoConfigModel {
         id: repoConfig
+    }
+    // The same repository's line-ending setting, read and written at the same level. A model of its own rather than
+    // more properties on the one above: the two chapters ask about different keys and the screen offers the
+    // line-ending question at both levels, so the type that answers it is the one the `GLOBAL` group uses too
+    // (`LineEndingsModel`).
+    LineEndingsModel {
+        id: repoEndings
+        scope: "local"
     }
     // What git answers with is what the boxes say, until somebody types. Every property arrives on the one signal, so
     // the guard is the reader's touch rather than which value moved (`SettingsGitPane.toolTouched` is the same shape).
@@ -211,6 +257,27 @@ ColumnLayout {
             acceptText: repoConfig.writeBusy ? qsTr("Saving…") : qsTr("Save")
             acceptEnabled: !repoConfig.writeBusy && repoConfig.state === "ready" && pane.dirty
             onAccepted: pane.submitIdentity()
+        }
+    }
+
+    SettingsSection {
+        visible: pane.autoRepoRows > 0
+        caption: qsTr("LINE ENDINGS")
+        LineEndingField {
+            id: endingsField
+            held: repoEndings.held
+            effective: repoEndings.effective
+            // What the empty row falls back to lives in a file this screen is not showing, and git resolves it
+            // through more than one of them — so it is said out loud, as what git is doing there right now.
+            saysEffective: true
+            ready: repoEndings.state === "ready"
+            busy: repoEndings.busy
+            errorText: repoEndings.error
+            // What the empty row gets you, rather than one of the answers: this setting has somewhere to fall back
+            // to, and the row is how a reader asks for it (the `inherited` the identity boxes use as a placeholder).
+            unwrittenWord: qsTr("Inherited")
+            note: qsTr("Written as core.autocrlf in that repository. Inherited is not written there at all.")
+            onPicked: value => repoEndings.save(value)
         }
     }
 }

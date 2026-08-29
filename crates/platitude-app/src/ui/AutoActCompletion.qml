@@ -143,7 +143,7 @@ QtObject {
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
                 "stash-state",
                 "settings-tools", "settings-tools-loading", "settings-switch",
-                "settings-repo", "settings-repo-pick",
+                "settings-repo", "settings-repo-pick", "settings-eol",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
     }
 }

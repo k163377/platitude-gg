@@ -122,6 +122,34 @@ ColumnLayout {
         }
     }
 
+    // ---- line endings ----------------------------------------------------
+    // Written the moment a row is picked, the way every field on this screen but the identity is (規約 §設定の画面):
+    // one key, so there is nothing for a Save to hold together. The model reads itself back afterwards, so what the
+    // chooser shows is always what git holds.
+    //
+    // **The read is asked for when the screen opens**, not when this category shows: it is one `git config`, the same
+    // order of cost as the identity read beside it, and the eight-second one (`--tool-help`) is the only thing on
+    // this screen that waits for its own chapter.
+    function loadEndings() {
+        // No path: the user's own configuration is what git resolves outside any repository, which is where this
+        // level lives (`LineEndingsModel.look`).
+        globalEndings.look("")
+    }
+    /// The global read has answered, one way or the other. **Not `state === "ready"`** — this level is read out of
+    /// whatever configuration the machine running the verb happens to have, and a run held until it answered
+    /// *well* would wait out the watchdog on a machine where git cannot resolve one at all.
+    readonly property bool autoEndingsAnswered: globalEndings.state === "ready"
+                                                || globalEndings.state === "error"
+    /// Smoke hook. Output side throughout — `held` is what git answered with, and the row the chooser is showing is
+    /// what a photograph cannot tell apart from one nobody has filled in yet.
+    function reportEndings() {
+        AppBackend.report("line_endings scope=global state=" + globalEndings.state
+                          + " held=" + globalEndings.held
+                          + " shown=" + endingsField.words[endingsField.heldRow]
+                          + " busy=" + globalEndings.busy
+                          + " error=" + globalEndings.error)
+    }
+
     // ---- the identity ----------------------------------------------------
     // Nothing here waits on the answer. The gate keeps a `saving` flag because a landed save is what closes it; this
     // screen was not opened to answer that one question, so it stays standing either way and the marks the fields
@@ -153,6 +181,14 @@ ColumnLayout {
     function reportRepo() {
         repoPane.reportRepo()
     }
+    readonly property bool autoRepoEndingsReady: repoPane.autoEndingsReady
+    readonly property string autoRepoEndingHeld: repoPane.autoEndingHeld
+    function autoPickRepoEnding(value) {
+        return repoPane.autoPickEnding(value)
+    }
+    function reportRepoEndings() {
+        repoPane.reportEndings()
+    }
     /// Lands the second group on the repository the reader is looking at, for the screen that just opened.
     function landOnFront() {
         repoPane.landOnFront()
@@ -160,6 +196,20 @@ ColumnLayout {
 
     Layout.fillWidth: true
     spacing: Theme.spaceXl
+
+    LineEndingsModel {
+        id: globalEndings
+        scope: "global"
+    }
+    // A write here is the value the group below *inherits*, so the sentence under its chooser — what git is doing in
+    // that repository right now — has just moved. Nothing else on the screen would notice: the two chapters read
+    // different files, and only this one of them changed.
+    Connections {
+        target: globalEndings
+        function onWrote() {
+            repoPane.rereadEndings()
+        }
+    }
 
     SettingsGroup {
         caption: qsTr("GLOBAL")
@@ -227,6 +277,21 @@ ColumnLayout {
                 // Named rather than picked from a list: the only way to enumerate them is `git mergetool
                 // --tool-help`, whose output is laid out for a person to read.
                 text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
+            }
+        }
+
+        SettingsSection {
+            caption: qsTr("LINE ENDINGS")
+            LineEndingField {
+                id: endingsField
+                held: globalEndings.held
+                ready: globalEndings.state === "ready"
+                busy: globalEndings.busy
+                errorText: globalEndings.error
+                // How far the write reaches is the warning's line above; this one is left with the key, the way the
+                // merge editor's line names `merge.guitool`.
+                note: qsTr("Stored by git as core.autocrlf. What a repository sets for itself stands over it.")
+                onPicked: value => globalEndings.save(value)
             }
         }
     }
