@@ -15,6 +15,7 @@ mod config_reads;
 mod details_diff;
 mod edge_strings;
 mod eol_integration;
+mod eol_setting_integration;
 mod exec;
 mod identity_integration;
 mod integrate_integration;

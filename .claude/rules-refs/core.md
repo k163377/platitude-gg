@@ -25,6 +25,8 @@
 - **`--all` で HEAD は外せない** — `--exclude=<現在のブランチ> --all` でも先端が negative に残る(実測)。外したい walk は `--branches --remotes` を並べる
 - `git config <key> <value>` に `--` を付けない(`--` が値として保存される)。ダッシュ始まりの値はそのまま通る
 - **`config --get-regexp` は低いレベル順・実効値は最後の行** — 1 件目で判定すると system が常に勝つ(Git for Windows は system に `core.autocrlf=true` を書く。実測)。単一キーは `--get`、複数キーは最後の出現で上書き読み。TestRepo が隔離するのは撃つ git だけで、コード側は開発機の system / global を見る
+- **`core.autocrlf` の綴りは git の bool 語彙**(実測 2.55): `input` は大小無視で先に見る / true = `true` `yes` `on` と非ゼロの整数 / false = `false` `no` `off` `0` と**空の値** / 値なしのキー(`=` が無い)は true / それ以外は `fatal: bad boolean config value` で git が動かない。**読みは `None` に倒す**(`eol::setting::AutoCrlf::of_record`)— 「未設定」と同じ席で、設定画面はその 4 つ目の行しか選べないから。**警告(`eol::normalises`)と設定画面は同じ 1 本の読みを通る** — 2 通りに読むと「git が決めているか」に答えが 2 つできる
+- **`core.autocrlf` の書きは 1 キーなので撃ち直さない**(identity の 2 連書きと違う)— ただし**先に読む**: `--unset` は無かった時も多値の時も exit 5 で、読んでおくと前者を撃たずに済む(`eol::setting::set`。`identity::local` と同じ理由)。スコープは `--global` / `--local` を必ず綴る(既定に頼らない)
 - **identity(`user.name` / `user.email`)に独自バリデーションを足さない** — git が拒むのは空の name だけ(空 email は通り `<>` になる)。`<` `>` 改行は author 行から黙って落ち、config 書き込みは `\n` エスケープで注入は起きない(実測)
 - **identity の 2 連書きは原子化できない**(実測: `git config` は 1 プロセス 1 キー・`--edit` はロックを取らない・自前 lock は config ライタ再実装・libgit2 は絶対制約で閉)— 書いた後に実効設定を読み直し、違えば 1 回だけ撃ち直す(`identity::set_identity`)。半端(新 name + 旧 email)は `Identity::is_complete()` 真で黙って居座る。競合でない失敗は何度でも同じ = 2 回で止める。不採用: 書く前に読んで失敗時に戻す(戻しが同じロックを踏む)
 - **半端の再現は多値の `user.email`**(`identity_integration`)— `--add` 2 回のキーへの set は `cannot overwrite multiple values` で exit 5、隣の `user.name` は通る(実測)。`.git/config.lock` 先置きで両方不着地も作れる(読みはロック不要)

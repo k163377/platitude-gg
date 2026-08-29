@@ -24,6 +24,10 @@ mod read;
 mod verify;
 mod write;
 
+// The word for "which of git's files" belongs to the module that owns
+// configuration, not to this one — but it is spelled `identity::ConfigScope`
+// everywhere that asks for an identity, so it keeps that door.
+pub use crate::config::ConfigScope;
 pub use local::{load_local, set_local_identity};
 pub use read::{AuthorConfig, Identity, SignatureFormat, SigningConfig, load};
 // Reached by the siblings through `use super::*`: the rule for "git was
@@ -32,4 +36,4 @@ pub use read::{AuthorConfig, Identity, SignatureFormat, SigningConfig, load};
 // same records, in fewer of them.
 use read::{non_empty, parse_config};
 pub use verify::{Signature, SignatureStatus, verify_commit};
-pub use write::{ConfigScope, IdentityWrite, set_identity};
+pub use write::{IdentityWrite, set_identity};

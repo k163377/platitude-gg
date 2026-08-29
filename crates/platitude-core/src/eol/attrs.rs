@@ -6,7 +6,6 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
@@ -145,43 +144,19 @@ async fn attributes(
 
 /// Whether `core.autocrlf` converts on the way into the index.
 ///
-/// **`--get-regexp` answers from every config level at once, lowest first,
-/// and the last one is the effective value.** Reading the first match makes
-/// every repository on Windows look like it normalises: the Git for Windows
-/// installer writes `core.autocrlf=true` into the system config, and a
-/// repository that sets `false` for itself shows up as the second record
-/// (measured on this machine — system `true`, repo `false`, in that order).
+/// The read and the spellings are [`super::setting`]'s — the notice and
+/// the settings screen ask about one key, and two readings of it would be
+/// two answers to "does git decide the endings here".
 ///
-/// `core.eol` is read in the same breath and deliberately not consulted:
-/// it only takes effect where a path is already text by attribute or by
-/// `autocrlf`, both of which have answered by then, so on its own it never
-/// decides anything.
+/// `core.eol` is deliberately not consulted: it only takes effect where a
+/// path is already text by attribute or by `autocrlf`, both of which have
+/// answered by then, so on its own it never decides anything.
 pub async fn normalises(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
-    let out = config::get_regexp(
-        executor,
-        workdir,
-        r"^core\.(autocrlf|eol)$",
-        "git config --get-regexp core.autocrlf",
-        cancel,
-    )
-    .await?;
-    let mut effective = false;
-    for record in config::parse_z_records(&out) {
-        if record.key().trim() != "core.autocrlf" {
-            continue;
-        }
-        // A valueless key is boolean true (`git config --type=bool`, and
-        // the same shape identity reads for `commit.gpgsign`). `input`
-        // converts on the way in and not on the way out, which is still
-        // git deciding what gets stored.
-        effective = match record.value() {
-            None => true,
-            Some(value) => matches!(value.trim(), "true" | "input"),
-        };
-    }
-    Ok(effective)
+    Ok(super::setting::effective(executor, workdir, cancel)
+        .await?
+        .is_some_and(super::setting::AutoCrlf::normalises))
 }

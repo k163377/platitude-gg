@@ -1,11 +1,17 @@
 //! The one shape of configuration read this app makes:
 //! `git config -z --get-regexp <pattern>`, and the records it answers with.
 //!
-//! Six callers ask git for a group of keys this way — the identity and its
-//! signing keys, the remotes, what a branch tracks, `core.autocrlf`, the
-//! merge tools someone wrote a command for, and the identity one
-//! repository sets for itself. What they do with the answer differs; how
-//! it is asked for and how it arrives does not.
+//! Seven callers ask git for a group of keys this way — the identity and
+//! its signing keys, the remotes, what a branch tracks, `core.autocrlf`,
+//! the merge tools someone wrote a command for, the identity one
+//! repository sets for itself, and the line-ending setting one file sets
+//! for itself. What they do with the answer differs; how it is asked for
+//! and how it arrives does not.
+//!
+//! The word for **which of git's files** is here as well ([`ConfigScope`]),
+//! because a read narrowed to one of them and a write aimed at one of them
+//! are the same question asked twice — and two enums for it would be two
+//! spellings of `--global` to keep in step.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -34,40 +40,58 @@ pub async fn get_regexp(
     named: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
-    read(executor, workdir, Level::Effective, pattern, named, cancel).await
+    read(executor, workdir, None, pattern, named, cancel).await
 }
 
-/// The same read, narrowed to this repository's own configuration file.
+/// The same read, narrowed to one of git's configuration files.
 ///
 /// A door of its own rather than a flag on [`get_regexp`], because the two
 /// answer different questions and every caller knows which one it came
 /// for. [`get_regexp`] cannot answer this one at all: a key set in two
 /// places arrives twice with no word for which file either record came out
-/// of, so a value that is only inherited reads there exactly like one this
-/// repository wrote down.
-pub async fn get_regexp_local(
+/// of, so a value that is only inherited reads there exactly like one the
+/// named file wrote down.
+pub async fn get_regexp_at(
     executor: &GitExecutor,
     workdir: &Path,
+    scope: ConfigScope,
     pattern: &str,
     named: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
-    read(executor, workdir, Level::Local, pattern, named, cancel).await
+    read(executor, workdir, Some(scope), pattern, named, cancel).await
 }
 
-/// Which of git's configuration files the read is answered from.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Level {
-    /// Every level, lowest first.
-    Effective,
-    /// This repository's own file alone (`--local`).
+/// Which of git's configuration files a value is written to, and which one
+/// a narrowed read is answered from.
+///
+/// There is deliberately no `System` — nothing this app writes belongs to
+/// the machine rather than to the person, and a level nobody can write is
+/// a level the screen cannot offer to give back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigScope {
+    /// This repository only.
     Local,
+    /// The user's global configuration — the right default for a first-run
+    /// prompt, since the answer is about the person, not the project.
+    Global,
 }
 
+impl ConfigScope {
+    /// The flag that names this file to `git config`.
+    pub(crate) fn flag(self) -> &'static str {
+        match self {
+            Self::Local => "--local",
+            Self::Global => "--global",
+        }
+    }
+}
+
+/// `None` reads every level at once, the way git resolves it here.
 async fn read(
     executor: &GitExecutor,
     workdir: &Path,
-    level: Level,
+    scope: Option<ConfigScope>,
     pattern: &str,
     named: &str,
     cancel: &CancellationToken,
@@ -76,8 +100,8 @@ async fn read(
         .cwd(workdir)
         .answers_by_code(1)
         .args(["config", "-z"]);
-    if level == Level::Local {
-        cmd = cmd.arg("--local");
+    if let Some(scope) = scope {
+        cmd = cmd.arg(scope.flag());
     }
     let cmd = cmd.args(["--get-regexp", pattern]);
     let out = executor.run_unchecked(cmd, cancel).await?;

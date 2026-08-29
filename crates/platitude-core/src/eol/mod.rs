@@ -1,8 +1,14 @@
 //! Line-ending notices, read from the bytes git printed.
 //!
-//! Nothing in this module converts anything or writes git config: what lands
-//! in the index is git's decision (`core.autocrlf`, `core.eol`,
-//! `.gitattributes`).
+//! Nothing in this module converts anything: what lands in the index is
+//! git's decision (`core.autocrlf`, `core.eol`, `.gitattributes`), and the
+//! notices only say what that decision did.
+//!
+//! **The one setting this app writes lives here too** ([`setting`]), and it
+//! belongs to the settings screen alone — a reader who goes there went to
+//! change it. The notices have no way in and are never getting one: an
+//! offer to fix itself, attached to a warning, is where every other GUI's
+//! line-ending accident starts (デザイン規約 §改行コードの警告).
 //!
 //! Four cases produce a notice (デザイン規約 §改行コードの警告):
 //!
@@ -48,6 +54,7 @@ mod notice;
 mod read;
 mod sample;
 mod scan;
+pub mod setting;
 mod worktree;
 
 #[cfg(test)]

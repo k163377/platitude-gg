@@ -36,9 +36,10 @@ pub async fn load_local(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Identity, GitError> {
-    let out = config::get_regexp_local(
+    let out = config::get_regexp_at(
         executor,
         workdir,
+        ConfigScope::Local,
         LOCAL_PATTERN,
         "git config --local --get-regexp user",
         cancel,

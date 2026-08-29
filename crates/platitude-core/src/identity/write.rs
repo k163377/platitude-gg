@@ -2,15 +2,6 @@
 
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigScope {
-    /// This repository only.
-    Local,
-    /// The user's global configuration — the right default for a first-run
-    /// prompt, since the answer is about the person, not the project.
-    Global,
-}
-
 /// What a [`set_identity`] left behind.
 ///
 /// Read back from git rather than echoed, for two reasons. An identity is
