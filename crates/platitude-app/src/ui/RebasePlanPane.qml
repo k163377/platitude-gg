@@ -17,6 +17,11 @@ Rectangle {
     required property var planModel
     /// The commit the page's selection sits on, so the row under it reads selected the way a graph row would.
     property string selectedOid: ""
+    /// The read that opens the plan is still out. The pane takes the graph's seat at the press rather than at the
+    /// answer (`RepoPage.planShown`), so this is the face it has until the rows land: the band's one word, the turning
+    /// mark in the middle of the column that will hold them, and nothing it does not yet know — the base has no name
+    /// and no id yet, and neither has the question of whether there is a base at all (デザイン規約 §フル interactive rebase).
+    required property bool waiting
 
     /// Which commit the reader picked, for the page to select (the details pane follows it).
     signal rowPicked(string oidHex)
@@ -38,6 +43,7 @@ Rectangle {
 
         // The head names the mode, not a command: nothing is running (§git 用語のコード表記 — 状態は通常表記).
         Item {
+            id: planHead
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.toolbarHeight
             RowLayout {
@@ -45,21 +51,30 @@ Rectangle {
                 anchors.leftMargin: Theme.spaceMd
                 anchors.rightMargin: Theme.spaceMd
                 spacing: Theme.spaceSm
+                // The mode is named from the press, before the read that would finish the sentence has landed
+                // (ユーザー判断 2026-08-30): the band says what this face is for the whole time it is up, and the rest of
+                // the sentence arrives with the rows.
+                //
+                // **The `…` is the sentence's, not the wait's** (ユーザー判断 2026-08-31): what it marks is that this
+                // phrase is cut short and will be finished — the elision mark of 規約 §ウィンドウの縁, not the
+                // progress mark §進行中・長押しの定数 refuses. Without it the band reads as a finished sentence and the
+                // name arriving rewrites it; with it the name lands where the mark already said something was missing.
                 Label {
-                    text: planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
-                                                  : qsTr("Rebasing onto")
+                    text: planPane.waiting ? qsTr("Rebasing…")
+                        : planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
+                        : qsTr("Rebasing onto")
                     font.pixelSize: Theme.fontMd
                     color: Theme.textPrimary
                 }
                 // The base, its branch name first and the id only as the fallback (ユーザー判断 2026-08-30).
                 Label {
-                    visible: !planPane.planModel.root && planPane.planModel.ontoRef !== ""
+                    visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef !== ""
                     text: planPane.planModel.ontoRef
                     font.pixelSize: Theme.fontMd
                     color: Theme.accentHover
                 }
                 Label {
-                    visible: !planPane.planModel.root && planPane.planModel.ontoRef === ""
+                    visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef === ""
                     text: planPane.planModel.ontoOid.substring(0, 8)
                     font.family: Theme.monoFamily
                     font.pixelSize: Theme.fontCode
@@ -87,7 +102,14 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.topMargin: Theme.spaceXs
-            model: planPane.planModel
+            // No rows until they are the plan's — the half of this face that arrives late, and what makes the wait one
+            // face rather than a band and a mark laid over whatever else is there. **Costs nothing while the read is
+            // really out**: the model has no rows then either.
+            //
+            // The count, not `visible`: a hidden child leaves the column with nothing to stretch, and the band drops to
+            // the middle of the pane with the mark on top of it (2026-08-30, seen on Linux — where the rows land before
+            // the grab does, and the report line stayed green because it says what the edge saw).
+            model: planPane.waiting ? 0 : planPane.planModel
 
             /// What every row reads and calls (the delegate reaches the pane through its view).
             readonly property string selectedOid: planPane.selectedOid
@@ -106,11 +128,13 @@ Rectangle {
             delegate: RebasePlanRow {}
 
             // The base the rows land on, as the row after the oldest one: what the squash arrows point at, and the
-            // one row here nothing can be done to.
+            // one row here nothing can be done to. A list with no rows still lays its footer out, so the wait takes it
+            // down as well — the base is exactly what the read has not answered yet, and its row drawn empty would be
+            // a commit with no face, no words and no id.
             footer: Item {
                 width: planList.width
-                height: planPane.planModel.root ? 0 : Theme.graphRowHeight + Theme.spaceSm
-                visible: !planPane.planModel.root
+                height: planPane.waiting || planPane.planModel.root ? 0 : Theme.graphRowHeight + Theme.spaceSm
+                visible: !planPane.waiting && !planPane.planModel.root
                 Rectangle {
                     id: footerRule
                     anchors.left: parent.left
@@ -161,6 +185,20 @@ Rectangle {
                 }
             }
         }
+    }
+
+    // The read walking the range, in the middle of the column that will hold its rows — the same mark at the same size
+    // in the same seat the graph's own first load puts one in (`GraphEmptyState`), because this pane is standing where
+    // that column was and waiting should not change its look when the seat changes hands (ユーザー判断 2026-08-30).
+    //
+    // Centred below the head rather than in the pane: the band is up the whole time and the rows will start under it,
+    // so the middle of what is waiting is half a head lower than the middle of the pane.
+    SpinnerIcon {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: planHead.height / 2
+        width: Theme.iconLg
+        height: Theme.iconLg
+        spinning: planPane.waiting
     }
 
     // The verb menu: the same six words the todo file takes, chips first (デザイン規約 §git 用語のコード表記). What row

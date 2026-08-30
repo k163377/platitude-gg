@@ -30,7 +30,7 @@ ActionButton {
     // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
     // own button (提案 2026-08-30 — 組んでいる間、書き込みの入口は実行ボタンだけ。fetch だけは残る).
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
-             && !stashButton.curPage.planActive
+             && !stashButton.curPage.planShown
     tip: {
         // Nothing open, or another git command already out. Neither is about stashing, and both are said on
         // this band already (デザイン規約 §無効). Said out loud because a disabled control still takes hover and
@@ -38,7 +38,7 @@ ActionButton {
         if (stashButton.mode === "closed" || stashButton.curPage.pageTab.busyCount > 0)
             return ""
         // The freeze names itself: a tree that could be stashed looks no different while a plan stands over it.
-        if (stashButton.curPage.planActive)
+        if (stashButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — until it closes, the only write is its run button")
         // The three that *are* about the working tree each name what is missing (デザイン規約 §hover のツールチップ).
         // They speak where the fetch button's refusals stay silent, because the reason is not on screen the way

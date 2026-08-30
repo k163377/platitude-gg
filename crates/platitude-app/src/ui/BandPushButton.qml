@@ -41,7 +41,7 @@ ActionButton {
     holdMs: mode === "diverged" ? Metrics.holdMs : 0
     // Held down while a rebase plan is being composed, like the stash button: what a push moves is the remote's
     // story of the very commits the plan is about to rewrite (提案 2026-08-30).
-    enabled: pushButton.curPage !== null && !pushButton.curPage.planActive
+    enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
              && (pushButton.curPage.canPush || (mode === "diverged" && pushButton.curPage.canForcePush))
     onHeld: pushButton.curPage.forcePush()
     tip: {
@@ -49,7 +49,7 @@ ActionButton {
             return ""
         // The freeze speaks for itself the way the tree-shaped refusals below do: a frozen button still takes
         // hover, and nothing else on screen says the plan is what is holding it down.
-        if (pushButton.curPage.planActive)
+        if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
         const to = pushButton.curPage.pushTargetLabel
         const what = pushButton.mode === "unborn"

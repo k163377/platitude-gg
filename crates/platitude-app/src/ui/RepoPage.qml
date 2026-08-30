@@ -87,7 +87,11 @@ Item {
     /// whole pane goes to the disabled step and stays there — the restriction belongs to the mode rather than to a
     /// command, and lasts as long as the mode does, so it is said plainly (デザイン規約 §フル interactive rebase). Only
     /// the `>_` band is left out of it (`SidebarPane.frozen`).
-    readonly property bool sidebarFrozen: planModel.active
+    ///
+    /// **From the press, not from the rows** (ユーザー判断 2026-08-30): the mode is entered when the face takes the
+    /// graph's seat, and a pane that stays live under it for the length of the read would be saying the reader may
+    /// still write — which is the one thing this mode is for taking away.
+    readonly property bool sidebarFrozen: page.planShown
     /// The other one, which begins where the plan ends: a write that replays a range a commit at a time is running
     /// (`RepoTab.replaying` — the meaning core puts on the op name), or its run is out and has not started yet. A
     /// rebase is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is
@@ -476,7 +480,7 @@ Item {
     /// Ctrl+F: the find bar belongs to the graph — which the plan is standing over while one is open, so the press
     /// is quietly refused there, the way a standing question already refuses it (`GraphPane.startFind`).
     function startFind() {
-        if (planModel.active)
+        if (page.planShown)
             return
         graphPane.startFind()
     }
@@ -486,29 +490,62 @@ Item {
     // While the plan stands, the page holds down what could move the history under it from inside this window (the
     // sidebar, find, the toolbar's own writes — TopBar reads `planActive`); what it cannot hold — a terminal, another
     // session — the model answers by putting the plan away when the tip moves (`noteHead` below).
-    readonly property bool planActive: planModel.active
+    /// A plan is standing: its rows are here and they are a draft somebody can compose.
+    ///
+    /// **The one answer**, read by everything on this page that a standing plan changes — the freezes, the right
+    /// pane's boxes, the run bar, the corner it takes the seat of. Written twice they could disagree, and the run
+    /// that holds the opening face (`planLoadHeld`) is exactly the moment a second spelling would.
+    readonly property bool planActive: planModel.active && !page.planLoadHeld
+    /// The plan's face has the graph's seat: the read that opens it is out, or its rows have arrived.
+    ///
+    /// **The seat is taken at the press, not at the answer** (ユーザー指定 2026-08-30「ローディング -> 操作可能」). The read
+    /// walks the whole range — 27ms where the click was shallow, a second and more at the root of a real history
+    /// (measured, JetBrains/kotlin) — and a screen that does not move for that long says the press was not heard.
+    /// What the pane can say before the rows land is in the pane (`RebasePlanPane.waiting`).
+    ///
+    /// **The mode's restrictions are on this too** (ユーザー判断 2026-08-30) — the left menu, `push`, `stash` and
+    /// Ctrl+F all go out from the press, because entering the mode is what taking the seat *is*. What waits for the
+    /// rows is only what needs a draft to mean anything, and that reads `planActive`.
+    readonly property bool planShown: planModel.active || planModel.loading
+    /// Automation (`PG_AUTO_ACT=plan-loading`): the opening face, held from the real edge — the rows arrive through
+    /// the feed and can land while the asynchronous grab is still out, and the picture would then be of the plan
+    /// rather than of the wait for it (verify-ui スキル §中間状態は実 edge を latch する).
+    ///
+    /// It holds the *whole* face, not the middle of it: a run that held only the pane would photograph the run bar
+    /// standing at the right pane's foot and the left menu already frozen, under a centre that says the plan has not
+    /// arrived. That is a screen this app never puts up.
+    property bool planLoadHeld: false
     /// The plan model itself — an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property var rebasePlan: planModel
     /// The rewrite warning's count for the plan's own range: the shared publish slot, read only while it answers
     /// this very range (the slot rule — 聞いた範囲の答えだけを読む).
-    readonly property int planPushed: planModel.active && repoTab.publishRange === planModel.publishRange
+    readonly property int planPushed: page.planActive && repoTab.publishRange === planModel.publishRange
                                       ? repoTab.publishPublished : 0
     /// Whether the details pane's boxes are, right now, a plan row's reword input: the plan stands, the row the
     /// selection sits on carries the verb, **and the pane is showing that very commit** — anything else that moves
     /// the selection (a shortcut, a landing) must not leave typing routed into a row whose message is not on
     /// screen. The model owns which row it is, so a reorder cannot detach the two.
-    readonly property bool planReword: planModel.active && planModel.selectedAction === "reword"
+    readonly property bool planReword: page.planActive && planModel.selectedAction === "reword"
                                        && planModel.selectedOid !== ""
                                        && planModel.selectedOid === detailsModel.shaHex
     function startRebasePlan(oidHex) {
         planModel.open(oidHex)
     }
-    onPlanActiveChanged: {
-        if (page.planActive) {
+    // What the pane's arrival and departure do, on the edge the *seat* changes rather than the one the rows do: the
+    // graph is gone from the press, and a diff opened over it goes with it. Either way out of the read — rows, a
+    // refusal, a failure, Cancel pressed on the empty face — comes back through here, so the fold has no exceptions.
+    onPlanShownChanged: {
+        if (page.planShown) {
             page.closeDiff()
             // Down to the rail with the rest of the window's other business, and back up when the plan goes —
             // whichever way it goes (`foldForPlan`).
             page.foldForPlan(true)
+        } else {
+            page.foldForPlan(false)
+        }
+    }
+    onPlanActiveChanged: {
+        if (page.planActive) {
             // The graph lands on the plan's own newest row, whatever face was up before — the right pane
             // becomes that commit's, and the WIP face (whose commit button would sit under the run bar, and whose
             // own writes the freeze is for) cannot stay up under an open plan. `activateRow` also puts away a
@@ -526,7 +563,6 @@ Item {
             // rewrite of the history the plan never ran, and on any other row it is one commit's message shown under
             // another's. The commit's own message goes back in.
             detailsPane.dropDraft()
-            page.foldForPlan(false)
         }
     }
     // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the
@@ -536,7 +572,7 @@ Item {
     Connections {
         target: branchesModel
         function onRefsMoved() {
-            if (planModel.active && planModel.publishRange !== "")
+            if (page.planActive && planModel.publishRange !== "")
                 repoTab.checkPublish(planModel.publishRange)
         }
     }
@@ -544,7 +580,7 @@ Item {
     // are frozen, but a landing answer asked before the freeze is not). The note reads only its own range, so a
     // clobbered slot would blank the amber — this converges it back. Edge-triggered on the very property, so it
     // re-asks once per clobber, not once per tick.
-    readonly property bool planPushedClobbered: planModel.active && planModel.publishRange !== ""
+    readonly property bool planPushedClobbered: page.planActive && planModel.publishRange !== ""
                                                 && repoTab.publishRange !== planModel.publishRange
     onPlanPushedClobberedChanged: {
         if (page.planPushedClobbered)
@@ -582,10 +618,10 @@ Item {
     Connections {
         target: workTree
         function onChanged() {
-            if (!planModel.active)
+            if (!page.planActive)
                 return
             planModel.noteOp(workTree.opText)
-            if (planModel.active)
+            if (page.planActive)
                 planModel.noteHead(workTree.headOid)
         }
     }
@@ -1232,7 +1268,7 @@ Item {
     function askSelectedPublished() {
         // Not while a plan stands: the slot is the plan's (its amber note reads it), and the save row this answer
         // warns on is the plan's reword chip, which carries the plan's own warning instead.
-        if (page.selectedOid !== "" && repoTab.state === "open" && !planModel.active)
+        if (page.selectedOid !== "" && repoTab.state === "open" && !page.planActive)
             repoTab.checkPublish(page.selectedOid + "^!")
     }
     onSelectedOidChanged: page.selectedPublished = false
@@ -2492,9 +2528,10 @@ Item {
                         id: centreStack
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        // The plan stands over both: a diff opened later closes on the way in (`onPlanActiveChanged`),
+                        // The plan stands over both from the press that asked for it — before its rows exist, which is
+                        // the whole of `planShown` (a diff opened earlier closes on the way in, `onPlanShownChanged`),
                         // and the graph comes back exactly as it was when the plan is put away.
-                        currentIndex: planModel.active ? 2 : page.diffShown ? 1 : 0
+                        currentIndex: page.planShown ? 2 : page.diffShown ? 1 : 0
 
                         GraphPane {
                             id: graphPane
@@ -2565,6 +2602,11 @@ Item {
                         RebasePlanPane {
                             planModel: planModel
                             selectedOid: page.selectedOid
+                            // The pane has nothing of its own yet — or the run is holding the face it had then. A
+                            // read that *replaces* a standing plan is not this: those rows still answer a question
+                            // somebody asked, and the pane keeps them until the newer answer lands, which is the
+                            // model's own rule (`RebasePlanModel::open`).
+                            waiting: (planModel.loading && !planModel.active) || page.planLoadHeld
                             onRowPicked: oidHex => page.activateRow(oidHex)
                         }
                     }
@@ -2582,7 +2624,7 @@ Item {
                         id: gitCorner
                         // The run button takes the pane's foot while a plan stands, and the foot it takes is this
                         // corner's seat (§コミットメッセージの 2 つの枠「ペインの底は空かない」).
-                        visible: !planModel.active
+                        visible: !page.planActive
                         // Only one of the two panes is on screen at a time, and each measures its own file list.
                         roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
                         anchors.right: parent.right
@@ -2630,12 +2672,12 @@ Item {
                         // 打つ場所はアプリに 1 つ). A plain amend is held down for the plan's whole stay — it is a
                         // queued rewrite of the very history the plan is composed on, which the freeze exists to
                         // stop; on a plan row the way to type is the row's own verb.
-                        editable: (page.messageEdit === "amend" && !planModel.active) || page.planReword
+                        editable: (page.messageEdit === "amend" && !page.planActive) || page.planReword
                         intoPlan: page.planReword
-                        planDraftOid: planModel.active ? planModel.selectedOid : ""
+                        planDraftOid: page.planActive ? planModel.selectedOid : ""
                         planDraftSubject: planModel.selectedMsgSubject
                         planDraftBody: planModel.selectedMsgBody
-                        editBlocked: planModel.active && !page.planReword && page.messageEdit !== ""
+                        editBlocked: page.planActive && !page.planReword && page.messageEdit !== ""
                             ? qsTr("Mark the row reword to retype its message")
                             : page.messageEdit === "stash"
                               ? qsTr("Rename it in the list on the left")
@@ -2667,7 +2709,7 @@ Item {
                                 // resting text now (the write path hears this from
                                 // `writeReworded` instead).
                                 detailsPane.noteMessageSaved()
-                            } else if (!planModel.active) {
+                            } else if (!page.planActive) {
                                 page.saveMessage(oidHex, subject, body)
                             }
                         }
@@ -2685,7 +2727,7 @@ Item {
                         id: planRunBar
                         // The plan holds the details face up (`onPlanActiveChanged`); the WIP guard is the belt —
                         // were that face ever up, this bar would sit over the commit button.
-                        visible: planModel.active && !page.wipShown
+                        visible: page.planActive && !page.wipShown
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
