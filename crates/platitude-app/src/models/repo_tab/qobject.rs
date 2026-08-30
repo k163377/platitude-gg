@@ -17,6 +17,7 @@ impl RepoTab {
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
     qproperty!("busyOp", Member = busy_op, Notify = changed);
+    qproperty!("replaying", Member = replaying, Notify = changed);
     qproperty!("mergeTools", Member = merge_tools, Notify = changed);
     qproperty!(
         "mergeToolsLoading",

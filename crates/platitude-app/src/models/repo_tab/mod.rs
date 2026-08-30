@@ -52,6 +52,12 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
+    /// Whether the write in flight is one that replays history a commit
+    /// at a time (`platitude_core::session::replays_history`). **The op
+    /// name is turned into this meaning here**, so the page holds its
+    /// write doors down without branching on git vocabulary
+    /// (app-ui.md「QML にビジネスロジックを書かない」).
+    replaying: bool,
     /// Merge tool names the settings field can offer, joined by U+001F the
     /// way the graph's label records are. Empty means none to offer, which
     /// is a working state — the field takes a typed name either way.

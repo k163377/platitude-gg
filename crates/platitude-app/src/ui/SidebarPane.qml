@@ -21,6 +21,17 @@ Rectangle {
     /// Folded down to the rail. Held by the page: what folds it is going
     /// to include opening a diff, and that is the page's to know.
     required property bool collapsed
+    /// Every door on this pane is held down, and dimmed the way disabled
+    /// things are; reading it stays free (規約 §無効).
+    ///
+    /// **The `>_` band at the foot is not held with them.** It is the one
+    /// place that answers "what is git doing", which is exactly the
+    /// question a reader has while a replay they cannot interrupt is
+    /// running — so the hold is put on the list and the rail rather than
+    /// on the pane, and the band goes on standing at full weight. Dimming
+    /// the pane whole would also have to be undone here: a band that is
+    /// pressable while painted like a disabled one is a lie about itself.
+    property bool frozen: false
     /// The page whose command log the row at the foot of this pane opens
     /// (`CommandsToggle`). Null while no tab is open — and the whole row
     /// goes once the log is up, since from then on it is the log's own
@@ -318,6 +329,8 @@ Rectangle {
         anchors.fill: parent
         anchors.bottomMargin: sidebar.footRoom
         visible: !sidebar.collapsed
+        enabled: !sidebar.frozen
+        opacity: sidebar.frozen ? Metrics.dimFade : 1
         repoTab: sidebar.repoTab
         workTree: sidebar.workTree
         branchesModel: sidebar.branchesModel
@@ -346,6 +359,8 @@ Rectangle {
         anchors.fill: parent
         anchors.bottomMargin: sidebar.footRoom
         visible: sidebar.collapsed
+        enabled: !sidebar.frozen
+        opacity: sidebar.frozen ? Metrics.dimFade : 1
         branchesModel: sidebar.branchesModel
         remotesModel: sidebar.remotesModel
         worktreesModel: sidebar.worktreesModel

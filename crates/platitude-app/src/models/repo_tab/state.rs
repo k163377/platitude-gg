@@ -20,6 +20,7 @@ impl Default for RepoTab {
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
+            replaying: false,
             merge_tools: String::new(),
             merge_tools_loading: false,
             remote_names: String::new(),

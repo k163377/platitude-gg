@@ -61,6 +61,14 @@ impl RebasePlanModel {
     #[qsignal]
     fn standing_op(&mut self);
 
+    /// The plan was handed over and put away: from here the replay is
+    /// out. Said at the press rather than left to the write's own answer
+    /// — `replaying` rises when the queue *starts* the write, not when
+    /// the button was let go, and the screen must not come back to life
+    /// in between (`RepoPage.planRunSeq`).
+    #[qsignal]
+    fn plan_ran(&mut self);
+
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
@@ -241,6 +249,7 @@ impl RebasePlanModel {
             s.rebase_interactive(upstream, steps, options, expect);
         });
         self.close();
+        self.plan_ran();
     }
 
     /// The branch tip as the status now reads it. The page feeds every

@@ -157,6 +157,7 @@ impl RepoTab {
                         // write's answer, and only that answer knows what
                         // to make of it (`write_running`).
                         self.write_running = true;
+                        self.replaying = platitude_core::session::replays_history(&op);
                         self.busy_op = op;
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
@@ -212,6 +213,7 @@ impl RepoTab {
         self.busy_count = (self.busy_count - 1).max(0);
         if self.busy_count == 0 {
             self.busy_op = String::new();
+            self.replaying = false;
         }
         self.write_running = self.busy_count > 0;
         // Who said no and what about — the halves the notice is made of.

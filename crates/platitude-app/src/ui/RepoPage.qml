@@ -43,6 +43,37 @@ Item {
             page.foldedByDiff = false
         }
     }
+    /// The same for the plan: the mode takes the graph pane whole, and the list beside it is a column of doors into a
+    /// history the plan is composed over — so it goes down to the rail with the rest of the window's other business
+    /// (規約 §フル interactive rebase). Its own flag, so putting the plan away takes back only the fold the plan made.
+    ///
+    /// **The fold comes back when the plan does, not when the replay ends.** From the run onwards the list has nothing
+    /// left to say about a screen that is no longer standing over it, and the reader is back on the graph watching the
+    /// rewrite land — the hold on the doors carries on without it (`sidebarLocked`).
+    ///
+    /// Unlike the diff's, there is no way back by hand: the rail's own fold control is one of the doors held down.
+    property bool foldedByPlan: false
+    function foldForPlan(open) {
+        if (open) {
+            if (page.sidebarCollapsed)
+                return
+            page.sidebarCollapsed = true
+            page.foldedByPlan = true
+        } else if (page.foldedByPlan) {
+            page.sidebarCollapsed = false
+            page.foldedByPlan = false
+        }
+    }
+    /// What `writeSeq` stood at when a plan was handed over, so the hold can start at the press: `replaying` rises
+    /// when the queue *starts* the write, not when the button was let go, and the pane must not come back to life in
+    /// the gap. -1 = no run of ours has been sent.
+    property int planRunSeq: -1
+    readonly property bool planRunOut: page.planRunSeq >= 0 && repoTab.writeSeq <= page.planRunSeq
+    /// Every door on the left pane is held down: while the plan is composed, while its run is out, and under any write
+    /// that replays a range a commit at a time (`RepoTab.replaying` — the meaning core puts on the op name). A rebase
+    /// is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is the
+    /// exit nobody meant. The `>_` band is not held with them (`SidebarPane.frozen`).
+    readonly property bool sidebarLocked: planModel.active || page.planRunOut || repoTab.replaying
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes with it — nothing is asked,
     /// what it costs is the typing (デザイン規約 §左メニューの所作) — and so does anything over the graph that is standing on an
@@ -445,6 +476,9 @@ Item {
     onPlanActiveChanged: {
         if (page.planActive) {
             page.closeDiff()
+            // Down to the rail with the rest of the window's other business, and back up when the plan goes —
+            // whichever way it goes (`foldForPlan`).
+            page.foldForPlan(true)
             // The graph lands on the plan's own newest row, whatever face was up before — the right pane
             // becomes that commit's, and the WIP face (whose commit button would sit under the run bar, and whose
             // own writes the freeze is for) cannot stay up under an open plan. `activateRow` also puts away a
@@ -462,6 +496,7 @@ Item {
             // rewrite of the history the plan never ran, and on any other row it is one commit's message shown under
             // another's. The commit's own message goes back in.
             detailsPane.dropDraft()
+            page.foldForPlan(false)
         }
     }
     // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the
@@ -487,6 +522,11 @@ Item {
     }
     Connections {
         target: planModel
+        // Armed by the answer that a run actually went out, not by the button being pressed: `runPlan` turns away a
+        // plan that asks for nothing, and a hold armed for a write that was never sent would never be let go of.
+        function onPlanRan() {
+            page.planRunSeq = repoTab.writeSeq
+        }
         function onRefusedPlan(kind) {
             page.showNotice(
                 kind === "merge" ? qsTr("A merge is in the way") : qsTr("Not on this branch"),
@@ -2341,12 +2381,10 @@ Item {
 
                 SidebarPane {
                     id: sidebarPane
-                    // While a plan is being composed, every door here is a way to move the history under it — a
-                    // switch, a delete, a double-click. Held down whole, and dimmed the way disabled things are;
-                    // reading it stays free (デザイン規約 §無効 / 提案 2026-08-30: 組んでいる間、書き込みの入口は実行
-                    // ボタンだけ).
-                    enabled: !planModel.active
-                    opacity: planModel.active ? Metrics.dimFade : 1
+                    // Every door here is a way to move the history under a rewrite that is being composed or is
+                    // already running — a switch, a delete, a double-click. The pane holds them down itself, so the
+                    // `>_` band at its foot stays live through it (`SidebarPane.frozen`).
+                    frozen: page.sidebarLocked
                     // Over the pane beside it while a name box is standing: the box reaches past this pane's edge when
                     // what is in it does not fit, and the graph is laid out after this one (`NavItemDelegate`). Only
                     // then — a pane that sat over its neighbour the rest of the time would draw its own edge over the
