@@ -96,12 +96,32 @@ fn a_hidden_or_stationary_graph_cannot_produce_a_valid_scroll_reading() {
             &mut reading,
         );
         absorb(&format!("scroll_bench fps=60 {evidence}"), &mut reading);
+        absorb("perf_scroll_frame visible=true row=42", &mut reading);
         assert!(
             missing(&reading, &opts)
                 .expect_err("no visible scroll")
                 .contains("visible, moving")
         );
     }
+}
+
+#[test]
+fn scroll_completion_requires_a_rendered_row_after_the_animation() {
+    let opts = options(&["--repo", ".", "--no-select"]);
+    let mut reading = unselected_reading();
+    absorb(
+        "perf_complete selection=none details=false diff=false graph=true scrolled=true",
+        &mut reading,
+    );
+    absorb(
+        "scroll_bench fps=60 visible=true moved=100 frame_count=60",
+        &mut reading,
+    );
+    assert!(missing(&reading, &opts).is_err());
+    absorb("perf_scroll_frame visible=true row=-1", &mut reading);
+    assert!(missing(&reading, &opts).is_err());
+    absorb("perf_scroll_frame visible=true row=42", &mut reading);
+    assert!(missing(&reading, &opts).is_ok());
 }
 
 #[test]
@@ -151,4 +171,18 @@ fn contradictory_or_empty_scenarios_are_rejected() {
             "{args:?}"
         );
     }
+}
+
+#[test]
+fn an_empty_repository_requires_a_frame_but_has_no_first_chunk() {
+    let opts = options(&["--repo", ".", "--no-select", "--no-scroll"]);
+    let mut reading = unselected_reading();
+    reading.first_chunk_ms = None;
+    absorb(
+        "perf_complete selection=none details=false diff=false graph=true scrolled=false rows=0",
+        &mut reading,
+    );
+    assert!(missing(&reading, &opts).is_ok());
+    reading.startup_ms = None;
+    assert!(missing(&reading, &opts).is_err());
 }

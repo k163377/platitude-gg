@@ -11,9 +11,19 @@ Item {
     property bool finished: false
     property int frameBefore: 0
     readonly property bool expectsPage: AppBackend.autoOpen !== ""
+    readonly property bool identityReady: AppBackend.identityState === "ready"
 
     function begin() {
         if (!AppBackend.autoPerf || driver.finished)
+            return
+        if (AppBackend.identityState === "missing" || AppBackend.identityState === "error") {
+            driver.finished = true
+            AppBackend.report("perf_failed reason=identity-gate")
+            if (PerfProbe.verifying)
+                Qt.quit()
+            return
+        }
+        if (!driver.identityReady)
             return
         if (driver.expectsPage || driver.page !== null)
             return
@@ -35,7 +45,7 @@ Item {
         target: driver.window
         enabled: AppBackend.autoPerf && !driver.expectsPage && driver.page === null && !driver.finished
         function onFrameSwapped() {
-            if (driver.window.frameCounter > driver.frameBefore)
+            if (driver.identityReady && driver.window.frameCounter > driver.frameBefore)
                 driver.finish()
         }
     }
@@ -58,4 +68,8 @@ Item {
 
     Component.onCompleted: driver.begin()
     onPageChanged: driver.begin()
+    Connections {
+        target: AppBackend
+        function onIdentityChanged() { driver.begin() }
+    }
 }

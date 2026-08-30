@@ -60,8 +60,10 @@ struct Reading {
     frame_p99_ms: Option<f64>,
     frame_max_ms: Option<f64>,
     scroll_visible: bool,
+    scroll_framed: bool,
     selection: Option<String>,
     scenario_complete: Option<String>,
+    rows: Option<usize>,
     failure: Option<String>,
     /// The `mem report` line with the largest `rust_live`, verbatim.
     breakdown: Option<String>,
@@ -284,19 +286,27 @@ fn read_app(
             for line in BufReader::new(pipe).lines().map_while(Result::ok) {
                 if let Err(error) = writeln!(log, "{} {line}", started.elapsed().as_micros()) {
                     found.failure = Some(format!("could not preserve app log: {error}"));
-                    let _ = done_tx.send(false);
                 }
                 if found.startup_ms.is_none() && line.contains("perf_graph_frame") {
                     found.startup_ms = Some(started.elapsed().as_millis() as u64);
                 }
-                if line.contains("perf_done") {
-                    let _ = done_tx.send(true);
-                }
                 if line.contains("perf_failed") {
                     found.failure = Some(line.clone());
-                    let _ = done_tx.send(false);
                 }
                 absorb(&line, &mut found);
+                let completion = if found.failure.is_some() {
+                    Some(false)
+                } else if line.contains("perf_done") {
+                    Some(true)
+                } else {
+                    None
+                };
+                if let Some(done) = completion
+                    && done_tx.send(done).is_err()
+                {
+                    found.failure = Some("measurement receiver disconnected".into());
+                    break;
+                }
             }
         }
         found
@@ -334,7 +344,7 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     if reading.startup_ms.is_none() {
         gaps.push("startup (no `perf_graph_frame`)");
     }
-    if reading.first_chunk_ms.is_none() {
+    if reading.first_chunk_ms.is_none() && reading.rows != Some(0) {
         gaps.push("the walk (no `first_chunk_ms=`)");
     }
     if reading.total_ms.is_none() {
@@ -366,7 +376,9 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.push("the requested diff frame");
     }
     if opts.scroll
-        && (!reading.fps.is_some_and(|fps| fps.is_finite() && fps > 0.0) || !reading.scroll_visible)
+        && (!reading.fps.is_some_and(|fps| fps.is_finite() && fps > 0.0)
+            || !reading.scroll_visible
+            || !reading.scroll_framed)
     {
         gaps.push("fps of a visible, moving graph");
     }
@@ -403,6 +415,13 @@ fn absorb(line: &str, found: &mut Reading) {
     }
     if line.contains("perf_complete") {
         found.scenario_complete = Some(line.to_string());
+        found.rows = field(line, "rows=").and_then(|v| v.parse().ok());
+    }
+    if line.contains("perf_scroll_frame") {
+        found.scroll_framed = field(line, "visible=") == Some("true")
+            && field(line, "row=")
+                .and_then(|v| v.parse::<usize>().ok())
+                .is_some();
     }
     if line.contains("perf_details_frame")
         && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())

@@ -27,7 +27,7 @@ Item {
 
     readonly property bool graphVisible: graphPane.visible && !page.diffShown
                                         && graphPane.width > 0 && graphPane.height > 0
-    readonly property bool ready: repoTab.state === "open" && !graphModel.loading
+    readonly property bool ready: AppBackend.identityState === "ready" && repoTab.state === "open" && !graphModel.loading
                                   && graphModel.finishCount > 0 && branchesModel.refsLoaded
                                   && worktreeModel.loaded
 
@@ -147,11 +147,13 @@ Item {
         driver.stage = "finished"
         AppBackend.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
                           + " diff=" + driver.sawDiff + " graph=" + driver.graphVisible
-                          + " scrolled=" + AppBackend.autoScroll)
+                          + " scrolled=" + AppBackend.autoScroll + " rows=" + graphModel.rowTotal)
         page.perfFinished()
     }
 
     function beginScroll() {
+        graphPane.view.forceLayout()
+        driver.reportViewport("start")
         if (!driver.graphVisible || scrollBench.to <= scrollBench.from) {
             driver.fail("scroll-hidden-or-no-overflow")
             return
@@ -160,6 +162,13 @@ Item {
         driver.scrollStart = graphPane.view.contentY
         PerfProbe.beginScroll()
         scrollBench.start()
+    }
+
+    function reportViewport(at) {
+        const view = graphPane.view
+        AppBackend.report("perf_viewport at=" + at + " y=" + view.contentY + " origin=" + view.originY
+                          + " height=" + view.contentHeight + " viewport=" + view.height
+                          + " row=" + view.indexAt(view.width / 2, view.contentY + view.height / 2))
     }
 
     function frame() {
@@ -190,6 +199,16 @@ Item {
             driver.afterInteraction()
         } else if (driver.stage === "scroll-frame") {
             driver.beginScroll()
+        } else if (driver.stage === "scroll-end-frame") {
+            const view = graphPane.view
+            const row = view.indexAt(view.width / 2, view.contentY + view.height / 2)
+            const item = row >= 0 ? view.itemAtIndex(row) : null
+            if (!driver.graphVisible || !item || !item.visible) {
+                driver.fail("scroll-ended-without-visible-row")
+                return
+            }
+            AppBackend.report("perf_scroll_frame visible=true row=" + row)
+            driver.finish()
         }
     }
 
@@ -231,13 +250,14 @@ Item {
                                       driver.graphPane.view.contentHeight - driver.graphPane.view.height))
         duration: 12000
         onFinished: {
+            driver.reportViewport("end")
             const moved = Math.abs(driver.graphPane.view.contentY - driver.scrollStart)
             const visible = driver.scrollValid && driver.graphVisible
             PerfProbe.endScroll(driver.graphModel.rowTotal, moved, visible)
             if (!visible || moved <= 0)
                 driver.fail("scroll-not-observed")
             else
-                driver.finish()
+                driver.waitFrame("scroll-end-frame")
         }
     }
 
