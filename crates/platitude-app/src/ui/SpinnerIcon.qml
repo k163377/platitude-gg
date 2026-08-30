@@ -16,6 +16,10 @@ NavIcon {
     kind: "spinner"
     tint: Theme.textSecondary
     visible: ring.spinning
+    // A ring is drawn only while something is out, so most of them are born invisible — and a `Canvas` that was never
+    // visible was never asked to paint (rules-refs/app-ui.md). Turning does not ask either: rotation is a transform
+    // over ink that has to be there already. Built in for the same reason the stillness above is.
+    onVisibleChanged: if (ring.visible) ring.requestPaint()
 
     // On the render thread, so it keeps turning while the GUI thread
     // drains models.

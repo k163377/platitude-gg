@@ -18,7 +18,7 @@ Item {
     required property var window
     required property TopBar topBar
     required property WindowChrome chrome
-    required property ColumnLayout mainUi
+    required property Item mainUi
     required property IdentityDialog identityDialog
 
     // Capture the communication ring from a real busy edge. TopBar latches the visual only after RepoTab actually

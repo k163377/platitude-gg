@@ -49,7 +49,7 @@ ApplicationWindow {
         Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.openFloorWidth : 0)
     readonly property real floorHeight:
         // The band, the divider under it, and the line the window's bottom edge is drawn as — the three rows of
-        // `mainUi` that are not the page (they carry their own heights; the page's is its own floor).
+        // `bodyColumn` that are not the page (they carry their own heights; the page's is its own floor).
         Theme.toolbarHeight + Theme.splitterWidth + Theme.borderWidth
         + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
     minimumWidth: Math.ceil(root.floorWidth)
@@ -143,6 +143,15 @@ ApplicationWindow {
                 root.curPage.releasePressedAway(scenePos)
         }
     }
+
+    /// Automation (`PG_AUTO_ACT=replay-running`): stands a hand at `x, y` in scene coordinates and leaves it there.
+    /// A function rather than a binding, so the map runs once against the geometry it is looking at (app-ui.md).
+    function holdWaitHand(x, y) {
+        waitSeat.handStandIn = waitSeat.mapFromItem(null, x, y)
+    }
+    /// What the mark beside that hand makes of it. Its own `spinning` rather than its `visible`, for the reason the
+    /// other mark a pointer wears gives (`RefusalBadge`): read from another file `visible` comes back stale.
+    readonly property bool waitRingShown: waitRing.spinning
 
     // Identity: the dialog and the state that opens it live in the gate below (`IdentityGate`). The way in keeps its
     // name on the window — the harness calls it here (`WindowAutoActDriver`).
@@ -346,7 +355,10 @@ ApplicationWindow {
     }
 
     // ---- main ------------------------------------------------------------
-    ColumnLayout {
+    // The window's body, and the whole of what a headless picture is of (`AutoShotDriver.grabApp` grabs this item, so
+    // anything drawn outside it is drawn outside every screenshot). Almost all of it is the column below; what is not
+    // is the one mark that answers the pointer rather than a row of the window.
+    Item {
         id: mainUi
         // ApplicationWindow keeps its content item inside the window's safe area, which with the client area expanded
         // starts below the title bar (Windows: y = 31). The chrome reaches back up over that inset with a negative top
@@ -355,83 +367,125 @@ ApplicationWindow {
         // the next input event to be painted.
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
-        spacing: 0
         visible: AppBackend.gitState === "ok"
 
-        // Where the hand is, for the shared tooltip to open beside. Declared here, on the parent of the whole content,
-        // because that is the one place a window-wide handler costs the rows nothing (`PointerWatch`).
+        // Where the hand is, for whoever has to open something beside it. Declared here, on the parent of the whole
+        // content, because that is the one place a window-wide handler costs the rows nothing (`PointerWatch`).
         PointerWatch {
             id: hand
         }
 
-        TopBar {
-            id: topBar
-            Layout.fillWidth: true
-            tabsModel: tabsModel
-            curPage: root.curPage
-            captionMerged: root.captionMerged
-            windowMaximized: root.visibility === Window.Maximized
-            // Standing on the floor is the one width with nothing left to share out, and the band's state group gives
-            // up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of band's and page's.
-            windowAtFloor: root.width <= Math.ceil(root.floorWidth)
-            // …and the width the three actions have to be down to their marks by, which is that floor with the list
-            // open. Read here for the same reason: only this window has both halves of it.
-            windowFloorWidth: root.openFloorWidth
-            onOpenRepositoryRequested: root.openRepositoryPicker()
-            onCloneRepositoryRequested: root.startClone()
-            onIdentityEditRequested: dialogSeat.openSettingsAt("git")
-            onSettingsRequested: dialogSeat.openSettingsAt("app")
-            onMaximizeToggleRequested: chrome.toggleMaximized()
-            onMinimizeRequested: chrome.minimizeWindow()
-            onCloseRequested: root.close()
-            onCaptionStripMoved: chrome.reportCaptionStrip()
-        }
-        // Divider under the tab toolbar — same look as the pane splitters.
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.splitterWidth
-            color: Theme.borderSubtle
-        }
+        // ---- the wait the hand is given ----------------------------------
+        // A write that replays history stands for seconds (`session::replays_history`), and for all of them the
+        // pointer is the one thing the reader is looking at. The ring goes beside it, over everything, and belongs to
+        // no pane: it answers the hand rather than whatever the hand happens to be over.
+        //
+        // The sheet draws and nothing more — no handler of its own. Hover is taken by the item it is laid over, so a
+        // handler here would put every row and cell below it out (規約 §QML 実装ルール); the pointer is read off the
+        // handler above, which is on this same item and so leaves its own subtree answering (`PointerWatch`).
+        Item {
+            id: waitSeat
+            anchors.fill: parent
+            z: 10001
 
-        // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
-        Loader {
-            id: blankPage
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            active: tabsModel.currentIndex < 0
-            visible: active
-            sourceComponent: Component {
-                RepoPage {
-                    index: -1
-                    tab_id: -1
-                    onOpenRepositoryPicker: root.openRepositoryPicker()
-                }
+            /// Where the hand would have been, for the runs that have none: a point in this sheet, or a negative x
+            /// for the ordinary case where a real pointer answers. The same shape every hover stand-in in this app
+            /// has (`SharedToolTip.handAcross`, `BandStateGroup.pointedAt`) — hover cannot be injected, so automation
+            /// writes what the pointer would have written, into the one answer the mark reads.
+            ///
+            /// **Offscreen does answer**, with a hand at the origin (`SharedToolTip`), so a run without this
+            /// photographs a ring in the window's top corner — drawn, and in no place worth judging it by.
+            property point handStandIn: Qt.point(-1, -1)
+            readonly property bool handKnown: waitSeat.handStandIn.x >= 0 || hand.known
+            readonly property point handAt: waitSeat.handStandIn.x >= 0
+                                            ? waitSeat.handStandIn
+                                            : Qt.point(hand.handX, hand.handY)
+
+            WaitRing {
+                id: waitRing
+                at: waitSeat.handAt
+                // Only the tab on screen has a replay, and only a hand that is over this window has a place to be
+                // told about it (デザイン規約 §進行中・長押しの定数 — the mark is the whole of what says a wait is on).
+                spinning: waitSeat.handKnown && root.curPage !== null && root.curPage.replayRunning
             }
         }
 
-        // Repository pages — one row per tab, and a page only for the tab in front (`RepoPageStack`).
-        RepoPageStack {
-            id: pages
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            visible: tabsModel.currentIndex >= 0
-            tabsModel: tabsModel
-            pageBand: topBar
-            focusEpoch: root.focusEpoch
-            onScreen: root.onScreen
-            onOpenRepositoryPicker: root.openRepositoryPicker()
-            onSettingsDialogRequested: dialogSeat.openSettingsAt("app")
-            onGitSettingsRequested: dialogSeat.openSettingsAt("git")
-            // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
-            onAvatarSettingsRequested: (name, email) => dialogSeat.openAvatarSettings(name, email)
-        }
+        ColumnLayout {
+            id: bodyColumn
+            anchors.fill: parent
+            spacing: 0
 
-        // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in borderDefault
-        // doing both. Drawn while the window fills the screen too: this side still has the taskbar under it.
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.borderWidth
-            color: Theme.borderDefault
+            TopBar {
+                id: topBar
+                Layout.fillWidth: true
+                tabsModel: tabsModel
+                curPage: root.curPage
+                captionMerged: root.captionMerged
+                windowMaximized: root.visibility === Window.Maximized
+                // Standing on the floor is the one width with nothing left to share out, and the band's state
+                // group gives up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of
+                // band's and page's.
+                windowAtFloor: root.width <= Math.ceil(root.floorWidth)
+                // …and the width the three actions have to be down to their marks by, which is that floor with the list
+                // open. Read here for the same reason: only this window has both halves of it.
+                windowFloorWidth: root.openFloorWidth
+                onOpenRepositoryRequested: root.openRepositoryPicker()
+                onCloneRepositoryRequested: root.startClone()
+                onIdentityEditRequested: dialogSeat.openSettingsAt("git")
+                onSettingsRequested: dialogSeat.openSettingsAt("app")
+                onMaximizeToggleRequested: chrome.toggleMaximized()
+                onMinimizeRequested: chrome.minimizeWindow()
+                onCloseRequested: root.close()
+                onCaptionStripMoved: chrome.reportCaptionStrip()
+            }
+            // Divider under the tab toolbar — same look as the pane splitters.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.splitterWidth
+                color: Theme.borderSubtle
+            }
+
+            // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
+            Loader {
+                id: blankPage
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                active: tabsModel.currentIndex < 0
+                visible: active
+                sourceComponent: Component {
+                    RepoPage {
+                        index: -1
+                        tab_id: -1
+                        onOpenRepositoryPicker: root.openRepositoryPicker()
+                    }
+                }
+            }
+
+            // Repository pages — one row per tab, and a page only for the tab in front (`RepoPageStack`).
+            RepoPageStack {
+                id: pages
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: tabsModel.currentIndex >= 0
+                tabsModel: tabsModel
+                pageBand: topBar
+                focusEpoch: root.focusEpoch
+                onScreen: root.onScreen
+                onOpenRepositoryPicker: root.openRepositoryPicker()
+                onSettingsDialogRequested: dialogSeat.openSettingsAt("app")
+                onGitSettingsRequested: dialogSeat.openSettingsAt("git")
+                // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
+                onAvatarSettingsRequested: (name, email) => dialogSeat.openAvatarSettings(name, email)
+            }
+
+            // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in
+            // borderDefault doing both. Drawn while the window fills the screen too: this side still has the
+            // taskbar under it.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.borderWidth
+                color: Theme.borderDefault
+            }
         }
     }
 }

@@ -14,7 +14,7 @@ Item {
     /// The two textures laid over each other, for the picture that holds the hover and the thing it hangs off at once
     /// (`Main.qml`). Only asked for when the overlay was holding something.
     property Loader sceneMirror
-    property ColumnLayout mainUi
+    property Item mainUi
     property Item gate
 
     property bool pageActClaimed: false

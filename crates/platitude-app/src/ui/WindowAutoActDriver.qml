@@ -31,7 +31,7 @@ Item {
     property Repeater pageRepeater
     property TopBar topBar
     property WindowChrome chrome
-    property ColumnLayout mainUi
+    property Item mainUi
     property Item gate
     property OpenFailedDialog openFailedDialog
     property IdentityDialog identityDialog

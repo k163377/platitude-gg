@@ -267,6 +267,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamForm.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WaitRing.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowBandActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowChrome.qml", "qt/qml/platitude");

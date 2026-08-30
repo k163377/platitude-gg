@@ -20,7 +20,7 @@ Item {
     required property TabsModel tabsModel
     required property Repeater pageRepeater
     required property TopBar topBar
-    required property ColumnLayout mainUi
+    required property Item mainUi
 
     // PG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers rather than
     // a picture: the app is the whole screen, so there is no desktop left beside it to show a gap against.

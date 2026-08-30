@@ -201,6 +201,7 @@ TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 UpstreamFlow 1.0 UpstreamFlow.qml
 UpstreamForm 1.0 UpstreamForm.qml
+WaitRing 1.0 WaitRing.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowBandActs 1.0 WindowBandActs.qml
 WindowChrome 1.0 WindowChrome.qml

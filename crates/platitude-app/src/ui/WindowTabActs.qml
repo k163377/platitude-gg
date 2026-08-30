@@ -21,7 +21,7 @@ Item {
     required property TabsModel tabsModel
     required property Repeater pageRepeater
     required property TopBar topBar
-    required property ColumnLayout mainUi
+    required property Item mainUi
     required property Item gate
 
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge rather than
