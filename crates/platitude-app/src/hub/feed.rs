@@ -140,6 +140,9 @@ pub struct Feeds {
     pub details: Arc<Feed<DetailsMsg>>,
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,
+    /// The interactive-rebase screen's plan rows (one consumer, the plan
+    /// model; answers replace one another the way status snapshots do).
+    pub plan: Arc<Feed<PlanMsg>>,
 }
 
 /// One feed, seen without its message type — the three questions every
@@ -172,7 +175,7 @@ impl Feeds {
     /// left out of one is a queue that goes on holding a repository
     /// nobody is reading — or one the memory report cannot name, which is
     /// exactly the queue that report exists to catch.
-    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 14] {
+    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 15] {
         [
             ("tab", &*self.tab),
             ("graph", &*self.graph),
@@ -188,6 +191,7 @@ impl Feeds {
             ("details", &*self.details),
             ("diff", &*self.diff),
             ("commands", &*self.commands),
+            ("plan", &*self.plan),
         ]
     }
 

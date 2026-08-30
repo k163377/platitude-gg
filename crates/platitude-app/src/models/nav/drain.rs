@@ -15,6 +15,7 @@ impl NavSectionModel {
         // Whether refs were published at all, which is a different
         // question from whether they moved (see `refs_settled`).
         let mut settled = false;
+        let mut moved = false;
         if let Some(feed) = self.refs_feed.clone()
             && let Some(snapshot) = feed.drain().pop()
         {
@@ -29,6 +30,7 @@ impl NavSectionModel {
                 .as_ref()
                 .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
             if fresh {
+                moved = true;
                 self.last_refs = Some(Arc::clone(&snapshot));
                 arrived |= match self.section.as_str() {
                     "branches" => {
@@ -84,6 +86,9 @@ impl NavSectionModel {
         }
         if settled {
             self.refs_settled();
+        }
+        if moved {
+            self.refs_moved();
         }
         if stashes_arrived {
             self.stashes_settled();

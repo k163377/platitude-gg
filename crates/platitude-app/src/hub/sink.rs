@@ -104,6 +104,7 @@ impl SessionSink for BridgeSink {
                 merge_tool,
                 push_remote,
                 eol_marks,
+                stop,
             } => {
                 // One copy per bucket run: each of the WIP pane's lists
                 // shows a run of its own and answers about the whole tree
@@ -122,6 +123,7 @@ impl SessionSink for BridgeSink {
                         merge_tool: merge_tool.clone(),
                         push_remote: push_remote.clone(),
                         eol_marks: Arc::clone(&eol_marks),
+                        stop: stop.clone(),
                     });
                 }
                 self.feeds.status.push_replace(StatusMsg {
@@ -133,6 +135,7 @@ impl SessionSink for BridgeSink {
                     merge_tool,
                     push_remote,
                     eol_marks,
+                    stop,
                 });
             }
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
@@ -268,6 +271,17 @@ impl SessionSink for BridgeSink {
                     code: signature.status.code().to_string(),
                     signer: signature.signer,
                 });
+            }
+            SessionEvent::RebasePlanLoaded { preview } => {
+                self.feeds.plan.push_replace(PlanMsg::Loaded { preview });
+            }
+            SessionEvent::RebasePlanRefused { from, refusal } => {
+                self.feeds
+                    .plan
+                    .push_replace(PlanMsg::Refused { from, refusal });
+            }
+            SessionEvent::RebasePlanFailed { from } => {
+                self.feeds.plan.push_replace(PlanMsg::Failed { from });
             }
             SessionEvent::PublishChecked { range, state } => {
                 self.feeds.tab.push(TabMsg::Publish {

@@ -88,6 +88,14 @@ impl NavSectionModel {
     #[qsignal]
     pub(super) fn refs_settled(&mut self);
 
+    /// A refs snapshot arrived *and it was a new one* — the tick-by-tick
+    /// republish of the same `Arc` stays quiet. What a listener that
+    /// re-derives something expensive from the refs should wait on:
+    /// `refs_settled` fires on every status tick, and hanging a git
+    /// spawn off it would poll the repository at the tick rate.
+    #[qsignal]
+    pub(super) fn refs_moved(&mut self);
+
     /// A stash listing arrived, whether or not it moved anything.
     ///
     /// **Separate from `refs_settled`, because the two do not land

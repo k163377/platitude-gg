@@ -247,6 +247,9 @@ impl GitFacts {
     /// **Asked as a binding, not frozen like the menus' answers** — the
     /// boxes stand open while the repository moves under them, so a
     /// commit that stops being HEAD's has to stop taking typing.
+    // The parameter row mirrors the core rule one-for-one; folding it
+    // into a struct would put a QML-invisible shape between the two.
+    #[expect(clippy::too_many_arguments)]
     #[qslot]
     fn message_edit(
         &self,
@@ -255,10 +258,14 @@ impl GitFacts {
         head_oid: String,
         stash_ref: String,
         op_text: String,
+        editing: bool,
+        edit_oid: String,
     ) -> String {
-        platitude_core::offers::message_edit(open, &oid_hex, &head_oid, &stash_ref, &op_text)
-            .as_str()
-            .to_string()
+        platitude_core::offers::message_edit(
+            open, &oid_hex, &head_oid, &stash_ref, &op_text, editing, &edit_oid,
+        )
+        .as_str()
+        .to_string()
     }
 
     /// The move a press on a ref adds up to

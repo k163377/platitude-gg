@@ -116,6 +116,14 @@ pub struct WorkTreeModel {
     /// Whether the exit card's `--skip` loses nothing: the stop is on a
     /// commit that came out empty (`offers::skip_is_free`).
     op_skip_free: bool,
+    /// Whether the standing rebase stopped on purpose at an `edit` step —
+    /// the stop whose tree is as clean as the empty one, told apart by
+    /// git's own marker (`integrate::RebaseStop`). The exit card's words
+    /// and its `--skip`'s cost both turn on it.
+    op_editing: bool,
+    /// The commit that stop is about, abbreviated as git wrote it; empty
+    /// where it wrote none.
+    op_edit_oid: String,
     /// Bumped when a status moves any of the four bucket counts — what
     /// "somebody moved the tree" is read off, so a status that moved no
     /// count (the answer to this window's own poll) does not re-read an
@@ -182,6 +190,8 @@ impl WorkTreeModel {
     qproperty!("leaveUndoes", Member = leave_undoes, Notify = changed);
     qproperty!("leaveCode", Member = leave_code, Notify = changed);
     qproperty!("opSkipFree", Member = op_skip_free, Notify = changed);
+    qproperty!("opEditing", Member = op_editing, Notify = changed);
+    qproperty!("opEditOid", Member = op_edit_oid, Notify = changed);
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
 
@@ -209,6 +219,7 @@ impl WorkTreeModel {
             merge_tool,
             push_remote,
             eol_marks,
+            stop,
         }) = feed.drain().pop()
         else {
             return;
@@ -256,7 +267,9 @@ impl WorkTreeModel {
         let in_progress = platitude_core::integrate::InProgress::from_state(&op_state);
         self.leave_undoes = platitude_core::offers::leaving_undoes(in_progress);
         self.leave_code = platitude_core::offers::leave_code(in_progress).to_string();
-        self.op_skip_free = platitude_core::offers::skip_is_free(&counts);
+        self.op_editing = stop.editing;
+        self.op_edit_oid = stop.oid;
+        self.op_skip_free = platitude_core::offers::skip_is_free(&counts, stop.editing);
         let tally = (
             self.staged_count,
             self.unstaged_count,

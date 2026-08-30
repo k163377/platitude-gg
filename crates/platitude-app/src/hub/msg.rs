@@ -263,6 +263,27 @@ pub struct StatusMsg {
     pub push_remote: String,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
+    /// Why a standing rebase is standing — the `edit` stop that a clean
+    /// tree cannot be told from an empty stop by. Default while none is.
+    pub stop: platitude_core::integrate::RebaseStop,
+}
+
+/// What the rebase-plan feed carries: the rows the interactive-rebase
+/// screen opens over, or the refusal of this end's own that keeps it shut.
+/// Either way `from` says which click it answers — the click that asked
+/// may be behind another by the time this lands.
+#[derive(Debug)]
+pub enum PlanMsg {
+    Loaded {
+        preview: platitude_core::rebase_plan::PlanPreview,
+    },
+    Refused {
+        from: String,
+        refusal: platitude_core::rebase_plan::PlanRefusal,
+    },
+    /// The read failed (the failure itself reaches the error surface);
+    /// this puts the model's waiting state down.
+    Failed { from: String },
 }
 
 /// What the diff feed carries. Two messages rather than one, because the

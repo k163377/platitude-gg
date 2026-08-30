@@ -1,0 +1,260 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+
+use crate::hub::{Feed, PlanMsg};
+
+use super::qml_register;
+
+mod qobject;
+#[cfg(test)]
+mod steps_tests;
+
+// ---------------------------------------------------------------------------
+// RebasePlanModel: the interactive-rebase screen's plan — the rows of
+// `from^..HEAD` newest-first, the verb and reword text each row carries,
+// and the run that turns them back into git's oldest-first todo.
+// ---------------------------------------------------------------------------
+
+/// One row of the plan, in the screen's order (newest first — the same way
+/// the graph reads, and the reverse of the todo file).
+#[derive(QModelItem, Default, Clone)]
+pub struct PlanStepItem {
+    pub(super) oid_hex: String,
+    pub(super) author: String,
+    pub(super) author_email: String,
+    pub(super) avatar: i32,
+    pub(super) avatar_url: String,
+    /// The commit's own subject — what the todo line carries as comment,
+    /// and what the row falls back to showing.
+    pub(super) subject: String,
+    /// What the row draws: the reword's new subject once one is typed,
+    /// the commit's own otherwise. Chosen here rather than in QML — which
+    /// text a row shows is a rule, not a look (app-ui.md).
+    pub(super) shown: String,
+    /// `pick` / `reword` / `edit` / `squash` / `fixup` / `drop`, as the
+    /// verb chip spells it (デザイン規約 §git 用語のコード表記).
+    pub(super) action: String,
+    /// The reword's replacement message, split the way the two boxes hold
+    /// it. Empty until typed; an empty pair at run time means the commit
+    /// keeps its message, so the step goes back to a plain `pick`.
+    pub(super) msg_subject: String,
+    pub(super) msg_body: String,
+}
+
+/// The six verbs a row can carry — the todo's own vocabulary.
+pub(super) const ACTIONS: [&str; 6] = ["pick", "reword", "edit", "squash", "fixup", "drop"];
+
+/// The two verbs that fold into the row below (the parent). The oldest
+/// row has no row below it inside the plan, so neither stands there.
+pub(super) fn folds(action: &str) -> bool {
+    action == "squash" || action == "fixup"
+}
+
+#[derive(Default)]
+pub struct RebasePlanModel {
+    pub(super) steps: Vec<PlanStepItem>,
+    /// Rows staged for the next model reset — `QListModelBase::reset`
+    /// calls [`QListModel::reset_unnotified`], which installs these.
+    pub(super) pending_rows: Option<Vec<PlanStepItem>>,
+    /// The oids in the order the plan opened with — what `dirty` compares
+    /// the current order against.
+    pub(super) initial: Vec<String>,
+    pub(super) active: bool,
+    pub(super) loading: bool,
+    /// The commit the open was asked from; answers for any other click
+    /// are stale and dropped.
+    pub(super) asked_from: String,
+    pub(super) from_oid: String,
+    /// Parent of `from_oid`, which the plan replays onto; empty on `root`.
+    pub(super) onto_oid: String,
+    pub(super) root: bool,
+    pub(super) onto_subject: String,
+    pub(super) onto_author: String,
+    pub(super) onto_email: String,
+    pub(super) onto_avatar: i32,
+    pub(super) onto_avatar_url: String,
+    /// A local branch standing on the base, said first with the id as the
+    /// fallback (デザイン規約: onto はブランチ名優先). Empty when none.
+    pub(super) onto_ref: String,
+    /// The branch tip the plan was composed against (= the newest row).
+    /// The run pins it, and a tip that moves under the open plan closes
+    /// it (`note_head`).
+    pub(super) expect_head: String,
+    /// What `RepoTab.checkPublish` should be asked for the rewrite
+    /// warning: the very range the plan replays.
+    pub(super) publish_range: String,
+    /// [`Self::is_dirty`] as a property, settled by every mutation — the
+    /// run button's `enabled:` has to follow it, and a binding on a slot
+    /// freezes at its first answer (app-ui.md).
+    pub(super) dirty: bool,
+    /// Rows the plan leaves out, settled the same way: with the tip held
+    /// by nothing else, what makes the run a hold (§履歴を合流させる).
+    pub(super) drops: i32,
+    /// How many rows the plan holds, for the run button's own phrase.
+    pub(super) step_count: i32,
+    /// The row the page's selection sits on (-1 = none), and its verb —
+    /// what the right pane's boxes read to know a reword is on screen.
+    /// Held here rather than in QML so a reorder cannot leave the two
+    /// disagreeing (the move remaps it).
+    pub(super) selected_row: i32,
+    pub(super) selected_action: String,
+    /// That row's commit, so the page can refuse to route typing whose
+    /// details pane shows some other commit (a selection moved by
+    /// anything that is not a plan row click).
+    pub(super) selected_oid: String,
+    /// The selected row's stored reword, so the boxes can reopen on the
+    /// draft rather than on the commit's own message when the row is
+    /// revisited — saving over the original would silently revert it.
+    pub(super) selected_msg_subject: String,
+    pub(super) selected_msg_body: String,
+    /// One head report that disagreed with `expect_head` is a suspect,
+    /// not a verdict: a status read that began before a tip move and
+    /// landed after the plan opened carries the *older* oid, and closing
+    /// on it would discard a plan composed on exactly the tip that
+    /// exists. Reads are single-flight, so at most one stale report can
+    /// land after the open — the second strike is always fresh.
+    pub(super) head_suspect: bool,
+    pub(super) feed: Option<Arc<Feed<PlanMsg>>>,
+    pub(super) tab_id: i32,
+}
+
+impl QListModel for RebasePlanModel {
+    type Item = PlanStepItem;
+
+    fn len(&self) -> usize {
+        self.steps.len()
+    }
+    fn get(&self, index: usize) -> Option<&PlanStepItem> {
+        self.steps.get(index)
+    }
+    fn reset_unnotified(&mut self) {
+        self.steps = self.pending_rows.take().unwrap_or_default();
+    }
+}
+
+impl RebasePlanModel {
+    /// Whether the plan asks for anything at all: a verb other than
+    /// `pick`, a typed reword, or rows out of their original order. The
+    /// run button only opens on this — an untouched plan replays every
+    /// commit onto the parent it already sits on, and a button that runs
+    /// it would be one that visibly does nothing
+    /// (デザイン規約 §可否・警告の出し場所).
+    pub(super) fn is_dirty(&self) -> bool {
+        self.steps.len() != self.initial.len()
+            || self
+                .steps
+                .iter()
+                .zip(&self.initial)
+                .any(|(step, oid)| step.oid_hex != *oid)
+            || self.steps.iter().any(|step| {
+                step.action != "pick" || !step.msg_subject.is_empty() || !step.msg_body.is_empty()
+            })
+    }
+
+    pub(super) fn drop_count(&self) -> i32 {
+        let drops = self.steps.iter().filter(|s| s.action == "drop").count();
+        i32::try_from(drops).unwrap_or(i32::MAX)
+    }
+
+    /// What the row should show for its subject, given what the plan
+    /// holds for it.
+    pub(super) fn shown_of(action: &str, msg_subject: &str, subject: &str) -> String {
+        if action == "reword" && !msg_subject.trim().is_empty() {
+            msg_subject.trim().to_string()
+        } else {
+            subject.to_string()
+        }
+    }
+
+    /// The steps as git's todo wants them: oldest first, reword only where
+    /// a message was actually typed (an empty box means the commit keeps
+    /// its message, which is a plain `pick`).
+    pub(super) fn todo_steps(&self) -> Vec<platitude_core::sequencer::RebaseStep> {
+        use platitude_core::sequencer::{RebaseStep, TodoAction};
+        self.steps
+            .iter()
+            .rev()
+            .map(|step| {
+                let message =
+                    platitude_core::commit::join_message(&step.msg_subject, &step.msg_body);
+                let action = match step.action.as_str() {
+                    "reword" if !message.is_empty() => TodoAction::Reword,
+                    "reword" => TodoAction::Pick,
+                    "edit" => TodoAction::Edit,
+                    "squash" => TodoAction::Squash,
+                    "fixup" => TodoAction::Fixup,
+                    "drop" => TodoAction::Drop,
+                    _ => TodoAction::Pick,
+                };
+                RebaseStep {
+                    message: (action == TodoAction::Reword).then_some(message),
+                    action,
+                    oid: step.oid_hex.clone(),
+                    subject: step.subject.clone(),
+                }
+            })
+            .collect()
+    }
+
+    /// Re-derives the summaries every mutation moves
+    /// ([`Self::is_dirty`] / [`Self::drop_count`] / the selection's verb).
+    pub(super) fn settle(&mut self) {
+        self.dirty = self.is_dirty();
+        self.drops = self.drop_count();
+        self.step_count = i32::try_from(self.steps.len()).unwrap_or(i32::MAX);
+        let selected = usize::try_from(self.selected_row)
+            .ok()
+            .and_then(|row| self.steps.get(row));
+        self.selected_action = selected.map(|step| step.action.clone()).unwrap_or_default();
+        self.selected_oid = selected
+            .map(|step| step.oid_hex.clone())
+            .unwrap_or_default();
+        self.selected_msg_subject = selected
+            .map(|step| step.msg_subject.clone())
+            .unwrap_or_default();
+        self.selected_msg_body = selected
+            .map(|step| step.msg_body.clone())
+            .unwrap_or_default();
+    }
+
+    /// Whether a fold may stand on `row`: something below it has to
+    /// remain in the history for it to fold into — a drop is not it, and
+    /// the oldest row has nothing below at all. What the verb menu
+    /// freezes as it opens; [`Self::demote_orphan_folds`] holds the same
+    /// line against reorders and later drops.
+    pub(super) fn fold_lands(&self, row: usize) -> bool {
+        self.steps
+            .get(row + 1..)
+            .is_some_and(|below| below.iter().any(|step| step.action != "drop"))
+    }
+
+    /// Rows the fold rule holds down after any mutation: a fold folds
+    /// into the nearest row below that stays in the history, so one with
+    /// nothing but drops under it — moved there, or stranded by a later
+    /// drop — goes back to `pick` on the spot, visibly on the row itself,
+    /// rather than as a todo git rejects into a broken stop
+    /// (`cannot 'squash' without a previous commit`, measured).
+    /// Walked bottom-up: a fold that stays is itself something a fold
+    /// above can land in.
+    pub(super) fn demote_orphan_folds(&mut self) -> Vec<usize> {
+        let mut demoted = Vec::new();
+        let mut lands = false;
+        for row in (0..self.steps.len()).rev() {
+            let step = &mut self.steps[row];
+            if folds(&step.action) && !lands {
+                step.action = "pick".to_string();
+                step.shown = Self::shown_of("pick", &step.msg_subject, &step.subject);
+                demoted.push(row);
+            }
+            lands |= self.steps[row].action != "drop";
+        }
+        demoted
+    }
+}
+
+super::impl_move_notified!(RebasePlanModel, steps);
+super::impl_notify_runs!(RebasePlanModel);
+
+qml_register!(RebasePlanModel, "RebasePlanModel", singleton = false);
