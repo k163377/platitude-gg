@@ -70,6 +70,11 @@ struct Tab {
     /// filed under (`reapply_settings`).
     path: PathBuf,
     feeds: Arc<Feeds>,
+    /// The session's own door into those feeds, kept so a release or
+    /// close can shut it (`BridgeSink::retired`): the writes a close lets
+    /// run on answer late, and the feeds outlive the session they were
+    /// speaking for. `None` for a tab with no session.
+    sink: Option<Arc<sink::BridgeSink>>,
     /// Held across a release, because it is the only thing here that
     /// cannot be read again.
     draft: Draft,
@@ -81,6 +86,12 @@ pub struct Hub {
     executor: GitExecutor,
     tabs: HashMap<i32, Tab>,
     next_tab_id: i32,
+    /// Write loops of closed sessions that still had local writes to
+    /// finish — a tab released or closed mid-write lets the write run on
+    /// (`RepoSession::close`), and these are how the quit gate and the
+    /// shutdown still see it. Finished handles are pruned where they are
+    /// read (`Hub::writes_settled`).
+    parked_writes: Vec<tokio::task::JoinHandle<()>>,
     store: Store,
     settings: Settings,
     /// What the window looks like now, and what is already on disk. The

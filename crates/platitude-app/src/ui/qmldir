@@ -152,6 +152,8 @@ PaneScrollBar 1.0 PaneScrollBar.qml
 PointerWatch 1.0 PointerWatch.qml
 PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml
+QuitWaitDialog 1.0 QuitWaitDialog.qml
+WindowQuitGate 1.0 WindowQuitGate.qml
 RefChip 1.0 RefChip.qml
 RefListPopup 1.0 RefListPopup.qml
 RefBranchMenu 1.0 RefBranchMenu.qml

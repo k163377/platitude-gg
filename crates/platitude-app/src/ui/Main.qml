@@ -176,7 +176,7 @@ ApplicationWindow {
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
     function claimAutoPageAct() { return autoShotDriver.claimPageAct() }
-    function finishAutoAct() { autoShotDriver.finish() }
+    function finishAutoAct() { quitGate.yieldToRun(); autoShotDriver.finish() }
 
     WindowPerfDriver {
         window: root
@@ -195,6 +195,12 @@ ApplicationWindow {
     OpenFailedDialog {
         id: openFailedDialog
         onChooseAnother: near => root.openRepositoryPicker(near)
+    }
+
+    WindowQuitGate {
+        id: quitGate
+        window: root
+        anchors.fill: parent
     }
 
     // The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
@@ -253,12 +259,15 @@ ApplicationWindow {
             cloneDialog: dialogSeat.cloneDialog
             folderDialog: folderDialog
             settingsDialog: dialogSeat.settingsDialog
+            quitWaitDialog: quitGate.dialog
         }
     }
 
-    // Closing is the last chance: the timer will not come round again.
-    onClosing: {
-        if (!AppBackend.alreadyRunning)
+    // While git is still writing, the close is put off rather than taken (`WindowQuitGate`); a close that passes
+    // is the last chance — the timer will not come round again — so the state is reported only then.
+    onClosing: close => {
+        quitGate.gateClose(close)
+        if (close.accepted && !AppBackend.alreadyRunning)
             root.reportState()
     }
 

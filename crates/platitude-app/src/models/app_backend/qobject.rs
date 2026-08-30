@@ -138,6 +138,19 @@ impl AppBackend {
         Hub::with(|hub| i32::try_from(hub.sessions().len()).unwrap_or(i32::MAX)).unwrap_or(0)
     }
 
+    /// Whether the window may go now: nothing git was asked to write is
+    /// still queued or running (`Hub::writes_settled`). Asked when a
+    /// close is requested, and sampled by the dialog that holds the
+    /// window open while the answer is no (`QuitWaitDialog`) — a slot
+    /// over hub state, never bound (the recorded exception:
+    /// rules-refs/app-ui.md の close ゲート項). Fails open on purpose: a
+    /// missing hub means shutdown already owns the writes, and its join
+    /// is the guarantee then.
+    #[qslot]
+    fn ready_to_quit(&self) -> bool {
+        Hub::with(Hub::writes_settled).unwrap_or(true)
+    }
+
     #[qsignal]
     pub(super) fn git_state_changed(&mut self);
 

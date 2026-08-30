@@ -23,6 +23,7 @@ impl Hub {
                 executor: GitExecutor::new(),
                 tabs: HashMap::new(),
                 next_tab_id: 0,
+                parked_writes: Vec::new(),
                 store,
                 settings,
                 saved_state: state.clone(),
@@ -53,12 +54,28 @@ impl Hub {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {
             hub.flush_state();
+            let mut writes = std::mem::take(&mut hub.parked_writes);
             for (_, tab) in hub.tabs.drain() {
                 if let Some(session) = tab.session {
                     session.close();
+                    if let Some(write) = session.take_write_join() {
+                        writes.push(write);
+                    }
                 }
             }
             if let Some(rt) = hub.runtime.take() {
+                // A local write in flight is waited out, never dropped
+                // with the runtime — `kill_on_drop` would end git itself,
+                // mid-write. Normally instant: the window does not close
+                // while one is pending (`Hub::writes_settled`), so what
+                // is joined here has already ended.
+                rt.block_on(async {
+                    for write in writes {
+                        if let Err(error) = write.await {
+                            tracing::warn!(%error, "a write loop did not end cleanly");
+                        }
+                    }
+                });
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
         }
@@ -168,6 +185,7 @@ impl Hub {
                 session: None,
                 path,
                 feeds: Arc::new(Feeds::default()),
+                sink: None,
                 draft: Draft::default(),
             },
         );
@@ -197,8 +215,8 @@ impl Hub {
         tab.feeds.clear_queued_all();
         let feeds = Arc::clone(&tab.feeds);
         let applied = self.settings.defaults.clone();
-        let sink = Arc::new(BridgeSink { feeds });
-        let session = RepoSession::open(executor, handle, path, sink);
+        let sink = Arc::new(BridgeSink::new(feeds));
+        let session = RepoSession::open(executor, handle, path, Arc::clone(&sink) as _);
         apply_repo_settings(&session, &applied);
         // The saved tags flag takes the same door the settings do: the
         // page's restore runs before this session exists, so its
@@ -211,6 +229,7 @@ impl Hub {
         session.fetch_on_open();
         if let Some(tab) = self.tabs.get_mut(&id) {
             tab.session = Some(session);
+            tab.sink = Some(sink);
         }
         tracing::info!(
             tab = id,
@@ -259,7 +278,15 @@ impl Hub {
             return;
         };
         session.close();
+        // Before the feeds are let go: a write the close let run on
+        // answers late, and the next session on this tab attaches to the
+        // same feeds — the retired sink is what keeps that answer out of
+        // its page.
+        if let Some(sink) = tab.sink.take() {
+            sink.retire();
+        }
         tab.feeds.release_all();
+        self.park_writes_of(&session);
         crate::memprobe::forget(id);
         tracing::info!(tab = id, "released repository tab");
     }
@@ -285,12 +312,48 @@ impl Hub {
     /// Closes a tab and cancels its session.
     pub fn close_tab(&mut self, id: i32) {
         if let Some(tab) = self.tabs.remove(&id) {
+            if let Some(sink) = tab.sink {
+                sink.retire();
+            }
             if let Some(session) = tab.session {
                 session.close();
+                self.park_writes_of(&session);
             }
             crate::memprobe::forget(id);
             tracing::info!(tab = id, "closed repository tab");
         }
+    }
+
+    /// Keeps hold of a closed session's write loop while it still has a
+    /// local write to finish — the write outlives the close on purpose
+    /// (`RepoSession::close`), and this handle is how [`Hub::writes_settled`]
+    /// and [`Hub::shutdown`] still see it.
+    ///
+    /// Read after the close on purpose: once the cancel has landed no new
+    /// write can start, so a count of zero here means the queue is done —
+    /// a loop with nothing left ends on its own and needs no watching.
+    fn park_writes_of(&mut self, session: &Arc<RepoSession>) {
+        if session.local_writes_pending() == 0 {
+            return;
+        }
+        if let Some(write) = session.take_write_join() {
+            self.parked_writes.push(write);
+        }
+    }
+
+    /// Whether nothing git was asked to write would outlast the window:
+    /// no open tab has a local write queued or running, and every write a
+    /// closed tab left running has ended. The quit gate reads this — the
+    /// window stays until it answers true (`Main.qml`), so the join in
+    /// [`Hub::shutdown`] normally has nothing left to wait for.
+    pub fn writes_settled(&mut self) -> bool {
+        self.parked_writes.retain(|write| !write.is_finished());
+        self.parked_writes.is_empty()
+            && self.tabs.values().all(|tab| {
+                tab.session
+                    .as_ref()
+                    .is_none_or(|session| session.local_writes_pending() == 0)
+            })
     }
 
     /// Re-reads the author configuration of every open tab. Each session

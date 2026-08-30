@@ -49,9 +49,7 @@ fn asked(feeds: &Feeds) -> Vec<String> {
 #[test]
 fn a_late_answer_to_an_older_click_cannot_eat_the_one_the_screen_waits_on() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink {
-        feeds: Arc::clone(&feeds),
-    };
+    let sink = BridgeSink::new(Arc::clone(&feeds));
     sink.event(SessionEvent::RebasePlanLoaded {
         generation: 2,
         preview: preview("shallow"),
@@ -69,9 +67,7 @@ fn a_late_answer_to_an_older_click_cannot_eat_the_one_the_screen_waits_on() {
 #[test]
 fn an_older_plan_cannot_stand_in_front_of_a_newer_refusal() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink {
-        feeds: Arc::clone(&feeds),
-    };
+    let sink = BridgeSink::new(Arc::clone(&feeds));
     sink.event(SessionEvent::RebasePlanRefused {
         generation: 4,
         from: "shallow".to_string(),
@@ -101,9 +97,7 @@ fn an_older_plan_cannot_stand_in_front_of_a_newer_refusal() {
 #[test]
 fn a_drained_answer_is_not_requeued_by_a_late_duplicate() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink {
-        feeds: Arc::clone(&feeds),
-    };
+    let sink = BridgeSink::new(Arc::clone(&feeds));
     sink.event(SessionEvent::RebasePlanLoaded {
         generation: 7,
         preview: preview("shallow"),

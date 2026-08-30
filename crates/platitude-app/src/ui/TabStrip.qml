@@ -64,6 +64,9 @@ Item {
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
     signal settingsRequested()
+    /// The ☰'s Exit row. It means what the band's ✕ means, and it takes the same road (`TopBar` folds it into
+    /// `closeRequested`), so the close gate that waits a write out (`Main.qml`) has one door to stand at.
+    signal exitRequested()
     /// The grab-run moved or changed size in the strip's own layout. `Main` folds in the shifts this strip cannot see
     /// from here (the maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
@@ -335,7 +338,10 @@ Item {
             AppMenuSeparator {}
             AppMenuItem {
                 text: qsTr("Exit")
-                onTriggered: Qt.quit()
+                // Up to the window rather than `Qt.quit()`: quitting is a close of the window, and one named road
+                // (`TopBar.closeRequested` → `root.close()`) is what keeps the close gate that waits a running
+                // write out from having a second spelling (`Main.qml` onClosing).
+                onTriggered: tabStrip.exitRequested()
             }
         }
     }

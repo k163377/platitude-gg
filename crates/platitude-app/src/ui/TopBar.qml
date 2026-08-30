@@ -295,6 +295,8 @@ Rectangle {
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
             onCloneRepositoryRequested: topBar.cloneRepositoryRequested()
             onSettingsRequested: topBar.settingsRequested()
+            // The Exit row is the ✕ by another name: one signal out of the band, so the window has one close gate.
+            onExitRequested: topBar.closeRequested()
             onCaptionStripMoved: topBar.captionStripMoved()
         }
 

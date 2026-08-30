@@ -6,11 +6,37 @@ use super::*;
 /// tokio threads; must never block beyond the short feed locks.
 pub(super) struct BridgeSink {
     pub(super) feeds: Arc<Feeds>,
+    /// Set when the tab this sink fed was released or closed
+    /// (`Hub::release_tab` / `Hub::close_tab`). A write the close let run
+    /// on (`RepoSession::close`) answers minutes later — into a page that
+    /// no longer exists, or worse, into the fresh session a reselected
+    /// tab has opened over the same `Feeds`. Retired, the late answers go
+    /// nowhere instead of into somebody else's page.
+    pub(super) retired: std::sync::atomic::AtomicBool,
+}
+
+impl BridgeSink {
+    pub(super) fn new(feeds: Arc<Feeds>) -> Self {
+        Self {
+            feeds,
+            retired: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    /// No more of this session's answers reach the feeds — the page is
+    /// gone, and the feeds may already be speaking for its successor.
+    pub(super) fn retire(&self) {
+        self.retired
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 impl SessionSink for BridgeSink {
     #[expect(clippy::too_many_lines)]
     fn event(&self, event: SessionEvent) {
+        if self.retired.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         match event {
             SessionEvent::Opened { info } => {
                 let title = info
