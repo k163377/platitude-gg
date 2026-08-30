@@ -231,7 +231,13 @@ impl<T: Clone> Derived<T> {
     /// Invalidation does not wait for a slow read. It advances the
     /// generation and clears the value synchronously. A reader that then
     /// returns from git sees that its answer belonged to the old generation
-    /// and goes round again instead of restoring stale state.
+    /// and reads once more instead of restoring stale state — once, not
+    /// until it wins: every write invalidates on its way out, so a chase
+    /// held open until no write lands mid-read is unbounded, git process
+    /// after git process, with every waiter parked behind the gate. The
+    /// second reading was taken during this call and is answer enough; it
+    /// stays out of the cache, so the next caller settles the current
+    /// generation.
     pub(super) async fn get_or_try_init<E, F, Fut>(&self, mut read: F) -> Result<T, E>
     where
         F: FnMut() -> Fut,
@@ -242,6 +248,7 @@ impl<T: Clone> Derived<T> {
         }
 
         let _reading = self.reading.lock().await;
+        let mut last_chance = false;
         loop {
             let generation = {
                 let state = self.lock_state();
@@ -257,9 +264,10 @@ impl<T: Clone> Derived<T> {
                 state.value = Some(value.clone());
                 return Ok(value);
             }
-            // Something invalidated the answer while git was reading it.
-            // Keep the gate and read the current generation before waking
-            // callers that are waiting for the same answer.
+            if last_chance {
+                return Ok(value);
+            }
+            last_chance = true;
         }
     }
 
@@ -412,5 +420,30 @@ mod tests {
             .get_or_try_init(|| async { Ok::<u32, ()>(99) })
             .await;
         assert_eq!(held, Ok(2), "only the current generation was cached");
+    }
+
+    /// An answer invalidated on *every* read still comes back: the chase
+    /// after a lost generation is one read long, not open-ended — a write
+    /// lands an invalidation on its way out, so a chase held open until no
+    /// write interferes spins git processes for as long as writes keep
+    /// coming, with every waiter parked behind the single-flight gate.
+    #[tokio::test]
+    async fn an_answer_invalidated_on_every_read_is_still_an_answer() {
+        let derived = Derived::<u32>::default();
+        let calls = AtomicU64::new(0);
+        let got = derived
+            .get_or_try_init(|| {
+                let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+                derived.forget();
+                async move { Ok::<u32, ()>(call as u32) }
+            })
+            .await;
+        assert_eq!(got, Ok(2), "the second reading is the answer");
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "the chase is bounded");
+
+        let after = derived
+            .get_or_try_init(|| async { Ok::<u32, ()>(9) })
+            .await;
+        assert_eq!(after, Ok(9), "the outrun reading was not cached");
     }
 }
