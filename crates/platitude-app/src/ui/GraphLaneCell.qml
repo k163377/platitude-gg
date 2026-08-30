@@ -42,13 +42,11 @@ Item {
     readonly property real badgeCX: laneCell.nodeMidX + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth
     readonly property real badgeCY: Theme.graphRowHeight / 2 + Metrics.nodeIcon / 2
 
-    onGeometryChanged: laneCanvas.requestPaint()
-    // The badge's punched ring rides the lane canvas while the faces ride their own — a lane change, a credit change
-    // and a dim each move ink on both.
+    onGeometryChanged: ink.requestPaint()
     onNodeLaneChanged: laneCell.repaintNode()
     onCoAuthorsChanged: laneCell.repaintNode()
     onDimmedChanged: laneCell.repaintNode()
-    onAvatarChanged: nodeCanvas.requestPaint()
+    onAvatarChanged: ink.requestPaint()
     // Assigning a picture changes no history, so this role moves on rows that are otherwise untouched — and a canvas
     // repaints only when it is asked to.
     onAvatarUrlChanged: laneCell.loadFace()
@@ -58,19 +56,20 @@ Item {
     // a stash popped off the top left its box on the working-tree row, and a stash just made wore the dashed ring.
     onIsWipChanged: laneCell.repaintNode()
     onStashRefChanged: laneCell.repaintNode()
+    // The two names remain, both repainting the one canvas: what a caller asks for is that this ink be brought in
+    // line, and which parts of it live on which surface stopped being a real distinction when the surfaces merged.
     function repaintLanes() {
-        laneCanvas.requestPaint()
+        ink.requestPaint()
     }
     function repaintNode() {
-        laneCanvas.requestPaint()
-        nodeCanvas.requestPaint()
+        ink.requestPaint()
     }
-    /// How wide the two canvases below are drawn.
+    /// How wide the canvas below is drawn.
     ///
     /// **The lanes reach `fullWidth`, but only the column is ever on screen while the graph is not sent sideways**,
     /// and a canvas is an image the size of the item it is: at the reference repository that is 852 pixels held for
-    /// 252 shown, on every row that is built, and the same ratio again on every repaint (measured — the two
-    /// canvases at full width are 42.6MB of the working set once the graph has been scrolled through).
+    /// 252 shown, on every row that is built, and the same ratio again on every repaint (measured — two full-width
+    /// canvases a row were 42.6MB of the working set once the graph had been scrolled through).
     ///
     /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
     /// moving the canvas rather than repainting it (`x`), so during a pan it has to already hold what the slide will
@@ -79,27 +78,34 @@ Item {
     /// repaint itself for a canvas that is visible** (the note on `onWidthChanged` below), so the first frame of a pan
     /// is the lanes and not the old picture stretched — verified at that frame (`PG_AUTO_ACT=graph-bar`).
     ///
-    /// A function rather than one property because the two canvases stand in boxes of different widths — the faces'
-    /// clipper leans `spaceSm` further than the lanes' — and the rule about how wide to draw is one rule. It reads
-    /// only properties, so a binding on it takes the dependencies it names (`xOffset`, `fullWidth`, and whatever the
-    /// caller hands in); the rule against binding to a *method* is about the ones that measure and never notify
-    /// (app-ui.md).
+    /// It reads only properties, so a binding on it takes the dependencies it names (`xOffset`, `fullWidth`, and the
+    /// box the caller hands in); the rule against binding to a *method* is about the ones that measure and never
+    /// notify (app-ui.md).
     function inkWidth(box) {
         return laneCell.xOffset > 0 ? laneCell.fullWidth : Math.min(laneCell.fullWidth, box)
     }
 
     function loadFace() {
         if (laneCell.avatarUrl !== "")
-            nodeCanvas.loadImage(laneCell.avatarUrl)
-        nodeCanvas.requestPaint()
+            ink.loadImage(laneCell.avatarUrl)
+        ink.requestPaint()
     }
     Component.onCompleted: laneCell.loadFace()
 
+    // One clipper for the row's whole ink, and it is the faces': `spaceSm` past the column, up to where the message
+    // tick stands, so a narrowing column or a sideways pan slides the clip edge over the badge's gap instead of
+    // cutting a face mid-ink (規約 §グラフ列は最も広い所のレーンまで). The lanes stop at the column's own edge, which
+    // is a clip *inside* the paint now — one canvas holds both inks, and only the faces lean past.
+    //
+    // One canvas rather than the two this held (lanes under, faces over): a canvas is an image plus the texture it
+    // uploads, and the pair doubled both on every row that exists and again on every repaint, for two inks that are
+    // drawn in one order into one picture anyway.
     Item {
-        anchors.fill: parent
+        width: parent.width + Theme.spaceSm
+        height: parent.height
         clip: true
         InkCanvas {
-            id: laneCanvas
+            id: ink
             x: -laneCell.xOffset
             width: laneCell.inkWidth(parent.width)
             height: parent.height
@@ -110,9 +116,55 @@ Item {
             // front).
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
+            // A row coming back from the reuse pool carries a new author, so the picture it holds is loaded again
+            // before the paint that would draw it.
+            onImageLoaded: requestPaint()
+            /// One round face: the assigned picture when there is a url for it, the generated pattern otherwise. Shared
+            /// by the node and the co-author badge so the two cannot drift apart in shape or outline.
+            function face(ctx, cx, cy, radius, code, url) {
+                ctx.save()
+                ctx.beginPath()
+                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                ctx.clip()
+                if (url !== "") {
+                    if (ink.isImageLoaded(url)) {
+                        ctx.drawImage(url, cx - radius, cy - radius, 2 * radius, 2 * radius)
+                    }
+                } else {
+                    ctx.fillStyle = Theme.bgElevated
+                    ctx.fillRect(cx - radius, cy - radius, 2 * radius, 2 * radius)
+                    ctx.fillStyle = Theme.graphLane[(code >> 15) & 0x7]
+                    const inner = 2 * radius * Metrics.identiconFill
+                    const cell = inner / 5
+                    const ox = cx - inner / 2
+                    const oy = cy - inner / 2
+                    for (let row = 0; row < 5; row++) {
+                        for (let col = 0; col < 3; col++) {
+                            if ((code >> (row * 3 + col)) & 1) {
+                                ctx.fillRect(ox + col * cell, oy + row * cell, cell + 0.5, cell + 0.5)
+                                if (col < 2)
+                                    ctx.fillRect(ox + (4 - col) * cell, oy + row * cell, cell + 0.5, cell + 0.5)
+                            }
+                        }
+                    }
+                }
+                ctx.restore()
+                ctx.strokeStyle = Theme.borderStrong
+                ctx.lineWidth = Theme.borderWidth
+                ctx.beginPath()
+                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                ctx.stroke()
+            }
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
+                // ---- the lanes, and the marks that ride them, held to the column's edge ----
+                // In canvas coordinates that edge is `xOffset + laneCell.width`: the canvas is slid left by
+                // `xOffset`, and the cell is the column. This rect is the clip the lanes' own item used to be.
+                ctx.save()
+                ctx.beginPath()
+                ctx.rect(0, 0, laneCell.xOffset + laneCell.width, height)
+                ctx.clip()
                 ctx.lineWidth = Metrics.laneStroke
                 const laneCount = Theme.graphLane.length
                 const cx = function (l) { return Metrics.laneInset + l * Metrics.laneW + Metrics.laneW / 2 }
@@ -144,22 +196,11 @@ Item {
                     }
                     ctx.setLineDash([])
                 }
-                // The badge punches its ring out of the lanes as well: the faces sit on the canvas below (whose clip
-                // leans past the column), and a ring cut only there would leave the lane line showing through the gap
-                // the badge keeps around itself.
-                if (!laneCell.isWip && laneCell.stashRef === "" && laneCell.mateFace !== 0) {
-                    ctx.save()
-                    ctx.globalCompositeOperation = "destination-out"
-                    ctx.beginPath()
-                    ctx.arc(laneCell.badgeCX, laneCell.badgeCY, Theme.iconSm / 2 + Theme.borderWidth, 0, 2 * Math.PI)
-                    ctx.fill()
-                    ctx.restore()
-                }
                 // The marks below are the row's own — they dim with it while the lanes above stay lit. A lane is one
                 // line drawn across many rows: dimming it per row would break each line into a bright-and-dark ladder.
                 ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
                 // The WIP row has no commit and no author: a dashed, empty node instead of a face. A lane mark, drawn
-                // here — nothing of it leans past the column.
+                // inside the lanes' clip — nothing of it leans past the column.
                 const r = Metrics.nodeIcon / 2
                 if (laneCell.isWip) {
                     ctx.strokeStyle = Theme.textSecondary
@@ -169,6 +210,9 @@ Item {
                     ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                     ctx.stroke()
                     ctx.setLineDash([])
+                    // The context outlives this paint: a return that kept the save would hand the lanes' clip and
+                    // this row's alpha to the next paint, whose clearRect would then miss the faces' strip.
+                    ctx.restore()
                     return
                 }
                 // Stash rows draw the bare archive box of the STASHES section (NavIcon "stash", same 16-unit grid)
@@ -189,75 +233,14 @@ Item {
                     ctx.moveTo(gx + 6.5 * s, gy + 9.5 * s)
                     ctx.lineTo(gx + 9.5 * s, gy + 9.5 * s)
                     ctx.stroke()
-                }
-            }
-        }
-    }
-    // The faces' own clipper: `spaceSm` past the column, up to where the message tick stands, so a narrowing column or
-    // a sideways pan slides the clip edge over the badge's gap instead of cutting a face mid-ink (規約 §グラフ列は最も
-    // 広い所のレーンまで).
-    Item {
-        width: parent.width + Theme.spaceSm
-        height: parent.height
-        clip: true
-        InkCanvas {
-            id: nodeCanvas
-            x: -laneCell.xOffset
-            width: laneCell.inkWidth(parent.width)
-            height: parent.height
-            // Same resize rule as the lane canvas above.
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            // A row coming back from the reuse pool carries a new author, so the picture it holds is loaded again
-            // before the paint that would draw it.
-            onImageLoaded: requestPaint()
-            /// One round face: the assigned picture when there is a url for it, the generated pattern otherwise. Shared
-            /// by the node and the co-author badge so the two cannot drift apart in shape or outline.
-            function face(ctx, cx, cy, radius, code, url) {
-                ctx.save()
-                ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
-                ctx.clip()
-                if (url !== "") {
-                    if (nodeCanvas.isImageLoaded(url)) {
-                        ctx.drawImage(url, cx - radius, cy - radius, 2 * radius, 2 * radius)
-                    }
-                } else {
-                    ctx.fillStyle = Theme.bgElevated
-                    ctx.fillRect(cx - radius, cy - radius, 2 * radius, 2 * radius)
-                    ctx.fillStyle = Theme.graphLane[(code >> 15) & 0x7]
-                    const inner = 2 * radius * Metrics.identiconFill
-                    const cell = inner / 5
-                    const ox = cx - inner / 2
-                    const oy = cy - inner / 2
-                    for (let row = 0; row < 5; row++) {
-                        for (let col = 0; col < 3; col++) {
-                            if ((code >> (row * 3 + col)) & 1) {
-                                ctx.fillRect(ox + col * cell, oy + row * cell, cell + 0.5, cell + 0.5)
-                                if (col < 2)
-                                    ctx.fillRect(ox + (4 - col) * cell, oy + row * cell, cell + 0.5, cell + 0.5)
-                            }
-                        }
-                    }
-                }
-                ctx.restore()
-                ctx.strokeStyle = Theme.borderStrong
-                ctx.lineWidth = Theme.borderWidth
-                ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
-                ctx.stroke()
-            }
-            onPaint: {
-                const ctx = getContext("2d")
-                ctx.clearRect(0, 0, width, height)
-                // The WIP ring and the stash box are lane marks, drawn on the canvas above; this one is the faces
-                // alone.
-                if (laneCell.isWip || laneCell.stashRef !== "")
+                    // Same discipline as the ring above: the save may not outlive the paint.
+                    ctx.restore()
                     return
+                }
+                // ---- the faces, leaning as far as the clipper goes ----
+                ctx.restore()
                 // The node is the row's own — it dims with the row while the lanes stay lit.
                 ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
-                const midY = height / 2
-                const r = Metrics.nodeIcon / 2
                 // The commit node is the author's picture where they were given one, and their identicon otherwise
                 // (5x5, mirrored; what stands in for the avatar services this application cannot use). The pattern uses
                 // only the inner part of the circle so the clip cuts less of it. A commit somebody shares steps its
@@ -267,12 +250,14 @@ Item {
                 const shared = laneCell.mateFace !== 0
                 const ax = shared ? laneCell.nodeMidX - Theme.borderWidth : laneCell.nodeMidX
                 const ay = shared ? midY - Theme.borderWidth : midY
-                nodeCanvas.face(ctx, ax, ay, r, laneCell.avatar, laneCell.avatarUrl)
+                ink.face(ctx, ax, ay, r, laneCell.avatar, laneCell.avatarUrl)
                 if (shared) {
                     const br = Theme.iconSm / 2
-                    // Punched out of what is already drawn, so the smaller face reads as being in front of the node
-                    // rather than blended into it. At full strength whatever the row's is: this takes pixels away, and
-                    // a dimmed eraser would leave the author's face showing through the badge.
+                    // Punched out of what is already drawn — the author's face and the lane ink under it alike — so
+                    // the smaller face reads as being in front of the node rather than blended into it, and no lane
+                    // line shows through the gap the badge keeps around itself. At full strength whatever the row's
+                    // is: this takes pixels away, and a dimmed eraser would leave the author's face showing through
+                    // the badge.
                     ctx.save()
                     ctx.globalAlpha = 1
                     ctx.globalCompositeOperation = "destination-out"
@@ -280,7 +265,7 @@ Item {
                     ctx.arc(laneCell.badgeCX, laneCell.badgeCY, br + Theme.borderWidth, 0, 2 * Math.PI)
                     ctx.fill()
                     ctx.restore()
-                    nodeCanvas.face(ctx, laneCell.badgeCX, laneCell.badgeCY, br, laneCell.mateFace, "")
+                    ink.face(ctx, laneCell.badgeCX, laneCell.badgeCY, br, laneCell.mateFace, "")
                 }
             }
         }
