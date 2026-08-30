@@ -98,6 +98,7 @@ pub use graph_refresh::{
 };
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
+use ops_integrate::PlanRead;
 pub use pass_watch::PassStep;
 use pass_watch::{PassStepHook, PassWatch};
 use print::RowPrint;

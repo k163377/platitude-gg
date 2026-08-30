@@ -50,6 +50,7 @@ impl RepoSession {
             lex_cache: Mutex::new(None),
             log_cancel: Mutex::new(None),
             details_read: Mutex::new(DetailsRead::default()),
+            plan_read: Mutex::new(PlanRead::default()),
             graph_passes: Arc::default(),
             pass_step: Mutex::new(None),
             pass_fault: Mutex::new(None),

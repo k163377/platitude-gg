@@ -4,6 +4,39 @@
 use super::build::{Replay, Rewrite, rewrite_carrying, run_plan, standing_name};
 use super::*;
 
+/// Numbers every plan ask this process makes, so an answer can say which
+/// click it belongs to.
+///
+/// Process-global rather than per-session for the reason the details
+/// read's is ([`super::details_read`]): the feed carrying these answers
+/// outlives the session that filled it, and a counter starting again at 1
+/// would leave a closed session's answer sitting above everything the new
+/// one asks.
+static NEXT_PLAN_ASK: AtomicU64 = AtomicU64::new(1);
+
+/// Latest-request ownership for the interactive-rebase plan — the shape
+/// [`super::details_read::DetailsRead`] has for commit details, kept
+/// separate rather than shared because two are not yet three
+/// (.claude/rules/structure.md §共通化).
+#[derive(Default)]
+pub(super) struct PlanRead {
+    cancel: Option<CancellationToken>,
+}
+
+impl PlanRead {
+    /// Takes the next number and cancels whatever ask held the slot.
+    /// Called before the task is spawned, so the number is settled in the
+    /// order the clicks were made rather than the order they finish.
+    fn begin(&mut self, parent: &CancellationToken) -> (u64, CancellationToken) {
+        let generation = NEXT_PLAN_ASK.fetch_add(1, Ordering::Relaxed);
+        let cancel = parent.child_token();
+        if let Some(previous) = self.cancel.replace(cancel.clone()) {
+            previous.cancel();
+        }
+        (generation, cancel)
+    }
+}
+
 impl RepoSession {
     /// Says a write came to rest on a stop rather than on a commit, when
     /// that is what git did ([`SessionEvent::WriteStopped`]).
@@ -121,27 +154,52 @@ impl RepoSession {
     /// [`SessionEvent::RebasePlanRefused`] where the range cannot be
     /// replayed. A read like [`RepoSession::check_publish`] — nothing is
     /// touched, so it stays off the write queue.
+    ///
+    /// **One ask at a time** ([`PlanRead`]). The screen has one plan, so
+    /// a second right-click is not a second question but a replacement
+    /// for the first: the earlier read is cancelled where it stands —
+    /// `from^..HEAD` off a deep commit is a walk of the whole branch, and
+    /// leaving it running is a walk nobody will read — and its answer, if
+    /// it was already past the point of stopping, is one the numbering
+    /// keeps from overtaking the answer the screen is waiting for.
     pub fn ask_rebase_plan(self: &Arc<Self>, from: String) {
+        let (generation, cancel) = relock(&self.plan_read).begin(&self.root_cancel);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let Some(workdir) = s.workdir() else {
                 return;
             };
-            let cancel = s.root_cancel.clone();
-            match rebase_plan::preview(&s.executor, &workdir, &from, &cancel).await {
+            if cancel.is_cancelled() {
+                return;
+            }
+            let answer = rebase_plan::preview(&s.executor, &workdir, &from, &cancel).await;
+            // A superseded read says nothing at all: the click it answers
+            // is one the screen has already left behind, and its failure
+            // is this end's own cancellation rather than anything the
+            // error surface should carry.
+            if cancel.is_cancelled() {
+                return;
+            }
+            match answer {
                 Ok(rebase_plan::PlanAnswer::Plan(preview)) => {
-                    s.sink
-                        .event(SessionEvent::RebasePlanLoaded { preview: *preview });
+                    s.sink.event(SessionEvent::RebasePlanLoaded {
+                        generation,
+                        preview: *preview,
+                    });
                 }
                 Ok(rebase_plan::PlanAnswer::Refused(refusal)) => {
-                    s.sink
-                        .event(SessionEvent::RebasePlanRefused { from, refusal });
+                    s.sink.event(SessionEvent::RebasePlanRefused {
+                        generation,
+                        from,
+                        refusal,
+                    });
                 }
                 Err(error) => {
                     // Both halves: the failure itself to the shared error
                     // surface, and word to the asker so its waiting state
                     // comes down rather than loading forever.
-                    s.sink.event(SessionEvent::RebasePlanFailed { from });
+                    s.sink
+                        .event(SessionEvent::RebasePlanFailed { generation, from });
                     s.fail("rebase-plan", error);
                 }
             }

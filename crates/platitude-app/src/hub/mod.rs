@@ -30,6 +30,8 @@ use qtbridge::QmlMethodInvoker;
 mod details_tests;
 mod feed;
 mod msg;
+#[cfg(test)]
+mod plan_tests;
 mod prefs;
 mod sink;
 mod tabs;

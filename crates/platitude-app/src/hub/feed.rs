@@ -159,7 +159,8 @@ pub struct Feeds {
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,
     /// The interactive-rebase screen's plan rows (one consumer, the plan
-    /// model; answers replace one another the way status snapshots do).
+    /// model; one pending answer, ordered by the ask the way the details
+    /// feed is — `Feed::push_latest`).
     pub plan: Arc<Feed<PlanMsg>>,
 }
 

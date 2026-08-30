@@ -285,16 +285,34 @@ impl SessionSink for BridgeSink {
                     signer: signature.signer,
                 });
             }
-            SessionEvent::RebasePlanLoaded { preview } => {
-                self.feeds.plan.push_replace(PlanMsg::Loaded { preview });
-            }
-            SessionEvent::RebasePlanRefused { from, refusal } => {
+            // Ordered by the ask rather than by arrival, the way the
+            // details feed is and for the same reason: two right-clicks a
+            // moment apart need not finish in that order, and a plain
+            // replace lets the *older* answer be the one waiting when the
+            // consumer drains — which the model then drops as stale
+            // (`asked_from`), leaving the newer click unanswered and the
+            // screen waiting on a plan that can no longer arrive.
+            SessionEvent::RebasePlanLoaded {
+                generation,
+                preview,
+            } => {
                 self.feeds
                     .plan
-                    .push_replace(PlanMsg::Refused { from, refusal });
+                    .push_latest(generation, PlanMsg::Loaded { preview });
             }
-            SessionEvent::RebasePlanFailed { from } => {
-                self.feeds.plan.push_replace(PlanMsg::Failed { from });
+            SessionEvent::RebasePlanRefused {
+                generation,
+                from,
+                refusal,
+            } => {
+                self.feeds
+                    .plan
+                    .push_latest(generation, PlanMsg::Refused { from, refusal });
+            }
+            SessionEvent::RebasePlanFailed { generation, from } => {
+                self.feeds
+                    .plan
+                    .push_latest(generation, PlanMsg::Failed { from });
             }
             SessionEvent::PublishChecked { range, state } => {
                 self.feeds.tab.push(TabMsg::Publish {

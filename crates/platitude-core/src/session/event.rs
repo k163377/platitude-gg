@@ -181,15 +181,20 @@ pub enum SessionEvent {
         state: publish::PublishState,
     },
     /// Answer to [`RepoSession::ask_rebase_plan`]: the rows the
-    /// interactive-rebase screen opens over. `from` is echoed back because
-    /// the click that asked may be behind another by the time this lands.
+    /// interactive-rebase screen opens over. `from` is echoed back (inside
+    /// the preview) because the click that asked may be behind another by
+    /// the time this lands, and `generation` says which ask it answers —
+    /// the asks are numbered, and two clicks a moment apart need not
+    /// finish in the order they were made.
     RebasePlanLoaded {
+        generation: u64,
         preview: rebase_plan::PlanPreview,
     },
     /// The same question answered with a refusal of this end's own: the
     /// range cannot be replayed, and the screen never opens. The wording
     /// is the screen's to write, so what travels is the kind.
     RebasePlanRefused {
+        generation: u64,
         from: String,
         refusal: rebase_plan::PlanRefusal,
     },
@@ -198,6 +203,7 @@ pub enum SessionEvent {
     /// this one exists so the model asking can put its waiting state
     /// down — silence would leave it loading forever.
     RebasePlanFailed {
+        generation: u64,
         from: String,
     },
     /// Whether anything besides the branch HEAD is on still reaches its
