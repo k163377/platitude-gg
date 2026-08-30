@@ -12,8 +12,8 @@ Item {
     property int frameBefore: 0
     readonly property bool expectsPage: AppBackend.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
-    // QML ScreenInfo has no refreshRate. Match its name to the runner's OS
-    // mode snapshot; never infer the panel rate from measured frameSwapped.
+    // ScreenInfo names can be friendly labels, not OS device IDs. The runner
+    // separately records the native window's monitor; never infer its Hz from fps.
     readonly property string displayInfo: !AppBackend.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
         screen: window.screen.name, model: window.screen.model, manufacturer: window.screen.manufacturer,
         screenX: window.screen.virtualX, screenY: window.screen.virtualY,

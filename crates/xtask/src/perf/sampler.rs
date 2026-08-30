@@ -21,8 +21,12 @@ pub(super) fn sample_memory(
     mut csv: std::fs::File,
 ) -> std::thread::JoinHandle<Result<(u64, u64), String>> {
     std::thread::spawn(move || {
-        writeln!(csv, "parent_elapsed_us,working_set_bytes,private_bytes")
-            .map_err(|e| e.to_string())?;
+        let display_column = if cfg!(windows) { ",display_name" } else { "" };
+        writeln!(
+            csv,
+            "parent_elapsed_us,working_set_bytes,private_bytes{display_column}"
+        )
+        .map_err(|e| e.to_string())?;
         #[cfg(windows)]
         {
             windows_sampler(pid, deadline, started, &mut csv)
@@ -66,12 +70,19 @@ fn windows_sampler(
     // `Refresh()` makes the held Process object re-read its counters;
     // without it every iteration would return the first sample.
     let script = format!(
-        "$ErrorActionPreference='SilentlyContinue';\
-         $p=Get-Process -Id {pid};\
+        "$ErrorActionPreference='Stop';\
+         Add-Type -AssemblyName System.Windows.Forms;\
+         $p=Get-Process -Id {pid} -ErrorAction SilentlyContinue;\
          $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
+           try {{\
            $p.Refresh();\
-           Write-Output \"$($p.WorkingSet64) $($p.PrivateMemorySize64)\";\
+           $display='unknown';\
+           if($p.MainWindowHandle -ne [IntPtr]::Zero){{\
+             $display=[System.Windows.Forms.Screen]::FromHandle($p.MainWindowHandle).DeviceName;\
+           }};\
+           Write-Output \"$($p.WorkingSet64) $($p.PrivateMemorySize64) $display\";\
+           }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}"
     );
@@ -84,18 +95,20 @@ fn windows_sampler(
     let mut peak = (0, 0);
     let mut error = None;
     for line in BufReader::new(stdout).lines() {
-        let pair = match line {
-            Ok(line) => parse_pair(&line),
+        let line = match line {
+            Ok(line) => line,
             Err(e) => {
                 error = Some(e.to_string());
                 break;
             }
         };
+        let pair = parse_pair(&line);
+        let display = line.split_whitespace().nth(2).unwrap_or("unknown");
         peak.0 = peak.0.max(pair.0);
         peak.1 = peak.1.max(pair.1);
         if let Err(e) = writeln!(
             csv,
-            "{},{},{}",
+            "{},{},{},{display}",
             started.elapsed().as_micros(),
             pair.0,
             pair.1

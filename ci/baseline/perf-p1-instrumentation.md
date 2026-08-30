@@ -10,6 +10,9 @@
   API未対応のOSや採取失敗は `unavailable` と明記し、0Hzや60Hzで埋めない。
 - `app.log` の `perf_display` は実際のQMLウィンドウの画面名、model/manufacturer、DPR、論理DPI、
   画面と窓の論理座標・寸法、visibilityを、開始・変化・完了で記録する。通常起動では有効にならない。
+- Windowsの `memory.csv` は、自分が起動したPIDの `MainWindowHandle` に対応する画面IDを
+  `display_name` 列へ採取する。Qtのfriendly nameとは別であり、このIDをOSのHzと照合する。
+  HWNDがまだ無い時は `unknown` と記録し、primaryのHzで代用しない。
 - `--trace-frames` は12秒窓のフレーム到着をアプリ共通の単調時計で保持し、窓が閉じてから
   `perf_frame index=... clock_ms=... interval_ms=...` を時系列順に出力する。
   先頭間隔はスクロール開始から最初の通知まで。`perf_scroll_begin` / `perf_viewport` も同じ時計を使う。
@@ -23,8 +26,9 @@
 [EnumDisplaySettingsW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsw)
 の現在設定を使う。`DEVMODEW.dmDisplayFrequency` は整数で、0/1は既定値を表し具体的Hzではないためnull扱い。
 小数Hz・VRR・実際のパネル走査は計測していない。
-[QML Screen](https://doc.qt.io/qt-6.10/qml-qtquick-screen.html) が公開する情報にはHzがないため、
-その画面名をOSの採取結果と対応付ける。実測FPSからHzを逆算していない。
+[QML Screen](https://doc.qt.io/qt-6.10/qml-qtquick-screen.html) が公開する情報にはHzがない。
+実機ではQtの名前が `PL2492H (2)`、Windowsが `\\.\DISPLAY1` 等の形式で異なるため、
+名前同士で結合しない。PIDのウィンドウから得るOSのIDを経由する。実測FPSからHzを逆算していない。
 
 前後snapshotの一致だけでは、途中で設定を変更して元に戻したケースを検出できない。
 QML側は画面・DPI・窓位置等の変化を記録するが、Hzだけの一時変更は残課題。
@@ -72,3 +76,28 @@ cargo xtask perf --repo C:/Users/wrongwrong/IdeaProjects/kotlin --no-select --ru
 ログは `target/perf/p1-instrumentation-check/check-logs` に退避し、過去runのログと分離した。
 アプリ共通時計からフレーム間隔への変換と、要求した系列の欠落を拒否するテストも通る。
 offscreenの画面名が空であることをログで確認し、ここでの値を実機性能値には使っていない。
+
+## 最初の実機診断と、次に切り分ける区間
+
+`cc5d8eb6` のrelease + memprobeで上の例を実行した。ソースはクリーン、Kotlin HEADは
+`db1bc5055f24c7227a7d2cc37d058432007d288f`、refsは54,268本。
+このタスクのビルド／テストとの同時実行はしていない。
+`target/perf/p1-frame-diagnostic` に各runのログ、memory.csv、抽出したframes.csv、前後画面設定、
+exe hash、repo/source情報を保存した。exe SHA-256は
+`C87A46443F6AA93A399A9162ECB475A2094BDE45F7E75D81B7D2B94E30423172`。
+
+| run | frame行数 | 最長間隔 | スクロール開始からその間隔の開始／終了 |
+|---|---|---|---|
+| 0（cold、除外） | 1,160 | 292.564ms | 7,725.421 / 8,017.985ms |
+| 1 | 1,149 | 190.034ms | 7,720.131 / 7,910.166ms |
+
+各系列のindex連続性・時刻の単調性・件数を確認した。両runとも100ms超は1件。
+通常の間隔が約10msであることと、約7.72秒後に始まる長い間隔は別の観測として扱う。
+この2回だけでは同じ原因だと確定しない。該当区間のviewport/行、UI適用・QML処理、CPU/待機の
+トレースを重ね、同じ行を再訪した場合と新しい行の場合、memprobeを外した場合を比べる。
+
+Qt側では起動直後に `PL2470H` から `PL2492H (2)` へ移り、スクロール窓の間は
+後者、DPR=1、論理DPI=96、窓1440×900、位置(-1679,66)を記録した。
+前後のOS設定は一致したが、この初回版はfriendly nameとOS IDを結合できない。
+そのため後続修正でPIDのウィンドウから画面IDを採るようにした。
+初回runのFPSやメモリを、比較可能性や性能予算の達成証拠として扱わない。
