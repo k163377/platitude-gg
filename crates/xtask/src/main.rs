@@ -19,6 +19,7 @@ mod shots;
 mod structure;
 mod usage;
 mod verify;
+mod waits;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -31,6 +32,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("check") => check::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),
+        Some("waits") => waits::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {
             // The path is the output: scripts consume `(cargo xtask ...)`.
             println!("{}", path.display());

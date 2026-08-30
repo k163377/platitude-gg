@@ -58,6 +58,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // builds nothing and answers in a second or two, and a line ceiling
         // is not worth finding out about after ten minutes of compiling.
         words(&["cargo", "xtask", "structure"]),
+        // Same reasoning, same cost: a naked wait is a hang the suite
+        // cannot name, and this answers before anything compiles.
+        words(&["cargo", "xtask", "waits"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
         words(&[
             "cargo",

@@ -54,6 +54,13 @@ commands:
       raised to warn in the workspace lints, and an existing long function
       carries #[expect(clippy::too_many_lines)] until it is cut up.
 
+  waits
+      Every await in tests/it that resolves through a channel no Patience
+      watches — a tracked outcome(), a session boundary wait, a ticker
+      step — must sit under support::wait::bounded or an explicit
+      timeout, so a silent hang fails by test name instead of sitting
+      until the CI kill. Second step of `check`; subsecond on its own.
+
 ";
 
 // No `"\` continuation on the opening line (see `demo_repo`).
