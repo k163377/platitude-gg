@@ -6,6 +6,14 @@ use std::time::Duration;
 use crate::report::{ReportKind, WriteReport};
 
 /// Errors produced while locating, spawning or running the git CLI.
+///
+/// **These sentences are read as they are written.** Every one of them
+/// reaches a screen — the error line, the notice bar, the command log,
+/// the band's state card — and nothing on the way renders markup, so a
+/// command wrapped in backticks arrives with the backticks in it
+/// (デザイン規約 §git 用語のコード表記: the code chip is a menu row's form,
+/// and it is a chip rather than punctuation). Punctuate them the way a
+/// sentence is punctuated, and leave the marking up to whoever draws them.
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
     /// The git executable could not be found on PATH.
@@ -16,7 +24,7 @@ pub enum GitError {
     },
 
     /// Spawning the subprocess failed for a reason other than a missing binary.
-    #[error("failed to spawn `{command}`: {source}")]
+    #[error("failed to spawn {command}: {source}")]
     Spawn {
         command: String,
         #[source]
@@ -24,7 +32,7 @@ pub enum GitError {
     },
 
     /// I/O failure while talking to a running subprocess.
-    #[error("i/o error while running `{command}`: {source}")]
+    #[error("i/o error while running {command}: {source}")]
     Io {
         command: String,
         #[source]
@@ -33,7 +41,7 @@ pub enum GitError {
 
     /// The command ran but exited with a non-zero status. `stderr` is passed
     /// through untouched: the app presents git's own message to the user.
-    #[error("`{command}` exited with code {code}: {stderr}")]
+    #[error("{command} exited with code {code}: {stderr}")]
     Failed {
         command: String,
         code: i32,
@@ -55,7 +63,7 @@ pub enum GitError {
     /// Boxed because every `Result<_, GitError>` in the crate carries the
     /// widest variant, and four more strings here would put that cost on
     /// reads that can never be refused by anybody (`result_large_err`).
-    #[error("`{command}` exited with code {code}: {stderr}")]
+    #[error("{command} exited with code {code}: {stderr}")]
     Reported {
         command: String,
         code: i32,
@@ -64,11 +72,11 @@ pub enum GitError {
     },
 
     /// The command exceeded its time budget and was killed.
-    #[error("`{command}` timed out after {timeout:?}")]
+    #[error("{command} timed out after {timeout:?}")]
     TimedOut { command: String, timeout: Duration },
 
     /// The command was cancelled (repository switch, app shutdown, ...).
-    #[error("`{command}` was cancelled")]
+    #[error("{command} was cancelled")]
     Cancelled { command: String },
 
     /// The given path is not inside a git repository (or does not exist).
@@ -85,7 +93,7 @@ pub enum GitError {
     },
 
     /// The command succeeded but printed something we cannot interpret.
-    #[error("unexpected output from `{command}`: {message}")]
+    #[error("unexpected output from {command}: {message}")]
     UnexpectedOutput { command: String, message: String },
 
     /// A message written here rather than passed through from git: a value
