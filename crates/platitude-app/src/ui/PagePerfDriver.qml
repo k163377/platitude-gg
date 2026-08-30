@@ -62,8 +62,15 @@ Item {
                 driver.fail("none-selected-a-commit")
                 return
             }
+            // ListView gives its first row a current index even though the
+            // page never activated a commit. Clear that visual selection too.
+            const hadCurrent = graphPane.view.currentIndex >= 0
+            graphPane.setCurrentRow(-1)
             AppBackend.report("perf_selection mode=none oid=none")
-            driver.afterInteraction()
+            if (hadCurrent)
+                driver.waitFrame("none-frame")
+            else
+                driver.afterInteraction()
             return
         }
         let row = -1
@@ -191,6 +198,11 @@ Item {
             AppBackend.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true")
             driver.stage = "ready"
             driver.tick()
+        } else if (driver.stage === "none-frame") {
+            if (graphPane.view.currentIndex >= 0)
+                driver.fail("none-retained-current-row")
+            else
+                driver.afterInteraction()
         } else if (driver.stage === "details-frame") {
             driver.afterDetails()
         } else if (driver.stage === "diff-frame") {
