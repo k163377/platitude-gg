@@ -24,6 +24,9 @@ ColumnLayout {
     property bool canSave: false
     /// A caret is in one of the boxes.
     property bool editing: false
+    /// The boxes are feeding a rebase plan's `reword` row rather than an amend: the press stores the words in the
+    /// plan and runs nothing (`RebasePlanModel.setMessage`).
+    property bool intoPlan: false
     /// Who will be recorded as having made this commit once it is written back — **not** who wrote it. git keeps the
     /// author and replaces the committer with whoever runs the rewrite (measured: Alice's commit amended by Bob comes
     /// back `A=Alice C=Bob`), which is the one thing about this button a reader cannot see anywhere else on the pane —
@@ -60,8 +63,11 @@ ColumnLayout {
         tone: Theme.textPrimary
         frameColor: saveButton.enabled ? Theme.accent : Theme.borderDefault
         activeFocusOnTab: true
-        phraseHead: "commit --amend"
-        text: qsTr("the message")
+        // Feeding a rebase plan's `reword` row instead, the chip is that row's own verb: nothing runs on this press —
+        // the words go into the plan, and the plan's one button is what runs (§git 用語のコード表記 — todo 動詞は
+        // コマンドと同じに扱う).
+        phraseHead: actions.intoPlan ? "reword" : "commit --amend"
+        text: actions.intoPlan ? qsTr("in the plan") : qsTr("the message")
         phraseFace: actions.committerFace
         phraseFaceUrl: actions.committerFaceUrl
         phraseSignature: actions.signature

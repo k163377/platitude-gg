@@ -51,6 +51,9 @@ Item {
     signal tagHereRequested(string oidHex)
     signal squashRequested(string oidHex)
     signal dropRequested(string oidHex)
+    /// The full interactive rebase, opened as a plan over `from^..HEAD` — nothing runs until its own button is
+    /// pressed, so the row is a plain click however much the plan may come to take away.
+    signal planRequested(string oidHex)
     signal resetRequested(string mode)
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
@@ -181,6 +184,19 @@ Item {
                 rowMenu.dropRequested(rowMenu.oid)
             }
         }
+        // The whole range from this commit up, opened as a plan rather than run: verbs, reorders and rewords are
+        // composed over the graph and nothing touches the repository until the plan's own button — so this row asks
+        // for nothing, whatever the plan may come to take away (デザイン規約 §履歴を合流させる / P3-確認事項 §A). The
+        // clicked commit is the oldest one *included*, and the plan shows the base it lands on as its own last row —
+        // where the products disagree ("from here" in and out), showing the base is what settles it.
+        AppMenuItem {
+            code: "rebase --interactive"
+            //: Follows the `rebase --interactive` chip: "from here up".
+            text: qsTr("from here up")
+            note: rowMenu.published ? Words.rewritesPushed : ""
+            offered: rowMenu.canEditHistory
+            onTriggered: rowMenu.planRequested(rowMenu.oid)
+        }
         AppMenuSeparator {}
         AppMenuItem {
             code: "merge"
@@ -193,7 +209,7 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             text: qsTr("%1 onto it").arg(rowMenu.branch)
-            note: rowMenu.published ? qsTr("rewrites pushed commits") : ""
+            note: rowMenu.published ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.repoTab.rebase(rowMenu.oid, "", true)
         }

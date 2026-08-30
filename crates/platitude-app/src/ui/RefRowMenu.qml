@@ -214,7 +214,7 @@ Item {
             offered: (refRowMenu.kind === "branch" || refRowMenu.kind === "remote") && refRowMenu.canIntegrateFrom
             // Said, not asked (要望: rewriting a pushed commit shows a warning). Published = reachable from a
             // remote-tracking ref, only as fresh as the last fetch.
-            note: refRowMenu.rebasePublished ? qsTr("rewrites pushed commits") : ""
+            note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)
         }
         // A stash has one thing done to it and nothing to nest: it is not a branch and not a tag, so its drop stays on

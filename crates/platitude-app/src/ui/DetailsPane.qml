@@ -34,6 +34,16 @@ ColumnLayout {
     /// git keeps the author and replaces the committer.
     property int committerFace: -1
     property string committerFaceUrl: ""
+    /// The boxes are a rebase plan's `reword` input right now — the save row wears that verb instead of the amend's
+    /// command, since nothing runs on the press (`RepoPage.planReword`).
+    property bool intoPlan: false
+    /// The plan's stored reword for one commit, so a row revisited opens on
+    /// its draft rather than on the message it is replacing — the boxes
+    /// filled from the commit would offer to save the original back over
+    /// the draft. Empty oid while no plan holds one.
+    property string planDraftOid: ""
+    property string planDraftSubject: ""
+    property string planDraftBody: ""
     property bool signsCommits: false
     property string signingTip: ""
     /// The badge was pressed: the settings card opens knowing whom it is about.
@@ -164,13 +174,20 @@ ColumnLayout {
 
     /// Adopt the model's message whenever it moves to another commit.
     /// Nothing else can change a message in place — a different message is
-    /// a different commit — so an untouched box needs no other cue.
+    /// a different commit — so an untouched box needs no other cue. A plan
+    /// row with a stored reword opens on the draft instead, and the draft
+    /// is the resting text: it is already in the plan, so there is nothing
+    /// unsaved about it.
     function syncMessage() {
         if (detailsPane.details.shaHex === detailsPane.baseOid)
             return
         detailsPane.baseOid = detailsPane.details.shaHex
-        detailsPane.baseSubject = detailsPane.details.messageSubject
-        detailsPane.baseBody = detailsPane.details.messageBody
+        const drafted = detailsPane.details.shaHex !== ""
+            && detailsPane.details.shaHex === detailsPane.planDraftOid
+            && (detailsPane.planDraftSubject !== "" || detailsPane.planDraftBody !== "")
+        detailsPane.baseSubject = drafted ? detailsPane.planDraftSubject
+                                          : detailsPane.details.messageSubject
+        detailsPane.baseBody = drafted ? detailsPane.planDraftBody : detailsPane.details.messageBody
         msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
     }
     /// Put the commit's own message back.
@@ -395,6 +412,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     dirty: detailsPane.messageDirty
                     editing: detailsPane.editable && msgEditor.anyFocused
+                    intoPlan: detailsPane.intoPlan
                     published: detailsPane.published
                     busy: detailsPane.busy
                     canSave: msgEditor.subjectText.trim() !== ""

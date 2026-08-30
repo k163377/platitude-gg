@@ -122,6 +122,34 @@ Rectangle {
             // Someone takes the slack, or the engine centres what it cannot fill.
             Item { Layout.fillWidth: true }
         }
+        // The stop that was asked for: the plan's own `edit` step. Its tree is as clean as the emptied-commit stop's,
+        // so without this line the card cannot say why it is standing — and here `--skip` takes the commit out, which
+        // is why the row above went back to a hold (offers::skip_is_free, P3-確認事項 §A).
+        RowLayout {
+            visible: opExitCard.workTree.opEditing
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spaceXs
+            Layout.bottomMargin: Theme.spaceXs
+            spacing: Theme.spaceXs
+            CodeChip {
+                word: "edit"
+                size: Theme.fontSm
+                tint: Theme.textSecondary
+                Layout.alignment: Qt.AlignVCenter
+            }
+            Label {
+                Layout.fillWidth: true
+                // The oid is abbreviated as git wrote it (`rebase-merge/stopped-sha`); HEAD sits on that commit, so
+                // the boxes above are already the tool (offers::message_edit の edit 停止の免除).
+                text: opExitCard.workTree.opEditOid !== ""
+                      ? qsTr("Stopped on purpose at %1 — amend it above, then continue")
+                            .arg(opExitCard.workTree.opEditOid.substring(0, 8))
+                      : qsTr("Stopped on purpose — amend the commit above, then continue")
+                elide: Text.ElideRight
+                font.pixelSize: Theme.fontSm
+                color: Theme.textSecondary
+            }
+        }
         // **A merge does not get one.** `--continue` there *is* the commit — same tree, same two parents, same
         // message, same hooks as pressing the button above this card (measured, 2.55) — so the card would be offering a
         // second door onto the seat it is standing under, and the one with no message box attached. Everything else

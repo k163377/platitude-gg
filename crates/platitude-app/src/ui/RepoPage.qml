@@ -412,9 +412,94 @@ Item {
     // One bar over the graph (デザイン規約 §可否・警告の出し場所); Escape, another ask or a click anywhere else walks away from it.
     // Only questions about a ref reach it: everything that takes one named thing away is held down on the row or button
     // that names it (デザイン規約 §長押し).
-    /// Ctrl+F: the find bar belongs to the graph.
+    /// Ctrl+F: the find bar belongs to the graph — which the plan is standing over while one is open, so the press
+    /// is quietly refused there, the way a standing question already refuses it (`GraphPane.startFind`).
     function startFind() {
+        if (planModel.active)
+            return
         graphPane.startFind()
+    }
+
+    // ---- the interactive-rebase plan ---------------------------------
+    // Composing runs nothing; the run is the one queued write, pinned by the model to the tip the plan opened on.
+    // While the plan stands, the page holds down what could move the history under it from inside this window (the
+    // sidebar, find, the toolbar's own writes — TopBar reads `planActive`); what it cannot hold — a terminal, another
+    // session — the model answers by putting the plan away when the tip moves (`noteHead` below).
+    readonly property bool planActive: planModel.active
+    /// The plan model itself — an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property var rebasePlan: planModel
+    /// The rewrite warning's count for the plan's own range: the shared publish slot, read only while it answers
+    /// this very range (the slot rule — 聞いた範囲の答えだけを読む).
+    readonly property int planPushed: planModel.active && repoTab.publishRange === planModel.publishRange
+                                      ? repoTab.publishPublished : 0
+    /// Whether the details pane's boxes are, right now, a plan row's reword input: the plan stands, the row the
+    /// selection sits on carries the verb, **and the pane is showing that very commit** — anything else that moves
+    /// the selection (a shortcut, a landing) must not leave typing routed into a row whose message is not on
+    /// screen. The model owns which row it is, so a reorder cannot detach the two.
+    readonly property bool planReword: planModel.active && planModel.selectedAction === "reword"
+                                       && planModel.selectedOid !== ""
+                                       && planModel.selectedOid === detailsModel.shaHex
+    function startRebasePlan(oidHex) {
+        planModel.open(oidHex)
+    }
+    onPlanActiveChanged: {
+        if (page.planActive) {
+            page.closeDiff()
+            // The selection lands on the plan's own newest row, whatever face was up before — the right pane
+            // becomes that commit's, and the WIP face (whose commit button would sit under the run bar, and whose
+            // own writes the freeze is for) cannot stay up under an open plan. `activateRow` also puts away a
+            // standing row question and a name box, the way any deliberate click does.
+            page.activateRow(planModel.expectHead)
+            planModel.selectRow(0)
+            if (planModel.publishRange !== "")
+                repoTab.checkPublish(planModel.publishRange)
+        }
+    }
+    // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the
+    // freeze leaves running — so the count is asked again whenever the refs actually move (`refsMoved`, not the
+    // every-tick `refsSettled` — that would spawn a rev-list at the status rate), and the run button's amber
+    // follows the fetch instead of freezing at the plan's opening (規約 §フル interactive rebase).
+    Connections {
+        target: branchesModel
+        function onRefsMoved() {
+            if (planModel.active && planModel.publishRange !== "")
+                repoTab.checkPublish(planModel.publishRange)
+        }
+    }
+    // The publish slot is shared, and something else can put its own range in it while the plan stands (the flows
+    // are frozen, but a landing answer asked before the freeze is not). The note reads only its own range, so a
+    // clobbered slot would blank the amber — this converges it back. Edge-triggered on the very property, so it
+    // re-asks once per clobber, not once per tick.
+    readonly property bool planPushedClobbered: planModel.active && planModel.publishRange !== ""
+                                                && repoTab.publishRange !== planModel.publishRange
+    onPlanPushedClobberedChanged: {
+        if (page.planPushedClobbered)
+            repoTab.checkPublish(planModel.publishRange)
+    }
+    Connections {
+        target: planModel
+        function onRefusedPlan(kind) {
+            page.showNotice(
+                kind === "merge" ? qsTr("A merge is in the way") : qsTr("Not on this branch"),
+                kind === "merge"
+                    ? qsTr("Replaying from there drops merges; the history would come back flattened.")
+                    : qsTr("A rebase only rewrites the branch you are standing on."),
+                "warning")
+        }
+        function onStalePlan() {
+            page.showNotice(qsTr("The branch tip moved"),
+                            qsTr("The plan was put away; nothing has run."), "warning")
+        }
+    }
+    // The tip as the status reads it, fed on every snapshot: the model compares it against the tip the plan opened
+    // on and puts a stale draft away itself. Only while one stands — fed to a shut model it would spend a borrow
+    // per tick saying nothing.
+    Connections {
+        target: workTree
+        function onChanged() {
+            if (planModel.active)
+                planModel.noteHead(workTree.headOid)
+        }
     }
 
     property var rowAskRun: null
@@ -887,6 +972,7 @@ Item {
         onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
         onSquashRequested: oidHex => page.squashCommit(oidHex)
         onDropRequested: oidHex => page.dropCommit(oidHex)
+        onPlanRequested: oidHex => page.startRebasePlan(oidHex)
         onResetRequested: mode => page.moveBranchHere(mode)
         onApplyStashRequested: selector => repoTab.applyStash(selector)
         onPopStashRequested: selector => page.popStash(selector)
@@ -1021,7 +1107,7 @@ Item {
     // boxes stand open while the repository moves under them, so a commit that stops being HEAD's stops taking typing.
     readonly property string messageEdit: GitFacts.messageEdit(
         !page.blank && repoTab.state === "open", detailsModel.shaHex, workTree.headOid,
-        page.selectedStashRef, workTree.opText)
+        page.selectedStashRef, workTree.opText, workTree.opEditing, workTree.opEditOid)
 
     // What git makes of the selected commit's signature. Asked on every selection, and read only when the answer names
     // the commit now on screen — verifying runs gpg or ssh-keygen, so the answer arrives well after the details do.
@@ -1045,7 +1131,9 @@ Item {
     // click.
     property bool selectedPublished: false
     function askSelectedPublished() {
-        if (page.selectedOid !== "" && repoTab.state === "open")
+        // Not while a plan stands: the slot is the plan's (its amber note reads it), and the save row this answer
+        // warns on is the plan's reword chip, which carries the plan's own warning instead.
+        if (page.selectedOid !== "" && repoTab.state === "open" && !planModel.active)
             repoTab.checkPublish(page.selectedOid + "^!")
     }
     onSelectedOidChanged: page.selectedPublished = false
@@ -1585,6 +1673,7 @@ Item {
     WorkTreeModel { id: workTree }
     DetailsModel { id: detailsModel }
     DiffModel { id: diffModel }
+    RebasePlanModel { id: planModel }
     NavSectionModel { id: branchesModel }
     NavSectionModel { id: remotesModel }
     // One letter apart, two different things: the three `*Model`s below feed the WIP pane (the "worktree" nav section =
@@ -1710,6 +1799,7 @@ Item {
         workTree.attach(page.tab_id)
         detailsModel.attach(page.tab_id)
         diffModel.attach(page.tab_id)
+        planModel.attach(page.tab_id)
         branchesModel.attachSection(page.tab_id, "branches")
         remotesModel.attachSection(page.tab_id, "remotes")
         conflictsModel.attachWorktree(page.tab_id, "conflicts")
@@ -2067,7 +2157,9 @@ Item {
             // describes while the highlight the working-tree row left behind is inherited by whatever slid into its
             // place, which after this press is the entry it just made.
             const ourStash = page.stashLanded
-            if (worktreeModel.total === 0 && page.wipShown
+            // Not while an operation is standing: an `edit` stop leaves the tree clean, and the WIP face is where
+            // its exit card lives — walking off it here would take the card off screen with the stop still on.
+            if (worktreeModel.total === 0 && page.wipShown && workTree.opText === ""
                     && (ourStash || (wipPane.subjectText === "" && wipPane.bodyText === ""))) {
                 page.stashLanded = false
                 page.wipShown = false
@@ -2199,6 +2291,12 @@ Item {
 
                 SidebarPane {
                     id: sidebarPane
+                    // While a plan is being composed, every door here is a way to move the history under it — a
+                    // switch, a delete, a double-click. Held down whole, and dimmed the way disabled things are;
+                    // reading it stays free (デザイン規約 §無効 / 提案 2026-08-30: 組んでいる間、書き込みの入口は実行
+                    // ボタンだけ).
+                    enabled: !planModel.active
+                    opacity: planModel.active ? Metrics.dimFade : 1
                     // Over the pane beside it while a name box is standing: the box reaches past this pane's edge when
                     // what is in it does not fit, and the graph is laid out after this one (`NavItemDelegate`). Only
                     // then — a pane that sat over its neighbour the rest of the time would draw its own edge over the
@@ -2263,7 +2361,9 @@ Item {
                         id: centreStack
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        currentIndex: page.diffShown ? 1 : 0
+                        // The plan stands over both: a diff opened later closes on the way in (`onPlanActiveChanged`),
+                        // and the graph comes back exactly as it was when the plan is put away.
+                        currentIndex: planModel.active ? 2 : page.diffShown ? 1 : 0
 
                         GraphPane {
                             id: graphPane
@@ -2330,6 +2430,12 @@ Item {
                             }
                             onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
                         }
+
+                        RebasePlanPane {
+                            planModel: planModel
+                            selectedOid: page.selectedOid
+                            onRowPicked: oidHex => page.activateRow(oidHex)
+                        }
                     }
                 }
 
@@ -2343,6 +2449,9 @@ Item {
 
                     GitVersionCorner {
                         id: gitCorner
+                        // The run button takes the pane's foot while a plan stands, and the foot it takes is this
+                        // corner's seat (§コミットメッセージの 2 つの枠「ペインの底は空かない」).
+                        visible: !planModel.active
                         // Only one of the two panes is on screen at a time, and each measures its own file list.
                         roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
                         anchors.right: parent.right
@@ -2377,20 +2486,33 @@ Item {
                     DetailsPane {
                         id: detailsPane
                         anchors.fill: parent
+                        // The run button's seat is carved off the pane's foot while a plan stands — the pane's own
+                        // press-things-here edge moves up with it (§コミットメッセージの 2 つの枠「押す物はペインの底」).
+                        anchors.bottomMargin: planRunBar.visible ? planRunBar.height : 0
                         visible: !page.wipShown
                         details: detailsModel
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it
-                        // (`page.messageEdit`). The words are the page's; the rule is core's.
-                        editable: page.messageEdit === "amend"
-                        editBlocked: page.messageEdit === "stash"
-                            ? qsTr("Rename it in the list on the left")
-                            : page.messageEdit === "not-head"
-                              ? qsTr("Only the newest commit's message can be rewritten here")
-                              : page.messageEdit === "standing"
-                                ? qsTr("Finish the stopped operation first")
-                                : ""
+                        // (`page.messageEdit`). The words are the page's; the rule is core's — and while a plan row
+                        // carries `reword`, the same boxes are that row's plan input (提案 2026-08-30: メッセージを
+                        // 打つ場所はアプリに 1 つ). A plain amend is held down for the plan's whole stay — it is a
+                        // queued rewrite of the very history the plan is composed on, which the freeze exists to
+                        // stop; on a plan row the way to type is the row's own verb.
+                        editable: (page.messageEdit === "amend" && !planModel.active) || page.planReword
+                        intoPlan: page.planReword
+                        planDraftOid: planModel.active ? planModel.selectedOid : ""
+                        planDraftSubject: planModel.selectedMsgSubject
+                        planDraftBody: planModel.selectedMsgBody
+                        editBlocked: planModel.active && !page.planReword && page.messageEdit !== ""
+                            ? qsTr("Mark the row reword to retype its message")
+                            : page.messageEdit === "stash"
+                              ? qsTr("Rename it in the list on the left")
+                              : page.messageEdit === "not-head"
+                                ? qsTr("Only the newest commit's message can be rewritten here")
+                                : page.messageEdit === "standing"
+                                  ? qsTr("Finish the stopped operation first")
+                                  : ""
                         busy: repoTab.busyCount > 0
                         published: page.selectedPublished
                         signatureKind: page.selectedSignatureKind
@@ -2407,7 +2529,17 @@ Item {
                                       ? qsTr("Signed with your x509 certificate")
                                       : qsTr("Signed with your gpg key")
                         readPath: page.diffKind === "commit" ? page.diffPath : ""
-                        onMessageSubmitted: (oidHex, subject, body) => page.saveMessage(oidHex, subject, body)
+                        onMessageSubmitted: (oidHex, subject, body) => {
+                            if (page.planReword) {
+                                planModel.setMessage(planModel.selectedRow, subject, body)
+                                // The model took it synchronously — the typed text is the
+                                // resting text now (the write path hears this from
+                                // `writeReworded` instead).
+                                detailsPane.noteMessageSaved()
+                            } else if (!planModel.active) {
+                                page.saveMessage(oidHex, subject, body)
+                            }
+                        }
                         onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
                         onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
@@ -2416,6 +2548,22 @@ Item {
                         onCopyRequested: text => clipboard.copy(text)
                         onApplyStashRequested: selector => repoTab.applyStash(selector)
                         onPopStashRequested: selector => page.popStash(selector)
+                    }
+
+                    RebasePlanRunBar {
+                        id: planRunBar
+                        // The plan holds the details face up (`onPlanActiveChanged`); the WIP guard is the belt —
+                        // were that face ever up, this bar would sit over the commit button.
+                        visible: planModel.active && !page.wipShown
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: Theme.spaceMd
+                        anchors.rightMargin: Theme.spaceMd
+                        plan: planModel
+                        pushedCount: page.planPushed
+                        tipHeldElsewhere: repoTab.headReachedElsewhere
+                        busy: repoTab.busyCount > 0
                     }
                 }
             }

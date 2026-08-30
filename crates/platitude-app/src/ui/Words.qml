@@ -11,6 +11,10 @@ QtObject {
     /// A held control's answer to a screen reader, wherever a HoldDriver drives one.
     readonly property string holdToActivate: qsTr("Hold to activate")
 
+    /// The menu-row tag on anything that replays commits a remote already has — the amend-family rows and both
+    /// rebase entries say it with one voice (デザイン規約 §可否・警告の出し場所).
+    readonly property string rewritesPushed: qsTr("rewrites pushed commits")
+
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
     readonly property string openRepository: qsTr("Open repository…")
 

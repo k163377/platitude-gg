@@ -14,7 +14,8 @@ mod winframe;
 use hub::Hub;
 use models::{
     AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel,
-    LineEndingsModel, NavSectionModel, RepoConfigModel, RepoTab, TabsModel, WorkTreeModel,
+    LineEndingsModel, NavSectionModel, RebasePlanModel, RepoConfigModel, RepoTab, TabsModel,
+    WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QApp;
@@ -221,6 +222,9 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RefusalBadge.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ReclickGesture.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RebasePlanPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RebasePlanRow.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RebasePlanRunBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPage.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RepoPageStack.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CloneDialog.qml", "qt/qml/platitude");
@@ -293,6 +297,7 @@ fn main() {
         .register::<DetailsModel>()
         .register::<DiffModel>()
         .register::<CommandsModel>()
+        .register::<RebasePlanModel>()
         .add_import_path("qrc:/qt/qml")
         .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
         .run();
