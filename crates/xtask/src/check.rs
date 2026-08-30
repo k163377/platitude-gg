@@ -53,14 +53,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let started = Instant::now();
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
+    // The `cargo xtask` alias runs `--quiet`, which swallows cargo's
+    // "Blocking waiting for file lock" line — and a step blocked on this
+    // side's own build lock would then sit with an empty log until the
+    // silence ceiling calls it a hang. Spelled out unquieted here, so the
+    // lock line (and the compile lines, which are liveness) reach the log.
+    let xtask = |line: &[&str]| {
+        let mut step = words(&["cargo", "run", "-p", "xtask", "--"]);
+        step.extend(line.iter().map(|w| (*w).to_string()));
+        step
+    };
     let mut host_steps: Vec<Vec<String>> = vec![
         // First because it is the cheapest thing here that can fail — it
         // builds nothing and answers in a second or two, and a line ceiling
         // is not worth finding out about after ten minutes of compiling.
-        words(&["cargo", "xtask", "structure"]),
+        xtask(&["structure"]),
         // Same reasoning, same cost: a naked wait is a hang the suite
         // cannot name, and this answers before anything compiles.
-        words(&["cargo", "xtask", "waits"]),
+        xtask(&["waits"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
         words(&[
             "cargo",
@@ -74,7 +84,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         words(&["cargo", "test", "--workspace"]),
     ];
     let mut linux_steps: Vec<Vec<String>> = vec![
-        words(&["cargo", "xtask", "linux", "test", "-p", "platitude-core"]),
+        xtask(&["linux", "test", "-p", "platitude-core"]),
         // The same line as the host's clippy above, because the host's
         // cannot answer for it: a name reachable only under
         // #[cfg(not(windows))] is not compiled on Windows at all, so an
@@ -84,9 +94,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // `bare` is the only other thing on this side that compiles the
         // app for Linux, and it is a release build whose warnings are not
         // errors and which nobody reads.
-        words(&[
-            "cargo",
-            "xtask",
+        xtask(&[
             "linux",
             "clippy",
             "--workspace",
@@ -102,7 +110,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // ("co-authors 4 --preset co-authors").
         let verb_words: Vec<&str> = verb.split_whitespace().collect();
         // The first host run builds the release; the rest reuse it.
-        let mut host = words(&["cargo", "xtask", "verify-ui"]);
+        let mut host = xtask(&["verify-ui"]);
         host.extend(verb_words.iter().map(|w| (*w).to_string()));
         if i > 0 {
             host.push("--no-build".to_string());
@@ -111,7 +119,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // The container side reuses its first build too: a fingerprint
         // check across the host boundary is measurably slow, and paying
         // it once per verb bought nothing.
-        let mut linux = words(&["cargo", "xtask", "linux", "verify-ui"]);
+        let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(verb_words.iter().map(|w| (*w).to_string()));
         if i > 0 {
             linux.push("--no-build".to_string());
@@ -119,7 +127,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         linux_steps.push(linux);
     }
     // Last so it reuses the release the container's verify-ui just built.
-    linux_steps.push(words(&["cargo", "xtask", "linux", "bare"]));
+    linux_steps.push(xtask(&["linux", "bare"]));
 
     let host_root = root.clone();
     let host = std::thread::spawn(move || run_side("host", &host_root, &host_steps));
@@ -171,11 +179,13 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
     }
     for (index, step) in steps.iter().enumerate() {
         let display = step.join(" ");
-        println!("[{side}] {display} …");
-        let at = Instant::now();
         let log = logs.join(format!("{side}-{index:02}.log"));
+        println!("[{side}] {display} … (log: {})", log.display());
+        let at = Instant::now();
         let outcome = run_step(root, step, &log);
-        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        // Lossy, never empty-on-error: one localized byte in a linker or
+        // Qt line must not blank a failure's whole log.
+        let text = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();
         let secs = at.elapsed().as_secs();
         match outcome {
             Ok(true) => {
@@ -255,8 +265,9 @@ fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool, String> {
             // lock, which the message owns up to rather than letting the
             // next run's stall look unrelated.
             return Err(format!(
-                "killed at the ceiling: the step {ceiling} (its log has the tail; \
-                 survivors of the killed command may still hold this side's build lock)"
+                "killed at the ceiling: the step {ceiling} (its log has the tail; an \
+                 empty log usually means it never got past a build lock another cargo \
+                 holds; survivors of the killed command may still hold this side's own)"
             ));
         }
         std::thread::sleep(Duration::from_millis(500));

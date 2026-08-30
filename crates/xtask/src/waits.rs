@@ -81,12 +81,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// backstop in the same statement, as (first line of the statement,
 /// 1-based line number).
 ///
-/// A statement is what sits between `;`, `{` and `}`, comments stripped —
-/// coarse, but exact where it matters: rustfmt may wrap a call across any
-/// number of lines and never across a statement, so the wrapper and the
-/// wait always share one. String literals are not parsed; a `;` inside
-/// one splits a statement in two, which can only turn a wrapped wait into
-/// a finding to look at, never hide a naked one.
+/// A statement is what sits between `;`, `{` and `}`, line comments
+/// stripped — coarse, but exact where it matters: rustfmt may wrap a call
+/// across any number of lines and never across a statement, so the
+/// wrapper and the wait always share one. Only a `//` at the start of a
+/// line or after whitespace reads as a comment, so a `://` inside a
+/// string does not eat the statement boundary behind it. What stays out
+/// of sight is a wait threaded through a closure or macro body (the `{`
+/// splits the statement) — this reads the shape the suite writes in, not
+/// the language.
 fn naked_waits(text: &str) -> Vec<(String, usize)> {
     let mut found = Vec::new();
     let mut statement = String::new();
@@ -95,7 +98,7 @@ fn naked_waits(text: &str) -> Vec<(String, usize)> {
     let mut fresh = true;
     let code = text
         .lines()
-        .map(|l| l.split("//").next().unwrap_or(l))
+        .map(strip_line_comment)
         .collect::<Vec<_>>()
         .join("\n");
     for ch in code.chars() {
@@ -122,10 +125,10 @@ fn judge(statement: &str, opened_at: usize, found: &mut Vec<(String, usize)>) {
     if !statement.contains(".await") {
         return;
     }
-    if !SILENT_WAITS.iter().any(|wait| statement.contains(wait)) {
+    if !SILENT_WAITS.iter().any(|wait| has_token(statement, wait)) {
         return;
     }
-    if BACKSTOPS.iter().any(|stop| statement.contains(stop)) {
+    if BACKSTOPS.iter().any(|stop| has_token(statement, stop)) {
         return;
     }
     let first = statement
@@ -134,6 +137,38 @@ fn judge(statement: &str, opened_at: usize, found: &mut Vec<(String, usize)>) {
         .find(|l| !l.is_empty())
         .unwrap_or_default();
     found.push((first.to_string(), opened_at));
+}
+
+/// The line up to its comment. Only a `//` at the start or after
+/// whitespace opens one: the `//` of a `file://` URL in a string must not
+/// swallow the `;` behind it and weld two statements together.
+fn strip_line_comment(line: &str) -> &str {
+    let mut from = 0;
+    while let Some(found) = line[from..].find("//") {
+        let at = from + found;
+        if at == 0 || line.as_bytes()[at - 1].is_ascii_whitespace() {
+            return &line[..at];
+        }
+        from = at + 2;
+    }
+    line
+}
+
+/// Whether `token` occurs on a word boundary: `timeout(` must not be
+/// found inside `no_timeout(`, nor `bounded(` inside `unbounded(`.
+/// Tokens that open with a non-word byte (`.outcome()`) match anywhere.
+fn has_token(haystack: &str, token: &str) -> bool {
+    let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let guarded = token.as_bytes().first().copied().is_some_and(word);
+    let mut from = 0;
+    while let Some(found) = haystack[from..].find(token) {
+        let at = from + found;
+        if !guarded || at == 0 || !word(haystack.as_bytes()[at - 1]) {
+            return true;
+        }
+        from = at + token.len();
+    }
+    false
 }
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
@@ -206,5 +241,27 @@ let handle = session.refresh_poll_tracked();
 let a = 1;
 ";
         assert!(naked_waits(text).is_empty());
+    }
+
+    #[test]
+    fn a_url_in_a_string_does_not_weld_two_statements_together() {
+        let text = "\
+let a = bounded(\"x\", t.outcome()).await.unwrap_or(\"file://z\");
+session.wait_for_snapshot_reads().await;
+";
+        let found = naked_waits(text);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].1, 2, "the wrapped first statement stays clean");
+    }
+
+    #[test]
+    fn a_timeout_of_another_name_is_no_backstop() {
+        let text = "\
+let out = exec.no_timeout().run(cmd).outcome().await;
+let b = unbounded(task.outcome()).await;
+let ok = tokio::time::timeout(BUDGET, task.outcome()).await;
+";
+        let found = naked_waits(text);
+        assert_eq!(found.len(), 2, "{found:?}");
     }
 }
