@@ -56,6 +56,7 @@ mod author;
 mod auto_fetch;
 mod build;
 mod chips;
+mod details_read;
 mod eol;
 mod event;
 mod feed;
