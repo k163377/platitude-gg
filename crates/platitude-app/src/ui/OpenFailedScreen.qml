@@ -11,7 +11,8 @@ import platitude.ui
 //
 // Not one component with that dialog: they are two seats (デザイン規約 §可否・警告の出し場所) and read as such — this one is centred in
 // the seat it takes over and offers the way out of a tab, the dialog is a window's left-aligned form and offers the
-// picker again. What they do share is the wording, and that already lives in `Words`.
+// picker again. What they do share is the wording, which already lives in `Words`, and the width those same three
+// lines are set to (デザイン規約 §レイアウト初期値, 640): a different seat is not a different amount to read.
 Item {
     id: screen
 
@@ -46,7 +47,7 @@ Item {
         id: failedColumn
         anchors.centerIn: parent
         spacing: Theme.spaceMd
-        width: Math.min(700, screen.pageWidth - 2 * Theme.spaceXl)
+        width: Math.min(640, screen.pageWidth - 2 * Theme.spaceXxl)
 
         CardText {
             text: Words.openFailure(screen.kind)
