@@ -51,6 +51,8 @@ impl RepoSession {
             log_cancel: Mutex::new(None),
             graph_passes: Arc::default(),
             pass_step: Mutex::new(None),
+            pass_fault: Mutex::new(None),
+            graph_stale: std::sync::atomic::AtomicBool::new(false),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_incoming: Mutex::new(Vec::new()),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),

@@ -40,6 +40,27 @@ pub enum SessionEvent {
         generation: u64,
         error: String,
     },
+    /// Whether the graph on screen is known to have fallen behind the
+    /// repository — a whole picture that an off-screen rebuild would have
+    /// replaced and did not, so no row is missing and every one of them
+    /// is out of date (`RepoSession::run_swap_pass`).
+    ///
+    /// **Sent on the turn only**, which is why it carries a flag rather
+    /// than being two events or none: the common answer a rebuild gives
+    /// is [`RefreshOutcome::Unchanged`], which sends nothing at all so
+    /// that a quiet auto-fetch tick does not wake the consumer. A mark
+    /// that could only be *put on* would then stand for the rest of the
+    /// session, and one sent on every pass would cost exactly the wakeup
+    /// the silence is there to save.
+    ///
+    /// **No words.** Whatever git said about the rebuild went out as
+    /// [`SessionEvent::OpFailed`] like every other read's, so it is
+    /// already in the error surface and the command log; the graph is
+    /// told the state and nothing else. A pass that fell over silently
+    /// has none to give anyway (`session::pass_watch`).
+    LogStale {
+        stale: bool,
+    },
     /// A background rebuild finished and replaces the whole graph in one
     /// step. Deliberately one event rather than Started/Chunk/Finished:
     /// those travel as separate queued messages, and a consumer that

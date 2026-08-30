@@ -9,13 +9,18 @@
 //!
 //! The fault is raised from inside the pass (`run_inside_next_pass`),
 //! because that is the only place it can come from.
+//!
+//! The mark a fallen rebuild leaves on the graph is held here too — it
+//! goes up in the same arm — along with the other door into a pass,
+//! `fail_every_pass`, which is what lets the band's `STALE GRAPH` be
+//! photographed and so has to keep reaching the walk.
 
 use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, scenario};
 use crate::support::wait::bounded;
-use platitude_core::session::{PassStep, RepoSession, SessionEvent};
+use platitude_core::session::{PassStep, RefreshOutcome, RepoSession, SessionEvent};
 
 /// `scenario()` opened, with everything the opening starts closed out:
 /// the pass each test takes down is the one it asked for and no other.
@@ -61,7 +66,7 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
         failed, announced,
         "the answer belongs to the stream that emptied the column"
     );
-    // The band's `PARTIAL HISTORY` badge carries the sentence; core has
+    // The band's `STALE GRAPH` badge carries the sentence; core has
     // no words of its own here, and nobody said any (app-ui.md
     // 「Rust に文言を置かない」).
     assert!(
@@ -74,8 +79,11 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
 /// An off-screen pass that falls over reports as the operation it was.
 ///
 /// Nothing on screen is waiting on it and what is standing there is a
-/// real graph — only older than it should be — so the graph hears
-/// nothing at all and the tab carries the failure.
+/// real graph — only older than it should be — so the tab carries the
+/// failure and the rows are left alone. What the graph does hear is that
+/// it has fallen behind ([`SessionEvent::LogStale`]), which is the state
+/// and not a stream's answer: the band raises `STALE GRAPH` over the
+/// picture that is still standing.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
     let (_repo, sink, session) = settled().await;
@@ -103,6 +111,104 @@ async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
         sink.count(is_stream_event),
         standing,
         "the graph on screen was left standing: {:?}",
+        sink.events.lock().unwrap()
+    );
+    assert_eq!(
+        sink.count(|event| matches!(event, SessionEvent::LogStale { stale: true })),
+        1,
+        "and was marked as no longer this repository's: {:?}",
+        sink.events.lock().unwrap()
+    );
+    session.close();
+}
+
+/// The mark goes back down when a pass reads the repository again — and
+/// **the pass that says so is the one that sends nothing else**.
+///
+/// A rebuild over a repository nothing has touched comes back
+/// `Unchanged` and stays silent, so that a quiet auto-fetch tick costs
+/// the consumer nothing. That silence is what makes this worth holding:
+/// with the mark only ever going up, the ordinary answer to "is it
+/// current again" would never arrive, and the band would carry
+/// `STALE GRAPH` over a graph that had been read since.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_graph_read_again_is_no_longer_behind() {
+    let (_repo, sink, session) = settled().await;
+
+    session.run_inside_next_pass(PassStep::Swapping, || panic!("the walk fell over"));
+    session.refresh_log();
+    sink.wait_for("the fallen rebuild's mark", |events| {
+        events
+            .iter()
+            .find(|event| matches!(event, SessionEvent::LogStale { stale: true }))
+            .map(|_| ())
+    })
+    .await;
+
+    // Nothing has moved, so this one walks the same commits and finds
+    // the picture on screen to be them: `Unchanged`, and the only thing
+    // it has to say is that the mark can come down.
+    let outcome = bounded("the quiet rebuild", session.refresh_log_tracked().outcome()).await;
+    assert_eq!(
+        outcome,
+        RefreshOutcome::Unchanged,
+        "the quiet rebuild is the one that carries this"
+    );
+    let taken = sink
+        .wait_for("the mark coming back down", |events| {
+            events
+                .iter()
+                .rev()
+                .find_map(|event| match event {
+                    SessionEvent::LogStale { stale } => Some(*stale),
+                    _ => None,
+                })
+                .filter(|stale| !stale)
+        })
+        .await;
+    assert!(!taken, "the graph is this repository's again");
+    session.close();
+}
+
+/// The fault the screen is driven with reaches the pass's ordinary
+/// reporting arm.
+///
+/// **The one injection whose failure would look like a pass.**
+/// `fail_every_pass` exists so `STALE GRAPH` can be photographed, and a
+/// verb photographs whatever window it is given: an injection that
+/// stopped reaching the walk would leave every run of those verbs
+/// looking at a healthy graph and calling it green (verify-ui スキル
+/// 「仕込みが PATH に届かなかった run は普通の窓を撮る」). So the arm it
+/// leaves by is held here — the outcome, the words, and the mark that
+/// tells the band a whole graph has gone out of date.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_fault_the_screen_is_driven_with_fails_the_walk() {
+    let (_repo, sink, session) = settled().await;
+
+    session.fail_every_pass(PassStep::Swapping);
+    let outcome = bounded("the made failure", session.refresh_log_tracked().outcome()).await;
+
+    assert_eq!(
+        outcome,
+        RefreshOutcome::Failed,
+        "the rebuild came back as a failure"
+    );
+    let message = sink
+        .wait_for("the made failure's report", |events| {
+            events.iter().find_map(|event| match event {
+                SessionEvent::OpFailed { op, error } if *op == "log" => Some(error.to_string()),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(
+        message.contains("the graph walk was made to fail"),
+        "the words are the fault's own: {message}"
+    );
+    assert_eq!(
+        sink.count(|event| matches!(event, SessionEvent::LogStale { stale: true })),
+        1,
+        "and the graph left standing was marked: {:?}",
         sink.events.lock().unwrap()
     );
     session.close();

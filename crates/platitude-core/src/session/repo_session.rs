@@ -28,6 +28,19 @@ pub struct RepoSession {
     /// which never leaves anything here: the only caller is a test ending
     /// a pass the one way nothing else can.
     pub(super) pass_step: Mutex<Option<PassStepHook>>,
+    /// What every graph pass reaching a given step fails with instead
+    /// of walking ([`RepoSession::fail_every_pass`]). Empty except while a
+    /// caller is driving the failure on purpose.
+    pub(super) pass_fault: Mutex<Option<(PassStep, String)>>,
+    /// Whether the graph on screen has been left behind the repository:
+    /// a rebuild that would have replaced it did not land, so every row
+    /// standing there is real and none of them is current.
+    ///
+    /// Held rather than derived because the consumer is told on the turn
+    /// only ([`SessionEvent::LogStale`]) — the pass that finds nothing
+    /// changed is the quiet one, and it has to be able to say "current
+    /// again" without every quiet pass saying anything.
+    pub(super) graph_stale: std::sync::atomic::AtomicBool,
     /// Which diff read is the current one. Bumped by every
     /// [`RepoSession::load_diff`], and read again just before the colours
     /// for that diff would be worked out: a reader going down a commit's

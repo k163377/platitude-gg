@@ -120,6 +120,22 @@ impl RepoSession {
         relock(&self.log_options)
     }
 
+    /// The graph on screen has been left behind the repository, or has
+    /// caught up with it again. Said on the turn only
+    /// ([`SessionEvent::LogStale`]).
+    ///
+    /// **Every pass ends in one of these two.** A rebuild that lands, one
+    /// that finds nothing to change and a stream that starts over all
+    /// leave a graph that is this repository's; only a rebuild that could
+    /// not be walked leaves the last one standing. A cancelled pass says
+    /// neither — whoever cancelled it is the one drawing now, and this is
+    /// their answer to give.
+    pub(super) fn tell_graph_stale(&self, stale: bool) {
+        if self.graph_stale.swap(stale, Ordering::SeqCst) != stale {
+            self.sink.event(SessionEvent::LogStale { stale });
+        }
+    }
+
     /// Restarts the log → graph stream (used by manual full refresh).
     ///
     /// With tags enabled this runs **two passes**: a fast tag-less pass
@@ -205,6 +221,10 @@ impl RepoSession {
             // answer as this one's.
             shared.sent_footer = None;
             self.sink.event(SessionEvent::LogStarted { generation });
+            // Nothing old is standing any more: the column this stream is
+            // about to fill is empty. Said here rather than at the end,
+            // because the graph that had fallen behind has already gone.
+            self.tell_graph_stale(false);
             // From here the column is empty and turning on this stream.
             watch.announced(generation);
         }
@@ -212,7 +232,14 @@ impl RepoSession {
         // unwinds, and `watch` is what the empty column hears from.
         self.run_pass_step(PassStep::Streaming);
         let started = Instant::now();
-        match self.stream_log(workdir, generation, options, cancel).await {
+        // A fault left here stands in for the walk, so what follows is
+        // the same reporting arm a git that failed would have reached
+        // (`fail_every_pass`).
+        let walk = match self.pass_fault(PassStep::Streaming) {
+            Some(error) => Err(error),
+            None => self.stream_log(workdir, generation, options, cancel).await,
+        };
+        match walk {
             Ok(totals) => {
                 let footer = Footer {
                     walked: totals.walked,
@@ -290,9 +317,14 @@ impl RepoSession {
         let mut builder = GraphBuilder::new();
         let mut rows: Vec<LogRow> = Vec::new();
 
-        let result = self
-            .collect_log(workdir, options, cancel, &mut builder, &mut rows)
-            .await;
+        // See `run_direct_pass`: a fault left here stands in for the walk.
+        let result = match self.pass_fault(PassStep::Swapping) {
+            Some(error) => Err(error),
+            None => {
+                self.collect_log(workdir, options, cancel, &mut builder, &mut rows)
+                    .await
+            }
+        };
         let walked = match result {
             Ok(walked) => walked,
             Err(error) => {
@@ -301,6 +333,11 @@ impl RepoSession {
                 if matches!(error, GitError::Cancelled { .. }) {
                     return RefreshOutcome::Cancelled;
                 }
+                // What is on screen is now the graph this pass would have
+                // replaced: whole, and no longer this repository's. The
+                // band says so (`STALE GRAPH`); git's words go where every
+                // other read's do.
+                self.tell_graph_stale(true);
                 self.fail("log", error);
                 return RefreshOutcome::Failed;
             }
@@ -363,6 +400,10 @@ impl RepoSession {
                 // pass — and this walk numbered its rows the same way, or
                 // it would not have compared equal.
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
+                // The one pass that sends nothing is also the one that
+                // clears a mark left by an earlier failure: this walk read
+                // the repository and found the picture on screen to be it.
+                self.tell_graph_stale(false);
                 watch.answered();
                 return RefreshOutcome::Unchanged;
             }
@@ -379,6 +420,9 @@ impl RepoSession {
                 walked: footer.walked,
                 truncated: footer.truncated,
             });
+            // The graph is this repository's again, whatever the pass
+            // before it left standing.
+            self.tell_graph_stale(false);
         }
         watch.answered();
         RefreshOutcome::Changed

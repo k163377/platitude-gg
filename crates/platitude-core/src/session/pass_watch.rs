@@ -80,6 +80,42 @@ impl RepoSession {
         *relock(&self.pass_step) = Some((at, Box::new(run)));
     }
 
+    /// Every graph pass that reaches `at` from here on fails there, in
+    /// place of the walk it would have made.
+    ///
+    /// **The door a *screen* is driven through**, where
+    /// [`Self::run_inside_next_pass`] is the one a test ends a pass
+    /// through. What the band says about a graph that is not the
+    /// repository's cannot be photographed otherwise: the state needs a
+    /// git that fails, and a demo repository built to be walked has no
+    /// such git in it. The pass leaves by the same `match` arm a real
+    /// failure would — the report, the words and the mark are all the
+    /// ordinary ones — so what is drawn is what a reader whose git had
+    /// failed would see.
+    ///
+    /// **It stands, where the other one is taken by the first pass to
+    /// reach it.** That one raises a fault *at* a pass and answers for
+    /// that pass alone; this one asks for a *state*, and a state that one
+    /// pass could lift would be a race — the pass already walking takes
+    /// the fault, the pass the caller then asks for succeeds, and the
+    /// mark goes up and straight back down before anything can be read
+    /// off it. Nothing takes it back: a session driven into this is being
+    /// photographed, not used.
+    pub fn fail_every_pass(&self, at: PassStep) {
+        *relock(&self.pass_fault) = Some((at, "the graph walk was made to fail".to_string()));
+    }
+
+    /// The fault standing at `at`, as the error a walk there would have
+    /// come back with.
+    pub(super) fn pass_fault(&self, at: PassStep) -> Option<GitError> {
+        let left = relock(&self.pass_fault);
+        let (_, message) = left.as_ref().filter(|(step, _)| *step == at)?;
+        Some(GitError::UnexpectedOutput {
+            command: "git log".to_string(),
+            message: message.clone(),
+        })
+    }
+
     /// Runs what was left at `at`, if that is the step it was left at.
     ///
     /// Taken out under the lock and run outside it: what it is here to do
@@ -148,17 +184,23 @@ impl Drop for PassWatch<'_> {
                 generation: *generation,
                 // **No words**: nobody said anything, so what the screen
                 // shows is its own — the sentence behind the band's
-                // `PARTIAL HISTORY` badge (`BandStateCard`,
+                // `STALE GRAPH` badge (`BandStateCard`,
                 // app-ui.md「Rust に文言を置かない」).
                 error: String::new(),
             }),
-            Told::Operation => session.fail(
-                "log",
-                GitError::UnexpectedOutput {
-                    command: "git log".to_string(),
-                    message: "the graph walk ended without an answer".to_string(),
-                },
-            ),
+            Told::Operation => {
+                // The graph left standing is whole and no longer this
+                // repository's, which is the half of the badge's state
+                // this arm is (`SessionEvent::LogStale`).
+                session.tell_graph_stale(true);
+                session.fail(
+                    "log",
+                    GitError::UnexpectedOutput {
+                        command: "git log".to_string(),
+                        message: "the graph walk ended without an answer".to_string(),
+                    },
+                );
+            }
         }));
         if reported.is_err() {
             tracing::error!("and the report of it fell over too");
