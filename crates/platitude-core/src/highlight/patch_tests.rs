@@ -368,6 +368,93 @@ diff --git a/A.qml b/A.qml
 }
 
 #[test]
+fn a_file_its_grammar_has_not_learned_reads_through_the_lexer() {
+    // Kotlin's `when` guards (`is Field if it.static ->`) postdate the
+    // pinned grammar. The parse breaks, and past the break the
+    // recovery left the added and context rows plain while deletions
+    // kept their colours through the fragment (measured on a real
+    // compiler file: rows 161..285 were one ERROR node with not a
+    // capture inside). A source the grammar cannot parse reads through
+    // the regex lexer instead, which reads line by line and does not
+    // care what the whole of it means.
+    let source = "\
+// note
+class Loader {
+    val ready = items.any {
+        when (it) {
+            is Field if it.static && !it.late -> true
+            else -> false
+        }
+    }
+
+    fun label(): String {
+        // a comment far below the guard
+        return \"hi\"
+    }
+}
+";
+    let patch = "\
+diff --git a/A.kt b/A.kt
+--- a/A.kt
++++ b/A.kt
+@@ -10,4 +10,4 @@
+     fun label(): String {
+         // a comment far below the guard
+-        return \"lo\"
++        return \"hi\"
+     }
+";
+    let colors = colors(&patches(patch), Some(source));
+    let comment = colors.line(0, 0, 1);
+    assert!(
+        comment
+            .spans
+            .iter()
+            .any(|s| s.color != super::super::grammar::PLAIN),
+        "a comment below the unlearned syntax wears the comment colour: {comment:?}"
+    );
+    let added = colors.line(0, 0, 3);
+    assert!(
+        added
+            .spans
+            .iter()
+            .any(|s| s.color != super::super::grammar::PLAIN),
+        "an added row is taken apart too: {added:?}"
+    );
+}
+
+#[test]
+fn without_a_real_fallback_a_broken_file_keeps_its_grammar() {
+    // A `.plist` is the XML grammar's, and syntect's set has nothing
+    // for the extension — `syntax_for` answers `None`. However badly
+    // the parse of one goes, the grammar's partial answer beats the
+    // nothing the lexer road would say here.
+    let source = "\
+<!-- note -->
+<plist>
+  <key>one</
+</plist>
+";
+    let patch = "\
+diff --git a/p.plist b/p.plist
+--- a/p.plist
++++ b/p.plist
+@@ -1,3 +1,3 @@
+ <!-- note -->
+-<plist version=\"0\">
++<plist>
+";
+    let colors = colors(&patches(patch), Some(source));
+    let note = colors.line(0, 0, 0);
+    assert!(
+        note.spans
+            .iter()
+            .any(|s| s.color != super::super::grammar::PLAIN),
+        "the comment still wears what the grammar could read: {note:?}"
+    );
+}
+
+#[test]
 fn binary_patches_are_left_alone() {
     let patch = "\
 diff --git a/logo.png b/logo.png

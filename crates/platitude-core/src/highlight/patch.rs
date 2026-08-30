@@ -50,7 +50,9 @@ pub fn knows(path: &str) -> bool {
 /// regex lexer's ~16,000 lines a second. Where it would, callers send
 /// [`colors_quick`]'s answer first. A path a grammar claims is never
 /// deep: the whole side parses in milliseconds, so the full answer is
-/// the quick one.
+/// the quick one. (A file that outgrew its grammar reads through the
+/// lexer instead and its colours can arrive a beat late — telling it
+/// apart here would cost the very parse whose price is in question.)
 pub fn deep(patches: &[FilePatch]) -> bool {
     let mut rows = 0usize;
     let mut deepest = 0usize;
@@ -175,7 +177,17 @@ fn patch_colors(
     // to budget, nothing for the cache to remember, and none of the
     // fallback set's load time (`theme::assets`) spent.
     if let Some(lang) = super::grammar::for_path(patch.path()) {
-        return super::tree::patch_colors(lang, patch, source);
+        // …unless the file has outgrown its grammar — syntax newer than
+        // the pinned parser, which past the first break can leave every
+        // row plain (`tree::reads`). Such a source goes to the lexer
+        // below, where the fallback set has a real syntax to read it
+        // with; where it has none, the grammar's partial answer is
+        // still the best there is.
+        let outgrown = source.is_some_and(|text| !super::tree::reads(lang, text))
+            && super::theme::reads(patch.path());
+        if !outgrown {
+            return super::tree::patch_colors(lang, patch, source);
+        }
     }
     let assets = assets();
     let Some(syntax) = syntax_for(&assets.syntaxes, patch.path()) else {

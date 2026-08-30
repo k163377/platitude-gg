@@ -4,7 +4,8 @@
 //! parsed **whole** ([`tree`]) — no walk, no budget, correct from the
 //! first paint, an order of magnitude faster than the lexer (measured).
 //! Everything below describes the second road: the regex-lexer fallback
-//! for languages no grammar claims.
+//! for languages no grammar claims — and for a file that has outgrown
+//! its grammar, syntax newer than the pinned parser ([`tree::reads`]).
 //!
 //! A patch is a few lines out of the middle of a file, and what those
 //! lines mean depends on everything above them. So the file itself is

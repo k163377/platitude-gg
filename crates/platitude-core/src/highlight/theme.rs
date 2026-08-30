@@ -85,6 +85,16 @@ pub(super) fn knows(path: &str) -> bool {
     syntax_for(&assets().syntaxes, path).is_some()
 }
 
+/// Whether the set has a syntax of its own for this path — not the
+/// plain-text one every `.txt` resolves to, which colours nothing.
+/// What decides if a file that outgrew its grammar is worth handing to
+/// the lexer at all (`patch::patch_colors`).
+pub(super) fn reads(path: &str) -> bool {
+    let syntaxes = &assets().syntaxes;
+    syntax_for(syntaxes, path)
+        .is_some_and(|syntax| syntax.name != syntaxes.find_syntax_plain_text().name)
+}
+
 pub(super) struct Assets {
     pub(super) syntaxes: SyntaxSet,
     pub(super) theme: Theme,

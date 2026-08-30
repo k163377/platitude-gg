@@ -157,6 +157,24 @@ fn fragment_line(
     fragment.get(at).cloned().unwrap_or_default()
 }
 
+/// Whether the grammar reads this text as its own language: a parse
+/// with no error node in it. A grammar can predate the language it
+/// reads — Kotlin's `when` guards and square-bracket destructuring did
+/// (measured: three of them turned rows 161..285 of a real compiler
+/// file into one ERROR node with not a capture inside) — and past the
+/// break its recovery can leave every row plain. The caller sends such
+/// a file to the regex lexer, which reads line by line and does not
+/// care what the whole of it means.
+pub(super) fn reads(lang: &Lang, text: &str) -> bool {
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&lang.config.language).is_err() {
+        return false;
+    }
+    parser
+        .parse(text.as_bytes(), None)
+        .is_some_and(|tree| !tree.root_node().has_error())
+}
+
 /// Every line of `text` as the runs the theme paints, or `None` when
 /// the grammar refuses the text outright.
 fn line_spans(lang: &Lang, highlighter: &mut Highlighter, text: &str) -> Option<Vec<Vec<Span>>> {
