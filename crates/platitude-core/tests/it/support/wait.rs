@@ -39,9 +39,10 @@ pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
 /// `session_integration::concurrent_writes_are_serialized` puts its burst
 /// of writes through the queue one at a time, and under `cargo test
 /// --workspace` — hundreds of integration tests, a thread per core, all
-/// spawning git — one round trip inflates ~25× over the test run on its
-/// own (measured). Raising the number until that fits would hand every
-/// other wait in the suite the same head start before it notices a hang.
+/// spawning git — one round trip inflates ~25× over its solo time (the
+/// measurement behind `GitExecutor::without_stock_timeouts`). Raising the
+/// number until that fits would hand every other wait in the suite the
+/// same head start before it notices a hang.
 ///
 /// Progress is what tells the two apart, so that is what the budget is
 /// counted against: every event renews it, and only a session gone quiet

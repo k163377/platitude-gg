@@ -144,9 +144,10 @@ async fn the_log_reads_the_authors_through_mailmap() {
     repo.git(&["add", "--", ".mailmap"]);
     repo.git(&["commit", "-m", "add mailmap"]);
 
-    // git hands an address it did not map back exactly as the commit
-    // spelled it (`%ae` is the raw pair) — lowercasing is the parser's
-    // own to do, and is pinned in its unit tests.
+    // `%ae` is the raw address whether a mailmap matches it or not, so
+    // this pins what the parser receives: git keeps the commit's own
+    // spelling. Lowercasing is the parser's to do, pinned in its unit
+    // tests.
     let raw = repo.git(&["log", "--format=%ae", "-1", "HEAD^"]);
     assert_eq!(raw, "OTHER@Example.COM", "git keeps the spelling");
 

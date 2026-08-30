@@ -161,7 +161,11 @@ async fn reading_the_merge_tools_answers_by_code() {
     assert_answered(&config_reads(&log), "the merge-tool reads");
 }
 
-/// Whether git normalises line endings on the way into the index.
+/// Whether git normalises line endings on the way into the index — read
+/// off the fixture's `false`, then off a hand-written valueless key,
+/// which is git's boolean true and comes back as a `-z` record with no
+/// newline in it. That shape is git's to emit, so only a real read pins
+/// it; the CLI cannot even write the key that produces it.
 #[tokio::test]
 async fn reading_core_autocrlf_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -174,4 +178,20 @@ async fn reading_core_autocrlf_answers_by_code() {
 
     assert!(!normalises, "the test repository sets core.autocrlf=false");
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
+
+    // Appended, so the last record also has to win over the `false` the
+    // fixture sets.
+    let config = repo.path.join(".git").join("config");
+    let mut text = std::fs::read_to_string(&config).expect("read config");
+    text.push_str("[core]\n\tautocrlf\n");
+    std::fs::write(&config, text).expect("write config");
+
+    let normalises = eol::normalises(&exec, &repo.path, &cancel)
+        .await
+        .expect("normalises after the hand edit");
+    assert!(normalises, "a valueless boolean key is git's true");
+    assert_eq!(
+        config_reads(&log),
+        vec![CommandEnd::Answered(0), CommandEnd::Answered(0)]
+    );
 }

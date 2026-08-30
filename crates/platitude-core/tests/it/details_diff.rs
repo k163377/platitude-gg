@@ -65,11 +65,15 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     let mut repo = TestRepo::init();
     // The spelling tools actually write is `Co-Authored-By`; the one the
     // convention documents is `Co-authored-by`. git's `key=` matches
-    // either, and both have to land here.
+    // either, and both have to land here. The one in the prose must not:
+    // a trailer is a property of the final block, git is what decides
+    // that, and the count below is what would go wrong if the message
+    // were ever scanned by hand instead.
     let sha = repo.commit_file_id(
         "a.txt",
         "one\n",
-        "feat: two hands on it\n\nbody\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\
+        "feat: two hands on it\n\nI wrote Co-authored-by: nobody <n@e.com> in the body\n\n\
+         Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\
          co-authored-by: Bob Builder <bob@example.com>",
     );
 
