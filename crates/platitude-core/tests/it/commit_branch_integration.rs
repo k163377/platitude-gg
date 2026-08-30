@@ -763,8 +763,7 @@ async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
     repo.commit_file("seed.txt", "seed\n", "root");
     repo.write_file("a.txt", "content\n");
     repo.git(&["add", "--", "a.txt"]);
-    write_hook(
-        &repo,
+    repo.write_hook(
         "pre-commit",
         "echo \"a.txt:1 trailing whitespace\"\necho \"lint found 1 problem\" >&2\nexit 1\n",
     );
@@ -875,18 +874,4 @@ async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
         "main",
         "nothing moved"
     );
-}
-
-/// Writes one of the repository's own hooks and makes it runnable.
-fn write_hook(repo: &TestRepo, name: &str, body: &str) {
-    let hooks = repo.path.join(".git").join("hooks");
-    std::fs::create_dir_all(&hooks).expect("create hooks dir");
-    let hook = hooks.join(name);
-    std::fs::write(&hook, format!("#!/bin/sh\n{body}")).expect("write the hook");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
-            .expect("make the hook executable");
-    }
 }

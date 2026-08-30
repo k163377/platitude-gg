@@ -70,6 +70,8 @@ impl RepoSession {
             join_key: Mutex::new(None),
             last_snapshot: Mutex::new(None),
             write_busy: std::sync::atomic::AtomicBool::new(false),
+            local_writes: std::sync::atomic::AtomicUsize::new(0),
+            write_join: Mutex::new(None),
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             refs_read: ReadSlot::default(),
             status_read: ReadSlot::default(),
@@ -97,7 +99,11 @@ impl RepoSession {
             stash_gate: OpGate::default(),
             worktrees_gate: OpGate::default(),
         });
-        runtime.spawn(Arc::clone(&session).write_loop(write_rx));
+        // The handle is kept, not dropped: the application's shutdown
+        // joins the loop so a local write in flight ends before the
+        // runtime does (`RepoSession::take_write_join`).
+        let write_loop = runtime.spawn(Arc::clone(&session).write_loop(write_rx));
+        *relock(&session.write_join) = Some(write_loop);
 
         let s = Arc::clone(&session);
         runtime.spawn(async move {

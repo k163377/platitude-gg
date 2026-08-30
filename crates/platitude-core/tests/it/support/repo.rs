@@ -96,6 +96,25 @@ impl TestRepo {
         &self.global_config
     }
 
+    /// Writes one of the repository's own hooks and makes it runnable —
+    /// the shebang is this method's, so `body` is the script alone. One
+    /// spelling of the mechanics for every test that needs a hook: the
+    /// exec bit is the half that only matters on machines the author is
+    /// not on, and a copy that forgot it passes everywhere but the
+    /// container.
+    pub fn write_hook(&self, name: &str, body: &str) {
+        let hooks = self.path.join(".git").join("hooks");
+        std::fs::create_dir_all(&hooks).expect("create hooks dir");
+        let hook = hooks.join(name);
+        std::fs::write(&hook, format!("#!/bin/sh\n{body}")).expect("write the hook");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
+                .expect("make the hook executable");
+        }
+    }
+
     /// Runs git in the repo and panics on failure. Returns trimmed stdout.
     pub fn git(&mut self, args: &[&str]) -> String {
         let dir = self.path.clone();

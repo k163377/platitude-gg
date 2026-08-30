@@ -568,20 +568,10 @@ async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
 /// reach this end as the same `[remote rejected]`, and only the sentence
 /// underneath differs.
 fn decline_every_push(bare: &TestRepo, said: &str) {
-    let hooks = bare.path.join(".git").join("hooks");
-    std::fs::create_dir_all(&hooks).expect("create hooks dir");
-    let hook = hooks.join("pre-receive");
-    std::fs::write(
-        &hook,
-        format!("#!/bin/sh\necho \"error: {said}\" >&2\nexit 1\n"),
-    )
-    .expect("write pre-receive hook");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
-            .expect("make the hook executable");
-    }
+    bare.write_hook(
+        "pre-receive",
+        &format!("echo \"error: {said}\" >&2\nexit 1\n"),
+    );
 }
 
 #[tokio::test]

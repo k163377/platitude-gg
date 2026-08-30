@@ -112,7 +112,7 @@ use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState,
     Shared, WriteRequest,
 };
-pub use write::replays_history;
+pub use write::{remote_paced, replays_history};
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;

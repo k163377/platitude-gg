@@ -196,7 +196,10 @@ impl RepoSession {
     pub fn delete_tag_everywhere(self: &Arc<Self>, tag: String, remote_name: String) {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
-        self.write(
+        // The far end paces the pair's second half and the read behind
+        // it, so the lane is said here — the op label is a local op's
+        // (`write_remote_paced`).
+        self.write_remote_paced(
             "tag",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {

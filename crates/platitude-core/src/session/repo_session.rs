@@ -141,6 +141,16 @@ pub struct RepoSession {
     /// Set while the write queue runs a request, so the poll can stay out
     /// of a repository that is mid-operation.
     pub(super) write_busy: std::sync::atomic::AtomicBool,
+    /// Local writes handed to the queue and not yet done with — the ones
+    /// a close waits out rather than kills ([`super::remote_paced`] is
+    /// the other lane). What the application's quit gate reads: zero on
+    /// every open session is the moment the window may go.
+    pub(super) local_writes: std::sync::atomic::AtomicUsize,
+    /// The write loop's own task. Handed to the application on the way
+    /// out ([`RepoSession::take_write_join`]): dropping the runtime drops
+    /// the loop mid-write, and `kill_on_drop` then ends git itself — so a
+    /// shutdown joins this first.
+    pub(super) write_join: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// One permit, held by a running poll: a tick that arrives while the
     /// previous one is still reading is dropped rather than queued.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
@@ -274,9 +284,32 @@ impl RepoSession {
         self.commands.set_recording(recording);
     }
 
-    /// Cancels everything this session is doing. Idempotent.
+    /// Cancels everything this session is doing — except the local
+    /// writes already asked for, running and queued alike, which run to
+    /// completion on tokens of their own ([`super::remote_paced`]):
+    /// killing git mid-write loses what the user asked for, dropping a
+    /// queued request loses it silently, and a local git is only ever
+    /// slow in proportion to the work. What stops is intake — nothing
+    /// sent after the close is accepted — and the network-paced requests
+    /// in the tail, which die on this cancel as always. Idempotent.
     pub fn close(&self) {
         self.root_cancel.cancel();
+    }
+
+    /// How many local writes are queued or running — the ones
+    /// [`RepoSession::close`] waits out rather than kills (network
+    /// writes die with the session instead). Zero is the moment nothing
+    /// here would outlast a shutdown.
+    pub fn local_writes_pending(&self) -> usize {
+        self.local_writes.load(Ordering::SeqCst)
+    }
+
+    /// The write loop's task, for the one caller that has to outwait it:
+    /// the application's shutdown joins it after [`RepoSession::close`]
+    /// so a local write in flight is not dropped with the runtime.
+    /// `None` after the first take.
+    pub fn take_write_join(&self) -> Option<tokio::task::JoinHandle<()>> {
+        relock(&self.write_join).take()
     }
 
     // --- internals ------------------------------------------------------

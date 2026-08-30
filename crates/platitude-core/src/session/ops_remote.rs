@@ -271,7 +271,8 @@ impl RepoSession {
     /// that asked morphs the way the plain delete's does. The remote
     /// half reaches the network, which is why the pair sits on the write
     /// queue as one command with one answer (合成は 1 手目が失敗したら
-    /// 止める — core.md).
+    /// 止める — core.md) — and why the pair says its lane itself: the op
+    /// label is a local op's, but the far end paces the second half.
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
@@ -280,7 +281,7 @@ impl RepoSession {
         force: bool,
     ) {
         let timeout = self.network_timeout();
-        self.write(
+        self.write_remote_paced(
             "branch",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {

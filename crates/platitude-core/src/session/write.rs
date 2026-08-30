@@ -25,6 +25,33 @@ pub fn replays_history(op: &str) -> bool {
     )
 }
 
+/// Whether `op` is paced by the far end of a network connection — the
+/// fetches and pushes, whose one real way to hang is a remote that stopped
+/// answering. These keep their time budget and die with the session.
+///
+/// Every other write is local: it costs what the repository's own size
+/// makes it cost, and slowness is not a hang — so the queue waits it out
+/// to the end, with no stock budget and no cancellation, even through a
+/// close. A kill mid-write is the one way this queue can lose what the
+/// user asked for (measured: a killed commit is simply gone), and a
+/// user's own wedged hook is the user's to deal with — the screen shows
+/// busy and the command log shows what is running.
+///
+/// **The one place the set is written**, for the reason
+/// [`replays_history`] gives: the budget lane and the cancel lane ask the
+/// same question, and a second spelling would let them disagree.
+///
+/// **The default an unlisted op gets is the unsupervised lane** — waited
+/// out, uncancellable, holding the quit gate. An op whose task reaches
+/// the network in *any* half must be named here or enqueue through
+/// [`RepoSession::write_remote_paced`] (the compound deletes do — their
+/// labels are local ops' names); nothing mechanical catches the
+/// omission, so the choice is this comment's to demand.
+#[must_use]
+pub fn remote_paced(op: &str) -> bool {
+    matches!(op, "push" | "fetch" | AUTO_FETCH_OP | OPEN_FETCH_OP)
+}
+
 impl RepoSession {
     // --- writes ---------------------------------------------------------
 
@@ -38,60 +65,137 @@ impl RepoSession {
         F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
+        self.enqueue(op, remote_paced(op), after, task);
+    }
+
+    /// [`RepoSession::write`] with the network lane chosen by the caller —
+    /// for the compound writes whose op label the classifier cannot see
+    /// through ("delete here and on the remote too" runs a push under a
+    /// local op's name). The far end paces them, so they keep their
+    /// budget and die with the session like any push.
+    pub(super) fn write_remote_paced<F, Fut>(
+        self: &Arc<Self>,
+        op: &'static str,
+        after: AfterWrite,
+        task: F,
+    ) where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
+        self.enqueue(op, true, after, task);
+    }
+
+    fn enqueue<F, Fut>(
+        self: &Arc<Self>,
+        op: &'static str,
+        remote_paced: bool,
+        after: AfterWrite,
+        task: F,
+    ) where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
         let request = WriteRequest {
             op,
             after,
+            remote_paced,
             run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
         };
+        // Counted before it is sent, so the count can never trail the
+        // queue: the loop's decrement pairs with exactly one increment.
+        if !remote_paced {
+            self.local_writes.fetch_add(1, Ordering::SeqCst);
+        }
         // Enqueueing is synchronous, so the queue order is the order the UI
         // asked in. Sending only fails once the session has shut down.
         if self.write_tx.send(request).is_err() {
+            if !remote_paced {
+                self.local_writes.fetch_sub(1, Ordering::SeqCst);
+            }
             tracing::debug!(op, "write dropped: the session is closed");
         }
     }
 
     /// Runs queued writes one at a time, in submission order.
+    ///
+    /// A close reaches this loop between requests, never inside one: the
+    /// write already running is waited out to its end where its lane says
+    /// so (its token is not the session's), and the requests already
+    /// queued behind it still run — the queue's promise is that the asked
+    /// order lands, and the quit gate holds the window for this same tail
+    /// (`local_writes`). What the close does stop is intake: nothing sent
+    /// after it is accepted, and the network-paced requests in the tail
+    /// die at once on the session's cancelled token. `biased`, so a close
+    /// that has landed wins the race into drain mode deterministically.
     pub(super) async fn write_loop(
         self: Arc<Self>,
         mut queue: tokio::sync::mpsc::UnboundedReceiver<WriteRequest>,
     ) {
         loop {
             let request = tokio::select! {
-                _ = self.root_cancel.cancelled() => return,
+                biased;
+                _ = self.root_cancel.cancelled() => break,
                 request = queue.recv() => match request {
                     Some(request) => request,
                     None => return,
                 },
             };
-            // Set around the whole request, refreshes included, so the
-            // poll keeps out until the write's own refresh has landed —
-            // except under the writes that replay, which the poll is
-            // allowed through so the screen can count them out.
-            let replays = replays_history(request.op);
-            self.write_busy.store(true, Ordering::SeqCst);
-            self.write_replays.store(replays, Ordering::SeqCst);
-            self.run_write(request).await;
-            self.write_replays.store(false, Ordering::SeqCst);
-            self.write_busy.store(false, Ordering::SeqCst);
+            self.serve(request).await;
+        }
+        queue.close();
+        while let Some(request) = queue.recv().await {
+            self.serve(request).await;
+        }
+    }
+
+    /// One request, served whole: the flags the poll reads set around it,
+    /// the run, and the count the quit gate reads given back.
+    async fn serve(self: &Arc<Self>, request: WriteRequest) {
+        // Set around the whole request, refreshes included, so the
+        // poll keeps out until the write's own refresh has landed —
+        // except under the writes that replay, which the poll is
+        // allowed through so the screen can count them out.
+        let replays = replays_history(request.op);
+        let local = !request.remote_paced;
+        self.write_busy.store(true, Ordering::SeqCst);
+        self.write_replays.store(replays, Ordering::SeqCst);
+        self.run_write(request).await;
+        self.write_replays.store(false, Ordering::SeqCst);
+        self.write_busy.store(false, Ordering::SeqCst);
+        if local {
+            self.local_writes.fetch_sub(1, Ordering::SeqCst);
         }
     }
 
     async fn run_write(self: &Arc<Self>, request: WriteRequest) {
-        let WriteRequest { op, after, run } = request;
+        let WriteRequest {
+            op,
+            after,
+            remote_paced,
+            run,
+        } = request;
         let Some(info) = self.repo_info() else {
             tracing::debug!(op, "write dropped: no repository is open");
             return;
         };
-        let cancel = self.root_cancel.clone();
         self.sink.event(SessionEvent::WriteStarted { op });
-        // The fetches nobody asked for travel this queue too — the
-        // interval's and the one an opening fires — and stay out of the
-        // command log unless background reads are on, so neither can make
-        // an offline laptop raise the panel.
-        let exec = if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP {
-            self.executor.clone()
+        // The request's lane decides both halves of its supervision at
+        // once: a network-paced write keeps the stock budget and dies
+        // with the session, a local one runs unbudgeted — on a token
+        // nothing cancels — to completion, even through a close. The
+        // fetches nobody asked for travel this queue too — the interval's
+        // and the one an opening fires — and stay on the background
+        // handle, out of the command log unless background reads are on,
+        // so neither can make an offline laptop raise the panel.
+        let (exec, cancel) = if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP {
+            (self.executor.clone(), self.root_cancel.clone())
+        } else if remote_paced {
+            (self.exec_user.clone(), self.root_cancel.clone())
         } else {
-            self.exec_user.clone()
+            (
+                self.exec_user.clone().without_stock_timeouts(),
+                CancellationToken::new(),
+            )
         };
         let result = run(exec, info, cancel).await;
         let rebuild_graph = match result {
@@ -103,10 +207,11 @@ impl RepoSession {
                 });
                 after == AfterWrite::Graph
             }
-            // Cancelled means the session is closing, but the event pair
-            // must still balance: the UI counts Started/Finished to know
-            // whether a write is in flight, and an unmatched start would
-            // pin that count for good.
+            // Only the network lane can land here — a local write's token
+            // is nobody's to cancel — and it means the session is closing.
+            // The event pair must still balance: the UI counts
+            // Started/Finished to know whether a write is in flight, and
+            // an unmatched start would pin that count for good.
             Err(error) if error.is_cancelled() => {
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
@@ -183,7 +288,7 @@ impl RepoSession {
 
 #[cfg(test)]
 mod tests {
-    use super::{AUTO_FETCH_OP, OPEN_FETCH_OP, replays_history};
+    use super::{AUTO_FETCH_OP, OPEN_FETCH_OP, remote_paced, replays_history};
 
     /// The set is the writes that hand a range to git one commit at a
     /// time. The three one-commit edits are in it because each is a
@@ -223,6 +328,44 @@ mod tests {
             OPEN_FETCH_OP,
         ] {
             assert!(!replays_history(op), "{op} is one pass, not a replay");
+        }
+    }
+
+    /// The network lane is the fetches and pushes in their four
+    /// spellings; every other op *label* defaults to the local lane,
+    /// which the session waits out — no stock budget binds it and a
+    /// close does not cancel it. The two compound deletes that push
+    /// under the labels "branch" and "tag" override the default at
+    /// their call sites (`write_remote_paced`), which this table cannot
+    /// see — the label answers for the plain ops alone.
+    #[test]
+    fn the_remote_paced_writes_are_the_fetches_and_pushes() {
+        for op in ["push", "fetch", AUTO_FETCH_OP, OPEN_FETCH_OP] {
+            assert!(remote_paced(op), "{op} is paced by the far end");
+        }
+        for op in [
+            "stage",
+            "unstage",
+            "discard",
+            "commit",
+            "checkout",
+            "reset",
+            "branch",
+            "tag",
+            "stash",
+            "merge",
+            "rebase",
+            "squash",
+            "drop",
+            "reword",
+            "cherry-pick",
+            "revert",
+            "resolve",
+            "mergetool",
+            "identity",
+            "remote",
+        ] {
+            assert!(!remote_paced(op), "{op} is local and waited out");
         }
     }
 }

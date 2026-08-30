@@ -17,10 +17,14 @@ use crate::error::GitError;
 #[path = "tests.rs"]
 mod tests;
 
-/// Default time budget for short-lived commands. The streaming log walks
-/// and `mergetool` (open-ended, user-paced) opt out via
-/// [`GitCommand::no_timeout`]; network commands set their own, longer
-/// budget instead (`remote`).
+/// Default time budget for short-lived commands — which is to say, for
+/// reads: the streaming log walks and `mergetool` (open-ended,
+/// user-paced) opt out via [`GitCommand::no_timeout`], network commands
+/// set their own, longer budget instead (`remote`), and the write
+/// queue's local lane lifts the stock budget wholesale
+/// (`session::write::remote_paced`) — a local write is waited out to
+/// completion, because killing git mid-write loses what it was writing
+/// and a local git is only ever slow in proportion to the work.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(windows)]
@@ -123,11 +127,14 @@ impl GitExecutor {
 
     /// Lifts the stock time budget from every command that did not set
     /// one of its own: those commands are then bounded by cancellation
-    /// alone. For test harnesses — under a loaded suite a git round trip
-    /// inflates ~25×, and a wall-clock cap that generous decides by load,
-    /// not correctness; the harness arms its own failure-detection
-    /// backstops instead (.claude/rules/core.md). The shipped application
-    /// keeps the stock budget.
+    /// alone. Two callers. The session's write queue puts its local lane
+    /// on this — a local write is waited out, never killed
+    /// (`session::write::remote_paced`). And test harnesses lift the
+    /// budget from their whole executor — under a loaded suite a git
+    /// round trip inflates ~25×, and a wall-clock cap that generous
+    /// decides by load, not correctness; the harness arms its own
+    /// failure-detection backstops instead (.claude/rules/core.md). The
+    /// application's reads keep the stock budget.
     pub fn without_stock_timeouts(mut self) -> Self {
         self.stock_timeout = None;
         self

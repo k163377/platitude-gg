@@ -300,3 +300,90 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
     );
     session.close();
 }
+
+/// The body of a hook that holds its commit until `release` exists — a
+/// causal barrier, so "git was still running when X happened" is
+/// arranged rather than raced (`TestRepo::write_hook` is the installer).
+/// The internal cap only keeps an orphaned hook from outliving the suite.
+fn barrier_hook(release: &std::path::Path) -> String {
+    let release = release.to_string_lossy().replace('\\', "/");
+    format!(
+        "i=0\nwhile [ ! -f \"{release}\" ]; do\n  i=$((i+1))\n  [ \"$i\" -gt 6000 ] && exit 1\n  sleep 0.1\ndone\n"
+    )
+}
+
+/// A close loses nothing the queue was already asked for. The running
+/// commit outlives it — the token handed to git is the write's own and no
+/// stock budget binds the local lane (`session::write::remote_paced`), so
+/// a tab going down, or the whole application, waits it out instead of
+/// killing it mid-write: killed, the commit is simply gone (measured with
+/// a short stock budget before the lane was split; a cancel lost it the
+/// same way). And the branch queued behind it still lands: the asked
+/// order is the queue's promise, and a close only stops intake — the
+/// same tail the quit gate holds the window for, so the pending count
+/// the gate reads drains to zero exactly when the loop ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_close_waits_out_the_running_write_and_the_queue() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    repo.write_file("new.txt", "content\n");
+    repo.git(&["add", "new.txt"]);
+    let release = repo.path.join("hook-release");
+    repo.write_hook("pre-commit", &barrier_hook(&release));
+
+    let (sink, session) = opened(&repo).await;
+    session.commit(
+        "survives the close".into(),
+        platitude_core::commit::CommitOptions::default(),
+    );
+    sink.wait_for("the commit started", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::WriteStarted { op: "commit" }))
+            .then_some(())
+    })
+    .await;
+    // Queued while the commit is still held by the hook: the close below
+    // must not cost the user this branch — they asked for it.
+    session.create_branch("queued-behind".into(), None, false);
+
+    session.close();
+    // Released only after the close: the hook is still waiting for this
+    // file, so git was provably alive when the cancel landed.
+    std::fs::write(&release, b"go").expect("release the hook");
+
+    assert_eq!(
+        write_result(&sink, "commit").await,
+        None,
+        "the commit landed"
+    );
+    assert_eq!(
+        write_result(&sink, "branch").await,
+        None,
+        "the queued branch landed behind it"
+    );
+    let done = crate::support::wait::bounded(
+        "the write loop ends with the queue drained",
+        session.take_write_join().expect("the loop's task"),
+    )
+    .await;
+    assert!(done.is_ok(), "the loop ended without panicking: {done:?}");
+
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        "survives the close"
+    );
+    assert!(
+        repo.git_ok(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "refs/heads/queued-behind"
+        ]),
+        "the branch asked for before the close exists after it"
+    );
+    assert_eq!(
+        session.local_writes_pending(),
+        0,
+        "the pending count drained with the loop"
+    );
+}

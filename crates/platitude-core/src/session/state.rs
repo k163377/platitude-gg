@@ -120,6 +120,12 @@ impl AutoFetchTicker {
 pub(super) struct WriteRequest {
     pub(super) op: &'static str,
     pub(super) after: AfterWrite,
+    /// Which lane serves it: `true` keeps the stock budget and dies with
+    /// the session, `false` is waited out to the end. Derived from the op
+    /// label ([`super::remote_paced`]) except for the compound writes
+    /// whose network half the label cannot see — those say so themselves
+    /// ([`super::RepoSession::write_remote_paced`]).
+    pub(super) remote_paced: bool,
     #[expect(
         clippy::type_complexity,
         reason = "a boxed async job needs its shape spelled out"
