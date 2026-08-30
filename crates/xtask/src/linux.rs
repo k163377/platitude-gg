@@ -37,10 +37,10 @@
 //!
 //! One thing does not survive the boundary: a worktree's `.git` is a file
 //! naming an absolute Windows path, which git inside reads as relative and
-//! cannot follow, so a run from a worktree logs "not a git repository"
-//! about /work once. Nothing depends on it — the app is handed the
-//! repositories it opens, and the identity it looks for in the checkout is
-//! not in a container anyway.
+//! cannot follow, so any git run with /work as its working directory calls
+//! it a broken repository rather than no repository. Nothing a run depends
+//! on stands there — `verify-ui` starts the app outside every checkout,
+//! on a git configuration of its own (`verify::run`).
 
 use std::io::IsTerminal;
 use std::path::Path;

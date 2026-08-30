@@ -133,9 +133,10 @@ pub(super) const TABLE: &[Verb] = &[
     // every demo repository is built with (`demo::repo`).
     //
     // Only the repository level has rows here. The chapter above it
-    // writes `--global` — the developer's own file on whatever machine
-    // the run is on — and no run owns that, so there is no verb that
-    // touches it.
+    // writes `--global`, which for a run is the fixture configuration it
+    // was started on (`shim::global_seed`) rather than a repository's own
+    // — a second scope with nothing of this repository in it, and no verb
+    // of its own.
     Verb {
         name: "settings-eol",
         when: &[

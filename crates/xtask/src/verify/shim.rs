@@ -77,6 +77,24 @@ pub(super) fn stage_old_git(
 /// write landed rather than that the value was already there.
 const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 
+/// The identity handed to every run that is not about the identity screen.
+///
+/// Which machine a run happens on must not reach the picture, and a git
+/// with no `user.*` is one of the ways it would: the window opens a modal
+/// asking for one, and that modal and its dimmer are two popups counted by
+/// verbs with nothing to do with either (`verbs::graph`, `commit-menu`).
+/// Deliberately not what the demo repositories commit as (`demo::repo`),
+/// so a settings screen holding a global value beside a repository's own
+/// still holds two different things.
+const MACHINE_IDENTITY: &str =
+    "[user]\n\tname = Verify Fixture\n\temail = verify@example.invalid\n";
+
+/// The whole global git configuration a run starts from: the seed the
+/// identity verbs are about, or the fixture identity for everyone else.
+pub(super) fn global_seed(verb: &str) -> &'static str {
+    identity_seed(verb).unwrap_or(MACHINE_IDENTITY)
+}
+
 /// The git configuration an identity run starts from, or `None` for every
 /// verb that has nothing to do with one.
 ///
@@ -113,5 +131,28 @@ pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
         "badges" | "badges-hover" => "skip",
         _ if arg.is_empty() => IDENTITY_ASKED,
         _ => arg,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{global_seed, identity_seed};
+
+    /// The seed is not the identity verbs' alone. A git with no `user.*`
+    /// opens a modal, the modal and its dimmer are popups, and the verbs
+    /// that count popups are about menus — so a run left on the machine's
+    /// own configuration fails or passes by who is sitting at it.
+    #[test]
+    fn only_the_identity_verbs_start_without_an_identity() {
+        for verb in ["commit-menu", "reset-menu", "perf", "wip", "old-git", ""] {
+            assert!(identity_seed(verb).is_none(), "{verb} is not one of them");
+            let seed = global_seed(verb);
+            assert!(seed.contains("name = "), "{verb} starts with no name");
+            assert!(seed.contains("email = "), "{verb} starts with no address");
+        }
+        // The screen those two photograph only stands over a configuration
+        // that names nobody, or half of somebody.
+        assert_eq!(global_seed("identity"), "");
+        assert!(!global_seed("identity-half").contains("name = "));
     }
 }

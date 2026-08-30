@@ -98,11 +98,14 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       tell itself apart needs standing beside it. It points at the tab
       its argument names (default 0) and reads the hover as well.
       `identity` and `identity-half` are read as a pair, and are the only
-      verbs whose write would land outside a demo repository — so they are
-      handed a git configuration of their own (GIT_CONFIG_GLOBAL in the
-      shot directory) and never see the one on this machine. The argument
-      is what to type, as `<name>|<email>`. `identity` fills the screen and
-      leaves it; `identity-half` saves against a configuration whose
+      verbs whose write would land outside a demo repository. Every run is
+      started on a git configuration of its own (GIT_CONFIG_GLOBAL in the
+      shot directory, a working directory outside every checkout to read
+      it in) and never sees the one on this machine; what these two seed
+      into it is the state the screen begins from, which for everyone else
+      is a fixture identity that keeps the screen from opening at all. The
+      argument is what to type, as `<name>|<email>`. `identity` fills the
+      screen and leaves it; `identity-half` saves against a seed whose
       user.email holds two values, which git refuses to overwrite with one
       — so the name lands and the address does not, the same way a lost
       configuration lock leaves it. Both are judged on their own report:

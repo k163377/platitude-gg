@@ -237,9 +237,32 @@ pub fn run(args: &[String]) -> Result<(), String> {
         staged
     };
 
+    // Which machine a run happens on must not reach the picture, and git
+    // takes its answer to "who is sitting here" from two places the run
+    // would otherwise inherit: a configuration file, and the directory it
+    // resolves one from. So every run is handed both of its own — a
+    // gitconfig carrying the fixture identity (`shim::global_seed`), and a
+    // working directory outside every checkout to read it in.
+    //
+    // Without the file a machine with no global `user.*` — which is every
+    // container — puts the first-run modal over the window on the way in,
+    // and the two popups it brings are counted by verbs that have nothing
+    // to do with an identity. Without the directory the tree this ran from
+    // gets a say, and inside a container that tree's `.git` names a
+    // Windows path git calls fatal rather than absent.
+    //
+    // The identity verbs are the ones whose write would land here rather
+    // than in a demo repository; they bring their own seed and answer the
+    // screen it raises, and go through the same door as everyone else.
+    let config = shot_dir.join("gitconfig");
+    std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
+    println!("git config for this run: {}", config.display());
+
     let mut cmd = Command::new(&exe);
     crate::app_env::clear_automation(&mut cmd);
-    cmd.current_dir(&root)
+    cmd.current_dir(&shot_dir)
+        .env("GIT_CONFIG_GLOBAL", &config)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("PATH", &child_path)
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
@@ -285,26 +308,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
-    super::perf::configure(&mut cmd, &opts.verb, &arg, &config_dir)?;
-    // The identity screen is the one surface whose write lands outside the
-    // demo repository — in the configuration of whoever is sitting at this
-    // machine. So the run is given one of its own: `--global` follows
-    // GIT_CONFIG_GLOBAL and the read-back resolves through the same file,
-    // which exercises the whole feature without reading or touching a real
-    // identity. The working directory goes with it, because git resolves
-    // configuration from one and the repository this tree lives in would
-    // otherwise get a say.
-    if let Some(seed) = identity_seed(&opts.verb) {
-        let config = shot_dir.join("gitconfig");
-        std::fs::write(&config, seed).map_err(|e| e.to_string())?;
-        cmd.current_dir(&shot_dir)
-            .env("GIT_CONFIG_GLOBAL", &config)
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("PG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
+    super::perf::configure(&mut cmd, &opts.verb, &arg)?;
+    // The screen the identity verbs are about: the seed written above is
+    // theirs, and this is what the dialog standing on it is told to do.
+    if identity_seed(&opts.verb).is_some() {
+        cmd.env("PG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
         if opts.verb == "identity-half" || opts.verb == "identity-tip" {
             cmd.env("PG_AUTO_IDENTITY_SAVE", "1");
         }
-        println!("identity config: {}", config.display());
     }
 
     // `solo` is the one verb the harness has to take part in: the window

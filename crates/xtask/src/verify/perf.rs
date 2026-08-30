@@ -1,33 +1,7 @@
 //! The offscreen contract check for the real-window performance driver.
 use std::process::Command;
 
-pub(super) fn configure(
-    cmd: &mut Command,
-    verb: &str,
-    arg: &str,
-    directory: &std::path::Path,
-) -> Result<(), String> {
-    if [
-        "perf",
-        "details-failure",
-        "rebase-plan",
-        "rebase-plan-run",
-        "rebase-edit-stop",
-        "wip",
-    ]
-    .contains(&verb)
-    {
-        // A missing global identity opens a modal over the graph on Linux.
-        // Only this child's git sees the fixture; never write the user's config.
-        let identity = directory.join("identity.gitconfig");
-        std::fs::write(
-            &identity,
-            "[user]\nname = Performance Fixture\nemail = perf@example.invalid\n",
-        )
-        .map_err(|e| e.to_string())?;
-        cmd.env("GIT_CONFIG_GLOBAL", identity)
-            .env("GIT_CONFIG_NOSYSTEM", "1");
-    }
+pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), String> {
     if verb != "perf" {
         return Ok(());
     }
