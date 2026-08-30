@@ -164,6 +164,86 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=settings-escape: the way out the screen owns, taken through the same function the `✕` and the
+    // Escape shortcut are one line onto (`SettingsDialog.escapeOut`). **A picture cannot answer this one** — a
+    // window with no settings screen over it is drawn exactly like one where the screen never opened — so what is
+    // judged is the pair of states in the report, not the shot.
+    //
+    // What it does not prove is that the key reaches the shortcut; nothing headless can post one (規約 §UI 自動化の
+    // 因果性 — the harness has no keyboard). It proves the road is there and ends where it says it does.
+    SampleTimer {
+        id: escapeTimer
+        running: AppBackend.autoAct === "settings-escape"
+        /// The screen was up before the way out was taken — the half the shot cannot hold.
+        property bool wasOpen: false
+        onTriggered: {
+            if (!escapeTimer.wasOpen) {
+                if (!settingsDialog.opened) {
+                    // The argument names the category, because the way out is not the same road from both: the git
+                    // one has the two chapters a Save stands in front of, and its reads land after the screen is up.
+                    settingsDialog.openAt(AppBackend.autoActArg === "" ? "app" : AppBackend.autoActArg)
+                    return
+                }
+                // Nothing may be counted as unsaved before git has answered for the boxes — a run that pressed the
+                // way out mid-read would be photographing the read rather than the way out.
+                if (settingsDialog.category === "git" && !settingsDialog.autoRepoReady)
+                    return
+                escapeTimer.wasOpen = true
+                settingsDialog.escapeOut()
+                return
+            }
+            if (settingsDialog.opened)
+                return
+            escapeTimer.stop()
+            // The two halves of `unsaved` are named apart: a way out that stopped says nothing about *which* of the
+            // two chapters thought it was holding an edit, and they are read out of different files.
+            AppBackend.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
+                              + " global=" + settingsDialog.autoUnsavedGlobal
+                              + " repo=" + settingsDialog.autoUnsavedRepo
+                              + " was_open=" + escapeTimer.wasOpen
+                              + " now_open=" + settingsDialog.opened)
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=settings-leave: the way out, taken while an identity chapter is holding an edit git has not been
+    // given. The run types into the box the way a keystroke does, then presses the same way out the `✕` and Escape
+    // press — and what has to be true afterwards is that the screen is **still there**, with the question standing
+    // in its foot.
+    //
+    // **Neither half is a picture.** A screen that stayed is drawn like one that was never asked to go, and a foot
+    // carrying the question is drawn like a foot carrying anything else until it is read.
+    SampleTimer {
+        id: leaveTimer
+        running: AppBackend.autoAct === "settings-leave"
+        /// The edit has been made and the way out pressed.
+        property bool acted: false
+        onTriggered: {
+            if (!leaveTimer.acted) {
+                if (!settingsDialog.opened) {
+                    settingsDialog.openAt("git")
+                    return
+                }
+                // The boxes have to be holding git's answer before one of them is changed, or the "edit" is only
+                // the read that had not landed yet.
+                if (settingsDialog.unsavedIdentities !== 0)
+                    return
+                settingsDialog.autoTypeIdentity("Someone Else")
+                if (settingsDialog.unsavedIdentities === 0)
+                    return
+                settingsDialog.escapeOut()
+                leaveTimer.acted = true
+            }
+            if (!settingsDialog.askingLeave)
+                return
+            leaveTimer.stop()
+            AppBackend.report("settings_leave unsaved=" + settingsDialog.unsavedIdentities
+                              + " asked=" + settingsDialog.askingLeave
+                              + " open=" + settingsDialog.opened)
+            window.finishAutoAct()
+        }
+    }
+
     // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own

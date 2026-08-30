@@ -79,6 +79,24 @@ ColumnLayout {
     readonly property bool dirty: identityFields.nameText.trim() !== repoConfig.localName
                                   || identityFields.emailText.trim() !== repoConfig.localEmail
 
+    /// The boxes hold an edit **somebody made** that this repository's file has not been given — which is not the
+    /// same question as `dirty` above. That one lights the Save and asks only whether the boxes and git disagree;
+    /// this one is what the way out of the screen stops for, so it also asks whether anybody typed
+    /// (`IdentityFields.dirty`). Guarded on the read as well: before git has answered there is nothing to disagree
+    /// with.
+    readonly property bool unsaved: repoConfig.state === "ready" && identityFields.dirty
+    /// The whole chapter, for the way out that puts the reader in front of what is holding it — the heading and its
+    /// rule included, since a column landing on the boxes alone arrives with the chapter's name already off the top.
+    function identityItem() {
+        return identitySection
+    }
+    /// Puts the boxes back to what this repository's file holds, for the reader who chose to leave an edit behind.
+    /// The touch goes with it — what is in the boxes is git's again, so the next answer from git may fill them.
+    function reloadIdentity() {
+        pane.touched = false
+        identityFields.load()
+    }
+
     function submitIdentity() {
         if (!identityActions.acceptEnabled)
             return
@@ -170,22 +188,14 @@ ColumnLayout {
     // rather than a warning. The group above wears `warning` because it replaces what every
     // git on the computer reads; this one reaches one repository, which is the reader's own choice and undone by
     // emptying a box. A colour that says "careful" on both would stop saying anything on either.
-    Label {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
+    HelpText {
         text: qsTr("Saved in the chosen repository's own git configuration. What is set here stands over the values above, for that repository only.")
     }
 
     // Nothing to choose from and nothing to set. The screen is reachable with no repository open, because the app
     // menu's one row opens it rather than a category (規約 §設定の画面).
-    Label {
-        Layout.fillWidth: true
+    HelpText {
         visible: pane.autoRepoRows === 0
-        wrapMode: Text.Wrap
-        color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
         text: qsTr("No repository is open. These settings are about one repository, so there is nothing to show.")
     }
 
@@ -209,6 +219,7 @@ ColumnLayout {
     }
 
     SettingsSection {
+        id: identitySection
         visible: pane.autoRepoRows > 0
         caption: qsTr("IDENTITY")
         IdentityFields {
@@ -240,12 +251,8 @@ ColumnLayout {
         // What an empty box actually falls back to cannot be shown inside it: the value lives in a file this screen is
         // not showing, and git resolves it through more than one of them. So it is said out loud instead, as what a
         // commit made here would carry right now.
-        Label {
-            Layout.fillWidth: true
+        HelpText {
             visible: repoConfig.effectiveName !== "" && repoConfig.effectiveEmail !== ""
-            wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
             text: qsTr("A commit made there now would be attributed to %1 <%2>.")
                   .arg(repoConfig.effectiveName).arg(repoConfig.effectiveEmail)
         }

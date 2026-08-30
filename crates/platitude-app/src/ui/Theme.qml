@@ -156,4 +156,13 @@ QtObject {
     readonly property int navBarReach: 5
     readonly property int navBarGutter: 8
     readonly property int messageMaxHeight: 108
+    // The widest a run of prose is set in this window (デザイン規約 §レイアウト初期値, 640): the card a dialog
+    // stands in, the git gate's lines, the screen a repository would not open on, and the sentences under a settings
+    // chapter. A different seat is not a different amount to read, so they share one width — the boxes beside them
+    // still take whatever the column gives (§設定の画面).
+    readonly property int textWidth: 640
+    // The settings screen's category rail. **Not the sidebar's 260** — that width is for a column of names nobody
+    // chose (branches, remotes, tags), and this one holds a handful of words this app writes itself
+    // (デザイン規約 §設定の画面).
+    readonly property int settingsRailWidth: 160
 }

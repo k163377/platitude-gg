@@ -69,6 +69,32 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settings_switch was_app=true app=false git=true",
     },
+    // The way out the screen owns, which the `✕` and Escape are both one
+    // line onto. **Nothing here is a picture**: a window with no settings
+    // screen over it is drawn exactly like one where the screen never
+    // opened, so both halves have to be said — that it was up, and that
+    // it went.
+    //
+    // `unsaved=0` is the third: the way out stops for an identity nobody
+    // has saved, so a run where it did not stop has to say that nothing
+    // was holding it. Boxes drift from git's answer on their own — git
+    // answers late, and answers again — and a screen that called any of
+    // that an edit would warn about work nobody did. The argument names
+    // the category, because the git one is where both such chapters are.
+    Verb {
+        name: "settings-escape",
+        when: &[],
+        plain: "settings_escape unsaved=0 global=false repo=false was_open=true now_open=false",
+    },
+    // The same way out, taken over an identity that has not been saved.
+    // **Neither half is a picture**: a screen that stayed is drawn like
+    // one nobody asked to close, and the question in its foot is drawn
+    // like any other foot until it is read.
+    Verb {
+        name: "settings-leave",
+        when: &[],
+        plain: "settings_leave unsaved=1 asked=true open=true",
+    },
     // The git category's two groups, which is the tallest this screen
     // gets. **The pair splits the claim**, because a row is one
     // substring and there are two things a picture cannot say.

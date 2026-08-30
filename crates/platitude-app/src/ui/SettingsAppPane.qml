@@ -147,16 +147,18 @@ ColumnLayout {
     // Where this category's values live, said before the chapters rather than in a line at the foot. The other two
     // categories say the same about themselves in their own files, and between them those sentences are the whole of
     // the difference between the categories.
-    Label {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
+    HelpText {
         text: qsTr("Kept by Platitude GG in its own settings file. Nothing here is written to your git configuration.")
     }
 
     SettingsSection {
         caption: qsTr("AUTOMATIC FETCH")
+        // Over the field, not under it: a sentence about what a chapter does belongs before the thing it describes,
+        // which is the shape the group and category sentences already keep (規約 §設定の画面).
+        HelpText {
+            text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Empty means off; %1 minutes is the longest interval.")
+                  .arg(AppBackend.autoFetchMaxMinutes)
+        }
         LabeledField {
             caption: qsTr("Interval")
             RowLayout {
@@ -184,18 +186,14 @@ ColumnLayout {
                 Item { Layout.fillWidth: true }
             }
         }
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
-            text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Empty means off; %1 minutes is the longest interval.")
-                  .arg(AppBackend.autoFetchMaxMinutes)
-        }
     }
 
     SettingsSection {
         caption: qsTr("COMMIT GRAPH")
+        HelpText {
+            text: qsTr("How much history a graph opens with. The rest is loaded from the row at the bottom of it, a quarter of this at a time — with the whole history there is no such row. %1 is the smallest window.")
+                  .arg(AppBackend.initialCommitsMin)
+        }
         LabeledField {
             caption: qsTr("Initial commits")
             RowLayout {
@@ -233,18 +231,13 @@ ColumnLayout {
             text: qsTr("Load the whole history")
             onToggled: pane.applyCommits()
         }
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
-            text: qsTr("How much history a graph opens with. The rest is loaded from the row at the bottom of it, a quarter of this at a time — with the whole history there is no such row. %1 is the smallest window.")
-                  .arg(AppBackend.initialCommitsMin)
-        }
     }
 
     SettingsSection {
         caption: qsTr("AVATARS")
+        HelpText {
+            text: qsTr("An avatar for anyone whose commits you read. The list offers this repository's authors. Nothing is fetched: it comes from one of your own files, copied in beside these settings.")
+        }
         Repeater {
             id: avatarRepeater
             /// The one column every row's name is laid into, as wide
@@ -314,13 +307,6 @@ ColumnLayout {
             color: Theme.danger
             font.pixelSize: Theme.fontSm
             text: AppBackend.avatarError
-        }
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSm
-            text: qsTr("An avatar for anyone whose commits you read. The list offers this repository's authors. Nothing is fetched: it comes from one of your own files, copied in beside these settings.")
         }
     }
 

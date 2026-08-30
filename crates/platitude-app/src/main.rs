@@ -231,6 +231,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/SettingsAppPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsGitPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/SettingsHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsGroup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsRepoPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SettingsSection.qml", "qt/qml/platitude");

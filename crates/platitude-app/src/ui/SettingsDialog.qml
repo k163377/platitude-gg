@@ -22,6 +22,18 @@ AppDialog {
     /// screen, and the door decides which of them the reader lands on.
     property string category: "app"
 
+    /// The categories, and what each is called. **One list**: the rail lays it out and the title reads the current
+    /// word out of it, so the two can never come to call the same category by different names.
+    readonly property var categories: [{ key: "app", word: qsTr("Application") },
+                                       { key: "git", word: qsTr("Git") }]
+    readonly property string categoryWord: {
+        for (let i = 0; i < settingsDialog.categories.length; i++) {
+            if (settingsDialog.categories[i].key === settingsDialog.category)
+                return settingsDialog.categories[i].word
+        }
+        return ""
+    }
+
     /// The tab this screen reads git through: the avatar candidates come off its graph, the merge editor off its
     /// working tree. The settings themselves are global, but "whose commits are these" and "what would git launch"
     /// are read where the person is.
@@ -135,6 +147,8 @@ AppDialog {
     property string prefillEmail: ""
 
     onOpened: {
+        // Nothing is being asked yet, whatever the last reader left standing.
+        settingsDialog.askingLeave = false
         appPane.load()
         gitPane.loadIdentity()
         gitPane.loadTool()
@@ -168,6 +182,7 @@ AppDialog {
     // identity is the exception — git cannot be given both of its keys in
     // one go, so it keeps a Save of its own in the chapter it belongs to.
     onClosed: {
+        settingsDialog.askingLeave = false
         settingsDialog.applyFields()
         settingsDialog.prefillName = ""
         settingsDialog.prefillEmail = ""
@@ -179,31 +194,134 @@ AppDialog {
         gitPane.applyTool()
     }
 
+    /// An identity chapter is holding an edit git has not been given, and the reader is on their way out. **The one
+    /// thing on this screen that can be lost** — every other field writes as it is finished with, so this is the
+    /// only place a Save stands between what is typed and what git holds (規約 §設定の画面).
+    readonly property int unsavedIdentities: gitPane.unsavedIdentities
+    /// The same, told apart: the two chapters read out of different files, so a way out that stopped has to be able
+    /// to say which of them stopped it.
+    readonly property bool autoUnsavedGlobal: gitPane.unsavedIsGlobal
+    readonly property bool autoUnsavedRepo: gitPane.unsavedIsRepo
+    /// How wide the screen's one block is: the rail, the line beside it, and the column of chapters, with the same
+    /// step on both sides of that line. Everything on the screen that is not a full-width rule is laid inside it.
+    /// **Symmetric on purpose**: one `spaceXxl` of air outside the rail, and one on the far side of the column for
+    /// the bar to stand in. Centre the block and the ink is centred with it — a lane on one side only would put
+    /// everything the reader looks at that far left of the middle.
+    readonly property real blockWidth: 2 * Theme.spaceXxl + Theme.settingsRailWidth + 2 * Theme.spaceLg
+                                       + Theme.borderWidth + Theme.textWidth
+
+    /// A way out was taken over an unsaved identity and turned down. **The mark is armed, not the screen blocked**:
+    /// the reader was shown what is holding it and the next press goes through (規約 §設定の画面).
+    property bool askingLeave: false
+
+    /// The way out, for the two things that take it: the `✕` in the corner and Escape. One function so they cannot
+    /// come apart, and so a run enters the same road a hand does (規約 §UI 自動化の因果性).
+    ///
+    /// **The first press over an unsaved identity does not close.** It puts the reader in front of the chapter that
+    /// is holding it — the right category, scrolled to the boxes — and turns the mark. Nothing is asked in words and
+    /// no second window opens: what a person needs at that moment is to *see* the thing, and the Save it needs is
+    /// standing right there. **The second press closes**, because a way out that can be refused twice is not a way
+    /// out. Leaving puts the boxes back, so a screen opened again is not still offering the edit that was dropped.
+    function escapeOut() {
+        if (settingsDialog.unsavedIdentities > 0 && !settingsDialog.askingLeave) {
+            settingsDialog.category = "git"
+            settingsDialog.askingLeave = true
+            settingsDialog.showUnsaved()
+            return
+        }
+        if (settingsDialog.unsavedIdentities > 0)
+            gitPane.dropUnsavedIdentities()
+        settingsDialog.close()
+    }
+    /// Sends the chapters to the boxes that are holding the edit. Mapped rather than measured: the chapters are two
+    /// components deep and only the column they are laid into knows where they ended up.
+    function showUnsaved() {
+        const item = gitPane.unsavedIdentityItem()
+        if (!item)
+            return
+        const at = item.mapToItem(chapterCol, 0, 0).y
+        chapters.contentY = Math.max(0, Math.min(at - Theme.spaceXl,
+                                                 chapterCol.implicitHeight - chapters.height))
+    }
+    /// Typing again takes the arming off: the mark is about a press the reader made, not about the state of the
+    /// boxes, and an edit made after it is one they have not been shown yet.
+    onUnsavedIdentitiesChanged: settingsDialog.askingLeave = false
+    /// Automation: leaves the global identity holding an edit, so the way out has something to stop for.
+    function autoTypeIdentity(text) {
+        gitPane.autoTypeIdentity(text)
+    }
+
+    // Two bands, and the rule between them is what says the top one does not move (規約 §設定の画面). It runs the
+    // whole width — the screen covers the window, so a line stopped short of the frame would read as an unfinished
+    // one rather than as the edge of a band. **What is inside the bands does not**: both are laid in the one block
+    // the screen is centred on, so the title stands over the rail and the way out over the column it closes. That is
+    // what the padding here is 0 for — each band carries its own, and the rule carries none.
+    padding: 0
+
     contentItem: ColumnLayout {
-        spacing: Theme.spaceLg
-        Label {
-            text: qsTr("Settings")
-            font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+        spacing: 0
+
+        // Escape is heard as a shortcut rather than left to the popup's own `closePolicy`, which needs the key to
+        // reach the screen through whatever holds the caret. Owned by the screen, so Qt hands it over only while
+        // this is the topmost thing open: a list standing over it still takes the first press for itself and the
+        // screen stays (qmltestrunner 実測, `tst_esc7`).
+        Shortcut {
+            // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the
+            // single form takes only the first of them (Qt warns about exactly this).
+            sequences: [StandardKey.Cancel]
+            enabled: settingsDialog.opened
+            onActivated: settingsDialog.escapeOut()
         }
 
+        // ---- the header band -------------------------------------------------
+        // Laid in the same block the chapters are, so the title stands over the rail and the way out over the column
+        // it closes (`SettingsHeader`). Its own file for the reason the panes are: this screen is at the length it
+        // is held to, and the band is a whole thing rather than a line of it.
+        SettingsHeader {
+            Layout.maximumWidth: settingsDialog.blockWidth
+            Layout.alignment: Qt.AlignHCenter
+            word: settingsDialog.categoryWord
+            unsaved: settingsDialog.unsavedIdentities > 0
+            armed: settingsDialog.askingLeave
+            onClosed: settingsDialog.escapeOut()
+        }
+        // The band's edge is the window's, so this one line is not laid in the block.
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: Theme.borderWidth
+            color: Theme.borderDefault
+        }
+
+        // ---- the categories and their chapters -------------------------------
+        // **Centred, and the margins are what a narrowing window eats first** (2026-08-30 ユーザー指示). The block
+        // is a fixed thing — a rail of a known width beside a column set to the width words are read at — so on a
+        // wide window the leftover is air on both sides rather than a screen hanging off the left edge. Narrower
+        // than the block, `fillWidth` takes over and the column gives way; `blockWidth` is the ceiling, not a floor.
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.maximumWidth: settingsDialog.blockWidth
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: Theme.spaceLg
+            Layout.bottomMargin: Theme.spaceLg
             spacing: Theme.spaceLg
 
             // The categories. A list of names down the left of a screen, lit the way the sidebar's rows are
-            // (規約 §左メニューの所作) — the same kind of thing in the same clothes, and at the same width
-            // (規約 §レイアウト初期値 サイドバー幅). Fixed, because a layout inside a layout fills by default and a
-            // rail that took the width the chapters did not want would move every time the category changed.
+            // (規約 §左メニューの所作) — the same kind of thing in the same clothes. **Not the sidebar's width**
+            // (2026-08-30 ユーザー報告「左メニューが長すぎ」): 260 is for a column of names this app did not write
+            // — branches, remotes, tags, whatever anybody called them — and this one holds a handful of words it
+            // did. `settingsRailWidth` leaves room for the longest a category is going to be. Fixed rather than
+            // fitted, because a layout inside a layout fills by default and a rail that took whatever the chapters
+            // did not want would move every time the category changed.
             ColumnLayout {
                 Layout.fillWidth: false
-                Layout.preferredWidth: 260
+                Layout.leftMargin: Theme.spaceXxl
+                Layout.preferredWidth: Theme.settingsRailWidth
                 Layout.alignment: Qt.AlignTop
                 spacing: 0
                 Repeater {
                     id: categoryRepeater
-                    model: [{ key: "app", word: qsTr("Application") }, { key: "git", word: qsTr("Git") }]
+                    model: settingsDialog.categories
                     delegate: Rectangle {
                         id: categoryRow
                         required property var modelData
@@ -218,12 +336,33 @@ AppDialog {
                         color: categoryRow.current
                                ? Theme.bgSelected
                                : categoryHover.hovered ? Theme.bgHover : "transparent"
+                        // Which category is holding something git has not been given. **The rail is where it has to
+                        // be said**: the question at the foot names the chapter, but a reader standing in the other
+                        // category cannot see either of them — and this is the one column on screen that is always
+                        // showing both (2026-08-30. The shape JetBrains marks a modified settings page with).
+                        NavIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.spaceSm
+                            width: Theme.iconSm
+                            height: Theme.iconSm
+                            kind: "bang"
+                            tint: Theme.warning
+                            visible: categoryRow.modelData.key === "git"
+                                     && settingsDialog.unsavedIdentities > 0
+                        }
                         Label {
                             anchors.verticalCenter: parent.verticalCenter
                             x: Theme.spaceSm
                             text: categoryRow.modelData.word
                             font.pixelSize: Theme.fontMd
-                            color: categoryRow.current ? Theme.textPrimary : Theme.textSecondary
+                            // **Every row is `textPrimary`, standing or not** (2026-08-30 ユーザー報告
+                            // 「左メニューの文字が弱すぎる」). What says which one is showing is the wash under it,
+                            // exactly as in the left menu these rows are dressed as — there a row does not go dim
+                            // for not being the one selected. Dimming the other one also said the wrong thing: the
+                            // category nobody is in is the one there is any reason to press (規約 §無効
+                            // 「選ばれていないことを無効の色で言わない」).
+                            color: Theme.textPrimary
                         }
                         HoverHandler {
                             id: categoryHover
@@ -245,30 +384,52 @@ AppDialog {
             // git category is two groups deep — so the thing a card was avoided for (規約 §設定の画面) arrives here
             // anyway, and this is where it can be answered without the screen resizing itself under the reader.
             //
-            // **The floating bar, not the panels' slab** (デザイン規約 §スクロールバー / §QML 実装ルール のバーの
-            // 選び方). The slab says its idle state with `bgElevated`, which is the step above a *pane's* ground —
-            // and this screen's ground is `bgElevated` itself, so an idle slab here is the ground exactly (measured: the
-            // five pixels at the edge came back `#0F172A`, and a bar that is meant to dim rather than vanish had
-            // vanished). The translucent thumb is the one with a reading over a card, and this edge can take it: the
-            // ink reaches eight pixels in, where the combo's chevron starts, and what it passes over below that is
-            // the inside of a box near its own right frame.
+            // **The panels' slab, with the idle step this ground needs** (デザイン規約 §ペインのスクロールバー.
+            // 2026-08-30 ユーザー指示 =「settings のスクロールバーは意匠を足してよい」). The slab's three states are
+            // counted up from whatever it stands on, and the default idle is the step above a *pane's* ground —
+            // which on this screen is the ground exactly, so a resting bar was not there at all (実測: 辺の 5px が
+            // `#0F172A`). One step further up (`borderSubtle`) is the same rule read against this ground, and it is
+            // what lets the reader see there is more to read before touching anything. The floating thumb could not
+            // say that: three tenths of one ink over `bgElevated` is barely a colour.
+            //
+            // **The bar stands at the window's edge, not against the chapters.** The band's right inset is spent
+            // inside this view rather than outside it, so the room the reader can see to the right of the form is
+            // where the bar goes (2026-08-30 ユーザー報告「余白が余ってるのにピッタピタにくっつけるのをやめて」) —
+            // the chapters keep their own right edge, level with the `OK` and the `✕`, and nothing of theirs comes
+            // near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and nothing
+            // more, which is the same "just barely" in a smaller size.
+            // **No margin of its own.** The row's `spacing` is the step on both sides of the line, and an extra one
+            // here put the chapters eight pixels further from it than the rail is — a difference small enough to
+            // read as a mistake rather than as a choice (2026-08-30 ユーザー報告).
             Flickable {
                 id: chapters
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.leftMargin: Theme.spaceSm
                 clip: true
                 contentWidth: width
                 contentHeight: chapterCol.implicitHeight
                 // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: AutoScrollBar { id: chaptersBar }
+                ScrollBar.vertical: PaneScrollBar {
+                    id: chaptersBar
+                    idleColor: Theme.borderSubtle
+                }
 
                 ColumnLayout {
                     id: chapterCol
                     // Width rather than a margin: a `Flickable`'s content item is not a layout, so `Layout.*` on this
-                    // one would be read by nobody. No gutter — a floating bar does not take one (規約 §余白).
-                    width: chapters.width
+                    // one would be read by nobody. **The band's right inset is spent here** — the view runs to the
+                    // window's edge so the bar can stand there — **and the column stops at the width a run of words
+                    // is set at** (`textWidth`. 2026-08-30).
+                    //
+                    // A settings screen is read, and a sentence set across 1200 pixels is one the eye loses its
+                    // place returning from: at `fontMd` that is around 180 characters, twice what a line should be.
+                    // **The boxes stop there too** rather than only the prose — a form whose inputs are twice the
+                    // width of the sentences explaining them reads as two columns that happen to be stacked, and a
+                    // box a thousand pixels wide for a person's name is not asking for a name. Every settings screen
+                    // worth copying does this (VS Code, Windows 11, GitHub all cap the column and leave the rest of
+                    // a wide window empty); what fills the space here is the bar, at the far edge where it belongs.
+                    width: Math.min(chapters.width - Theme.spaceXxl, Theme.textWidth)
                     spacing: Theme.spaceXl
 
                     SettingsAppPane {
@@ -277,7 +438,7 @@ AppDialog {
                         curPage: settingsDialog.curPage
                         prefillName: settingsDialog.prefillName
                         prefillEmail: settingsDialog.prefillEmail
-                        onAccepted: settingsDialog.close()
+                        onAccepted: settingsDialog.escapeOut()
                     }
 
                     SettingsGitPane {
@@ -290,19 +451,15 @@ AppDialog {
                         // reader is standing.
                         showing: settingsDialog.opened && settingsDialog.category === "git"
                         screenOpen: settingsDialog.opened
-                        onAccepted: settingsDialog.close()
+                        onAccepted: settingsDialog.escapeOut()
                     }
                 }
             }
         }
-        // One button, because there is only one thing left for a button to
-        // do. A Cancel here would promise to put back a picture that was
-        // assigned the moment it was named, and a Save would claim credit
-        // for writes that already happened — which is also why the one
-        // button carries no check.
-        DialogActions {
-            acceptText: qsTr("OK")
-            onAccepted: settingsDialog.close()
-        }
+        // **No foot.** The `OK` that stood here closed a screen that had already written everything it was going to
+        // write, which is a button for confirming nothing (2026-08-30 ユーザー判断). What is left is the way out in
+        // the corner, and a way out does not need a second copy of itself along the bottom edge — every settings
+        // screen worth copying (VS Code, Windows 11, the browsers) ends the same way: content to the bottom of the
+        // window and nothing under it.
     }
 }

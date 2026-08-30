@@ -23,6 +23,18 @@ ColumnLayout {
     /// Both boxes hold something. What a Save is enabled by, wherever that button stands — except where empty is an
     /// answer in its own right (the repository chapter, where it means "not set here").
     readonly property bool filled: nameField.text.trim() !== "" && emailField.text.trim() !== ""
+    /// **Somebody typed, and what they typed is not what git holds.** The one thing on the settings screen that can
+    /// be left half-done — everything else there writes as it is finished with, so this is the only edit a reader
+    /// can walk away from and lose (`SettingsDialog.escapeOut`).
+    ///
+    /// **Both halves are required, and `touched` is the half that matters.** A difference between a box and git's
+    /// answer is not by itself somebody's edit: git answers late, answers again on its own, and empties these boxes
+    /// on the way to answering about another repository — and a way out that stopped for any of that would be
+    /// warning about work nobody did (2026-08-30 ユーザー報告「何も変えてなくても警告が出る」). What the Save is lit
+    /// by stays the plain difference, since a Save has to go out when the boxes and git disagree however they came
+    /// to (`SettingsRepoPane.dirty`).
+    readonly property bool dirty: fields.touched
+                                  && (nameField.text !== fields.heldName || emailField.text !== fields.heldEmail)
 
     /// What `load()` fills the boxes from: what git holds now, wherever the caller reads it.
     property string heldName: AppBackend.identityName
@@ -46,8 +58,13 @@ ColumnLayout {
                                  ? qsTr("git still reports a different identity. A setting in the repository this window was started in can sit over this one.")
                                  : ""
 
-    /// The line under the boxes. The default says how far the write reaches, for the gate, which has nothing above it
+    /// The line over the boxes. The default says how far the write reaches, for the gate, which has nothing above it
     /// that does; the settings screen's warning already says it, so there the line only names the two keys.
+    ///
+    /// **Over them, not under.** It is about the pair — both boxes and the Save beside them — and a sentence set
+    /// after the second box reads as belonging to that box alone (2026-08-30 ユーザー報告). The rule it now follows
+    /// is the one the group and category sentences already did: **what a thing is goes before it, what a thing
+    /// currently amounts to goes after** (`errorText` below, and the settings screen's effective-value lines).
     property string note: qsTr("Saved for every repository on this computer (user.name and user.email).")
 
     /// Enter was pressed in one of the boxes.
@@ -61,18 +78,46 @@ ColumnLayout {
     /// `AppCombo.wanted` documents, and for the same reason).
     signal edited()
 
-    /// Fills the boxes from what git answers with now. Called when the screen around them opens.
+    /// Somebody has typed since the boxes were last filled from git. **What keeps a late answer from being read as
+    /// an edit**: git may answer after the screen opened, and boxes still holding the value from before that answer
+    /// differ from it without anybody having touched them — which `dirty` would otherwise call unsaved work and the
+    /// way out would stop for (実測: the way-out verb wedged on exactly this).
+    property bool touched: false
+    // **Through `Connections`, not an `onEdited` here.** A handler written in a component's own body is replaced
+    // outright by one a caller writes at the instantiation, and one caller does (`SettingsRepoPane`) — so the
+    // component's own bookkeeping would quietly stop happening in exactly the chapter that has the most of it.
+    Connections {
+        target: fields
+        function onEdited() { fields.touched = true }
+    }
+    onHeldNameChanged: if (!fields.touched) fields.load()
+    onHeldEmailChanged: if (!fields.touched) fields.load()
+
+    /// Fills the boxes from what git answers with now. Called when the screen around them opens, and again whenever
+    /// git's answer moves under boxes nobody has touched.
     function load() {
         nameField.text = fields.heldName
         emailField.text = fields.heldEmail
+        fields.touched = false
     }
     function focusName() {
         nameField.forceActiveFocus()
+    }
+    /// Automation: leaves the name box holding something git has not been given. Both halves of what a keystroke
+    /// does, because only one of them happens on its own — setting `text` in code raises no `textEdited`, which is
+    /// the whole point of `edited()` above, so a run that only assigned would leave the callers that guard on the
+    /// reader's touch thinking nobody had touched anything.
+    function autoTypeName(text) {
+        nameField.text = text
+        fields.edited()
     }
 
     Layout.fillWidth: true
     spacing: Theme.spaceLg
 
+    HelpText {
+        text: fields.note
+    }
     LabeledField {
         caption: qsTr("Name")
         RowLayout {
@@ -124,12 +169,16 @@ ColumnLayout {
             }
         }
     }
+    // **The one thing on the settings screen that is not written as it is finished with**, said where it is true
+    // rather than in a band at the foot of the screen (規約 §可否・警告の出し場所 — the warning goes where the
+    // operation is). The Save that answers it is the next thing under this line, which is the whole reason the way
+    // out puts the reader here rather than asking them a question somewhere else (`SettingsDialog.escapeOut`).
     Label {
         Layout.fillWidth: true
+        visible: fields.dirty
         wrapMode: Text.Wrap
-        color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
-        text: fields.note
+        color: Theme.warning
+        text: qsTr("Not given to git yet.")
     }
     // What went wrong, in the caller's words or git's (`errorText`).
     Label {

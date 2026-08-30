@@ -160,10 +160,37 @@ ColumnLayout {
     function focusIdentity() {
         identityFields.focusName()
     }
+    /// Automation: leaves this group's name box holding an edit, so the way out has something to stop for.
+    function autoTypeIdentity(text) {
+        identityFields.autoTypeName(text)
+    }
     function submitIdentity() {
         if (!identityActions.acceptEnabled)
             return
         AppBackend.saveIdentity(identityFields.nameText, identityFields.emailText)
+    }
+
+    // ---- what the way out has to stop for -------------------------------
+    /// How many identity chapters are holding an edit git has not been given. **The only thing on this screen a
+    /// reader can lose by leaving** — every other field writes as it is finished with, and these two keep a Save
+    /// because git cannot be handed both of their keys at once (規約 §設定の画面). Counted rather than answered
+    /// yes/no so the question can say which of the two it is about.
+    readonly property int unsavedIdentities: (identityFields.dirty ? 1 : 0) + (repoPane.unsaved ? 1 : 0)
+    /// Which group the question is about, for its sentence. Both is possible; the word then names neither.
+    readonly property bool unsavedIsGlobal: identityFields.dirty
+    readonly property bool unsavedIsRepo: repoPane.unsaved
+    /// The boxes a refused way out puts the reader in front of. The group's own chapter first, since it is the one
+    /// higher up the screen; null when neither is holding anything.
+    function unsavedIdentityItem() {
+        if (identityFields.dirty)
+            return identitySection
+        return repoPane.unsaved ? repoPane.identityItem() : null
+    }
+    /// Puts both back to what git holds, for the reader who said to leave them behind. The way out runs this rather
+    /// than just closing, so a screen opened again does not come back still holding the edit that was discarded.
+    function dropUnsavedIdentities() {
+        identityFields.load()
+        repoPane.reloadIdentity()
     }
 
     // ---- what the repository group answers for, forwarded ------------------
@@ -227,6 +254,7 @@ ColumnLayout {
         }
 
         SettingsSection {
+            id: identitySection
             caption: qsTr("IDENTITY")
             IdentityFields {
                 id: identityFields
@@ -249,6 +277,11 @@ ColumnLayout {
 
         SettingsSection {
             caption: qsTr("MERGE EDITOR")
+            HelpText {
+                // Named rather than picked from a list: the only way to enumerate them is `git mergetool
+                // --tool-help`, whose output is laid out for a person to read.
+                text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
+            }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
@@ -268,15 +301,6 @@ ColumnLayout {
                     onActivated: pane.applyTool()
                     onAccepted: pane.accepted()
                 }
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSm
-                // Named rather than picked from a list: the only way to enumerate them is `git mergetool
-                // --tool-help`, whose output is laid out for a person to read.
-                text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
             }
         }
 

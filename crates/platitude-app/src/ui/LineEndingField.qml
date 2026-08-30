@@ -90,6 +90,12 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceLg
 
+    // What this chapter writes, said before the chooser: a sentence about the setting goes over it, and only what
+    // the setting currently amounts to goes under (規約 §設定の画面).
+    HelpText {
+        visible: text !== ""
+        text: field.note
+    }
     // No caption over the chooser: the chapter's own heading already names it, and one control under a heading that
     // says the same word twice reads as two things (`MERGE EDITOR` is the same shape). A caption is for telling the
     // boxes of a chapter apart, which is why the identity keeps two.
@@ -113,22 +119,11 @@ ColumnLayout {
             onActivated: index => field.pick(index)
         }
     }
-    Label {
-        Layout.fillWidth: true
-        visible: text !== ""
-        wrapMode: Text.Wrap
-        color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
-        text: field.note
-    }
     // What the file the chooser is showing actually amounts to, which the chooser cannot say on its own: the value it
     // falls back to lives in a file this screen is not showing, and git resolves it through more than one of them.
-    Label {
-        Layout.fillWidth: true
+    // **This one stays under** — it is not what the setting is, it is where the setting has got to.
+    HelpText {
         visible: field.saysEffective && field.ready
-        wrapMode: Text.Wrap
-        color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
         text: field.effectiveLine
     }
     Label {

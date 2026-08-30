@@ -167,6 +167,7 @@ SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsAppPane 1.0 SettingsAppPane.qml
 SettingsDialog 1.0 SettingsDialog.qml
 SettingsGitPane 1.0 SettingsGitPane.qml
+SettingsHeader 1.0 SettingsHeader.qml
 SettingsGroup 1.0 SettingsGroup.qml
 SettingsRepoPane 1.0 SettingsRepoPane.qml
 SettingsSection 1.0 SettingsSection.qml
