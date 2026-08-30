@@ -37,6 +37,20 @@ pub(super) struct Options {
     pub(super) no_board: bool,
 }
 
+/// A path off the command line, pinned to where it was typed.
+///
+/// The run starts the app in a directory of its own (`run`), so a relative
+/// path that reached the child as written would name one place to xtask
+/// and another to the app. Resolved here, once, against the directory the
+/// command was actually run in.
+fn typed_path(raw: &str) -> PathBuf {
+    let path = PathBuf::from(raw);
+    match path.is_absolute() {
+        true => path,
+        false => std::env::current_dir().map_or(path, |cwd| cwd.join(raw)),
+    }
+}
+
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     let mut opts = Options {
         verb: String::new(),
@@ -60,7 +74,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         match a.as_str() {
             "--repo" => opts
                 .repo
-                .push(PathBuf::from(it.next().ok_or("--repo needs a path")?)),
+                .push(typed_path(it.next().ok_or("--repo needs a path")?)),
             "--preset" => opts
                 .preset
                 .push(it.next().ok_or("--preset needs a name")?.clone()),
@@ -82,11 +96,10 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .map_err(|e| format!("--watchdog-ms: {e}"))?;
             }
             "--shot-dir" => {
-                opts.shot_dir = Some(PathBuf::from(it.next().ok_or("--shot-dir needs a path")?));
+                opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }
             "--config-dir" => {
-                opts.config_dir =
-                    Some(PathBuf::from(it.next().ok_or("--config-dir needs a path")?));
+                opts.config_dir = Some(typed_path(it.next().ok_or("--config-dir needs a path")?));
             }
             "--restore" => opts.restore = true,
             "--allow-write-failure" => opts.allow_write_failure = true,
@@ -124,6 +137,45 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
 #[cfg(test)]
 mod tests {
     use super::parse;
+
+    /// The app is started in a directory of its own, so a path that stayed
+    /// as it was typed would name one place to xtask and another to the
+    /// child — and a run against the wrong repository photographs a window
+    /// that opened, which is the failure that passes.
+    #[test]
+    fn a_path_off_the_command_line_is_pinned_where_it_was_typed() {
+        let opts = parse(&[
+            "commit".to_string(),
+            "--repo".to_string(),
+            "demo".to_string(),
+            "--shot-dir".to_string(),
+            "shots".to_string(),
+            "--config-dir".to_string(),
+            "conf".to_string(),
+        ])
+        .expect("a verb and three paths");
+        let shot = opts.shot_dir.as_ref().expect("--shot-dir");
+        let config = opts.config_dir.as_ref().expect("--config-dir");
+        for path in [&opts.repo[0], shot, config] {
+            assert!(path.is_absolute(), "{} stayed relative", path.display());
+        }
+        assert!(opts.repo[0].ends_with("demo"));
+
+        // And one that was already absolute is left exactly as it stands:
+        // the container is handed paths of its own (`linux`).
+        let typed = if cfg!(windows) {
+            "C:\\tmp\\demo"
+        } else {
+            "/tmp/demo"
+        };
+        let kept = parse(&[
+            "commit".to_string(),
+            "--repo".to_string(),
+            typed.to_string(),
+        ])
+        .expect("an absolute path");
+        assert_eq!(kept.repo[0], std::path::Path::new(typed));
+    }
 
     #[test]
     fn the_flag_is_off_until_it_is_asked_for() {
