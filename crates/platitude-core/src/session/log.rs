@@ -208,6 +208,9 @@ impl RepoSession {
             // From here the column is empty and turning on this stream.
             watch.announced(generation);
         }
+        // Outside the lock the reset was taken under: a fault raised here
+        // unwinds, and `watch` is what the empty column hears from.
+        self.run_pass_step(PassStep::Streaming);
         let started = Instant::now();
         match self.stream_log(workdir, generation, options, cancel).await {
             Ok(totals) => {
@@ -282,6 +285,7 @@ impl RepoSession {
         // and replaces the graph at the end, so a pass that never gets
         // there leaves a real picture standing (`PassWatch`).
         let mut watch = PassWatch::operation(self);
+        self.run_pass_step(PassStep::Swapping);
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
         let mut rows: Vec<LogRow> = Vec::new();

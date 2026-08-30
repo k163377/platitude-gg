@@ -38,6 +38,71 @@ enum Told {
     Operation,
 }
 
+/// A place inside a graph pass that a test can be let into.
+///
+/// **The one ending in the session nothing outside can ask for.**
+/// `PassWatch` speaks for a pass that stopped without a word, and the
+/// only thing that stops one that way is a panic — which the runtime
+/// swallows at the task boundary, so a report that stopped working would
+/// look exactly like the silence it exists to break. Every other ending
+/// is asked for from outside and can be driven from there; this one has
+/// to be caused from inside the pass, which is what these are for.
+///
+/// The two steps are the two answers (`Told`): past the first the pass
+/// owns an empty column, past the second it owns nothing on screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PassStep {
+    /// A streaming pass, once it has emptied the graph and announced the
+    /// generation the column is now turning on.
+    Streaming,
+    /// An off-screen pass, at the point it begins the walk it would swap
+    /// in at the end.
+    Swapping,
+}
+
+/// What the next pass to reach a given step runs there.
+pub(super) type PassStepHook = (PassStep, Box<dyn FnOnce() + Send>);
+
+impl RepoSession {
+    /// Leaves `run` for the next graph pass to reach `at`, to be run
+    /// there, on that pass's own task, once.
+    ///
+    /// **The door a test ends a pass through**, since nothing it can ask
+    /// for ends one the way `PassWatch` answers for: a failed git, a
+    /// timeout and a cancellation all leave by a `match` that reports
+    /// itself, and only an unwind leaves by no arm at all. So the fault
+    /// has to be raised inside the pass, and `run` is what raises it —
+    /// the panic is the caller's, which is why there is none here.
+    ///
+    /// Taken by the pass that runs it, so exactly one falls over. A pass
+    /// reaching a step nobody left anything at is a lock and a look.
+    pub fn run_inside_next_pass(&self, at: PassStep, run: impl FnOnce() + Send + 'static) {
+        *relock(&self.pass_step) = Some((at, Box::new(run)));
+    }
+
+    /// Runs what was left at `at`, if that is the step it was left at.
+    ///
+    /// Taken out under the lock and run outside it: what it is here to do
+    /// is unwind, and a guard held across that would poison the lock —
+    /// which the pass behind this one would then take, run, and unwind
+    /// through in turn.
+    pub(super) fn run_pass_step(&self, at: PassStep) {
+        let run = {
+            let mut left = relock(&self.pass_step);
+            match left.take() {
+                Some((step, run)) if step == at => Some(run),
+                other => {
+                    *left = other;
+                    None
+                }
+            }
+        };
+        if let Some(run) = run {
+            run();
+        }
+    }
+}
+
 impl<'a> PassWatch<'a> {
     pub(super) fn operation(session: &'a RepoSession) -> Self {
         Self {

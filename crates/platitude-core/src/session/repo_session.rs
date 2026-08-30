@@ -23,6 +23,11 @@ pub struct RepoSession {
     /// The graph passes that could still walk, whether or not the stream
     /// is still theirs (see [`GraphPasses`]).
     pub(super) graph_passes: Arc<GraphPasses>,
+    /// What the next graph pass to reach a given step runs there
+    /// ([`RepoSession::run_inside_next_pass`]). Empty in the application,
+    /// which never leaves anything here: the only caller is a test ending
+    /// a pass the one way nothing else can.
+    pub(super) pass_step: Mutex<Option<PassStepHook>>,
     /// Which diff read is the current one. Bumped by every
     /// [`RepoSession::load_diff`], and read again just before the colours
     /// for that diff would be worked out: a reader going down a commit's

@@ -94,7 +94,8 @@ pub use graph_refresh::{
 };
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
-use pass_watch::PassWatch;
+pub use pass_watch::PassStep;
+use pass_watch::{PassStepHook, PassWatch};
 use print::RowPrint;
 pub use query::{DiffRefreshOutcome, DiffRefreshTask};
 use read_slot::{ReadSlot, SlotHeld};

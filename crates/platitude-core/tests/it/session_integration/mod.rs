@@ -13,6 +13,7 @@ mod carry_rewrite;
 mod command_log;
 mod details;
 mod helper_binary;
+mod pass_watch;
 mod query;
 mod rebuild;
 mod stream;
