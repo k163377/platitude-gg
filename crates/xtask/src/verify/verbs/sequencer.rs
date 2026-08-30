@@ -73,11 +73,14 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The plan stood open with a verb of each cost on it. The counts
     // are the halves a picture underclaims: dirty is what opens the
-    // run button, and pushed is the amber the range earned.
+    // run button, pushed is the amber the range earned, and selected is
+    // the row the model opened on — the highlight in the picture is the
+    // page's, so nothing else here would notice a plan that opened with
+    // no selection at all.
     Verb {
         name: "rebase-plan",
         when: &[],
-        plain: "rebase_plan rows=4 dirty=true drops=1 onto=true pushed=3",
+        plain: "rebase_plan rows=4 dirty=true drops=1 onto=true pushed=3 selected=0",
     },
     // The run's landing: answered by name, the dropped row gone from
     // the graph's own model, the draft away, and no red line raised.

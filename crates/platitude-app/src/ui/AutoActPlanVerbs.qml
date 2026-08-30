@@ -69,13 +69,16 @@ Item {
             planOpenTimer.stop()
             if (planOpenTimer.act === "rebase-plan") {
                 // One of each look: a fold leaning into its parent and a drop struck through. The selection is
-                // already on the newest row — the plan opens it there — so the right pane is that commit's.
+                // already on the newest row — `RebasePlanModel::take` opens it there — so the right pane is that
+                // commit's. **`selected=` is in the report because the picture cannot say it**: the row's own
+                // highlight reads `page.selectedOid`, which the `activateRow` below sets, so a model that opened
+                // with nothing selected would photograph exactly the same.
                 plan.setAction(1, "squash")
                 plan.setAction(2, "drop")
                 page.activateRow(workTree.headOid)
                 AppBackend.report("rebase_plan rows=" + plan.stepCount + " dirty=" + plan.dirty
                                   + " drops=" + plan.dropCount + " onto=" + (plan.ontoRef !== "")
-                                  + " pushed=" + page.planPushed)
+                                  + " pushed=" + page.planPushed + " selected=" + plan.selectedRow)
                 renderedBarrier.begin()
             } else if (planOpenTimer.act === "rebase-plan-run") {
                 // Dropping a commit origin still reaches, so the *dropped row stays drawn* — the old line is
@@ -87,8 +90,9 @@ Item {
                 planRanTimer.begin(workTree.headOid)
                 plan.runPlan()
             } else if (planOpenTimer.act.startsWith("plan-reword")) {
-                // The newest row is already the selected one, and the plan already put the right pane on its commit
-                // (`RepoPage.onPlanActiveChanged`) — all that is missing is the verb that makes the boxes the row's.
+                // The newest row is already the selected one (`RebasePlanModel::take`), and the plan already put the
+                // right pane on its commit (`RepoPage.onPlanActiveChanged`) — all that is missing is the verb that
+                // makes the boxes the row's.
                 plan.setAction(0, "reword")
                 planRewordTimer.begin(planOpenTimer.act)
             } else {
