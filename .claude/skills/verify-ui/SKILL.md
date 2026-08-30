@@ -74,7 +74,7 @@ hover はアプリへは注入できない(§Windows での実行・デバッグ
 
 **`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も **verbs.md の表がそのまま通る**(`--preset` / `--repo` / `--no-build` / `--watchdog-ms` / `--select` …)。フォントスタックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
 
-- **スクショはホスト側の一時ディレクトリに出る**。パスは実行時に `screenshots and settings: <path>` として印字されるので、そこを読む(コンテナ内の `/out` を見に行かない)。`--shot-dir` を明示した時はそちらが優先され、この橋渡しは行われない
+- **スクショはホスト側の一時ディレクトリに出る**。パスは実行時に `screenshots and settings: <path>` として印字されるので、そこを読む(コンテナ内の `/out` を見に行かない)。`--shot-dir` を明示した時はそちらが優先され、この橋渡しは行われない。**Linux の run に `--shot-dir` を渡さない** — Windows のパスは `--repo` と同じく MSYS に書き換えられ、しかも橋渡しが切れるので、**カレントディレクトリの下に `C:` という名前のディレクトリが生えて**その中に絵が出る(2026-08-30 実測。`PASS` は出るので、`git status` に `?? "C:/"` が並ぶまで気付かない。掃除は `rm -rf "./C:"`)
 - **offscreen はコンテナでは既定の姿**。Windows のような `QT_QPA_FONTDIR` の指定は要らず、**.ttc の罠も無い**(fontconfig 経由)。イメージが `fonts-noto-cjk` を持つので**日本語はそのまま出る** — デザイン規約が Ubuntu 側に名指ししている `Noto Sans CJK JP` が完全一致で解決することは実測済み
 - **2 つの PNG を画素で突き合わせない**。フォントのラスタライズが違うので一致しないのが正常。判定は各 OS で `screenshot saved=true` + 目視
 - **どの動詞も「この機械に誰が座っているか」を読まない** — xtask は run ごとに shot dir へ gitconfig を書き、`GIT_CONFIG_GLOBAL` + `GIT_CONFIG_NOSYSTEM=1` と**チェックアウトの外にある作業ディレクトリ**を渡してアプリを起動する(`verify::run`)。中身は `shim::global_seed` — identity 系の動詞だけが自分の種を持ち、他は全部同じ fixture identity(`Verify Fixture`)。**識別できる帰結が 3 つ**: identity 未設定のコンテナでも**質問モーダルが出ない**(出ると dimmer と 2 つで `popups=` を狂わせる = `commit-menu` / `reset-menu` が構造的に落ちていた形)/ **帯に `SET IDENTITY` が立たない**(両 OS 同じ)/ **worktree の壊れた `.git`(Windows の絶対パスを書いたファイル)を踏む git が居ない**ので `not a git repository` の行も identity 欄の赤も出ない。**`--repo` / `--shot-dir` / `--config-dir` の相対パスは打った場所で解決される**(`options::typed_path`。アプリの cwd が別の場所なので、渡すまでに絶対化しないと二重の意味になる)
