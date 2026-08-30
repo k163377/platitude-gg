@@ -122,3 +122,15 @@ memory.csvの時刻は実際の採取間隔を表す。100msのsleepに処理時
 4回の長い間隔の開始は7,720〜7,727msに集中した。FPS平均の差だけで評価せず、この共通区間を次の調査対象にする。
 GC、行固有のlayout/Canvas/文字処理、backgroundのUI適用、計数自体の負荷のどれかは未特定。
 診断用runのWorkingSetや平均FPSの差を改善量として報告しない。native保持元の帰属と予算合否は未完了。
+
+## 最新mainへの追従
+
+作業中にmainへ追加された5コミットを含む `3ff44ad6` へ、追加分の3コミットをrebaseした。
+`range-diff` は3件とも同じ差分と判定。統合後に同じ3つのperf動詞を含む段2をPASS（3分06秒）とし、
+両OSのPNGも確認した。ログは `target/perf/p1-rebase-check/check-logs`。
+この再検証は表示契約の確認であり、rebase後の新しい性能baselineではない。
+
+上記の実機値が指す旧コミットIDは、採取時のものとして変更していない。
+各診断ディレクトリに `source-cc5d8eb6.zip` / `source-f020b6b2.zip` を保存した。
+後者にはSHA-256一致を確認した `measured-platitude-gg.exe` も保存し、rebase後に上書きされたreleaseと区別する。
+追加分は席bに保持し、今回のmain反映対象だった `97f072e6` までの11コミットとは分離する。
