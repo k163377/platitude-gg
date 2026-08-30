@@ -20,6 +20,7 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
         println!("  Linux private column is VmData, not Windows committed Private Bytes.");
     }
     println!("  memory units: MiB (1024 * 1024 bytes)");
+    diagnostic_notes(opts);
     let settled: Vec<f64> = kept
         .iter()
         .filter(|r| r.settled_working_set > 0)
@@ -49,7 +50,10 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
     }
     let fps: Vec<f64> = kept.iter().filter_map(|r| r.fps).collect();
     if !fps.is_empty() {
-        println!("  scroll      : {} fps", spread(&fps));
+        println!(
+            "  scroll      : {} fps (GUI-delivered frameSwapped)",
+            spread(&fps)
+        );
     }
     let details: Vec<f64> = kept
         .iter()
@@ -99,6 +103,20 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
         .and_then(|r| r.breakdown.clone())
     {
         println!("\n  breakdown at the largest Rust heap of the kept runs:\n    {line}");
+    }
+}
+
+fn diagnostic_notes(opts: &Options) {
+    if opts.trace_frames {
+        println!("  diagnostic frame trace enabled; do not use this run for budget acceptance.");
+    }
+    if opts.open && opts.scroll {
+        println!(
+            "  compare only after matching screen, Hz, DPI and window geometry in the evidence."
+        );
+        println!(
+            "  display snapshots do not detect a mode change that was reverted during the run."
+        );
     }
 }
 

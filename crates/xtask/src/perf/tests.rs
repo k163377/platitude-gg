@@ -186,3 +186,32 @@ fn an_empty_repository_requires_a_frame_but_has_no_first_chunk() {
     reading.startup_ms = None;
     assert!(missing(&reading, &opts).is_err());
 }
+
+#[test]
+fn requesting_a_frame_trace_rejects_a_partially_preserved_series() {
+    let opts = options(&["--repo", ".", "--no-select", "--trace-frames"]);
+    let mut reading = unselected_reading();
+    absorb(
+        "perf_complete selection=none details=false diff=false graph=true scrolled=true",
+        &mut reading,
+    );
+    absorb(
+        "scroll_bench fps=60 visible=true moved=100 frame_count=2",
+        &mut reading,
+    );
+    absorb("perf_scroll_frame visible=true row=42", &mut reading);
+    absorb(
+        "perf_frame index=0 clock_ms=1000 interval_ms=16",
+        &mut reading,
+    );
+    assert!(
+        missing(&reading, &opts)
+            .expect_err("one frame is missing")
+            .contains("frame trace")
+    );
+    absorb(
+        "perf_frame index=1 clock_ms=1016 interval_ms=16",
+        &mut reading,
+    );
+    assert!(missing(&reading, &opts).is_ok());
+}

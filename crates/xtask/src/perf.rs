@@ -14,6 +14,7 @@
 //! the line still comes, with `counted=false` and no Rust-heap total.
 
 mod artifacts;
+mod display;
 mod options;
 mod report;
 mod sampler;
@@ -59,6 +60,8 @@ struct Reading {
     frame_p95_ms: Option<f64>,
     frame_p99_ms: Option<f64>,
     frame_max_ms: Option<f64>,
+    frame_count: Option<usize>,
+    traced_frames: usize,
     scroll_visible: bool,
     scroll_framed: bool,
     selection: Option<String>,
@@ -98,9 +101,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for run in 0..=opts.runs {
         let run_dir = output.join(format!("run-{run}"));
         std::fs::create_dir(&run_dir).map_err(|e| e.to_string())?;
+        display::capture(&run_dir, "before")?;
         let result = measure(&exe, &path, &root, &opts, &run_dir);
         std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
             .map_err(|e| e.to_string())?;
+        display::capture(&run_dir, "after")?;
         let reading = result?;
         let discarded = run == 0;
         println!(
@@ -151,6 +156,7 @@ fn measure(
     // A config directory per process, so another perf process or a previous
     // run's restored state cannot decide what this one does.
     let (config_dir, log, samples) = artifacts::open_run(run_dir)?;
+    let trace_frames = if opts.trace_frames { "1" } else { "0" };
     let mut cmd = Command::new(exe);
     crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(root)
@@ -166,6 +172,7 @@ fn measure(
         .env("PG_PERF_OID", &opts.oid)
         .env("PG_PERF_FILE", &opts.file)
         .env("PG_PERF_DIFF", if opts.diff { "1" } else { "0" })
+        .env("PG_PERF_TRACE_FRAMES", trace_frames)
         // A real window, deliberately: `verify-ui` runs offscreen, and
         // offscreen Qt builds no scene graph worth measuring.
         .env_remove("QT_QPA_PLATFORM")
@@ -382,6 +389,12 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     {
         gaps.push("fps of a visible, moving graph");
     }
+    if opts.scroll
+        && opts.trace_frames
+        && (reading.traced_frames == 0 || reading.frame_count != Some(reading.traced_frames))
+    {
+        gaps.push("the complete timestamped frame trace");
+    }
     if gaps.is_empty() {
         return Ok(());
     }
@@ -393,6 +406,9 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     ))
 }
 fn absorb(line: &str, found: &mut Reading) {
+    if line.contains("perf_frame ") {
+        found.traced_frames += 1;
+    }
     if line.contains("perf_done") {
         found.perf_done = true;
     }
@@ -434,6 +450,7 @@ fn absorb(line: &str, found: &mut Reading) {
         found.diff_frame_ms.push(ms);
     }
     if line.contains("scroll_bench") {
+        found.frame_count = field(line, "frame_count=").and_then(|v| v.parse().ok());
         found.fps = field(line, "fps=").and_then(|v| v.parse().ok());
         found.scroll_visible = field(line, "visible=") == Some("true")
             && field(line, "moved=")

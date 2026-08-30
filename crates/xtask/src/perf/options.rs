@@ -24,6 +24,7 @@ pub(super) struct Options {
     pub(super) diff: bool,
     pub(super) output: Option<PathBuf>,
     pub(super) breakdown: bool,
+    pub(super) trace_frames: bool,
     pub(super) build: bool,
     /// Start with no repository at all — the window and nothing in it.
     /// What it is for: subtracting this from a run that opened an empty
@@ -47,6 +48,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         diff: true,
         output: None,
         breakdown: false,
+        trace_frames: false,
         build: true,
         open: true,
     };
@@ -92,6 +94,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--output" => opts.output = Some(PathBuf::from(value()?)),
             "--no-open" => opts.open = false,
             "--breakdown" => opts.breakdown = true,
+            "--trace-frames" => opts.trace_frames = true,
             "--no-build" => opts.build = false,
             other => return Err(format!("unknown option: {other}")),
         }

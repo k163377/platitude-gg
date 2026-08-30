@@ -35,6 +35,7 @@ pub(super) fn configure(
         return Err("verify-ui perf takes none, details, diff, scroll, or scroll-none".into());
     }
     cmd.env("PG_AUTO_PERF", "1")
+        .env("PG_PERF_TRACE_FRAMES", "1")
         .env(
             "PG_PERF_SELECTION",
             if ["none", "scroll-none"].contains(&arg) {

@@ -12,6 +12,22 @@ Item {
     property int frameBefore: 0
     readonly property bool expectsPage: AppBackend.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
+    // QML ScreenInfo has no refreshRate. Match its name to the runner's OS
+    // mode snapshot; never infer the panel rate from measured frameSwapped.
+    readonly property string displayInfo: !AppBackend.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
+        screen: window.screen.name, model: window.screen.model, manufacturer: window.screen.manufacturer,
+        screenX: window.screen.virtualX, screenY: window.screen.virtualY,
+        screenWidth: window.screen.width, screenHeight: window.screen.height,
+        dpr: window.screen.devicePixelRatio, logicalDpi: window.screen.logicalPixelDensity * 25.4,
+        x: window.x, y: window.y, width: window.width, height: window.height,
+        visibility: window.visibility
+    })
+
+    function reportDisplay(phase) {
+        if (AppBackend.autoPerf)
+            AppBackend.report("perf_display clock_ms=" + PerfProbe.clockMs() + " phase=" + phase
+                              + " data=" + driver.displayInfo)
+    }
 
     function begin() {
         if (!AppBackend.autoPerf || driver.finished)
@@ -35,6 +51,7 @@ Item {
         if (driver.finished)
             return
         driver.finished = true
+        driver.reportDisplay("complete")
         AppBackend.noteMemory("perf-done")
         AppBackend.report("perf_done open=" + (driver.page !== null))
         if (PerfProbe.verifying)
@@ -66,8 +83,12 @@ Item {
         onTriggered: AppBackend.noteMemory(driver.page === null ? "idle" : "open")
     }
 
-    Component.onCompleted: driver.begin()
+    Component.onCompleted: {
+        driver.reportDisplay("begin")
+        driver.begin()
+    }
     onPageChanged: driver.begin()
+    onDisplayInfoChanged: driver.reportDisplay("changed")
     Connections {
         target: AppBackend
         function onIdentityChanged() { driver.begin() }

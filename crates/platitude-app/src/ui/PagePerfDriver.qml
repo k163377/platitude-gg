@@ -173,7 +173,8 @@ Item {
 
     function reportViewport(at) {
         const view = graphPane.view
-        AppBackend.report("perf_viewport at=" + at + " y=" + view.contentY + " origin=" + view.originY
+        AppBackend.report("perf_viewport clock_ms=" + PerfProbe.clockMs() + " at=" + at
+                          + " y=" + view.contentY + " origin=" + view.originY
                           + " height=" + view.contentHeight + " viewport=" + view.height
                           + " row=" + view.indexAt(view.width / 2, view.contentY + view.height / 2))
     }

@@ -74,8 +74,8 @@ const TAIL: &str = "  perf --repo <path> [--label <name>] [--runs <n>] [--breakd
       --breakdown builds with the `memprobe` feature and adds
       PG_MEM_REPORT=1, then prints the largest `mem report` line the run
       produced: live Rust heap, the models and the session parts holding
-      it, and what none of them account for. That remainder plus the
-      process total is what separates the toolkit's bytes from ours.
+      it, and what none of them account for. Process memory minus Rust
+      live bytes is not a measurement of Qt's live heap.
       options:
         --runs <n>        kept runs after the discarded first (default 3)
         --watchdog-ms <n> outer hang ceiling (default 300000)
@@ -92,6 +92,8 @@ const TAIL: &str = "  perf --repo <path> [--label <name>] [--runs <n>] [--breakd
         --file <path>     open this changed file (default: first)
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
+        --trace-frames    diagnostic app-clock frame series in app.log;
+                          flushed after scrolling, not a budget run
         --no-open         start with no repository at all — the window and
                           nothing in it. Subtracting this from a run that
                           opened an empty repository leaves the cost of

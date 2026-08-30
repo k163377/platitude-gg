@@ -39,10 +39,12 @@ pub(super) fn prepare(root: &Path, exe: &Path, opts: &Options) -> Result<PathBuf
     let mut manifest =
         std::fs::File::create(directory.join("manifest.txt")).map_err(|e| e.to_string())?;
     writeln!(manifest,
-        "protocol=2\nos={}\narch={}\nexe={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nruns={}\n",
+        "protocol=3\nos={}\narch={}\nexe={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nruns={}\n",
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.repo.display(),
         opts.selection, opts.oid, opts.file, opts.diff, opts.scroll, opts.open, opts.settle_ms,
         opts.breakdown, opts.runs).map_err(|e| e.to_string())?;
+    writeln!(manifest, "trace_frames={}\nframe_boundary=GUI-delivered-frameSwapped\ndisplay_modes=display-before.txt,display-after.txt\nwindow_metadata=app.log perf_display\n", opts.trace_frames)
+        .map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;
     capture(&directory, "source-head.txt", root, &["rev-parse", "HEAD"])?;
     capture(
