@@ -184,17 +184,21 @@ Item {
             mergeCommitTimer.begin()
             AppBackend.report("merge_commit pressed=" + wipPane.pressCommit())
         } else if (act === "op-exit" || act === "op-exit-go") {
-            // "-go" runs the held row the argument names to its end.
-            page.showWip()
-            if (act === "op-exit-go")
-                AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
-        } else if (act === "op-exit-lands") {
-            // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
-            // the write's own answer (`AutoActDriver.awaitOpExitLanding`).
+            // "-go" runs the row the argument names to its end — the hold where the row has one, the plain press where
+            // it has not (`OpExitRow.completeHold`).
             //
             // **The argument is the bare word**, dashes added here: a positional that begins with `--` is turned away
             // by the option parser as a misspelled flag of its own (`verify::options`), so a verb that took the flag
-            // whole could not be asked for at all.
+            // whole could not be asked for at all. **No default** — the word *is* which of the four rows to run, so a
+            // run that forgot it matches nothing and says `op_exit_held false`, which is the line it is judged on.
+            page.showWip()
+            if (act === "op-exit-go")
+                AppBackend.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
+        } else if (act === "op-exit-lands") {
+            // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
+            // the write's own answer (`AutoActDriver.awaitOpExitLanding`). The argument is the bare word for the same
+            // reason as above, and here it does have a default: this verb asks after one landing rather than after a
+            // row.
             page.showWip()
             AppBackend.report("op_exit_held "
                               + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))

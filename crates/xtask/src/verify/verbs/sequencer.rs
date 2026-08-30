@@ -106,6 +106,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "op_exit_landed wip=false op= follows=true onscreen=true",
     },
+    // Which of the exit card's rows the run actually ran. The card sizes
+    // itself to what it holds, so a row that was never reached crops to
+    // the same picture as one that ran and took its operation with it —
+    // and the row is named by a positional word, where a misspelling
+    // (or a forgotten argument) is simply a row nothing matches.
+    Verb {
+        name: "op-exit-go",
+        when: &[],
+        plain: "op_exit_held true",
+    },
     // The same landing reached the ordinary way: a conflict resolved,
     // staged, and continued. Its file rows do empty, so this is the half
     // that was reachable before an operation could hold the face open —
