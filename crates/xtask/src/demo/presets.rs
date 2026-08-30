@@ -93,6 +93,14 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "deep" => deep(&mut repo)?,
+        "perf" => {
+            deep(&mut repo)?;
+            repo.commit(
+                "f.txt",
+                "A changed file for the visible diff.\n",
+                "test: performance scenario",
+            )?;
+        }
         "deep-detached" => deep_detached(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,

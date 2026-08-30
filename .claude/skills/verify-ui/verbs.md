@@ -6,6 +6,8 @@
 
 ## 動詞一覧
 
+- `perf none|details|diff|scroll|scroll-none --preset perf`: 性能ドライバーの表示契約。未選択、詳細、diff、diffを閉じて表示グラフをスクロール、未選択スクロールの5通り。全て `perf_complete` の状態とPNGで判定する。offscreenのfps・メモリは性能値に使わず、実測は `cargo xtask perf`。空コミットを持つ `deep` はdiff要求を失敗させるため、変更ファイル付きの専用presetを使う。
+
 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**:
 
 - `commit`(引数はメッセージ。**省略時は `chore: commit from the headless run`** — 空のまま撃つと git が拒み、コミットの積まれていない絵が撮れる)

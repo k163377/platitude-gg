@@ -162,7 +162,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Turning the timer off turns that one off with it, which is also
     // what leaves the toolbar offering a plain `push` — an end that had
     // fetched would know it was diverged and offer the overwrite instead.
-    if opts.verb == "push-outdated" {
+    if opts.verb == "push-outdated" || opts.verb == "perf" {
         let settings = config_dir.join("settings.toml");
         std::fs::write(
             &settings,
@@ -285,7 +285,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
-
+    super::perf::configure(&mut cmd, &opts.verb, &arg)?;
     // The identity screen is the one surface whose write lands outside the
     // demo repository — in the configuration of whoever is sitting at this
     // machine. So the run is given one of its own: `--global` follows

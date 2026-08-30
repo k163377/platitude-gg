@@ -27,6 +27,8 @@ Item {
         driver.finished = true
         AppBackend.noteMemory("perf-done")
         AppBackend.report("perf_done open=" + (driver.page !== null))
+        if (PerfProbe.verifying)
+            window.finishAutoAct()
     }
 
     Connections {
@@ -49,7 +51,7 @@ Item {
     Timer {
         interval: 500
         repeat: true
-        running: AppBackend.memReport && !driver.finished
+        running: AppBackend.memReport
         triggeredOnStart: true
         onTriggered: AppBackend.noteMemory(driver.page === null ? "idle" : "open")
     }

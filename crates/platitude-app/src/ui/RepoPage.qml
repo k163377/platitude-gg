@@ -2007,7 +2007,7 @@ Item {
     // load so the details pane always shows something.
     function trySelectDefault() {
         if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect
-                || AppBackend.autoSelect || AppBackend.autoWip
+                || AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
                 || graphModel.rowTotal === 0)
             return
         // Refs decide which commit is "current" — wait for them instead of guessing the newest row too early.
@@ -2221,7 +2221,7 @@ Item {
     property bool autoSelected: false
     Connections {
         target: graphModel
-        enabled: AppBackend.autoSelect
+        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
         function onStatsChanged() {
             if (page.autoSelected || graphModel.rowTotal === 0)
                 return
@@ -2242,7 +2242,7 @@ Item {
     }
     Connections {
         target: detailsModel
-        enabled: AppBackend.autoSelect
+        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
         function onChanged() {
             if (detailsModel.shaHex !== "" && detailsModel.fileTotal > 0 && diffModel.title === "")
                 page.toggleDiff("commit", detailsModel.filePathAt(0), detailsModel.fileOrigPathAt(0))

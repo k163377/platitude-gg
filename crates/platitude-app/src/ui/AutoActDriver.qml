@@ -428,6 +428,7 @@ Item {
     function runAutoAct() {
         const act = AppBackend.autoAct
         const arg = AppBackend.autoActArg
+        if (act === "perf") return // WindowPerfDriver owns this verb's causal completion.
         driver.prepareCompletion(act)
         // First family to know the verb runs it — the same first match the one chain had, and no verb is
         // named by two of them.

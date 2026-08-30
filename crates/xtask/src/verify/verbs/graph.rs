@@ -5,6 +5,28 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    Verb {
+        name: "perf",
+        when: &[
+            (
+                Arg::Is("scroll-none"),
+                "perf_complete selection=none details=false diff=false graph=true scrolled=true",
+            ),
+            (
+                Arg::Is("none"),
+                "perf_complete selection=none details=false diff=false graph=true scrolled=false",
+            ),
+            (
+                Arg::Is("details"),
+                "perf_complete selection=first details=true diff=false graph=true scrolled=false",
+            ),
+            (
+                Arg::Is("diff"),
+                "perf_complete selection=first details=true diff=true graph=false scrolled=false",
+            ),
+        ],
+        plain: "perf_complete selection=first details=true diff=true graph=true scrolled=true",
+    },
     // The eye at the end of the TAGS band. Both sides of it frame as
     // a graph with the same tags listed beside it, and what separates
     // them — a row, and every tag chip — depends on the repository, so

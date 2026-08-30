@@ -18,6 +18,11 @@ pub(super) struct Options {
     pub(super) settle_ms: u64,
     pub(super) scroll: bool,
     pub(super) select: bool,
+    pub(super) selection: String,
+    pub(super) oid: String,
+    pub(super) file: String,
+    pub(super) diff: bool,
+    pub(super) output: Option<PathBuf>,
     pub(super) breakdown: bool,
     pub(super) build: bool,
     /// Start with no repository at all — the window and nothing in it.
@@ -36,6 +41,11 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         settle_ms: 0,
         scroll: true,
         select: true,
+        selection: "first".into(),
+        oid: String::new(),
+        file: String::new(),
+        diff: true,
+        output: None,
         breakdown: false,
         build: true,
         open: true,
@@ -74,13 +84,36 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 );
             }
             "--no-scroll" => opts.scroll = false,
-            "--no-select" => opts.select = false,
+            "--no-select" => opts.selection = "none".into(),
+            "--selection" => opts.selection = value()?,
+            "--select-oid" => opts.oid = value()?,
+            "--file" => opts.file = value()?,
+            "--no-diff" => opts.diff = false,
+            "--output" => opts.output = Some(PathBuf::from(value()?)),
             "--no-open" => opts.open = false,
             "--breakdown" => opts.breakdown = true,
             "--no-build" => opts.build = false,
             other => return Err(format!("unknown option: {other}")),
         }
         i += 1;
+    }
+    if !["none", "first", "head"].contains(&opts.selection.as_str()) {
+        return Err("--selection takes none, first, or head".into());
+    }
+    opts.select = opts.selection != "none";
+    if (!opts.oid.is_empty() || !opts.file.is_empty()) && !opts.select {
+        return Err("--select-oid and --file require selection".into());
+    }
+    if !opts.oid.is_empty()
+        && (!matches!(opts.oid.len(), 40 | 64) || !opts.oid.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err("--select-oid requires a full hexadecimal object id".into());
+    }
+    if !opts.file.is_empty() && !opts.diff {
+        return Err("--file conflicts with --no-diff".into());
+    }
+    if opts.runs == 0 || opts.watchdog_ms == 0 {
+        return Err("--runs and --watchdog-ms must be positive".into());
     }
     if opts.repo.as_os_str().is_empty() && opts.open {
         return Err("--repo <path> is required (or --no-open for the bare window)".into());

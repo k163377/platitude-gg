@@ -13,6 +13,7 @@
 //! are. That needs a binary built with the `memprobe` feature; without it
 //! the line still comes, with `counted=false` and no Rust-heap total.
 
+mod artifacts;
 mod options;
 mod report;
 mod sampler;
@@ -20,7 +21,7 @@ mod sampler;
 mod tests;
 
 use options::{Options, parse};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -31,7 +32,7 @@ use sampler::{sample_last, sample_memory, sample_once};
 const SAMPLE_MS: u64 = 100;
 
 /// What one run reported.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct Reading {
     peak_working_set: u64,
     peak_private: u64,
@@ -42,8 +43,7 @@ struct Reading {
     /// The working set alone, because that is the side the budget is read
     /// against (ci/baseline/perf-windows-x64.md §判定).
     settled_working_set: u64,
-    /// Process start to the first rows being on the model — the budget's
-    /// "startup to the graph's first display".
+    /// Process start to the first frame of the visible graph.
     ///
     /// Timed here rather than taken off the app's own `first_chunk_ms`,
     /// which starts counting when the walk starts and so leaves out
@@ -54,6 +54,15 @@ struct Reading {
     total_ms: Option<u64>,
     fps: Option<f64>,
     details_ms: Vec<u64>,
+    details_frame_ms: Vec<f64>,
+    diff_frame_ms: Vec<f64>,
+    frame_p95_ms: Option<f64>,
+    frame_p99_ms: Option<f64>,
+    frame_max_ms: Option<f64>,
+    scroll_visible: bool,
+    selection: Option<String>,
+    scenario_complete: Option<String>,
+    failure: Option<String>,
     /// The `mem report` line with the largest `rust_live`, verbatim.
     breakdown: Option<String>,
     breakdown_live: u64,
@@ -75,6 +84,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         extra.extend(["--features", "memprobe"]);
     }
     let exe = crate::app_exe(&root, &path, opts.build, &extra)?;
+    let output = artifacts::prepare(&root, &exe, &opts)?;
+    println!("evidence: {}", output.display());
 
     println!(
         "repo: {} | runs: {} (the first is discarded — cold cache)",
@@ -83,7 +94,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     );
     let mut kept: Vec<Reading> = Vec::new();
     for run in 0..=opts.runs {
-        let reading = measure(&exe, &path, &root, &opts)?;
+        let run_dir = output.join(format!("run-{run}"));
+        std::fs::create_dir(&run_dir).map_err(|e| e.to_string())?;
+        let result = measure(&exe, &path, &root, &opts, &run_dir);
+        std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
+            .map_err(|e| e.to_string())?;
+        let reading = result?;
         let discarded = run == 0;
         println!(
             "  run {}{}: ws={:.1}MB private={:.1}MB startup={} walk={} fps={}",
@@ -128,12 +144,11 @@ fn measure(
     path: &std::ffi::OsString,
     root: &std::path::Path,
     opts: &Options,
+    run_dir: &std::path::Path,
 ) -> Result<Reading, String> {
     // A config directory per process, so another perf process or a previous
     // run's restored state cannot decide what this one does.
-    let config_dir = std::env::temp_dir().join(format!("pg-perf-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&config_dir);
-    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let (config_dir, log, samples) = artifacts::open_run(run_dir)?;
     let mut cmd = Command::new(exe);
     crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(root)
@@ -145,6 +160,10 @@ fn measure(
         // has answered. The parent owns termination so it can take the last
         // process-memory sample and reap exactly the child it started.
         .env("PG_AUTO_PERF", "1")
+        .env("PG_PERF_SELECTION", &opts.selection)
+        .env("PG_PERF_OID", &opts.oid)
+        .env("PG_PERF_FILE", &opts.file)
+        .env("PG_PERF_DIFF", if opts.diff { "1" } else { "0" })
         // A real window, deliberately: `verify-ui` runs offscreen, and
         // offscreen Qt builds no scene graph worth measuring.
         .env_remove("QT_QPA_PLATFORM")
@@ -168,10 +187,11 @@ fn measure(
         .map_err(|e| format!("failed to start the app: {e}"))?;
     let pid = child.id();
     let stderr = child.stderr.take();
-    let (done_rx, reader) = read_app(stderr, started);
+    let (done_rx, reader) = read_app(stderr, started, log);
 
     let deadline = started + Duration::from_millis(opts.watchdog_ms);
-    let sampler = sample_memory(pid, deadline);
+    let sampling_end = deadline + Duration::from_millis(opts.settle_ms);
+    let sampler = sample_memory(pid, sampling_end, started, samples);
     // `perf_done`, not elapsed time, is the success edge. The deadline is
     // only an outer diagnostic guard for an app that stopped answering.
     let mut done = false;
@@ -179,8 +199,8 @@ fn measure(
     let mut timed_out = false;
     let mut wait_error = None;
     loop {
-        if done_rx.try_recv().is_ok() {
-            done = true;
+        if let Ok(success) = done_rx.try_recv() {
+            done = success;
             break;
         }
         match child.try_wait() {
@@ -214,12 +234,16 @@ fn measure(
     let _ = child.kill();
     let _ = child.wait();
     let mut reading = reader.join().unwrap_or_default();
-    let (ws, private) = sampler.join().unwrap_or_default();
+    let (ws, private) = sampler
+        .join()
+        .map_err(|_| "memory sampler panicked".to_string())??;
     reading.perf_done |= done;
     reading.peak_working_set = ws.max(final_sample.0);
     reading.peak_private = private.max(final_sample.1);
     reading.settled_working_set = settled;
-    let _ = std::fs::remove_dir_all(&config_dir);
+    if let Some(error) = &reading.failure {
+        return Err(error.clone());
+    }
     if let Some(error) = wait_error {
         return Err(error);
     }
@@ -251,17 +275,26 @@ fn hold_idle(pid: u32, ms: u64) -> u64 {
 fn read_app(
     stderr: Option<std::process::ChildStderr>,
     started: Instant,
-) -> (mpsc::Receiver<()>, std::thread::JoinHandle<Reading>) {
+    mut log: std::fs::File,
+) -> (mpsc::Receiver<bool>, std::thread::JoinHandle<Reading>) {
     let (done_tx, done_rx) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let mut found = Reading::default();
         if let Some(pipe) = stderr {
             for line in BufReader::new(pipe).lines().map_while(Result::ok) {
-                if found.startup_ms.is_none() && line.contains("graph first chunk") {
+                if let Err(error) = writeln!(log, "{} {line}", started.elapsed().as_micros()) {
+                    found.failure = Some(format!("could not preserve app log: {error}"));
+                    let _ = done_tx.send(false);
+                }
+                if found.startup_ms.is_none() && line.contains("perf_graph_frame") {
                     found.startup_ms = Some(started.elapsed().as_millis() as u64);
                 }
                 if line.contains("perf_done") {
-                    let _ = done_tx.send(());
+                    let _ = done_tx.send(true);
+                }
+                if line.contains("perf_failed") {
+                    found.failure = Some(line.clone());
+                    let _ = done_tx.send(false);
                 }
                 absorb(&line, &mut found);
             }
@@ -277,6 +310,17 @@ fn read_app(
 /// at once (`platitude_gg::init_tracing`).
 fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     let mut gaps = Vec::new();
+    if reading.peak_working_set == 0 || reading.peak_private == 0 {
+        gaps.push("nonzero process memory samples");
+    }
+    if opts.breakdown
+        && !reading
+            .breakdown
+            .as_ref()
+            .is_some_and(|s| s.contains("counted=true"))
+    {
+        gaps.push("a counted Rust heap (build with memprobe)");
+    }
     if !reading.perf_done {
         gaps.push("perf completion (no `perf_done`)");
     }
@@ -288,7 +332,7 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         };
     }
     if reading.startup_ms.is_none() {
-        gaps.push("startup (no `graph first chunk`)");
+        gaps.push("startup (no `perf_graph_frame`)");
     }
     if reading.first_chunk_ms.is_none() {
         gaps.push("the walk (no `first_chunk_ms=`)");
@@ -296,11 +340,35 @@ fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     if reading.total_ms.is_none() {
         gaps.push("the finished graph (no `elapsed_ms=`)");
     }
-    if opts.select && reading.details_ms.is_empty() {
-        gaps.push("the interaction (no `details request round trip`)");
+    let expected = format!(
+        "selection={} details={} diff={} graph={} scrolled={}",
+        opts.selection,
+        opts.select,
+        opts.select && opts.diff,
+        opts.scroll || !opts.select || !opts.diff,
+        opts.scroll
+    );
+    if reading.selection.as_deref() != Some(opts.selection.as_str())
+        || !reading
+            .scenario_complete
+            .as_ref()
+            .is_some_and(|line| line.contains(&expected))
+    {
+        gaps.push("the requested selection and completed scenario");
     }
-    if opts.scroll && reading.fps.is_none() {
-        gaps.push("fps (no `scroll_bench fps=`)");
+    if opts.select && (reading.details_ms.is_empty() || reading.details_frame_ms.is_empty()) {
+        gaps.push("the interaction (data and rendered frame)");
+    }
+    if !opts.select && (!reading.details_ms.is_empty() || !reading.details_frame_ms.is_empty()) {
+        gaps.push("an actually unselected page");
+    }
+    if opts.select && opts.diff && reading.diff_frame_ms.is_empty() {
+        gaps.push("the requested diff frame");
+    }
+    if opts.scroll
+        && (!reading.fps.is_some_and(|fps| fps.is_finite() && fps > 0.0) || !reading.scroll_visible)
+    {
+        gaps.push("fps of a visible, moving graph");
     }
     if gaps.is_empty() {
         return Ok(());
@@ -330,8 +398,34 @@ fn absorb(line: &str, found: &mut Reading) {
     {
         found.details_ms.push(ms);
     }
-    if let Some(rest) = line.split("scroll_bench fps=").nth(1) {
-        found.fps = rest.split_whitespace().next().and_then(|v| v.parse().ok());
+    if line.contains("perf_selection") {
+        found.selection = field(line, "mode=").map(str::to_string);
+    }
+    if line.contains("perf_complete") {
+        found.scenario_complete = Some(line.to_string());
+    }
+    if line.contains("perf_details_frame")
+        && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())
+    {
+        found.details_frame_ms.push(ms);
+    }
+    if line.contains("perf_diff_frame")
+        && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())
+    {
+        found.diff_frame_ms.push(ms);
+    }
+    if line.contains("scroll_bench") {
+        found.fps = field(line, "fps=").and_then(|v| v.parse().ok());
+        found.scroll_visible = field(line, "visible=") == Some("true")
+            && field(line, "moved=")
+                .and_then(|v| v.parse::<f64>().ok())
+                .is_some_and(|v| v > 0.0)
+            && field(line, "frame_count=")
+                .and_then(|v| v.parse::<u64>().ok())
+                .is_some_and(|v| v > 0);
+        found.frame_p95_ms = field(line, "frame_p95_ms=").and_then(|v| v.parse().ok());
+        found.frame_p99_ms = field(line, "frame_p99_ms=").and_then(|v| v.parse().ok());
+        found.frame_max_ms = field(line, "frame_max_ms=").and_then(|v| v.parse().ok());
     }
     if line.contains("mem report") {
         let live: u64 = field(line, "rust_live=")

@@ -16,6 +16,10 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
     println!("\n== {} ==", opts.label);
     println!("  working set : {}", spread(&ws));
     println!("  private     : {}", spread(&private));
+    if cfg!(target_os = "linux") {
+        println!("  Linux private column is VmData, not Windows committed Private Bytes.");
+    }
+    println!("  memory units: MiB (1024 * 1024 bytes)");
     let settled: Vec<f64> = kept
         .iter()
         .filter(|r| r.settled_working_set > 0)
@@ -31,7 +35,7 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
     let startups: Vec<f64> = kept.iter().filter_map(|r| r.startup_ms).map(f).collect();
     if !startups.is_empty() {
         println!(
-            "  startup     : {} ms (to the first rows)",
+            "  startup     : {} ms (to a visible graph frame)",
             spread(&startups)
         );
     }
@@ -53,7 +57,41 @@ pub(super) fn report(opts: &Options, kept: &[Reading]) {
         .map(f)
         .collect();
     if !details.is_empty() {
-        println!("  details     : {} ms", spread(&details));
+        println!("  details data: {} ms (request to drain)", spread(&details));
+    }
+    let rendered: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.details_frame_ms.iter().copied())
+        .collect();
+    if !rendered.is_empty() {
+        println!(
+            "  details frame: {} ms (handler to frame; excludes OS input delivery)",
+            spread(&rendered)
+        );
+    }
+    let diff: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.diff_frame_ms.iter().copied())
+        .collect();
+    if !diff.is_empty() {
+        println!(
+            "  diff frame  : {} ms (raw diff; highlighting may follow)",
+            spread(&diff)
+        );
+    }
+    for (name, values) in [
+        (
+            "p95",
+            kept.iter()
+                .filter_map(|r| r.frame_p95_ms)
+                .collect::<Vec<_>>(),
+        ),
+        ("p99", kept.iter().filter_map(|r| r.frame_p99_ms).collect()),
+        ("max", kept.iter().filter_map(|r| r.frame_max_ms).collect()),
+    ] {
+        if !values.is_empty() {
+            println!("  frame {name:>3}   : {} ms", spread(&values));
+        }
     }
     if let Some(line) = kept
         .iter()

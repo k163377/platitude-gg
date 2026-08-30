@@ -1,5 +1,6 @@
 //! Peak process-memory sampling for the performance harness.
 
+use std::io::Write;
 #[cfg(windows)]
 use std::process::Command;
 use std::time::Instant;
@@ -13,20 +14,27 @@ use super::SAMPLE_MS;
 ///
 /// Windows keeps one PowerShell process for the whole run (spawning one per
 /// 100ms sample would perturb the measurement); Linux reads `/proc` directly.
-pub(super) fn sample_memory(pid: u32, deadline: Instant) -> std::thread::JoinHandle<(u64, u64)> {
+pub(super) fn sample_memory(
+    pid: u32,
+    deadline: Instant,
+    started: Instant,
+    mut csv: std::fs::File,
+) -> std::thread::JoinHandle<Result<(u64, u64), String>> {
     std::thread::spawn(move || {
+        writeln!(csv, "parent_elapsed_us,working_set_bytes,private_bytes")
+            .map_err(|e| e.to_string())?;
         #[cfg(windows)]
         {
-            windows_sampler(pid, deadline)
+            windows_sampler(pid, deadline, started, &mut csv)
         }
         #[cfg(target_os = "linux")]
         {
-            linux_sampler(pid, deadline)
+            linux_sampler(pid, deadline, started, &mut csv)
         }
         #[cfg(not(any(windows, target_os = "linux")))]
         {
-            let _ = (pid, deadline);
-            (0, 0)
+            let _ = (pid, deadline, started);
+            Err("memory sampling is not implemented for this OS".into())
         }
     })
 }
@@ -47,27 +55,66 @@ pub(super) fn sample_once(pid: u32) -> (u64, u64) {
 }
 
 #[cfg(windows)]
-fn windows_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
+fn windows_sampler(
+    pid: u32,
+    deadline: Instant,
+    started: Instant,
+    csv: &mut std::fs::File,
+) -> Result<(u64, u64), String> {
+    use std::io::{BufRead, BufReader};
     let seconds = deadline.saturating_duration_since(Instant::now()).as_secs() + 5;
     // `Refresh()` makes the held Process object re-read its counters;
     // without it every iteration would return the first sample.
     let script = format!(
         "$ErrorActionPreference='SilentlyContinue';\
          $p=Get-Process -Id {pid};\
-         $ws=0;$pv=0;$end=(Get-Date).AddSeconds({seconds});\
+         $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
            $p.Refresh();\
-           if($p.WorkingSet64 -gt $ws){{$ws=$p.WorkingSet64}};\
-           if($p.PrivateMemorySize64 -gt $pv){{$pv=$p.PrivateMemorySize64}};\
+           Write-Output \"$($p.WorkingSet64) $($p.PrivateMemorySize64)\";\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
-         }};\
-         Write-Output \"$ws $pv\""
+         }}"
     );
-    let out = Command::new("powershell")
+    let mut child = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output();
-    let Ok(out) = out else { return (0, 0) };
-    parse_pair(&String::from_utf8_lossy(&out.stdout))
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let stdout = child.stdout.take().ok_or("memory sampler stdout missing")?;
+    let mut peak = (0, 0);
+    let mut error = None;
+    for line in BufReader::new(stdout).lines() {
+        let pair = match line {
+            Ok(line) => parse_pair(&line),
+            Err(e) => {
+                error = Some(e.to_string());
+                break;
+            }
+        };
+        peak.0 = peak.0.max(pair.0);
+        peak.1 = peak.1.max(pair.1);
+        if let Err(e) = writeln!(
+            csv,
+            "{},{},{}",
+            started.elapsed().as_micros(),
+            pair.0,
+            pair.1
+        ) {
+            error = Some(e.to_string());
+            break;
+        }
+    }
+    if error.is_some() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if let Some(error) = error {
+        return Err(error);
+    }
+    if !status.success() {
+        return Err("memory sampler failed".into());
+    }
+    Ok(peak)
 }
 
 #[cfg(windows)]
@@ -128,7 +175,12 @@ pub(super) fn sample_last(pid: u32, ms: u64) -> u64 {
 }
 
 #[cfg(target_os = "linux")]
-fn linux_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
+fn linux_sampler(
+    pid: u32,
+    deadline: Instant,
+    started: Instant,
+    csv: &mut std::fs::File,
+) -> Result<(u64, u64), String> {
     let status = format!("/proc/{pid}/status");
     let (mut ws, mut pv) = (0u64, 0u64);
     while Instant::now() < deadline {
@@ -138,9 +190,11 @@ fn linux_sampler(pid: u32, deadline: Instant) -> (u64, u64) {
         }
         ws = ws.max(next_ws);
         pv = pv.max(next_pv);
+        writeln!(csv, "{},{next_ws},{next_pv}", started.elapsed().as_micros())
+            .map_err(|e| e.to_string())?;
         std::thread::sleep(Duration::from_millis(SAMPLE_MS));
     }
-    (ws, pv)
+    Ok((ws, pv))
 }
 
 #[cfg(target_os = "linux")]
@@ -153,7 +207,7 @@ fn linux_sample_once(pid: u32) -> (u64, u64) {
     for line in text.lines() {
         let kb = |l: &str| {
             l.split_whitespace()
-                .nth(1)
+                .next()
                 .and_then(|v| v.parse::<u64>().ok())
                 .unwrap_or(0)
                 * 1024

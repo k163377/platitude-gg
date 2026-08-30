@@ -87,6 +87,11 @@ const TAIL: &str = "  perf --repo <path> [--label <name>] [--runs <n>] [--breakd
                           nothing to do (default 0 = read at once)
         --no-scroll       leave the scroll benchmark out
         --no-select       do not select a row or open a diff
+        --selection <s>   none, first (default), or head
+        --select-oid <id>  select this full OID from the loaded graph
+        --file <path>     open this changed file (default: first)
+        --no-diff         select and show details without opening a diff
+        --output <path>   new directory for metadata and raw per-run logs
         --no-open         start with no repository at all — the window and
                           nothing in it. Subtracting this from a run that
                           opened an empty repository leaves the cost of

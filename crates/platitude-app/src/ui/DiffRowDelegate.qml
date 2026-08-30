@@ -193,7 +193,7 @@ Rectangle {
                 readonly property var run: modelData.split(":")
                 x: -diffRow.codeX + Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta
                 width: Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
-                height: parent.height
+                height: codeRoom.height
                 color: diffRow.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
             }
         }
