@@ -346,7 +346,13 @@ impl RebasePlanModel {
                 self.onto_email = onto.author_email;
                 self.onto_ref = preview.onto_ref;
                 self.loading = false;
-                self.selected_row = -1;
+                // An open plan already has its newest row selected, and
+                // the model is where that is set: every property here
+                // notifies on the one `changed()`, so selecting from the
+                // page's `planActive` handler would fire `active`'s own
+                // notify inside the binding that is still delivering it —
+                // a binding loop Qt reports and refuses to re-evaluate.
+                self.selected_row = if count > 0 { 0 } else { -1 };
                 self.head_suspect = false;
                 // An empty range cannot arise from a click on a commit
                 // (the row itself is in it), but an answer is an answer.

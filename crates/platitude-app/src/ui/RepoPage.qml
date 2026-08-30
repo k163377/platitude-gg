@@ -445,12 +445,13 @@ Item {
     onPlanActiveChanged: {
         if (page.planActive) {
             page.closeDiff()
-            // The selection lands on the plan's own newest row, whatever face was up before — the right pane
+            // The graph lands on the plan's own newest row, whatever face was up before — the right pane
             // becomes that commit's, and the WIP face (whose commit button would sit under the run bar, and whose
             // own writes the freeze is for) cannot stay up under an open plan. `activateRow` also puts away a
-            // standing row question and a name box, the way any deliberate click does.
+            // standing row question and a name box, the way any deliberate click does. The plan's *own* selection
+            // is already on that row: the model opens it there, because writing it from here would fire the
+            // model's one `changed()` inside the very binding delivering it (`RebasePlanModel::take`).
             page.activateRow(planModel.expectHead)
-            planModel.selectRow(0)
             if (planModel.publishRange !== "")
                 repoTab.checkPublish(planModel.publishRange)
         } else {

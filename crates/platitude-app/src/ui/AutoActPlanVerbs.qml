@@ -68,11 +68,10 @@ Item {
                 return
             planOpenTimer.stop()
             if (planOpenTimer.act === "rebase-plan") {
-                // One of each look: a fold leaning into its parent, a drop struck through, and the selection on the
-                // newest row so the right pane is that commit's.
+                // One of each look: a fold leaning into its parent and a drop struck through. The selection is
+                // already on the newest row — the plan opens it there — so the right pane is that commit's.
                 plan.setAction(1, "squash")
                 plan.setAction(2, "drop")
-                plan.selectRow(0)
                 page.activateRow(workTree.headOid)
                 AppBackend.report("rebase_plan rows=" + plan.stepCount + " dirty=" + plan.dirty
                                   + " drops=" + plan.dropCount + " onto=" + (plan.ontoRef !== "")
