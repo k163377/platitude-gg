@@ -184,8 +184,17 @@ pub struct RebaseStop {
     /// git says so by leaving `rebase-merge/amend` behind — the file its
     /// own `--continue` reads to know the commit may have been amended.
     pub editing: bool,
-    /// The commit the stop is about (`rebase-merge/stopped-sha`),
-    /// abbreviated as git wrote it; empty where it wrote none.
+    /// The commit the stop left HEAD on, full hex — the amend marker's own
+    /// contents, which is what git wrote HEAD as when it stopped
+    /// (`intend_to_amend`). Empty where the file could not be read.
+    ///
+    /// **Not `rebase-merge/stopped-sha`**, which names the *todo's* commit
+    /// — the id the row had before the replay. They are the same commit
+    /// only when everything ahead of the `edit` step fast-forwarded: put a
+    /// reword, a squash or a reorder in front of it and the stop sits on a
+    /// commit with a new id, while `stopped-sha` still names one that is no
+    /// longer in the history. Measured by
+    /// `an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos`.
     pub oid: String,
 }
 
@@ -211,7 +220,6 @@ pub async fn rebase_standing(
         "rebase-apply/next",
         "rebase-apply/last",
         "rebase-merge/amend",
-        "rebase-merge/stopped-sha",
     ] {
         cmd = cmd.args(["--git-path", rel]);
     }
@@ -239,9 +247,13 @@ pub async fn rebase_standing(
             break;
         }
     }
-    let editing = paths.get(4).is_some_and(|p| p.exists());
-    let oid = paths
-        .get(5)
+    // One file answers both halves: that it is there is the `edit` stop,
+    // and what it says is the commit the stop put HEAD on. A marker there
+    // but unreadable still says `editing` — the answer `skip_is_free`
+    // needs, and the one that errs toward holding the `--skip` back.
+    let amend = paths.get(4);
+    let editing = amend.is_some_and(|p| p.exists());
+    let oid = amend
         .and_then(|p| std::fs::read_to_string(p).ok())
         .map(|s| s.trim().to_string())
         .unwrap_or_default();

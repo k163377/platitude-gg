@@ -148,11 +148,7 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
         "the same read carries the step count"
     );
     let named = repo.git(&["rev-parse", &format!("{}^{{commit}}", stop.oid)]);
-    assert_eq!(
-        named.trim(),
-        ids[2],
-        "stopped-sha resolves to the edited commit"
-    );
+    assert_eq!(named.trim(), ids[2], "the marker names the edited commit");
     assert_eq!(
         repo.git(&["rev-parse", "HEAD"]).trim(),
         ids[2],
@@ -169,6 +165,84 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
     .await
     .expect("continue");
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "fourth");
+}
+
+/// The marker has to name a commit that is *in* the history the reader is
+/// looking at. `rebase-merge/stopped-sha` does not once anything ahead of
+/// the `edit` step rewrote a commit: it keeps naming the todo's own id,
+/// which the replay has already replaced. The amend marker's contents is
+/// the stop's HEAD, and that is what the card names and the boxes amend.
+#[tokio::test]
+async fn an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos() {
+    let (mut repo, ids) = four_commits();
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let mut steps = sequencer::plan_for(&exec, &repo.path, &ids[1], &cancel)
+        .await
+        .expect("plan");
+    assert_eq!(steps.len(), 2);
+    steps[0].action = TodoAction::Reword; // "third" gets a new id...
+    steps[0].message = Some("third reworded".to_string());
+    steps[1].action = TodoAction::Edit; // ...so "fourth" is replayed onto it
+    let outcome = sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        &ids[1],
+        &steps,
+        &Default::default(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("rebase");
+    assert!(matches!(outcome, RebaseOutcome::Stopped), "{outcome:?}");
+
+    let head = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
+    assert_ne!(head, ids[3], "the replay gave the edited commit a new id");
+    let (_, stop) = integrate::rebase_standing(&exec, &repo.path, &cancel)
+        .await
+        .expect("stop");
+    assert!(stop.editing);
+    assert_eq!(
+        stop.oid, head,
+        "the stop names the commit HEAD sits on, not the todo's own id"
+    );
+    // What the old key read, kept here as the reason the new one exists:
+    // git still writes the pre-replay id, and nothing resolves it to a
+    // commit the graph is drawing.
+    let stopped_sha = std::fs::read_to_string(repo.path.join(".git/rebase-merge/stopped-sha"))
+        .expect("stopped-sha");
+    assert_eq!(stopped_sha.trim(), ids[3]);
+
+    // The boxes take the amend, and take the one after it: a typo in the
+    // first is exactly when the second is wanted. git moves HEAD off the
+    // id it stopped on and updates none of its own markers to match, so
+    // nothing here may key on HEAD still being that id.
+    repo.git(&["commit", "--amend", "-m", "fourth amended"]);
+    let amended = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
+    assert_ne!(amended, head);
+    let (_, after) = integrate::rebase_standing(&exec, &repo.path, &cancel)
+        .await
+        .expect("stop after the amend");
+    assert!(after.editing, "the stop still stands");
+    assert_eq!(after.oid, head, "and still names where it stopped");
+    repo.git(&["commit", "--amend", "-m", "fourth amended twice"]);
+
+    integrate::resolve_current(
+        &exec,
+        &repo.path,
+        integrate::Continuation::Continue,
+        &cancel,
+    )
+    .await
+    .expect("continue takes both amends");
+    assert_eq!(
+        repo.git(&["log", "--format=%s", "-2"])
+            .lines()
+            .collect::<Vec<_>>(),
+        ["fourth amended twice", "third reworded"]
+    );
 }
 
 #[tokio::test]

@@ -121,8 +121,10 @@ pub struct WorkTreeModel {
     /// git's own marker (`integrate::RebaseStop`). The exit card's words
     /// and its `--skip`'s cost both turn on it.
     op_editing: bool,
-    /// The commit that stop is about, abbreviated as git wrote it; empty
-    /// where it wrote none.
+    /// The commit that stop left HEAD on, full hex; empty where git wrote
+    /// none. The card abbreviates it itself — it is one the reader can go
+    /// and find, which the todo's own id is not once anything ahead of the
+    /// `edit` step rewrote history (`integrate::RebaseStop::oid`).
     op_edit_oid: String,
     /// Bumped when a status moves any of the four bucket counts — what
     /// "somebody moved the tree" is read off, so a status that moved no
