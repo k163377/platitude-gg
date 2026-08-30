@@ -248,6 +248,43 @@ pub async fn rebase_standing(
     Ok((progress, RebaseStop { editing, oid }))
 }
 
+/// The same count, read without a process.
+///
+/// [`rebase_standing`] spends a `rev-parse` to learn where the four files
+/// are, because it is also asking two questions that only make sense
+/// together and it runs once per status tick. **A replay that is still
+/// running is the other case**: the number moves every few milliseconds
+/// and the screen is meant to count it out, so the read has to be cheap
+/// enough to repeat several times a second — and it is, because the one
+/// thing `rev-parse` was answering is already known. `repo::open` resolves
+/// the git directory once, linked worktrees included, and the rebase state
+/// of a work tree lives under that work tree's own git directory.
+///
+/// Both backends again, and `None` for "no rebase is standing" as well as
+/// for one whose files cannot be read: the caller is asking about a write
+/// it started, and either answer means there is nothing to count yet.
+#[must_use]
+pub fn rebase_progress(git_dir: &Path) -> Option<crate::conflict::Progress> {
+    let count = |rel: &str| -> Option<u32> {
+        std::fs::read_to_string(git_dir.join(rel))
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+    };
+    for (current, total) in [
+        ("rebase-merge/msgnum", "rebase-merge/end"),
+        ("rebase-apply/next", "rebase-apply/last"),
+    ] {
+        if let (Some(current), Some(total)) = (count(current), count(total))
+            && total > 0
+        {
+            return Some(crate::conflict::Progress { current, total });
+        }
+    }
+    None
+}
+
 /// Builds a rebase command; `todo_editor` turns it into an interactive one
 /// driven by that `GIT_SEQUENCE_EDITOR` (see [`crate::sequencer`]).
 pub(crate) fn rebase_command(

@@ -308,6 +308,16 @@ impl RepoTab {
         self.with_session(|s| s.refresh_poll());
     }
 
+    /// The other tick, run several times a second while a write that
+    /// replays is out: how far it has got and nothing else. Two file reads
+    /// and no process, which is what lets it be that often — the tick
+    /// above carries a whole `git status` and is ten seconds apart
+    /// (`RepoSession::refresh_op_progress`).
+    #[qslot]
+    fn refresh_op_progress(&mut self) {
+        self.with_session(|s| s.refresh_op_progress());
+    }
+
     /// Full refresh: restarts the log stream as well (manual refresh).
     #[qslot]
     fn refresh_all(&mut self) {

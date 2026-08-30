@@ -138,6 +138,13 @@ impl SessionSink for BridgeSink {
                     stop,
                 });
             }
+            // `push_replace`, like the snapshot it is a slice of: what the
+            // badge shows is where the replay is *now*, and a tick the GUI
+            // thread was too busy to drain is a number nobody wants back.
+            SessionEvent::OpProgress { op_state, progress } => self
+                .feeds
+                .op_progress
+                .push_replace(OpProgressMsg { op_state, progress }),
             SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
             SessionEvent::WorktreesLoaded { worktrees } => {
                 self.feeds.worktrees.push_replace(worktrees)

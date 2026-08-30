@@ -1970,6 +1970,19 @@ Item {
         running: page.onScreen && page.visible && repoTab.state === "open"
         onTriggered: page.pollRepo()
     }
+    // The badge counting a running replay out. Its own tick because it asks its own question: two file reads off the
+    // git directory, no process, so it can run at a rate a number is worth watching at — where the tick above carries
+    // a whole `git status` and is ten seconds apart for it (デザイン規約 §進行中・長押しの定数, and the measured cost
+    // in `ci/baseline/poll-cost-windows-x64.md`).
+    //
+    // While the write is out and no longer: with nothing replaying there is no number, and the status tick is what
+    // says the operation ended. `replayRunning` covers the gap a handed-over plan leaves before the queue starts it.
+    Timer {
+        interval: Metrics.opProgressMs
+        repeat: true
+        running: page.visible && repoTab.state === "open" && page.replayRunning
+        onTriggered: repoTab.refreshOpProgress()
+    }
     /// One tick: the repository, and the file the diff pane is holding. The two are separate reads because they answer
     /// different questions — refs and status say what the tree is, the diff says what the file says.
     function pollRepo() {

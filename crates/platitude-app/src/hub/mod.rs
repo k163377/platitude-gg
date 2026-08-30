@@ -38,7 +38,8 @@ mod tabs;
 
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
-    CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, PickMsg, PlanMsg, StatusMsg, TabMsg,
+    CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, OpProgressMsg, PickMsg, PlanMsg,
+    StatusMsg, TabMsg,
 };
 pub use prefs::AvatarUrls;
 pub use tabs::{from_session, with_session};

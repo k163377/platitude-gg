@@ -24,6 +24,7 @@ QtObject {
     readonly property int anchorDelayMs: 50
     readonly property int keyStepSettleMs: 150
     readonly property int pollIntervalMs: 10000
+    readonly property int opProgressMs: 250
     readonly property int spinMs: 1000
     readonly property int holdMs: 500
     readonly property int holdFillMin: Theme.spaceXs

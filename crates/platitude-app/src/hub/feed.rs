@@ -162,6 +162,13 @@ pub struct Feeds {
     /// model; one pending answer, ordered by the ask the way the details
     /// feed is — `Feed::push_latest`).
     pub plan: Arc<Feed<PlanMsg>>,
+    /// How far a running replay has got, on its own rather than inside a
+    /// status snapshot. Same consumer as `status` (the work-tree model
+    /// carries the badge's fields), a different feed because it is asked
+    /// several times a second while the snapshot is asked every ten:
+    /// pushed through that one it would be a whole `git status` per tick
+    /// (`RepoSession::refresh_op_progress`).
+    pub op_progress: Arc<Feed<OpProgressMsg>>,
 }
 
 /// One feed, seen without its message type — the three questions every
@@ -194,7 +201,7 @@ impl Feeds {
     /// left out of one is a queue that goes on holding a repository
     /// nobody is reading — or one the memory report cannot name, which is
     /// exactly the queue that report exists to catch.
-    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 15] {
+    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 16] {
         [
             ("tab", &*self.tab),
             ("graph", &*self.graph),
@@ -211,6 +218,7 @@ impl Feeds {
             ("diff", &*self.diff),
             ("commands", &*self.commands),
             ("plan", &*self.plan),
+            ("op-progress", &*self.op_progress),
         ]
     }
 

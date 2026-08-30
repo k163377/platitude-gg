@@ -175,6 +175,32 @@ impl RepoSession {
         moved
     }
 
+    /// Publishes what operation is standing and how far it has got, and
+    /// nothing else.
+    ///
+    /// **The whole of it is a handful of file reads** — no process, no
+    /// lock, no snapshot ([`opstate::detect_at`] /
+    /// [`integrate::rebase_progress`]) — which is what lets the screen
+    /// count the steps out rather than sample them: a replay moves the
+    /// number about every eleven milliseconds, and the periodic re-read
+    /// around it is ten seconds apart because it carries a whole `git
+    /// status` (`ci/baseline/poll-cost-windows-x64.md`). Asking that one
+    /// faster would have the reads competing with the replay they are
+    /// about; asking this one faster costs nothing measurable.
+    ///
+    /// Not gated on anything: the caller ticks it while it knows a write
+    /// that replays is out, and a repository with nothing standing
+    /// answers exactly that.
+    pub fn refresh_op_progress(self: &Arc<Self>) {
+        let Some(git_dir) = self.git_dir() else {
+            return;
+        };
+        self.sink.event(SessionEvent::OpProgress {
+            op_state: opstate::detect_at(&git_dir),
+            progress: integrate::rebase_progress(&git_dir),
+        });
+    }
+
     /// Loads status + op state and publishes them, returning whether the
     /// synthetic WIP row moved: the working tree turned dirty or clean, or
     /// a standing merge changed what it is bringing in.

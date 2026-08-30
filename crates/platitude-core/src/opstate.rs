@@ -88,6 +88,28 @@ pub async fn merge_heads(
     (!heads.is_empty()).then_some(heads)
 }
 
+/// Detects in-progress operations, without a process, for a caller that
+/// already knows where the git directory is.
+///
+/// [`detect`] spends a `rev-parse` on resolving the marker names, and
+/// then does exactly this — the markers are files, and whether one exists
+/// is the whole of the question. The resolving is what `repo::open`
+/// already answered, linked worktrees included, so a caller holding a
+/// [`crate::repo::RepoInfo`] can ask as often as it likes
+/// (`RepoSession::refresh_op_progress` asks several times a second while
+/// a replay is running).
+#[must_use]
+pub fn detect_at(git_dir: &Path) -> OpState {
+    let has = |marker: &str| git_dir.join(marker).exists();
+    OpState {
+        rebasing: has(MARKERS[0]) || has(MARKERS[1]),
+        merging: has(MARKERS[2]),
+        cherry_picking: has(MARKERS[3]),
+        reverting: has(MARKERS[4]),
+        bisecting: has(MARKERS[5]),
+    }
+}
+
 /// Detects in-progress operations for the repository at `workdir`.
 pub async fn detect(
     executor: &GitExecutor,

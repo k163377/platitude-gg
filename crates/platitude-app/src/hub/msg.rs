@@ -240,6 +240,16 @@ pub enum CommandMsg {
     },
 }
 
+/// The badge's own two halves, arriving on their own several times a
+/// second while a write that replays is out (`SessionEvent::OpProgress`).
+/// A slice of [`StatusMsg`] rather than a message of its own kind — the
+/// same consumer reads both, and this one costs no git process.
+#[derive(Debug)]
+pub struct OpProgressMsg {
+    pub op_state: OpState,
+    pub progress: Option<platitude_core::conflict::Progress>,
+}
+
 #[derive(Debug)]
 pub struct StatusMsg {
     pub status: WorkTreeStatus,

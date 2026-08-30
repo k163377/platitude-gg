@@ -131,6 +131,28 @@ pub enum SessionEvent {
         /// (デザイン規約 §進行中の操作から出る). Default while no rebase is.
         stop: integrate::RebaseStop,
     },
+    /// What operation is standing and how far it has got — the badge's
+    /// two halves and nothing else ([`RepoSession::refresh_op_progress`]).
+    ///
+    /// Its own event rather than a status snapshot because it is asked
+    /// several times a second: the count moves about every eleven
+    /// milliseconds and the screen is there to count it out, while the
+    /// snapshot around it costs a `git status` of the whole work tree
+    /// (`ci/baseline/poll-cost-windows-x64.md`). Both halves come from
+    /// files under the git directory, so the whole event costs no process
+    /// at all.
+    ///
+    /// **The state rides with the count** because the badge needs both:
+    /// the count alone would arrive at a badge that is not on screen, a
+    /// rebase of a few hundred commits being over long before the ten-
+    /// second tick that would have raised it. Which operation is the live
+    /// one is still core's answer and still the same one
+    /// ([`integrate::InProgress::from_state`]) — this is that answer read
+    /// from the cheaper side.
+    OpProgress {
+        op_state: OpState,
+        progress: Option<conflict::Progress>,
+    },
     /// Answer to [`RepoSession::ask_merge_tools`]: names the settings field
     /// can offer, deliberate ones first. Empty is a valid answer.
     ///

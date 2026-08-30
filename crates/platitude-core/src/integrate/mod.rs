@@ -18,7 +18,9 @@ use crate::opstate;
 
 pub use merge::{MergeOptions, merge, stopped_message};
 pub use pick::{cherry_pick, revert};
-pub use rebase::{RebaseOptions, RebaseOutcome, RebaseStop, rebase, rebase_standing};
+pub use rebase::{
+    RebaseOptions, RebaseOutcome, RebaseStop, rebase, rebase_progress, rebase_standing,
+};
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};
 
 pub(crate) use rebase::{landed, rebase_command};

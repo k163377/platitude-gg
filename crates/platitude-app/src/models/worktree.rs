@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use qtbridge::{QObjectHolder, qobject};
 
-use crate::hub::{Feed, StatusMsg};
+use crate::hub::{Feed, OpProgressMsg, StatusMsg};
 
 use super::qml_register;
 
@@ -140,6 +140,12 @@ pub struct WorkTreeModel {
     /// serve there: a clean-tree write moves no count.
     status_seq: i32,
     feed: Option<Arc<Feed<StatusMsg>>>,
+    /// The badge's own halves, arriving several times a second while the
+    /// feed above arrives every ten (`Feeds::op_progress`). Both wake the
+    /// one `drain` slot, which is why they are read there in the order the
+    /// screen wants them: a status snapshot carries a count of its own,
+    /// and the one it carries is the older of the two.
+    progress_feed: Option<Arc<Feed<OpProgressMsg>>>,
     tab_id: i32,
 }
 
@@ -203,10 +209,13 @@ impl WorkTreeModel {
         self.tab_id = tab_id;
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.status, invoker);
+        let invoker = self.get_qml_method_invoker();
+        self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, invoker);
     }
 
     #[qslot]
     fn drain(&mut self) {
+        self.drain_progress();
         let Some(feed) = self.feed.clone() else {
             return;
         };
@@ -290,6 +299,53 @@ impl WorkTreeModel {
 }
 
 impl WorkTreeModel {
+    /// The badge, taken before the snapshot beside it.
+    ///
+    /// **Only the badge moves.** Nothing else a status carries can have
+    /// changed without a write answering for it, and the badge is the one
+    /// thing on screen counting — so this is the whole of what the short
+    /// tick pays for (`RepoSession::refresh_op_progress`).
+    ///
+    /// **The word comes with the count**, or the count would arrive at a
+    /// badge that is not up: a rebase of a few hundred commits is over
+    /// long before the ten-second tick that would have raised it, and
+    /// `opText` is what the band draws on.
+    ///
+    /// Silent when nothing arrived, and silent about "nothing standing" as
+    /// well: this tick runs only while a write that replays is out, and
+    /// the moment before git writes its first marker it would otherwise
+    /// answer "no operation" — which, taken, is the badge flickering off
+    /// at the very start of the thing it is there to announce. What ends
+    /// the badge is the status read after the write lands.
+    fn drain_progress(&mut self) {
+        let Some(feed) = self.progress_feed.clone() else {
+            return;
+        };
+        let Some(OpProgressMsg {
+            op_state,
+            progress: Some(progress),
+        }) = feed.drain().pop()
+        else {
+            return;
+        };
+        let (step, steps) = (
+            i32::try_from(progress.current).unwrap_or(i32::MAX),
+            i32::try_from(progress.total).unwrap_or(i32::MAX),
+        );
+        // Both words, not just the first: everything else `settle_op`
+        // writes is derived from the one operation it names, but the
+        // second name is bisect's — which runs alongside rather than
+        // instead, and so can arrive while the first has not moved.
+        let said = (self.op_text.clone(), self.op_also.clone());
+        self.settle_op(&op_state, "");
+        let moved = (self.op_step, self.op_steps) != (step, steps)
+            || (self.op_text.as_str(), self.op_also.as_str()) != (said.0.as_str(), said.1.as_str());
+        (self.op_step, self.op_steps) = (step, steps);
+        if moved {
+            self.changed();
+        }
+    }
+
     /// The operation banner's fields, off the op state in one place.
     ///
     /// One name, not every flag that happens to be set: a rebase stopped

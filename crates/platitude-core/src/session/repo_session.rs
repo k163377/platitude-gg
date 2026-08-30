@@ -236,6 +236,15 @@ impl RepoSession {
         self.lock_info().as_ref().map(|i| i.config_path.clone())
     }
 
+    /// Git directory of the opened repository (None until `Opened`).
+    ///
+    /// Same reason as the line above, more so: the running replay's counter
+    /// is read off this several times a second and nothing else about it is
+    /// wanted ([`Self::refresh_op_progress`]).
+    pub(super) fn git_dir(&self) -> Option<PathBuf> {
+        self.lock_info().as_ref().map(|i| i.git_dir.clone())
+    }
+
     /// Resolved repository paths (None until `Opened`).
     pub fn repo_info(&self) -> Option<RepoInfo> {
         self.lock_info().clone()
