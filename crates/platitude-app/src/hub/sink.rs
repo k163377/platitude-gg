@@ -60,6 +60,7 @@ impl SessionSink for BridgeSink {
                     message: error,
                 })
             }
+            SessionEvent::LogStale { stale } => self.feeds.graph.push(GraphMsg::Stale { stale }),
             SessionEvent::LogReplaced {
                 generation,
                 rows,

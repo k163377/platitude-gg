@@ -32,7 +32,7 @@ Item {
     }
     // **A walk that gave up is not said here** — a screen that fills the whole pane would paint the sentence across
     // the rows a part-finished walk has already drawn. It is one state, so it is said in one place: the band's
-    // `PARTIAL HISTORY` badge, with whatever was said about it in the card behind it (`BandStateGroup`, by design).
+    // `STALE GRAPH` badge, with whatever was said about it in the card behind it (`BandStateGroup`, by design).
     // A badge is in view wherever the reader is standing, which the middle of a five-hundred-row column is not.
     // A repository with no history yet. Told in the middle of the column that will hold it, not under the working-tree
     // row: the history has not stopped somewhere (the window cut's footer says that, where it stops) — there is none,

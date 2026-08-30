@@ -265,6 +265,59 @@ Item {
         window.finishAutoAct()
     }
 
+    // PG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history, and
+    // the card line that says which of the two ways it came to be so. `graph-stale` fails the off-screen rebuild, so a
+    // whole graph is left standing and goes out of date where it is; `graph-stopped` fails the stream, so the column
+    // empties and the walk gives up part-way. Both go in at the walk itself (`GraphModel.failGraphPass`) — the state
+    // needs a git that fails, and a demo repository has none in it.
+    SampleTimer {
+        id: staleActTimer
+        running: AppBackend.autoAct === "graph-stale" || AppBackend.autoAct === "graph-stopped"
+        property bool faultArmed: false
+        onTriggered: {
+            if (window.curPage === null)
+                return
+            const graph = window.curPage.pageGraph
+            if (!staleActTimer.faultArmed) {
+                // Not before a pass has landed: the fault has to be raised over a graph that was whole, or what the
+                // badge is standing for is the opening rather than the failure (規約 §前提条件を完了判定に混ぜない).
+                if (graph.loading || graph.finishCount <= 0 || graph.rowTotal <= 0)
+                    return
+                staleActTimer.faultArmed = true
+                graph.failGraphPass(AppBackend.autoAct === "graph-stale" ? "swapping" : "streaming")
+                return
+            }
+            if (!topBar.staleBadgeShown || graph.loading)
+                return
+            // The card, opened the one way the hand opens it (`badges-hover` の同じ 1 本): the line under the badge is
+            // half of what this verb is for, and it is the only place the two states are told apart.
+            topBar.statePointedAt = true
+            if (!topBar.stateCardOpen)
+                return
+            stop()
+            acts.reportStale()
+        }
+    }
+    /// The five that are judged come first and in one run, because `must_say` matches them as one string. `badge=`
+    /// leads; `stopped=` and `stale=` are the model's own two, which the badge folds into one — a run where they
+    /// disagreed with it would be a badge standing for nothing. `tint=` is the rule reaching the paint (規約 §状態), and
+    /// `card=` is there because the line under the badge is the only place the two states are told apart.
+    function reportStale() {
+        const graph = window.curPage.pageGraph
+        AppBackend.report(
+            "graph_stale badge=" + topBar.staleBadgeShown
+            + " stopped=" + graph.failed
+            + " stale=" + graph.stale
+            + " tint=" + acts.stateTint
+            + " card=" + topBar.stateCardOpen
+            // Along for the read: whether the card had git's words to put on its line, how much of the graph was left
+            // standing, and what the card actually laid out.
+            + " words=" + (graph.error !== "")
+            + " rows=" + graph.rowTotal
+            + " cardRows=" + topBar.stateCardRows)
+        window.finishAutoAct()
+    }
+
     // PG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
     // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape* rather than a number, because which pixel
     // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.

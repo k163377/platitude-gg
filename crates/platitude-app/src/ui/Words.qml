@@ -17,15 +17,18 @@ QtObject {
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
     readonly property string addRemote: qsTr("Add remote…")
 
-    /// The window band's three badge words (BandStateGroup measures and draws them, BandStateCard titles them);
+    /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
     readonly property string badgeConflicts: qsTr("CONFLICTS")
     readonly property string badgeSetIdentity: qsTr("SET IDENTITY")
     readonly property string badgeOldGit: qsTr("OLD GIT")
-    /// The walk gave up, so **what is drawn is not the history** — some of it, or none. Unlike the window cut nothing
-    /// says how much is missing, because the walk stopped rather than reached its end. **The only place this state is
-    /// said**: the graph column carries none of it, and the words behind it are in the card.
-    readonly property string badgePartial: qsTr("PARTIAL HISTORY")
+    /// **What is drawn is not this repository's history**, either way it came to be so: the walk gave up part-way
+    /// through (some of it, or none), or every row landed and the rebuild that would have refreshed them did not. One
+    /// word for the two, because a reader's position is the same in both — nothing on screen can be acted on as if it
+    /// were current — and the card's line says which it was. Unlike the window cut nothing says how much is missing,
+    /// because neither state reached the end of a walk. **The only place this state is said**: the graph column
+    /// carries none of it, and the words behind it are in the card.
+    readonly property string badgeStaleGraph: qsTr("STALE GRAPH")
 
     /// The one way a commit's moment is written down: the rows carry epoch seconds, and the display side makes the
     /// `yyyy-MM-dd HH:mm` out of them (デザイン規約 — 行が持つのは epoch 秒). The commands panel's `HH:mm:ss` clock

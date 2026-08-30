@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use platitude_core::find::{Query, Row};
-use platitude_core::session::LogRow;
+use platitude_core::session::{LogRow, PassStep};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};
@@ -88,12 +88,20 @@ pub struct GraphModel {
     head_avatar_url: String,
     head_geometry: String,
     error: String,
-    /// A pass reported that it could not draw the graph. **Not the same as
-    /// `error` being set**: a walk that ended without an answer at all —
-    /// the task fell over — has nobody's words to show, and the screen
-    /// says that in its own (`Words.graphStopped`, app-ui.md「Rust に文言を
-    /// 置かない」).
+    /// The walk stopped, so the rows drawn are not all of them. **Not the
+    /// same as `error` being set**: a walk that ended without an answer at
+    /// all — the task fell over — has nobody's words to show, and the
+    /// screen says that in its own (`BandStateCard`, app-ui.md「Rust に
+    /// 文言を置かない」).
     failed: bool,
+    /// Every row is drawn and every one of them is out of date: an
+    /// off-screen rebuild that would have replaced this graph did not
+    /// land (`SessionEvent::LogStale`).
+    ///
+    /// **The other half of one badge.** `STALE GRAPH` stands for either,
+    /// because either way what is on screen is not this repository's
+    /// history; which of the two it was is the card's line.
+    stale: bool,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,
     tab_id: i32,

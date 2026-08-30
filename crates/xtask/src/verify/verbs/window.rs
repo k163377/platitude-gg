@@ -164,6 +164,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "card=true rows=op,conflicts,identity",
     },
+    // The badge for a graph that is not this repository's history, and
+    // the card line that parts its two states. **Neither is a picture's
+    // to judge**: a whole graph that has gone out of date is pixel for
+    // pixel the graph that was current a moment ago, and an emptied
+    // column is what an opening looks like — the badge is the only mark
+    // either leaves, and the badge alone cannot say which of the two put
+    // it up. So the model's own two are read beside it, one of them true
+    // and the other false, and the card is required open because that
+    // line is where the difference is written. `tint=` rides in the
+    // judged run rather than beside it: both states are `danger` (規約
+    // §状態), and a badge that came up warning is the rule not having
+    // reached the paint.
+    Verb {
+        name: "graph-stale",
+        when: &[],
+        plain: "graph_stale badge=true stopped=false stale=true tint=danger card=true",
+    },
+    Verb {
+        name: "graph-stopped",
+        when: &[],
+        plain: "graph_stale badge=true stopped=true stale=false tint=danger card=true",
+    },
     // The band's three actions at the last cell that still has a word
     // in it. A band shot at one width says nothing about the width its
     // shape was supposed to change at, so what is judged is that the

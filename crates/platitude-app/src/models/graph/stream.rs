@@ -36,6 +36,11 @@ impl GraphModel {
                     generation,
                     message,
                 } => self.fail_walk(generation, message),
+                // Read as sent, with no generation to check: the session
+                // says this of whatever graph is standing, and every
+                // stream that starts, lands or finds nothing to change
+                // takes it back from the same place (`log::tell_graph_stale`).
+                GraphMsg::Stale { stale } => self.stale = stale,
             }
         }
         self.settle_head();
@@ -189,11 +194,12 @@ impl GraphModel {
         );
     }
 
-    /// A pass said it could not draw this graph. `message` is whoever's
-    /// words there are — git's, where git is what failed — and empty for
-    /// the one that has none: a walk that ended without an answer at all
-    /// (`session::log::PassWatch`). The screen tells those two apart by
-    /// `failed` standing without an `error` beside it.
+    /// A stream said it could not draw this graph, so the rows that did
+    /// arrive are not all of them. `message` is whoever's words there are
+    /// — git's, where git is what failed — and empty for the one that has
+    /// none: a walk that ended without an answer at all
+    /// (`session::pass_watch::PassWatch`). The screen tells those two
+    /// apart by `failed` standing without an `error` beside it.
     fn fail_walk(&mut self, generation: u64, message: String) {
         if generation == self.generation {
             self.loading = false;

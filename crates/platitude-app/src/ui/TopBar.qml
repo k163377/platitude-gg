@@ -39,12 +39,13 @@ Rectangle {
     readonly property bool tabPinRidesLeft: tabStrip.tabPinRidesLeft
     readonly property bool frontTabWhole: tabStrip.frontTabWhole
     readonly property bool tabRunTravelling: tabStrip.runTravelling
-    /// Automation: the four things that can be the matter here. The group owns the conditions and the hidden
+    /// Automation: the five things that can be the matter here. The group owns the conditions and the hidden
     /// measurements behind them; what the hooks ask the band for comes back through here (`BandStateGroup`).
     readonly property bool opBadgeShown: stateGroup.opBadgeShown
     readonly property bool conflictBadgeShown: stateGroup.conflictBadgeShown
     readonly property bool identityBadgeShown: stateGroup.identityBadgeShown
     readonly property bool oldGitBadgeShown: stateGroup.oldGitBadgeShown
+    readonly property bool staleBadgeShown: stateGroup.staleBadgeShown
     readonly property real stateBadgeMinW: stateGroup.stateBadgeMinW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card

@@ -207,6 +207,13 @@ pub enum GraphMsg {
         generation: u64,
         message: String,
     },
+    /// The graph standing on screen has fallen behind the repository, or
+    /// has caught up with it again (see [`SessionEvent::LogStale`]). No
+    /// generation: what it describes is the picture as a whole, not one
+    /// stream's rows.
+    Stale {
+        stale: bool,
+    },
 }
 
 /// Command-log messages: one git invocation, start and end.

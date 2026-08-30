@@ -78,7 +78,12 @@ impl GraphModel {
         Notify = stats_changed
     );
     qproperty!("error", Member = error, Notify = stats_changed);
+    // The two ways the drawn graph stops being this repository's history:
+    // the walk stopped part-way (`failed`), or every row is drawn and the
+    // rebuild that would have refreshed them did not land (`stale`). One
+    // badge stands for both (`BandStateGroup.staleBadgeShown`).
     qproperty!("failed", Member = failed, Notify = stats_changed);
+    qproperty!("stale", Member = stale, Notify = stats_changed);
 
     #[qsignal]
     pub(super) fn stats_changed(&mut self);
@@ -125,6 +130,32 @@ impl GraphModel {
         self.growing = true;
         self.stats_changed();
         crate::hub::with_session(self.tab_id, |s| s.grow_log_window());
+    }
+
+    /// Automation: graph passes reaching `step` fail where they would
+    /// have walked, and one is asked for in the same call
+    /// (`RepoSession::fail_every_pass`).
+    ///
+    /// **What lets `STALE GRAPH` be photographed at all.** Both halves of
+    /// that state need a git that fails, under a repository built to be
+    /// walked, at a moment nothing outside the pass can name — so the
+    /// fault goes in at the walk and the pass leaves by its ordinary
+    /// reporting arm (`PG_AUTO_ACT=graph-stopped` / `graph-stale`).
+    #[qslot]
+    fn fail_graph_pass(&mut self, step: String) {
+        crate::hub::with_session(self.tab_id, |s| {
+            if step == "swapping" {
+                // Off screen, so the whole graph is left standing and
+                // goes out of date where it is.
+                s.fail_every_pass(PassStep::Swapping);
+                s.refresh_log();
+            } else {
+                // The column is emptied first, so the walk stops with
+                // rows missing.
+                s.fail_every_pass(PassStep::Streaming);
+                s.restart_log();
+            }
+        });
     }
 
     /// Row index of a commit (sidebar jump); -1 when absent.

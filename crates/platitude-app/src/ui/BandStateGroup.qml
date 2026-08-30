@@ -46,20 +46,21 @@ Item {
     readonly property bool identityBadgeShown: AppBackend.identityState === "missing" || AppBackend.identityUnsaved
         || (stateGroup.curPage !== null && !stateGroup.curPage.pageTab.identityReady)
     readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
-    /// The walk gave up: what is drawn is not the repository's history, whether that is some of it or none.
+    /// What is drawn is not the repository's history.
+    ///
+    /// **Two ways in, one badge.** The walk gave up part-way, so rows are missing (`failed`); or every row is drawn
+    /// and the rebuild that would have refreshed them did not land, so none of them is current (`stale`). Told apart
+    /// on the card's line and nowhere else — from where the reader stands the two are one position, because neither
+    /// picture may be acted on as though it were this repository's.
     ///
     /// **The only place it is said**: one state told in two places is two places to keep in step for no gain, and a
     /// badge is in view wherever the reader happens to be standing — which the middle of the graph column is not.
-    ///
-    /// **The streaming pass only**, which is what `failed` answers for. A background re-read that dies leaves a
-    /// *whole* graph standing that no later ref will change (`session::log::PassWatch` reports it as an operation),
-    /// and that is a different state with no word of its own: what is drawn there is not partial, it is old. It says
-    /// so where the other reads do, on the error line and the log's mark.
-    readonly property bool partialBadgeShown: stateGroup.curPage !== null
-                                              && stateGroup.curPage.pageGraph.failed
+    readonly property bool staleBadgeShown: stateGroup.curPage !== null
+                                            && (stateGroup.curPage.pageGraph.failed
+                                                || stateGroup.curPage.pageGraph.stale)
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
-                                       || stateGroup.partialBadgeShown
+                                       || stateGroup.staleBadgeShown
     /// The narrowest a badge is drawn before the group gives up on words. Counted in characters rather than pixels (規約
     /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
     /// names keep three.
@@ -84,7 +85,7 @@ Item {
     readonly property int conflictBadgeW: Math.ceil(mConflict.implicitWidth) + 2 * Theme.spaceXs
     readonly property int identityBadgeW: Math.ceil(mIdentity.implicitWidth) + 2 * Theme.spaceXs
     readonly property int oldGitBadgeW: Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
-    readonly property int partialBadgeW: Math.ceil(mPartial.implicitWidth) + 2 * Theme.spaceXs
+    readonly property int staleBadgeW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
     /// came back with. The conditions above are what asks for a state; these are what the band made of it
@@ -102,17 +103,17 @@ Item {
     readonly property string stateCardSize: stateCard.laidOutSize
 
     /// Which colour the mark takes once the words are gone. The two that stop work win whenever they are among them
-    /// (規約 §状態): a conflict, and a history the walk could not finish reading — the graph on screen is not the one
-    /// the repository has.
-    readonly property color tint: stateGroup.conflictBadgeShown || stateGroup.partialBadgeShown
+    /// (規約 §状態): a conflict, and a graph that is not the history the repository has — **either way it came to be
+    /// so**, since a picture that cannot be acted on is one state whether rows are missing from it or merely old.
+    readonly property color tint: stateGroup.conflictBadgeShown || stateGroup.staleBadgeShown
                                   ? Theme.danger : Theme.warning
     /// The group's ceiling; `foldedWidth` below is its floor, and the window's floor is costed at the mark
     /// (`TopBar.floorWidth`).
     readonly property real naturalWidth: (stateGroup.opBadgeShown ? stateGroup.opBadgeW + Theme.spaceXs : 0)
         + (stateGroup.conflictBadgeShown ? stateGroup.conflictBadgeW + Theme.spaceXs : 0)
         + (stateGroup.identityBadgeShown ? stateGroup.identityBadgeW + Theme.spaceXs : 0)
+        + (stateGroup.staleBadgeShown ? stateGroup.staleBadgeW + Theme.spaceXs : 0)
         + (stateGroup.oldGitBadgeShown ? stateGroup.oldGitBadgeW + Theme.spaceXs : 0)
-        + (stateGroup.partialBadgeShown ? stateGroup.partialBadgeW + Theme.spaceXs : 0)
         - Theme.spaceXs
     readonly property real foldedWidth: stateGroup.cellFolded
         ? Theme.railWidth : stateMark.implicitWidth + 2 * stateGroup.controlPadding
@@ -164,10 +165,10 @@ Item {
             want.push(stateGroup.conflictBadgeW)
         if (stateGroup.identityBadgeShown)
             want.push(stateGroup.identityBadgeW)
+        if (stateGroup.staleBadgeShown)
+            want.push(stateGroup.staleBadgeW)
         if (stateGroup.oldGitBadgeShown)
             want.push(stateGroup.oldGitBadgeW)
-        if (stateGroup.partialBadgeShown)
-            want.push(stateGroup.partialBadgeW)
         if (want.length === 0) {
             stateGroup.cap = Number.MAX_VALUE
             return
@@ -252,8 +253,8 @@ Item {
         text: Words.badgeOldGit
     }
     BadgeWord {
-        id: mPartial
-        text: Words.badgePartial
+        id: mStale
+        text: Words.badgeStaleGraph
     }
     DotMark {
         id: mDot
@@ -348,6 +349,31 @@ Item {
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
+        // `danger`, where the two outlined ones beside it are `warning`: the graph on screen is not the repository's
+        // history and nothing is going to make it so on its own (規約 §状態「今止まっている・失敗した」). **Outlined, not
+        // filled** — the fill is `CONFLICTS`, the one state with files waiting on the reader; this one is read, not
+        // worked through. Whatever was said about it is in the card behind this badge, which is where every one of
+        // these keeps its sentence.
+        //
+        // **Ahead of `OLD GIT`, which is the one that is not a state of this repository or this window** (規約
+        // §ウィンドウの縁): every badge before that one is a mark that somebody is in the middle of something, and this is
+        // one of them — the next read that lands takes it down, where an old git stands until the machine's is replaced.
+        StateBadge {
+            id: staleBadge
+            visible: stateGroup.staleBadgeShown
+            naturalW: stateGroup.staleBadgeW
+            cap: stateGroup.cap
+            tint: Theme.danger
+            Label {
+                text: Words.badgeStaleGraph
+                color: Theme.danger
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+                Layout.maximumWidth: Math.ceil(implicitWidth)
+            }
+        }
         StateBadge {
             id: oldGitBadge
             visible: stateGroup.oldGitBadgeShown
@@ -356,24 +382,6 @@ Item {
             Label {
                 text: Words.badgeOldGit
                 color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
-            }
-        }
-        // `danger`, where the two beside it are `warning`: the graph on screen is not the repository's history and
-        // nothing is going to make it so on its own (規約 §状態「今止まっている・失敗した」). Whatever was said about it is
-        // in the card behind this badge, which is where every one of these keeps its sentence.
-        StateBadge {
-            id: partialBadge
-            visible: stateGroup.partialBadgeShown
-            naturalW: stateGroup.partialBadgeW
-            cap: stateGroup.cap
-            Label {
-                text: Words.badgePartial
-                color: Theme.danger
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
@@ -450,8 +458,9 @@ Item {
         conflictShown: stateGroup.conflictBadgeShown
         identityShown: stateGroup.identityBadgeShown
         oldGitShown: stateGroup.oldGitBadgeShown
-        partialShown: stateGroup.partialBadgeShown
-        partialWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
+        staleShown: stateGroup.staleBadgeShown
+        staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
+        staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
         onIdentityRequested: stateGroup.identityEditRequested()
     }
 }

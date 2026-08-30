@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The band's state badges, opened out. The band itself keeps one mark for however many of them are standing (`TopBar` の
-// `…`): the tabs are what that row is for, and four badges of words beside them is the widest thing this app ever puts
+// `…`): the tabs are what that row is for, and a row of badge words beside them is the widest thing this app ever puts
 // there (デザイン規約 §ウィンドウの縁).
 //
 // A card rather than a `ToolTip`, for the reason `EolHoverCard` is one: a tooltip's ground is the Fusion default from
@@ -19,7 +19,7 @@ import platitude.ui
 // **The sentences can be taken away, the badges cannot.** A `CardText` is what the right-hand half of every row is,
 // because the git version and the count of waiting files are things a reader wants in their hands. A badge is a mark
 // rather than a line of content — its word is the band's own, it is drawn to be recognised by colour and shape, and one
-// of the four is a button.
+// of them is a button.
 //
 // Owned by the band rather than by the mark: a popup parented to something that can be laid out away takes the card
 // with it (app-ui.md).
@@ -43,9 +43,14 @@ AppCard {
     property bool conflictShown: false
     property bool identityShown: false
     property bool oldGitShown: false
-    property bool partialShown: false
+    property bool staleShown: false
+    /// Which of the two states the badge is standing for: the walk stopped part-way, so rows are missing. False is the
+    /// other one — every row is drawn and the rebuild that would have refreshed them did not land. **True wins where
+    /// both are** (a stream that stopped, then a rebuild over it that did not land): missing rows is the heavier of
+    /// the two, and it is the one that has words to show for itself.
+    property bool staleStopped: false
     /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
-    property string partialWhy: ""
+    property string staleWhy: ""
 
     /// The one row that is also a way somewhere. The badge it replaced was pressable, and folding the band must not
     /// cost the way back to the setup screen after "Not now" (規約 §identity).
@@ -57,8 +62,8 @@ AppCard {
     readonly property real badgeRun: Math.max(stateCard.opShown ? opBadge.implicitWidth : 0,
                                                stateCard.conflictShown ? conflictBadge.implicitWidth : 0,
                                                stateCard.identityShown ? identityBadge.implicitWidth : 0,
-                                               stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0,
-                                               stateCard.partialShown ? partialBadge.implicitWidth : 0)
+                                               stateCard.staleShown ? staleBadge.implicitWidth : 0,
+                                               stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
     /// Automation: which rows the card actually laid out, in band order. Read off the rows themselves rather than off
     /// the flags above — asking for a row and getting one are different things, and only one of them is what the
@@ -71,10 +76,10 @@ AppCard {
             out.push("conflicts")
         if (identityRow.visible)
             out.push("identity")
+        if (staleRow.visible)
+            out.push("stale")
         if (oldGitRow.visible)
             out.push("old-git")
-        if (partialRow.visible)
-            out.push("partial")
         return out.join(",")
     }
 
@@ -239,6 +244,47 @@ AppCard {
             }
         }
 
+        // The graph is not this repository's history. **Which of the two ways it came to be so is the one thing the
+        // badge could not say**, and it is what a reader needs to know here: rows are missing, or every row is there
+        // and out of date. The two are the same position — nothing on screen may be acted on — so they share a badge
+        // and part on this line.
+        //
+        // **Only the stopped walk quotes git.** A rebuild that failed said so where every other read does — the error
+        // line and the log's mark — and a sentence said twice is two places to keep in step. The stopped walk has
+        // nowhere else: its words come in on the stream and stop here.
+        RowLayout {
+            id: staleRow
+            visible: stateCard.staleShown
+            spacing: Theme.spaceSm
+            Rectangle {
+                id: staleBadge
+                color: "transparent"
+                border.color: Theme.danger
+                border.width: Theme.borderWidth
+                radius: Theme.radiusSm
+                implicitHeight: Theme.iconLg
+                implicitWidth: staleLabel.implicitWidth + 2 * Theme.spaceXs
+                Layout.preferredWidth: stateCard.badgeRun
+                Label {
+                    id: staleLabel
+                    anchors.centerIn: parent
+                    text: Words.badgeStaleGraph
+                    color: Theme.danger
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
+            }
+            CardText {
+                text: !stateCard.staleStopped
+                      ? qsTr("The latest history is not being shown")
+                      : stateCard.staleWhy !== ""
+                        ? stateCard.staleWhy
+                        : qsTr("Only part of the history could be read")
+                color: Theme.textSecondary
+                pixelSize: Theme.fontSm
+            }
+        }
+
         // The git on this machine is older than the one this app is built for. Which two versions those are is what the
         // badge had no room for, and it is the whole of what can be done about it — the way out is installing a newer
         // git, which is not in this window.
@@ -267,39 +313,6 @@ AppCard {
             CardText {
                 text: qsTr("git %1 is older than the %2 this app is built for")
                           .arg(stateCard.gitVersion).arg(stateCard.minimumGit)
-                color: Theme.textSecondary
-                pixelSize: Theme.fontSm
-            }
-        }
-        // The walk gave up with rows already drawn. **What is missing is not known** — the walk stopped, so there is
-        // no count to give the way the window cut has one — and the line under it is whoever's words there are: git's
-        // where git failed, and none at all where the pass simply fell over.
-        RowLayout {
-            id: partialRow
-            visible: stateCard.partialShown
-            spacing: Theme.spaceSm
-            Rectangle {
-                id: partialBadge
-                color: "transparent"
-                border.color: Theme.danger
-                border.width: Theme.borderWidth
-                radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
-                implicitWidth: partialLabel.implicitWidth + 2 * Theme.spaceXs
-                Layout.preferredWidth: stateCard.badgeRun
-                Label {
-                    id: partialLabel
-                    anchors.centerIn: parent
-                    text: Words.badgePartial
-                    color: Theme.danger
-                    font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
-                }
-            }
-            CardText {
-                text: stateCard.partialWhy !== ""
-                      ? stateCard.partialWhy
-                      : qsTr("The graph stops where the history could not be read")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }
