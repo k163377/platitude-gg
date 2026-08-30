@@ -40,6 +40,7 @@ Item {
         if (AppBackend.readyToQuit())
             return
         close.accepted = false
+        waitDialog.noteVeto()
         waitDialog.open()
     }
 

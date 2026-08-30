@@ -45,15 +45,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "quit_wait dialog=true window=true busy=true",
     },
-    // The way back in, and the write the quit was asked over landing
-    // anyway. `landed=true` is the whole point of the wait — the hook
-    // held the commit, the close was pressed, and nothing was killed —
-    // and no picture can say it (a history with the commit looks like
-    // a history that was always going to get it).
+    // The lock that takes no answer, and the write the quit was asked
+    // over landing anyway. `vetoes=2` is the door tried a second time
+    // and held a second time; `escape=false` is the policy Qt itself
+    // consults, so the day `CloseOnEscape` comes back this goes red.
+    // `landed=true` is the whole point of the wait — the hook held the
+    // commit, the close was pressed, and nothing was killed — and no
+    // picture can say it (a history with the commit looks like a
+    // history that was always going to get it).
     Verb {
-        name: "quit-stays",
+        name: "quit-locked",
         when: &[],
-        plain: "quit_stay dialog=false window=true landed=true",
+        plain: "quit_lock dialog=true window=true escape=false vetoes=2 landed=true",
     },
     // What a tab switch carries and what it drops, in one line
     // because neither half means anything alone. `sessions=1` with

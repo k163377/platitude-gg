@@ -316,23 +316,28 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=quit-waits / quit-stays: the close that arrives while git is still writing. The commit is held by
+    // PG_AUTO_ACT=quit-waits / quit-locked: the close that arrives while git is still writing. The commit is held by
     // the repository's own pre-commit hook (`--preset slowhook` — it sleeps), so the write is provably in flight when
     // the close lands: the gate turns the close away and stands the wait dialog up. `quit-waits` photographs that
-    // state; `quit-stays` presses the way back in and then watches the held write land anyway — the wait was never
-    // a kill.
+    // state; `quit-locked` tries the door a second time and then watches the held write land anyway — the wait takes
+    // no answer, and it was never a kill.
     //
-    // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make; the way back
-    // in is the dialog's own `keepWorking()`, the function its button calls. Neither verb is a write act: the commit
-    // deliberately has not landed when `quit-waits` photographs, and `quit-stays` waits the landing out in its own
-    // sampler (`AutoActCompletion`).
+    // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make — and, once the
+    // lock stands, **the only road left**: the modal seals both the pointer and the window's own `Shortcut`s
+    // (qmltestrunner 実測 — rules-refs/app-ui.md §close ゲート), while a close request still reaches `onClosing`
+    // the way Alt+F4 does. That is why the second press is the honest test of a lock with no way out, and why no verb
+    // here fires a write behind it: a handler called from QML would run whatever the modal is covering, and reporting
+    // that it did not would be a claim about a road this harness cannot drive.
+    //
+    // Neither verb is a write act: the commit deliberately has not landed when `quit-waits` photographs, and
+    // `quit-locked` waits the landing out in its own sampler (`AutoActCompletion`).
     SampleTimer {
         id: quitTimer
-        running: AppBackend.autoAct === "quit-waits" || AppBackend.autoAct === "quit-stays"
+        running: AppBackend.autoAct === "quit-waits" || AppBackend.autoAct === "quit-locked"
         /// The steps already taken, so nothing re-reads what had to be true before each of them.
         property bool committed: false
         property bool closed: false
-        property bool kept: false
+        property bool retried: false
         property int seqBefore: -1
         onTriggered: {
             if (window.curPage === null)
@@ -366,21 +371,26 @@ Item {
                 window.finishAutoAct()
                 return
             }
-            if (!quitTimer.kept) {
-                if (!quitWaitDialog.opened)
+            if (!quitTimer.retried) {
+                // The same guard as the first press, for the same reason: a close that arrived after the hook let
+                // go would be let through, and the gate would be right to let it. The write has to still be out for
+                // the refusal to mean anything.
+                if (!quitWaitDialog.opened || tab.busyCount === 0)
                     return
-                quitTimer.kept = true
-                quitWaitDialog.keepWorking()
+                quitTimer.retried = true
+                window.close()
                 return
             }
-            // The dialog has gone, the window stayed, and the write the quit was asked over still landed: the
+            // The lock never let go, the window stayed, and the write the quit was asked over still landed: the
             // sequence moving past the armed one is the write's answer being absorbed, busy falling is the queue
             // done with it.
-            if (quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
+            if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
                 return
             stop()
-            AppBackend.report("quit_stay dialog=" + quitWaitDialog.opened
+            AppBackend.report("quit_lock dialog=" + quitWaitDialog.opened
                 + " window=" + window.visible
+                + " escape=" + quitWaitDialog.escapes
+                + " vetoes=" + quitWaitDialog.vetoes
                 + " landed=" + (tab.writeSeq > quitTimer.seqBefore))
             window.finishAutoAct()
         }

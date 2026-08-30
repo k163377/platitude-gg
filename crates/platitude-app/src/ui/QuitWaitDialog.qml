@@ -10,9 +10,11 @@ import platitude.ui
 //
 // A window of its own rather than a bar: the subject is the window itself, so there is no list for a bar to stand
 // over — the seat the folder that would not open sits in (デザイン規約 §可否・警告の出し場所, the popups for what has
-// nowhere else to go). It asks for nothing back; the one button is the way to change one's mind, and Escape says the
-// same thing. Modal on purpose: a press that queued one more write would move the very moment this window is
-// waiting for.
+// nowhere else to go).
+//
+// **It asks nothing and takes no answer** (方針 = ユーザー決定 2026-08-31): the quit is already decided, so this is a
+// loading mode, not a question. There is no way back — no button, no Escape (`closePolicy` below) — and the modal is
+// what seals the rest: a press that queued one more write would move the very moment this window is waiting for.
 AppDialog {
     id: quitWaitDialog
 
@@ -20,14 +22,28 @@ AppDialog {
     /// (`WindowQuitGate` closes the window on it).
     signal settled()
 
-    /// Stay after all: the pending quit is abandoned with the dialog. The button's handler and the harness both
-    /// come through here (app-ui.md §UI 自動化の因果性 — the run presses what the hand presses).
-    function keepWorking() {
-        quitWaitDialog.close()
+    /// Escape would take this down. **Read off `closePolicy` itself** rather than written beside it, so the verb
+    /// that reports it (`quit-locked`) goes red the day somebody hands the policy back its `CloseOnEscape` bit —
+    /// a second spelling would go on saying `false` while the key worked.
+    readonly property bool escapes: (quitWaitDialog.closePolicy & Popup.CloseOnEscape) !== 0
+
+    /// How many closes this lock has turned away. It takes no answer, so a close that arrives while it stands —
+    /// Alt+F4, or anything else reaching the window rather than the screen the modal covers — is refused exactly
+    /// the way the first one was, and this is where `quit-locked` reads that (`WindowDialogActs`). Raised **from
+    /// inside the handler the window's `onClosing` calls** (`WindowQuitGate.gateClose`): a tally kept beside the
+    /// veto would go on rising after the veto itself was gone.
+    property int vetoes: 0
+    function noteVeto() {
+        quitWaitDialog.vetoes++
     }
 
-    // The way back in takes the focus, so either road out of here — the word or Escape — is one keystroke.
-    onOpened: actions.acceptButton.forceActiveFocus()
+    // The way out is taken away rather than left and refused: `AppDialog` opens Escape (`CloseOnEscape`), and a
+    // loading mode that Escape dismisses is a question wearing a ring. Nothing else in the window needs a guard —
+    // **a modal popup seals the window's own `Shortcut`s while it stands** (qmltestrunner 実測 2026-08-31: F5 and
+    // Cancel both fire with no popup up and under a *modeless* one, and neither fires under a modal one, focus or
+    // not). So F5's refresh, Ctrl+F's find and the two bars' Escape are already out of reach here, and holding them
+    // down again in `Main` would be code that never runs.
+    closePolicy: Popup.NoAutoClose
 
     contentItem: ColumnLayout {
         spacing: Theme.spaceLg
@@ -52,12 +68,6 @@ AppDialog {
             color: Theme.textSecondary
             text: qsTr("A git command is still writing to a repository.")
         }
-
-        DialogActions {
-            id: actions
-            acceptText: qsTr("Keep working")
-            onAccepted: quitWaitDialog.keepWorking()
-        }
     }
 
     // The sampling beat, not the verdict: the answer is the backend's (`AppBackend.readyToQuit`), asked once per
@@ -66,8 +76,8 @@ AppDialog {
     //
     // Held from answering during a headless run: the photograph is of the wait itself, and the seeded hook's
     // write can land while the shot pipeline is still grabbing — the close this would fire takes the window, and
-    // the PNGs, down with it (`finishAutoAct` ends a run, never a window). The gate, the veto and the way back
-    // in stay real; only the self-close is the run's to forgo.
+    // the PNGs, down with it (`finishAutoAct` ends a run, never a window). The gate and the veto stay real; only
+    // the self-close is the run's to forgo.
     SampleTimer {
         running: quitWaitDialog.opened && AppBackend.autoAct === ""
         onTriggered: if (AppBackend.readyToQuit()) quitWaitDialog.settled()
