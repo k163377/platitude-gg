@@ -59,11 +59,13 @@ RowLayout {
         Layout.preferredWidth: avatarRow.nameColW
         elide: Text.ElideRight
     }
+    // The address beside the name is supporting information, which is `textSecondary` — not `textMuted`, which is
+    // what a row nobody may touch looks like (デザイン規約 §テキスト / §無効).
     Label {
         Layout.fillWidth: true
         text: avatarRow.modelData.email
         elide: Text.ElideRight
-        color: Theme.textMuted
+        color: Theme.textSecondary
         font.pixelSize: Theme.fontSm
     }
     // Held, not clicked: this card writes as it is worked

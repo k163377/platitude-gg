@@ -6,11 +6,12 @@ import platitude.ui
 // One chapter of a settings screen: the word that names it, the rule under that word, and whatever the caller lays
 // out below.
 //
-// The word is spelled the way every other band heading in this app is (規約 §タイポグラフィ 帯の見出し) —
-// upper case, `fontMd`, `DemiBold`, `textSecondary` — so a chapter here reads as the same kind of thing as
-// BRANCHES does in the sidebar. That spelling is also what keeps it apart from the captions inside it
-// (`LabeledField`: the same step and colour at `Font.Normal`). The chapter is not louder, it is heavier, and the
-// rule under the word is what says where one chapter ends and the next begins.
+// Upper case, `fontMd`, `DemiBold`, `textPrimary` — the band heading's spelling with the ink of a heading rather
+// than of a note (規約 §設定の画面). A sidebar band wears `textSecondary` among rows that are `textPrimary`, so it
+// is the quiet thing in a loud column; here the whole screen around it is captions and explanations, and a heading
+// that took the same step down had nothing left to be quieter than — the skeleton read as the faintest thing on the
+// screen (2026-08-30 ユーザー報告). What ranks it under the group above is the rule and the inset, not the ink
+// (`SettingsGroup`). The chapter is not louder than its fields, it is heavier and it carries a rule.
 ColumnLayout {
     id: section
 
@@ -26,7 +27,7 @@ ColumnLayout {
         spacing: Theme.spaceXs
         Label {
             text: section.caption
-            color: Theme.textSecondary
+            color: Theme.textPrimary
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
         }

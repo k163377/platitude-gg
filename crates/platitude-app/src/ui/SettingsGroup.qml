@@ -7,10 +7,11 @@ import platitude.ui
 // chapters the caller lays out below (規約 §設定の画面).
 //
 // The level above `SettingsSection`, and it is ranked without changing the step: both are `fontMd` + `DemiBold` +
-// upper case, because a heading is made by weight, colour and case rather than by size (規約 §タイポグラフィ
-// 「見出しを段で作らない」). What ranks them is the ink and the rule — the group takes `textPrimary` over
-// `borderDefault`, the chapter `textSecondary` over `borderSubtle` — and the chapters are inset, so the group's rule
-// runs past theirs on the left and the nesting is legible without reading a word of it.
+// upper case + `textPrimary`, because a heading is made by weight, colour and case rather than by size
+// (規約 §タイポグラフィ 「見出しを段で作らない」) and both of these are headings. What ranks them is the rule and
+// the inset — the group's is `borderDefault` and the chapter's `borderSubtle`, and the chapters are inset, so the
+// group's rule runs past theirs on the left and the nesting is legible without reading a word of it. **Not the
+// ink**: a screen whose skeleton was one step down read as the faintest thing on itself (`SettingsSection`).
 ColumnLayout {
     id: group
 

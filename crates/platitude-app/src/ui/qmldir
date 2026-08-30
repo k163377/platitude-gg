@@ -111,6 +111,7 @@ GraphTailFooter 1.0 GraphTailFooter.qml
 HashPlate 1.0 HashPlate.qml
 HeadPinRow 1.0 HeadPinRow.qml
 HeadTrack 1.0 HeadTrack.qml
+HelpText 1.0 HelpText.qml
 HoldDriver 1.0 HoldDriver.qml
 HoldFill 1.0 HoldFill.qml
 HoldIcon 1.0 HoldIcon.qml
