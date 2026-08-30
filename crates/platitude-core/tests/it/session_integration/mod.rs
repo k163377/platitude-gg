@@ -12,6 +12,7 @@ mod carry_move;
 mod carry_rewrite;
 mod command_log;
 mod details;
+mod details_order;
 mod helper_binary;
 mod pass_watch;
 mod query;

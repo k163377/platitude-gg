@@ -230,14 +230,15 @@ pub enum SessionEvent {
         worktrees: Vec<crate::worktrees::WorktreeEntry>,
     },
     DetailsLoaded {
+        generation: u64,
         details: CommitDetails,
     },
-    /// The details read for `oid` failed. The failure itself goes out as
-    /// [`SessionEvent::OpFailed`] like every read's; this one is for the
-    /// pane showing a spinner against that oid, which nothing else would
-    /// take down.
+    /// A details failure is addressed to its request, including its error.
+    /// The consumer surfaces it only if that request is still current.
     DetailsFailed {
+        generation: u64,
         oid: Oid,
+        error: GitError,
     },
     DiffLoaded {
         target: DiffTarget,

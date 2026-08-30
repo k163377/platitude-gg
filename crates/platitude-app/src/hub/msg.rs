@@ -328,9 +328,22 @@ impl DiffMsg {
 /// only a message can take it down.
 #[derive(Debug)]
 pub enum DetailsMsg {
-    Loaded(Box<platitude_core::details::CommitDetails>),
-    /// The read failed (the failure itself reaches the error surface).
-    Failed {
-        oid_hex: String,
+    Loaded {
+        generation: u64,
+        details: Box<platitude_core::details::CommitDetails>,
     },
+    /// Only the consumer of the matching request may surface this error.
+    Failed {
+        generation: u64,
+        oid_hex: String,
+        message: String,
+    },
+}
+
+impl DetailsMsg {
+    pub fn generation(&self) -> u64 {
+        match self {
+            Self::Loaded { generation, .. } | Self::Failed { generation, .. } => *generation,
+        }
+    }
 }

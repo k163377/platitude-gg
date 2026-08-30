@@ -49,6 +49,7 @@ impl RepoSession {
             last_diff: Mutex::new(None),
             lex_cache: Mutex::new(None),
             log_cancel: Mutex::new(None),
+            details_read: Mutex::new(DetailsRead::default()),
             graph_passes: Arc::default(),
             pass_step: Mutex::new(None),
             pass_fault: Mutex::new(None),

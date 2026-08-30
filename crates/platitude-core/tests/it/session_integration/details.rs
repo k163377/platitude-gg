@@ -19,10 +19,10 @@ async fn details_and_diff_round_trip_through_the_session() {
     let (sink, session) = opened(&repo).await;
 
     let oid = Oid::from_hex_str(&head).unwrap();
-    session.load_details(oid);
+    let task = session.load_details(oid).expect("open session");
     sink.wait_for("DetailsLoaded", |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::DetailsLoaded { details } => {
+            SessionEvent::DetailsLoaded { details, .. } => {
                 assert_eq!(details.oid, oid);
                 assert_eq!(details.message, "edit f");
                 assert_eq!(details.files.len(), 1);
@@ -33,6 +33,10 @@ async fn details_and_diff_round_trip_through_the_session() {
         })
     })
     .await;
+    assert_eq!(
+        crate::support::wait::bounded("details completion", task.outcome()).await,
+        platitude_core::session::DetailsOutcome::Sent
+    );
 
     session.load_diff(DiffTarget::Commit {
         oid,

@@ -81,9 +81,11 @@ impl DetailsModel {
         };
         self.requested = oid_hex;
         self.requested_at = Some(Instant::now());
-        self.loading = true;
+        self.requested_generation = crate::hub::from_session(self.tab_id, |s| s.load_details(oid))
+            .flatten()
+            .map(|task| task.generation());
+        self.loading = self.requested_generation.is_some();
         self.changed();
-        crate::hub::with_session(self.tab_id, |s| s.load_details(oid));
     }
 
     #[qslot]
@@ -94,13 +96,24 @@ impl DetailsModel {
         let Some(msg) = feed.drain().pop() else {
             return;
         };
+        if Some(msg.generation()) != self.requested_generation {
+            return;
+        }
         let details = match msg {
-            crate::hub::DetailsMsg::Loaded(details) => details,
-            crate::hub::DetailsMsg::Failed { oid_hex } => {
+            crate::hub::DetailsMsg::Loaded { details, .. } => details,
+            crate::hub::DetailsMsg::Failed {
+                oid_hex, message, ..
+            } => {
                 // Only the spinner comes down (the failure itself is on
                 // the error surface); an answer already on screen stays.
                 if oid_hex == self.requested {
                     self.loading = false;
+                    self.requested_at = None;
+                    Hub::with(|hub| {
+                        if let Some(feeds) = hub.feeds(self.tab_id) {
+                            feeds.tab.push(crate::hub::TabMsg::OpError { message });
+                        }
+                    });
                     self.changed();
                 }
                 return;
@@ -111,7 +124,7 @@ impl DetailsModel {
             return; // stale response for a previous selection
         }
         if let Some(t0) = self.requested_at.take() {
-            // The 100ms interaction budget is measured here (click → data).
+            // Data arrival only; PagePerfDriver separately observes a frame.
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,
                 "details request round trip"

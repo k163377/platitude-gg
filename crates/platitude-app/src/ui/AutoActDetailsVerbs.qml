@@ -30,7 +30,11 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
-        if (act === "details-select" || act === "details-select-away") {
+        if (act === "details-failure") {
+            driver.completionDeferred = true
+            driver.detailsModel.request("ffffffffffffffffffffffffffffffffffffffff")
+            detailsFailure.start()
+        } else if (act === "details-select" || act === "details-select-away") {
             // `<value>` or `<value>:<row>` — the graph row defaults to the top one, since what this is about is the
             // pane rather than which commit is in it. `-away` takes two values instead, `<first>+<then>`, and is
             // about the first one letting go.
@@ -110,6 +114,16 @@ Item {
             return false
         }
         return true
+    }
+    SampleTimer {
+        id: detailsFailure
+        onTriggered: {
+            if (driver.detailsModel.loading || !driver.repoTab.lastError.startsWith("details: "))
+                return
+            detailsFailure.stop()
+            AppBackend.report("details_failure loading=false error=true")
+            renderedBarrier.begin()
+        }
     }
     /// The pane's values are fields the reader drags over (規約 §右のペインの字は掴める). A drag cannot be injected, so
     /// this picks the field out the way `Ctrl+A` does and reads back what it holds — the same pair `tip-copy` uses,

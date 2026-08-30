@@ -26,6 +26,8 @@ use platitude_core::stash::StashEntry;
 use platitude_core::status::WorkTreeStatus;
 use qtbridge::QmlMethodInvoker;
 
+#[cfg(test)]
+mod details_tests;
 mod feed;
 mod msg;
 mod prefs;

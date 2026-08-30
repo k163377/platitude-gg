@@ -6,6 +6,11 @@ use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     Verb {
+        name: "details-failure",
+        when: &[],
+        plain: "details_failure loading=false error=true",
+    },
+    Verb {
         name: "perf",
         when: &[
             (

@@ -87,6 +87,8 @@ mod walk;
 mod write;
 
 pub use auto_fetch::OpenFetch;
+use details_read::DetailsRead;
+pub use details_read::{DetailsOutcome, DetailsTask};
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use feed::Recording;

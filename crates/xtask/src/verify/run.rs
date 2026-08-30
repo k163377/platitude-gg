@@ -285,7 +285,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
-    super::perf::configure(&mut cmd, &opts.verb, &arg)?;
+    super::perf::configure(&mut cmd, &opts.verb, &arg, &config_dir)?;
     // The identity screen is the one surface whose write lands outside the
     // demo repository — in the configuration of whoever is sitting at this
     // machine. So the run is given one of its own: `--global` follows

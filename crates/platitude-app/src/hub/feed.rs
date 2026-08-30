@@ -9,6 +9,7 @@ pub struct Feed<T> {
 
 struct FeedState<T> {
     queue: VecDeque<T>,
+    latest: Option<u64>,
     invoker: Option<QmlMethodInvoker>,
 }
 
@@ -17,6 +18,7 @@ impl<T> Default for Feed<T> {
         Self {
             state: Mutex::new(FeedState {
                 queue: VecDeque::new(),
+                latest: None,
                 invoker: None,
             }),
         }
@@ -49,6 +51,20 @@ impl<T> Feed<T> {
             s.queue.push_back(item);
             s
         };
+        Self::wake(guard);
+    }
+
+    /// One pending answer, ordered by request rather than completion.
+    /// Keep the watermark after draining so a late duplicate cannot wake
+    /// the consumer or retain stale data. A new session resets it explicitly.
+    pub fn push_latest(&self, generation: u64, item: T) {
+        let mut guard = self.lock();
+        if guard.latest.is_some_and(|latest| generation <= latest) {
+            return;
+        }
+        guard.latest = Some(generation);
+        guard.queue.clear();
+        guard.queue.push_back(item);
         Self::wake(guard);
     }
 
@@ -108,7 +124,9 @@ impl<T> Feed<T> {
     /// the model, so one stale `Started` leaves it holding a number the
     /// new stream never reaches and no chunk it sends is ever drawn.
     pub fn clear_queued(&self) {
-        self.lock().queue.clear();
+        let mut guard = self.lock();
+        guard.queue.clear();
+        guard.latest = None;
     }
 }
 

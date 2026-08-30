@@ -142,15 +142,28 @@ impl SessionSink for BridgeSink {
             SessionEvent::WorktreesLoaded { worktrees } => {
                 self.feeds.worktrees.push_replace(worktrees)
             }
-            SessionEvent::DetailsLoaded { details } => self
-                .feeds
-                .details
-                .push_replace(DetailsMsg::Loaded(Box::new(details))),
-            SessionEvent::DetailsFailed { oid } => {
-                self.feeds.details.push_replace(DetailsMsg::Failed {
+            SessionEvent::DetailsLoaded {
+                generation,
+                details,
+            } => self.feeds.details.push_latest(
+                generation,
+                DetailsMsg::Loaded {
+                    generation,
+                    details: Box::new(details),
+                },
+            ),
+            SessionEvent::DetailsFailed {
+                generation,
+                oid,
+                error,
+            } => self.feeds.details.push_latest(
+                generation,
+                DetailsMsg::Failed {
+                    generation,
                     oid_hex: oid.to_hex(),
-                })
-            }
+                    message: format!("details: {error}"),
+                },
+            ),
             SessionEvent::DiffLoaded {
                 target,
                 patches,
