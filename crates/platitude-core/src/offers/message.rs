@@ -63,13 +63,21 @@ impl MessageEdit {
 /// rewrites that are asked for by name keep their rows in the commit
 /// menu ([`super::commit_menu`]'s `edit_history`).
 ///
-/// **Nothing while an operation stands.** git refuses the amend outright
-/// there: `You are in the middle of a merge -- cannot amend`, the same
-/// sentence for a cherry-pick, and `Committing is not possible because
-/// you have unmerged files` mid-rebase (measured, 2.55). A rebase stopped
-/// clean would take one, but no screen here stops one on purpose yet
-/// (full interactive rebase is unwired), so every stop this app can
-/// reach is one of those refusals.
+/// **Nothing while an operation stands** — with one exception. git
+/// refuses the amend outright there: `You are in the middle of a merge --
+/// cannot amend`, the same sentence for a cherry-pick, and `Committing is
+/// not possible because you have unmerged files` mid-rebase (measured, 2.55).
+/// The exception is the stop that exists *for* amending: an interactive
+/// rebase stopped at an `edit` step sits with HEAD on the commit, a clean
+/// tree, and an amend git takes — `editing` is git's own word on it and
+/// `edit_oid` names the commit it stopped on
+/// ([`crate::integrate::RebaseStop`], abbreviated as git wrote it).
+///
+/// **The exemption is the stopped commit's, not HEAD's.** git leaves the
+/// stop standing while a terminal makes further commits on top, and HEAD
+/// then names a commit the exit card's "amend it above" was never about —
+/// so the boxes open only while HEAD still is the stopped commit. An
+/// empty `edit_oid` (git wrote none) falls back to trusting HEAD.
 ///
 /// **Detached is not a reason.** `git commit --amend` on a detached HEAD
 /// amends as usual (measured, 2.55) — unlike the menu's rewrite rows, which
@@ -80,6 +88,8 @@ pub fn message_edit(
     head_oid: &str,
     stash_ref: &str,
     op_text: &str,
+    editing: bool,
+    edit_oid: &str,
 ) -> MessageEdit {
     if !open || oid_hex.is_empty() {
         return MessageEdit::Nothing;
@@ -89,7 +99,8 @@ pub fn message_edit(
     if !stash_ref.is_empty() {
         return MessageEdit::Stash;
     }
-    if !op_text.is_empty() {
+    let head_is_the_stop = edit_oid.is_empty() || head_oid.starts_with(edit_oid);
+    if !op_text.is_empty() && !(editing && head_is_the_stop && oid_hex == head_oid) {
         return MessageEdit::Standing;
     }
     if oid_hex != head_oid {
@@ -105,9 +116,9 @@ mod tests {
     const HEAD: &str = "abc123";
     const OLDER: &str = "def456";
 
-    /// The same open tab, `oid` on screen.
+    /// The same open tab, `oid` on screen, no edit stop.
     fn edit(oid: &str, stash_ref: &str, op_text: &str) -> MessageEdit {
-        message_edit(true, oid, HEAD, stash_ref, op_text)
+        message_edit(true, oid, HEAD, stash_ref, op_text, false, "")
     }
 
     #[test]
@@ -127,6 +138,39 @@ mod tests {
         assert_eq!(edit(HEAD, "", "MERGING"), MessageEdit::Standing);
     }
 
+    /// The stop that exists for amending is the exception: HEAD's commit
+    /// opens, and every other row stays refused as before.
+    #[test]
+    fn an_edit_stop_opens_heads_commit_and_nothing_else() {
+        assert_eq!(
+            message_edit(true, HEAD, HEAD, "", "REBASING", true, "abc1"),
+            MessageEdit::Amend
+        );
+        assert_eq!(
+            message_edit(true, OLDER, HEAD, "", "REBASING", true, "abc1"),
+            MessageEdit::Standing
+        );
+        assert_eq!(
+            message_edit(true, HEAD, HEAD, "stash@{0}", "REBASING", true, "abc1"),
+            MessageEdit::Stash
+        );
+    }
+
+    /// A terminal commit made during the stop moves HEAD off the stopped
+    /// commit; the boxes shut rather than offering an amend of a commit
+    /// the exit card never named. An unnamed stop trusts HEAD as before.
+    #[test]
+    fn a_head_that_left_the_stopped_commit_takes_the_amend_away() {
+        assert_eq!(
+            message_edit(true, HEAD, HEAD, "", "REBASING", true, "def9"),
+            MessageEdit::Standing
+        );
+        assert_eq!(
+            message_edit(true, HEAD, HEAD, "", "REBASING", true, ""),
+            MessageEdit::Amend
+        );
+    }
+
     // Which of the two refusals a stash under a stopped operation gets:
     // the row is a stash whatever the repository is in the middle of, and
     // that is the one the reader can act on.
@@ -140,7 +184,7 @@ mod tests {
     fn an_empty_pane_refuses_without_a_reason() {
         assert_eq!(edit("", "", ""), MessageEdit::Nothing);
         assert_eq!(
-            message_edit(false, HEAD, HEAD, "", ""),
+            message_edit(false, HEAD, HEAD, "", "", false, ""),
             MessageEdit::Nothing
         );
         assert_eq!(edit("", "", "").as_str(), "");

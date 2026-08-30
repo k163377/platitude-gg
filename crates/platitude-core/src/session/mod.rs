@@ -42,6 +42,7 @@ use crate::preview::{self, FilePreview};
 use crate::process::{CommandEnd, GitCommand, GitExecutor};
 use crate::publish;
 use crate::reachable;
+use crate::rebase_plan;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
 use crate::remote;
 use crate::repo::RepoInfo;

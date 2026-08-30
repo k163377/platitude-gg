@@ -192,14 +192,15 @@ impl RepoSession {
         let op = opstate::detect(&self.executor, &workdir, &cancel).await;
         match (status, op) {
             (Ok(status), Ok(op_state)) => {
-                // Only a stepping rebase has a counter to read, so the
-                // common refresh costs nothing extra.
-                let progress = if op_state.rebasing {
-                    conflict::rebase_progress(&self.executor, &workdir, &cancel)
+                // Only a standing rebase has a counter to read or a stop
+                // to explain, and the two ride one spawn — this runs every
+                // tick for the life of a stop (`integrate::rebase_standing`).
+                let (progress, stop) = if op_state.rebasing {
+                    integrate::rebase_standing(&self.executor, &workdir, &cancel)
                         .await
                         .unwrap_or_default()
                 } else {
-                    None
+                    (None, integrate::RebaseStop::default())
                 };
                 // Likewise: the two sides only have names while something
                 // is stopped, which is the rare case. Nothing stopped
@@ -275,7 +276,16 @@ impl RepoSession {
                 if !self.status_gate.is_current(op_gen) {
                     return false;
                 }
-                let dirty = status.is_dirty();
+                // The working-tree row stands while the tree is dirty *or*
+                // an operation is — a stop's landing is that row, and the
+                // `edit` stop and the emptied-commit stop both leave the
+                // tree clean while the exit card waits under it
+                // (デザイン規約 §進行中の操作から出る「着地は WIP 行」).
+                // "An operation" is one with an exit card to land: a
+                // bisect also flips `op_state.any()`, and it has no card
+                // and changes nothing about the tree.
+                let dirty =
+                    status.is_dirty() || integrate::InProgress::from_state(&op_state).is_some();
                 // Both halves are recorded whatever the other says: they
                 // are what the next read compares against, and a `||` that
                 // skipped the second would leave it behind.
@@ -312,6 +322,7 @@ impl RepoSession {
                     merge_tool,
                     push_remote,
                     eol_marks,
+                    stop,
                 });
                 flipped
             }

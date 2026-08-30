@@ -100,14 +100,18 @@ fn only_a_rebase_costs_something_to_leave() {
 
 #[test]
 fn a_clean_tree_under_a_stop_is_the_emptied_commit_and_skip_is_free() {
-    assert!(skip_is_free(&Counts::default()));
+    assert!(skip_is_free(&Counts::default(), false));
     let untracked = Counts {
         untracked: 4,
         ..Counts::default()
     };
     assert!(
-        skip_is_free(&untracked),
+        skip_is_free(&untracked, false),
         "untracked files say nothing about the stopped commit"
+    );
+    assert!(
+        !skip_is_free(&Counts::default(), true),
+        "an edit stop is just as clean, and skipping it takes the commit out"
     );
     for dirty in [
         Counts {
@@ -123,6 +127,6 @@ fn a_clean_tree_under_a_stop_is_the_emptied_commit_and_skip_is_free() {
             ..Counts::default()
         },
     ] {
-        assert!(!skip_is_free(&dirty), "{dirty:?}");
+        assert!(!skip_is_free(&dirty, false), "{dirty:?}");
     }
 }

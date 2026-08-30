@@ -35,6 +35,7 @@ pub mod preview;
 pub mod process;
 pub mod publish;
 pub mod reachable;
+pub mod rebase_plan;
 pub mod refs;
 pub mod remote;
 pub mod repo;

@@ -13,6 +13,7 @@ mod edits;
 mod merge;
 mod mergetool;
 mod pick_revert;
+mod plan;
 mod publish;
 mod rebase;
 mod sides;

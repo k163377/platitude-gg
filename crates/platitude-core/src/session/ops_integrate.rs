@@ -57,17 +57,34 @@ impl RepoSession {
 
     /// `git rebase --interactive` with a plan assembled in the UI. The todo
     /// editor is the helper binary shipped beside the application.
+    ///
+    /// `expect_head` (full hex, empty = unchecked) is the tip the plan was
+    /// composed against. The screen pins it when the plan opens; a terminal
+    /// or another session moving the branch in between would leave the
+    /// plan's todo silently dropping whatever landed, so a tip that moved
+    /// is refused here — before git is spawned — and nothing is touched.
     pub fn rebase_interactive(
         self: &Arc<Self>,
         upstream: String,
         steps: Vec<sequencer::RebaseStep>,
         options: integrate::RebaseOptions,
+        expect_head: String,
     ) {
         let session = Arc::clone(self);
         self.write(
             "rebase",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                if !expect_head.is_empty() {
+                    let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
+                    if head.to_hex() != expect_head {
+                        return Err(GitError::Rejected {
+                            message: "the branch tip moved while the plan was being arranged; \
+                                      nothing was rewritten"
+                                .to_string(),
+                        });
+                    }
+                }
                 let replay = Replay::of(&upstream, &steps, options)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
@@ -75,6 +92,39 @@ impl RepoSession {
                 Ok(())
             },
         );
+    }
+
+    /// Asks what an interactive rebase from `from` (a full commit id)
+    /// would be made of; the answer arrives as
+    /// [`SessionEvent::RebasePlanLoaded`], or as
+    /// [`SessionEvent::RebasePlanRefused`] where the range cannot be
+    /// replayed. A read like [`RepoSession::check_publish`] — nothing is
+    /// touched, so it stays off the write queue.
+    pub fn ask_rebase_plan(self: &Arc<Self>, from: String) {
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let Some(workdir) = s.workdir() else {
+                return;
+            };
+            let cancel = s.root_cancel.clone();
+            match rebase_plan::preview(&s.executor, &workdir, &from, &cancel).await {
+                Ok(rebase_plan::PlanAnswer::Plan(preview)) => {
+                    s.sink
+                        .event(SessionEvent::RebasePlanLoaded { preview: *preview });
+                }
+                Ok(rebase_plan::PlanAnswer::Refused(refusal)) => {
+                    s.sink
+                        .event(SessionEvent::RebasePlanRefused { from, refusal });
+                }
+                Err(error) => {
+                    // Both halves: the failure itself to the shared error
+                    // surface, and word to the asker so its waiting state
+                    // comes down rather than loading forever.
+                    s.sink.event(SessionEvent::RebasePlanFailed { from });
+                    s.fail("rebase-plan", error);
+                }
+            }
+        });
     }
 
     /// Folds one commit into its parent.

@@ -92,6 +92,12 @@ pub async fn rebase(
 /// reaches the screen: this is a question *about* that failure, and
 /// letting it replace the answer would report a `rev-parse` where git
 /// said why it would not rebase.
+///
+/// **Exit 0 is not the whole of Done either.** The `edit` stop is the one
+/// stop git exits 0 on — the pause was asked for, so git does not count
+/// it against the command (measured, 2.55 —
+/// `an_edit_stop_says_so_and_names_the_commit_it_sits_on`). The marker
+/// left standing is what tells it from a rebase that ran out the end.
 pub(crate) async fn landed(
     executor: &GitExecutor,
     workdir: &Path,
@@ -99,7 +105,18 @@ pub(crate) async fn landed(
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
     let Err(error) = result else {
-        return Ok(RebaseOutcome::Done);
+        // The probe's own failure travels, asymmetrically from the exit-1
+        // branch below: there git's words are the answer and a failed read
+        // must not replace them, while here "Done" has consequences of its
+        // own — the caller sweeps the reword message files a standing
+        // rebase's todo still reads — so a stop must never be missed
+        // quietly. A loud error costs a red line; the next status poll
+        // still finds the standing rebase and raises the exit card.
+        return match opstate::detect(executor, workdir, cancel).await {
+            Ok(state) if state.rebasing => Ok(RebaseOutcome::Stopped),
+            Ok(_) => Ok(RebaseOutcome::Done),
+            Err(probe) => Err(probe),
+        };
     };
     let GitError::Failed {
         command,
@@ -153,6 +170,82 @@ fn work_is_in_the_way(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
     text.contains("cannot rebase:")
         && (text.contains("unstaged changes") || text.contains("uncommitted changes"))
+}
+
+/// Why a standing rebase is standing, where git wrote it down.
+///
+/// A stop at an `edit` step leaves the tree as clean as a stop over an
+/// emptied commit, so the tree cannot tell the two apart — this read is
+/// what can (P3-確認事項 §A). Default everywhere nothing is standing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RebaseStop {
+    /// The rebase stopped on purpose at an `edit` step: the commit is
+    /// applied, HEAD sits on it, and amending it is what the stop is for.
+    /// git says so by leaving `rebase-merge/amend` behind — the file its
+    /// own `--continue` reads to know the commit may have been amended.
+    pub editing: bool,
+    /// The commit the stop is about (`rebase-merge/stopped-sha`),
+    /// abbreviated as git wrote it; empty where it wrote none.
+    pub oid: String,
+}
+
+/// Reads why the standing rebase stopped, and how far it got, in one
+/// process. Only worth asking while [`opstate::detect`] says one is
+/// standing; with none, everything here comes back default — and the
+/// caller pays the spawn once per status tick for the life of a stop,
+/// which is why the two questions share it.
+///
+/// Progress reads both backends (the merge backend counts in
+/// `rebase-merge/msgnum`, the apply backend in `rebase-apply/next`); the
+/// stop's reason reads only the merge side — the apply backend has no
+/// `edit` to stop at, and a conflicted stop is already told by the tree.
+pub async fn rebase_standing(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<(Option<crate::conflict::Progress>, RebaseStop), GitError> {
+    let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
+    for rel in [
+        "rebase-merge/msgnum",
+        "rebase-merge/end",
+        "rebase-apply/next",
+        "rebase-apply/last",
+        "rebase-merge/amend",
+        "rebase-merge/stopped-sha",
+    ] {
+        cmd = cmd.args(["--git-path", rel]);
+    }
+    let out = executor.run(cmd, cancel).await?;
+    let text = out.stdout_utf8();
+    // `--git-path` prints paths relative to the cwd (the workdir) or
+    // absolute ones; joining handles both (the shape `opstate::detect` uses).
+    let paths: Vec<std::path::PathBuf> = text
+        .lines()
+        .map(|rel| workdir.join(rel.trim_end()))
+        .collect();
+    let count = |at: usize| -> Option<u32> {
+        std::fs::read_to_string(paths.get(at)?)
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+    };
+    let mut progress = None;
+    for pair in [(0, 1), (2, 3)] {
+        if let (Some(current), Some(total)) = (count(pair.0), count(pair.1))
+            && total > 0
+        {
+            progress = Some(crate::conflict::Progress { current, total });
+            break;
+        }
+    }
+    let editing = paths.get(4).is_some_and(|p| p.exists());
+    let oid = paths
+        .get(5)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    Ok((progress, RebaseStop { editing, oid }))
 }
 
 /// Builds a rebase command; `todo_editor` turns it into an interactive one

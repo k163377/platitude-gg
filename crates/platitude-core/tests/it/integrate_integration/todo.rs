@@ -7,7 +7,6 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::{current_op, helper};
-use platitude_core::conflict;
 use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
@@ -141,11 +140,10 @@ async fn interactive_rebase_stops_at_an_edit_step() {
     .await;
 
     assert_eq!(current_op(&repo).await, Some(InProgress::Rebase));
-    let progress = conflict::rebase_progress(&exec, &repo.path, &cancel)
+    let (progress, _) = integrate::rebase_standing(&exec, &repo.path, &cancel)
         .await
-        .expect("progress")
-        .expect("running");
-    assert_eq!(progress.total, 2);
+        .expect("progress");
+    assert_eq!(progress.expect("running").total, 2);
 
     integrate::resolve_current(&exec, &repo.path, Continuation::Continue, &cancel)
         .await

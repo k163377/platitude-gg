@@ -276,13 +276,23 @@ pub async fn plan_edit(
         .unwrap_or_default();
     let root = upstream.is_empty();
 
-    if has_merges(executor, workdir, &upstream, root, cancel).await? {
+    // One read answers both questions: the rows, and whether a merge sits
+    // among them (`%P` rides along — crate::rebase_plan::read_rows, the
+    // same parser the full plan's preview goes through).
+    let read =
+        crate::rebase_plan::read_rows(executor, workdir, &range_arg(&upstream, root), cancel)
+            .await?;
+    if read.merges {
         return Err(fail(
             "this range contains a merge commit, which a rebase would drop".to_string(),
         ));
     }
 
-    let mut steps = plan_for_range(executor, workdir, &upstream, root, cancel).await?;
+    let mut steps: Vec<RebaseStep> = read
+        .rows
+        .into_iter()
+        .map(|row| RebaseStep::pick(row.oid, row.subject))
+        .collect();
     let Some(index) = steps.iter().position(|s| s.oid == oid) else {
         return Err(fail(format!(
             "{} is not in the history of the current branch",
@@ -317,7 +327,7 @@ fn short(oid: &str) -> &str {
 }
 
 /// Resolves a revision, returning `None` when git does not know it.
-async fn resolve(
+pub(crate) async fn resolve(
     executor: &GitExecutor,
     workdir: &Path,
     rev: &str,
@@ -341,21 +351,6 @@ async fn resolve(
     Ok((!text.is_empty()).then_some(text))
 }
 
-async fn has_merges(
-    executor: &GitExecutor,
-    workdir: &Path,
-    upstream: &str,
-    root: bool,
-    cancel: &CancellationToken,
-) -> Result<bool, GitError> {
-    let cmd = crate::process::GitCommand::new()
-        .cwd(workdir)
-        .args(["rev-list", "--merges", "--count"])
-        .arg(range_arg(upstream, root));
-    let out = executor.run(cmd, cancel).await?;
-    Ok(out.stdout_utf8().trim() != "0")
-}
-
 /// The commits `git rebase -i <upstream>` would offer, oldest first.
 pub async fn plan_for(
     executor: &GitExecutor,
@@ -363,43 +358,25 @@ pub async fn plan_for(
     upstream: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<RebaseStep>, GitError> {
-    plan_for_range(executor, workdir, upstream, false, cancel).await
+    let read =
+        crate::rebase_plan::read_rows(executor, workdir, &range_arg(upstream, false), cancel)
+            .await?;
+    Ok(read
+        .rows
+        .into_iter()
+        .map(|row| RebaseStep::pick(row.oid, row.subject))
+        .collect())
 }
 
-fn range_arg(upstream: &str, root: bool) -> String {
+/// The range a plan replays, spelled in one place for everyone who says
+/// it — the sequencer's own reads, the preview, and the rewrite warning
+/// the screen asks about (three sayers is past the tolerated two).
+pub(crate) fn range_arg(upstream: &str, root: bool) -> String {
     if root {
         "HEAD".to_string()
     } else {
         format!("{upstream}..HEAD")
     }
-}
-
-async fn plan_for_range(
-    executor: &GitExecutor,
-    workdir: &Path,
-    upstream: &str,
-    root: bool,
-    cancel: &CancellationToken,
-) -> Result<Vec<RebaseStep>, GitError> {
-    let cmd = crate::process::GitCommand::new()
-        .cwd(workdir)
-        .args(["log", "--reverse", "--format=%H%x00%s", "-z"])
-        .arg(range_arg(upstream, root));
-    let out = executor.run(cmd, cancel).await?;
-    let mut steps = Vec::new();
-    for record in out.stdout.split(|b| *b == 0).collect::<Vec<_>>().chunks(2) {
-        let [oid, subject] = record else { continue };
-        let oid = String::from_utf8_lossy(oid);
-        let oid = oid.trim();
-        if oid.is_empty() {
-            continue;
-        }
-        steps.push(RebaseStep::pick(
-            oid,
-            String::from_utf8_lossy(subject).trim_end().to_string(),
-        ));
-    }
-    Ok(steps)
 }
 
 /// Runs `git rebase --interactive` with `steps` as the todo list.
@@ -485,19 +462,26 @@ pub async fn rebase_interactive(
     // may still have a reader.
     drop(plan);
     let outcome = crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
-    if matches!(outcome, Ok(RebaseOutcome::Stopped)) {
+    match &outcome {
         // The remaining todo still points at them; they wait for the
         // `--continue`. Whatever an abort strands is swept below, on the
         // next rebase that runs to the end — a moment when nothing can be
         // standing.
-        for file in message_files {
-            file.keep();
+        //
+        // **An error keeps them too**: `landed`'s probe can fail over a
+        // rebase that is in fact standing, and files dropped there would
+        // break the todo's own `exec` lines. A stray file costs the sweep
+        // one more entry; a missing one breaks a `--continue`.
+        Ok(RebaseOutcome::Stopped) | Err(_) => {
+            for file in message_files {
+                file.keep();
+            }
         }
-    } else {
-        drop(message_files);
-        if matches!(outcome, Ok(RebaseOutcome::Done)) {
+        Ok(RebaseOutcome::Done) => {
+            drop(message_files);
             ScratchFile::sweep(&repo.git_dir, REWORD_MSG_TAG);
         }
+        Ok(RebaseOutcome::Blocked(_)) => drop(message_files),
     }
     outcome
 }

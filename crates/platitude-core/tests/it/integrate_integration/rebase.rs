@@ -154,10 +154,10 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
     );
 
     assert_eq!(current_op(&repo).await, Some(InProgress::Rebase));
-    let progress = conflict::rebase_progress(&exec, &repo.path, &cancel)
+    let (progress, _) = integrate::rebase_standing(&exec, &repo.path, &cancel)
         .await
-        .expect("progress")
-        .expect("a rebase is running");
+        .expect("progress");
+    let progress = progress.expect("a rebase is running");
     assert_eq!(
         (progress.current, progress.total),
         (1, 2),
@@ -169,9 +169,10 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
         .expect("abort");
     assert_eq!(current_op(&repo).await, None);
     assert!(
-        conflict::rebase_progress(&exec, &repo.path, &cancel)
+        integrate::rebase_standing(&exec, &repo.path, &cancel)
             .await
             .expect("progress")
+            .0
             .is_none()
     );
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic two");

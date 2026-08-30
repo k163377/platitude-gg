@@ -85,47 +85,6 @@ pub struct Progress {
     pub total: u32,
 }
 
-/// Progress of an in-progress rebase, or `None` when none is running.
-///
-/// Both rebase backends are read: the merge backend (the default, and what
-/// `--interactive` always uses) counts in `rebase-merge/msgnum`, while the
-/// apply backend counts in `rebase-apply/next`.
-pub async fn rebase_progress(
-    executor: &GitExecutor,
-    workdir: &Path,
-    cancel: &CancellationToken,
-) -> Result<Option<Progress>, GitError> {
-    const FILES: [(&str, &str); 2] = [
-        ("rebase-merge/msgnum", "rebase-merge/end"),
-        ("rebase-apply/next", "rebase-apply/last"),
-    ];
-    let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
-    for (current, total) in FILES {
-        cmd = cmd.args(["--git-path", current]);
-        cmd = cmd.args(["--git-path", total]);
-    }
-    let out = executor.run(cmd, cancel).await?;
-    let text = out.stdout_utf8();
-    let paths: Vec<&str> = text.lines().map(str::trim_end).collect();
-
-    for pair in paths.chunks_exact(2) {
-        // `--git-path` prints paths relative to the cwd or absolute ones;
-        // joining handles both.
-        let current = read_count(&workdir.join(pair[0]));
-        let total = read_count(&workdir.join(pair[1]));
-        if let (Some(current), Some(total)) = (current, total)
-            && total > 0
-        {
-            return Ok(Some(Progress { current, total }));
-        }
-    }
-    Ok(None)
-}
-
-fn read_count(path: &Path) -> Option<u32> {
-    std::fs::read_to_string(path).ok()?.trim().parse().ok()
-}
-
 /// What to call the two sides of a conflict, for whatever operation is
 /// stopped. Either may be empty when git left nothing to name it by.
 ///

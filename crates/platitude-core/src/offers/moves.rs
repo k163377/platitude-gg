@@ -143,15 +143,13 @@ pub fn leave_code(op: Option<InProgress>) -> &'static str {
 /// An interactive rebase stops on a commit that came out empty and names
 /// `--skip` as the way past it (measured —
 /// `an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip`).
-/// Nothing is conflicted or staged while it stands there, and a clean
-/// tree under a stopped operation is what tells that stop from every
-/// other one this app can reach today. Untracked files say nothing about
-/// the stopped commit and do not count.
+/// Nothing is conflicted or staged while it stands there, and untracked
+/// files say nothing about the stopped commit and do not count.
 ///
-/// **Revisit when `edit` steps land** (full interactive rebase): an
-/// `edit` stop is clean too, and skipping one does lose the commit.
-/// Telling them apart needs the session to say why git stopped
-/// (P3-確認事項) — that answer belongs here.
-pub fn skip_is_free(counts: &Counts) -> bool {
-    counts.conflicted == 0 && counts.staged == 0 && counts.unstaged == 0
+/// A clean tree alone cannot answer, though: an `edit` stop is exactly as
+/// clean, the commit there is applied and skipping it takes it back out.
+/// `editing` is the session's word on why git stopped
+/// ([`crate::integrate::RebaseStop`]), and it overrules the tree.
+pub fn skip_is_free(counts: &Counts, editing: bool) -> bool {
+    !editing && counts.conflicted == 0 && counts.staged == 0 && counts.unstaged == 0
 }

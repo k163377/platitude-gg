@@ -125,6 +125,11 @@ pub enum SessionEvent {
         /// endings. Shared rather than copied: most status reads repeat the
         /// previous answer unchanged, and every open tab does it.
         eol_marks: Arc<Vec<EolMark>>,
+        /// Why a standing rebase is standing — the `edit` stop looks like
+        /// the empty stop from the tree alone, and the exit card's words
+        /// and its `--skip`'s cost both turn on which it is
+        /// (デザイン規約 §進行中の操作から出る). Default while no rebase is.
+        stop: integrate::RebaseStop,
     },
     /// Answer to [`RepoSession::ask_merge_tools`]: names the settings field
     /// can offer, deliberate ones first. Empty is a valid answer.
@@ -174,6 +179,26 @@ pub enum SessionEvent {
     PublishChecked {
         range: String,
         state: publish::PublishState,
+    },
+    /// Answer to [`RepoSession::ask_rebase_plan`]: the rows the
+    /// interactive-rebase screen opens over. `from` is echoed back because
+    /// the click that asked may be behind another by the time this lands.
+    RebasePlanLoaded {
+        preview: rebase_plan::PlanPreview,
+    },
+    /// The same question answered with a refusal of this end's own: the
+    /// range cannot be replayed, and the screen never opens. The wording
+    /// is the screen's to write, so what travels is the kind.
+    RebasePlanRefused {
+        from: String,
+        refusal: rebase_plan::PlanRefusal,
+    },
+    /// The same question and the read itself failed. The failure reaches
+    /// the shared error surface as its own [`SessionEvent::OpFailed`];
+    /// this one exists so the model asking can put its waiting state
+    /// down — silence would leave it loading forever.
+    RebasePlanFailed {
+        from: String,
     },
     /// Whether anything besides the branch HEAD is on still reaches its
     /// tip, so the rows that rewrite history can tell a rewrite that
