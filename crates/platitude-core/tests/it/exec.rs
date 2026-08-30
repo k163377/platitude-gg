@@ -65,31 +65,23 @@ async fn open_from_a_subdirectory_resolves_the_root() {
     assert_eq!(std::fs::canonicalize(&info.workdir).unwrap(), expected);
 }
 
+/// A folder with no repository in it and a path that is not there at all
+/// are the same refusal: nothing to show here, and not bare.
 #[tokio::test]
 async fn open_rejects_a_non_repository() {
     let dir = tempfile::tempdir().unwrap();
-    let (executor, cancel) = env();
-    let err = bounded("repo open", repo::open(&executor, dir.path(), &cancel))
-        .await
-        .unwrap_err();
-    assert!(
-        matches!(err, GitError::NotARepository { bare: false, .. }),
-        "got {err:?}"
-    );
-}
-
-#[tokio::test]
-async fn open_rejects_a_missing_path() {
-    let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("nope");
     let (executor, cancel) = env();
-    let err = bounded("repo open", repo::open(&executor, &missing, &cancel))
-        .await
-        .unwrap_err();
-    assert!(
-        matches!(err, GitError::NotARepository { bare: false, .. }),
-        "got {err:?}"
-    );
+    for path in [dir.path(), missing.as_path()] {
+        let err = bounded("repo open", repo::open(&executor, path, &cancel))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GitError::NotARepository { bare: false, .. }),
+            "{}: got {err:?}",
+            path.display()
+        );
+    }
 }
 
 /// A bare repository is refused like any other folder that cannot be

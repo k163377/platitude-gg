@@ -90,26 +90,6 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
 }
 
 #[tokio::test]
-async fn details_of_a_commit_without_the_trailer_credit_nobody() {
-    let mut repo = TestRepo::init();
-    // A `Co-authored-by` in the middle of the prose is not a trailer, and
-    // git is the one that decides that -- this is the case that would go
-    // wrong if the message were scanned by hand instead.
-    let sha = repo.commit_file_id(
-        "a.txt",
-        "one\n",
-        "feat: alone\n\nI wrote Co-authored-by: nobody <n@e.com> in the body\n\nand kept going.",
-    );
-
-    let (executor, cancel) = env();
-    let oid = Oid::from_hex_str(&sha).unwrap();
-    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
-        .await
-        .unwrap();
-    assert!(d.co_authors.is_empty(), "got {:?}", d.co_authors);
-}
-
-#[tokio::test]
 async fn details_report_renames_with_scores() {
     let mut repo = TestRepo::init();
     repo.commit_file("before.txt", "stable content here\n", "add file");

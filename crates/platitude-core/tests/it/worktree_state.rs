@@ -1,6 +1,7 @@
-//! status / stash against real git, plus captured-fixture parser checks
-//! (raw bytes committed under tests/fixtures/). Op-state detection is
-//! pinned where the operations that produce it live —
+//! status / stash against real git. The committed parser fixtures under
+//! tests/fixtures/ are regenerated here (`capture_fixtures`); the checks
+//! that parse them live beside each parser as unit tests. Op-state
+//! detection is pinned where the operations that produce it live —
 //! `integrate_integration` stops a real merge / rebase / cherry-pick and
 //! reads the state back.
 
@@ -127,41 +128,4 @@ async fn capture_fixtures() {
     stash_repo.git(&["stash", "push"]);
     let stash_bytes = stash_repo.git_raw(&["stash", "list", "-z", stash::STASH_FORMAT_ARG]);
     std::fs::write(fixture_dir().join("stash_list.bin"), &stash_bytes).unwrap();
-}
-
-fn read_fixture(name: &str) -> Vec<u8> {
-    let path = fixture_dir().join(name);
-    std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "missing fixture {} ({e}); regenerate with: cargo test -p platitude-core \
-             --test it -- --ignored capture",
-            path.display()
-        )
-    })
-}
-
-#[test]
-fn committed_status_fixture_parses() {
-    let bytes = read_fixture("status_v2.bin");
-    let s = status::parse_status(&bytes).unwrap();
-    assert_eq!(s.branch_head.as_deref(), Some("main"));
-    assert!(s.staged().any(|i| i.path() == "staged.txt"));
-    assert!(s.unstaged().any(|i| i.path() == "a.txt"));
-    assert!(s.untracked().any(|i| i.path() == "untracked dir/inner.txt"));
-    assert!(
-        s.items.iter().any(|i| matches!(
-            i,
-            StatusItem::Tracked { staged: 'R', orig_path: Some(o), .. } if o == "old name.txt"
-        )),
-        "rename with unicode target present"
-    );
-}
-
-#[test]
-fn committed_stash_fixture_parses() {
-    let bytes = read_fixture("stash_list.bin");
-    let stashes = stash::parse_stashes(&bytes).unwrap();
-    assert_eq!(stashes.len(), 2);
-    assert_eq!(stashes[0].name, "stash@{0}");
-    assert!(stashes[1].message.contains("first stash メッセージ"));
 }

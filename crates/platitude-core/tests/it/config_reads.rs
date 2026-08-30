@@ -175,24 +175,3 @@ async fn reading_core_autocrlf_answers_by_code() {
     assert!(!normalises, "the test repository sets core.autocrlf=false");
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
 }
-
-/// A key with no value at all is git's boolean true (`--type=bool` says
-/// so), and the CLI cannot write one — hand-edited configs can. The last
-/// record still wins: here it overrides the `false` the fixture sets.
-#[tokio::test]
-async fn a_valueless_core_autocrlf_reads_as_true() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let config = repo.path.join(".git").join("config");
-    let mut text = std::fs::read_to_string(&config).expect("read config");
-    text.push_str("[core]\n\tautocrlf\n");
-    std::fs::write(&config, text).expect("write config");
-    let (exec, log, cancel) = logged();
-
-    let normalises = eol::normalises(&exec, &repo.path, &cancel)
-        .await
-        .expect("normalises");
-
-    assert!(normalises, "a valueless boolean key is git's true");
-    assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
-}

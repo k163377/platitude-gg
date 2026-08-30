@@ -35,9 +35,11 @@ async fn real_git_log_streams_through_the_parser() {
 
     let mut parser = LogParser::new();
     let mut commits = Vec::new();
+    let mut raw = Vec::new();
     let mut parse_err = None;
     executor
         .run_streaming(cmd, &cancel, &mut |chunk| {
+            raw.extend_from_slice(chunk);
             if parse_err.is_none()
                 && let Err(e) = parser.feed(chunk, &mut commits)
             {
@@ -80,6 +82,16 @@ async fn real_git_log_streams_through_the_parser() {
     let root = &commits[3];
     assert!(root.parents.is_empty());
     assert!(root.time > 0);
+
+    // The same real output again in 3-byte chunks: record boundaries owe
+    // nothing to the chunk boundaries the pipe happened to deliver.
+    let mut reparser = LogParser::new();
+    let mut rechunked = Vec::new();
+    for chunk in raw.chunks(3) {
+        reparser.feed(chunk, &mut rechunked).unwrap();
+    }
+    reparser.finish().unwrap();
+    assert_eq!(rechunked.len(), commits.len());
 }
 
 /// Runs the log through the parser and hands back what came out.
@@ -108,7 +120,8 @@ async fn parse_log(
 /// What `.mailmap` is for, and the reason the format asks for `%aN` /
 /// `%aE` rather than the raw pair: one person with two addresses comes
 /// back as one person, and the answer is git's rather than a second one
-/// of our own.
+/// of our own. The second address is spelled loudly so the map has to
+/// match it the way git matches — without regard to case.
 #[tokio::test]
 async fn the_log_reads_the_authors_through_mailmap() {
     let mut repo = TestRepo::init();
@@ -120,7 +133,7 @@ async fn the_log_reads_the_authors_through_mailmap() {
     repo.git(&[
         "commit",
         "--allow-empty",
-        "--author=Other Name <other@example.com>",
+        "--author=Other Name <OTHER@Example.COM>",
         "-m",
         "under another address",
     ]);
@@ -130,6 +143,12 @@ async fn the_log_reads_the_authors_through_mailmap() {
     );
     repo.git(&["add", "--", ".mailmap"]);
     repo.git(&["commit", "-m", "add mailmap"]);
+
+    // git hands an address it did not map back exactly as the commit
+    // spelled it (`%ae` is the raw pair) — lowercasing is the parser's
+    // own to do, and is pinned in its unit tests.
+    let raw = repo.git(&["log", "--format=%ae", "-1", "HEAD^"]);
+    assert_eq!(raw, "OTHER@Example.COM", "git keeps the spelling");
 
     let (commits, parser) = parse_log(&repo, &["--all"]).await;
     let names: Vec<&str> = commits
@@ -151,58 +170,4 @@ async fn the_log_reads_the_authors_through_mailmap() {
     // One address, one pool entry — which is what makes it usable as the
     // key a picture is filed under.
     assert_eq!(commits[0].author_email, commits[1].author_email);
-}
-
-/// git hands the address back exactly as the commit spelled it — mailmap
-/// matches without regard to case but does not rewrite what it did not
-/// map. Lowercasing is ours to do, or the same person shouting once would
-/// file under a second key.
-#[tokio::test]
-async fn an_address_is_lowercased_however_the_commit_spelled_it() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "0\n", "first");
-    repo.git(&[
-        "commit",
-        "--allow-empty",
-        "--author=Test User <TEST@Example.COM>",
-        "-m",
-        "shouting",
-    ]);
-
-    let raw = repo.git(&["log", "-1", "--format=%aE"]);
-    assert_eq!(raw, "TEST@Example.COM", "git keeps the spelling");
-
-    let (commits, parser) = parse_log(&repo, &[]).await;
-    assert_eq!(
-        parser.pool().get(commits[0].author_email),
-        "test@example.com"
-    );
-    assert_eq!(
-        commits[0].author_email, commits[1].author_email,
-        "both spellings land on one key"
-    );
-}
-
-#[tokio::test]
-async fn parser_handles_tiny_chunks_from_real_output() {
-    let (repo, _) = scenario();
-
-    // Capture the raw bytes once, then re-parse with pathological chunking.
-    let (executor, cancel) = env();
-    let cmd = GitCommand::new().cwd(&repo.path).args([
-        "log",
-        "-z",
-        "--topo-order",
-        LOG_FORMAT_ARG,
-        "--all",
-    ]);
-    let out = executor.run(cmd, &cancel).await.unwrap();
-
-    let mut parser = LogParser::new();
-    let mut commits = Vec::new();
-    for chunk in out.stdout.chunks(3) {
-        parser.feed(chunk, &mut commits).unwrap();
-    }
-    parser.finish().unwrap();
-    assert_eq!(commits.len(), 4);
 }

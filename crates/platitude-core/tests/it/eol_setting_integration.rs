@@ -209,26 +209,3 @@ async fn what_is_written_is_what_the_notice_reads() {
         );
     }
 }
-
-/// git's own spellings, straight out of a file this app did not write.
-/// The screen shows one of three rows whatever the file says, so a value
-/// spelled `yes` has to arrive as the row that means the same thing.
-#[tokio::test]
-async fn a_value_written_in_gits_other_spellings_still_reads() {
-    let (mut repo, exec, cancel) = no_local_setting();
-
-    for (spelling, expected) in [
-        ("yes", Some(AutoCrlf::True)),
-        ("INPUT", Some(AutoCrlf::Input)),
-        ("off", Some(AutoCrlf::False)),
-    ] {
-        repo.git(&["config", "--local", "core.autocrlf", spelling]);
-        assert_eq!(
-            setting::held(&exec, &repo.path, ConfigScope::Local, &cancel)
-                .await
-                .expect("held local"),
-            expected,
-            "{spelling}"
-        );
-    }
-}

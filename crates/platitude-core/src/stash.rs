@@ -375,6 +375,28 @@ mod tests {
         assert!(parse_stashes(&bytes).is_err());
     }
 
+    /// Raw `stash list -z` bytes out of real git, committed under
+    /// tests/fixtures/ and regenerated (never hand-edited) with:
+    /// `cargo test -p platitude-core --test it -- --ignored capture`
+    #[test]
+    fn committed_stash_fixture_parses() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("stash_list.bin");
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "missing fixture {} ({e}); regenerate with: cargo test -p platitude-core \
+                 --test it -- --ignored capture",
+                path.display()
+            )
+        });
+        let stashes = parse_stashes(&bytes).unwrap();
+        assert_eq!(stashes.len(), 2);
+        assert_eq!(stashes[0].name, "stash@{0}");
+        assert!(stashes[1].message.contains("first stash メッセージ"));
+    }
+
     #[test]
     fn a_label_is_one_line_with_something_on_it() {
         assert!(is_valid_message("half of the refactor"));
