@@ -48,6 +48,14 @@ Item {
     function relayout() {
         const whole = cut.text
         const box = cut.width
+        // The whole name goes onto `measure` here, imperatively — written before any branch so the ruler behind
+        // `implicitWidth` never lags the text, and written by this handler rather than bound because a binding and
+        // this handler answer the same `textChanged` in an order nobody has written down. Owning the write is also
+        // what lets the fitness test below read `measure` instead of laying the whole name out a *second* time on
+        // `probe` — and a relayout whose text has not changed (a column drag, a window resize) lays it out no times:
+        // TextMetrics does nothing for a value it already holds.
+        measure.font = headLabel.font
+        measure.text = whole
         // No name, or no column yet — a delegate is built before the layout has given it one, and the labels below
         // are anchored to the item rather than elided into it, so a name drawn against a box of nothing would be
         // drawn in full over whatever the row keeps beside it.
@@ -57,10 +65,7 @@ Item {
             cut.cutting = false
             return
         }
-        // Measured on the ruler this function owns, not on the one `implicitWidth` is bound to: that one follows
-        // `text` through a binding, and a binding and this handler answer the same `textChanged` in an order nobody
-        // has written down — read from there, the first pass after a delegate is reused measures the name before it.
-        if (cut.inkOf(whole) <= box) {
+        if (measure.advanceWidth <= box) {
             cut.headText = whole
             cut.tailText = ""
             cut.cutting = false
@@ -160,13 +165,12 @@ Item {
     onWidthChanged: cut.relayout()
     Component.onCompleted: cut.relayout()
 
-    /// Two rulers, because one is bound and the other is written. `measure` carries the whole name and answers for
-    /// `implicitWidth` alone — a binding either side of it, so nothing has to know which of them runs first. `probe`
-    /// is set and read a dozen times inside one `relayout()`, and nothing binds to it.
+    /// Two rulers, both written by `relayout()`. `measure` carries the whole name — laid out once there, read for
+    /// the fitness test and, through the `implicitWidth` binding above, for the item's own size, so the name is never
+    /// laid out twice for one relayout. `probe` is set and read a dozen times inside one `relayout()` on pieces of
+    /// the name, and nothing binds to it.
     TextMetrics {
         id: measure
-        font: headLabel.font
-        text: cut.text
     }
     TextMetrics {
         id: probe
