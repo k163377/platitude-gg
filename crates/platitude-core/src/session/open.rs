@@ -51,6 +51,7 @@ impl RepoSession {
             log_cancel: Mutex::new(None),
             details_read: Mutex::new(DetailsRead::default()),
             plan_read: Mutex::new(PlanRead::default()),
+            write_replays: std::sync::atomic::AtomicBool::new(false),
             graph_passes: Arc::default(),
             pass_step: Mutex::new(None),
             pass_fault: Mutex::new(None),

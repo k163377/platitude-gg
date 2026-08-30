@@ -23,6 +23,10 @@ pub struct RepoSession {
     pub(super) details_read: Mutex<DetailsRead>,
     /// One interactive-rebase plan ask at a time (`ask_rebase_plan`).
     pub(super) plan_read: Mutex<PlanRead>,
+    /// Whether the write in flight is one that replays
+    /// ([`super::replays_history`]) — the poll reads it to know it may
+    /// keep running under this one.
+    pub(super) write_replays: std::sync::atomic::AtomicBool,
     /// The graph passes that could still walk, whether or not the stream
     /// is still theirs (see [`GraphPasses`]).
     pub(super) graph_passes: Arc<GraphPasses>,

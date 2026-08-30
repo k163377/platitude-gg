@@ -245,6 +245,19 @@ impl RepoSession {
     /// the write refreshes when it lands) and while the previous poll is
     /// still going, so a slow repository polls less often instead of
     /// stacking reads up.
+    ///
+    /// **Except under a write that replays** ([`super::replays_history`]).
+    /// Those stand for as long as the range is deep — seconds, and past
+    /// twenty on a window's worth of commits — and skipping the poll
+    /// through all of it leaves the window saying nothing at all: no
+    /// badge, no progress, no graph, for the whole of a rewrite the
+    /// reader asked for. git counts the steps out on disk as it goes
+    /// (`rebase-merge/msgnum`, read by [`crate::integrate::rebase_standing`]),
+    /// so the tick that runs under one has an answer to publish. The
+    /// snapshot reads coalesce with the write's own refresh
+    /// ([`super::ReadSlot`]), and a tick that cannot keep up with the
+    /// replay simply lands later — the picture is allowed to fall behind,
+    /// but not to stop.
     pub fn refresh_poll(self: &Arc<Self>) {
         drop(self.start_refresh_poll());
     }
@@ -256,7 +269,7 @@ impl RepoSession {
     }
 
     fn start_refresh_poll(self: &Arc<Self>) -> RefreshTask {
-        if self.write_busy.load(Ordering::SeqCst) {
+        if self.write_busy.load(Ordering::SeqCst) && !self.write_replays.load(Ordering::SeqCst) {
             tracing::trace!("poll skipped: a write is running");
             return RefreshTask::ready(RefreshOutcome::WriteBusy);
         }

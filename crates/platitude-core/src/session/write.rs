@@ -3,6 +3,28 @@
 
 use super::*;
 
+/// Whether `op` replays history a commit at a time, rather than touching
+/// the index once and coming back.
+///
+/// These are the writes that can stand for tens of seconds — a replay
+/// costs about 11ms a commit (measured), so a range of a few hundred is
+/// seconds and the graph's own window is more than twenty — and they are
+/// the ones git leaves a standing operation on disk for while they run.
+/// Both halves of that matter: the poll is let through under these so the
+/// badge can count the steps out ([`RepoSession::refresh_poll`]), and the
+/// screen holds its write doors down for as long as one is out.
+///
+/// **The one place the set is written.** The poll's gate and the screen's
+/// lock ask the same question, and a second spelling of it would let the
+/// two disagree about what is running.
+#[must_use]
+pub fn replays_history(op: &str) -> bool {
+    matches!(
+        op,
+        "merge" | "rebase" | "squash" | "drop" | "reword" | "cherry-pick" | "revert" | "resolve"
+    )
+}
+
 impl RepoSession {
     // --- writes ---------------------------------------------------------
 
@@ -42,9 +64,14 @@ impl RepoSession {
                 },
             };
             // Set around the whole request, refreshes included, so the
-            // poll keeps out until the write's own refresh has landed.
+            // poll keeps out until the write's own refresh has landed —
+            // except under the writes that replay, which the poll is
+            // allowed through so the screen can count them out.
+            let replays = replays_history(request.op);
             self.write_busy.store(true, Ordering::SeqCst);
+            self.write_replays.store(replays, Ordering::SeqCst);
             self.run_write(request).await;
+            self.write_replays.store(false, Ordering::SeqCst);
             self.write_busy.store(false, Ordering::SeqCst);
         }
     }
@@ -150,6 +177,52 @@ impl RepoSession {
         }
         if after == AfterWrite::Author {
             self.refresh_author();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AUTO_FETCH_OP, OPEN_FETCH_OP, replays_history};
+
+    /// The set is the writes that hand a range to git one commit at a
+    /// time. The three one-commit edits are in it because each is a
+    /// rebase underneath (`sequencer::plan_edit` + `run_plan`), so a
+    /// squash near the root replays everything above it — the same wait
+    /// under a shorter name.
+    #[test]
+    fn the_writes_that_replay_are_the_ones_a_range_can_make_long() {
+        for op in [
+            "merge",
+            "rebase",
+            "squash",
+            "drop",
+            "reword",
+            "cherry-pick",
+            "revert",
+            "resolve",
+        ] {
+            assert!(replays_history(op), "{op} hands a range to git");
+        }
+        // Everything that touches the index once and comes back: the poll
+        // stays out under these, the way it always has.
+        for op in [
+            "commit",
+            "stage",
+            "unstage",
+            "discard",
+            "stash",
+            "switch",
+            "branch",
+            "tag",
+            "push",
+            "fetch",
+            "config",
+            "mergetool",
+            AUTO_FETCH_OP,
+            OPEN_FETCH_OP,
+        ] {
+            assert!(!replays_history(op), "{op} is one pass, not a replay");
         }
     }
 }
