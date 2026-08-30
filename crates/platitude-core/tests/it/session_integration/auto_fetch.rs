@@ -423,7 +423,9 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     only.git(&["remote", "add", "origin", &origin.file_url()]);
     // A poll that was refused (busy, or a write in front of it) would
     // prove nothing about what it reads.
-    let polled = session.refresh_poll_tracked().outcome().await;
+    let polled =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert!(
         matches!(
             polled,

@@ -98,7 +98,11 @@ async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize
 async fn background_refresh_swaps_only_on_change() {
     let (mut repo, sink, session, baseline) = settled_graph().await;
 
-    let quiet = session.refresh_log_tracked().outcome().await;
+    let quiet = crate::support::wait::bounded(
+        "the tracked graph refresh",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
     assert_eq!(quiet, RefreshOutcome::Unchanged);
     assert_eq!(
         sink.count(is_stream_event),
@@ -111,7 +115,11 @@ async fn background_refresh_swaps_only_on_change() {
     // atomic replacement — a single LogReplaced carrying every row, so
     // the consumer never holds an empty model in between.
     repo.commit_file("h.txt", "x\n", "outside commit");
-    let changed = session.refresh_log_tracked().outcome().await;
+    let changed = crate::support::wait::bounded(
+        "the tracked graph refresh",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
     assert_eq!(changed, RefreshOutcome::Changed);
     let events = sink.events.lock().unwrap();
     let after: Vec<&SessionEvent> = events
@@ -325,7 +333,10 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     session.restart_log();
     let refresh = session.refresh_log_tracked();
     release.send(()).expect("let the rebuild finish");
-    assert_eq!(refresh.outcome().await, RefreshOutcome::Unchanged);
+    assert_eq!(
+        crate::support::wait::bounded("refresh", refresh.outcome()).await,
+        RefreshOutcome::Unchanged
+    );
 
     let events = sink.events.lock().unwrap();
     let after: Vec<&SessionEvent> = events[settled..]
@@ -368,10 +379,13 @@ async fn a_poll_rebuilds_the_graph_once() {
     let (quiet_replacements, quiet_starts) = (replacements(), starts());
 
     // An idle repository is what the poll spends nearly all its ticks on.
-    let idle = session.refresh_poll_tracked().outcome().await;
+    let idle =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert_eq!(idle, RefreshOutcome::Unchanged);
     assert_eq!(
-        session.refresh_poll_tracked().outcome().await,
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await,
         RefreshOutcome::Unchanged,
         "the completion returned the single-flight slot before waking us"
     );
@@ -385,7 +399,9 @@ async fn a_poll_rebuilds_the_graph_once() {
     // Both signals move at once: `new.txt` becomes a commit, so the ref
     // advances and the WIP row goes away.
     repo.commit_file("new.txt", "content\n", "outside commit");
-    let changed = session.refresh_poll_tracked().outcome().await;
+    let changed =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert_eq!(changed, RefreshOutcome::Changed);
     assert_eq!(
         replacements(),
@@ -436,12 +452,15 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
     let taken_over = session.refresh_log_tracked();
     let winner = session.refresh_log_tracked();
     assert_eq!(
-        taken_over.outcome().await,
+        crate::support::wait::bounded("taken_over", taken_over.outcome()).await,
         RefreshOutcome::Cancelled,
         "the second ask owns the stream"
     );
-    assert_eq!(winner.outcome().await, RefreshOutcome::Unchanged);
-    session.wait_for_graph_passes().await;
+    assert_eq!(
+        crate::support::wait::bounded("winner", winner.outcome()).await,
+        RefreshOutcome::Unchanged
+    );
+    crate::support::wait::bounded("the graph passes", session.wait_for_graph_passes()).await;
     assert_eq!(
         walks(),
         1,

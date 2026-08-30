@@ -329,7 +329,9 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
 
     // A poll that was refused (busy, or a write in front of it) would
     // prove nothing about what it reads.
-    let polled = session.refresh_poll_tracked().outcome().await;
+    let polled =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert!(
         matches!(
             polled,
@@ -355,7 +357,9 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     // reads the same marks, finds the held answer equal, and asks git for
     // no listing of its own.
     assert_eq!(listed(&sink), 1, "{:?}", commands_of(&sink));
-    let polled = session.refresh_poll_tracked().outcome().await;
+    let polled =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert!(
         matches!(
             polled,
@@ -410,7 +414,9 @@ async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices(
     .await;
 
     repo.git(&["config", "--local", "core.autocrlf", "true"]);
-    let polled = session.refresh_poll_tracked().outcome().await;
+    let polled =
+        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
+            .await;
     assert!(
         matches!(
             polled,
@@ -554,7 +560,11 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
     // The outcome is the boundary: once it has answered, nothing from this
     // read can still be on its way (core.md §非同期・並行テスト).
     assert_eq!(
-        session.refresh_diff_tracked(target).outcome().await,
+        crate::support::wait::bounded(
+            "the tracked diff refresh",
+            session.refresh_diff_tracked(target).outcome()
+        )
+        .await,
         DiffRefreshOutcome::Unchanged
     );
     assert_eq!(
@@ -595,7 +605,11 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     );
 
     assert_eq!(
-        session.refresh_diff_tracked(target).outcome().await,
+        crate::support::wait::bounded(
+            "the tracked diff refresh",
+            session.refresh_diff_tracked(target).outcome()
+        )
+        .await,
         DiffRefreshOutcome::Sent
     );
     diffs_reach(&sink, "f.txt", published.len() + 1).await;

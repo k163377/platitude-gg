@@ -484,7 +484,11 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
         "with the interval off there is no autonomous source that can ask for tags"
     );
     assert_eq!(
-        session.refresh_remote_tags_tracked().outcome().await,
+        crate::support::wait::bounded(
+            "the tracked remote-tag refresh",
+            session.refresh_remote_tags_tracked().outcome()
+        )
+        .await,
         RemoteTagRefreshOutcome::Disabled,
         "the catch-up path itself causally declines the unasked network read"
     );
@@ -508,7 +512,11 @@ async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
          eager badge read, is what may fill hidden tags in"
     );
     assert_eq!(
-        session.refresh_remote_tags_tracked().outcome().await,
+        crate::support::wait::bounded(
+            "the tracked remote-tag refresh",
+            session.refresh_remote_tags_tracked().outcome()
+        )
+        .await,
         RemoteTagRefreshOutcome::Hidden,
         "the eager catch-up explicitly declines tags that cannot be shown"
     );
@@ -527,11 +535,19 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
     // this loop: it is the ack whose ownership boundary we are testing.
     let completed = tokio::time::timeout(crate::support::wait::OVERALL_BUDGET, async {
         loop {
-            let outcome = session.refresh_remote_tags_tracked().outcome().await;
+            let outcome = crate::support::wait::bounded(
+                "one remote-tag ask",
+                session.refresh_remote_tags_tracked().outcome(),
+            )
+            .await;
             if outcome != RemoteTagRefreshOutcome::Busy {
                 break outcome;
             }
-            tokio::task::yield_now().await;
+            // A pause, not a yield: the opening read holds the slot for a
+            // whole `ls-remote`, and a bare yield spins a worker at full
+            // tilt for all of it — load this suite is not allowed to make.
+            // The completion stays causal; only the retry pace is timed.
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })
     .await
@@ -543,7 +559,11 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
         ),
         "the first remote-tag read completed: {completed:?}"
     );
-    let following = session.refresh_remote_tags_tracked().outcome().await;
+    let following = crate::support::wait::bounded(
+        "the tracked remote-tag refresh",
+        session.refresh_remote_tags_tracked().outcome(),
+    )
+    .await;
     assert!(
         matches!(
             following,
