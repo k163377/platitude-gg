@@ -36,13 +36,12 @@ pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
 ///
 /// A wait is here to catch a session that stopped, and a budget counted
 /// from the first poll cannot tell that from one that is merely slow.
-/// `session_integration::concurrent_writes_are_serialized` puts 12 writes
-/// through the queue one at a time, and under `cargo test --workspace` —
-/// 264 integration tests, a thread per core, all spawning git — one round
-/// trip takes ~2.5s: measured, 20 seconds bought 8 of them, where the test on
-/// its own finished all 12 in 4.7s. Raising the number until that fits
-/// would hand every other wait in the suite the same head start before it
-/// notices a hang.
+/// `session_integration::concurrent_writes_are_serialized` puts its burst
+/// of writes through the queue one at a time, and under `cargo test
+/// --workspace` — hundreds of integration tests, a thread per core, all
+/// spawning git — one round trip inflates ~25× over the test run on its
+/// own (measured). Raising the number until that fits would hand every
+/// other wait in the suite the same head start before it notices a hang.
 ///
 /// Progress is what tells the two apart, so that is what the budget is
 /// counted against: every event renews it, and only a session gone quiet

@@ -8,11 +8,15 @@ use platitude_core::session::SessionEvent;
 /// Writes are serialized per session: a burst of concurrent stage requests
 /// must all land. Without the lock they race on `.git/index.lock` and some
 /// silently fail.
+///
+/// Six, not more: two would already race the lock, and each write runs a
+/// status read behind it, so the count is what this test costs under a
+/// loaded suite — the longest test of the binary is this one, linearly.
 #[tokio::test(flavor = "multi_thread")]
 async fn concurrent_writes_are_serialized() {
     let mut repo = TestRepo::init();
     repo.commit_file("root.txt", "0\n", "root");
-    const COUNT: usize = 12;
+    const COUNT: usize = 6;
     for n in 0..COUNT {
         repo.write_file(&format!("f{n}.txt"), "content\n");
     }

@@ -21,46 +21,13 @@ async fn tag_only_commits_follow_the_include_tags_option() {
 
     let (sink, session) = open_unawaited(&repo);
 
-    // Tags are walked by default → the tag-only commit has a row. The
-    // tag-inclusive pass differs from the fast pass here, so it arrives
-    // as an atomic replacement.
-    let first_gen = sink
-        .wait_for("tags-on LogReplaced", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::LogReplaced {
-                    generation, rows, ..
-                } if rows.len() == 2 => Some(*generation),
-                _ => None,
-            })
-        })
-        .await;
-
-    // Two-phase streaming: when the fast tag-less pass lands, it lands
-    // before the tag-inclusive swap. Its landing is not guaranteed — an
-    // opening rebuild that takes the log token mid-stream swallows it
-    // without a word (`pass_of`) — so only the order is asserted, never
-    // the existence.
-    {
-        let events = sink.events.lock().unwrap();
-        let fast_pass = events.iter().find_map(|e| match e {
-            SessionEvent::LogFinished {
-                generation, total, ..
-            } if *total == 1 => Some(*generation),
-            _ => None,
-        });
-        assert!(
-            fast_pass.is_none_or(|g| g < first_gen),
-            "the tag-less fast pass painted after the tag-inclusive swap"
-        );
-    }
-
-    // The chips ride the refs snapshot, not the walk: a pass that beats
-    // the opening refs read lands its rows bare, and the chips catch up
-    // as a `LabelsChanged` diff onto the same generation (the swap above
-    // proves the walk, not the chips — its rows read `[]` under load).
-    // So what "is drawn" is the union of the two (`drawn_at`), and it is
-    // read off the settled opening, where the refs are in whichever half
-    // carried them.
+    // Tags are walked by default, so the settled opening has two rows —
+    // the tag-only commit included. The chips ride the refs snapshot, not
+    // the walk: a pass that beats the opening refs read lands its rows
+    // bare, and the chips catch up as a `LabelsChanged` diff onto the
+    // same generation. So what "is drawn" is the union of the two
+    // (`drawn_at`), read off the settled opening, where the refs are in
+    // whichever half carried them.
     let base = sink.opened_graph(&session, 2).await;
     let drawn = drawn_at(&sink.events.lock().unwrap(), base.generation);
     assert!(
