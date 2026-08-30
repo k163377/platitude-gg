@@ -57,6 +57,7 @@
 | `diff-tree` | `-r` / `--no-commit-id` / `-z` / `--name-status` / `--find-renames` / `--root` / `--no-ext-diff` | 2.43.0 ✓ |
 | `fetch` | `--prune` / `--all` | 古参(1.6.5 / 1.6.6) |
 | `for-each-ref` | `--format=`(`refname` `objecttype` `objectname` `*objectname` `upstream` `HEAD` `creatordate:unix`) | 2.43.0 ✓(`:unix` は `--date=unix` 委譲、git-log 2.43.0 ✓) |
+| `for-each-ref` | `--points-at=` / `--count`(プラン preview の onto 名) | 古参(--points-at は 2.7、--count は 2.0)+ 2.43.0 ✓ |
 | `ls-files` | `-z` / `--eol` / pathspec | `--eol` は 2.8。**最低バージョンのコンテナで実測**(同上)— 列は `i/<v>  w/<v>  attr/<v>\t<path>`、未チェックアウトは `w/` が空 |
 | `log` | `-z` / `-1` / `--date-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log`「Separate the commits with NULs instead of newlines」を v2.43.0 ソースで確認。`--date-order` は古参(1.5 系から rev-list-options.txt に在る) |
 | `ls-remote` | `--tags` / `--heads` / `--end-of-options` / `--` | 古参(`--tags` / `--heads` は 1.0 以前)。`--end-of-options` は gitcli 2.43.0 ✓ + コンテナの統合テストで実測 |

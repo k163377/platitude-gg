@@ -63,10 +63,10 @@
 - **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格 — 自分の Done ゲートや段 2 の完了待ちを前提条件にしない)。land はどのセッションからでも動き、本体 checkout の HEAD がどこに居ても安全な手を選ぶ(worktree セッションの git は自ツリーに隔離され、手動 `git merge` は本体に届かない。`branch -f` / `update-ref` の手動反映は本体の index を置き去りにする既知の罠)。hook が main を書く git を deny して land へ誘導する
 - 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` / `.claude/rules-refs` は除く** — worktree に積んで反映指示を待つ)
 
-## 現在のフェーズ: **Phase 2 / 3 の日常操作まで配線済み**
+## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
 - 性能 4 項目のうち**メモリと操作応答が予算超過**(メモリ 406–418MB / 予算 300MB、応答は最小 46ms だが裾が 155ms まで散る): [実測](ci/baseline/perf-windows-x64.md)。メモリは**グラフを流さなくても超過**(327–331MB)で、漏れではなく行を組んだ C++ ヒープが返らない形 — 残件と残る手は [P3-確認事項.md](internal-docs/P3-確認事項.md) §app。**絶対値は計測の座りで 350–420MB 動く**ので、回帰は同じ座りの対照でしか読めない。起動・fps は予算内
-- **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。本ファイルは未配線だけを持つ — **未配線はフル interactive rebase 画面のみ**
+- **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。本ファイルは未配線だけを持つ — **未配線の操作は無い**(フル interactive rebase のプラン編集モードまで配線済み。磨き残しは [P3-確認事項.md](internal-docs/P3-確認事項.md))
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済み・**push するまで実行しない**。初回検証は配布準備期(P5)。CI も軽量(段 2)/ 完全性(段 3)に分ける([P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
 - ネットワーク非通信の baseline: [windows-x64](ci/baseline/windows-x64.md)(主張の立て方は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3)
