@@ -1,6 +1,7 @@
 //! The one history longer than the graph's own window, and the shapes
 //! the window's cut and the stand-in for a scrolled-off HEAD have to be
-//! looked at against.
+//! looked at against — and, built the same way, the one deep enough that
+//! rewriting it stands for seconds rather than an instant.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -144,5 +145,111 @@ const DEEP_SIDE_MARK: u64 = 100_000;
 pub(super) fn deep_detached(repo: &mut DemoRepo) -> Result<(), String> {
     deep_history(repo, true)?;
     repo.git(&["switch", "--detach", &format!("main~{DEEP_DETACH_BACK}")])?;
+    Ok(())
+}
+
+/// Commits on the line `replay` gets rewritten along. A replay costs
+/// about eleven milliseconds a commit (measured, `session::write`), so
+/// three hundred of them is a rebase that stands for a few seconds:
+/// long enough that the badge, the held doors and the ring can all be
+/// caught with git still out, and short enough to pay for on both sides
+/// of every `check`.
+const REPLAY_COMMITS: u64 = 300;
+
+/// Where `replay`'s blob marks start — clear of its commit marks, which
+/// run to `REPLAY_COMMITS + 1` and then to [`REPLAY_BASE_MARK`].
+const REPLAY_BLOB_MARK: u64 = 100_000;
+
+/// The mark of the one commit the fork never saw.
+const REPLAY_BASE_MARK: u64 = 1_000;
+
+/// One commit that actually changes something: its own blob, at its own
+/// path. `deep` hands every commit the same blob because what that
+/// preset is for is the *count* — but a replay applies each commit's
+/// diff, and a commit whose diff is empty is one git drops rather than
+/// replays. Each at a path of its own, so three hundred of them collide
+/// over nothing.
+fn replay_commit(
+    stream: &mut String,
+    on: &str,
+    mark: u64,
+    from: Option<u64>,
+    when: u64,
+    path: &str,
+    msg: &str,
+) {
+    let blob = REPLAY_BLOB_MARK + mark;
+    let body = format!("{path}\n");
+    stream.push_str(&format!(
+        "blob\nmark :{blob}\ndata {}\n{body}\n",
+        body.len()
+    ));
+    stream.push_str(&format!("commit refs/heads/{on}\n"));
+    stream.push_str(&format!("mark :{mark}\n"));
+    stream.push_str(&format!(
+        "author Demo User <demo@example.com> {when} +0000\n"
+    ));
+    stream.push_str(&format!(
+        "committer Demo User <demo@example.com> {when} +0000\n"
+    ));
+    stream.push_str(&format!("data {}\n{msg}\n", msg.len()));
+    if let Some(parent) = from {
+        stream.push_str(&format!("from :{parent}\n"));
+    }
+    stream.push_str(&format!("M 100644 :{blob} {path}\n\n"));
+}
+
+/// A rewrite that can be watched happening: `main` carries
+/// [`REPLAY_COMMITS`] of its own and `base` one commit the fork never
+/// saw, so `rebase base` replays every one of them rather than fast
+/// forwarding.
+///
+/// **What it is for is the running state, not the result.** Every other
+/// rebase preset builds a replay that is already over — stopped, staged,
+/// finished — and the screen those photograph is a landing. This one is
+/// the only shape in which the badge is counting steps out, the left
+/// pane's doors are held down and the ring is beside the hand, which is
+/// the whole of `replay-running`.
+pub(super) fn replay(repo: &mut DemoRepo) -> Result<(), String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    let first = now - 3600 - (REPLAY_COMMITS + 1) * DEEP_STEP_SECS;
+    let mut stream = String::new();
+    replay_commit(
+        &mut stream,
+        "main",
+        1,
+        None,
+        first,
+        "notes.txt",
+        "docs: the note both lines start from",
+    );
+    for n in 1..=REPLAY_COMMITS {
+        replay_commit(
+            &mut stream,
+            "main",
+            n + 1,
+            Some(n),
+            first + n * DEEP_STEP_SECS,
+            &format!("n/{n:04}.txt"),
+            &format!("feat: step {n}"),
+        );
+    }
+    // Off the root, so the whole of the other line is what a rebase has
+    // to replay.
+    replay_commit(
+        &mut stream,
+        "base",
+        REPLAY_BASE_MARK,
+        Some(1),
+        first + (REPLAY_COMMITS + 1) * DEEP_STEP_SECS,
+        "base.txt",
+        "chore: the base moves on without them",
+    );
+    repo.git_stdin(&["fast-import", "--quiet"], &stream)?;
+    // fast-import writes refs and nothing else (`deep_history`).
+    repo.git(&["reset", "--hard", "main"])?;
     Ok(())
 }

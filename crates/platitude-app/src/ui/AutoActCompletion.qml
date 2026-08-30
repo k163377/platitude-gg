@@ -144,6 +144,11 @@ QtObject {
                 // waits out one more status after that — where putting the stop down leaves the reader, which the
                 // continuation's own answer comes too early to say (`AutoActDriver.awaitOpExitLanding`).
                 "rebase-plan", "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
+                // The opening face and the running replay, each held from an edge of its own and each finished by
+                // the sampler that took that edge. Deliberately not write acts: the first writes nothing at all, and
+                // what the second photographs is the middle of the write rather than its answer — held at the write
+                // barrier it would wait for the very thing that takes its picture away.
+                "plan-loading", "replay-running",
                 // The three about the right pane's boxes end in the same sampler: the plan arrives through the feed,
                 // and each step of the walk is entered off the state the one before it asked for — the last of them
                 // waits out a rev-list nobody asked for until the boxes were typed into again.

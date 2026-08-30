@@ -67,6 +67,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   deep, standing 800 commits down it: the only shape in
                   which the graph's HEAD stand-in rides the bottom edge,
                   and the only one where it is detached (graph-head-below)
+        replay    300 commits on main and one on base that the fork never
+                  saw: the only shape where a rebase stands for seconds,
+                  so the screen has one to be photographed during
+                  (replay-running)
         edges     every string at both ends of what git allows, in Japanese
         long      a message, a commit and a work tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)

@@ -10,7 +10,7 @@ use super::conflict::{
     conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
     rebase_empty, rebase_staged, revert_clashes,
 };
-use super::deep::{deep, deep_detached};
+use super::deep::{deep, deep_detached, replay};
 use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, unpublished};
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, widechars, widelines};
@@ -102,6 +102,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
             )?;
         }
         "deep-detached" => deep_detached(&mut repo)?,
+        "replay" => replay(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,

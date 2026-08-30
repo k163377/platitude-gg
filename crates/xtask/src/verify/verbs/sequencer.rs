@@ -82,6 +82,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "rebase_plan rows=4 dirty=true drops=1 onto=true pushed=3 selected=0",
     },
+    // The face the plan opens with, before its rows exist. Every half of
+    // it is invisible: an empty pane photographs the same whether a read
+    // is out, was refused, or was never asked for — and `standing=false`
+    // is what says the picture is of the wait rather than of a plan whose
+    // rows happen not to have been drawn yet.
+    Verb {
+        name: "plan-loading",
+        when: &[],
+        plain: "plan_loading held=true shown=true standing=false rows=0 onto=false",
+    },
+    // The screen while git is still replaying. The picture holds the
+    // badge and the ring; what it cannot say is that either of them was
+    // caught from a real edge rather than left standing — `counted=true`
+    // is git's own step count read off `rebase-merge/msgnum`, and the
+    // numbers after it are whatever the replay had reached.
+    Verb {
+        name: "replay-running",
+        when: &[],
+        plain: "replay_running op=REBASING counted=true ring=true held=true",
+    },
     // The run's landing: answered by name, the dropped row gone from
     // the graph's own model, the draft away, and no red line raised.
     Verb {

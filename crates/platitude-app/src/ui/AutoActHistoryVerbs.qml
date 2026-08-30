@@ -118,8 +118,8 @@ Item {
                     page.dropCommit(commitMenuState.menuOid)
             }
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
-                   || act === "rebase-stops" || act === "revert-commit" || act === "revert-stops"
-                   || act === "integrate-menu") {
+                   || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"
+                   || act === "revert-stops" || act === "integrate-menu") {
             // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
             if (act === "revert-commit" || act === "revert-stops") {
                 // The click that opens this menu selects the row too (GraphRowDelegate), so the hook takes both steps a
@@ -145,12 +145,19 @@ Item {
                     else
                         tipLandedTimer.begin()
                     repoTab.merge(arg, false, false, "")
-                } else if (act === "rebase-onto" || act === "rebase-stops") {
+                } else if (act === "rebase-onto" || act === "rebase-stops" || act === "replay-running") {
                     // A replay that stopped part-way answers in the working tree like the other three: no commit
                     // was written, and the badge, the exit card and the conflicted rows are where the press ends
-                    // (規約 §未コミット変更がある状態で履歴を書き換える の着地表).
-                    if (act === "rebase-stops")
+                    // (規約 §未コミット変更がある状態で履歴を書き換える の着地表). The third of them answers nowhere: its
+                    // subject is the screen *while* git is out, so it is caught on the way rather than at a landing.
+                    if (act === "rebase-stops") {
                         opStoppedTimer.begin(false)
+                    } else if (act === "replay-running") {
+                        replayRunningTimer.start()
+                        // What a click on the row does next, which the other two never need: their picture is a
+                        // landing the menu is long gone from, and this one is of the screen the press left behind.
+                        driver.refMenu.close()
+                    }
                     repoTab.rebase(arg, "", true)
                 }
             }
@@ -158,6 +165,44 @@ Item {
             return false
         }
         return true
+    }
+    // ---- the picture of a replay that is still replaying -----------------
+    // What only exists while git is out: the badge counting the steps out of git's own file, the doors the page holds
+    // down, and the ring beside the hand. Every other rebase verb photographs a landing.
+    //
+    // **Nothing is pressed here.** The page runs the count's own tick for as long as a replay is out
+    // (`Metrics.opProgressMs`), so this waits for the number the way a reader does — and a build whose tick never
+    // started, or never reached the badge, waits out the watchdog rather than being carried by the run.
+    //
+    // Then the face is **held** — `RepoPage.autoReplayHeld`, the same latch `doors-held` takes, because the two runs
+    // photograph one state from two sides. The write answers before the reads it invalidated, so a run that only
+    // reported at the edge could photograph a screen the replay had already left (verify-ui スキル).
+    SampleTimer {
+        id: replayRunningTimer
+        onTriggered: {
+            // Queued is not out: the write travels a queue that can be carrying something else, and git writes
+            // nothing to count until it is actually replaying.
+            if (!repoTab.replaying || workTree.opSteps === 0 || workTree.opStep === 0)
+                return
+            replayRunningTimer.stop()
+            page.autoReplayHeld = true
+            const win = page.Window.window
+            // Where the hand would have been: over the pane the replay is rewriting, and clear of the rows' own ink
+            // — a sixteen-pixel ring laid over a subject line cannot be judged at all. Hover cannot be injected, so
+            // the run writes the one answer the mark reads (`Main.holdWaitHand`); offscreen's own hand sits at the
+            // window's origin, which is a corner rather than a place worth photographing a mark in.
+            const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
+            win.holdWaitHand(seat.x, seat.y)
+            // `counted` rather than the numbers: the step is whatever git had reached, and what is being claimed is
+            // that the badge is counting a range out at all.
+            const counted = workTree.opStep > 0 && workTree.opStep <= workTree.opSteps
+                            && workTree.opSteps > 1
+            AppBackend.report("replay_running op=" + workTree.opText + " counted=" + counted
+                              + " ring=" + win.waitRingShown
+                              + " held=" + page.replayRunning
+                              + " step=" + workTree.opStep + " steps=" + workTree.opSteps)
+            renderedBarrier.begin()
+        }
     }
     // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its
     // refresh and the beat the viewport waits out all have to be behind it, and the picture cannot answer the second

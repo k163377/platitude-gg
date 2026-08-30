@@ -34,7 +34,7 @@ Item {
     function run(act, arg) {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
-            || act === "plan-reword-out" || act === "plan-reword-ask") {
+            || act === "plan-reword-out" || act === "plan-reword-ask" || act === "plan-loading") {
             // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
             // Each verb selects the smallest plan its result needs — the three about the right pane's boxes need
             // only that the newest commit be a row of it, since that is the row the plan opens the selection on.
@@ -44,11 +44,53 @@ Item {
             page.openRowMenu(fromOid)
             page.startRebasePlan(fromOid)
             commitMenu.close()
-            planOpenTimer.begin(act)
+            if (act === "plan-loading")
+                planLoadingTimer.start()
+            else
+                planOpenTimer.begin(act)
         } else {
             return false
         }
         return true
+    }
+    // ---- the face the press puts up before any of that -----------------
+    // The pane in the graph's seat with nothing in it but the mode's one word, Cancel and the turning mark. The face
+    // is **held** from the edge that raised it (`RepoPage.planLoadHeld`): the rows arrive through the feed and can
+    // land while the asynchronous grab is still out, and the picture would then be of the plan rather than of the
+    // wait for it (verify-ui スキル §中間状態は実 edge を latch する).
+    //
+    // **The edge is caught on the model's own signal, not sampled.** `open()` raises `loading` inside the dispatch
+    // and the answer to a five-commit range can be back before the next tick, so a sampler looking for it would find
+    // a state that had already gone and wait out the watchdog in silence.
+    Connections {
+        target: AppBackend.autoAct === "plan-loading" ? page.rebasePlan : null
+        function onChanged() {
+            const plan = page.rebasePlan
+            if (page.planLoadHeld || !plan.loading || plan.active)
+                return
+            planLoadingTimer.sawRows = plan.stepCount
+            planLoadingTimer.sawOnto = plan.ontoRef !== "" || plan.ontoOid !== ""
+            page.planLoadHeld = true
+        }
+    }
+    // Completed a turn later and off the page's own answer rather than in the callback that pressed
+    // (app-ui.md §UI 自動化の因果性). Nothing in the line can be read off the picture: an empty pane photographs the same
+    // whether a read is out, was refused, or was never asked for.
+    SampleTimer {
+        id: planLoadingTimer
+        /// What the edge saw, kept for the report: read back afterwards these would be the *plan's* — the model goes
+        /// on filling itself while only the face is held.
+        property int sawRows: -1
+        property bool sawOnto: false
+        onTriggered: {
+            if (!page.planLoadHeld || !page.planShown || page.planActive)
+                return
+            planLoadingTimer.stop()
+            AppBackend.report("plan_loading held=true shown=true standing=" + page.planActive
+                              + " rows=" + planLoadingTimer.sawRows
+                              + " onto=" + planLoadingTimer.sawOnto)
+            renderedBarrier.begin()
+        }
     }
     // The plan's own three landings. First the open: rows arrive through the feed, so the verbs wait for the model
     // to say the plan stands before touching it — and the overview also waits for the publish answer, since the
