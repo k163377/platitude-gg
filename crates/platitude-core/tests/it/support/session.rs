@@ -95,16 +95,21 @@ impl CaptureSink {
     /// meanwhile must be started from the test's own thread, not from
     /// inside the hook.
     ///
-    /// And while parked, **await only what is already recorded** (the
-    /// sink records before it runs the hook). The delivery that fires the
-    /// hook wakes the waiters watching the sink, and a woken task can
-    /// land in the parked worker's LIFO slot — the one place stealing
-    /// never reaches. A wait for a *future* event can therefore be held
-    /// captive by the very park it is supposed to release: no task runs,
-    /// no timer serves the captive `Patience`, and the binary sits at 0%
-    /// CPU until the CI kill. measured: a hook parked on the opening refs
-    /// delivery plus a wait for the tag-inclusive swap deadlocked exactly
+    /// And while parked, **only the test's own root future may wait for
+    /// an event that has not been recorded yet** (the sink records before
+    /// it runs the hook). The delivery that fires the hook wakes the
+    /// waiters watching the sink, and a woken *spawned task* can land in
+    /// the parked worker's LIFO slot — the one place stealing never
+    /// reaches. Such a wait for a future event is then held captive by
+    /// the very park it is supposed to release: no task runs, no timer
+    /// serves the captive `Patience`, and the binary sits at 0% CPU until
+    /// the CI kill. measured: a hook parked on the opening refs delivery
+    /// plus a spawned wait for the tag-inclusive swap deadlocked exactly
     /// so in the container, deterministically, while passing on Windows.
+    /// The root future is the one exception because its waker unparks the
+    /// test thread directly instead of scheduling onto a worker — an
+    /// implementation property of the runtime, so a wait that can be
+    /// phrased over recorded events still should be.
     pub fn hook_once(
         &self,
         when: impl Fn(&SessionEvent) -> bool + Send + 'static,
