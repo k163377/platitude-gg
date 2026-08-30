@@ -198,45 +198,16 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
-    // Fetching a repository that has no tab yet, and the folder chooser that belongs to it. A second FolderDialog
-    // rather than the one above: the two ask different questions ("which repository" / "which folder to put one in"),
-    // and sharing one would carry each answer into the other's next opening.
-    CloneModel {
-        id: cloneModel
-        // The clone landed, so the box that asked for it goes and the strip does what it always does with a folder
-        // that opens. The two objects are joined here rather than to each other: fetching a repository happens before
-        // there is a tab, and opening one is the strip's ordinary job (`models/clone.rs`).
-        onCloneDone: path => {
-            cloneDialog.landed()
-            tabsModel.openRepositoryPath(path)
-        }
-        onCloneFailed: message => cloneDialog.said(message)
+    // The settings screen and the clone box, with the model and folder chooser the clone owns — one seat, filling
+    // the window because it is the popups' parent (`WindowDialogSeat`).
+    WindowDialogSeat {
+        id: dialogSeat
+        anchors.fill: parent
+        curPage: root.curPage
+        tabsModel: tabsModel
     }
-    CloneDialog {
-        id: cloneDialog
-        cloning: cloneModel.cloning
-        onSubmitted: (url, parentUrl, name) => cloneModel.cloneRepository(url, parentUrl, name)
-        // Every road out of the box comes through here, Escape included: a clone still on the network is stopped by
-        // the same press that takes away the only place its answer could have landed.
-        onCancelled: cloneModel.cancelClone()
-        onChooseFolder: near => {
-            if (near !== "")
-                cloneFolderDialog.currentFolder = near
-            cloneFolderDialog.open()
-        }
-    }
-    FolderDialog {
-        id: cloneFolderDialog
-        title: qsTr("Where to put it")
-        onAccepted: cloneDialog.setFolder(selectedFolder.toString())
-    }
-
-    /// The clone box, opened beside the repository that is already open — a second working copy usually goes where the
-    /// first one is, which is the reading `openRepositoryPicker` starts from as well. With no tab open there is
-    /// nothing to be beside, and the platform dialog's own folder is what stands in.
     function startClone() {
-        const near = root.curPage !== null ? root.curPage.pageTab.pickerFolderUrl : ""
-        cloneDialog.start(near !== "" ? near : cloneFolderDialog.currentFolder.toString())
+        dialogSeat.startClone()
     }
 
     // Every way in goes through here so the picker opens beside the repository that is already open — left to itself
@@ -269,10 +240,10 @@ ApplicationWindow {
             gate: gate
             openFailedDialog: openFailedDialog
             identityDialog: identityGate.dialog
-            cloneModel: cloneModel
-            cloneDialog: cloneDialog
+            cloneModel: dialogSeat.cloneModel
+            cloneDialog: dialogSeat.cloneDialog
             folderDialog: folderDialog
-            settingsDialog: settingsDialog
+            settingsDialog: dialogSeat.settingsDialog
         }
     }
 
@@ -343,13 +314,7 @@ ApplicationWindow {
     IdentityGate {
         id: identityGate
         anchors.fill: parent
-        settingsOpen: settingsDialog.opened
-    }
-
-    SettingsDialog {
-        id: settingsDialog
-        curPage: root.curPage
-        tabsModel: tabsModel
+        settingsOpen: dialogSeat.settingsOpened
     }
     // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
     // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,
@@ -362,7 +327,7 @@ ApplicationWindow {
             if (AppBackend.identityState !== "ready")
                 return
             root.identityEditShown = true
-            settingsDialog.openAt("git")
+            dialogSeat.openSettingsAt("git")
         }
     }
 
@@ -414,8 +379,8 @@ ApplicationWindow {
             windowFloorWidth: root.openFloorWidth
             onOpenRepositoryRequested: root.openRepositoryPicker()
             onCloneRepositoryRequested: root.startClone()
-            onIdentityEditRequested: settingsDialog.openAt("git")
-            onSettingsRequested: settingsDialog.openAt("app")
+            onIdentityEditRequested: dialogSeat.openSettingsAt("git")
+            onSettingsRequested: dialogSeat.openSettingsAt("app")
             onMaximizeToggleRequested: chrome.toggleMaximized()
             onMinimizeRequested: chrome.minimizeWindow()
             onCloseRequested: root.close()
@@ -455,14 +420,10 @@ ApplicationWindow {
             focusEpoch: root.focusEpoch
             onScreen: root.onScreen
             onOpenRepositoryPicker: root.openRepositoryPicker()
-            onSettingsDialogRequested: settingsDialog.openAt("app")
-            onGitSettingsRequested: settingsDialog.openAt("git")
+            onSettingsDialogRequested: dialogSeat.openSettingsAt("app")
+            onGitSettingsRequested: dialogSeat.openSettingsAt("git")
             // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
-            onAvatarSettingsRequested: (name, email) => {
-                settingsDialog.prefillName = name
-                settingsDialog.prefillEmail = email
-                settingsDialog.openAt("app")
-            }
+            onAvatarSettingsRequested: (name, email) => dialogSeat.openAvatarSettings(name, email)
         }
 
         // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in borderDefault
