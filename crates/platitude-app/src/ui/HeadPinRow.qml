@@ -36,9 +36,11 @@ Rectangle {
 
     readonly property real rowTop: headPin.branchesModel.headRow * Theme.rowHeight
     /// The branch is there but its row is not — a filter or a folded folder is holding it. Nothing to ride above, so
-    /// this takes a row of its own and the list begins one row lower (`NavSections` reads it for `topMargin`). Read
-    /// off the model alone: the list's own height answers to this, so reading its geometry back would be a loop, and
-    /// a list with a top margin rests at a negative `contentY` — the edges below cannot be asked in that state.
+    /// this asks for a row of its own and the list begins one row lower (`NavSections` reads it for `topMargin`).
+    /// **Asks, not takes**: a list with no rows at all keeps its hairline and grants nothing, so this stays true while
+    /// the seat is refused and what is drawn is the 1px of it the shut section leaves. Read off the model alone: the
+    /// list's own height answers to this, so reading its geometry back would be a loop, and a list with a top margin
+    /// rests at a negative `contentY` — the edges below cannot be asked in that state.
     readonly property bool seated: headPin.branchesModel.headName !== "" && headPin.branchesModel.headRow < 0
     readonly property bool rowAbove: headPin.seated || headPin.rowTop < headPin.contentY
     readonly property bool rowBelow: !headPin.seated

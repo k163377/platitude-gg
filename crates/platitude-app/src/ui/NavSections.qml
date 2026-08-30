@@ -112,7 +112,12 @@ ColumnLayout {
         // The one list whose rows something else can sit at the head of: with no row to ride above, the stand-in
         // takes a row of its own and the rows begin under it (`HeadPinRow.seated`). The list asks for that much more
         // height along with it, or the row the margin pushed down would be the one that cannot be read.
-        topMargin: headPin.seated ? Theme.rowHeight : 0
+        //
+        // **A section with nothing in it keeps its 1px of ground and nothing else.** That 1px is an instruction, not
+        // a consequence of anything here (デザイン規約 §QML 実装ルール のセクションの地), so a seat is never taken
+        // out of it: a filter that matched no branch is answered by the section standing empty, not by one row
+        // appearing in it.
+        topMargin: headPin.seated && branchList.count > 0 ? Theme.rowHeight : 0
         Layout.verticalStretchFactor: sections.sectionPull
         headTracks: sections.workTree.upstream !== ""
         headAhead: sections.workTree.ahead
