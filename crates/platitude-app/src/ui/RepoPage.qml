@@ -1242,7 +1242,7 @@ Item {
     // boxes stand open while the repository moves under them, so a commit that stops being HEAD's stops taking typing.
     readonly property string messageEdit: GitFacts.messageEdit(
         !page.blank && repoTab.state === "open", detailsModel.shaHex, workTree.headOid,
-        page.selectedStashRef, workTree.opText, workTree.opEditing, workTree.opEditOid)
+        page.selectedStashRef, workTree.opText, workTree.opEditing)
 
     // What git makes of the selected commit's signature. Asked on every selection, and read only when the answer names
     // the commit now on screen — verifying runs gpg or ssh-keygen, so the answer arrives well after the details do.

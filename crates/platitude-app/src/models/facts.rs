@@ -249,7 +249,6 @@ impl GitFacts {
     /// commit that stops being HEAD's has to stop taking typing.
     // The parameter row mirrors the core rule one-for-one; folding it
     // into a struct would put a QML-invisible shape between the two.
-    #[expect(clippy::too_many_arguments)]
     #[qslot]
     fn message_edit(
         &self,
@@ -259,10 +258,9 @@ impl GitFacts {
         stash_ref: String,
         op_text: String,
         editing: bool,
-        edit_oid: String,
     ) -> String {
         platitude_core::offers::message_edit(
-            open, &oid_hex, &head_oid, &stash_ref, &op_text, editing, &edit_oid,
+            open, &oid_hex, &head_oid, &stash_ref, &op_text, editing,
         )
         .as_str()
         .to_string()

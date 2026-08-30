@@ -69,15 +69,22 @@ impl MessageEdit {
 /// not possible because you have unmerged files` mid-rebase (measured, 2.55).
 /// The exception is the stop that exists *for* amending: an interactive
 /// rebase stopped at an `edit` step sits with HEAD on the commit, a clean
-/// tree, and an amend git takes — `editing` is git's own word on it and
-/// `edit_oid` names the commit it stopped on
-/// ([`crate::integrate::RebaseStop`], abbreviated as git wrote it).
+/// tree, and an amend git takes — `editing` is git's own word on it
+/// ([`crate::integrate::RebaseStop`]).
 ///
-/// **The exemption is the stopped commit's, not HEAD's.** git leaves the
-/// stop standing while a terminal makes further commits on top, and HEAD
-/// then names a commit the exit card's "amend it above" was never about —
-/// so the boxes open only while HEAD still is the stopped commit. An
-/// empty `edit_oid` (git wrote none) falls back to trusting HEAD.
+/// **The exemption is HEAD's, and nothing narrower.** It is tempting to
+/// hold the boxes to the commit the stop began on, so that a terminal
+/// committing on top of the stop cannot walk into them. There is nothing
+/// left to test it with: git writes the stop's HEAD into
+/// `rebase-merge/amend` once and never touches that file again, so the
+/// first amend — the very act the boxes are for — already moves HEAD off
+/// it, and nothing else under `rebase-merge/` moves with it (measured,
+/// whole directory before and after). Telling an amend from a commit made
+/// on top costs an ancestry question git has to be spawned for, once per
+/// status tick, to refuse an amend git itself takes and the reader asked
+/// for. So the rule is the plain one the design states: while the stop
+/// stands, HEAD's own commit takes typing (デザイン規約 §フル interactive
+/// rebase).
 ///
 /// **Detached is not a reason.** `git commit --amend` on a detached HEAD
 /// amends as usual (measured, 2.55) — unlike the menu's rewrite rows, which
@@ -89,7 +96,6 @@ pub fn message_edit(
     stash_ref: &str,
     op_text: &str,
     editing: bool,
-    edit_oid: &str,
 ) -> MessageEdit {
     if !open || oid_hex.is_empty() {
         return MessageEdit::Nothing;
@@ -99,8 +105,7 @@ pub fn message_edit(
     if !stash_ref.is_empty() {
         return MessageEdit::Stash;
     }
-    let head_is_the_stop = edit_oid.is_empty() || head_oid.starts_with(edit_oid);
-    if !op_text.is_empty() && !(editing && head_is_the_stop && oid_hex == head_oid) {
+    if !op_text.is_empty() && !(editing && oid_hex == head_oid) {
         return MessageEdit::Standing;
     }
     if oid_hex != head_oid {
@@ -118,7 +123,7 @@ mod tests {
 
     /// The same open tab, `oid` on screen, no edit stop.
     fn edit(oid: &str, stash_ref: &str, op_text: &str) -> MessageEdit {
-        message_edit(true, oid, HEAD, stash_ref, op_text, false, "")
+        message_edit(true, oid, HEAD, stash_ref, op_text, false)
     }
 
     #[test]
@@ -143,31 +148,35 @@ mod tests {
     #[test]
     fn an_edit_stop_opens_heads_commit_and_nothing_else() {
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "", "REBASING", true, "abc1"),
+            message_edit(true, HEAD, HEAD, "", "REBASING", true),
             MessageEdit::Amend
         );
         assert_eq!(
-            message_edit(true, OLDER, HEAD, "", "REBASING", true, "abc1"),
+            message_edit(true, OLDER, HEAD, "", "REBASING", true),
             MessageEdit::Standing
         );
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "stash@{0}", "REBASING", true, "abc1"),
+            message_edit(true, HEAD, HEAD, "stash@{0}", "REBASING", true),
             MessageEdit::Stash
         );
     }
 
-    /// A terminal commit made during the stop moves HEAD off the stopped
-    /// commit; the boxes shut rather than offering an amend of a commit
-    /// the exit card never named. An unnamed stop trusts HEAD as before.
+    /// Whatever HEAD moved onto during the stop, HEAD is what the boxes
+    /// amend — an amend of the stopped commit moves HEAD off the id the
+    /// stop began on, and a second one has to reach the same box (a typo
+    /// in the first is exactly when it is wanted). The `editing` flag is
+    /// the whole of the exemption, so a rebase that is stopped for any
+    /// other reason keeps the refusal.
     #[test]
-    fn a_head_that_left_the_stopped_commit_takes_the_amend_away() {
+    fn an_edit_stop_opens_whatever_head_moved_onto() {
+        // Whatever the id, it is HEAD's row that opens.
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "", "REBASING", true, "def9"),
-            MessageEdit::Standing
+            message_edit(true, OLDER, OLDER, "", "REBASING", true),
+            MessageEdit::Amend
         );
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "", "REBASING", true, ""),
-            MessageEdit::Amend
+            message_edit(true, HEAD, HEAD, "", "REBASING", false),
+            MessageEdit::Standing
         );
     }
 
@@ -184,7 +193,7 @@ mod tests {
     fn an_empty_pane_refuses_without_a_reason() {
         assert_eq!(edit("", "", ""), MessageEdit::Nothing);
         assert_eq!(
-            message_edit(false, HEAD, HEAD, "", "", false, ""),
+            message_edit(false, HEAD, HEAD, "", "", false),
             MessageEdit::Nothing
         );
         assert_eq!(edit("", "", "").as_str(), "");
