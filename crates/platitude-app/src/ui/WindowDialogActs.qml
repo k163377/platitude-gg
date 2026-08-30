@@ -28,6 +28,7 @@ Item {
     required property CloneDialog cloneDialog
     required property var folderDialog
     required property var settingsDialog
+    required property QuitWaitDialog quitWaitDialog
 
     // The picker completes once its dialog is up, and `visible` is the property that says so: `FolderDialog` is
     // `QtQuick.Dialogs`' own type, not a `Popup`, so the `opened` the dialogs around it answer to is undefined here.
@@ -311,6 +312,76 @@ Item {
                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
                 + " tip=" + topBar.stateCardOpen
                 + " rows=" + topBar.stateCardRows)
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=quit-waits / quit-stays: the close that arrives while git is still writing. The commit is held by
+    // the repository's own pre-commit hook (`--preset slowhook` — it sleeps), so the write is provably in flight when
+    // the close lands: the gate turns the close away and stands the wait dialog up. `quit-waits` photographs that
+    // state; `quit-stays` presses the way back in and then watches the held write land anyway — the wait was never
+    // a kill.
+    //
+    // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make; the way back
+    // in is the dialog's own `keepWorking()`, the function its button calls. Neither verb is a write act: the commit
+    // deliberately has not landed when `quit-waits` photographs, and `quit-stays` waits the landing out in its own
+    // sampler (`AutoActCompletion`).
+    SampleTimer {
+        id: quitTimer
+        running: AppBackend.autoAct === "quit-waits" || AppBackend.autoAct === "quit-stays"
+        /// The steps already taken, so nothing re-reads what had to be true before each of them.
+        property bool committed: false
+        property bool closed: false
+        property bool kept: false
+        property int seqBefore: -1
+        onTriggered: {
+            if (window.curPage === null)
+                return
+            const tab = window.curPage.pageTab
+            if (!quitTimer.committed) {
+                if (tab.state !== "open")
+                    return
+                quitTimer.seqBefore = tab.writeSeq
+                tab.commit("chore: held by a sleeping hook", "", false, false)
+                quitTimer.committed = true
+                return
+            }
+            if (!quitTimer.closed) {
+                // Pressed only while the hook provably holds the write: the preset's hook sleeps for longer than
+                // the beat between this tick and the close below, so a busy count that has risen cannot have
+                // fallen by the time the close lands.
+                if (tab.busyCount === 0)
+                    return
+                quitTimer.closed = true
+                window.close()
+                return
+            }
+            if (AppBackend.autoAct === "quit-waits") {
+                if (!quitWaitDialog.opened)
+                    return
+                stop()
+                AppBackend.report("quit_wait dialog=" + quitWaitDialog.opened
+                    + " window=" + window.visible
+                    + " busy=" + (tab.busyCount !== 0))
+                window.finishAutoAct()
+                return
+            }
+            if (!quitTimer.kept) {
+                if (!quitWaitDialog.opened)
+                    return
+                quitTimer.kept = true
+                quitWaitDialog.keepWorking()
+                return
+            }
+            // The dialog has gone, the window stayed, and the write the quit was asked over still landed: the
+            // sequence moving past the armed one is the write's answer being absorbed, busy falling is the queue
+            // done with it.
+            if (quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
+                return
+            stop()
+            AppBackend.report("quit_stay dialog=" + quitWaitDialog.opened
+                + " window=" + window.visible
+                + " landed=" + (tab.writeSeq > quitTimer.seqBefore))
             window.finishAutoAct()
         }
     }

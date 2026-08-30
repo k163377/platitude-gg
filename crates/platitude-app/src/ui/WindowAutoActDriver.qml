@@ -39,6 +39,7 @@ Item {
     property CloneDialog cloneDialog
     property var folderDialog
     property var settingsDialog
+    property QuitWaitDialog quitWaitDialog
     // Negative/error states can be shorter than a polling cadence when a later background command also finishes.
     // Observe their change signals synchronously, then carry that proof into the recovery report.
     property bool commandsWrongSeen: false
@@ -182,6 +183,7 @@ Item {
         cloneDialog: driver.cloneDialog
         folderDialog: driver.folderDialog
         settingsDialog: driver.settingsDialog
+        quitWaitDialog: driver.quitWaitDialog
     }
     WindowSettingsActs {
         window: driver.window

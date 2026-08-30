@@ -49,6 +49,8 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   (remote-refused, tag-refused)
         hooked    a pre-commit hook that says no, over something staged
                   for it to say it about (commit-refused, notice-over-diff)
+        slowhook  a pre-commit hook that takes its time, over something
+                  staged — a write provably in flight (quit-waits, quit-stays)
         noremote  commits and no remote at all: the first push writes one down
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-

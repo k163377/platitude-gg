@@ -135,6 +135,23 @@ pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Puts one hook into `hooks` and makes it runnable — the mechanics all
+/// three hook-carrying presets share, so a platform fix (the exec bit is
+/// the one that only matters on machines the author is not on) lands in
+/// every preset at once. `script` is the whole file, shebang included.
+fn install_hook(hooks: &std::path::Path, name: &str, script: &str) -> Result<(), String> {
+    std::fs::create_dir_all(hooks).map_err(|e| e.to_string())?;
+    let path = hooks.join(name);
+    std::fs::write(&path, script).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// A repository whose own `pre-commit` hook says no, with something
 /// staged for it to say it about.
 ///
@@ -148,24 +165,37 @@ pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
     repo.write("src/app.txt", "app v2\t\n")?;
 
-    let hook = repo.work.join(".git").join("hooks");
-    std::fs::create_dir_all(&hook).map_err(|e| e.to_string())?;
-    let path = hook.join("pre-commit");
-    std::fs::write(
-        &path,
+    install_hook(
+        &repo.work.join(".git").join("hooks"),
+        "pre-commit",
         "#!/bin/sh\n\
          echo \"src/app.txt:1: trailing whitespace\"\n\
          echo \"style: 1 problem found, nothing committed\" >&2\n\
          exit 1\n",
     )
-    .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+}
+
+/// A repository whose own `pre-commit` hook takes its time, with
+/// something already staged — so a run's one write is the commit itself,
+/// and it is provably still in flight when the run acts over it (the
+/// quit verbs close the window across it).
+///
+/// `sleep` is the blocking command all three machines agree on (the
+/// seeded merge tool's own stand-in says why — `verify::repos`), and two
+/// seconds holds the write across a sampler beat and the close behind it
+/// without making every run pay for more. The wait is arrangement, not a
+/// completion condition: a hook that somehow ends early fails the run
+/// out loud — the close goes through and takes the window the shots
+/// needed.
+pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.write("held.txt", "held by the hook\n")?;
+    repo.git(&["add", "--all"])?;
+    install_hook(
+        &repo.work.join(".git").join("hooks"),
+        "pre-commit",
+        "#!/bin/sh\nsleep 2\n",
+    )
 }
 
 /// Both sides moved on, and this repository has already seen it happen:
@@ -206,17 +236,15 @@ pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["tag", "v1.0"])?;
     repo.git(&["push", "origin", "refs/tags/v1.0"])?;
 
-    let hook = repo.root.join("origin.git").join("hooks");
-    std::fs::create_dir_all(&hook).map_err(|e| e.to_string())?;
-    let path = hook.join("pre-receive");
     // **The words follow the ref, the way a forge's do.** GitHub writes
     // `Protected tag update failed` over a tag and `Protected branch
     // update failed` over a branch; a fixture that said `branch` while a
     // tag was being refused would put a sentence on screen that this end
     // could be blamed for writing (measured — the report quotes it as it came).
     // The refs arrive on stdin as `<old> <new> <ref>`.
-    std::fs::write(
-        &path,
+    install_hook(
+        &repo.root.join("origin.git").join("hooks"),
+        "pre-receive",
         "#!/bin/sh\n\
          while read -r old new ref; do\n\
          case \"$ref\" in\n\
@@ -228,12 +256,4 @@ pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
          done\n\
          exit 1\n",
     )
-    .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }

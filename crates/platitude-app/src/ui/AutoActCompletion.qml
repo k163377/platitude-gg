@@ -165,6 +165,10 @@ QtObject {
                 "clone-dialog", "clone-go", "clone-refused",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",
+                // Not write acts, though both commit: `quit-waits` photographs the moment before the held write's
+                // answer, and `quit-stays` waits the landing out in its own sampler — a write barrier in front of
+                // either would hold the shot for an answer the verb is about the absence of.
+                "quit-waits", "quit-stays",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",

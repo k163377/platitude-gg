@@ -34,6 +34,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "middle_close gone=true",
     },
+    // The close that arrived while git was writing, turned away and
+    // said out loud. None of it is a picture on its own: a vetoed
+    // window frames like one nobody asked to close, and the dialog in
+    // the overlay could equally be standing over a repository with
+    // nothing running — `busy=true` is the write actually in flight
+    // under the photograph.
+    Verb {
+        name: "quit-waits",
+        when: &[],
+        plain: "quit_wait dialog=true window=true busy=true",
+    },
+    // The way back in, and the write the quit was asked over landing
+    // anyway. `landed=true` is the whole point of the wait — the hook
+    // held the commit, the close was pressed, and nothing was killed —
+    // and no picture can say it (a history with the commit looks like
+    // a history that was always going to get it).
+    Verb {
+        name: "quit-stays",
+        when: &[],
+        plain: "quit_stay dialog=false window=true landed=true",
+    },
     // What a tab switch carries and what it drops, in one line
     // because neither half means anything alone. `sessions=1` with
     // two tabs open is the release itself — the tab left behind is
