@@ -70,6 +70,13 @@ impl Value<'_> {
     pub(super) fn flag(&self) -> bool {
         matches!(self, Self::Flag(true))
     }
+
+    pub(super) fn number(&self) -> i32 {
+        match self {
+            Self::Number(number) => *number,
+            Self::Said(_) | Self::Spelled(_) | Self::Flag(_) => 0,
+        }
+    }
 }
 
 /// The roles a delegate reads a row by.

@@ -35,6 +35,27 @@ pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
     }
 }
 
+pub(super) fn local(short: &str, is_head: bool) -> platitude_core::session::BranchItem {
+    platitude_core::session::BranchItem {
+        short: short.into(),
+        full: format!("refs/heads/{short}").into(),
+        oid: oid("c"),
+        has_remote: false,
+        is_head,
+        upstream: "".into(),
+        held_elsewhere: false,
+    }
+}
+
+pub(super) fn locals(
+    list: Vec<platitude_core::session::BranchItem>,
+) -> Arc<platitude_core::session::RefsSnapshot> {
+    Arc::new(platitude_core::session::RefsSnapshot {
+        locals: list,
+        ..Default::default()
+    })
+}
+
 pub(super) fn snapshot(
     remotes: Vec<platitude_core::session::BranchItem>,
     tags: Vec<platitude_core::session::TagItem>,

@@ -22,6 +22,45 @@ fn a_filtered_remote_row_shows_its_whole_name() {
     assert_eq!(says(&model, 0, Role::Full), "");
 }
 
+/// What the sticky stand-in steps itself in by (`HeadPinRow`): the folds
+/// of the row it stands for, and none at all while there is no such row.
+#[test]
+fn the_head_row_reports_the_fold_its_stand_in_takes() {
+    let branches = |head: &str| {
+        let mut model = section(
+            "branches",
+            Source::Locals(locals(vec![
+                local("feature/topic-a", head == "feature/topic-a"),
+                local("main", head == "main"),
+            ])),
+        );
+        model.arrange();
+        model
+    };
+
+    // feature / topic-a / main: a branch under a folder is one step in,
+    // and the stand-in for it takes the same step.
+    let model = branches("feature/topic-a");
+    assert_eq!(model.head_row, 1);
+    assert_eq!(depth_of(&model, 1), 1);
+    assert_eq!(model.head_depth, 1);
+
+    // A branch with no `/` is nested by nothing, and neither is its
+    // stand-in — the step a stand-in always took put its name in a column
+    // no row was in.
+    let mut model = branches("main");
+    assert_eq!(model.head_row, 2);
+    assert_eq!(depth_of(&model, 2), 0);
+    assert_eq!(model.head_depth, 0);
+
+    // Filtered away: the stand-in has no row to follow and takes a seat of
+    // its own at the head of the list, where the rows themselves begin.
+    model.filter = "feature".to_string();
+    model.arrange();
+    assert_eq!(model.head_row, -1);
+    assert_eq!(model.head_depth, 0);
+}
+
 /// Where to scroll for a name, in the two shapes a row is keyed by:
 /// the full one a tree gives a leaf, and the shown one a tag has
 /// instead of a full name at all.

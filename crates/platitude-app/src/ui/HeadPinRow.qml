@@ -56,9 +56,12 @@ Rectangle {
     }
     RowLayout {
         anchors.fill: parent
-        // The panel's own margin and one fold of it — where a branch carrying a `/` begins, which is where nearly
-        // every branch this stands in for does (`NavItemDelegate.rowInset` / `nestStep`).
-        anchors.leftMargin: Theme.spaceSm + Theme.spaceSm
+        // The panel's own margin and the folds the row it stands for is nested by (`NavItemDelegate.rowInset` /
+        // `nestStep`, which the list sets to the one value — see there). **The fold count comes from that row**
+        // (`headDepth`): a branch carrying a `/` sits one step in and `main` sits at none, so a stand-in that always
+        // took one step began its name in a column no row was in. While it is seated there is no row to follow and the
+        // model answers 0, which is the column the list's own rows begin in.
+        anchors.leftMargin: Theme.spaceSm + headPin.branchesModel.headDepth * Theme.spaceSm
         // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs — the one
         // a pane's own bar takes (`NavItemDelegate` / `PaneScrollBar`).
         anchors.rightMargin: Theme.navBarGutter

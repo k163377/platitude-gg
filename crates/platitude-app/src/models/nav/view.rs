@@ -74,13 +74,19 @@ impl NavSectionModel {
                     .collect(),
             )
         };
-        self.head_row = (0..self.shown_rows())
-            .find(|at| {
-                self.row_at(*at).is_some_and(|row| {
-                    self.field(row, Role::IsHead).flag() && !self.field(row, Role::Folder).flag()
-                })
+        let head = (0..self.shown_rows()).find(|at| {
+            self.row_at(*at).is_some_and(|row| {
+                self.field(row, Role::IsHead).flag() && !self.field(row, Role::Folder).flag()
             })
-            .map_or(-1, |row| row as i32);
+        });
+        self.head_row = head.map_or(-1, |row| row as i32);
+        // The fold the stand-in steps itself in by, read off the row it
+        // stands for rather than guessed: a branch carrying a `/` sits one
+        // step in and `main` sits at none, and a stand-in that always took
+        // the same step began its name in a column no row was in.
+        self.head_depth = head
+            .and_then(|at| self.row_at(at))
+            .map_or(0, |row| self.field(row, Role::Depth).number());
         self.shown_total = self.shown_rows() as i32;
         // The count the section's band shows. **A hidden row is not one
         // of them** — the band is saying how many the repository has, and

@@ -100,6 +100,12 @@ pub struct NavSectionModel {
     /// filter or a collapsed folder hides it, or HEAD is detached). The
     /// sticky row needs it to tell whether the real row is on screen.
     head_row: i32,
+    /// How far that row is folded in — what the sticky row steps itself
+    /// in by, so the stand-in's name begins in the same column as the
+    /// name it stands for. 0 where there is no row to stand for: the
+    /// stand-in then takes a seat of its own at the head of the list
+    /// (`HeadPinRow.seated`), where nothing is nesting it.
+    head_depth: i32,
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,

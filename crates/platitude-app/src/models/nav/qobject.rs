@@ -10,6 +10,7 @@ impl NavSectionModel {
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
     qproperty!("headHasPr", Member = head_has_pr, Notify = changed);
     qproperty!("headRow", Member = head_row, Notify = changed);
+    qproperty!("headDepth", Member = head_depth, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!(
