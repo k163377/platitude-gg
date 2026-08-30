@@ -36,6 +36,7 @@ QtObject {
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
+                "rebase-plan-run", "rebase-edit-stop",
                 "rebase-onto", "revert-commit", "op-exit-go", "stage-hunk",
                 "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
@@ -135,6 +136,9 @@ QtObject {
                 "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
+                // All three end in their own samplers: the plan arrives through the feed, and the two that run wait
+                // out the write's own landing (the gone row / the edit marker) behind the write barrier.
+                "rebase-plan", "rebase-plan-run", "rebase-edit-stop",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-rest", "avatar-hover",
                 "find", "find-next", "find-prev", "find-drop",

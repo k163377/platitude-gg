@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::authorship::{authorship, co_authors};
-use super::basic::{basic, detached, dirty, eol, noremote, stashes};
+use super::basic::{basic, detached, dirty, eol, noremote, plan, stashes};
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
     conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
@@ -85,6 +85,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "outrun" => outrun(&mut repo)?,
         "hooked" => hooked(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
+        "plan" => plan(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "errsig" => errsig(&mut repo)?,
         "co-authors" => co_authors(&mut repo)?,

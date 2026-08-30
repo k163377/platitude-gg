@@ -190,6 +190,26 @@ pub(super) fn stashes(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A straight run for the interactive-rebase plan: five steps on main
+/// with origin holding all but the newest, a branch standing on the
+/// commit the default plan lands on, and a clean tree. Linear on
+/// purpose — the plan refuses a range with a merge in it, and the
+/// verbs walk down from HEAD by row, which only a branchless stretch
+/// keeps meaning "this branch's own history".
+pub(super) fn plan(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("notes.txt", "v1\n", "docs: start the notes")?;
+    repo.commit("src/one.txt", "one\n", "feat: the first step")?;
+    repo.commit("src/two.txt", "two\n", "feat: the second step")?;
+    repo.commit("src/three.txt", "three\n", "feat: the third step")?;
+    repo.commit("src/four.txt", "four\n", "feat: the fourth step")?;
+    repo.git(&["branch", "base", "HEAD~3"])?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    // Ahead by one, so the plan's newest row is this clone's own.
+    repo.commit("src/five.txt", "five\n", "feat: the newest step")?;
+    Ok(())
+}
+
 /// HEAD detached at a tagged commit.
 pub(super) fn detached(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("a.txt", "v1\n", "feat: one")?;

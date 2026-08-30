@@ -71,4 +71,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "merge_committed merging=false kept=true typed=false",
     },
+    // The plan stood open with a verb of each cost on it. The counts
+    // are the halves a picture underclaims: dirty is what opens the
+    // run button, and pushed is the amber the range earned.
+    Verb {
+        name: "rebase-plan",
+        when: &[],
+        plain: "rebase_plan rows=4 dirty=true drops=1 onto=true pushed=3",
+    },
+    // The run's landing: answered by name, the dropped row gone from
+    // the graph's own model, the draft away, and no red line raised.
+    Verb {
+        name: "rebase-plan-run",
+        when: &[],
+        plain: "rebase_plan_ran op=rebase moved=true gone=true stopped=false plan=false error=false",
+    },
+    // The stop that was asked for: git's edit marker up, the skip's
+    // cost back with it, and the exit card's rows still standing — a
+    // clean tree frames exactly like the emptied-commit stop without
+    // these (P3-確認事項 §A).
+    Verb {
+        name: "rebase-edit-stop",
+        when: &[],
+        plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true",
+    },
 ];

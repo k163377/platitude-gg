@@ -50,6 +50,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         hooked    a pre-commit hook that says no, over something staged
                   for it to say it about (commit-refused, notice-over-diff)
         noremote  commits and no remote at all: the first push writes one down
+        plan      a straight run of five commits, origin holding all but the
+                  newest and a branch on the base: what the interactive-
+                  rebase plan opens over (rebase-plan, rebase-plan-run,
+                  rebase-edit-stop)
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E
                   verdict (signature-tip passes only on this preset)
