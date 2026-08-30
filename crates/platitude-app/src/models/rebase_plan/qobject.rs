@@ -53,9 +53,9 @@ impl RebasePlanModel {
     #[qsignal]
     fn stale_plan(&mut self);
 
-    /// An operation started under the open plan — a merge, a cherry-pick,
-    /// a revert or a bisect, from a terminal or another session — so it
-    /// was put away; nothing was run. Its own signal rather than
+    /// An operation started under the open plan — anything the badge
+    /// names, from a terminal or another session — so it was put away;
+    /// nothing was run. Its own signal rather than
     /// `stalePlan`: the tip has not moved and saying it did would send a
     /// reader looking for a rewrite nobody made (§答えの要らない報せ).
     #[qsignal]
