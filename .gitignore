@@ -6,6 +6,11 @@ target/
 # checkout and never in a worktree's own tree.
 .shots/
 
+# The task-chip ledger (hook chips): one file per session, beside this
+# .git so every seat's sessions write to one directory. Cleared when the
+# session that wrote it ends.
+.chips/
+
 # IDE / editors
 .idea/
 *.iml

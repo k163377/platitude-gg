@@ -27,6 +27,15 @@
             "command": "cargo xtask hook pre-worktree"
           }
         ]
+      },
+      {
+        "matcher": "mcp__ccd_session__spawn_task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook pre-chip"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -45,6 +54,25 @@
           {
             "type": "command",
             "command": "cargo xtask hook post-worktree"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__ccd_session__(spawn|dismiss)_task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook post-chip"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook stop"
           }
         ]
       }

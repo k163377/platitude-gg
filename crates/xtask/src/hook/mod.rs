@@ -6,6 +6,7 @@
 
 use std::io::Read;
 
+mod chips;
 mod commit;
 mod git;
 mod greeting;
@@ -38,12 +39,23 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "pre-write" => write::pre_write(&input),
         "post-write" => write::post_write(&input),
         "pre-shell" => pre_shell(&input),
+        "pre-chip" => chips::pre_spawn(&input),
+        "post-chip" => chips::post_chip(&input),
+        "stop" => chips::stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
         "session-start" => greeting::session_start(&input),
-        "session-end" => seat::session_end(&input),
+        "session-end" => session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),
     }
+}
+
+/// SessionEnd: everything a session leaves behind for itself alone —
+/// the seat it claimed, and the chip ledger its numbering was judged
+/// against.
+fn session_end(input: &str) -> Result<(), String> {
+    chips::session_end(input);
+    seat::session_end(input)
 }
 
 /// PreToolUse(Bash|PowerShell): every shell line passes through here. One
