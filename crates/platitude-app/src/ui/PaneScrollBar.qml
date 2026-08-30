@@ -10,11 +10,13 @@ import platitude.ui
 /// inside the right panel. **A box being typed into keeps the style's bar** — it is the one place a bar is inside the
 /// content rather than at a pane's edge.
 ///
-/// **Its three states climb the palette from the pane's ground**: `bgElevated` idle, the one
+/// **Its three states climb the palette from the ground it stands on**: `bgElevated` idle over a pane, the one
 /// step there is between a pane's ground and the lines it divides itself with; `borderDefault` while the view is being
 /// sent, the ink a frame is drawn in; `borderStrong` under a held thumb. The style's see-through bar lands on the same
 /// three over a pane's ground by carrying that much of its one ink, so the two families read alike by two routes — and
 /// this one, opaque on purpose (below), cannot say a step by carrying less, so it names the colours (`dimsItself`).
+/// **Only the idle step is the ground's to move** (`idleColor`): the other two are frames, and a frame is the same
+/// ink wherever it is drawn.
 ///
 /// Three things it does not take from the style's bar:
 ///
@@ -29,6 +31,13 @@ import platitude.ui
 ///    side keeps its step, where it is grabbing room rather than a gap: the box stays wider than the ink.
 AutoScrollBar {
     id: paneBar
+
+    /// The idle step, which is **the one step above whatever ground this bar stands on** — the rest of the climb
+    /// (`borderDefault`, `borderStrong`) is the same wherever it stands. A pane's ground is `bgSurface`, so the
+    /// default is the step above that; the settings screen's ground is `bgElevated` itself, where this colour would
+    /// be the ground exactly and the resting bar would not be there at all (実測: 辺の 5px が `#0F172A`). That screen
+    /// hands in the next step up instead (デザイン規約 §ペインのスクロールバー).
+    property color idleColor: Theme.bgElevated
 
     // Named colours, not a share of one (above).
     dimsItself: false
@@ -51,7 +60,7 @@ AutoScrollBar {
         bottomRightRadius: 0
         // Idle a step under the ramp, and on it while the view is being sent. Up at once, down over 400ms — the two
         // halves every bar in the window shares (規約 §QML 実装ルール のバーの明るさ).
-        color: Theme.bgElevated
+        color: paneBar.idleColor
         states: [
             State { name: "gone"; when: !paneBar.visible },
             State {
