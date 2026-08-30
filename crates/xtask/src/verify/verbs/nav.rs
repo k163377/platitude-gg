@@ -34,6 +34,21 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL refused=true \
                 why=Only the letter case differs — on this disk that deletes both names",
     },
+    // Every door onto the history while a rebase replays behind the
+    // screen — the graph's and the left pane's. **None of it is a
+    // picture**: a switch the road turned away, a box that never opened, a
+    // `+` that greys and a menu row that greys all frame exactly like a
+    // window nobody touched, and the picture answers the other half —
+    // that the rows around them did not go out with them. `frozen=false`
+    // is in the line because the plan's freeze is the other state and
+    // takes the pane whole: a run that photographed that one instead
+    // would leave a picture nothing in the report could tell apart.
+    Verb {
+        name: "doors-held",
+        when: &[],
+        plain: "doors_held held=true frozen=false road=true rowmenu=true drop=true \
+                box=false plus=true menu=true switchrow=true why=true",
+    },
     // The row taken away before git answered for it, held open for
     // the picture. `row=-1` is the sidebar without it and `chips=true`
     // the graph without its chip — **both halves at once** is the whole

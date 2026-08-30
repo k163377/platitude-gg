@@ -76,6 +76,9 @@ QtObject {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                // The replay has to be under way before the doors can be tried, so the sampler that waits for it is
+                // the one owner; the render barrier behind it would otherwise photograph the panes before any of it.
+                "doors-held",
                 "nav-branch-box", "nav-rename-box", "nav-tag-box",
                 // All five end in the rail sampler; without this the render barrier is a second
                 // completion owner and photographs the pane before the fold has landed.

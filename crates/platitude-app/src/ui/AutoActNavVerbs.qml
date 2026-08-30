@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
+import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -30,6 +32,10 @@ Item {
     readonly property var tagsModel: driver.tagsModel
     readonly property var sidebarPane: driver.sidebarPane
     readonly property var remoteDialog: driver.remoteDialog
+    readonly property var refSwitchItem: driver.refSwitchItem
+    readonly property var commitMenu: driver.commitMenu
+    readonly property var dropCommitItem: driver.dropCommitItem
+    readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
@@ -113,6 +119,16 @@ Item {
                 sidebarPane.tapAddRemote()
             }
             navAddRemoteTimer.start()
+        } else if (act === "doors-held") {
+            // Every door onto the history while a write that replays is running behind the screen: the left pane's,
+            // and the graph's beside it. Nothing is frozen and nothing dims (`SidebarPane.doorsHeld`). **The rebase is
+            // a real one** — the argument names the branch to rebase onto, and the same one the menus are then opened
+            // on — and the state comes from `RepoTab.replaying`, not from a flag set for the run. A demo repository
+            // answers inside one beat of the sampler, so the rise is caught at the signal below and held for the
+            // picture. **One run for both panes**: standing this state up twice would be two runs of the same thing.
+            acts.heldBranch = arg
+            repoTab.rebase(arg, "", true)
+            navHeldTimer.start()
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.
@@ -174,6 +190,91 @@ Item {
             + " pane=" + Math.round(sidebarPane.height))
             driver.complete()
         }
+    }
+    /// PG_AUTO_ACT=doors-held: the branch rebased onto, and the one the right-click then lands on. Not the one the tree
+    /// is standing on — `switch` is only offered away from where you already are, and that row is the whole point of
+    /// the hold.
+    property string heldBranch: ""
+    /// The replay's own rising edge, caught where it cannot be missed. **A sampler would miss it**: the write starts
+    /// and finishes inside one beat on a repository this size, and what the page then holds up is the state itself
+    /// rather than a stand-in for it (`RepoPage.autoReplayHeld`).
+    Connections {
+        target: acts.repoTab
+        function onReplayingChanged() {
+            if (AppBackend.autoAct === "doors-held" && acts.repoTab.replaying)
+                page.autoReplayHeld = true
+        }
+    }
+    // The doors, tried one by one once the replay is under way. Each is read back rather than photographed: a box that
+    // never opened, a double-click that led nowhere and a `+` that cannot be pressed all frame exactly like a pane
+    // nobody touched (app-ui.md §UI 自動化の因果性). What the picture is for is the other half — that none of the rest
+    // of the pane went out with them.
+    /// Whether the doors have been tried; from then on the sampler is waiting for the line the blocked row says why
+    /// with, which comes out on the tooltip's own delay (`Metrics.tipDelayMs`) and is the last thing to arrive.
+    property bool heldTried: false
+    SampleTimer {
+        id: navHeldTimer
+        onTriggered: {
+            if (acts.heldTried) {
+                if (!refSwitchItem.ToolTip.visible)
+                    return
+                navHeldTimer.stop()
+                acts.reportHeld()
+                renderedBarrier.begin()
+                return
+            }
+            if (!page.autoReplayHeld)
+                return
+            acts.heldTried = true
+            // ---- the graph's two doors, before the pane's ----------------
+            // The road every switch on that side arrives by, asked for its own answer: a row's double-click, a chip's
+            // and a row of the list a chip had to stack all end here, and `false` is a press this road turned away
+            // (`RepoPage.switchToRef` — the same answer `switch-remote-twice` reads).
+            acts.heldSwitch = page.switchToRef("L", acts.heldBranch) === false
+            // And the menu that row raises. It comes up with its rows kept and greyed, the same as the ref menu's:
+            // `drop` is read because it is the one row of this card that cannot be undone.
+            page.openRowMenu(workTree.headOid)
+            acts.heldRowMenu = commitMenu.opened
+            acts.heldDrop = dropCommitItem.blocked
+            commitMenu.close()
+            // ---- and the pane's ------------------------------------------
+            // The box, asked for where a hand asks for it. **The one door whose refusal a picture cannot show** —
+            // nothing opening frames exactly like nothing having been asked — so it is read back instead. The
+            // double-click's own refusal is the line beside this one in the same object (`SidebarRowGestures.held`),
+            // and a run cannot tell a switch that was refused from one that has not landed yet.
+            sidebarPane.beginRename("branch", acts.heldBranch, acts.heldBranch)
+            // And the menu the rows raise, on the branch whose `switch` is exactly the move being held. Its rows
+            // stay and grey (`AppMenu.heldReason`); the line one says why with is in a tooltip, forced here because a
+            // pointer cannot be put on a row (verify-ui §hover の絵の撮り方).
+            acts.heldMenu = page.openRefMenu("branch", acts.heldBranch, acts.heldBranch,
+                                            branchesModel.oidOfName(acts.heldBranch), true)
+            acts.heldBox = sidebarPane.editKey !== ""
+            refSwitchItem.tipForced = true
+        }
+    }
+    /// What each door did, read at the press rather than at the report — which waits out the tooltip's delay after
+    /// them.
+    property bool heldBox: false
+    property bool heldMenu: false
+    property bool heldSwitch: false
+    property bool heldRowMenu: false
+    property bool heldDrop: false
+    function reportHeld() {
+        // **`frozen=` is in the line because the two states frame differently on purpose**: the plan's freeze takes the
+        // pane whole and dims it, and this one must not — a run that photographed the wrong one of the two would leave
+        // a picture nobody could tell apart from the other verb's.
+        AppBackend.report("doors_held held=" + (page.doorsHeldWhy !== "")
+                          + " frozen=" + page.sidebarFrozen
+                          // The graph's side: the road every switch there arrives by, and the menu its rows raise.
+                          + " road=" + acts.heldSwitch
+                          + " rowmenu=" + acts.heldRowMenu
+                          + " drop=" + acts.heldDrop
+                          // The pane's: the box, the `+`, and the menu its rows raise.
+                          + " box=" + acts.heldBox
+                          + " plus=" + sidebarPane.headOf("remote").addHeld
+                          + " menu=" + acts.heldMenu
+                          + " switchrow=" + refSwitchItem.blocked
+                          + " why=" + (refSwitchItem.blockedWhy !== ""))
     }
     // PG_AUTO_ACT=tags-eye: the eye at the end of the TAGS band, and the graph on the other side of it. What the
     // switch moves is the walk, so the commit the named tag stands on is the one thing that answers it — a tag on a
