@@ -145,6 +145,28 @@ fn settle_carries_the_selected_rows_stored_reword_out() {
     );
 }
 
+/// What the entrance does with a second right-click while the first
+/// answer is still out (`RebasePlanModel::open`): the same commit is the
+/// same question and spends nothing twice, another commit is a question
+/// of its own however long the one before it is taking, and a plan that
+/// is already open asks again — the answer for it is not out.
+#[test]
+fn a_second_click_only_stands_down_for_the_commit_already_asked() {
+    let mut model = RebasePlanModel::default();
+    assert!(!model.already_asking("c3"), "nothing has been asked yet");
+
+    model.loading = true;
+    model.asked_from = "c3".to_string();
+    assert!(model.already_asking("c3"));
+    assert!(!model.already_asking("c2"), "a different commit, a new ask");
+
+    model.loading = false;
+    assert!(
+        !model.already_asking("c3"),
+        "the answer landed; asking again is a fresh question"
+    );
+}
+
 #[test]
 fn the_shown_subject_follows_the_typed_reword_and_falls_back() {
     assert_eq!(RebasePlanModel::shown_of("reword", "typed", "own"), "typed");

@@ -81,10 +81,18 @@ impl RebasePlanModel {
     /// Asks for the rows an interactive rebase from `oid_hex` would
     /// offer; the answer arrives through the feed and raises `active`,
     /// or `refusedPlan` where the range cannot be replayed.
+    ///
+    /// The same commit asked for again while its answer is still out is
+    /// the same question, and is left to the answer already coming
+    /// ([`Self::already_asking`]) — the read walks the whole range, and a
+    /// second click on the row the menu just closed over is the one click
+    /// a reader who has been given nothing to look at will make. Another
+    /// commit replaces the ask outright: core cancels the read behind it
+    /// and the screen waits on the newer one.
     #[qslot]
     fn open(&mut self, oid_hex: String) {
         let from = oid_hex.trim().to_string();
-        if from.is_empty() {
+        if from.is_empty() || self.already_asking(&from) {
             return;
         }
         self.loading = true;

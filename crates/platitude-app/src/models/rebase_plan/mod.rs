@@ -153,6 +153,14 @@ impl RebasePlanModel {
             })
     }
 
+    /// Whether the answer to this very commit is already on its way, so
+    /// asking again would only spend the walk twice
+    /// (`RebasePlanModel::open`). Any other commit is a different
+    /// question, however long the one before it is taking.
+    pub(super) fn already_asking(&self, from: &str) -> bool {
+        self.loading && self.asked_from == from
+    }
+
     pub(super) fn drop_count(&self) -> i32 {
         let drops = self.steps.iter().filter(|s| s.action == "drop").count();
         i32::try_from(drops).unwrap_or(i32::MAX)
