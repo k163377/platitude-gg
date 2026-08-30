@@ -28,7 +28,7 @@ fn fresh() -> RebasePlanModel {
 }
 
 #[test]
-fn an_untouched_plan_is_not_dirty_and_every_touch_makes_it_so() {
+fn an_untouched_plan_is_not_dirty_and_a_real_request_makes_it_so() {
     let mut model = fresh();
     assert!(
         !model.is_dirty(),
@@ -78,6 +78,36 @@ fn a_reword_is_a_request_only_once_something_is_typed() {
         model.is_dirty(),
         "typed into the other box, still a request"
     );
+}
+
+/// The button binds to the `dirty` *property*, which only [`settle`]
+/// moves — so the answer has to survive the trip out of `is_dirty`, not
+/// just be right inside it.
+///
+/// [`settle`]: RebasePlanModel::settle
+#[test]
+fn settle_carries_the_reword_rule_out_to_the_property() {
+    let mut model = fresh();
+    model.steps[0].action = "reword".to_string();
+    model.settle();
+    assert!(!model.dirty, "the verb alone leaves the button shut");
+
+    model.steps[0].msg_subject = "typed".to_string();
+    model.settle();
+    assert!(model.dirty, "the typing opens it");
+}
+
+/// Every verb that is not `pick` is a request on its own — only `reword`
+/// waits for a message. Pinned per verb because they now share one
+/// mapping (`RebasePlanModel::todo_action_of`), where a guard written
+/// for `reword` could reach the others.
+#[test]
+fn every_other_verb_is_a_request_without_a_message() {
+    for action in ["edit", "squash", "fixup", "drop"] {
+        let mut model = fresh();
+        model.steps[1].action = action.to_string();
+        assert!(model.is_dirty(), "{action} asks for something");
+    }
 }
 
 #[test]
