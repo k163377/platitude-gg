@@ -7,7 +7,16 @@ pub(super) fn configure(
     arg: &str,
     directory: &std::path::Path,
 ) -> Result<(), String> {
-    if ["perf", "details-failure"].contains(&verb) {
+    if [
+        "perf",
+        "details-failure",
+        "rebase-plan",
+        "rebase-plan-run",
+        "rebase-edit-stop",
+        "wip",
+    ]
+    .contains(&verb)
+    {
         // A missing global identity opens a modal over the graph on Linux.
         // Only this child's git sees the fixture; never write the user's config.
         let identity = directory.join("identity.gitconfig");

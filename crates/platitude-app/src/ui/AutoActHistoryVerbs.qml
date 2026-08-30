@@ -155,15 +155,14 @@ Item {
                 }
             }
         } else if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop") {
-            // Through the row menu a right-click opens, then the very handler its `rebase --interactive` row calls
-            // (the shape `squash` takes above). How far down the plan reaches is each verb's own: the overview wants
-            // rows enough to wear three verbs, the run wants a drop whose vanishing the graph can attest, and the
-            // edit stop wants the shortest plan that stops.
+            // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
+            // Each verb selects the smallest plan its result needs.
             const back = act === "rebase-plan" ? 3 : act === "rebase-plan-run" ? 2 : 1
             const fromOid = arg !== "" ? driver.autoActOid(arg)
                           : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + back)
             page.openRowMenu(fromOid)
             page.startRebasePlan(fromOid)
+            commitMenu.close()
             planOpenTimer.begin(act)
         } else {
             return false
