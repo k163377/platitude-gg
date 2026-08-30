@@ -317,7 +317,10 @@ impl RepoSession {
     /// interval — see [`AutoFetchTicker`]. `None` while auto fetch is off.
     pub fn auto_fetch_ticker(&self) -> Option<AutoFetchTicker> {
         let guard = relock(&self.auto_fetch);
-        guard.as_ref().map(|a| AutoFetchTicker(a.ticks.clone()))
+        guard.as_ref().map(|a| AutoFetchTicker {
+            ticks: a.ticks.clone(),
+            stopped: a.cancel.clone(),
+        })
     }
 
     /// Queues one automatic fetch, unless the previous one is still going.
@@ -355,5 +358,32 @@ impl RepoSession {
             },
         );
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The refusal of a stopped timer must not wait for its task to be
+    /// polled: nothing schedules a cancelled task on any deadline, and
+    /// under load one sat unpolled for a test suite's whole overall budget
+    /// (900s, measured) while the caller of `tick` hung with it. Modelled
+    /// as a timer whose task never runs at all — the channel stays open,
+    /// nobody will answer, and the stop token is the only word there is.
+    #[tokio::test]
+    async fn a_stopped_timer_refuses_the_tick_without_being_scheduled() {
+        let stopped = CancellationToken::new();
+        let (ticks, keep_open) = tokio::sync::mpsc::unbounded_channel();
+        let ticker = AutoFetchTicker {
+            ticks,
+            stopped: stopped.clone(),
+        };
+        stopped.cancel();
+        let refused = tokio::time::timeout(std::time::Duration::from_secs(5), ticker.tick())
+            .await
+            .expect("the refusal does not wait for a task that will never run");
+        assert!(!refused, "a stopped timer never takes a tick");
+        drop(keep_open);
     }
 }

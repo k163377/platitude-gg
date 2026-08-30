@@ -81,7 +81,16 @@ pub(super) enum OpenFetchState {
 /// queued a moment before the stop can start much later on a loaded
 /// machine, and no length of quiet proves the next one is not coming. The
 /// app only ever sets an interval.
-pub struct AutoFetchTicker(pub(super) tokio::sync::mpsc::UnboundedSender<AutoFetchTick>);
+pub struct AutoFetchTicker {
+    pub(super) ticks: tokio::sync::mpsc::UnboundedSender<AutoFetchTick>,
+    /// The stop of the timer this ticker is bound to, read directly: the
+    /// refusal must not wait for the stopped task to come round and drop
+    /// the channel, because nothing schedules a cancelled task on any
+    /// deadline — under load one sat unpolled for the whole of a test
+    /// suite's overall budget while the rest of the session ran on
+    /// (measured), and a caller awaiting its answer hung with it.
+    pub(super) stopped: CancellationToken,
+}
 
 impl AutoFetchTicker {
     /// Fires one tick and resolves once the timer has acted on it: `true`
@@ -91,10 +100,19 @@ impl AutoFetchTicker {
     /// cancellation, so `false` is the last word on it.
     pub async fn tick(&self) -> bool {
         let (ack, taken) = tokio::sync::oneshot::channel();
-        if self.0.send(ack).is_err() {
+        if self.ticks.send(ack).is_err() {
             return false;
         }
-        taken.await.is_ok()
+        // Biased towards the answer: a tick that was acted on says so even
+        // when the stop lands right behind it. The stop token is the other
+        // half of the race — a stopped timer's task answers by dropping
+        // the channel, but only when it is next polled, and its stop must
+        // not hang on that.
+        tokio::select! {
+            biased;
+            answered = taken => answered.is_ok(),
+            () = self.stopped.cancelled() => false,
+        }
     }
 }
 
