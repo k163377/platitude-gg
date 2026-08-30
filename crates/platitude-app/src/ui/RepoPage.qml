@@ -64,16 +64,22 @@ Item {
             page.foldedByPlan = false
         }
     }
-    /// What `writeSeq` stood at when a plan was handed over, so the hold can start at the press: `replaying` rises
-    /// when the queue *starts* the write, not when the button was let go, and the pane must not come back to life in
-    /// the gap. -1 = no run of ours has been sent.
-    property int planRunSeq: -1
-    readonly property bool planRunOut: page.planRunSeq >= 0 && repoTab.writeSeq <= page.planRunSeq
+    /// A plan has been handed over and its replay has not started yet, so the hold can begin at the press:
+    /// `replaying` rises when the queue *starts* the write, not when the button was let go.
+    ///
+    /// **The gap is not a fixed length and no sequence number spans it.** The run is queued, and the queue can be
+    /// carrying something else — the timer's fetch travels it too — so the wait is however long that takes; and
+    /// `writeSeq` counts *every* write's answer, so the fetch landing in between would move it past anything armed
+    /// here and let the pane back to life with the rebase still to come. Let go of the moment a replay is under way,
+    /// which is exactly where `replayRunning` takes over.
+    property bool planRunOut: false
+    readonly property bool replayRunning: repoTab.replaying
+    onReplayRunningChanged: if (page.replayRunning) page.planRunOut = false
     /// Every door on the left pane is held down: while the plan is composed, while its run is out, and under any write
     /// that replays a range a commit at a time (`RepoTab.replaying` — the meaning core puts on the op name). A rebase
     /// is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is the
     /// exit nobody meant. The `>_` band is not held with them (`SidebarPane.frozen`).
-    readonly property bool sidebarLocked: planModel.active || page.planRunOut || repoTab.replaying
+    readonly property bool sidebarLocked: planModel.active || page.planRunOut || page.replayRunning
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes with it — nothing is asked,
     /// what it costs is the typing (デザイン規約 §左メニューの所作) — and so does anything over the graph that is standing on an
@@ -525,7 +531,7 @@ Item {
         // Armed by the answer that a run actually went out, not by the button being pressed: `runPlan` turns away a
         // plan that asks for nothing, and a hold armed for a write that was never sent would never be let go of.
         function onPlanRan() {
-            page.planRunSeq = repoTab.writeSeq
+            page.planRunOut = true
         }
         function onRefusedPlan(kind) {
             page.showNotice(
