@@ -163,10 +163,12 @@ AppListView {
     Layout.fillWidth: true
     Layout.fillHeight: expanded
     // A section closes on a hairline of ground — just enough to keep its last row off the next header band. Anything
-    // thicker reads as a blank row belonging to the section.
+    // thicker reads as a blank row belonging to the section. A top margin is a seat given to something standing over
+    // the rows rather than spare height, so the section asks for it on top of them (`NavSections` / `HeadPinRow`);
+    // every other list here has none and adds nothing.
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
-                          : count * Theme.rowHeight + Theme.borderWidth
+                          : count * Theme.rowHeight + navList.topMargin + Theme.borderWidth
     model: sectionModel
     // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
     verticalBar: PaneScrollBar {}

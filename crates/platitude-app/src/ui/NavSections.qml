@@ -109,6 +109,10 @@ ColumnLayout {
         expanded: branchHead.showsRows
         kindHint: "branch"
         gestures: sections.gestures
+        // The one list whose rows something else can sit at the head of: with no row to ride above, the stand-in
+        // takes a row of its own and the rows begin under it (`HeadPinRow.seated`). The list asks for that much more
+        // height along with it, or the row the margin pushed down would be the one that cannot be read.
+        topMargin: headPin.seated ? Theme.rowHeight : 0
         Layout.verticalStretchFactor: sections.sectionPull
         headTracks: sections.workTree.upstream !== ""
         headAhead: sections.workTree.ahead
