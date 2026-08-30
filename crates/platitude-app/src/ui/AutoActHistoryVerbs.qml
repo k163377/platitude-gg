@@ -154,7 +154,8 @@ Item {
                     repoTab.rebase(arg, "", true)
                 }
             }
-        } else if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop") {
+        } else if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
+                   || act === "rebase-edit-stop-out") {
             // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
             // Each verb selects the smallest plan its result needs.
             const back = act === "rebase-plan" ? 3 : act === "rebase-plan-run" ? 2 : 1
@@ -266,6 +267,10 @@ Item {
     // The stop that was asked for. Its tree is clean — nothing conflicted — so what the picture cannot hold is the
     // reason: git's own edit marker, the skip whose cost came back with it, and the exit card's rows still standing
     // (P3-確認事項 §A / デザイン規約 §進行中の操作から出る).
+    //
+    // The `-out` verb carries the same stop through its own `--continue`: a clean stop put down moves no row of the
+    // file list, so leaving it is the way out that nothing on that side ever announces (`RepoPage.leaveWipWhenDone`),
+    // and the reader is left on an empty face that photographs like any other.
     SampleTimer {
         id: planEditStopTimer
         onTriggered: {
@@ -278,7 +283,12 @@ Item {
                               + " cont=" + wipPane.offersOpExit("--continue")
                               + " skip=" + wipPane.offersOpExit("--skip")
                               + " op=" + workTree.opText)
-            renderedBarrier.begin()
+            if (planOpenTimer.act !== "rebase-edit-stop-out") {
+                renderedBarrier.begin()
+                return
+            }
+            AppBackend.report("op_exit_held " + wipPane.completeOpExit("--continue"))
+            driver.awaitOpExitLanding()
         }
     }
     // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its

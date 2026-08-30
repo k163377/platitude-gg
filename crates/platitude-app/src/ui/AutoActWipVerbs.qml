@@ -188,6 +188,17 @@ Item {
             page.showWip()
             if (act === "op-exit-go")
                 AppBackend.report("op_exit_held " + wipPane.completeOpExit(arg))
+        } else if (act === "op-exit-lands") {
+            // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
+            // the write's own answer (`AutoActDriver.awaitOpExitLanding`).
+            //
+            // **The argument is the bare word**, dashes added here: a positional that begins with `--` is turned away
+            // by the option parser as a misspelled flag of its own (`verify::options`), so a verb that took the flag
+            // whole could not be asked for at all.
+            page.showWip()
+            AppBackend.report("op_exit_held "
+                              + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))
+            driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
             // Nothing is committed — the shot is the state before anyone decides.
             page.showWip()

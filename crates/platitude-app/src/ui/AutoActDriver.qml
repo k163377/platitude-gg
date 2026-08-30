@@ -334,13 +334,17 @@ Item {
                 renderedBarrier.begin()
         }
     }
-    /// Where a press leaves the reader. A file of its own: it waits on the far side of the write barrier — core answers
-    /// a write before it publishes what that write invalidated — and has a report of its own to make about where the
-    /// reader was put (`AutoActLandings`).
+    /// The two landings a press can have. A file of their own: both wait on the far side of the write barrier — core
+    /// answers a write before it publishes what that write invalidated — and each has a report of its own to make about
+    /// where the reader was put (`AutoActLandings`).
     AutoActLandings { id: landings; driver: driver }
     /// Arms the stash landing — called once the graph the row went out of has settled.
     function awaitStashLanding() {
         landings.awaitStash()
+    }
+    /// Arms the stopped-operation landing — called right after the press that puts the operation down.
+    function awaitOpExitLanding() {
+        landings.awaitOpExit()
     }
 
     SampleTimer {

@@ -95,4 +95,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true",
     },
+    // The far end of the same stop, and of every other exit-card row:
+    // where putting the operation down leaves the reader. The face it
+    // was standing on is empty over a clean tree once the operation is
+    // gone, so a reader left on it frames exactly like one who was taken
+    // to the commit — `wip=` and `op=` are the whole claim, and neither
+    // is in the picture.
+    Verb {
+        name: "rebase-edit-stop-out",
+        when: &[],
+        plain: "op_exit_landed wip=false op= follows=true onscreen=true",
+    },
+    // The same landing reached the ordinary way: a conflict resolved,
+    // staged, and continued. Its file rows do empty, so this is the half
+    // that was reachable before an operation could hold the face open —
+    // and it lands only if the emptying and the operation's going are
+    // read out of one status (`RepoPage.leaveWipWhenDone`).
+    Verb {
+        name: "op-exit-lands",
+        when: &[],
+        plain: "op_exit_landed wip=false op= follows=true onscreen=true",
+    },
 ];

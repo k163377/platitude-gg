@@ -1895,8 +1895,53 @@ Item {
     // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
     /// Whether the last write this window sent was a stash that landed — read where the working tree turns out to be
-    /// empty, which is the moment that says the entry took all of it (`worktreeModel.onChanged`).
+    /// empty, which is the moment that says the entry took all of it (`leaveWipWhenDone`).
     property bool stashLanded: false
+    /// What operation the last status named, so that its going away can be read as an edge rather than as a state.
+    property string seenOpText: ""
+    /// The WIP face has nothing left to hold the reader with. The working tree emptied: after a commit of our own that
+    /// is the end of the editor's job; when someone else committed these changes it happens with no warning, so a
+    /// message being written stays on screen with its text — it is the one thing here that cannot be read back off
+    /// disk. Or the operation went away, which is what takes the exit card off the face. Either way, land on the commit
+    /// that now holds the changes rather than on nothing.
+    ///
+    /// **A stash pressed here is not held by the message.** The press *is* the decision to empty the tree, so the box
+    /// is not a reason to stay: the words are still in it when the working tree comes back (the pane is hidden, not
+    /// unloaded) and the entry took them for its own name on the way out. Left to the message alone, the one press that
+    /// always has words in front of it — a stopped merge fills the box itself (`absorbOpMessage`) — is the one that
+    /// never lands, and the pane stands over a tree it no longer describes while the highlight the working-tree row
+    /// left behind is inherited by whatever slid into its place, which after this press is the entry it just made.
+    ///
+    /// **Every half is read off one status** (`WorkTreeModel`), never off the file list beside it, and each of the two
+    /// reasons is a way out that was missing. The list says `changed` only when its rows differ, so a stop that ends on
+    /// a clean tree — an `edit` stop put down by `--continue`, `--skip`, `--abort` or a terminal — moves no row and
+    /// would never ask this question at all. And the list is drained before the headline is (`hub::sink` pushes the nav
+    /// runs first), so a question asked from there reads an `opText` one status old and hears the operation that has
+    /// just gone as though it were still standing — which is every ordinary conflict landing, where the rows empty and
+    /// the operation ends in the same status.
+    ///
+    /// `edge` is what that status moved: the tree's own counts, or the operation. Standing alone, the condition would
+    /// walk a reader off the face on a poll that changed nothing under them — the message box emptied by hand is the
+    /// one that would do it.
+    function leaveWipWhenDone(edge) {
+        if (!edge || !page.wipShown || workTree.opText !== "")
+            return
+        const clean = workTree.stagedCount === 0 && workTree.unstagedCount === 0
+                   && workTree.untrackedCount === 0 && workTree.conflictCount === 0
+        if (!clean)
+            return
+        const ourStash = page.stashLanded
+        if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
+            return
+        page.stashLanded = false
+        page.wipShown = false
+        page.pendingHeadSelect = true
+        // The status this is read out of **is** the one that answers: the fallback below may read anything younger
+        // than what the arming saw, and what this arming saw is the status before this one.
+        page.pendingHeadSeenSeq = workTree.statusSeq - 1
+        // Only ours is a landing anybody asked for, so only ours takes the viewport along.
+        page.pendingHeadAsked = ourStash
+    }
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
             return
@@ -2125,6 +2170,10 @@ Item {
         function onChanged() {
             const moved = workTree.treeRevision !== page.seenTreeRev
             page.seenTreeRev = workTree.treeRevision
+            // The operation that was standing is not standing any more — the other edge the WIP face's exit turns on,
+            // and the only one a clean stop ever moves (`leaveWipWhenDone`).
+            const opGone = page.seenOpText !== "" && workTree.opText === ""
+            page.seenOpText = workTree.opText
             // The status that follows this window's own write: the file was read when the write answered.
             const ours = page.diffReadAt === repoTab.writeSeq
             page.diffReadAt = -1
@@ -2136,6 +2185,10 @@ Item {
             page.absorbOpMessage()
             // ...and the other half of a move's landing: this is what carries the branch HEAD ended up on.
             page.absorbMoveLanding()
+            // Whether the WIP face still has anything to stand for. **After `absorbOpMessage`**: the words a stopped
+            // merge put in the box are that operation's, and an abort takes them back out — asked before it, the box it
+            // has yet to empty reads as a message somebody is writing.
+            page.leaveWipWhenDone(moved || opGone)
             // The status can be the half a detached landing was waiting on (`tryPendingHeadSelect`'s fallback reads
             // this model, and only a status younger than the arming may answer). **Only the detached half**: with a
             // branch name standing, resolution stays with the refs/graph events — a status that arrives first would
@@ -2153,30 +2206,9 @@ Item {
             // pane, with the neighbour noted by every change before it (`followEmptySide`).
             page.noteDiffNeighbour()
             page.followEmptySide()
-            // The working tree emptied. After a commit of our own that is the end of the editor's job; when someone
-            // else committed these changes it happens with no warning, so a message being written stays on screen with
-            // its text — it is the one thing here that cannot be read back off disk. Otherwise land on the commit that
-            // now holds the changes rather than on nothing.
-            //
-            // **A stash pressed here is not held by that.** The press *is* the decision to empty the tree, so the box
-            // is not a reason to stay: the words are still in it when the working tree comes back (the pane is hidden,
-            // not unloaded) and the entry took them for its own name on the way out. Left to the message alone, the
-            // one press that always has words in front of it — a stopped merge fills the box itself
-            // (`absorbOpMessage`) — is the one that never lands, and the pane stands over a tree it no longer
-            // describes while the highlight the working-tree row left behind is inherited by whatever slid into its
-            // place, which after this press is the entry it just made.
-            const ourStash = page.stashLanded
-            // Not while an operation is standing: an `edit` stop leaves the tree clean, and the WIP face is where
-            // its exit card lives — walking off it here would take the card off screen with the stop still on.
-            if (worktreeModel.total === 0 && page.wipShown && workTree.opText === ""
-                    && (ourStash || (wipPane.subjectText === "" && wipPane.bodyText === ""))) {
-                page.stashLanded = false
-                page.wipShown = false
-                page.pendingHeadSelect = true
-                page.pendingHeadSeenSeq = workTree.statusSeq
-                // Only ours is a landing anybody asked for, so only ours takes the viewport along.
-                page.pendingHeadAsked = ourStash
-            }
+            // **The face's own exit is not here** — it is asked of the status headline, one snapshot at a time
+            // (`leaveWipWhenDone`), because half the ways out of it move no row in this list at all.
+
             // Smoke hook (PG_AUTO_WIP=1): open the WIP view once uncommitted changes are known.
             if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {
                 graphPane.setCurrentRow(0)
