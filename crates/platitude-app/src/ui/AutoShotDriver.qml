@@ -100,6 +100,8 @@ Item {
         interval: Math.max(AppBackend.autoWatchdogMs, 1)
         onTriggered: {
             console.warn("auto-act watchdog expired verb=" + AppBackend.autoAct)
+            console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
+                         + " parts=" + driver.shotParts + " ink=" + Ink.owed)
             Qt.quit()
         }
     }

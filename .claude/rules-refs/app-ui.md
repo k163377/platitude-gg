@@ -519,3 +519,4 @@
 - **`LineText.cutAt`("end" 既定 / "start")** — `"start"` は欄を自然幅まで広げて `x` を負にし(`field.x = line.width - field.width`)、印を左端へ置く。**`onLine()` は欄座標を返す**(`p.x - field.x`)— これを忘れると、頭を切っている欄で掃きの桁が切った分だけずれる。使うのは DIFF の帯だけで、理由は規約 §右のペインの字は掴める(葉を落とさない)
 - **`DiffPaneHeader` のパスは `LineText`**(`elide: ElideMiddle` の `Label` だった)。`cut=` を `DiffPane.headerCut` として出しており、**広いペインの写真では答えられない**ので `diff-band-sweep` は `--config-dir` に `details_width = 1100` を撒いて帯を必ず切らせる
 - **`AskBar` の見出しと 1 行説明も `LineText`**(尾切りのまま = 質問は頭から読む)。バーの手は `askWords`(ColumnLayout)を content にするので、フォームの箱・ピル・`✕` は歩かれない
+- **撮影待ちの `InkCanvas.owing` は実効 `visible` も条件にする** — 親が隠れている NavIcon / ChangeIcon が未描画のまま待ちへ数えられる経路を確認(2026-08-30、Linux perf none の撮影診断)。窓・寸法だけでは表示対象とは限らない。非表示化で待ちを外し、初回paint前の再表示で戻す。`tests/qml/tst_ink.qml` は旧実装で2ケース失敗、修正後はWindows/LinuxでPASS。

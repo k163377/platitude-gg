@@ -7,7 +7,7 @@ import platitude.ui
 // its item, and a canvas cannot draw before the turn after (`Ink`).
 //
 // A mark owes its ink only while it could be in a picture at all. A canvas with no window — a menu nobody has opened —
-// or with no size never paints, and one that will never be drawn must not be one a picture waits for.
+// or with no size never paints. Hidden marks (including a hidden parent) must not hold a picture either.
 //
 // **`onPaint` stays the caller's**: a signal handler written in the file that uses this one replaces the handler here,
 // so the drawing is hung off `painted()`, which Qt emits after the caller's own has run.
@@ -17,7 +17,7 @@ Canvas {
     /// Whether this mark has been put on screen once.
     property bool inked: false
     /// Whether a picture taken now would be missing it.
-    readonly property bool owing: !canvas.inked && canvas.width > 0 && canvas.height > 0
+    readonly property bool owing: !canvas.inked && canvas.visible && canvas.width > 0 && canvas.height > 0
                                   && canvas.Window.window !== null
     /// What the tally was last told, so each mark is counted once and let go once.
     property bool counted: false
