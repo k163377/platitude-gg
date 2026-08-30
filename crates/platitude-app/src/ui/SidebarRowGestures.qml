@@ -17,6 +17,11 @@ QtObject {
     /// A menu raised from one of the folded list's rows is standing over it. The page's to set — the menus are its.
     property bool menuOpen: false
 
+    /// The pane's write doors are held (`SidebarPane.doorsHeld`). Only the two gestures below answer for it — the ones
+    /// that move the history or open a box to move it with. A click, a fold and a scroll are how this list is read,
+    /// and they go on working (デザイン規約 §消す操作は先に画面から消す: 消すのは行だけで、周りは止めない).
+    property bool held: false
+
     /// The two clicks a row answers with one gesture — one for the sidebar, not one per row (`ReclickGesture`): a
     /// delegate is recycled the moment its row scrolls off, and both the memory and the wait have to outlive it.
     /// What the wait was aimed at is read at the click (`p`), because by the time it runs out the row may be showing
@@ -98,6 +103,11 @@ QtObject {
               : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
+        // **The one door into the box, so the hold is asked once here** — the second click's own wait comes through,
+        // and so do the menu's three ways in (`beginRename` / `beginBranchAt` / `beginTagAt`). Every one of them ends
+        // in a write, and a box that opened while the doors are held would take a name nothing can be done with.
+        if (gestures.held)
+            return
         // The box opens where the row is — folded, that is the section standing beside the rail, and the list is not
         // put back for it (デザイン規約 §左メニューを畳む: a click in a peek does not undo the fold, which would take the
         // diff it was made for down). The hover that raised that section no longer decides how long it stands: the box
@@ -189,6 +199,12 @@ QtObject {
     }
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {
+        // The two of these that write: a switch, and the box a tag's row opens for a new branch's name. **A worktree
+        // row is not one of them** — opening another working copy in a tab writes nothing in this one, and going
+        // somewhere else to read while a rewrite runs is exactly what the hold is meant to leave alone
+        // (デザイン規約 §左メニューの所作 の replay の段).
+        if (gestures.held && kind !== "worktree")
+            return
         const id = full !== "" ? full : name
         if (kind === "branch")
             gestures.host.refSwitchRequested("L", id)

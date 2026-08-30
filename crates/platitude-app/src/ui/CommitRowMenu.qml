@@ -22,6 +22,12 @@ Item {
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
 
+    /// Why every row here is out, in one line, while the window's write doors are held — a write that replays is
+    /// running behind the screen (`RepoPage.doorsHeldWhy`). Every card of this menu takes it: a reset, a fold, a drop
+    /// and a cherry-pick all move the very history the replay is partway through, and the graph's rows are as much a
+    /// door onto that as the left pane's are. The rows stay and grey rather than going (`AppMenu.heldReason`).
+    property string heldReason: ""
+
     /// The branch this row carries, if it carries one — what the card is about. Empty on a row nothing points at,
     /// which takes the card off the menu.
     property string rowBranchKind: ""
@@ -96,6 +102,7 @@ Item {
 
     AppMenu {
         id: stashMenu
+        heldReason: rowMenu.heldReason
         AppMenuItem {
             code: "apply"
             offered: rowMenu.stashCanWrite
@@ -122,6 +129,7 @@ Item {
 
     AppMenu {
         id: commitMenu
+        heldReason: rowMenu.heldReason
         // **The card holds what moves the reader** (デザイン規約 §メニュー の入れ子): a branch of one's own started here,
         // the commits replayed onto where they are, this one's place in the history rewritten, the current branch
         // brought over or taken back. What is *done to* a ref goes behind a mark at the foot.
@@ -215,6 +223,7 @@ Item {
         }
         AppMenu {
             id: resetMenu
+            heldReason: rowMenu.heldReason
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
             title: rowMenu.branch !== "" ? qsTr("%1 here").arg(rowMenu.branch) : qsTr("the branch here")
@@ -248,6 +257,7 @@ Item {
         // drift; a row that carries none is handed "" and the card goes with its row.
         RefBranchMenu {
             id: branchCommitMenu
+            heldReason: rowMenu.heldReason
             repoTab: rowMenu.repoTab
             workTree: rowMenu.workTree
             branchesModel: rowMenu.branchesModel
@@ -263,6 +273,7 @@ Item {
         // a branch is somewhere to carry on from, a tag is a mark left behind.
         AppMenu {
             id: tagCommitMenu
+            heldReason: rowMenu.heldReason
             titleKind: "tag"
             titleTint: Theme.refTag
             title: qsTr("TAG")

@@ -28,6 +28,17 @@ Menu {
     /// screen" — and the row is built by the menu above, so the two meet here.
     property bool applies: true
 
+    /// Why every row of this menu is out right now, in one line — and, by being non-empty, that they are. The rows read
+    /// it off the menu the way they read `holdIndent`, so a whole card is held with one line rather than each row
+    /// carrying a copy (`AppMenuItem.blockedWhy`).
+    ///
+    /// **The rows stay and grey rather than going** — the app-menu rule rather than the assembled-menu one
+    /// (デザイン規約 §メニュー の例外: 「今できない」行は消えず無効になる). What is out here is not the row's own answer about the ref
+    /// it names but the window's answer about right now, and a row that vanished for it would read as a menu that
+    /// never had it. **A card left standing is not held with them**: it is the rows inside it that say why, and a
+    /// greyed title row would offer nothing to open and no line to read (`AppMenuItem.menuHeldReason`).
+    property string heldReason: ""
+
     /// How many rows this menu is actually offering. A menu is assembled for the thing that was clicked and shows only
     /// what can be chosen on it (デザイン規約 §メニュー), so it can come out with nothing in it at all — the current branch has
     /// no row of its own, and a write in flight takes every row with it.

@@ -26,6 +26,9 @@ Rectangle {
     /// The section the sidebar has open beside the rail: its cell keeps the hover look while the pointer is down in the
     /// list.
     property string openKind: ""
+    /// The `+` this rail carries is held (`SidebarPane.doorsHeld`). **Only the `+`** — the cells go on opening their
+    /// sections to the pointer and putting the list back to a click, which is how the folded pane is read.
+    property bool addHeld: false
 
     /// The pointer came to rest on a cell. `top` is where that cell sits, so the section can open level with the icon
     /// it belongs to.
@@ -98,8 +101,9 @@ Rectangle {
     }
     function tapAt(kind) {
         // The one cell that answers a click with no rows behind it. Everywhere else an empty cell is unavailable —
-        // there is nothing to open and nothing to do — but this one has the operation that fills it (`addable`).
-        if (rail.addableAt(kind))
+        // there is nothing to open and nothing to do — but this one has the operation that fills it (`addable`), for
+        // as long as that operation is not one of the doors being held.
+        if (rail.addableAt(kind) && !rail.addHeld)
             rail.addRemoteRequested()
         else if (rail.countOf(kind) > 0)
             rail.peekToggled(kind, rail.topOf(kind))
@@ -170,18 +174,21 @@ Rectangle {
                 /// Except this one. An empty REMOTES cell has an operation after all — writing the first remote down —
                 /// so it answers the pointer and the click, and wears the `+` that says which (`rail.addableAt`).
                 readonly property bool addable: rail.addableAt(cell.modelData.kind)
+                /// …and whether that operation can be reached right now. The mark stays on the cell either way — it is
+                /// what the cell is for — and goes grey with the rest of it while the doors are held (規約 §無効).
+                readonly property bool addLive: cell.addable && !rail.addHeld
 
                 width: Theme.railWidth
                 height: rail.cellHeight
                 // The open section keeps the hover wash while the pointer is away in its list: what is on screen has to
                 // say which cell put it there. An empty one washes for nobody — unavailable does not answer the pointer
                 // (規約 §無効) — unless it is the one with something to press.
-                color: (cellHover.hovered && (!cell.empty || cell.addable)) || cell.open
+                color: (cellHover.hovered && (!cell.empty || cell.addLive)) || cell.open
                        ? Theme.bgHover : "transparent"
                 // The `+` is the cell's only name while it is standing in for the whole band, and a mark with no word
                 // beside it has nowhere else to carry one (規約 §hover のツールチップ). The wording is the band's own, so
                 // the two doors into the dialog do not name it differently (デザイン規約 §リモートを書き留める).
-                ToolTip.visible: cell.addable && cellHover.hovered
+                ToolTip.visible: cell.addLive && cellHover.hovered
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: Words.addRemote
 
@@ -257,7 +264,7 @@ Rectangle {
                         NavIcon {
                             visible: cell.addable
                             kind: "plus"
-                            tint: cell.modelData.tint
+                            tint: cell.addLive ? cell.modelData.tint : Theme.textMuted
                             width: Theme.iconSm
                             height: Theme.iconSm
                             // The eye's seat exactly (規約 §左メニューを畳む names one corner for both) — the two are

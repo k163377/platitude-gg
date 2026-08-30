@@ -21,6 +21,13 @@ QtObject {
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
     readonly property string addRemote: qsTr("Add remote…")
 
+    /// Why a menu row is out while it cannot be chosen (`AppMenuItem.blockedWhy` — デザイン規約 §無効: the line is the
+    /// whole reason the row stays). One state and one line: git is out and the answer is to wait — the line the
+    /// delete table has always worn, and the whole of what the held doors say while a rewrite replays behind the
+    /// screen. Said here because the ref menu, the branch card, the tag card and the remote menu all have to say it
+    /// the same way.
+    readonly property string otherCommandRunning: qsTr("Another git command is still running")
+
     /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
     readonly property string badgeConflicts: qsTr("CONFLICTS")

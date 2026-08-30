@@ -54,7 +54,17 @@ MenuItem {
     /// fixed table that says nothing about why it is out is worse than no row at all (デザイン規約 §メニュー の削除の表). Presses and
     /// holds do nothing.
     property string blockedReason: ""
-    readonly property bool blocked: menuItem.blockedReason !== ""
+    /// The same, said once for the whole menu (`AppMenu.heldReason`) — read off the menu the way `holdIndent` is. **A
+    /// row that names a card is left out of it**: what is held is what the card holds, and the rows in there carry the
+    /// line themselves (the card sets its own `heldReason`).
+    readonly property string menuHeldReason:
+        menuItem.subMenu ? ""
+        : menuItem.menu !== null && menuItem.menu.heldReason !== undefined ? menuItem.menu.heldReason : ""
+    /// Why this row is out, whichever of the two said so. **The row's own answer wins**: that one is about the ref it
+    /// names, and the menu's is about right now — the more particular line is the one worth reading.
+    readonly property string blockedWhy:
+        menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
+    readonly property bool blocked: menuItem.blockedWhy !== ""
     /// Automation: show the tooltip with no pointer behind it. The same property the real hover drives, so a run that
     /// never reached the row photographs a row without one (verify-ui §hover の絵の撮り方).
     property bool tipForced: false
@@ -136,7 +146,7 @@ MenuItem {
     ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
                      && (menuItem.blocked || itemLabel.truncated)
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: menuItem.blocked ? menuItem.blockedReason
+    ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
                 : menuItem.code !== "" ? menuItem.code + " " + menuItem.text : menuItem.text
 
     // The mark, inside the padding the whole menu carries for it rather than in the row's layout: it stands against the
@@ -168,7 +178,9 @@ MenuItem {
         tint: Theme.warning
         width: Theme.iconSm
         height: Theme.iconSm
-        visible: menuItem.asks && menuItem.holdMs <= 0
+        // Not on a row that cannot be pressed at all: the mark says "read this before you press", and there is no
+        // press to read it before — what the row has to say then is the line under the pointer (`blockedWhy`).
+        visible: menuItem.asks && menuItem.holdMs <= 0 && !menuItem.blocked
     }
     // The kind's own mark, standing where the row begins. Out in the card's padding rather than in the row's layout
     // for the same reason the ring is: the word behind it has to sit against the mark, not against the mark plus the

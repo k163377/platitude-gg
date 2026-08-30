@@ -31,6 +31,8 @@ ColumnLayout {
     required property bool expTags
     /// The current branch's sticky stand-in is being pointed at — written on the pane (its smoke hooks), read here.
     property bool headPinPointed: false
+    /// The `+` on the REMOTES band is held (`SidebarPane.doorsHeld`) — the one control in this column that writes.
+    property bool addHeld: false
 
     /// A section's header band took a click; the pane flips the flag.
     signal sectionToggled(string kind)
@@ -146,6 +148,7 @@ ColumnLayout {
         // the only one whose control outlives the section going
         // unavailable (デザイン規約 §左メニューの所作).
         showAddRemote: true
+        addHeld: sections.addHeld
         onAddRemoteRequested: sections.addRemoteRequested()
     }
     NavList {

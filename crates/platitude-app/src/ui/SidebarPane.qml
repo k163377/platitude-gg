@@ -24,6 +24,15 @@ Rectangle {
     /// Every door on this pane is held down, and dimmed the way disabled
     /// things are; reading it stays free (規約 §無効).
     ///
+    /// **This is the plan's freeze, and it is meant to be read as one.**
+    /// While a rebase is being composed the only way into a write is the
+    /// run button, and the pane is out for as long as the mode lasts
+    /// rather than for as long as a command takes — so it says so with
+    /// the disabled step over the whole of itself (デザイン規約 §フル
+    /// interactive rebase). A write that merely replays behind the screen
+    /// is the other thing entirely, and holds the doors one at a time
+    /// (`doorsHeld`).
+    ///
     /// **The `>_` band at the foot is not held with them.** It is the one
     /// place that answers "what is git doing", which is exactly the
     /// question a reader has while a replay they cannot interrupt is
@@ -32,6 +41,25 @@ Rectangle {
     /// the pane whole would also have to be undone here: a band that is
     /// pressable while painted like a disabled one is a lie about itself.
     property bool frozen: false
+    /// The doors alone are held: a write that replays a range a commit at
+    /// a time is running behind the screen, and what the reader has to do
+    /// is wait for it (`RepoPage.doorsHeldWhy`). Held are the ways a click
+    /// here moves the history out from under it — a switch (the row's
+    /// double-click), the name box a second click or a menu row opens,
+    /// the `+` that writes a remote down, and every write row of the menus
+    /// the rows raise.
+    ///
+    /// **Nothing dims for this one, and no row leaves.** The lock comes
+    /// off the moment git answers, so the pane has to be the same pane on
+    /// both sides of it; and everything it is read with — choosing a row
+    /// and jumping to it, scrolling, the filter, folding a section, hover
+    /// — goes on working, which is what makes `textMuted` over the rows a
+    /// lie (規約 §無効). A delete takes its row away without stopping the
+    /// pane around it for exactly this reason (デザイン規約 §消す操作は先に
+    /// 画面から消す). The two things that really cannot be pressed say so
+    /// themselves: the `+` greys, and a menu row greys and gives its line
+    /// on hover.
+    property bool doorsHeld: false
     /// The page whose command log the row at the foot of this pane opens
     /// (`CommandsToggle`). Null while no tab is open — and the whole row
     /// goes once the log is up, since from then on it is the log's own
@@ -69,6 +97,9 @@ Rectangle {
     SidebarRowGestures {
         id: rowGestures
         host: sidebar
+        // Only the doors' hold reaches here: the plan's freeze takes the whole list out of the input path, so there
+        // is no gesture left for these to refuse.
+        held: sidebar.doorsHeld
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
     }
@@ -106,6 +137,14 @@ Rectangle {
     }
     function activateRow(kind, name, full, oidHex) {
         rowGestures.activateRow(kind, name, full, oidHex)
+    }
+    /// The `+` at the end of the REMOTES band, wherever it is standing — the open list's, the folded rail's cell, the
+    /// section the rail opens beside itself. **One door, held in one place**: the bands grey their own `+` so the hand
+    /// reads the refusal before it presses (規約 §無効), and this is what makes the refusal true whatever else reaches
+    /// the signal — a smoke hook, or a fourth band added later.
+    function askAddRemote() {
+        if (!sidebar.doorsHeld)
+            sidebar.addRemoteRequested()
     }
 
     /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.
@@ -331,6 +370,7 @@ Rectangle {
         visible: !sidebar.collapsed
         enabled: !sidebar.frozen
         opacity: sidebar.frozen ? Metrics.dimFade : 1
+        addHeld: sidebar.doorsHeld
         repoTab: sidebar.repoTab
         workTree: sidebar.workTree
         branchesModel: sidebar.branchesModel
@@ -350,7 +390,7 @@ Rectangle {
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
         onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
-        onAddRemoteRequested: sidebar.addRemoteRequested()
+        onAddRemoteRequested: sidebar.askAddRemote()
     }
 
     // ---- folded ------------------------------------------------------
@@ -361,6 +401,7 @@ Rectangle {
         visible: sidebar.collapsed
         enabled: !sidebar.frozen
         opacity: sidebar.frozen ? Metrics.dimFade : 1
+        addHeld: sidebar.doorsHeld
         branchesModel: sidebar.branchesModel
         remotesModel: sidebar.remotesModel
         worktreesModel: sidebar.worktreesModel
@@ -372,7 +413,7 @@ Rectangle {
         onPeekLeft: kind => sidebar.leavePeek(kind)
         onPeekToggled: (kind, top) => sidebar.togglePeek(kind, top)
         onUnfoldRequested: sidebar.foldRequested(false)
-        onAddRemoteRequested: sidebar.addRemoteRequested()
+        onAddRemoteRequested: sidebar.askAddRemote()
     }
 
     // ---- the folded list's one open section --------------------------
@@ -403,6 +444,7 @@ Rectangle {
     SectionPeekPopup {
         id: peek
         parent: sidebar
+        addHeld: sidebar.doorsHeld
         repoTab: sidebar.repoTab
         workTree: sidebar.workTree
         rail: rail
@@ -417,6 +459,6 @@ Rectangle {
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
         onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
-        onAddRemoteRequested: sidebar.addRemoteRequested()
+        onAddRemoteRequested: sidebar.askAddRemote()
     }
 }

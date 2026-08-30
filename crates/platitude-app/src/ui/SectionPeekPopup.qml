@@ -27,6 +27,8 @@ AppCard {
     /// one of its rows is standing over it, and taking the row away from
     /// under an open menu reads as the row having gone.
     required property bool pinned
+    /// The `+` on the band above these rows is held (`SidebarPane.doorsHeld`) — the same band, so the same answer.
+    property bool addHeld: false
 
     /// Which section is open, and where the cell that opened it begins.
     property string kind: ""
@@ -205,6 +207,7 @@ AppCard {
             tagsShown: peek.repoTab.tagsShown
             onTagsToggled: shown => peek.repoTab.setTagsShown(shown)
             showAddRemote: peek.kind === "remote"
+            addHeld: peek.addHeld
             onAddRemoteRequested: peek.addRemoteRequested()
         }
         NavList {

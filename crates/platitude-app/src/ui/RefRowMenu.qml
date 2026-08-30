@@ -25,6 +25,18 @@ Item {
     /// Where a remote last had a tag that is here as well (`remoteTagDrift`) — the readings live in this section alone.
     required property NavSectionModel tagsModel
 
+    /// Why every row here is out, in one line, while the window's write doors are held — a write that replays is
+    /// running behind the screen (`RepoPage.doorsHeldWhy`). Handed down rather than worked out here: the left pane
+    /// holds the same doors off the same answer, and two readings of "is a rewrite under way" would be two answers.
+    /// **The rows grey rather than go** — see `AppMenu.heldReason`.
+    property string heldReason: ""
+    /// What the offers are asked with while that is standing: **nothing running**. The hold already answers for every
+    /// row here, and the busy count would answer a second time by taking rows away — leaving a menu that is a
+    /// different shape on each side of a lock the reader is waiting to see come off. A row that is only ever *out* is
+    /// read as one the menu does not have; a row that greys and says why is read as the wait it is
+    /// (デザイン規約 §メニュー の例外: 「今できない」行は消えず無効になる).
+    readonly property int askBusy: refRowMenu.heldReason !== "" ? 0 : refRowMenu.repoTab.busyCount
+
     /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector rather than
     /// the message the row shows.
     property string kind: ""
@@ -141,7 +153,7 @@ Item {
         // answers stand while the menu does (see the note above).
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
-            refRowMenu.repoTab.state === "open", refRowMenu.repoTab.busyCount,
+            refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
             held, "", refRowMenu.pushRemote, sides).split(" ")
@@ -165,6 +177,7 @@ Item {
 
     AppMenu {
         id: refMenu
+        heldReason: refRowMenu.heldReason
         // A refused delete's offer is not cleared here: the card puts it back as it opens (`RefBranchMenu.offerOn`),
         // and nothing reads it while the card is down.
         onClosed: refRowMenu.dismissed()
@@ -187,10 +200,14 @@ Item {
             id: refSwitchItem
             code: "switch"
             offered: refRowMenu.canSwitch
-            // **Never blocked**, however much stands in the move's way: a branch another copy holds and a tree with
-            // unmerged files both press through to a question instead, and the mark is what says so before the press
+            // **Never blocked by what stands in the move's way**: a branch another copy holds and a tree with unmerged
+            // files both press through to a question instead, and the mark is what says so before the press
             // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer, not this one's — a row that cannot be
             // pressed says why only on hover, and the reader who reached for it is the one who needs to read it.
+            //
+            // **The doors being held is the other thing**, and this row is held with the rest of them (`heldReason`):
+            // there is no question to raise there, the answer being to wait — and a move let go into the middle of a
+            // rewrite is the exit nobody meant (§フル interactive rebase).
             blockedReason: ""
             asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
@@ -235,6 +252,7 @@ Item {
         // card (RefBranchMenu).
         RefBranchMenu {
             id: branchMenu
+            heldReason: refRowMenu.heldReason
             repoTab: refRowMenu.repoTab
             workTree: refRowMenu.workTree
             branchesModel: refRowMenu.branchesModel
@@ -248,6 +266,7 @@ Item {
         // Everything a tag's name answers for, behind its own mark — its own file for length alone (RefTagMenu).
         RefTagMenu {
             id: tagMenu
+            heldReason: refRowMenu.heldReason
             repoTab: refRowMenu.repoTab
             kind: refRowMenu.kind
             refId: refRowMenu.refId

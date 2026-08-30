@@ -49,9 +49,10 @@ Item {
     ///
     /// **The fold comes back when the plan does, not when the replay ends.** From the run onwards the list has nothing
     /// left to say about a screen that is no longer standing over it, and the reader is back on the graph watching the
-    /// rewrite land — the hold on the doors carries on without it (`sidebarLocked`).
+    /// rewrite land — the hold on the doors carries on without it (`doorsHeldWhy`).
     ///
-    /// Unlike the diff's, there is no way back by hand: the rail's own fold control is one of the doors held down.
+    /// Unlike the diff's, there is no way back by hand while the plan stands: the rail's own fold control is inside
+    /// the pane the plan freezes (`sidebarFrozen`).
     property bool foldedByPlan: false
     function foldForPlan(open) {
         if (open) {
@@ -73,13 +74,30 @@ Item {
     /// here and let the pane back to life with the rebase still to come. Let go of the moment a replay is under way,
     /// which is exactly where `replayRunning` takes over.
     property bool planRunOut: false
-    readonly property bool replayRunning: repoTab.replaying
+    readonly property bool replayRunning: repoTab.replaying || page.autoReplayHeld
     onReplayRunningChanged: if (page.replayRunning) page.planRunOut = false
-    /// Every door on the left pane is held down: while the plan is composed, while its run is out, and under any write
-    /// that replays a range a commit at a time (`RepoTab.replaying` — the meaning core puts on the op name). A rebase
-    /// is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is the
-    /// exit nobody meant. The `>_` band is not held with them (`SidebarPane.frozen`).
-    readonly property bool sidebarLocked: planModel.active || page.planRunOut || page.replayRunning
+    /// Automation: a replay this run really started, kept standing until its picture has been taken
+    /// (`AutoActNavVerbs`, PG_AUTO_ACT=doors-held). The rise is caught at the signal rather than sampled — a demo
+    /// repository's rebase is over inside one beat of the sampler — and what it holds up is the state the picture is
+    /// of, not a stand-in for it (app-ui.md §UI 自動化の因果性: 一瞬だけ立つ状態は signal で観測して latch する).
+    property bool autoReplayHeld: false
+    /// **The two ways the left pane is out are two different things, and they are not shown the same way.**
+    ///
+    /// This one is the plan's: while a rebase is being composed the only way into a write is the run button, so the
+    /// whole pane goes to the disabled step and stays there — the restriction belongs to the mode rather than to a
+    /// command, and lasts as long as the mode does, so it is said plainly (デザイン規約 §フル interactive rebase). Only
+    /// the `>_` band is left out of it (`SidebarPane.frozen`).
+    readonly property bool sidebarFrozen: planModel.active
+    /// The other one, which begins where the plan ends: a write that replays a range a commit at a time is running
+    /// (`RepoTab.replaying` — the meaning core puts on the op name), or its run is out and has not started yet. A
+    /// rebase is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is
+    /// the exit nobody meant — but the answer here is "wait for it", not "this screen is another mode".
+    ///
+    /// **So nothing freezes and nothing leaves**: the doors are held one at a time and each says this line
+    /// (`SidebarPane.doorsHeld` / `AppMenu.heldReason`), and the lock comes off the moment git answers. One line for
+    /// both halves of that, so the pane and the menus cannot disagree about whether a rewrite is under way.
+    readonly property string doorsHeldWhy:
+        page.replayRunning || page.planRunOut ? Words.otherCommandRunning : ""
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes with it — nothing is asked,
     /// what it costs is the typing (デザイン規約 §左メニューの所作) — and so does anything over the graph that is standing on an
@@ -392,7 +410,13 @@ Item {
     function switchToRef(kind, name, leaving) {
         // `busyCount` alone is not the gate: it rises when the queue starts the write, not when the press is made, and
         // it is back down while the screen is still catching up with what the write did (`moveLanding`).
-        if (repoTab.state !== "open" || repoTab.busyCount > 0 || page.moveLanding !== "")
+        //
+        // **The held doors are the third of them**, and the one that covers the beat between a plan's run being handed
+        // over and the queue starting it: the count is still zero there, and a move let go into that gap lands ahead
+        // of the rewrite it was made about. This road is where the graph's own doors end up — a row's double-click, a
+        // chip's, a row of the list a chip had to stack — so holding it here holds all three (`doorsHeldWhy`).
+        if (repoTab.state !== "open" || repoTab.busyCount > 0 || page.moveLanding !== ""
+                || page.doorsHeldWhy !== "")
             return false
         // The models hold the lookups — the local branch a remote row lands on is the one another copy can be holding
         // — and which move they add up to is core's rule (offers::switch_action): a tag or the detached marker moves
@@ -657,6 +681,11 @@ Item {
     // ---- context menu on a sidebar row ------------------------------
     RefRowMenu {
         id: refRowMenu
+        // Every row of this menu moves something — a switch, an integrate, a name taken away — so the whole card is
+        // held while the doors are, wherever it was raised from. **The chip on a graph row is the same door**: one
+        // menu answers for both entrances, and a `switch` that stayed live over there would be the very move the left
+        // pane just closed (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        heldReason: page.doorsHeldWhy
         repoTab: repoTab
         workTree: workTree
         branchesModel: branchesModel
@@ -677,6 +706,7 @@ Item {
     // configuration, and the ref menu is about refs (デザイン規約 §左メニューの所作).
     RemoteRowMenu {
         id: remoteRowMenu
+        heldReason: page.doorsHeldWhy
         repoTab: repoTab
         onUrlRequested: name => publishFlow.startEditRemote(name)
         onDismissed: rowHost.settleRefList()
@@ -1017,6 +1047,9 @@ Item {
 
     CommitRowMenu {
         id: commitRowMenu
+        // The graph's rows are doors onto the same history the left pane's are, so they are held on the same answer:
+        // a reset or a drop let go into the middle of a replay is the same accident a switch would be.
+        heldReason: page.doorsHeldWhy
         repoTab: repoTab
         workTree: workTree
         branchesModel: branchesModel
@@ -1115,7 +1148,9 @@ Item {
             page.activateRecord(record)
             return
         }
-        if (repoTab.busyCount === 0)
+        // The other half of the same door, and held on the same answer as the switch above it (`switchToRef`): the box
+        // is a branch about to be written, and the run of a plan is out before the count has anything to say.
+        if (repoTab.busyCount === 0 && page.doorsHeldWhy === "")
             graphPane.startNaming(oidHex)
     }
 
@@ -2387,10 +2422,12 @@ Item {
 
                 SidebarPane {
                     id: sidebarPane
-                    // Every door here is a way to move the history under a rewrite that is being composed or is
-                    // already running — a switch, a delete, a double-click. The pane holds them down itself, so the
-                    // `>_` band at its foot stays live through it (`SidebarPane.frozen`).
-                    frozen: page.sidebarLocked
+                    // The plan's freeze takes the pane whole and is meant to be read as the mode's own restriction;
+                    // a replay running behind the screen holds only the doors — a switch, a delete, a name box, the
+                    // `+` — and everything the pane is *read* with goes on working through it. Two states, two
+                    // answers (`SidebarPane.frozen` / `doorsHeld`).
+                    frozen: page.sidebarFrozen
+                    doorsHeld: page.doorsHeldWhy !== ""
                     // Over the pane beside it while a name box is standing: the box reaches past this pane's edge when
                     // what is in it does not fit, and the graph is laid out after this one (`NavItemDelegate`). Only
                     // then — a pane that sat over its neighbour the rest of the time would draw its own edge over the

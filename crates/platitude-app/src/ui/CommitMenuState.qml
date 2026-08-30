@@ -39,7 +39,11 @@ QtObject {
         menuState.menuOid = oidHex
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
         const offers = GitFacts.commitMenuOffers(
-            menuState.repoTab.state === "open", menuState.repoTab.busyCount,
+            // Nothing running, while the doors are held: the hold already answers for every row, and a row the busy
+            // count took away would leave the reader watching the menu change shape around a lock they are waiting to
+            // see lifted (`RefRowMenu.askBusy` — the same rule at the other entrance).
+            menuState.repoTab.state === "open",
+            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
             menuState.workTree.branch, menuState.workTree.detached, menuState.workTree.opText,
             oidHex, menuState.workTree.headOid, menuState.menuStashRef).split(" ")
         if (menuState.menuStashRef !== "") {

@@ -23,6 +23,11 @@ Rectangle {
     /// no remote is exactly the one where this is worth pressing, and the section it stands on cannot be opened to
     /// find another way in (デザイン規約 §左メニューの所作).
     property bool showAddRemote: false
+    /// …and held all the same while the pane's write doors are (`SidebarPane.doorsHeld`). **The one thing on this band
+    /// that goes grey for it**: the fold, the eye and the count are how the section is read, and the `+` is the only
+    /// place here where a press writes. Greyed rather than taken away — the seat is the section's, and a mark that
+    /// went would read as a band that never carried one (規約 §無効).
+    property bool addHeld: false
     signal toggled()
     signal tagsToggled(bool shown)
     signal addRemoteRequested()
@@ -146,6 +151,7 @@ Rectangle {
         // it cannot be pressed, and at zero remotes it is the only thing here that can (規約 §無効).
         HoverToolButton {
             visible: header.showAddRemote
+            enabled: !header.addHeld
             // The seat stays the one every icon button in the window sits in; the mark inside it is one step down, so
             // it is drawn on the same grid as the mark at the head of this band (`iconMd` — デザイン規約 §寸法). A `Control`
             // stretches its `contentItem` over whatever the padding leaves, so the step is written as that padding and
@@ -159,7 +165,10 @@ Rectangle {
             implicitHeight: Theme.iconLg
             contentItem: NavIcon {
                 kind: "plus"
-                tint: header.iconTint
+                // Its own colour is written here rather than left to the palette: a `contentItem` of one's own does
+                // not go through it (規約 §無効), and this is the one thing on the band whose colour says whether it
+                // can be pressed rather than what section it belongs to.
+                tint: header.addHeld ? Theme.textMuted : header.iconTint
             }
             // The dialog it opens is named by the `…`, the way the chooser's own row names it (デザイン規約 §長押し の語彙).
             tip: Words.addRemote

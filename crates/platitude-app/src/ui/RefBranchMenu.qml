@@ -89,7 +89,10 @@ AppMenu {
         // refusals it encodes — the current branch keeps its delete table and says why (offers::ref_menu).
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
-            branchCard.repoTab.state === "open", branchCard.repoTab.busyCount,
+            // Nothing running, while the doors are held: the hold answers for every row of this card, and a row the
+            // busy count took away would be a row the reader never sees come back (`RefRowMenu.askBusy`).
+            branchCard.repoTab.state === "open",
+            branchCard.heldReason !== "" ? 0 : branchCard.repoTab.busyCount,
             branchCard.workTree.branch, branchCard.workTree.detached,
             branchCard.workTree.opText, branchCard.workTree.conflictCount,
             state.heldByWorktree, state.remoteCounterpart,
@@ -132,8 +135,7 @@ AppMenu {
     /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
-    readonly property string deleteBlockedWhileBusy:
-        qsTr("Another git command is still running")
+    readonly property string deleteBlockedWhileBusy: Words.otherCommandRunning
     // Why git keeps a branch to one working copy is the causal half, and the tooltip rule drops it (デザイン規約 §hover の
     // ツールチップ) — what is left is the state that blocks the row and the one thing the menu cannot show: where. The
     // whole path is what git answers with and is the only unambiguous form, but nobody reads a tooltip that wide.

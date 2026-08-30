@@ -12,6 +12,11 @@ Item {
 
     required property var repoTab
 
+    /// Why both rows are out while the window's write doors are held (`RepoPage.doorsHeldWhy`). A remote is
+    /// configuration rather than history, but writing it down mid-rewrite is still a write, and the reader who reached
+    /// for the row is the one who needs the line (`AppMenu.heldReason`).
+    property string heldReason: ""
+
     /// The remote the menu stands on.
     property string remote: ""
 
@@ -36,6 +41,7 @@ Item {
 
     AppMenu {
         id: menu
+        heldReason: remoteRowMenu.heldReason
         onClosed: remoteRowMenu.dismissed()
 
         AppMenuItem {
@@ -54,8 +60,7 @@ Item {
             id: markItem
             text: qsTr("Mark as default remote (origin)")
             offered: remoteRowMenu.remote !== "" && remoteRowMenu.remote !== remoteRowMenu.repoTab.pushDefault
-            blockedReason: remoteRowMenu.repoTab.busyCount === 0
-                           ? "" : qsTr("Wait for the command that is running")
+            blockedReason: remoteRowMenu.repoTab.busyCount === 0 ? "" : Words.otherCommandRunning
             onTriggered: remoteRowMenu.repoTab.setPushDefault(remoteRowMenu.remote)
         }
     }
