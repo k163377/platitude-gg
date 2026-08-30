@@ -13,88 +13,105 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::reachable;
 
-/// Three commits on `main` and nothing else.
-fn scenario() -> TestRepo {
+/// Three commits on `main` and nothing else, plus `main`'s tip — the tests
+/// below move every ref but `main`, so the tip is the same commit at every
+/// ask.
+fn scenario() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "first");
     repo.commit_file("a.txt", "2\n", "second");
-    repo.commit_file("a.txt", "3\n", "third");
-    repo
+    let tip = repo.commit_file_id("a.txt", "3\n", "third");
+    (repo, tip)
 }
 
-async fn reached(repo: &mut TestRepo) -> bool {
-    let tip = repo.git(&["rev-parse", "HEAD"]);
+async fn reached(repo: &TestRepo, tip: &str) -> bool {
     let (executor, cancel) = env();
-    reachable::reached_without_branch(&executor, &repo.path, &tip, "main", &cancel)
+    reachable::reached_without_branch(&executor, &repo.path, tip, "main", &cancel)
         .await
         .expect("ask what holds the tip")
 }
 
-/// Doubles as the no-stash case: a repository that never stashed has no
-/// `refs/stash`, and the walk has to survive naming it anyway (that is
-/// why it is spelled `--glob=refs/stash*` — core.md).
+/// One history, the walk asked again after each move of a second branch.
+/// The opening ask doubles as the no-stash case: a repository that never
+/// stashed has no `refs/stash`, and the walk has to survive naming it
+/// anyway (that is why it is spelled `--glob=refs/stash*` — core.md).
 #[tokio::test]
-async fn a_branch_alone_on_its_tip_holds_it_alone() {
-    let mut repo = scenario();
-    assert!(!reached(&mut repo).await);
-}
+async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
+    let (mut repo, tip) = scenario();
+    assert!(
+        !reached(&repo, &tip).await,
+        "a branch alone on its tip holds it alone"
+    );
 
-#[tokio::test]
-async fn another_branch_on_the_tip_holds_it() {
-    let mut repo = scenario();
     repo.git(&["branch", "keep"]);
-    assert!(reached(&mut repo).await);
-}
+    assert!(
+        reached(&repo, &tip).await,
+        "another branch on the tip holds it"
+    );
 
-#[tokio::test]
-async fn a_branch_further_along_holds_the_tip_too() {
-    let mut repo = scenario();
-    repo.git(&["branch", "keep"]);
     repo.git(&["switch", "keep"]);
     repo.commit_file("b.txt", "1\n", "beyond");
     repo.git(&["switch", "main"]);
-    assert!(reached(&mut repo).await);
-}
+    assert!(
+        reached(&repo, &tip).await,
+        "a branch further along holds the tip too"
+    );
 
-/// The case that decides the whole rule: a branch part-way up the range
-/// saves what is below it and nothing above, so the tip is still lost.
-#[tokio::test]
-async fn a_branch_inside_the_range_does_not_hold_the_tip() {
-    let mut repo = scenario();
+    // A tag is not in the walk at all (they are the bulk of the refs on a
+    // large repository and the bulk of the cost). One sitting on the tip
+    // is caught by the refs listing instead — see
+    // `reachable::a_ref_sits_on_head` — and one strictly ahead of the tip
+    // is missed, which shows the mark on a row that could have been a
+    // click.
+    repo.git(&["tag", "v2", "keep"]);
+    repo.git(&["branch", "-D", "keep"]);
+    assert!(
+        !reached(&repo, &tip).await,
+        "a tag beyond the tip is not what this walk looks at"
+    );
+    repo.git(&["tag", "-d", "v2"]);
+
+    // The case that decides the whole rule: a branch part-way up the
+    // range saves what is below it and nothing above, so the tip is
+    // still lost.
     repo.git(&["branch", "keep", "HEAD~1"]);
-    assert!(!reached(&mut repo).await);
+    assert!(
+        !reached(&repo, &tip).await,
+        "a branch inside the range does not hold the tip"
+    );
 }
 
+/// The other two kinds of ref in the walk, on the same one history.
 #[tokio::test]
-async fn a_remote_tracking_ref_on_the_tip_holds_it() {
-    let mut repo = scenario();
-    let tip = repo.git(&["rev-parse", "HEAD"]);
-    repo.git(&["update-ref", "refs/remotes/origin/main", &tip]);
-    assert!(reached(&mut repo).await);
-}
-
-#[tokio::test]
-async fn a_remote_tracking_ref_left_behind_holds_nothing() {
-    let mut repo = scenario();
+async fn remote_tracking_refs_and_the_stash_hold_the_tip_like_branches() {
+    let (mut repo, tip) = scenario();
     let behind = repo.git(&["rev-parse", "HEAD~1"]);
-    repo.git(&["update-ref", "refs/remotes/origin/main", &behind]);
-    assert!(!reached(&mut repo).await);
-}
 
-#[tokio::test]
-async fn a_stash_made_on_the_tip_holds_it() {
-    let mut repo = scenario();
+    repo.git(&["update-ref", "refs/remotes/origin/main", &tip]);
+    assert!(
+        reached(&repo, &tip).await,
+        "a remote-tracking ref on the tip holds it"
+    );
+
+    repo.git(&["update-ref", "refs/remotes/origin/main", &behind]);
+    assert!(
+        !reached(&repo, &tip).await,
+        "a remote-tracking ref left behind holds nothing"
+    );
+
     repo.write_file("a.txt", "dirty\n");
     repo.git(&["stash"]);
-    assert!(reached(&mut repo).await);
+    assert!(
+        reached(&repo, &tip).await,
+        "a stash made on the tip holds it"
+    );
 }
 
 /// The exclusion is what makes the question mean anything: without it the
 /// branch negates its own tip and every repository reads as safe.
 #[tokio::test]
 async fn the_branch_being_asked_about_is_left_out_of_the_walk() {
-    let mut repo = scenario();
-    let tip = repo.git(&["rev-parse", "HEAD"]);
+    let (repo, tip) = scenario();
     let (executor, cancel) = env();
 
     let excluded = reachable::reached_without_branch(&executor, &repo.path, &tip, "main", &cancel)
@@ -106,21 +123,4 @@ async fn the_branch_being_asked_about_is_left_out_of_the_walk() {
 
     assert!(!excluded, "main must not hold its own tip");
     assert!(kept, "with nothing excluded, main holds it");
-}
-
-/// A tag is not in the walk at all (they are the bulk of the refs on a
-/// large repository and the bulk of the cost). One sitting on the tip is
-/// caught by the refs listing instead — see `reachable::a_ref_sits_on_head`
-/// — and one strictly ahead of the tip is missed, which shows the mark on
-/// a row that could have been a click.
-#[tokio::test]
-async fn a_tag_beyond_the_tip_is_not_what_this_walk_looks_at() {
-    let mut repo = scenario();
-    repo.git(&["branch", "keep"]);
-    repo.git(&["switch", "keep"]);
-    repo.commit_file("b.txt", "1\n", "beyond");
-    repo.git(&["tag", "v2"]);
-    repo.git(&["switch", "main"]);
-    repo.git(&["branch", "-D", "keep"]);
-    assert!(!reached(&mut repo).await);
 }

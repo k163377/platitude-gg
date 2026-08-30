@@ -30,22 +30,42 @@ fn write_bytes(repo: &TestRepo, rel: &str, bytes: &[u8]) {
     std::fs::write(repo.path.join(rel), bytes).unwrap();
 }
 
+/// One repository, four targets where one side simply is not there: an
+/// untracked file, a staged addition (no HEAD side), a staged deletion
+/// (no index side), and a root commit (no parent).
+///
+/// The staged addition also stands for the unborn-HEAD shape:
+/// `HEAD:<path>` not resolving means "no old side" whether the path is
+/// missing from HEAD or HEAD does not exist yet — the probe answers and
+/// no cat-file runs (`preview::blob_is_there`; what the log then holds is
+/// pinned in `answer_reads.rs`).
 #[tokio::test]
-async fn untracked_image_previews_the_new_side_only() {
+async fn a_side_that_is_not_there_previews_as_absent() {
     let mut repo = TestRepo::init();
-    repo.commit_file("base.txt", "x\n", "base");
-    write_bytes(&repo, "logo.png", TINY_PNG);
+    write_bytes(&repo, "root.png", TINY_PNG);
+    repo.git(&["add", "--", "root.png"]);
+    repo.git(&["commit", "-m", "root"]);
+    let root = repo.git(&["rev-parse", "HEAD"]);
+    write_bytes(&repo, "doomed.png", TINY_PNG);
+    repo.git(&["add", "--", "doomed.png"]);
+    repo.git(&["commit", "-m", "one to delete"]);
+    repo.git(&["rm", "--", "doomed.png"]);
+    std::fs::create_dir_all(repo.path.join("art")).unwrap();
+    write_bytes(&repo, "art/new.png", TINY_PNG);
+    repo.git(&["add", "--", "art/new.png"]);
+    write_bytes(&repo, "stray.png", TINY_PNG);
 
     let (executor, cancel) = env();
+
+    // Untracked: new side only — and the all-additions text diff of an
+    // untracked binary is flagged binary.
     let target = DiffTarget::Untracked {
-        path: "logo.png".to_string(),
+        path: "stray.png".to_string(),
     };
-    // The all-additions diff of an untracked binary is flagged binary.
     let patches = details::file_diff(&executor, &repo.path, &target, &cancel)
         .await
         .unwrap();
     assert!(patches[0].is_binary);
-
     let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
         .await
         .unwrap();
@@ -54,30 +74,56 @@ async fn untracked_image_previews_the_new_side_only() {
     let new = p.new.unwrap();
     assert_eq!(new.size, TINY_PNG.len() as u64);
     assert_eq!(new.bytes.as_deref(), Some(TINY_PNG));
-}
 
-/// Also the unborn-HEAD shape: `HEAD:<path>` not resolving means "no old
-/// side" whether the path is missing from HEAD or HEAD does not exist yet
-/// — the probe answers and no cat-file runs (`preview::blob_is_there`;
-/// what the log then holds is pinned in `answer_reads.rs`).
-#[tokio::test]
-async fn staged_new_image_reads_the_index_blob() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("base.txt", "x\n", "base");
-    std::fs::create_dir_all(repo.path.join("art")).unwrap();
-    write_bytes(&repo, "art/logo.png", TINY_PNG);
-    repo.git(&["add", "--", "art/logo.png"]);
-
-    let (executor, cancel) = env();
-    let target = DiffTarget::Staged {
-        path: "art/logo.png".to_string(),
-        orig_path: None,
-    };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
-        .await
-        .unwrap();
+    // Staged addition: the index blob is read; there is no HEAD side.
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Staged {
+            path: "art/new.png".to_string(),
+            orig_path: None,
+        },
+        true,
+        &cancel,
+    )
+    .await
+    .unwrap();
     assert!(p.old.is_none(), "no HEAD side for a newly added file");
     assert_eq!(p.new.unwrap().bytes.as_deref(), Some(TINY_PNG));
+
+    // Staged deletion: old side only.
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Staged {
+            path: "doomed.png".to_string(),
+            orig_path: None,
+        },
+        true,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
+    assert!(p.new.is_none(), "deleted from the index");
+
+    // Root commit: no parent, so no old side.
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Commit {
+            oid: Oid::from_hex_str(&root).unwrap(),
+            parent: None,
+            path: "root.png".to_string(),
+            orig_path: None,
+        },
+        true,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert!(p.old.is_none());
+    assert!(p.new.is_some());
 }
 
 #[tokio::test]
@@ -98,26 +144,6 @@ async fn modified_image_previews_both_sides() {
         .unwrap();
     assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
     assert_eq!(p.new.unwrap().bytes.as_deref(), Some(v2.as_slice()));
-}
-
-#[tokio::test]
-async fn staged_deletion_previews_the_old_side_only() {
-    let mut repo = TestRepo::init();
-    write_bytes(&repo, "logo.png", TINY_PNG);
-    repo.git(&["add", "--", "logo.png"]);
-    repo.git(&["commit", "-m", "add image"]);
-    repo.git(&["rm", "--", "logo.png"]);
-
-    let (executor, cancel) = env();
-    let target = DiffTarget::Staged {
-        path: "logo.png".to_string(),
-        orig_path: None,
-    };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
-        .await
-        .unwrap();
-    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
-    assert!(p.new.is_none(), "deleted from the index");
 }
 
 #[tokio::test]
@@ -174,28 +200,6 @@ async fn source_text_reads_the_side_the_commit_has() {
     )
     .await;
     assert_eq!(source.as_deref(), Some("fn main() {\n    work();\n}\n"));
-}
-
-#[tokio::test]
-async fn root_commit_image_has_no_old_side() {
-    let mut repo = TestRepo::init();
-    write_bytes(&repo, "logo.png", TINY_PNG);
-    repo.git(&["add", "--", "logo.png"]);
-    repo.git(&["commit", "-m", "root"]);
-    let head = repo.git(&["rev-parse", "HEAD"]);
-
-    let (executor, cancel) = env();
-    let target = DiffTarget::Commit {
-        oid: Oid::from_hex_str(&head).unwrap(),
-        parent: None,
-        path: "logo.png".to_string(),
-        orig_path: None,
-    };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
-        .await
-        .unwrap();
-    assert!(p.old.is_none());
-    assert!(p.new.is_some());
 }
 
 #[tokio::test]
