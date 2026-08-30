@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use platitude_core::sequencer::TodoAction;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::hub::{Feed, PlanMsg};
@@ -135,12 +136,18 @@ impl QListModel for RebasePlanModel {
 }
 
 impl RebasePlanModel {
-    /// Whether the plan asks for anything at all: a verb other than
-    /// `pick`, a typed reword, or rows out of their original order. The
-    /// run button only opens on this — an untouched plan replays every
-    /// commit onto the parent it already sits on, and a button that runs
-    /// it would be one that visibly does nothing
+    /// Whether the plan asks for anything at all: rows out of their
+    /// original order, or a row the run would write as something other
+    /// than `pick`. The run button only opens on this — an untouched
+    /// plan replays every commit onto the parent it already sits on, and
+    /// a button that runs it would be one that visibly does nothing
     /// (デザイン規約 §可否・警告の出し場所).
+    ///
+    /// The verb is read through [`Self::todo_action_of`] rather than off
+    /// `action`, so what opens the button is what the todo actually
+    /// carries: a row turned to `reword` with nothing typed goes to git
+    /// as a plain `pick`, and counting it here would open a run whose
+    /// todo is all picks.
     pub(super) fn is_dirty(&self) -> bool {
         self.steps.len() != self.initial.len()
             || self
@@ -148,9 +155,10 @@ impl RebasePlanModel {
                 .iter()
                 .zip(&self.initial)
                 .any(|(step, oid)| step.oid_hex != *oid)
-            || self.steps.iter().any(|step| {
-                step.action != "pick" || !step.msg_subject.is_empty() || !step.msg_body.is_empty()
-            })
+            || self
+                .steps
+                .iter()
+                .any(|step| Self::todo_action_of(step).0 != TodoAction::Pick)
     }
 
     /// Whether the answer to this very commit is already on its way, so
@@ -176,26 +184,35 @@ impl RebasePlanModel {
         }
     }
 
-    /// The steps as git's todo wants them: oldest first, reword only where
-    /// a message was actually typed (an empty box means the commit keeps
+    /// The todo verb one row stands for, with the message a `reword`
+    /// would carry. The single place the chips' vocabulary turns into
+    /// git's, so the todo the run writes and the button
+    /// [`Self::is_dirty`] opens cannot drift apart: reword only where a
+    /// message was actually typed (an empty box means the commit keeps
     /// its message, which is a plain `pick`).
+    pub(super) fn todo_action_of(step: &PlanStepItem) -> (TodoAction, String) {
+        let message = platitude_core::commit::join_message(&step.msg_subject, &step.msg_body);
+        let action = match step.action.as_str() {
+            "reword" if !message.is_empty() => TodoAction::Reword,
+            "reword" => TodoAction::Pick,
+            "edit" => TodoAction::Edit,
+            "squash" => TodoAction::Squash,
+            "fixup" => TodoAction::Fixup,
+            "drop" => TodoAction::Drop,
+            _ => TodoAction::Pick,
+        };
+        (action, message)
+    }
+
+    /// The steps as git's todo wants them: oldest first, each row's verb
+    /// as [`Self::todo_action_of`] settles it.
     pub(super) fn todo_steps(&self) -> Vec<platitude_core::sequencer::RebaseStep> {
-        use platitude_core::sequencer::{RebaseStep, TodoAction};
+        use platitude_core::sequencer::RebaseStep;
         self.steps
             .iter()
             .rev()
             .map(|step| {
-                let message =
-                    platitude_core::commit::join_message(&step.msg_subject, &step.msg_body);
-                let action = match step.action.as_str() {
-                    "reword" if !message.is_empty() => TodoAction::Reword,
-                    "reword" => TodoAction::Pick,
-                    "edit" => TodoAction::Edit,
-                    "squash" => TodoAction::Squash,
-                    "fixup" => TodoAction::Fixup,
-                    "drop" => TodoAction::Drop,
-                    _ => TodoAction::Pick,
-                };
+                let (action, message) = Self::todo_action_of(step);
                 RebaseStep {
                     message: (action == TodoAction::Reword).then_some(message),
                     action,

@@ -43,8 +43,41 @@ fn an_untouched_plan_is_not_dirty_and_every_touch_makes_it_so() {
     assert!(model.is_dirty(), "a reorder alone is a request");
     model.steps.swap(0, 1);
 
+    model.steps[2].action = "reword".to_string();
     model.steps[2].msg_subject = "typed".to_string();
     assert!(model.is_dirty(), "a typed reword is a request");
+}
+
+/// The verb on its own is not one. `todo_steps` folds a reword with an
+/// empty pair back into `pick`, so a plan holding nothing else would run
+/// the very todo an untouched plan writes — and the run button, which
+/// reads `dirty`, must not open on it.
+#[test]
+fn a_reword_is_a_request_only_once_something_is_typed() {
+    let mut model = fresh();
+    model.steps[0].action = "reword".to_string();
+    assert!(!model.is_dirty(), "the verb alone asks nothing");
+    assert!(
+        model
+            .todo_steps()
+            .iter()
+            .all(|s| s.action == TodoAction::Pick),
+        "the todo it would write is all picks"
+    );
+
+    model.steps[0].msg_subject = "  ".to_string();
+    assert!(!model.is_dirty(), "whitespace trims away to nothing");
+
+    model.steps[0].msg_subject = "n".to_string();
+    assert!(model.is_dirty(), "one character is a request");
+
+    // The description carries a reword just as far as the summary does.
+    model.steps[0].msg_subject = String::new();
+    model.steps[0].msg_body = "n".to_string();
+    assert!(
+        model.is_dirty(),
+        "typed into the other box, still a request"
+    );
 }
 
 #[test]
