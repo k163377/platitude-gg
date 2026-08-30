@@ -131,7 +131,7 @@ Rectangle {
                     // The base's name is said once, in the header's own sentence — this row is the commit itself,
                     // dressed like every other row: face, subject, id.
                     Label {
-                        Layout.preferredWidth: planList.verbColW + Theme.iconMd
+                        Layout.preferredWidth: planList.verbColW
                         text: qsTr("onto")
                         font.pixelSize: Theme.fontSm
                         color: Theme.textMuted

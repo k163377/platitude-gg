@@ -102,8 +102,6 @@ Item {
         }
 
         IdentIcon {
-            // A fold leans towards the parent it lands in — the indent is the arrow.
-            Layout.leftMargin: planRow.folded ? Theme.spaceLg : 0
             Layout.preferredWidth: Theme.iconMd
             Layout.preferredHeight: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
