@@ -490,13 +490,22 @@ Item {
             page.showNotice(qsTr("The branch tip moved"),
                             qsTr("The plan was put away; nothing has run."), "warning")
         }
+        function onStandingOp() {
+            page.showNotice(qsTr("An operation started here"),
+                            qsTr("The plan was put away; nothing has run. Finish what is in progress first."),
+                            "warning")
+        }
     }
-    // The tip as the status reads it, fed on every snapshot: the model compares it against the tip the plan opened
-    // on and puts a stale draft away itself. Only while one stands — fed to a shut model it would spend a borrow
-    // per tick saying nothing.
+    // The tip and the standing operation as the status reads them, fed on every snapshot: the model compares the tip
+    // against the one the plan opened on and puts a stale draft away itself, and an operation starting under the plan
+    // puts it away outright — a merge stopped on a conflict leaves the tip where it was, so the tip alone cannot see
+    // it. Only while one stands — fed to a shut model they would spend a borrow per tick saying nothing.
     Connections {
         target: workTree
         function onChanged() {
+            if (!planModel.active)
+                return
+            planModel.noteOp(workTree.opText)
             if (planModel.active)
                 planModel.noteHead(workTree.headOid)
         }

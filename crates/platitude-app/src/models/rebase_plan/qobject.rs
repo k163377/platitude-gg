@@ -53,6 +53,14 @@ impl RebasePlanModel {
     #[qsignal]
     fn stale_plan(&mut self);
 
+    /// An operation started under the open plan — a merge, a cherry-pick,
+    /// a revert or a bisect, from a terminal or another session — so it
+    /// was put away; nothing was run. Its own signal rather than
+    /// `stalePlan`: the tip has not moved and saying it did would send a
+    /// reader looking for a rewrite nobody made (§答えの要らない報せ).
+    #[qsignal]
+    fn standing_op(&mut self);
+
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
@@ -253,6 +261,31 @@ impl RebasePlanModel {
         }
         self.close();
         self.stale_plan();
+    }
+
+    /// The operation the status now reads as standing (`workTree.opText`,
+    /// empty = none). One that stands under an open plan puts it away:
+    /// the plan was composed over a repository with nothing running, and
+    /// a merge stopped on a conflict leaves HEAD exactly where it was —
+    /// so `noteHead` sees nothing wrong and would leave a doomed draft on
+    /// screen with its run button live. The run itself is refused by core
+    /// either way (`RepoSession::rebase_interactive`); this is what keeps
+    /// the screen from offering it.
+    ///
+    /// **One strike, unlike `noteHead`.** That rule is for a status read
+    /// that began before a tip move and carries the older oid, where a
+    /// single strike would discard a plan composed on the tip that
+    /// exists. There is no such reading here: a report naming an
+    /// operation was taken while one stood, and one that stood after the
+    /// plan opened is reason enough to put the draft away whether or not
+    /// it is still standing now.
+    #[qslot]
+    fn note_op(&mut self, op_text: String) {
+        if !self.active || op_text.is_empty() {
+            return;
+        }
+        self.close();
+        self.standing_op();
     }
 }
 
