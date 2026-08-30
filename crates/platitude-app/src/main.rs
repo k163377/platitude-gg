@@ -92,6 +92,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AutoActFindVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActGraphRowVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActHistoryVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/AutoActLandings.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActNavBoxVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActNavVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoActPaneVerbs.qml", "qt/qml/platitude");
