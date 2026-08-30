@@ -145,7 +145,7 @@ impl AppBackend {
     pub(super) fn identity_changed(&mut self);
 
     #[qsignal]
-    fn settings_changed(&mut self);
+    pub(super) fn settings_changed(&mut self);
 
     /// An assignment was made or taken away. Every list already on screen
     /// re-reads itself off this — the graph rows, the details card and
@@ -171,45 +171,17 @@ impl AppBackend {
         self.avatar_url(&email)
     }
 
-    /// Sets how often every open repository fetches, in minutes. Zero (the
-    /// blank input) turns it off, and the ceiling is core's to apply
-    /// (`session::auto_fetch_minutes`) — the field this writes is the one a
-    /// hand-written `settings.toml` writes, so a limit spelled out here as
-    /// well would be a second answer to the same question.
+    // The two below hand their bodies to `persist.rs`, the way the avatar
+    // slots hand theirs to `avatars.rs` (structure.md §分割 Qt): the slot
+    // has to be declared here, what it does does not.
     #[qslot]
     fn set_auto_fetch_minutes(&mut self, minutes: i32) {
-        let asked = platitude_core::session::auto_fetch_minutes(minutes.max(0).unsigned_abs());
-        let minutes = asked as i32;
-        if self.auto_fetch_minutes == minutes {
-            return;
-        }
-        self.auto_fetch_minutes = minutes;
-        Hub::with(|hub| hub.set_auto_fetch_minutes(asked));
-        self.settings_changed();
+        self.apply_auto_fetch_minutes(minutes);
     }
 
-    /// Sets how much history every graph opens with. Zero is the whole of
-    /// it: the screen's own box rather than a number anyone types.
-    ///
-    /// The floor is core's to apply (`session::log_limit`) — the field
-    /// this writes is the one a hand-written `settings.toml` writes, so a
-    /// floor spelled out here as well would be a second answer to the
-    /// same question.
     #[qslot]
     fn set_initial_commits(&mut self, commits: i32) {
-        let asked = match commits.max(0).unsigned_abs() {
-            0 => None,
-            count => Some(platitude_core::session::log_limit(count)),
-        };
-        // Saturating rather than wrapping: `settings.toml` can hold a
-        // count no `i32` can, and the property is what the screen shows.
-        let commits = asked.map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX));
-        if self.initial_commits == commits {
-            return;
-        }
-        self.initial_commits = commits;
-        Hub::with(|hub| hub.set_initial_commits(asked));
-        self.settings_changed();
+        self.apply_initial_commits(commits);
     }
 
     /// Asks Windows not to round the window's corners. A no-op on the
