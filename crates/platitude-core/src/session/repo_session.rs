@@ -92,6 +92,15 @@ pub struct RepoSession {
     pub(super) merge_tool_wanted: std::sync::atomic::AtomicBool,
     /// The last answer, repeated by refreshes that did not read it.
     pub(super) merge_tool_seen: Mutex<String>,
+    /// Why the standing rebase stopped, as the last read that managed to
+    /// tell left it. A read of git's markers can fail transiently — the
+    /// spawn loses a race with a write, the antivirus holds the file — and
+    /// a single tick answering "not an `edit` stop" is not a blank the exit
+    /// card can afford: it turns the `--skip` row from a hold back into a
+    /// plain click, and that click takes the stopped commit out
+    /// (`offers::skip_is_free`). Cleared by the first read that finds no
+    /// rebase standing.
+    pub(super) rebase_stop_seen: Mutex<integrate::RebaseStop>,
     /// Line-ending baselines already sampled, keyed by (directory,
     /// extension) — what a house style is scoped to, and what makes the
     /// second file opened in a directory cost nothing.

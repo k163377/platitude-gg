@@ -60,6 +60,7 @@ impl RepoSession {
             merge_incoming: Mutex::new(Vec::new()),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             merge_tool_seen: Mutex::new(String::new()),
+            rebase_stop_seen: Mutex::new(integrate::RebaseStop::default()),
             eol_baselines: Mutex::new(HashMap::new()),
             eol_normalises: Derived::default(),
             remotes: Derived::default(),

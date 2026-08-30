@@ -166,6 +166,16 @@ impl RepoSession {
         relock(&self.merge_incoming).clone()
     }
 
+    /// Why the standing rebase stopped, as the last read that could tell
+    /// left it (see [`RepoSession::rebase_stop_seen`]).
+    fn rebase_stop_seen(&self) -> integrate::RebaseStop {
+        relock(&self.rebase_stop_seen).clone()
+    }
+
+    fn set_rebase_stop_seen(&self, stop: integrate::RebaseStop) {
+        *relock(&self.rebase_stop_seen) = stop;
+    }
+
     /// Records them, answering whether they moved — a merge that started,
     /// finished or was aborted redraws the WIP row's leashes.
     fn set_merge_incoming(&self, incoming: Vec<Oid>) -> bool {
@@ -221,11 +231,26 @@ impl RepoSession {
                 // Only a standing rebase has a counter to read or a stop
                 // to explain, and the two ride one spawn — this runs every
                 // tick for the life of a stop (`integrate::rebase_standing`).
+                //
+                // A read that could not tell keeps the stop it had, the way
+                // the merge's sides and the merge tool do: the tick that
+                // answered `editing: false` in the middle of an `edit` stop
+                // would hand the exit card's `--skip` back its plain click,
+                // and that click is not one the reader gets to take back
+                // (`RepoSession::rebase_stop_seen`). The counter is not
+                // held the same way — a stale N/M would be read as
+                // progress that happened, and the badge losing it for one
+                // tick costs nothing.
                 let (progress, stop) = if op_state.rebasing {
-                    integrate::rebase_standing(&self.executor, &workdir, &cancel)
-                        .await
-                        .unwrap_or_default()
+                    match integrate::rebase_standing(&self.executor, &workdir, &cancel).await {
+                        Ok((progress, stop)) => {
+                            self.set_rebase_stop_seen(stop.clone());
+                            (progress, stop)
+                        }
+                        Err(_) => (None, self.rebase_stop_seen()),
+                    }
                 } else {
+                    self.set_rebase_stop_seen(integrate::RebaseStop::default());
                     (None, integrate::RebaseStop::default())
                 };
                 // Likewise: the two sides only have names while something
