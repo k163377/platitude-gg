@@ -98,7 +98,7 @@ impl RepoSession {
     /// the user's global config is still only seen on the next write or
     /// ref move. The push mark is the exception: the status tick reads it
     /// in every scope and hands it to [`RepoSession::note_push_default`].
-    fn forget_what_the_config_decides(&self) {
+    pub(super) fn forget_what_the_config_decides(&self) {
         let Some(path) = self.config_path() else {
             return;
         };

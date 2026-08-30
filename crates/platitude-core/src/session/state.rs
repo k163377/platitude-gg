@@ -441,9 +441,7 @@ mod tests {
         assert_eq!(got, Ok(2), "the second reading is the answer");
         assert_eq!(calls.load(Ordering::SeqCst), 2, "the chase is bounded");
 
-        let after = derived
-            .get_or_try_init(|| async { Ok::<u32, ()>(9) })
-            .await;
+        let after = derived.get_or_try_init(|| async { Ok::<u32, ()>(9) }).await;
         assert_eq!(after, Ok(9), "the outrun reading was not cached");
     }
 }

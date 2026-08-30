@@ -269,6 +269,15 @@ impl RepoSession {
         let (finished, task) = RefreshTask::pending();
         self.runtime.spawn(async move {
             let _held = held;
+            // The config stamp is settled before either read starts. The
+            // refs half invalidates what the config decides on its way in,
+            // and the status half consumes the line-ending staleness that
+            // leaves behind — ordered by completion inside the join, the
+            // status read can spend the mark before the refs read has set
+            // it, and a withdrawn notice then stands until something else
+            // happens to ask. Idempotent, so the refs read finding the
+            // stamp already current costs a stat and nothing else.
+            s.forget_what_the_config_decides();
             // Both reads can call for a rebuild, but the graph is one
             // picture: an external commit moves a ref *and* cleans the
             // tree, and walking twice would throw one pass away.

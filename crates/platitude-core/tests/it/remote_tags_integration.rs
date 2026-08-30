@@ -444,7 +444,21 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     // remote says it carries.
     let bare_path = bare.path.clone();
     bare.git_in(&bare_path, &["tag", "v-later", &root]);
-    session.set_auto_fetch(Some(Duration::from_secs(600)));
+    // Asked through the tracked form, retried past `Busy`: the opening's
+    // own catch-up can still hold the single-flight slot here, a Busy is
+    // that read, and the slot books no repeat — an ask dropped into it
+    // would be nobody's to carry out (rules-refs/core.md).
+    loop {
+        let outcome = crate::support::wait::bounded(
+            "the remote-tag catch-up",
+            session.refresh_remote_tags_tracked().outcome(),
+        )
+        .await;
+        if outcome != RemoteTagRefreshOutcome::Busy {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
     tags_loaded(&sink, named).await;
     // The chips have to arrive by their own event…
     sink.wait_for("the chips", move |evs| {
@@ -492,6 +506,10 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
         RemoteTagRefreshOutcome::Disabled,
         "the catch-up path itself causally declines the unasked network read"
     );
+    // The opening refs read has to land first: `snapshot_after_the_fetch`
+    // takes the first snapshot after the write, and an opening read still
+    // in flight can deliver its badge-less listing into that window.
+    sink.opening_settled(&session).await;
     // Asking is still asking: the fetch reads them as it always did.
     session.fetch(Some("origin".into()));
     assert!(some_tag_has_a_remote(
