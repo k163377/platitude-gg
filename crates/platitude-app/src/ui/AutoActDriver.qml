@@ -397,6 +397,7 @@ Item {
     AutoActTipVerbs { id: tipVerbs; driver: driver }
     AutoActDetailsVerbs { id: detailsVerbs; driver: driver }
     AutoActHistoryVerbs { id: historyVerbs; driver: driver }
+    AutoActPlanVerbs { id: planVerbs; driver: driver }
     AutoActFindVerbs { id: findVerbs; driver: driver }
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
 
@@ -421,6 +422,7 @@ Item {
             || tipVerbs.run(act, arg)
             || detailsVerbs.run(act, arg)
             || historyVerbs.run(act, arg)
+            || planVerbs.run(act, arg)
             || findVerbs.run(act, arg)
             || diffVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
