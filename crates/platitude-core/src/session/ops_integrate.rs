@@ -1,7 +1,7 @@
 //! History integration: merge, rebase (plain and interactive), sequencer
 //! edits, cherry-pick / revert, and conflict / merge-tool handling.
 
-use super::build::{Replay, Rewrite, rewrite_carrying, run_plan};
+use super::build::{Replay, Rewrite, rewrite_carrying, run_plan, standing_name};
 use super::*;
 
 impl RepoSession {
@@ -63,6 +63,18 @@ impl RepoSession {
     /// or another session moving the branch in between would leave the
     /// plan's todo silently dropping whatever landed, so a tip that moved
     /// is refused here — before git is spawned — and nothing is touched.
+    ///
+    /// **A tip that moved is not the only way the plan's premise goes.**
+    /// An operation started from a terminal — `git merge topic` that stops
+    /// on a conflict, a cherry-pick, a revert — leaves HEAD exactly where
+    /// it was, so the tip check sees nothing wrong, and firing the replay
+    /// into it destroys the standing operation outright: git refuses the
+    /// rebase in the very words the carry reads as a dirty tree, and the
+    /// stash that follows takes `MERGE_HEAD` down with it (measured, 2.55 —
+    /// `session_integration::standing_op`). The carry has its own guard
+    /// now; this one is the plan's, and it says so before anything is
+    /// spawned. The set is `opText != ""` on the screen — the same
+    /// operations the badge names, bisect included.
     pub fn rebase_interactive(
         self: &Arc<Self>,
         upstream: String,
@@ -75,6 +87,15 @@ impl RepoSession {
             "rebase",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let state = opstate::detect(&exec, &repo.workdir, &cancel).await?;
+                if state.any() {
+                    return Err(GitError::Rejected {
+                        message: format!(
+                            "a {} is in progress here; nothing was rewritten",
+                            standing_name(&state)
+                        ),
+                    });
+                }
                 if !expect_head.is_empty() {
                     let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
                     if head.to_hex() != expect_head {

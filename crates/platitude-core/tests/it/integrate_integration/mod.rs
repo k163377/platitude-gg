@@ -17,4 +17,5 @@ mod plan;
 mod publish;
 mod rebase;
 mod sides;
+mod standing_op;
 mod todo;
