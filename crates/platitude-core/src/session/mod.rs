@@ -71,6 +71,7 @@ mod ops_integrate;
 mod ops_remote;
 mod ops_remote_tags;
 mod ops_tree;
+mod pass_watch;
 mod print;
 mod query;
 mod read_slot;
@@ -93,6 +94,7 @@ pub use graph_refresh::{
 };
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
+use pass_watch::PassWatch;
 use print::RowPrint;
 pub use query::{DiffRefreshOutcome, DiffRefreshTask};
 use read_slot::{ReadSlot, SlotHeld};
