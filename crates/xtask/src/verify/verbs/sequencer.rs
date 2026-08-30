@@ -95,6 +95,35 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true",
     },
+    // The row's verb walked out of `reword` and back into it. What the
+    // picture cannot say is whose message the boxes are holding: the
+    // dropped draft and the commit's own message draw the same two boxes,
+    // and the dropped one rests there reading as unchanged — so the next
+    // save is refused with nothing on screen to say why.
+    Verb {
+        name: "plan-reword-verb",
+        when: &[],
+        plain: "plan_reword_verb verb=reword restored=true dirty=false editable=true draft=true",
+    },
+    // The plan walked away with a reword half-written. The boxes are the
+    // plain amend's again the moment it does, and the same two boxes are
+    // drawn either way — so the whole claim is that what rests in them is
+    // this commit's own message and not the plan's.
+    Verb {
+        name: "plan-reword-out",
+        when: &[],
+        plain: "plan_reword_out plan=false restored=true dirty=false editable=true",
+    },
+    // And the question the standing plan was refusing to ask: whether a
+    // remote already has the commit is asked on the *edge* of the boxes
+    // being written into, and the plan spent that edge. Typing again after
+    // it closes has to raise a new one — nothing in the picture says
+    // whether the range was ever asked about.
+    Verb {
+        name: "plan-reword-ask",
+        when: &[],
+        plain: "plan_reword_ask dirty=true asked=true",
+    },
     // The far end of the same stop, and of every other exit-card row:
     // where putting the operation down leaves the reader. The face it
     // was standing on is empty over a clean tree once the operation is

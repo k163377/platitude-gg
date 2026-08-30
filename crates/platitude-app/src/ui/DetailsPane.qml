@@ -171,24 +171,54 @@ ColumnLayout {
     property string baseBody: ""
     readonly property bool messageDirty: detailsPane.editable
         && (msgEditor.subjectText !== detailsPane.baseSubject || msgEditor.bodyText !== detailsPane.baseBody)
+    /// Whether a plan is holding a typed reword for the very commit on
+    /// screen: what the boxes have to show instead of the commit's own
+    /// message, since the message would offer to save the original back
+    /// over the draft.
+    readonly property bool planHoldsDraft: detailsPane.details.shaHex !== ""
+        && detailsPane.details.shaHex === detailsPane.planDraftOid
+        && (detailsPane.planDraftSubject !== "" || detailsPane.planDraftBody !== "")
 
     /// Adopt the model's message whenever it moves to another commit.
     /// Nothing else can change a message in place — a different message is
-    /// a different commit — so an untouched box needs no other cue. A plan
-    /// row with a stored reword opens on the draft instead, and the draft
-    /// is the resting text: it is already in the plan, so there is nothing
-    /// unsaved about it.
+    /// a different commit — so an untouched box needs no other cue.
     function syncMessage() {
         if (detailsPane.details.shaHex === detailsPane.baseOid)
             return
+        detailsPane.fillMessage(detailsPane.planHoldsDraft)
+    }
+    /// Fills the boxes from what is resting behind them, and takes that as
+    /// the text a save is measured against: the plan's draft where
+    /// `drafted`, the commit's own message otherwise. The draft is resting
+    /// text too — it is already in the plan, so there is nothing unsaved
+    /// about it. The editor is only written when the text actually moves:
+    /// the same text assigned back still sends the caret to the box's top
+    /// (`MessageEditor.setMessage`), and the plan taking a typed reword
+    /// lands here with the caret still in the box.
+    function fillMessage(drafted) {
         detailsPane.baseOid = detailsPane.details.shaHex
-        const drafted = detailsPane.details.shaHex !== ""
-            && detailsPane.details.shaHex === detailsPane.planDraftOid
-            && (detailsPane.planDraftSubject !== "" || detailsPane.planDraftBody !== "")
         detailsPane.baseSubject = drafted ? detailsPane.planDraftSubject
                                           : detailsPane.details.messageSubject
         detailsPane.baseBody = drafted ? detailsPane.planDraftBody : detailsPane.details.messageBody
+        if (msgEditor.subjectText === detailsPane.baseSubject
+                && msgEditor.bodyText === detailsPane.baseBody)
+            return
         msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
+    }
+    /// The plan's hold moved without the commit moving, so `syncMessage`'s
+    /// own guard would sit still: a row's verb left `reword` and took the
+    /// draft with it (`RebasePlanModel::set_action`), or the draft for the
+    /// row already up arrived. A dropped draft left resting in the boxes
+    /// reads as unchanged, so the next `reword` would find nothing to save
+    /// and refuse the press with nothing on screen to say why.
+    onPlanHoldsDraftChanged: detailsPane.fillMessage(detailsPane.planHoldsDraft)
+    /// The plan is gone, and with it the row that was to carry whatever is
+    /// in these boxes. The commit's own message goes back: the closing
+    /// plan hands the boxes to the plain amend, and a reword left resting
+    /// in them would stand there as a one-press rewrite of the history the
+    /// reader just walked away from (デザイン規約 §コミットメッセージの 2 つの枠).
+    function dropDraft() {
+        detailsPane.fillMessage(false)
     }
     /// Put the commit's own message back.
     function revertMessage() {

@@ -453,6 +453,14 @@ Item {
             planModel.selectRow(0)
             if (planModel.publishRange !== "")
                 repoTab.checkPublish(planModel.publishRange)
+        } else {
+            // Cancelled, stale, run, or put away under a standing operation — the plan is gone either way, and so is
+            // the row that was going to carry whatever a `reword` left in the right pane's boxes. Nothing moved the
+            // commit on screen, so the pane's own guard would sit still (`DetailsPane.syncMessage`) and leave that
+            // text where the plain amend this hands back can reach it: on the newest commit that is a one-press
+            // rewrite of the history the plan never ran, and on any other row it is one commit's message shown under
+            // another's. The commit's own message goes back in.
+            detailsPane.dropDraft()
         }
     }
     // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the

@@ -24,6 +24,8 @@ Item {
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
     readonly property var wipPane: driver.wipPane
+    readonly property var detailsPane: driver.detailsPane
+    readonly property var detailsModel: driver.detailsModel
     readonly property var commitMenu: driver.commitMenu
     readonly property var renderedBarrier: driver.barrierRendered
 
@@ -31,9 +33,11 @@ Item {
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
-            || act === "rebase-edit-stop-out") {
+            || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
+            || act === "plan-reword-out" || act === "plan-reword-ask") {
             // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
-            // Each verb selects the smallest plan its result needs.
+            // Each verb selects the smallest plan its result needs — the three about the right pane's boxes need
+            // only that the newest commit be a row of it, since that is the row the plan opens the selection on.
             const back = act === "rebase-plan" ? 3 : act === "rebase-plan-run" ? 2 : 1
             const fromOid = arg !== "" ? driver.autoActOid(arg)
                           : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + back)
@@ -83,10 +87,121 @@ Item {
                 driver.writeSeqBefore = repoTab.writeSeq
                 planRanTimer.begin(workTree.headOid)
                 plan.runPlan()
+            } else if (planOpenTimer.act.startsWith("plan-reword")) {
+                // The newest row is already the selected one, and the plan already put the right pane on its commit
+                // (`RepoPage.onPlanActiveChanged`) — all that is missing is the verb that makes the boxes the row's.
+                plan.setAction(0, "reword")
+                planRewordTimer.begin(planOpenTimer.act)
             } else {
                 plan.setAction(plan.stepCount - 1, "edit")
                 planEditStopTimer.start()
                 plan.runPlan()
+            }
+        }
+    }
+    // What the right pane's boxes do while a plan owns them, and after one lets go of them. A `reword` row types into
+    // the same two boxes a plain amend does (提案 2026-08-30: メッセージを打つ場所はアプリに 1 つ), so every way the
+    // plan lets go has to hand them back — and none of those ways moves the commit on screen, which is the only cue
+    // the pane refills on by itself (`DetailsPane.syncMessage`).
+    //
+    // `plan-reword-verb` walks the row's verb out of `reword` and back into it, with the plan still standing. The
+    // other two walk the whole plan away with the typing unsaved, and read what the boxes are left holding; the
+    // second of them goes on to type into them again, for the question the closed plan was refusing to ask.
+    SampleTimer {
+        id: planRewordTimer
+        property string act: ""
+        /// Where in the walk this run is. Each step is entered off the state the step before it asked for — the
+        /// sampler carries only the looking (app-ui.md §UI 自動化の因果性).
+        property string stage: ""
+        /// What the reword row is given, and what the boxes are asked for once more after the plan is gone: two
+        /// texts that are neither the commit's own message nor each other.
+        readonly property string typed: "planned"
+        readonly property string retyped: "retyped"
+        /// Whether the boxes are resting on the commit's own message again. Read off the resting text, since the
+        /// `dirty` in the same report is what says whether the boxes themselves have moved off it.
+        readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
+                                         && detailsPane.baseBody === detailsModel.messageBody
+        function begin(which) {
+            planRewordTimer.act = which
+            planRewordTimer.stage = "type"
+            planRewordTimer.start()
+        }
+        onTriggered: {
+            const plan = page.rebasePlan
+            if (planRewordTimer.stage === "type") {
+                // The boxes take typing once the page has routed them at the row carrying the verb
+                // (`RepoPage.planReword`), which waits on that commit's own details arriving.
+                if (!detailsPane.editable)
+                    return
+                detailsPane.setMessageText(planRewordTimer.typed, "")
+                // Only the round trip needs the plan to be holding the draft. The two that walk away leave it
+                // unsaved on purpose: an unsaved reword is the half-written message a closing plan would be
+                // handing to the amend it hands the boxes back to.
+                if (planRewordTimer.act === "plan-reword-verb") {
+                    detailsPane.submitMessage()
+                    planRewordTimer.stage = "held"
+                    return
+                }
+                plan.cancelPlan()
+                planRewordTimer.stage = "gone"
+                return
+            }
+            if (planRewordTimer.stage === "held") {
+                if (plan.selectedMsgSubject !== planRewordTimer.typed)
+                    return
+                plan.setAction(0, "pick")
+                planRewordTimer.stage = "picked"
+                return
+            }
+            if (planRewordTimer.stage === "picked") {
+                // `pick` took the draft with it (`RebasePlanModel::set_action`); `reword` again is where a draft
+                // left resting in the boxes would read as unchanged and refuse the next save.
+                if (plan.selectedAction !== "pick")
+                    return
+                plan.setAction(0, "reword")
+                planRewordTimer.stage = "back"
+                return
+            }
+            if (planRewordTimer.stage === "back") {
+                if (!detailsPane.editable)
+                    return
+                planRewordTimer.stop()
+                AppBackend.report("plan_reword_verb verb=" + plan.selectedAction
+                                  + " restored=" + planRewordTimer.restored
+                                  + " dirty=" + detailsPane.messageDirty
+                                  + " editable=" + detailsPane.editable
+                                  + " draft=" + (plan.selectedMsgSubject === ""))
+                renderedBarrier.begin()
+                return
+            }
+            if (planRewordTimer.stage === "gone") {
+                if (plan.active)
+                    return
+                AppBackend.report("plan_reword_out plan=" + plan.active
+                                  + " restored=" + planRewordTimer.restored
+                                  + " dirty=" + detailsPane.messageDirty
+                                  + " editable=" + detailsPane.editable)
+                if (planRewordTimer.act !== "plan-reword-ask") {
+                    planRewordTimer.stop()
+                    renderedBarrier.begin()
+                    return
+                }
+                // The keystroke that would have asked whether a remote already has this commit was spent while the
+                // plan was standing over the slot (`RepoPage.askSelectedPublished`), and the question is asked on
+                // the edge rather than on every letter. So type again, and wait for the slot to be carrying this
+                // very commit's own answer.
+                detailsPane.setMessageText(planRewordTimer.retyped, "")
+                planRewordTimer.stage = "asked"
+                return
+            }
+            if (planRewordTimer.stage === "asked") {
+                if (repoTab.publishRange !== page.selectedOid + "^!")
+                    return
+                planRewordTimer.stop()
+                AppBackend.report("plan_reword_ask dirty=" + detailsPane.messageDirty
+                                  + " asked=" + (repoTab.publishRange === page.selectedOid + "^!")
+                                  + " published=" + page.selectedPublished)
+                renderedBarrier.begin()
             }
         }
     }
