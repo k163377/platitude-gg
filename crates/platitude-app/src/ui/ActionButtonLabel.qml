@@ -92,6 +92,15 @@ Item {
     property string phraseCount: ""
     property string phraseTail: ""
     property color phraseTailTint: btnLabel.tint
+    /// A short warning said after the phrase's words, in the note's own step and colour — the vocabulary the menu
+    /// rows already use for the same thing (`AppMenuItem.note`).
+    ///
+    /// **Inside the phrase rather than on a line above the button.** The phrase is what the button says, and the
+    /// warning is said *about* what it says; a line of its own above a button that fills a pane reads as a
+    /// heading for the pane rather than as a clause of the phrase, and it takes the pane's floor off the button
+    /// (デザイン規約 §履歴を編集する — 実行ボタンの 3 状態). Empty says nothing.
+    property string phraseNote: ""
+    property color phraseNoteTint: Theme.warning
     /// The hold's mark, when the phrase is on a button that is held rather than clicked.
     ///
     /// **Inside the phrase rather than in the button's own seat.** The seat stands at the row's left edge, and a
@@ -125,7 +134,8 @@ Item {
     // ---- what gives, and in what order ---------------------------------
     //
     // **The ref is what the reader can be wrong about, so it is the last thing to give**.
-    // The parts that never give are the ones with no length of their own: the mark, the command, the count, the face.
+    // The parts that never give are the ones with no length of their own: the mark, the command, the count, the face,
+    // and the note (a count and words of ours, both of them as long as they will ever be).
     // What gives, weakest first: the `+N`, then the app's own words, then — only if there is still nothing left — the
     // ref itself.
     /// What the parts that never give are holding, each with the gap that follows it. Counted per part rather than as
@@ -134,6 +144,7 @@ Item {
         (btnLabel.phraseHoldMs > 0 ? Theme.iconSm + phraseRow.spacing : 0)
         + headChip.implicitWidth + phraseRow.spacing
         + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
+        + (noteWord.visible ? noteWord.implicitWidth + phraseRow.spacing : 0)
         + (btnLabel.phraseFace >= 0 ? byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing : 0)
     /// What is left for the three that do.
     readonly property real phraseFree: Math.max(0, btnLabel.phraseRoom - btnLabel.phraseFixed)
@@ -259,6 +270,18 @@ Item {
             color: btnLabel.tint
             font.family: Theme.uiFamily
             font.pixelSize: btnLabel.fontSize
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        // The warning said about what the phrase says, in the note's own step and colour — a step under the words it
+        // follows, because it is meta about the button rather than what the button names (デザイン規約 §タイポグラフィ),
+        // and never a colour on the words themselves (§長押し — 警告の色は語ではなく枠と印が持つ).
+        Label {
+            id: noteWord
+            visible: btnLabel.phraseNote !== ""
+            text: btnLabel.phraseNote
+            color: btnLabel.phraseNoteTint
+            font.family: Theme.uiFamily
+            font.pixelSize: Theme.fontSm
             anchors.verticalCenter: parent.verticalCenter
         }
         // **The ref is the one part that gives.** Everything else in this phrase is bounded by what it says — a

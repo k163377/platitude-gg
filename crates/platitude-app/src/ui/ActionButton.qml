@@ -60,6 +60,10 @@ HoverToolButton {
     property string phraseCount: ""
     property string phraseTail: ""
     property color phraseTailTint: actionBtn.fg
+    /// A short warning said after the phrase's words, in the note's own amber — the tag a menu row wears for the same
+    /// thing, brought inside the phrase (`ActionButtonLabel.phraseNote`).
+    property string phraseNote: ""
+    property color phraseNoteTint: Theme.warning
     /// Whom the action will be attributed to, at the end of the phrase, and how many more it credits
     /// (`ActionButtonLabel.phraseFace`).
     property int phraseFace: -1
@@ -387,6 +391,8 @@ HoverToolButton {
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail
                 phraseTailTint: actionBtn.phraseTailTint
+                phraseNote: actionBtn.phraseNote
+                phraseNoteTint: actionBtn.phraseNoteTint
                 phraseFace: actionBtn.phraseFace
                 phraseFaceUrl: actionBtn.phraseFaceUrl
                 phraseMates: actionBtn.phraseMates
