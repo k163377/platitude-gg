@@ -16,6 +16,7 @@ mod helper_binary;
 mod pass_watch;
 mod query;
 mod rebuild;
+mod standing_op;
 mod stream;
 mod window;
 mod write_queue;

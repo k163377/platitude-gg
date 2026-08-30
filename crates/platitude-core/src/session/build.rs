@@ -140,6 +140,37 @@ async fn carry_across_rewrite(
     refusal: GitError,
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
+    // **Not every refusal git words that way is a dirty tree.** A rebase
+    // asked for while a merge / cherry-pick / revert stands is refused in
+    // exactly the wording [`work_is_in_the_way`] reads as one — "cannot
+    // rebase: Your index contains uncommitted changes." — because that is
+    // all git sees: the operation's own staged result. It never names the
+    // operation (measured, 2.55).
+    //
+    // A stash is the one thing that must not follow. `git stash push`
+    // succeeds over a resolved-and-staged conflict and **takes the
+    // operation's marker down with it** — `MERGE_HEAD`,
+    // `CHERRY_PICK_HEAD`, `REVERT_HEAD` are all gone afterwards — so the
+    // carry would empty the tree, replay history over the wreckage, and
+    // put the resolution back as an ordinary staged edit with the merge's
+    // second parent lost. The write reported success (measured).
+    //
+    // A bisect is deliberately not in this set: it survives a stash
+    // untouched (measured), so a dirty tree under one carries as any
+    // other does. A standing rebase never reaches here — git refuses a
+    // second one with `already a rebase-merge directory`, which no
+    // classifier reads as work in the way.
+    let state = opstate::detect(executor, &repo.workdir, cancel).await?;
+    if integrate::InProgress::from_state(&state).is_some() {
+        return Err(GitError::Rejected {
+            message: format!(
+                "a {} is in progress here; nothing was rewritten \
+                 (git refused because that operation's own result is in \
+                 the index)",
+                standing_name(&state)
+            ),
+        });
+    }
     if !stash_everything(executor, repo, cancel).await? {
         // The tree was cleaned between the refusal and now, so there is
         // nothing of ours to carry and nothing of anybody else's to
@@ -192,6 +223,16 @@ async fn carry_across_rewrite(
 /// The entry a [`stash_everything`] just made, for the moves that put it
 /// back.
 const STASH_TOP: &str = "stash@{0}";
+
+/// What to call the operation standing in a refusal's sentence. Git's own
+/// verb where [`integrate::InProgress`] knows one, and bisect otherwise —
+/// which is the only thing left that `OpState::any` counts and
+/// `from_state` does not.
+pub(super) fn standing_name(state: &OpState) -> &'static str {
+    integrate::InProgress::from_state(state)
+        .map(integrate::InProgress::command)
+        .unwrap_or("bisect")
+}
 
 /// Puts the operation standing in a move's way down, and the tree it left
 /// behind with it, so `git switch` has nothing left to refuse.
