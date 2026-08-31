@@ -82,6 +82,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "rebase_plan rows=4 dirty=true drops=1 onto=true pushed=3 selected=0",
     },
+    // A fold carried down over the oldest place and set back down where
+    // it started. `carried=` is the half no picture holds: the pass
+    // through is one turn long, and afterwards a chip redrawn as `pick`
+    // and a row that was never a fold draw exactly the same. The three
+    // after it are the trip's own arithmetic — the row came home, the
+    // plan is the length it opened at, and the fold is still what the run
+    // would ask for.
+    Verb {
+        name: "plan-fold-carry",
+        when: &[],
+        plain: "plan_fold_carry carried=squash landed=squash row=1 rows=3 dirty=true",
+    },
     // The face the plan opens with, before its rows exist. Every half of
     // it is invisible: an empty pane photographs the same whether a read
     // is out, was refused, or was never asked for — and `standing=false`

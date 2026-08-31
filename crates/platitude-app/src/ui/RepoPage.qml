@@ -1334,6 +1334,7 @@ Item {
             detailsPane: detailsPane
             diffPane: diffPane
             wipPane: wipPane
+            planPane: planPane
             gitCorner: gitCorner
             refMenu: refRowMenu.menu
             refBranchCard: refRowMenu.branchCard
@@ -2636,6 +2637,7 @@ Item {
                         }
 
                         RebasePlanPane {
+                            id: planPane
                             planModel: planModel
                             selectedOid: page.selectedOid
                             // The pane has nothing of its own yet — or the run is holding the face it had then. A

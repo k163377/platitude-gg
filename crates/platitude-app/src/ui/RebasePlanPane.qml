@@ -26,6 +26,10 @@ Rectangle {
     /// Which commit the reader picked, for the page to select (the details pane follows it).
     signal rowPicked(string oidHex)
 
+    /// The list the rows stand in, so a verb can make the same calls a hand on a row makes. An automation-only
+    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property alias view: planList
+
     color: Theme.bgBase
 
     // The widest verb decides the chip column, measured off a real chip so the resolved font is what measures it

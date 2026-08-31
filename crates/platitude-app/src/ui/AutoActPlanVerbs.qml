@@ -24,6 +24,7 @@ Item {
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
     readonly property var wipPane: driver.wipPane
+    readonly property var planPane: driver.planPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var detailsModel: driver.detailsModel
     readonly property var commitMenu: driver.commitMenu
@@ -35,11 +36,14 @@ Item {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
             || act === "plan-reword-out" || act === "plan-reword-ask" || act === "plan-loading"
-            || act === "plan-details-held") {
+            || act === "plan-details-held" || act === "plan-fold-carry") {
             // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
             // Each verb selects the smallest plan its result needs — the three about the right pane's boxes need
-            // only that the newest commit be a row of it, since that is the row the plan opens the selection on.
-            const back = act === "rebase-plan" ? 3 : act === "rebase-plan-run" ? 2 : 1
+            // only that the newest commit be a row of it, since that is the row the plan opens the selection on,
+            // and the carry needs three: one to hold the fold, the oldest to carry it over, and one above.
+            const back = act === "rebase-plan" ? 3
+                       : act === "rebase-plan-run" || act === "plan-fold-carry" ? 2
+                       : 1
             const fromOid = arg !== "" ? driver.autoActOid(arg)
                           : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + back)
             page.openRowMenu(fromOid)
@@ -137,6 +141,33 @@ Item {
                 // commit's (`RepoPage.onPlanActiveChanged`) — the walk starts from exactly the screen a reader
                 // gets, with no verb dressed on anything.
                 planHeldTimer.begin()
+            } else if (planOpenTimer.act === "plan-fold-carry") {
+                // The reorder as a hand makes it: a fold taken up, carried down over the oldest place — where no
+                // fold can stand — and set back down where it started. Driven through the list's own functions,
+                // which are the ones the row's `MouseArea` calls (`RebasePlanRow`), so the two brackets the fold
+                // rule waits on are under test rather than assumed.
+                //
+                // **Nothing here is timed.** A move is answered inside the call, so the whole trip is one turn —
+                // and that is the point: the demotion used to land on the way through, at a moment no sampler
+                // could have caught either.
+                //
+                // The selection is put on the carried row first, so `selectedAction` *is* that row's verb for the
+                // whole trip (the reorder remaps the selection with it) — the model has no other way to be asked
+                // for one row's verb, and the picture cannot answer it: a chip redrawn as `pick` and a row that
+                // was never a fold photograph the same.
+                const carried = plan.stepCount - 2
+                plan.setAction(carried, "squash")
+                plan.selectRow(carried)
+                planPane.view.moveBegan()
+                planPane.view.moveRequested(carried, carried + 1)
+                const underHand = plan.selectedAction
+                planPane.view.moveRequested(carried + 1, carried)
+                planPane.view.moveEnded()
+                AppBackend.report("plan_fold_carry carried=" + underHand
+                                  + " landed=" + plan.selectedAction
+                                  + " row=" + plan.selectedRow + " rows=" + plan.stepCount
+                                  + " dirty=" + plan.dirty)
+                renderedBarrier.begin()
             } else if (planOpenTimer.act.startsWith("plan-reword")) {
                 // The newest row is already the selected one (`RebasePlanModel::take`), and the plan already put the
                 // right pane on its commit (`RepoPage.onPlanActiveChanged`) — all that is missing is the verb that

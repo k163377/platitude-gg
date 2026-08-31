@@ -55,7 +55,7 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,
-                  rebase-edit-stop)
+                  rebase-edit-stop, plan-fold-carry)
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E
                   verdict (signature-tip passes only on this preset)
