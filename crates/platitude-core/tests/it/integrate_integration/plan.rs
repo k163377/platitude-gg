@@ -5,6 +5,8 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::helper;
+use crate::support::remote::shallow_clone;
+use platitude_core::error::GitError;
 use platitude_core::integrate::{self, RebaseOutcome};
 use platitude_core::rebase_plan::{self, PlanAnswer, PlanRefusal};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
@@ -93,6 +95,88 @@ async fn a_range_holding_a_merge_is_refused() {
         .await
         .expect("preview");
     assert_eq!(answer, PlanAnswer::Refused(PlanRefusal::AcrossMerge));
+}
+
+#[tokio::test]
+async fn a_shallow_clones_edge_is_refused_rather_than_read_as_the_first_commit() {
+    let (_source, clone, held) = shallow_clone(6, 3);
+    assert_eq!(held.len(), 3, "the clone holds only what --depth asked for");
+    let (exec, cancel) = env();
+
+    let answer = rebase_plan::preview(&exec, &clone, &held[0], &cancel)
+        .await
+        .expect("preview");
+    assert_eq!(
+        answer,
+        PlanAnswer::Refused(PlanRefusal::UnfetchedBase),
+        "offered as --root instead, the replay rewrites the edge into a first commit and \
+         cuts the branch off from the history this clone never fetched"
+    );
+}
+
+#[tokio::test]
+async fn a_commit_above_the_shallow_edge_still_plans_onto_it() {
+    let (_source, clone, held) = shallow_clone(6, 3);
+    let (exec, cancel) = env();
+
+    let answer = rebase_plan::preview(&exec, &clone, &held[1], &cancel)
+        .await
+        .expect("preview");
+    let PlanAnswer::Plan(plan) = answer else {
+        panic!("refused: {answer:?}");
+    };
+    assert!(!plan.root, "the edge is a perfectly good upstream to name");
+    assert_eq!(plan.upstream, held[0]);
+    assert_eq!(plan.rows.len(), 2);
+}
+
+#[tokio::test]
+async fn a_folder_that_is_not_a_repository_fails_instead_of_planning_from_the_root() {
+    let (exec, cancel) = env();
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    // git exits 128 without reading anything, and only the 1 it exits for a
+    // revision it looked for and did not find is an answer (実測 2.55).
+    let error = rebase_plan::preview(&exec, dir.path(), &"0".repeat(40), &cancel)
+        .await
+        .expect_err("nothing here to read");
+    assert!(
+        matches!(error, GitError::Failed { code: 128, .. }),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn the_onto_name_is_the_one_the_graph_would_lead_with() {
+    let (mut repo, ids) = four_commits();
+    // Created out of order, and one of them nests — the graph sorts chips
+    // by name once kind and HEAD have had their say, and the base cannot
+    // be HEAD (the range above it is what makes it a base).
+    for name in ["zulu", "feature/x", "alpha", "main-ish"] {
+        repo.git(&["branch", name, &ids[0]]);
+    }
+    let (exec, cancel) = env();
+
+    let answer = rebase_plan::preview(&exec, &repo.path, &ids[1], &cancel)
+        .await
+        .expect("preview");
+    let PlanAnswer::Plan(plan) = answer else {
+        panic!("refused: {answer:?}");
+    };
+    assert_eq!(plan.onto_ref, "alpha");
+
+    // Where no branch stands there the name is left empty, and the screen
+    // writes the base's short id instead (デザイン規約 §フル interactive
+    // rebase). Nothing about the plan itself turns on it.
+    let answer = rebase_plan::preview(&exec, &repo.path, &ids[2], &cancel)
+        .await
+        .expect("preview");
+    let PlanAnswer::Plan(plan) = answer else {
+        panic!("refused: {answer:?}");
+    };
+    assert_eq!(plan.upstream, ids[1]);
+    assert!(plan.onto_ref.is_empty());
+    assert!(plan.onto.is_some(), "the row is still drawn, named or not");
 }
 
 #[tokio::test]

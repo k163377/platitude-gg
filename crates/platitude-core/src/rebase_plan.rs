@@ -73,6 +73,14 @@ pub enum PlanRefusal {
     /// The commit is not in the current branch's history: a rebase only
     /// ever rewrites the branch the tree is standing on.
     OffBranch,
+    /// The commit below the range was never fetched — a shallow clone's
+    /// edge, which git answers exactly as it answers the real first commit
+    /// (`%P` empty, `<edge>~1` exits 1). Offered as `--root`, the replay
+    /// rewrites the edge into a first commit and cuts the branch off from
+    /// the history this clone does not hold: measured on a `--depth=3`
+    /// clone, dropping the edge left the branch on one commit where the
+    /// remote had six.
+    UnfetchedBase,
 }
 
 /// A preview's two honest outcomes, apart from a read that failed. The
@@ -89,17 +97,26 @@ pub enum PlanAnswer {
 /// Two serial process latencies, not five: the range read carries the
 /// merge answer in its own `%P` field, and the onto row and its branch
 /// name — both about the already-resolved upstream — run side by side
-/// (CLAUDE.md §性能予算: 操作応答 100ms、spawn は 1 本 ~25ms).
+/// (CLAUDE.md §性能予算: 操作応答 100ms、spawn は 1 本 ~25ms). More go out
+/// only where git says there is nothing under `from`, to tell the
+/// history's first commit from a clone that stops there
+/// ([`sequencer::base_of`]).
 pub async fn preview(
     executor: &GitExecutor,
     workdir: &Path,
     from: &str,
     cancel: &CancellationToken,
 ) -> Result<PlanAnswer, GitError> {
-    let upstream = sequencer::resolve(executor, workdir, &format!("{from}~1"), cancel)
-        .await?
-        .unwrap_or_default();
-    let root = upstream.is_empty();
+    // The base answers before the range is read: a clone that stops here
+    // has nothing under `from` to replay onto, and refusing now also
+    // spares it the walk over everything it *does* hold.
+    let (upstream, root) = match sequencer::base_of(executor, workdir, from, cancel).await? {
+        sequencer::Base::Commit(oid) => (oid, false),
+        sequencer::Base::Root => (String::new(), true),
+        sequencer::Base::Unfetched => {
+            return Ok(PlanAnswer::Refused(PlanRefusal::UnfetchedBase));
+        }
+    };
     let range = sequencer::range_arg(&upstream, root);
 
     let read = read_rows(executor, workdir, &range, cancel).await?;
@@ -125,7 +142,16 @@ pub async fn preview(
             read_rows(executor, workdir, &just_the_base, cancel),
             branch_at(executor, workdir, &upstream, cancel),
         );
-        (onto?.rows.pop(), named?)
+        // The name is the decoration; the base itself is the answer. The
+        // screen already writes the short id where no branch stands there
+        // (デザイン規約 §フル interactive rebase: 指すブランチが無ければ sha),
+        // so a `for-each-ref` that failed takes the same road rather than
+        // the whole preview down with it.
+        let named = named.unwrap_or_else(|error| {
+            tracing::debug!(%error, "no branch name for the plan's base; its id stands in");
+            String::new()
+        });
+        (onto?.rows.pop(), named)
     };
     Ok(PlanAnswer::Plan(Box::new(PlanPreview {
         from: from.to_string(),
@@ -139,6 +165,14 @@ pub async fn preview(
 }
 
 /// The first local branch standing exactly on `oid`, empty where none is.
+///
+/// "First" is the graph's own order, so the base wears in the header the
+/// name its row would lead with: current branch, then kind, then name
+/// (`session::model::LabelIndex::from_pairs`). Only the last of the three
+/// can decide anything here — the query is local branches alone, and the
+/// current branch cannot stand on the base, which the range `upstream..HEAD`
+/// has already been shown to sit above. Sorting is named rather than left
+/// to git's default, which happens to agree (measured 2.55).
 async fn branch_at(
     executor: &GitExecutor,
     workdir: &Path,
@@ -148,6 +182,7 @@ async fn branch_at(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["for-each-ref", "refs/heads", "--count=1"])
+        .arg("--sort=refname:short")
         .arg(format!("--points-at={oid}"))
         .args(["--format=%(refname:short)"]);
     let out = executor.run(cmd, cancel).await?;

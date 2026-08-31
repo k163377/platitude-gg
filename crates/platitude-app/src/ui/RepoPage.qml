@@ -593,13 +593,25 @@ Item {
         function onPlanRan() {
             page.planRunOut = true
         }
+        // Three ways a range cannot be replayed. Only the kind travels — the words are this end's, because git was
+        // never run (app-ui.md「Rust に文言を置かない」).
         function onRefusedPlan(kind) {
-            page.showNotice(
-                kind === "merge" ? qsTr("A merge is in the way") : qsTr("Not on this branch"),
-                kind === "merge"
-                    ? qsTr("Replaying from there drops merges; the history would come back flattened.")
-                    : qsTr("A rebase only rewrites the branch you are standing on."),
-                "warning")
+            if (kind === "merge") {
+                page.showNotice(
+                    qsTr("A merge is in the way"),
+                    qsTr("Replaying from there drops merges; the history would come back flattened."),
+                    "warning")
+            } else if (kind === "unfetched") {
+                page.showNotice(
+                    qsTr("The history stops here"),
+                    qsTr("The commits below it were never fetched; replaying would cut the branch off from them."),
+                    "warning")
+            } else {
+                page.showNotice(
+                    qsTr("Not on this branch"),
+                    qsTr("A rebase only rewrites the branch you are standing on."),
+                    "warning")
+            }
         }
         function onStalePlan() {
             page.showNotice(qsTr("The branch tip moved"),

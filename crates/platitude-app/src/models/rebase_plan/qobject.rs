@@ -382,6 +382,7 @@ impl RebasePlanModel {
                 let kind = match refusal {
                     platitude_core::rebase_plan::PlanRefusal::AcrossMerge => "merge",
                     platitude_core::rebase_plan::PlanRefusal::OffBranch => "off-branch",
+                    platitude_core::rebase_plan::PlanRefusal::UnfetchedBase => "unfetched",
                 };
                 self.refused_plan(kind.to_string());
             }

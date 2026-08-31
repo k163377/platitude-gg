@@ -135,6 +135,34 @@ fn the_helper_must_sit_in_the_directory_it_is_looked_for_in() {
 }
 
 #[test]
+fn a_parent_header_is_read_out_of_the_headers_alone() {
+    // A shallow clone's edge keeps in the stored object the header its
+    // parsed `%P` has lost; the history's first commit never had one.
+    assert!(has_parent_header(
+        b"tree aaa\nparent bbb\nauthor a <a@e> 1 +0000\n\nsubject\n"
+    ));
+    assert!(!has_parent_header(
+        b"tree aaa\nauthor a <a@e> 1 +0000\n\nsubject\n"
+    ));
+    // A message that opens with the word is past the blank line, so it is
+    // no header — and reading one there would refuse a rebase from a
+    // perfectly good first commit.
+    assert!(!has_parent_header(
+        b"tree aaa\nauthor a <a@e> 1 +0000\n\nparent process died\n"
+    ));
+    // git writes the object with LF even on Windows (measured), and a CR
+    // does not hide the header either: taking an edge for the root is the
+    // costly direction of this answer.
+    assert!(has_parent_header(
+        b"tree aaa\r\nparent bbb\r\n\r\nsubject\r\n"
+    ));
+    // A merge has two, and either says there is a parent.
+    assert!(has_parent_header(
+        b"tree aaa\nparent bbb\nparent ccc\n\ns\n"
+    ));
+}
+
+#[test]
 fn apply_plan_overwrites_the_todo_file() {
     let dir = tempfile::tempdir().expect("tempdir");
     let plan = dir.path().join("plan");

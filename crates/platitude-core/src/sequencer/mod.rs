@@ -23,10 +23,12 @@ pub use run::{
 };
 pub use todo::{RebaseStep, TodoAction, TodoLine, render_todo};
 
-pub(crate) use plan::{range_arg, resolve};
+pub(crate) use plan::{Base, base_of, range_arg};
 
 // Reached only from `crate::sequencer_tests`, which pins the two pieces
 // of string work the modules above keep to themselves.
+#[cfg(test)]
+pub(crate) use plan::has_parent_header;
 #[cfg(test)]
 pub(crate) use run::sh_quote;
 #[cfg(test)]

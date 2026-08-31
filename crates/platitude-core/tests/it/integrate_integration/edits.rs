@@ -4,6 +4,7 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::{apply, helper};
+use crate::support::remote::shallow_clone;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
@@ -81,6 +82,49 @@ async fn the_first_commit_has_nothing_to_fold_into() {
     .await
     .expect_err("nothing before the root");
     assert!(err.to_string().contains("first commit"), "{err}");
+}
+
+#[tokio::test]
+async fn an_edit_at_the_shallow_edge_is_refused() {
+    let (_source, clone, held) = shallow_clone(6, 3);
+    let (exec, cancel) = env();
+
+    let err = sequencer::plan_edit(&exec, &clone, &held[0], sequencer::Edit::Drop, &cancel)
+        .await
+        .expect_err("the edge has no parent this clone can name");
+    assert!(
+        err.to_string().contains("the commit below the range"),
+        "{err}"
+    );
+}
+
+#[tokio::test]
+async fn only_the_edit_that_reaches_down_to_the_shallow_edge_is_refused() {
+    // Depth is what decides it: a squash folds into the line above it, so
+    // its range takes the parent in and bottoms out at the edge. A drop of
+    // the same commit reaches only itself and plans onto the edge fine.
+    let (_source, clone, held) = shallow_clone(6, 3);
+    let (exec, cancel) = env();
+
+    let err = sequencer::plan_edit(
+        &exec,
+        &clone,
+        &held[1],
+        sequencer::Edit::SquashIntoParent,
+        &cancel,
+    )
+    .await
+    .expect_err("the range bottoms out at the edge");
+    assert!(
+        err.to_string().contains("the commit below the range"),
+        "{err}"
+    );
+
+    let plan = sequencer::plan_edit(&exec, &clone, &held[1], sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("a drop needs nothing under the commit itself");
+    assert!(!plan.root);
+    assert_eq!(plan.upstream, held[0]);
 }
 
 #[tokio::test]
