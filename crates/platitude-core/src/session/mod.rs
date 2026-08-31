@@ -82,6 +82,7 @@ mod remote_tags;
 mod repo_session;
 mod rows;
 mod snapshot;
+mod stash_round;
 mod state;
 mod walk;
 mod write;

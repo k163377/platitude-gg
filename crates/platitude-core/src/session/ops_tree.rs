@@ -1,7 +1,8 @@
 //! Working-tree and local-ref writes: stage / unstage / discard, commit,
 //! checkout, reset, and the branch / tag / stash commands.
 
-use super::build::{conflicts_now, leave_operation, move_carrying};
+use super::build::{leave_operation, move_carrying};
+use super::stash_round::conflicts_now;
 use super::*;
 
 impl RepoSession {
