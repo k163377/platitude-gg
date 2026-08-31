@@ -5,6 +5,7 @@ use crate::support::TestRepo;
 use crate::support::session::{
     CaptureSink, install_todo_editor, opened, write_result, write_stopped,
 };
+use platitude_core::sequencer::RebaseStep;
 use platitude_core::session::SessionEvent;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -336,6 +337,93 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
         std::fs::read_to_string(repo.path.join("base.txt")).expect("read"),
         "base\n",
         "the uncommitted edit is in the entry, not in the tree"
+    );
+    session.close();
+}
+
+/// Whether the carry has begun — the one delivery that lands between the
+/// two spawns of a replay that was refused over a dirty tree.
+fn reached_the_stash(event: &SessionEvent) -> bool {
+    matches!(event, SessionEvent::CommandStarted { display, .. }
+        if display.starts_with("git stash push"))
+}
+
+/// **A commit that lands inside the carry is refused, not replayed over.**
+///
+/// The plan a screen composes is a fixed list of ids, and the carry spawns
+/// the replay twice: refused over the dirty tree, then again once a
+/// `detect` and a stash have emptied it — three spawns of room. git writes
+/// its own todo from `upstream..HEAD` and the helper replaces it whole, so
+/// a commit typed into that stretch is not in the list, and a rebase drops
+/// what the todo leaves out **without saying so**. Before the pin moved to
+/// sit in front of every spawn, this ran through: `terminal.txt` gone, the
+/// history replayed without it, and the write reported as a success.
+///
+/// The window is entered on purpose rather than waited for: the session is
+/// held inside the sink delivery that announces the stash, and the commit
+/// is made from the test's own thread while it is parked there
+/// ([`crate::support::session::CaptureSink::hook_once`]).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
+    install_todo_editor();
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let head = repo.commit_file_id("b.txt", "two\n", "the plan's only step");
+    let base = repo.git(&["rev-parse", "HEAD~1"]);
+    // What git refuses the first spawn over, which is what sends the write
+    // round through the stash in the first place.
+    repo.write_file("a.txt", "uncommitted\n");
+
+    let (sink, session) = opened(&repo).await;
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(reached_the_stash, move || {
+        held.recv().expect("the test releases the carry");
+    });
+    session.rebase_interactive(
+        base,
+        vec![RebaseStep::pick(head.clone(), "the plan's only step")],
+        platitude_core::integrate::RebaseOptions::default(),
+        // The tip the plan was composed against: sound when it was pressed.
+        head.clone(),
+    );
+    // The sink records before it runs the hook, so this is answered by the
+    // very delivery that is holding the write — and it is the test's own
+    // root future, which is the only thing that may wait while parked.
+    sink.wait_for("the carry reaching its stash", |events| {
+        events.iter().any(reached_the_stash).then_some(())
+    })
+    .await;
+    repo.commit_file("terminal.txt", "typed\n", "landed while the carry ran");
+    let injected = repo.git(&["rev-parse", "HEAD"]);
+    release.send(()).expect("the carry is released");
+
+    let refusal = write_result(&sink, "rebase")
+        .await
+        .expect("the replay is refused");
+    assert!(
+        refusal.contains("tip moved") && refusal.contains("nothing was rewritten"),
+        "the refusal says the plan's premise went: {refusal}"
+    );
+    assert_eq!(
+        rewrite_route(&sink),
+        vec!["rebase --interactive", "stash push", "stash pop"],
+        "the second spawn never happened, and the work came back"
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD"]),
+        injected,
+        "the commit that landed inside the window is still the tip"
+    );
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        "landed while the carry ran",
+        "and it is the one the terminal made, not a replay of the plan"
+    );
+    assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).expect("read"),
+        "uncommitted\n",
+        "with the uncommitted edit back in the tree"
     );
     session.close();
 }

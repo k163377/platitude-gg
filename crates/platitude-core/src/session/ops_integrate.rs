@@ -95,7 +95,10 @@ impl RepoSession {
     /// composed against. The screen pins it when the plan opens; a terminal
     /// or another session moving the branch in between would leave the
     /// plan's todo silently dropping whatever landed, so a tip that moved
-    /// is refused here — before git is spawned — and nothing is touched.
+    /// is refused and nothing is touched. It travels with the plan rather
+    /// than being read once here, because the carry spawns the replay
+    /// twice and both spawns need it in front of them
+    /// ([`Replay::tip_still_stands`]).
     ///
     /// **A tip that moved is not the only way the plan's premise goes.**
     /// An operation started from a terminal — `git merge topic` that stops
@@ -129,17 +132,7 @@ impl RepoSession {
                         ),
                     });
                 }
-                if !expect_head.is_empty() {
-                    let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
-                    if head.to_hex() != expect_head {
-                        return Err(GitError::Rejected {
-                            message: "the branch tip moved while the plan was being arranged; \
-                                      nothing was rewritten"
-                                .to_string(),
-                        });
-                    }
-                }
-                let replay = Replay::of(&upstream, &steps, options)?;
+                let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
                 session.note_landing("rebase", landing);

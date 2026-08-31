@@ -10,11 +10,14 @@ use super::stash_round::{
 use super::*;
 
 /// Everything one `git rebase --interactive` needs, held together so the
-/// two attempts a carry makes are the same command twice over.
+/// two attempts a carry makes are the same command twice over — the tip
+/// the todo was written for included ([`Replay::run`]).
 pub(super) struct Replay<'a> {
     upstream: &'a str,
     steps: &'a [sequencer::RebaseStep],
     options: integrate::RebaseOptions,
+    /// The tip `steps` was written against (full hex, empty = unchecked).
+    expect_head: &'a str,
     /// The todo-editor binary shipped beside the application.
     helper: PathBuf,
 }
@@ -25,6 +28,7 @@ impl Replay<'_> {
         upstream: &'a str,
         steps: &'a [sequencer::RebaseStep],
         options: integrate::RebaseOptions,
+        expect_head: &'a str,
     ) -> Result<Replay<'a>, GitError> {
         let helper = sequencer::helper_path().map_err(|source| GitError::Io {
             command: "git rebase --interactive".to_string(),
@@ -34,6 +38,7 @@ impl Replay<'_> {
             upstream,
             steps,
             options,
+            expect_head,
             helper,
         })
     }
@@ -44,6 +49,7 @@ impl Replay<'_> {
         repo: &RepoInfo,
         cancel: &CancellationToken,
     ) -> Result<integrate::RebaseOutcome, GitError> {
+        self.tip_still_stands(executor, repo, cancel).await?;
         sequencer::rebase_interactive(
             executor,
             repo,
@@ -54,6 +60,46 @@ impl Replay<'_> {
             cancel,
         )
         .await
+    }
+
+    /// Refuses the replay when HEAD is no longer the commit the todo was
+    /// written for.
+    ///
+    /// **`steps` is a fixed list of ids.** git writes its own todo from
+    /// `upstream..HEAD` and the helper replaces it whole, so a commit that
+    /// landed after the plan was composed is not in the list — and a
+    /// rebase drops what the todo leaves out, without a word. That is the
+    /// whole of what this is against.
+    ///
+    /// **Which is why it sits here and not once at the caller.** The carry
+    /// runs this command twice: the first attempt is refused over the
+    /// dirty tree, and the second comes after a `detect` and a stash —
+    /// three more spawns, 100–300ms — with the tree emptied and nothing
+    /// looking at the tip again. A check made once before the first spawn
+    /// leaves that whole stretch open, and the commit typed into it is the
+    /// one that goes.
+    ///
+    /// It cannot close the window, only narrow it to the gap nothing can
+    /// be put inside: git takes a todo but not the tip it was written for,
+    /// so what is left between the two is this read and the spawn after it.
+    async fn tip_still_stands(
+        &self,
+        executor: &GitExecutor,
+        repo: &RepoInfo,
+        cancel: &CancellationToken,
+    ) -> Result<(), GitError> {
+        if self.expect_head.is_empty() {
+            return Ok(());
+        }
+        let head = commit::head_oid(executor, &repo.workdir, cancel).await?;
+        if head.to_hex() == self.expect_head {
+            return Ok(());
+        }
+        Err(GitError::Rejected {
+            message: "the branch tip moved after the plan was composed; \
+                      nothing was rewritten"
+                .to_string(),
+        })
     }
 }
 
@@ -90,13 +136,21 @@ impl Rewrite<'_> {
 }
 
 /// Replays a one-commit edit plan through `git rebase --interactive`.
+///
+/// Unpinned, where the plan composed on screen is not
+/// ([`Replay::tip_still_stands`]): this one is read out of the repository
+/// a step earlier in the same write, so there is no tip held from before
+/// the press to compare against. The window is the carry's alone and it is
+/// narrower, but it is the same window — logged in P3-確認事項 §core rather
+/// than closed here, because the read that would close it is one more
+/// spawn on the response path of the three edits people click most.
 pub(super) async fn run_plan(
     executor: &GitExecutor,
     repo: &RepoInfo,
     plan: &sequencer::EditPlan,
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
-    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options())?;
+    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options(), "")?;
     rewrite_carrying(executor, repo, &Rewrite::Replay(&replay), cancel).await
 }
 
