@@ -24,7 +24,6 @@ Item {
 
     readonly property var list: planRow.ListView.view
     readonly property bool selected: planRow.list !== null && planRow.list.selectedOid === planRow.oid_hex
-    readonly property bool folded: planRow.action === "squash" || planRow.action === "fixup"
     readonly property bool dropped: planRow.action === "drop"
 
     width: planRow.list !== null ? planRow.list.width : 0
