@@ -9,6 +9,7 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::helper;
+use platitude_core::error::GitError;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
@@ -32,9 +33,14 @@ fn resolve_and_stage(repo: &mut TestRepo) {
     repo.git(&["add", "f.txt"]);
 }
 
-/// The `Blocked` refusal git gave, or a panic naming what came instead —
-/// `Blocked` is the classifier's own verdict, so reaching it *is* the
-/// observation.
+/// git's own words in the `Blocked` refusal, or a panic naming what came
+/// instead — `Blocked` is the classifier's own verdict, so reaching it
+/// *is* the observation.
+///
+/// The `stderr` field alone, never the rendered error: that puts the
+/// command line in front of git's message, and the flags this crate
+/// passes are not what is being read here (`--no-rebase-merges` carries
+/// the word `merge` through every one of them).
 async fn blocked_stderr(repo: &TestRepo, interactive: bool) -> String {
     let (exec, cancel) = env();
     let outcome = if interactive {
@@ -67,7 +73,8 @@ async fn blocked_stderr(repo: &TestRepo, interactive: bool) -> String {
         .await
     };
     match outcome.expect("git answered rather than failed") {
-        RebaseOutcome::Blocked(refusal) => refusal.to_string(),
+        RebaseOutcome::Blocked(GitError::Failed { stderr, .. }) => stderr,
+        RebaseOutcome::Blocked(other) => panic!("the refusal was expected to be git's: {other:?}"),
         other => panic!("expected a refusal the carry would act on, got {other:?}"),
     }
 }
