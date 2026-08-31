@@ -302,12 +302,11 @@ impl RepoTab {
         // group is what the page reads when any answer will do.
         self.write_answers.push(WriteAnswer {
             seq: self.write_seq,
-            op: op.clone(),
+            op,
             stopped: self.last_write_stopped,
             failed: !landed,
             at_tip: self.write_at_tip,
         });
-        self.last_write_op = op;
         self.last_write_error = error;
     }
 }

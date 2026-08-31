@@ -112,15 +112,9 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("headCommitSeq", Member = head_commit_seq, Notify = changed);
-    qproperty!("lastWriteOp", Member = last_write_op, Notify = changed);
     qproperty!(
         "lastWriteError",
         Member = last_write_error,
-        Notify = changed
-    );
-    qproperty!(
-        "lastWriteStopped",
-        Member = last_write_stopped,
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
@@ -135,7 +129,6 @@ impl RepoTab {
         Member = write_stale_diff,
         Notify = changed
     );
-    qproperty!("writeAtTip", Member = write_at_tip, Notify = changed);
     qproperty!(
         "writeMovedHead",
         Member = write_moved_head,

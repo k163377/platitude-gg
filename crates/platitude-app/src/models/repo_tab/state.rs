@@ -63,7 +63,6 @@ impl Default for RepoTab {
             head_author_email: String::new(),
             head_author_differs: false,
             head_commit_seq: 0,
-            last_write_op: String::new(),
             last_write_error: String::new(),
             last_write_stopped: false,
             write_seq: 0,

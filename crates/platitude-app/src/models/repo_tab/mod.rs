@@ -188,16 +188,14 @@ pub struct RepoTab {
     /// Bumped each time an answer arrives, so an editor waiting for one
     /// can tell "not loaded yet" from "loaded, and it is empty".
     head_commit_seq: i32,
-    /// The most recently finished write: its name, git's message (empty on
-    /// success) and a counter QML compares against to spot a new one. A
-    /// signal with arguments would be the natural shape, but the bridge
-    /// only carries parameterless ones.
+    /// The most recently finished write: git's message (empty on success)
+    /// and a counter QML compares against to spot a new one. A signal
+    /// with arguments would be the natural shape, but the bridge only
+    /// carries parameterless ones.
     ///
-    /// Name and message stay raw data over there — the automation's
-    /// diagnostics quote the name, the push flow shows the message. What
-    /// an answer *means* is the classified group below: the page never
-    /// branches on git vocabulary (app-ui.md).
-    last_write_op: String,
+    /// The message stays raw data over there — the push flow shows it.
+    /// What an answer *means* is the classified group below: the page
+    /// never branches on git vocabulary (app-ui.md).
     last_write_error: String,
     /// git stopped part-way through the write in flight and left the
     /// operation standing. Raised by the message before that write's
@@ -223,7 +221,8 @@ pub struct RepoTab {
     /// The answer is a commit at the tip: a revert / cherry-pick / merge
     /// that landed without stopping — including a merge git answered
     /// "Already up to date", whose tip is exactly where that merge would
-    /// have put anyone.
+    /// have put anyone. Not a property of its own: where a landing is
+    /// waited for, it is waited for by answer (`WriteAnswer::at_tip`).
     write_at_tip: bool,
     /// HEAD moved (a checkout or a reset landed), so the working tree
     /// under an open diff was rewritten.
