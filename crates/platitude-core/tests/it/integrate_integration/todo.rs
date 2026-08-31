@@ -176,3 +176,65 @@ async fn the_helper_is_found_beside_the_other_binaries() {
     assert_eq!(sequencer::helper_in(dir).expect("found"), built);
     assert!(Path::new(&built).is_file());
 }
+
+/// `rebase.rebaseMerges` is the person's own config, and it decides the
+/// shape of the todo git writes: with it standing the list opens with
+/// `label onto` / `reset onto` ahead of the picks (measured on 2.55).
+/// The helper replaces that file, so the driven rebase says
+/// `--no-rebase-merges` and the plan is the whole of what git is asked
+/// for.
+///
+/// Two things are being held here, and neither is the history's shape —
+/// the replaced todo makes the outcome the same either way today. First,
+/// the flag has to work on the minimum git, which the run in that
+/// container measures (`cargo xtask linux test -p platitude-core`).
+/// Second, git must not refuse the config and the flag standing
+/// together — the manual says the flag countermands the config, and this
+/// is that sentence run.
+#[tokio::test]
+async fn a_plan_runs_whole_with_rebase_merges_set_in_the_config() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+    repo.commit_file("c.txt", "three\n", "third");
+    repo.git(&["config", "rebase.rebaseMerges", "true"]);
+    assert_eq!(
+        repo.git(&["config", "rebase.rebaseMerges"]),
+        "true",
+        "the config has to be standing for this to measure anything"
+    );
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    let plan = sequencer::plan_for(&exec, &repo.path, "HEAD~2", &cancel)
+        .await
+        .expect("plan");
+    let steps = vec![
+        RebaseStep {
+            action: TodoAction::Drop,
+            ..plan[0].clone()
+        },
+        plan[1].clone(),
+    ];
+    sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        "HEAD~2",
+        &steps,
+        &RebaseOptions::default(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("the plan runs with rebase.rebaseMerges standing");
+
+    assert_eq!(current_op(&repo).await, None);
+    assert_eq!(
+        repo.git(&["log", "--format=%s"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec!["third", "root"],
+        "the plan replayed flat: the dropped commit is gone and nothing else"
+    );
+    assert!(!repo.path.join("b.txt").exists());
+}

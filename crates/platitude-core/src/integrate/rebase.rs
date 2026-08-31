@@ -310,7 +310,19 @@ pub(crate) fn rebase_command(
         cmd = cmd.arg("--update-refs");
     }
     if let Some(editor) = todo_editor {
-        cmd = cmd.arg("--interactive").env("GIT_SEQUENCE_EDITOR", editor);
+        // `--no-rebase-merges` pins off `rebase.rebaseMerges`, the config
+        // that decides the shape of the todo git writes: with it standing
+        // the list opens with `label onto` / `reset onto` ahead of the
+        // picks. The editor replaces that file wholesale, so the config
+        // changes nothing about what runs today — but that rests on the
+        // merge backend accepting a todo with no labels in it, and the
+        // plan on screen is what git has to be asked for rather than what
+        // it works out to. The driven form only: a plain rebase has no
+        // plan to keep, so the config is the person's own (measurements
+        // and the rest of the decision in rules-refs/core.md).
+        cmd = cmd
+            .args(["--interactive", "--no-rebase-merges"])
+            .env("GIT_SEQUENCE_EDITOR", editor);
     }
     if let Some(onto) = &options.onto {
         cmd = cmd.args(["--onto", onto]);
@@ -360,5 +372,21 @@ mod tests {
             "error: cannot rebase onto multiple branches"
         ));
         assert!(!work_is_in_the_way(""));
+    }
+
+    /// The plan only stays whole because git is told to write its todo
+    /// this crate's way; `rebase.rebaseMerges` is the config that would
+    /// decide it otherwise. A plain rebase has no plan to keep, so that
+    /// config stays the person's own — the pin is on the driven form
+    /// alone.
+    #[test]
+    fn only_the_driven_rebase_pins_rebase_merges_off() {
+        let options = RebaseOptions::default();
+        let driven =
+            rebase_command(Path::new("repo"), "upstream", &options, Some("editor")).describe();
+        assert!(driven.contains("--interactive"), "{driven}");
+        assert!(driven.contains("--no-rebase-merges"), "{driven}");
+        let plain = rebase_command(Path::new("repo"), "upstream", &options, None).describe();
+        assert!(!plain.contains("rebase-merges"), "{plain}");
     }
 }

@@ -62,6 +62,7 @@
 - **メモリ予算の約半分(`--no-open` 実測 143.6MB — ci/baseline/perf-windows-x64.md)は空リポジトリで既に埋まっている**(Rust ヒープは 1.2MB)。「全部 Qt」と読まない — Qt の床 84MB / 自前 QML シェル 32MB / ページ実体化 16MB(積み方は ci/baseline/perf-windows-x64.md)。software 描画は代替にならない — GPU −25MB だが 56fps で予算割れ(実測)
 
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に別実行ファイル `pg-todo-editor` を差す。**配布物に同梱必須**(本体と同じディレクトリ)
+- **駆動 rebase だけ `--no-rebase-merges` で釘付け**(`integrate::rebase_command` の `todo_editor` 側)— `rebase.rebaseMerges` が立つと git の書く todo が `label onto` / `reset onto`(`--root` は `reset [new root]`)で始まる。helper が todo を丸ごと差し替えるので**今は結果が変わらない**(2.55 実測: 素・`--root`・reword の `exec` 行・`--update-refs` 併用の全形で config 有無が同一)が、それは merge backend が label 無しの todo を通す偶然に乗っているだけなので、プランの全体を git に言わせる形に固定する。**素の rebase は釘付けしない**(守るプランが無い = config は利用者のもの)。網は `integrate_integration::todo::a_plan_runs_whole_with_rebase_merges_set_in_the_config`(最低バージョンでの実測を兼ねる — 2.43 のマニュアルは `--no-rebase-merges` を明記している)
 - **全行 `drop` のプランを拒むのは `--root` の時だけ**(`sequencer::rebase_interactive`)— `--root` は placeholder へ replay するので空 tree・空メッセージのコミットが残る(実測)。回避に範囲を 1 つ広げない — 下のマージが範囲に入り `plan_edit` が拒む
 - **テストが差し込む実行ファイルは rename で置く** — Linux は write fd の下の exec が `ETXTBSY`(git ではなく `sh` が Text file busy を返し rebase 失敗に見える)。`session_integration` の replay 系 5 本が持ち回りで赤くなったらここ(実測: 24 スレッドで 8 回中 6 回赤 → `Once` + staging へ copy + `rename` publish で 0)
   - **`--test-threads` を下げて隠さない** — 4 なら通る(実測)が CI のコア数で戻る。Windows では出ない — `cargo xtask linux` でしか観測できない
