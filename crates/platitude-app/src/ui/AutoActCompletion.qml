@@ -153,6 +153,9 @@ QtObject {
                 // and each step of the walk is entered off the state the one before it asked for — the last of them
                 // waits out a rev-list nobody asked for until the boxes were typed into again.
                 "plan-reword-verb", "plan-reword-out", "plan-reword-ask",
+                // The same shape once more: the plan arrives through the feed, and the walk over the right pane's
+                // remaining doors is entered a step at a time off what the step before it asked for.
+                "plan-details-held",
                 "op-exit-lands",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-rest", "avatar-hover",

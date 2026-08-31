@@ -137,6 +137,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_reword_out plan=false restored=true dirty=false editable=true",
     },
+    // The right pane's other two doors under a standing plan. Every half
+    // of this one is invisible: the row highlight is the page's own
+    // selection, so a model left behind draws the same picture; a diff
+    // read under the plan is drawn nowhere; and `centre=` is where the
+    // middle landed once the plan was put away, which the graph in the
+    // shot cannot tell from a graph that was never left.
+    Verb {
+        name: "plan-details-held",
+        when: &[],
+        plain: "plan_details_held row=1 oid=true outside=true diff=false centre=graph",
+    },
     // And the question the standing plan was refusing to ask: whether a
     // remote already has the commit is asked on the *edge* of the boxes
     // being written into, and the plan spent that edge. Typing again after

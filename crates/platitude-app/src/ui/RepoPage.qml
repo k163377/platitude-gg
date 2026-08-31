@@ -1608,6 +1608,17 @@ Item {
     /// Reads one file, whoever asked — a row that was clicked, or the pane moving itself off a side that ran out
     /// (`followEmptySide`).
     function openDiff(kind, path, origPath) {
+        // Not while a plan stands. The plan has the centre for the whole of its stay (`centreStack`), so a file read
+        // here goes into a pane nobody can see — and it is still open when the plan is put away, which lands the
+        // reader who came back for the graph on a file instead. **This is the only place the diff can be raised**, so
+        // the fold, the neighbour and the read are all held by the one line.
+        //
+        // The file rows themselves stay live, because the right pane does (規約 §フル interactive rebase「右の詳細
+        // ペインがそのまま生きる」): what is held is the one thing a press on them reaches past the pane to do. Silent,
+        // like the mode's other refusals — the arrows are already inert here for a reason of their own (`readPath` is
+        // empty with no diff open, and `FileRowWalk.stepFile` will not step from nowhere).
+        if (page.planShown)
+            return
         // Whatever place a rebuild of the last diff was keeping is the last diff's: restored here it would put the new
         // rows at the old file's scroll (規約 §diff を横へ送る「別のファイルは左端から」).
         diffPane.dropScroll()
@@ -2851,6 +2862,26 @@ Item {
     readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {
+        // While a plan stands the selection has two halves, and they are meant to be the one commit: **this page's**,
+        // which is what the plan pane lights a row from (`RebasePlanPane.selectedOid`), and **the model's row**, which
+        // is what the boxes are routed by and where a typed reword lands (`planReword` / `planDraftOid`). A jump made
+        // straight into this page's half lights the new row and leaves the routing on the old one, and the screen is
+        // then about two commits at once.
+        //
+        // So a hash pressed under a plan is one of two things. **A commit the plan holds** is a walk down the plan,
+        // and is taken the way the row click takes it — the model first, the page second (`RebasePlanPane`).
+        // **Anything else** is past the base, where this screen has no row to put the reader on; it is refused in
+        // silence, the way the mode's other refusals are (`startFind`), because nothing was lost and a hash is not a
+        // press that has to be answered. The waiting face holds no rows at all, so every hash there goes the second
+        // way.
+        if (page.planShown) {
+            const planRow = page.planActive ? planModel.rowOf(oidHex) : -1
+            if (planRow < 0)
+                return
+            planModel.selectRow(planRow)
+            page.activateRow(oidHex)
+            return
+        }
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)
             graphPane.jumpToRow(row)

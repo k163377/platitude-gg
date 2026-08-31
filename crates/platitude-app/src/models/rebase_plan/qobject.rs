@@ -186,6 +186,28 @@ impl RebasePlanModel {
         self.changed();
     }
 
+    /// The row a commit sits on right now, or -1 where the plan does not
+    /// hold it — for a selection that arrives named by its commit rather
+    /// than by its row. The parent hash in the right pane is the one such
+    /// door left open while a plan stands (`RepoPage.jumpToRef`), and the
+    /// answer is what tells a walk down into the plan from a walk out of
+    /// it, past the base and off this screen.
+    ///
+    /// A walk of the rows, because a reorder is exactly what the plan is
+    /// for: no index survives [`Self::move_step`], and one kept in step
+    /// with it would be a second spelling of the order the rows already
+    /// are. Same shape as the walk the click makes anyway on the way in
+    /// (`GraphModel::row_of`, over the whole loaded history), so nothing
+    /// new is put on the path.
+    #[qslot]
+    fn row_of(&mut self, oid_hex: String) -> i32 {
+        self.steps
+            .iter()
+            .position(|step| step.oid_hex == oid_hex)
+            .and_then(|row| i32::try_from(row).ok())
+            .unwrap_or(-1)
+    }
+
     /// Names the row the page's selection sits on (-1 = none), so the
     /// selection's verb is readable without a role query.
     #[qslot]
