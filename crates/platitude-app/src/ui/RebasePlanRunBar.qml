@@ -18,7 +18,30 @@ Item {
     required property bool busy
 
     height: runButton.implicitHeight + Theme.spaceMd
-    readonly property bool holds: bar.plan.dropCount > 0 && !bar.tipHeldElsewhere
+    /// What the run asks for as things stand: rows are leaving the history and nothing else reaches the tip.
+    readonly property bool holdsNow: bar.plan.dropCount > 0 && !bar.tipHeldElsewhere
+    /// The same answer as the press under way was given it — **whether this is a hold is settled the moment the
+    /// button goes down** (デザイン規約 §フル interactive rebase). `tipHeldElsewhere` follows the fetch the plan's
+    /// freeze deliberately leaves running, so it can move under a hand that is already holding, and `ActionButton`
+    /// reads the length again at the release: a hold begun on the red button would come back as a click and run the
+    /// plan on a gesture nobody made. The frame and the word are frozen with it, so nothing about the button changes
+    /// under the hand.
+    ///
+    /// Declared with the live value so it reads right from the start; the `Binding` below is what keeps it, dropped
+    /// while a press is under way with nothing put back after (`RestoreNone`) — which is the freeze itself.
+    property bool holds: bar.holdsNow
+    /// A gesture is under way. The pointer's is `down`; the keyboard's is not — an armed hold takes Space itself
+    /// (`HoldDriver.pressKey`), so `down` never rises for it and the climbing fill is what says the press is there.
+    /// The fill also covers the slide back out, which is that press's own tail.
+    readonly property bool pressing: runButton.down || runButton.holdProgress > 0
+
+    Binding {
+        target: bar
+        property: "holds"
+        value: bar.holdsNow
+        when: !bar.pressing
+        restoreMode: Binding.RestoreNone
+    }
 
     ActionButton {
         id: runButton
