@@ -3,12 +3,20 @@
 use super::*;
 
 impl RepoTab {
-    #[expect(clippy::too_many_lines)]
     pub(super) fn take_feed(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        for msg in feed.drain() {
+        self.absorb(feed.drain());
+        self.changed();
+    }
+
+    /// Everything the feed had waiting, folded into the properties QML
+    /// reads — **one `changed()` for the lot of them**, which is what
+    /// makes a whole batch a thing a test can hand over at once.
+    #[expect(clippy::too_many_lines)]
+    pub(super) fn absorb(&mut self, batch: Vec<TabMsg>) {
+        for msg in batch {
             match msg {
                 TabMsg::Opened { title, path } => {
                     self.state = "open".into();
@@ -168,7 +176,6 @@ impl RepoTab {
                 }
             }
         }
-        self.changed();
     }
 
     /// What git makes of one commit's signature, for the pane to read —
