@@ -14,6 +14,16 @@ fn step(oid: &str, subject: &str) -> PlanStepItem {
     }
 }
 
+/// One row dressed the way the two boxes and the verb chip leave it.
+fn typed(action: &str, msg_subject: &str, msg_body: &str, subject: &str) -> PlanStepItem {
+    PlanStepItem {
+        action: action.to_string(),
+        msg_subject: msg_subject.to_string(),
+        msg_body: msg_body.to_string(),
+        ..step("c1", subject)
+    }
+}
+
 /// Three rows in display order (newest first), untouched.
 fn fresh() -> RebasePlanModel {
     let mut model = RebasePlanModel::default();
@@ -299,7 +309,43 @@ fn a_second_click_only_stands_down_for_the_commit_already_asked() {
 
 #[test]
 fn the_shown_subject_follows_the_typed_reword_and_falls_back() {
-    assert_eq!(RebasePlanModel::shown_of("reword", "typed", "own"), "typed");
-    assert_eq!(RebasePlanModel::shown_of("reword", "  ", "own"), "own");
-    assert_eq!(RebasePlanModel::shown_of("pick", "typed", "own"), "own");
+    let shown = |s: PlanStepItem| RebasePlanModel::shown_of(&s);
+    assert_eq!(shown(typed("reword", "typed", "", "own")), "typed");
+    assert_eq!(shown(typed("reword", "  ", "", "own")), "own");
+    assert_eq!(shown(typed("pick", "typed", "", "own")), "own");
+    // The description box carries a reword as far as the summary does, so
+    // the row has to say so too: git takes the message's first line as
+    // the subject, and the row showing the commit's old one would be the
+    // plan telling the reader something the run then contradicts.
+    assert_eq!(
+        shown(typed("reword", "", "from the body\n\nand more", "own")),
+        "from the body"
+    );
+    assert_eq!(
+        shown(typed("pick", "", "from the body", "own")),
+        "own",
+        "no reword verb, nothing rewritten"
+    );
+}
+
+/// The rule the row is drawn by and the rule the todo is written by are
+/// the one mapping ([`RebasePlanModel::todo_action_of`]): whatever the
+/// two boxes hold, what the row shows is the subject that message leaves.
+#[test]
+fn the_row_shows_the_subject_the_todo_would_write() {
+    for (msg_subject, msg_body) in [
+        ("typed", ""),
+        ("", "from the body"),
+        ("typed", "and a body"),
+        ("", "from the body\n\nand more"),
+    ] {
+        let step = typed("reword", msg_subject, msg_body, "own");
+        let (action, message) = RebasePlanModel::todo_action_of(&step);
+        assert_eq!(action, TodoAction::Reword, "{msg_subject:?}/{msg_body:?}");
+        assert_eq!(
+            RebasePlanModel::shown_of(&step),
+            platitude_core::commit::split_message(&message).0,
+            "the row says what the run writes ({msg_subject:?}/{msg_body:?})"
+        );
+    }
 }

@@ -153,7 +153,7 @@ impl RebasePlanModel {
             step.msg_subject = String::new();
             step.msg_body = String::new();
         }
-        step.shown = Self::shown_of(&step.action, &step.msg_subject, &step.subject);
+        step.shown = Self::shown_of(step);
         // A drop can strand a fold above it (nothing left below to land
         // in), so the fold rule walks the rows after every verb change.
         let mut touched = self.demote_orphan_folds();
@@ -165,8 +165,9 @@ impl RebasePlanModel {
     }
 
     /// Types the reword for row `row` — the right pane's two boxes write
-    /// here, and the row's shown subject mirrors the summary as it is
-    /// typed (デザイン規約 §コミットメッセージの 2 つの枠).
+    /// here, and the row's shown subject mirrors what the run would leave
+    /// on the commit as it is typed ([`RebasePlanModel::shown_of`];
+    /// デザイン規約 §コミットメッセージの 2 つの枠).
     #[qslot]
     fn set_message(&mut self, row: i32, subject: String, body: String) {
         let Ok(index) = usize::try_from(row) else {
@@ -180,7 +181,7 @@ impl RebasePlanModel {
         }
         step.msg_subject = subject;
         step.msg_body = body;
-        step.shown = Self::shown_of(&step.action, &step.msg_subject, &step.subject);
+        step.shown = Self::shown_of(step);
         self.notify_runs([(index, index)]);
         self.settle();
         self.changed();

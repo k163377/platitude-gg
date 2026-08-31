@@ -178,13 +178,21 @@ impl RebasePlanModel {
         i32::try_from(drops).unwrap_or(i32::MAX)
     }
 
-    /// What the row should show for its subject, given what the plan
-    /// holds for it.
-    pub(super) fn shown_of(action: &str, msg_subject: &str, subject: &str) -> String {
-        if action == "reword" && !msg_subject.trim().is_empty() {
-            msg_subject.trim().to_string()
+    /// What the row should show for its subject: the subject the run
+    /// would actually leave on the commit.
+    ///
+    /// Read through [`Self::todo_action_of`] for the same reason
+    /// [`Self::is_dirty`] is — the row and the todo must not be able to
+    /// say different things. Typed into the description box alone, a
+    /// `reword` still rewrites the commit, and git's subject is that
+    /// message's first line; taking the summary box on its own would
+    /// leave the row showing the old subject while the run replaced it.
+    pub(super) fn shown_of(step: &PlanStepItem) -> String {
+        let (action, message) = Self::todo_action_of(step);
+        if action == TodoAction::Reword {
+            platitude_core::commit::split_message(&message).0
         } else {
-            subject.to_string()
+            step.subject.clone()
         }
     }
 
@@ -274,7 +282,7 @@ impl RebasePlanModel {
             let step = &mut self.steps[row];
             if folds(&step.action) && !lands {
                 step.action = "pick".to_string();
-                step.shown = Self::shown_of("pick", &step.msg_subject, &step.subject);
+                step.shown = Self::shown_of(step);
                 demoted.push(row);
             }
             lands |= self.steps[row].action != "drop";
