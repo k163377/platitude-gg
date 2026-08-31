@@ -118,8 +118,14 @@ Rectangle {
                 planPane.planModel.selectRow(row)
                 planPane.rowPicked(oidHex)
             }
+            function moveBegan() {
+                planPane.planModel.beginMove()
+            }
             function moveRequested(from, to) {
                 planPane.planModel.moveStep(from, to)
+            }
+            function moveEnded() {
+                planPane.planModel.endMove()
             }
             function verbMenuRequested(row) {
                 verbMenu.openFor(row)

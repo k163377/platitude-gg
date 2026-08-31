@@ -220,28 +220,48 @@ impl RebasePlanModel {
         self.changed();
     }
 
-    /// Moves row `from` to sit at `to` (display indices). One Qt move, so
-    /// the delegate under the hand stays alive; a fold the reorder
-    /// stranded on the oldest row goes back to `pick` on the spot, and
-    /// the selection follows the row it was on.
+    /// Moves row `from` to sit at `to` (display indices), the selection
+    /// following the row it was on. A fold the reorder stranded on the
+    /// oldest row goes back to `pick` — on the spot for a move that
+    /// stands on its own, and at the release for one a hand is still
+    /// making ([`Self::begin_move`] / [`Self::end_move`]).
     #[qslot]
     fn move_step(&mut self, from: i32, to: i32) {
-        let (Ok(from_i), Ok(to_i)) = (usize::try_from(from), usize::try_from(to)) else {
-            return;
-        };
-        if from_i == to_i || from_i >= self.steps.len() || to_i >= self.steps.len() {
+        if !self.reorder(from, to) {
             return;
         }
-        self.move_notified(from_i, to_i);
-        if self.selected_row == from {
-            self.selected_row = to;
-        } else if from < self.selected_row && to >= self.selected_row {
-            self.selected_row -= 1;
-        } else if from > self.selected_row && to <= self.selected_row {
-            self.selected_row += 1;
+        self.settle();
+        self.changed();
+    }
+
+    /// A reorder by hand has begun. From here to [`Self::end_move`] the
+    /// rows move without the fold rule walking them.
+    #[qslot]
+    fn begin_move(&mut self) {
+        self.dragging = true;
+    }
+
+    /// The hand let go (or the grab was taken from it), and the fold rule
+    /// is held once over where the row actually landed.
+    ///
+    /// **Why not per move.** The drag reports every row it crosses, so a
+    /// `squash` carried down past the oldest row and back would be
+    /// demoted on the way through and stay `pick` — redrawn under the
+    /// hand that never dropped it there. With the order back where it
+    /// started nothing else is left asking either, so `dirty` falls and
+    /// the run button shuts on a plan whose author still reads a fold on
+    /// the row. The rule is written for where a fold *lands*
+    /// (デザイン規約 §フル interactive rebase「並べ替えで最古に落ちた fold
+    /// は `pick` へ戻る」), and only the release says where that is.
+    #[qslot]
+    fn end_move(&mut self) {
+        if !self.dragging {
+            return;
         }
-        let demoted = self.demote_orphan_folds();
-        self.notify_runs(demoted.into_iter().map(|i| (i, i)));
+        self.dragging = false;
+        if !self.hold_fold_rule() {
+            return;
+        }
         self.settle();
         self.changed();
     }
@@ -253,6 +273,13 @@ impl RebasePlanModel {
     /// (デザイン規約 §進行中の操作から出る).
     #[qslot]
     fn run_plan(&mut self) {
+        // A drag whose release never came — its delegate taken out from
+        // under it — would leave the fold rule unheld, and the one thing
+        // that rule holds off is a todo git refuses outright
+        // ([`Self::demote_orphan_folds`]). Nothing is on screen to watch
+        // it happen, since the plan is put away a few lines down; a
+        // broken stop would be all the reader got in its place.
+        self.end_move();
         if !self.active || !self.dirty {
             return;
         }
@@ -425,7 +452,12 @@ impl RebasePlanModel {
     /// Replaces every row under one model reset: the plan opens whole,
     /// not row by row (`QListModelBase::reset` installs what
     /// `reset_unnotified` finds staged).
+    ///
+    /// Every delegate goes with the reset, one under a hand included, so
+    /// no release is coming for it — the drag is put down here rather
+    /// than left latched over rows that no longer exist (`end_move`).
     fn reset_rows(&mut self, rows: Vec<PlanStepItem>) {
+        self.dragging = false;
         self.pending_rows = Some(rows);
         self.reset();
     }

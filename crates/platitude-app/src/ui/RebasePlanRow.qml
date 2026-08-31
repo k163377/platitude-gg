@@ -60,13 +60,27 @@ Item {
             else if (!rowArea.dragging)
                 planRow.list.rowPicked(planRow.index, planRow.oid_hex)
         }
+        // Both ends of the drag are told to the model, because the fold rule is held at the release rather than at
+        // every crossing (RebasePlanModel::end_move). `dragging` itself is not put down here — the click that follows a
+        // release reads it to know the press was a drag and not a selection; the next press is what clears it.
+        onReleased: mouse => {
+            if (mouse.button === Qt.LeftButton && rowArea.dragging && planRow.list !== null)
+                planRow.list.moveEnded()
+        }
+        // The grab was taken away (a popup, a window losing it): no release is coming, so the drag is ended here.
+        onCanceled: {
+            if (rowArea.dragging && planRow.list !== null)
+                planRow.list.moveEnded()
+        }
         // The reorder: past the drag threshold the row follows the pointer a row at a time. The model's move keeps
         // this very delegate alive under the hand (impl_move_notified), so the mapping below stays anchored to it.
         onPositionChanged: mouse => {
             if (!rowArea.pressed || planRow.list === null)
                 return
-            if (!rowArea.dragging && Math.abs(mouse.y - rowArea.pressedY) > Qt.styleHints.startDragDistance)
+            if (!rowArea.dragging && Math.abs(mouse.y - rowArea.pressedY) > Qt.styleHints.startDragDistance) {
                 rowArea.dragging = true
+                planRow.list.moveBegan()
+            }
             if (!rowArea.dragging)
                 return
             const yInList = planRow.mapToItem(planRow.list.contentItem, 0, mouse.y).y

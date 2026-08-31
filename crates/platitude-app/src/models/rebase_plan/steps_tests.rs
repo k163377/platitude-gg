@@ -180,6 +180,73 @@ fn a_demoted_fold_is_itself_a_landing_for_the_fold_above() {
     assert_eq!(model.steps[1].action, "pick");
 }
 
+/// A reorder that stands on its own holds the fold rule the moment it
+/// lands — the row it stranded is `pick` before anything else is asked.
+#[test]
+fn a_reorder_on_its_own_demotes_where_it_lands() {
+    let mut model = fresh();
+    model.steps[1].action = "squash".to_string();
+    assert!(model.reorder(1, 2), "c2 goes to the oldest place");
+    assert_eq!(
+        model.steps[2].action, "pick",
+        "nothing left below to fold into"
+    );
+}
+
+/// The drag reports every row it crosses, so the rule cannot be walked
+/// per crossing: a `squash` carried down past the oldest row and back
+/// would come out `pick` under the hand that never dropped it there, and
+/// with the order restored the plan would read all-pick and shut its run
+/// button on a fold its author is still looking at.
+#[test]
+fn a_fold_carried_past_the_oldest_row_and_back_survives_the_trip() {
+    let mut model = fresh();
+    model.steps[1].action = "squash".to_string();
+
+    model.dragging = true;
+    assert!(model.reorder(1, 2), "down onto the oldest place");
+    assert_eq!(
+        model.steps[2].action, "squash",
+        "still a fold while the hand carries it"
+    );
+    assert!(model.reorder(2, 1), "and back where it came from");
+    assert!(!model.hold_fold_rule(), "it lands where a fold stands");
+
+    model.dragging = false;
+    assert_eq!(model.steps[1].action, "squash");
+    assert_eq!(
+        model
+            .steps
+            .iter()
+            .map(|s| s.oid_hex.as_str())
+            .collect::<Vec<_>>(),
+        vec!["c3", "c2", "c1"],
+        "the round trip put the order back"
+    );
+    model.settle();
+    assert!(model.dirty, "and the fold is still what the run would ask");
+}
+
+/// The other end of the same trip: a fold the hand actually *leaves* on
+/// the oldest row is demoted at the release, visibly on the row
+/// (デザイン規約 §フル interactive rebase).
+#[test]
+fn a_fold_dropped_on_the_oldest_row_is_demoted_at_the_release() {
+    let mut model = fresh();
+    model.steps[1].action = "squash".to_string();
+
+    model.dragging = true;
+    assert!(model.reorder(1, 2));
+    assert_eq!(
+        model.steps[2].action, "squash",
+        "not yet — the hand is on it"
+    );
+
+    model.dragging = false;
+    assert!(model.hold_fold_rule(), "the release is what demotes it");
+    assert_eq!(model.steps[2].action, "pick");
+}
+
 #[test]
 fn fold_lands_answers_for_the_menu_what_the_demotion_enforces() {
     let mut model = fresh();

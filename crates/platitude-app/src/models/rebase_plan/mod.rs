@@ -62,6 +62,10 @@ pub struct RebasePlanModel {
     /// The oids in the order the plan opened with — what `dirty` compares
     /// the current order against.
     pub(super) initial: Vec<String>,
+    /// A hand is carrying a row. The drag reports every row it crosses,
+    /// so the fold rule waits for the release (`end_move`) rather than
+    /// walking the rows once per crossing.
+    pub(super) dragging: bool,
     pub(super) active: bool,
     pub(super) loading: bool,
     /// The commit the open was asked from; answers for any other click
@@ -276,6 +280,45 @@ impl RebasePlanModel {
             lands |= self.steps[row].action != "drop";
         }
         demoted
+    }
+
+    /// Walks [`Self::demote_orphan_folds`] over the rows and redraws the
+    /// ones it sent back to `pick`. Answers whether it moved anything, so
+    /// a caller with no other reason to notify can stand down.
+    pub(super) fn hold_fold_rule(&mut self) -> bool {
+        let demoted = self.demote_orphan_folds();
+        let moved = !demoted.is_empty();
+        self.notify_runs(demoted.into_iter().map(|i| (i, i)));
+        moved
+    }
+
+    /// Moves row `from` to sit at `to` (display indices), carrying the
+    /// selection with the row it was on. One Qt move, so the delegate
+    /// under the hand stays alive. Answers whether anything moved.
+    ///
+    /// The fold rule is held here only when nothing is carrying the row.
+    /// A drag reports every row it crosses, and walking the rule per
+    /// crossing demotes a fold the hand is merely *passing* through the
+    /// oldest place — see `end_move`, which holds it once at the release.
+    pub(super) fn reorder(&mut self, from: i32, to: i32) -> bool {
+        let (Ok(from_i), Ok(to_i)) = (usize::try_from(from), usize::try_from(to)) else {
+            return false;
+        };
+        if from_i == to_i || from_i >= self.steps.len() || to_i >= self.steps.len() {
+            return false;
+        }
+        self.move_notified(from_i, to_i);
+        if self.selected_row == from {
+            self.selected_row = to;
+        } else if from < self.selected_row && to >= self.selected_row {
+            self.selected_row -= 1;
+        } else if from > self.selected_row && to <= self.selected_row {
+            self.selected_row += 1;
+        }
+        if !self.dragging {
+            self.hold_fold_rule();
+        }
+        true
     }
 }
 
