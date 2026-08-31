@@ -12,10 +12,15 @@ impl RepoTab {
     }
 
     /// Everything the feed had waiting, folded into the properties QML
-    /// reads — **one `changed()` for the lot of them**, which is what
-    /// makes a whole batch a thing a test can hand over at once.
+    /// reads — **one `changed()` for the lot of them**, which is why the
+    /// write answers are kept as a list beside the group they rewrite
+    /// (`write_answers`).
     #[expect(clippy::too_many_lines)]
     pub(super) fn absorb(&mut self, batch: Vec<TabMsg>) {
+        // Whatever the last notify carried is over: this one answers for
+        // itself, and an empty list is a drain that brought no write
+        // answer at all.
+        self.write_answers.clear();
         for msg in batch {
             match msg {
                 TabMsg::Opened { title, path } => {
@@ -178,6 +183,15 @@ impl RepoTab {
         }
     }
 
+    /// One of the answers this notify carried, or nothing where the
+    /// index is past their end — a reader that asks after the list has
+    /// been emptied gets the resting values, which are the failing ones.
+    pub(super) fn write_answer_at(&self, index: i32) -> Option<&WriteAnswer> {
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.write_answers.get(i))
+    }
+
     /// What git makes of one commit's signature, for the pane to read —
     /// **unless the question moved on while it was being answered**
     /// (`signature_wanted`).
@@ -281,8 +295,19 @@ impl RepoTab {
         self.write_stashed = landed && op == "stash";
         self.write_branch_op = op == "branch";
         self.write_pushed = op == "push";
+        self.write_seq += 1;
+        // …and kept beside the group as well, because the group holds
+        // only one answer and a drain can bring several. A reader waiting
+        // for its own write looks for it here (`write_answers`); the
+        // group is what the page reads when any answer will do.
+        self.write_answers.push(WriteAnswer {
+            seq: self.write_seq,
+            op: op.clone(),
+            stopped: self.last_write_stopped,
+            failed: !landed,
+            at_tip: self.write_at_tip,
+        });
         self.last_write_op = op;
         self.last_write_error = error;
-        self.write_seq += 1;
     }
 }

@@ -209,7 +209,7 @@ Item {
     // half: a row can be selected and still be somewhere nobody can see.
     SampleTimer {
         id: tipLandedTimer
-        /// The name this run's own write answered by, latched off the answer that carried it rather than read back
+        /// The name this run's own write answered by, taken from the answer that carried it rather than read back
         /// at the report — **every** answer rewrites the group it comes from (`RepoTab::settle_write`), so a fetch
         /// settling while the landing is still being waited out takes it away again. The counter having moved says
         /// only that *an* answer arrived; a fetch's answer moves it too.
@@ -259,17 +259,26 @@ Item {
     /// `busyCount` is deliberately not waited for anywhere in this chain: a write that begins and ends between two
     /// looks never shows one, and requiring it wedges the run instead (`writeSeqBefore`).
     ///
-    /// `writeAtTip` is the bridge's own word for "landed, did not stop part-way, and answers at the tip" — the op
-    /// names are turned into meanings on that side of it (`RepoTab::settle_write`), not branched on here. A fetch's
-    /// answer, a refusal and a stop all leave the arm down, and the run walks into its watchdog rather than
+    /// **And out of the answers that notify carried rather than off the group they leave behind**: one drain empties
+    /// the whole queue and notifies once (`RepoTab::write_answers`), so an answer arriving behind this one — the
+    /// interval's own fetch, most often — leaves the group describing itself, with the landing nowhere on it.
+    ///
+    /// `writeAnswerAtTip` is the bridge's own word for "landed, did not stop part-way, and answers at the tip" — the
+    /// op names are turned into meanings on that side of it (`RepoTab::settle_write`), not branched on here. A
+    /// fetch's answer, a refusal and a stop all leave the arm down, and the run walks into its watchdog rather than
     /// photographing a repository nothing happened to.
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
-            if (!tipLandedTimer.running || tipLandedTimer.answeredOp !== ""
-                    || driver.repoTab.writeSeq <= driver.writeSeqBefore || !driver.repoTab.writeAtTip)
+            if (!tipLandedTimer.running || tipLandedTimer.answeredOp !== "")
                 return
-            tipLandedTimer.answeredOp = driver.repoTab.lastWriteOp
+            const tab = driver.repoTab
+            for (let i = 0; i < tab.writeAnswerCount(); i++) {
+                if (tab.writeAnswerSeq(i) <= driver.writeSeqBefore || !tab.writeAnswerAtTip(i))
+                    continue
+                tipLandedTimer.answeredOp = tab.writeAnswerOp(i)
+                return
+            }
         }
     }
     // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit

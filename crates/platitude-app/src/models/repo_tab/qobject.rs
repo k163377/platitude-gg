@@ -125,7 +125,10 @@ impl RepoTab {
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
     // The last answer, classified in drain::settle_write — the page reads
-    // meanings, never op names (app-ui.md).
+    // meanings, never op names (app-ui.md). What a reader waiting for one
+    // particular answer asks instead is `writeAnswerCount` and the five
+    // beside it: a drain can carry several answers and these describe
+    // only the last of them.
     qproperty!("writeRefused", Member = write_refused, Notify = changed);
     qproperty!(
         "writeStaleDiff",
@@ -220,6 +223,54 @@ impl RepoTab {
     #[qslot]
     fn remote_at(&self, index: i32) -> String {
         self.remote_name_at(index)
+    }
+
+    /// How many write answers this notify carried
+    /// (`RepoTab::write_answers`). Zero on a notify raised by anything
+    /// else, which is most of them.
+    ///
+    /// Read one field at a time the way the remotes are, rather than
+    /// packed into a string: a decode in QML would be data handling, and
+    /// that belongs on this side of the bridge (app-ui.md).
+    #[qslot]
+    fn write_answer_count(&self) -> i32 {
+        i32::try_from(self.write_answers.len()).unwrap_or(i32::MAX)
+    }
+
+    /// What `write_seq` counted that answer at — how a reader tells the
+    /// answer to its own press from one counted before it.
+    #[qslot]
+    fn write_answer_seq(&self, index: i32) -> i32 {
+        self.write_answer_at(index).map_or(0, |a| a.seq)
+    }
+
+    /// Which write answered. Raw data, the way `lastWriteError` is: what
+    /// an answer *means* is the three below.
+    #[qslot]
+    fn write_answer_op(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.op.clone())
+            .unwrap_or_default()
+    }
+
+    /// git stopped part-way through that one and left the operation
+    /// standing.
+    #[qslot]
+    fn write_answer_stopped(&self, index: i32) -> bool {
+        self.write_answer_at(index).is_some_and(|a| a.stopped)
+    }
+
+    /// It did not happen: git would not do it, or could not reach the far
+    /// side to.
+    #[qslot]
+    fn write_answer_failed(&self, index: i32) -> bool {
+        self.write_answer_at(index).is_some_and(|a| a.failed)
+    }
+
+    /// It left a commit at the tip to go to.
+    #[qslot]
+    fn write_answer_at_tip(&self, index: i32) -> bool {
+        self.write_answer_at(index).is_some_and(|a| a.at_tip)
     }
 
     /// Local branch name a remote-tracking ref would take: the ref with

@@ -76,6 +76,7 @@ impl Default for RepoTab {
             write_stashed: false,
             write_branch_op: false,
             write_pushed: false,
+            write_answers: Vec::new(),
             write_report_kind: String::new(),
             write_report_remote: String::new(),
             write_report_name: String::new(),

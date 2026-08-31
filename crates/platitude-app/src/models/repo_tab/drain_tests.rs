@@ -288,3 +288,120 @@ fn every_answer_rewrites_the_whole_group() {
     assert!(tab.write_refused);
     assert_eq!(tab.write_seq, 2);
 }
+
+/// One drain carrying a whole run and the fetch behind it — what the
+/// freeze leaves running comes back while the run's landing is still
+/// being waited out, and the two answers meet in the same batch
+/// (`take_feed` drains the queue whole and notifies once).
+fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
+    vec![
+        TabMsg::WriteStopped,
+        TabMsg::WriteState {
+            op: "rebase".into(),
+            running: false,
+            error: String::new(),
+            report: None,
+        },
+        TabMsg::WriteState {
+            op: "fetch".into(),
+            running: true,
+            error: String::new(),
+            report: None,
+        },
+        TabMsg::WriteState {
+            op: "fetch".into(),
+            running: false,
+            error: String::new(),
+            report: None,
+        },
+    ]
+}
+
+// The group properties describe the answer that came last, and a batch
+// leaves only that one to be read: a reader waiting for the run's own
+// answer by name never sees it, and the stop it left standing is taken
+// back down by the fetch *starting*. Both are read out of the list
+// instead, which keeps every answer the notify carried.
+#[test]
+fn every_answer_in_one_drain_is_published_not_just_the_last() {
+    let mut tab = RepoTab::default();
+    tab.absorb(a_run_and_the_fetch_behind_it());
+    assert!(
+        !tab.last_write_stopped,
+        "the fetch starting took the stop back down"
+    );
+    let ops: Vec<&str> = tab.write_answers.iter().map(|a| a.op.as_str()).collect();
+    assert_eq!(
+        ops,
+        ["rebase", "fetch"],
+        "both answers, in the order they came"
+    );
+}
+
+#[test]
+fn the_runs_answer_keeps_the_stop_that_was_its_own() {
+    let mut tab = RepoTab::default();
+    tab.absorb(a_run_and_the_fetch_behind_it());
+    let run = &tab.write_answers[0];
+    assert!(run.stopped, "git stopped part-way through this one");
+    assert!(!run.failed);
+    assert!(!run.at_tip, "a stop leaves no commit at the tip to go to");
+    assert!(
+        !tab.write_answers[1].stopped,
+        "the stop was not the fetch's"
+    );
+}
+
+/// Which answer a run is waiting for is told by the counter it read
+/// before pressing, so one already counted cannot arm it.
+#[test]
+fn each_answer_carries_the_seq_it_was_counted_at() {
+    let mut tab = RepoTab::default();
+    tab.settle_write("push".into(), String::new(), None);
+    let before = tab.write_seq;
+    tab.absorb(a_run_and_the_fetch_behind_it());
+    let seqs: Vec<i32> = tab.write_answers.iter().map(|a| a.seq).collect();
+    assert_eq!(seqs, [before + 1, before + 2]);
+}
+
+// The tip landing is waited for by meaning rather than by name, and the
+// answer carrying it is not the one the group is left describing.
+#[test]
+fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
+    let mut tab = RepoTab::default();
+    tab.absorb(vec![
+        TabMsg::WriteState {
+            op: "merge".into(),
+            running: false,
+            error: String::new(),
+            report: None,
+        },
+        TabMsg::WriteState {
+            op: "fetch".into(),
+            running: false,
+            error: String::new(),
+            report: None,
+        },
+    ]);
+    assert!(!tab.write_at_tip, "the group describes the fetch");
+    let landed: Vec<&str> = tab
+        .write_answers
+        .iter()
+        .filter(|a| a.at_tip)
+        .map(|a| a.op.as_str())
+        .collect();
+    assert_eq!(landed, ["merge"]);
+}
+
+// A drain that brought no write answer says so, rather than leaving the
+// last one's list standing for a second notify to read over again.
+#[test]
+fn a_drain_with_no_write_answer_publishes_none() {
+    let mut tab = RepoTab::default();
+    tab.absorb(a_run_and_the_fetch_behind_it());
+    assert_eq!(tab.write_answers.len(), 2);
+    tab.absorb(vec![TabMsg::HeadReach {
+        reached_elsewhere: true,
+    }]);
+    assert!(tab.write_answers.is_empty());
+}

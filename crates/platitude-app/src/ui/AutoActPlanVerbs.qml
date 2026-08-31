@@ -388,11 +388,11 @@ Item {
     SampleTimer {
         id: planRanTimer
         property string headBefore: ""
-        /// The run's own answer, latched off the notify the way `tipLandedTimer.answeredOp` is — the fetch the
-        /// freeze leaves running rewrites `lastWriteOp` with every answer of its own, so a beat that reads the
-        /// sampled name can find a fetch's where the rebase's stood (same measured failure). One-way and by name:
-        /// a fetch answering *first* must not take the arm, so only the rebase's answer sets it, and what it said
-        /// about stopping and failing is taken in the same breath.
+        /// The run's own answer, picked out of the answers that notify carried the way `tipLandedTimer.answeredOp`
+        /// is — the fetch the freeze leaves running rewrites the answer group with every answer of its own, so a
+        /// beat that reads the sampled name can find a fetch's where the rebase's stood (same measured failure).
+        /// One-way and by name: a fetch answering *first* must not take the arm, so only the rebase's answer sets
+        /// it, and what it said about stopping and failing is taken in the same breath.
         property string answeredOp: ""
         property bool answeredStopped: false
         property bool answeredError: false
@@ -420,16 +420,25 @@ Item {
             renderedBarrier.begin()
         }
     }
+    /// **Read out of the answers the notify carried, not off the group they leave behind.** One drain empties the
+    /// whole queue and notifies once (`RepoTab::write_answers`), so the fetch coming back behind the run arrives in
+    /// the same beat and the group is left describing *it* — the name this is waiting for was never on screen for a
+    /// moment, and the run walks into its watchdog instead. Each answer keeps its own stop and refusal, so the two
+    /// read here are the rebase's.
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
-            if (!planRanTimer.running || planRanTimer.answeredOp !== ""
-                    || driver.repoTab.writeSeq <= driver.writeSeqBefore
-                    || driver.repoTab.lastWriteOp !== "rebase")
+            if (!planRanTimer.running || planRanTimer.answeredOp !== "")
                 return
-            planRanTimer.answeredOp = driver.repoTab.lastWriteOp
-            planRanTimer.answeredStopped = driver.repoTab.lastWriteStopped
-            planRanTimer.answeredError = driver.repoTab.lastWriteError !== ""
+            const tab = driver.repoTab
+            for (let i = 0; i < tab.writeAnswerCount(); i++) {
+                if (tab.writeAnswerSeq(i) <= driver.writeSeqBefore || tab.writeAnswerOp(i) !== "rebase")
+                    continue
+                planRanTimer.answeredOp = tab.writeAnswerOp(i)
+                planRanTimer.answeredStopped = tab.writeAnswerStopped(i)
+                planRanTimer.answeredError = tab.writeAnswerFailed(i)
+                return
+            }
         }
     }
     // The stop that was asked for. Its tree is clean — nothing conflicted — so what the picture cannot hold is the

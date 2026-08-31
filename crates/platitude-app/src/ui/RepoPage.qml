@@ -1534,19 +1534,32 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
         }
-        // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and the
-        // answer to the press is the working tree: the conflicted rows, and the way out under them (デザイン規約
-        // §進行中の操作から出る). Armed rather than done on the spot, for the reason the head landing below is: the
-        // status that will carry those rows has not arrived yet (by design).
-        if (repoTab.lastWriteStopped)
-            page.pendingWipSelect = true
-        // The answer is a commit at the tip, and that commit is what was asked for here, not the row or the ref that
-        // was clicked. The selection goes to it and the viewport follows: what was clicked can be anywhere in the
-        // history, while the answer is always at the top.
-        else if (repoTab.writeAtTip) {
-            page.pendingHeadSelect = true
-            page.pendingHeadSeenSeq = workTree.statusSeq
-            page.pendingHeadAsked = true
+        // Where the answer sends the reader — **read out of the answers this notify carried, not off the group they
+        // leave behind**. One drain empties the whole queue and notifies once (`RepoTab::write_answers`), so a write
+        // *starting* in the same batch — the fetch that follows a run — takes the stop's flag back down before this
+        // line is reached, and the reader is left on the graph where the conflicted rows should have been.
+        //
+        // Walked in order with the later answer winning: the two landings are exclusive — a stop leaves no commit at
+        // the tip to go to — so the one armed is the one the last answer asked for.
+        for (let i = 0; i < repoTab.writeAnswerCount(); i++) {
+            // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and
+            // the answer to the press is the working tree: the conflicted rows, and the way out under them
+            // (デザイン規約 §進行中の操作から出る). Armed rather than done on the spot, for the reason the head landing
+            // below is: the status that will carry those rows has not arrived yet (by design).
+            if (repoTab.writeAnswerStopped(i)) {
+                page.pendingWipSelect = true
+                page.pendingHeadSelect = false
+                page.pendingHeadAsked = false
+            }
+            // The answer is a commit at the tip, and that commit is what was asked for here, not the row or the ref
+            // that was clicked. The selection goes to it and the viewport follows: what was clicked can be anywhere
+            // in the history, while the answer is always at the top.
+            else if (repoTab.writeAnswerAtTip(i)) {
+                page.pendingWipSelect = false
+                page.pendingHeadSelect = true
+                page.pendingHeadSeenSeq = workTree.statusSeq
+                page.pendingHeadAsked = true
+            }
         }
         // The write moved what the two sides hold, so a diff left open on either is a picture of a file as it was —
         // the same staleness the file list's own `+` used to leave behind.

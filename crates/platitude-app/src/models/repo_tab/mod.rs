@@ -199,10 +199,11 @@ pub struct RepoTab {
     /// branches on git vocabulary (app-ui.md).
     last_write_op: String,
     last_write_error: String,
-    /// Whether git stopped part-way through that write and left the
-    /// operation standing. Not an error and not a landing: read from the
-    /// same answer, because where the screen goes next differs for all
-    /// three.
+    /// git stopped part-way through the write in flight and left the
+    /// operation standing. Raised by the message before that write's
+    /// answer and read by the answer itself, which is where it becomes
+    /// the answer's own (`WriteAnswer::stopped`): not an error and not a
+    /// landing, and where the screen goes next differs for all three.
     last_write_stopped: bool,
     write_seq: i32,
     /// That answer, classified where the op names are known
@@ -246,6 +247,24 @@ pub struct RepoTab {
     /// toolbar button's push stays the flow's own slot to say
     /// (`PublishFlow.pushSentBranch`).
     write_pushed: bool,
+    /// The write answers *this* notify carried, oldest first — the group
+    /// above says only what the last of them was.
+    ///
+    /// One drain empties the whole queue and notifies once
+    /// (`drain::absorb`), so a run's own answer and the fetch that came
+    /// back behind it reach QML as one `changed`. Everything read off the
+    /// group is then the fetch's: a reader waiting for its own write by
+    /// name never sees the name, and a stop the run left standing is
+    /// taken back down by the fetch *starting* — both measured as
+    /// silence, not as a wrong answer, and both correlated with how
+    /// loaded the machine is. So the answers are kept as they came, and
+    /// what waits for one of them looks here.
+    ///
+    /// Emptied at the top of every drain: a notify raised from anywhere
+    /// else (a slot that writes a setting) carries no answers, and the
+    /// list left standing would be read a second time. `seq` is what
+    /// tells an answer already counted from this one's own.
+    write_answers: Vec<WriteAnswer>,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing
@@ -290,4 +309,22 @@ pub struct RepoTab {
     /// behind the reader's back.
     auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
+}
+
+/// One write's answer as it arrived, for the readers that wait on a
+/// particular one (`RepoTab::write_answers`).
+///
+/// Carries what the group properties would say about it and no more:
+/// which write answered, whether git stopped part-way, whether it was
+/// refused, and whether it left a commit at the tip — **the meanings are
+/// named on this side of the bridge**, the same way `settle_write` names
+/// them for the group (app-ui.md: no business logic in QML). `seq` is the
+/// number `write_seq` counted it at, so a run tells its own answer from
+/// one already counted before it pressed.
+struct WriteAnswer {
+    seq: i32,
+    op: String,
+    stopped: bool,
+    failed: bool,
+    at_tip: bool,
 }
