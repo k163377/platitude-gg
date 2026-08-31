@@ -12,4 +12,3 @@
 #
 # <physical lines> <path from the workspace root>
 537 crates/platitude-core/src/conflict.rs
-525 crates/platitude-core/src/sequencer.rs
