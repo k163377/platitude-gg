@@ -11,4 +11,3 @@
 # outranks the ceiling and needs no entry here.
 #
 # <physical lines> <path from the workspace root>
-537 crates/platitude-core/src/conflict.rs
