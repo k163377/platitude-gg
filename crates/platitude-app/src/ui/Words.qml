@@ -31,7 +31,12 @@ QtObject {
     /// delete table has always worn, and the whole of what the held doors say while a rewrite replays behind the
     /// screen. Said here because the ref menu, the branch card, the tag card and the remote menu all have to say it
     /// the same way.
-    readonly property string otherCommandRunning: qsTr("Another git command is still running")
+    ///
+    /// **What is running, not what git is.** Every command this window runs is a git one and the panel that holds
+    /// them is spelled `GIT COMMANDS`, so naming git here buys nothing — and it would not settle the one ambiguity
+    /// there is, since the row the pointer is on wears a git command of its own on its chip. `running` is what
+    /// settles it. Short enough that the tip stands inside the menu it explains rather than wider than it.
+    readonly property string otherCommandRunning: qsTr("Wait for the running command")
 
     /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
