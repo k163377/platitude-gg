@@ -29,6 +29,7 @@ use qtbridge::QmlMethodInvoker;
 #[cfg(test)]
 mod details_tests;
 mod feed;
+mod life;
 mod msg;
 #[cfg(test)]
 mod plan_tests;

@@ -294,6 +294,29 @@ pub fn model_parts() -> Vec<(String, usize, usize)> {
 // The report
 // ---------------------------------------------------------------------------
 
+/// One report line for where the run has got to, gathered and written.
+///
+/// The hub is read here rather than at the QML slot that asks: the slot's
+/// whole part in this is being on the Qt main thread, which is where the
+/// sessions live, so the moment is its business and the reading is not
+/// (`AppBackend::note_memory`). Off unless the run asked for it.
+pub(crate) fn note_now(label: &str) {
+    if !enabled() {
+        return;
+    }
+    let (session_parts, waiting) = crate::hub::Hub::with(|hub| {
+        (
+            hub.sessions()
+                .into_iter()
+                .flat_map(|(_, session)| session.heap_report())
+                .collect::<Vec<_>>(),
+            hub.feed_depths(),
+        )
+    })
+    .unwrap_or_default();
+    report(label, &session_parts, &waiting);
+}
+
 /// Writes one report line: the live heap, the named parts, and what is
 /// left.
 ///

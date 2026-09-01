@@ -8,6 +8,7 @@ use crate::hub::{Feed, PlanMsg};
 
 use super::qml_register;
 
+mod drain;
 mod qobject;
 #[cfg(test)]
 mod steps_tests;

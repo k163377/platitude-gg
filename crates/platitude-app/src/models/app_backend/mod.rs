@@ -18,7 +18,7 @@ mod start;
 
 pub use build_id::build_tree;
 
-use start::{packed_avatars, with_flag, with_layout, with_window};
+use start::{packed_avatars, section_open, with_flag, with_layout, with_window};
 // The directory the application's own configuration reads are made in.
 // Shared with the settings screen's `GLOBAL` identity chapter, which reads
 // and writes the same file (`identity` in core).

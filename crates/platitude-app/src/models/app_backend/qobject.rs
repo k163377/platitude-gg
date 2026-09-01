@@ -103,27 +103,12 @@ impl AppBackend {
     qproperty!("memReport", Member = mem_report, Constant);
 
     /// Writes one line of the memory breakdown, tagged with where the run
-    /// had got to (`PG_MEM_REPORT=1` only).
-    ///
-    /// Here rather than on a timer inside Rust because the sessions live on
-    /// the Qt main thread: this is the one place that can reach both them
-    /// and the models' filings at a moment nothing is half-written.
+    /// had got to (`PG_MEM_REPORT=1` only). Asked from QML because the
+    /// sessions live on the Qt main thread — what it does is the probe's
+    /// (`harness::memprobe::note_now`).
     #[qslot]
     fn note_memory(&self, label: String) {
-        if !crate::harness::memprobe::enabled() {
-            return;
-        }
-        let (session_parts, waiting) = Hub::with(|hub| {
-            (
-                hub.sessions()
-                    .into_iter()
-                    .flat_map(|(_, session)| session.heap_report())
-                    .collect::<Vec<_>>(),
-                hub.feed_depths(),
-            )
-        })
-        .unwrap_or_default();
-        crate::harness::memprobe::report(&label, &session_parts, &waiting);
+        crate::harness::memprobe::note_now(&label);
     }
 
     /// How many open tabs are holding a repository.
@@ -363,14 +348,7 @@ impl AppBackend {
 
     #[qslot]
     fn start_section(&self, name: String) -> bool {
-        with_flag(|l| match name.as_str() {
-            "branches" => l.sections.branches,
-            "remotes" => l.sections.remotes,
-            "worktree" => l.sections.worktree,
-            "stashes" => l.sections.stashes,
-            "tags" => l.sections.tags,
-            _ => true,
-        })
+        section_open(&name)
     }
 
     /// Where the window is now. Reported on the same timer as the layout:

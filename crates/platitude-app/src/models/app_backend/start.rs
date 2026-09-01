@@ -41,6 +41,21 @@ pub(super) fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) ->
     Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))
 }
 
+/// Whether one sidebar section comes up open. A name nothing was saved
+/// for opens: a section added later has no line in anybody's state file,
+/// and closed-because-unheard-of is not what a first sight of it should
+/// be.
+pub(super) fn section_open(name: &str) -> bool {
+    with_flag(|l| match name {
+        "branches" => l.sections.branches,
+        "remotes" => l.sections.remotes,
+        "worktree" => l.sections.worktree,
+        "stashes" => l.sections.stashes,
+        "tags" => l.sections.tags,
+        _ => true,
+    })
+}
+
 /// Directory the application's own configuration reads run in — the
 /// user's home. git resolves configuration from a directory, and outside
 /// a repository that is exactly the user's own (global + system)
