@@ -9,8 +9,8 @@ import platitude.ui
 // Upper case, `fontMd`, `DemiBold`, `textPrimary` — the band heading's spelling with the ink of a heading rather
 // than of a note (規約 §設定の画面). A sidebar band wears `textSecondary` among rows that are `textPrimary`, so it
 // is the quiet thing in a loud column; here the whole screen around it is captions and explanations, and a heading
-// that took the same step down had nothing left to be quieter than — the skeleton read as the faintest thing on the
-// screen (2026-08-30 ユーザー報告). What ranks it under the group above is the rule and the inset, not the ink
+// that takes the same step down has nothing left to be quieter than — the skeleton reads as the faintest thing on
+// the screen (observed). What ranks it under the group above is the rule and the inset, not the ink
 // (`SettingsGroup`). The chapter is not louder than its fields, it is heavier and it carries a rule.
 ColumnLayout {
     id: section

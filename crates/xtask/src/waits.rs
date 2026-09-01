@@ -7,9 +7,9 @@
 //! `wait_for_snapshot_reads`) and a hand-stepped tick all resolve through
 //! channels no `Patience` is watching, so a naked await on one has
 //! nothing under it — the binary sits until the CI kill with no failing
-//! test named. Each of those has hung a real run (a starved timer task in
-//! 2026-08, its stopped twin over a whole 900s budget in 2026-08-30), and
-//! the fix each time included the backstop this count now holds in place.
+//! test named. Each of those has hung a real run (a starved timer task,
+//! and its stopped twin over a whole 900s budget), and the fix each time
+//! included the backstop this count holds in place.
 
 use std::path::{Path, PathBuf};
 

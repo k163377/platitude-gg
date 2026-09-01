@@ -461,7 +461,7 @@ Item {
     //
     // Both the ink and the wash are written as padding and inset rather than as sizes of their own: a `Control`
     // stretches its `contentItem` over whatever the padding leaves and places its `background` inside the insets, so a
-    // size written on either is gone on the next layout (手本 `TreeViewToggle`).
+    // size written on either is gone on the next layout (after `TreeViewToggle`).
     HoverToolButton {
         id: plusButton
         x: tabs.x + tabs.width

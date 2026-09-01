@@ -324,7 +324,7 @@ Item {
     //
     // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make — and, once the
     // lock stands, **the only road left**: the modal seals both the pointer and the window's own `Shortcut`s
-    // (qmltestrunner 実測 — rules-refs/app-ui.md §close ゲート), while a close request still reaches `onClosing`
+    // (measured, qmltestrunner — rules-refs/app-ui.md §close ゲート), while a close request still reaches `onClosing`
     // the way Alt+F4 does. That is why the second press is the honest test of a lock with no way out, and why no verb
     // here fires a write behind it: a handler called from QML would run whatever the modal is covering, and reporting
     // that it did not would be a claim about a road this harness cannot drive.

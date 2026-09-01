@@ -30,9 +30,8 @@ ColumnLayout {
     /// **Both halves are required, and `touched` is the half that matters.** A difference between a box and git's
     /// answer is not by itself somebody's edit: git answers late, answers again on its own, and empties these boxes
     /// on the way to answering about another repository — and a way out that stopped for any of that would be
-    /// warning about work nobody did (2026-08-30 ユーザー報告「何も変えてなくても警告が出る」). What the Save is lit
-    /// by stays the plain difference, since a Save has to go out when the boxes and git disagree however they came
-    /// to (`SettingsRepoPane.dirty`).
+    /// warning about work nobody did (observed). What the Save is lit by stays the plain difference, since a Save
+    /// has to go out when the boxes and git disagree however they came to (`SettingsRepoPane.dirty`).
     readonly property bool dirty: fields.touched
                                   && (nameField.text !== fields.heldName || emailField.text !== fields.heldEmail)
 
@@ -62,9 +61,9 @@ ColumnLayout {
     /// that does; the settings screen's warning already says it, so there the line only names the two keys.
     ///
     /// **Over them, not under.** It is about the pair — both boxes and the Save beside them — and a sentence set
-    /// after the second box reads as belonging to that box alone (2026-08-30 ユーザー報告). The rule it now follows
-    /// is the one the group and category sentences already did: **what a thing is goes before it, what a thing
-    /// currently amounts to goes after** (`errorText` below, and the settings screen's effective-value lines).
+    /// after the second box reads as belonging to that box alone (observed). The rule it follows is the one the
+    /// group and category sentences already do: **what a thing is goes before it, what a thing currently amounts to
+    /// goes after** (`errorText` below, and the settings screen's effective-value lines).
     property string note: qsTr("Saved for every repository on this computer (user.name and user.email).")
 
     /// Enter was pressed in one of the boxes.
@@ -81,7 +80,7 @@ ColumnLayout {
     /// Somebody has typed since the boxes were last filled from git. **What keeps a late answer from being read as
     /// an edit**: git may answer after the screen opened, and boxes still holding the value from before that answer
     /// differ from it without anybody having touched them — which `dirty` would otherwise call unsaved work and the
-    /// way out would stop for (実測: the way-out verb wedged on exactly this).
+    /// way out would stop for (measured: the way-out verb wedged on exactly this).
     property bool touched: false
     // **Through `Connections`, not an `onEdited` here.** A handler written in a component's own body is replaced
     // outright by one a caller writes at the instantiation, and one caller does (`SettingsRepoPane`) — so the

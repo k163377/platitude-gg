@@ -182,8 +182,8 @@ Item {
         }
     }
     // What the right pane's boxes do while a plan owns them, and after one lets go of them. A `reword` row types into
-    // the same two boxes a plain amend does (提案 2026-08-30: メッセージを打つ場所はアプリに 1 つ), so every way the
-    // plan lets go has to hand them back — and none of those ways moves the commit on screen, which is the only cue
+    // the same two boxes a plain amend does — there is one place in this app to type a message — so every way the
+    // plan lets go has to hand them back, and none of those ways moves the commit on screen, which is the only cue
     // the pane refills on by itself (`DetailsPane.syncMessage`).
     //
     // `plan-reword-verb` walks the row's verb out of `reword` and back into it, with the plan still standing. The

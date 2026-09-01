@@ -28,7 +28,7 @@ ActionButton {
     // 長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
     // own write.
     // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
-    // own button (提案 2026-08-30 — 組んでいる間、書き込みの入口は実行ボタンだけ。fetch だけは残る).
+    // own button, and fetch is the only other door left open.
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
              && !stashButton.curPage.planShown
     tip: {

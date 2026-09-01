@@ -33,9 +33,9 @@ RowLayout {
         font.pixelSize: Theme.fontXl
         font.weight: Font.DemiBold
     }
-    // What the screen is showing, beside what the screen is (2026-08-30 ユーザー選択; Apple HIG asks a settings
-    // window's title to name the pane it is on). **The same step, told apart by weight and ink** — it is the second
-    // half of one title rather than a subtitle, so dropping it a step would break the phrase
+    // What the screen is showing, beside what the screen is (Apple HIG asks a settings window's title to name the
+    // pane it is on). **The same step, told apart by weight and ink** — it is the second half of one title rather
+    // than a subtitle, so dropping it a step would break the phrase
     // (規約 §タイポグラフィ 「見出しを段で作らない」). The rule between them is the one every divider in this
     // window is drawn in.
     Rectangle {
@@ -50,10 +50,10 @@ RowLayout {
         color: Theme.textSecondary
     }
     Item { Layout.fillWidth: true }
-    // **The mark alone, and the key in its one line.** A drawn `Esc` beside it was tried and taken back
-    // (2026-08-30 ユーザー判断), and the products this screen was checked against agree: IBM Carbon's modal lists
-    // the three ways out — the `✕` in the upper right, a click outside, and Escape — and draws only the first. A
-    // legend for a key everyone already reaches for is furniture in the corner of every reading.
+    // **The mark alone, and the key in its one line.** No drawn `Esc` beside it: the products this screen was
+    // checked against agree — IBM Carbon's modal lists the three ways out (the `✕` in the upper right, a click
+    // outside, and Escape) and draws only the first. A legend for a key everyone already reaches for is furniture
+    // in the corner of every reading.
     CloseToolButton {
         id: closeMark
         Layout.alignment: Qt.AlignVCenter
@@ -61,8 +61,8 @@ RowLayout {
         // from the block's edge is its ink rather than the box around it (デザイン規約 §余白) — which is also what
         // lines it up with the right edge of the column below.
         Layout.rightMargin: Theme.spaceXxl - closeMark.inkAir
-        // A mark this small in a band this empty was a hard thing to hit, and at `iconSm` it read as an
-        // afterthought beside a `fontXl` word (2026-08-30 ユーザー報告). The seat grows into room that was doing
+        // A mark this small in a band this empty is a hard thing to hit, and at `iconSm` it reads as an
+        // afterthought beside a `fontXl` word (observed). The seat grows into room that was doing
         // nothing (規約 §当たり判定); the mark grows because what it closes is the whole screen.
         seat: Theme.toolbarHeight
         markSize: Theme.iconMd

@@ -257,7 +257,7 @@ AppDialog {
         // Escape is heard as a shortcut rather than left to the popup's own `closePolicy`, which needs the key to
         // reach the screen through whatever holds the caret. Owned by the screen, so Qt hands it over only while
         // this is the topmost thing open: a list standing over it still takes the first press for itself and the
-        // screen stays (qmltestrunner 実測, `tst_esc7`).
+        // screen stays (measured, qmltestrunner `tst_esc7`).
         Shortcut {
             // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the
             // single form takes only the first of them (Qt warns about exactly this).
@@ -286,10 +286,10 @@ AppDialog {
         }
 
         // ---- the categories and their chapters -------------------------------
-        // **Centred, and the margins are what a narrowing window eats first** (2026-08-30 ユーザー指示). The block
-        // is a fixed thing — a rail of a known width beside a column set to the width words are read at — so on a
-        // wide window the leftover is air on both sides rather than a screen hanging off the left edge. Narrower
-        // than the block, `fillWidth` takes over and the column gives way; `blockWidth` is the ceiling, not a floor.
+        // **Centred, and the margins are what a narrowing window eats first**. The block is a fixed thing — a rail
+        // of a known width beside a column set to the width words are read at — so on a wide window the leftover is
+        // air on both sides rather than a screen hanging off the left edge. Narrower than the block, `fillWidth`
+        // takes over and the column gives way; `blockWidth` is the ceiling, not a floor.
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -300,12 +300,11 @@ AppDialog {
             spacing: Theme.spaceLg
 
             // The categories. A list of names down the left of a screen, lit the way the sidebar's rows are
-            // (規約 §左メニューの所作) — the same kind of thing in the same clothes. **Not the sidebar's width**
-            // (2026-08-30 ユーザー報告「左メニューが長すぎ」): 260 is for a column of names this app did not write
-            // — branches, remotes, tags, whatever anybody called them — and this one holds a handful of words it
-            // did. `settingsRailWidth` leaves room for the longest a category is going to be. Fixed rather than
-            // fitted, because a layout inside a layout fills by default and a rail that took whatever the chapters
-            // did not want would move every time the category changed.
+            // (規約 §左メニューの所作) — the same kind of thing in the same clothes. **Not the sidebar's width**: 260
+            // is for a column of names this app did not write — branches, remotes, tags, whatever anybody called
+            // them — and this one holds a handful of words it did. `settingsRailWidth` leaves room for the longest a
+            // category is going to be. Fixed rather than fitted, because a layout inside a layout fills by default
+            // and a rail that took whatever the chapters did not want would move every time the category changed.
             ColumnLayout {
                 Layout.fillWidth: false
                 Layout.leftMargin: Theme.spaceXxl
@@ -332,7 +331,7 @@ AppDialog {
                         // Which category is holding something git has not been given. **The rail is where it has to
                         // be said**: the question at the foot names the chapter, but a reader standing in the other
                         // category cannot see either of them — and this is the one column on screen that is always
-                        // showing both (2026-08-30. The shape JetBrains marks a modified settings page with).
+                        // showing both (the shape JetBrains marks a modified settings page with).
                         NavIcon {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
@@ -349,12 +348,11 @@ AppDialog {
                             x: Theme.spaceSm
                             text: categoryRow.modelData.word
                             font.pixelSize: Theme.fontMd
-                            // **Every row is `textPrimary`, standing or not** (2026-08-30 ユーザー報告
-                            // 「左メニューの文字が弱すぎる」). What says which one is showing is the wash under it,
-                            // exactly as in the left menu these rows are dressed as — there a row does not go dim
-                            // for not being the one selected. Dimming the other one also said the wrong thing: the
-                            // category nobody is in is the one there is any reason to press (規約 §無効
-                            // 「選ばれていないことを無効の色で言わない」).
+                            // **Every row is `textPrimary`, standing or not** (observed). What says which one is
+                            // showing is the wash under it, exactly as in the left menu these rows are dressed as —
+                            // there a row does not go dim for not being the one selected. Dimming the others says
+                            // the wrong thing too: the category nobody is in is the one there is any reason to press
+                            // (規約 §無効 「選ばれていないことを無効の色で言わない」).
                             color: Theme.textPrimary
                         }
                         HoverHandler {
@@ -377,23 +375,22 @@ AppDialog {
             // git category is two groups deep — so the thing a card was avoided for (規約 §設定の画面) arrives here
             // anyway, and this is where it can be answered without the screen resizing itself under the reader.
             //
-            // **The panels' slab, with the idle step this ground needs** (デザイン規約 §ペインのスクロールバー.
-            // 2026-08-30 ユーザー指示 =「settings のスクロールバーは意匠を足してよい」). The slab's three states are
-            // counted up from whatever it stands on, and the default idle is the step above a *pane's* ground —
-            // which on this screen is the ground exactly, so a resting bar was not there at all (実測: 辺の 5px が
-            // `#0F172A`). One step further up (`borderSubtle`) is the same rule read against this ground, and it is
-            // what lets the reader see there is more to read before touching anything. The floating thumb could not
-            // say that: three tenths of one ink over `bgElevated` is barely a colour.
+            // **The panels' slab, with the idle step this ground needs** (デザイン規約 §ペインのスクロールバー). The
+            // slab's three states are counted up from whatever it stands on, and the default idle is the step above
+            // a *pane's* ground — which on this screen is the ground exactly, so a resting bar is not there at all
+            // (measured: the edge's 5px reads `#0F172A`). One step further up (`borderSubtle`) is the same rule read
+            // against this ground, and it is what lets the reader see there is more to read before touching
+            // anything. The floating thumb could not say that: three tenths of one ink over `bgElevated` is barely
+            // a colour.
             //
             // **The bar stands at the window's edge, not against the chapters.** The band's right inset is spent
             // inside this view rather than outside it, so the room the reader can see to the right of the form is
-            // where the bar goes (2026-08-30 ユーザー報告「余白が余ってるのにピッタピタにくっつけるのをやめて」) —
-            // the chapters keep their own right edge, level with the `✕`, and nothing of theirs comes
-            // near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and nothing
-            // more, which is the same "just barely" in a smaller size.
+            // where the bar goes — the chapters keep their own right edge, level with the `✕`, and nothing of theirs
+            // comes near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and
+            // nothing more, which is the same "just barely" in a smaller size.
             // **No margin of its own.** The row's `spacing` is the step on both sides of the line, and an extra one
-            // here put the chapters eight pixels further from it than the rail is — a difference small enough to
-            // read as a mistake rather than as a choice (2026-08-30 ユーザー報告).
+            // here puts the chapters eight pixels further from it than the rail is — a difference small enough to
+            // read as a mistake rather than as a choice (observed).
             Flickable {
                 id: chapters
                 Layout.fillWidth: true
@@ -413,7 +410,7 @@ AppDialog {
                     // Width rather than a margin: a `Flickable`'s content item is not a layout, so `Layout.*` on this
                     // one would be read by nobody. **The band's right inset is spent here** — the view runs to the
                     // window's edge so the bar can stand there — **and the column stops at the width a run of words
-                    // is set at** (`textWidth`. 2026-08-30).
+                    // is set at** (`textWidth`).
                     //
                     // A settings screen is read, and a sentence set across 1200 pixels is one the eye loses its
                     // place returning from: at `fontMd` that is around 180 characters, twice what a line should be.
@@ -449,10 +446,9 @@ AppDialog {
                 }
             }
         }
-        // **No foot.** The `OK` that stood here closed a screen that had already written everything it was going to
-        // write, which is a button for confirming nothing (2026-08-30 ユーザー判断). What is left is the way out in
-        // the corner, and a way out does not need a second copy of itself along the bottom edge — every settings
-        // screen worth copying (VS Code, Windows 11, the browsers) ends the same way: content to the bottom of the
-        // window and nothing under it.
+        // **No foot.** An `OK` here would close a screen that has already written everything it was going to write,
+        // which is a button for confirming nothing. What is left is the way out in the corner, and a way out does
+        // not need a second copy of itself along the bottom edge — every settings screen worth copying (VS Code,
+        // Windows 11, the browsers) ends the same way: content to the bottom of the window and nothing under it.
     }
 }

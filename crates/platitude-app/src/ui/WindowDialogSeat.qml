@@ -8,16 +8,15 @@ import platitude.ui
 
 // The window's two biggest dialogs — the settings screen and the clone box — with the model and the folder chooser
 // the clone owns. Together in one seat because every way into either goes through the doors below, and the doors are
-// what lets neither screen exist until it is first opened: the bare window used to pay ~8MB holding the two ready
-// (152.7–152.9MB working set against 143.8–145.0 with them built on demand, 2026-08-30 実測 — the settings panes had
-// been growing under that eagerness for a day, 実測の刻みは rules-refs/app-ui.md のダイアログの席の行).
+// what lets neither screen exist until it is first opened: holding the two ready costs the bare window ~8MB of
+// working set it never uses (measured — the figures are in rules-refs/app-ui.md's dialog-seat line).
 //
 // The harness is the one caller that gets them up front: its verbs read a dialog's properties before opening it
 // (`WindowDialogActs` / `WindowSettingsActs`), and a null there is a dead run, not a refusal.
 //
 // An `Item` that fills the window, and two Loaders that fill the seat: the dialogs are popups whose sizing reads
-// their parent (`AppDialog.fills`), and a loader left unsized hands them a 0x0 to fill (実測 — the screen opened as
-// an empty strip).
+// their parent (`AppDialog.fills`), and a loader left unsized hands them a 0x0 to fill (measured — the screen opens
+// as an empty strip).
 Item {
     id: seat
 

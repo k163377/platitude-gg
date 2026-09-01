@@ -14,7 +14,7 @@ HoverToolButton {
     property real seat: Theme.iconLg
     /// How big the mark itself is drawn. A step under whatever it closes is the rule (§寸法), so a `✕` beside a row
     /// or a tab takes `iconSm`; the one that closes a whole screen stands beside a `fontXl` title and needs the step
-    /// that goes with it (2026-08-30 ユーザー報告「`✕` が Settings に対して弱すぎる」).
+    /// that goes with it — at `iconSm` the mark reads as too weak for the screen it closes (observed).
     property real markSize: Theme.iconSm
     /// What the mark is drawn in. A `✕` is normally the quiet ink; a caller whose way out is carrying a warning
     /// says so here rather than drawing its own mark (`SettingsDialog`).
@@ -35,8 +35,8 @@ HoverToolButton {
     implicitWidth: closeButton.seat
     implicitHeight: closeButton.seat
     // The seat grows around the wash rather than with it. `Control` shrinks the background by its insets and leaves
-    // the item its own size, so the hand gets the whole seat and the paint stays where it was (手本 `TabItemDelegate`,
-    // which does the same subtraction the other way round).
+    // the item its own size, so the hand gets the whole seat and the paint stays where it was (after
+    // `TabItemDelegate`, which does the same subtraction the other way round).
     topInset: (closeButton.seat - Theme.iconLg) / 2
     bottomInset: closeButton.topInset
     leftInset: closeButton.topInset

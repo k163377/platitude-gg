@@ -6,7 +6,7 @@ import platitude.ui
 // The interactive-rebase plan, stood where the graph was: the rows of `from^..HEAD` newest-first, the verb each one
 // carries, and the base they land on as the list's own last row. Composing runs nothing — the one door out of here
 // that touches the repository is the run button standing at the right pane's foot, and Cancel up here only puts the
-// draft away (デザイン規約 §履歴を合流させる / 提案 2026-08-30).
+// draft away (デザイン規約 §履歴を合流させる).
 //
 // While this pane stands, the surfaces that could move the history under it are held down by the page (the sidebar,
 // find, the toolbar's writes); what cannot be held — another session, a terminal — is answered by the model putting
@@ -55,14 +55,14 @@ Rectangle {
                 anchors.leftMargin: Theme.spaceMd
                 anchors.rightMargin: Theme.spaceMd
                 spacing: Theme.spaceSm
-                // The mode is named from the press, before the read that would finish the sentence has landed
-                // (ユーザー判断 2026-08-30): the band says what this face is for the whole time it is up, and the rest of
-                // the sentence arrives with the rows.
+                // The mode is named from the press, before the read that would finish the sentence has landed: the
+                // band says what this face is for the whole time it is up, and the rest of the sentence arrives with
+                // the rows.
                 //
-                // **The `…` is the sentence's, not the wait's** (ユーザー判断 2026-08-31): what it marks is that this
-                // phrase is cut short and will be finished — the elision mark of 規約 §ウィンドウの縁, not the
-                // progress mark §進行中・長押しの定数 refuses. Without it the band reads as a finished sentence and the
-                // name arriving rewrites it; with it the name lands where the mark already said something was missing.
+                // **The `…` is the sentence's, not the wait's**: what it marks is that this phrase is cut short and
+                // will be finished — the elision mark of 規約 §ウィンドウの縁, not the progress mark
+                // §進行中・長押しの定数 refuses. Without it the band reads as a finished sentence and the name
+                // arriving rewrites it; with it the name lands where the mark already said something was missing.
                 Label {
                     text: planPane.waiting ? qsTr("Rebasing…")
                         : planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
@@ -70,7 +70,7 @@ Rectangle {
                     font.pixelSize: Theme.fontMd
                     color: Theme.textPrimary
                 }
-                // The base, its branch name first and the id only as the fallback (ユーザー判断 2026-08-30).
+                // The base, its branch name first and the id only as the fallback.
                 Label {
                     visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef !== ""
                     text: planPane.planModel.ontoRef
@@ -111,8 +111,8 @@ Rectangle {
             // really out**: the model has no rows then either.
             //
             // The count, not `visible`: a hidden child leaves the column with nothing to stretch, and the band drops to
-            // the middle of the pane with the mark on top of it (2026-08-30, seen on Linux — where the rows land before
-            // the grab does, and the report line stayed green because it says what the edge saw).
+            // the middle of the pane with the mark on top of it (observed on Linux — where the rows land before the
+            // grab does, and the report line stays green because it says what the edge saw).
             model: planPane.waiting ? 0 : planPane.planModel
 
             /// What every row reads and calls (the delegate reaches the pane through its view).
@@ -199,7 +199,7 @@ Rectangle {
 
     // The read walking the range, in the middle of the column that will hold its rows — the same mark at the same size
     // in the same seat the graph's own first load puts one in (`GraphEmptyState`), because this pane is standing where
-    // that column was and waiting should not change its look when the seat changes hands (ユーザー判断 2026-08-30).
+    // that column was and waiting should not change its look when the seat changes hands.
     //
     // Centred below the head rather than in the pane: the band is up the whole time and the rows will start under it,
     // so the middle of what is waiting is half a head lower than the middle of the pane.

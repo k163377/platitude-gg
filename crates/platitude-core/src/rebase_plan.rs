@@ -54,9 +54,8 @@ pub struct PlanPreview {
     /// `None` when `root` — there is nothing under the first commit.
     pub onto: Option<PlanRow>,
     /// A local branch standing exactly on `upstream`, where one does —
-    /// the name the screen says first, with the id as the fallback
-    /// (ユーザー判断 2026-08-30: onto はブランチ名優先). Empty when none
-    /// stands there, or on `root`.
+    /// the name the screen says first, with the id as the fallback.
+    /// Empty when none stands there, or on `root`.
     pub onto_ref: String,
 }
 

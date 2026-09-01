@@ -88,9 +88,9 @@ Item {
     /// command, and lasts as long as the mode does, so it is said plainly (デザイン規約 §フル interactive rebase). Only
     /// the `>_` band is left out of it (`SidebarPane.frozen`).
     ///
-    /// **From the press, not from the rows** (ユーザー判断 2026-08-30): the mode is entered when the face takes the
-    /// graph's seat, and a pane that stays live under it for the length of the read would be saying the reader may
-    /// still write — which is the one thing this mode is for taking away.
+    /// **From the press, not from the rows**: the mode is entered when the face takes the graph's seat, and a pane
+    /// that stays live under it for the length of the read would be saying the reader may still write — which is
+    /// the one thing this mode is for taking away.
     readonly property bool sidebarFrozen: page.planShown
     /// The other one, which begins where the plan ends: a write that replays a range a commit at a time is running
     /// (`RepoTab.replaying` — the meaning core puts on the op name), or its run is out and has not started yet. A
@@ -498,14 +498,14 @@ Item {
     readonly property bool planActive: planModel.active && !page.planLoadHeld
     /// The plan's face has the graph's seat: the read that opens it is out, or its rows have arrived.
     ///
-    /// **The seat is taken at the press, not at the answer** (ユーザー指定 2026-08-30「ローディング -> 操作可能」). The read
-    /// walks the whole range — 27ms where the click was shallow, a second and more at the root of a real history
-    /// (measured, JetBrains/kotlin) — and a screen that does not move for that long says the press was not heard.
-    /// What the pane can say before the rows land is in the pane (`RebasePlanPane.waiting`).
+    /// **The seat is taken at the press, not at the answer**. The read walks the whole range — 27ms where the click
+    /// was shallow, a second and more at the root of a real history (measured, JetBrains/kotlin) — and a screen that
+    /// does not move for that long says the press was not heard. What the pane can say before the rows land is in
+    /// the pane (`RebasePlanPane.waiting`).
     ///
-    /// **The mode's restrictions are on this too** (ユーザー判断 2026-08-30) — the left menu, `push`, `stash` and
-    /// Ctrl+F all go out from the press, because entering the mode is what taking the seat *is*. What waits for the
-    /// rows is only what needs a draft to mean anything, and that reads `planActive`.
+    /// **The mode's restrictions are on this too** — the left menu, `push`, `stash` and Ctrl+F all go out from the
+    /// press, because entering the mode is what taking the seat *is*. What waits for the rows is only what needs a
+    /// draft to mean anything, and that reads `planActive`.
     readonly property bool planShown: planModel.active || planModel.loading
     /// Automation (`PG_AUTO_ACT=plan-loading`): the opening face, held from the real edge — the rows arrive through
     /// the feed and can land while the asynchronous grab is still out, and the picture would then be of the plan
@@ -2719,8 +2719,8 @@ Item {
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it
                         // (`page.messageEdit`). The words are the page's; the rule is core's — and while a plan row
-                        // carries `reword`, the same boxes are that row's plan input (提案 2026-08-30: メッセージを
-                        // 打つ場所はアプリに 1 つ). A plain amend is held down for the plan's whole stay — it is a
+                        // carries `reword`, the same boxes are that row's plan input, because there is one place in
+                        // this app to type a message. A plain amend is held down for the plan's whole stay — it is a
                         // queued rewrite of the very history the plan is composed on, which the freeze exists to
                         // stop; on a plan row the way to type is the row's own verb.
                         editable: (page.messageEdit === "amend" && !page.planActive) || page.planReword

@@ -40,7 +40,7 @@ ActionButton {
     alertTone: Theme.warning
     holdMs: mode === "diverged" ? Metrics.holdMs : 0
     // Held down while a rebase plan is being composed, like the stash button: what a push moves is the remote's
-    // story of the very commits the plan is about to rewrite (提案 2026-08-30).
+    // story of the very commits the plan is about to rewrite.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
              && (pushButton.curPage.canPush || (mode === "diverged" && pushButton.curPage.canForcePush))
     onHeld: pushButton.curPage.forcePush()

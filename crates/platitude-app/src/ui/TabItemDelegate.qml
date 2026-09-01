@@ -215,7 +215,8 @@ Rectangle {
             // left over is small enough for `markGap` to spend the rest and land the ink a whole step from both.
             //
             // Only the width comes in. The seat stays `iconLg` tall so a hand coming down the strip still lands on the
-            // mark, and the wash is inset back to a box on the ink — 広げるのは判定だけ (§当たり判定; 手本 `TabStrip`'s `+`).
+            // mark, and the wash is inset back to a box on the ink — only the target grows
+            // (§当たり判定; after `TabStrip`'s `+`).
             implicitWidth: tabItem.metrics.markSeat
             topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
             bottomInset: closeMark.topInset

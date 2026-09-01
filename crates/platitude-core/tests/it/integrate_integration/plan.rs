@@ -136,7 +136,7 @@ async fn a_folder_that_is_not_a_repository_fails_instead_of_planning_from_the_ro
     let dir = tempfile::tempdir().expect("tempdir");
 
     // git exits 128 without reading anything, and only the 1 it exits for a
-    // revision it looked for and did not find is an answer (実測 2.55).
+    // revision it looked for and did not find is an answer (measured on 2.55).
     let error = rebase_plan::preview(&exec, dir.path(), &"0".repeat(40), &cancel)
         .await
         .expect_err("nothing here to read");

@@ -5,7 +5,7 @@ import platitude.ui
 
 // What a tab costs before its name, and what a name is allowed. Nothing here draws: the strip lays out by these
 // numbers, the delegate sets its margins by them, and both read the one copy so they agree on what a tab costs
-// (手本 `GraphColumnMetrics`).
+// (after `GraphColumnMetrics`).
 QtObject {
     id: tabMetrics
 

@@ -35,8 +35,8 @@ AutoScrollBar {
     /// The idle step, which is **the one step above whatever ground this bar stands on** — the rest of the climb
     /// (`borderDefault`, `borderStrong`) is the same wherever it stands. A pane's ground is `bgSurface`, so the
     /// default is the step above that; the settings screen's ground is `bgElevated` itself, where this colour would
-    /// be the ground exactly and the resting bar would not be there at all (実測: 辺の 5px が `#0F172A`). That screen
-    /// hands in the next step up instead (デザイン規約 §ペインのスクロールバー).
+    /// be the ground exactly and the resting bar would not be there at all (measured: the edge's 5px reads
+    /// `#0F172A`). That screen hands in the next step up instead (デザイン規約 §ペインのスクロールバー).
     property color idleColor: Theme.bgElevated
 
     // Named colours, not a share of one (above).
