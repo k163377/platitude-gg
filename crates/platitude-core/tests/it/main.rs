@@ -9,8 +9,9 @@
 mod support;
 
 mod answer_reads;
+mod branch_integration;
 mod clone_integration;
-mod commit_branch_integration;
+mod commit_integration;
 mod config_reads;
 mod details_diff;
 mod edge_strings;
@@ -31,4 +32,5 @@ mod session_integration;
 mod stage_integration;
 mod stash_integration;
 mod tag_integration;
+mod upstream_integration;
 mod worktree_state;
