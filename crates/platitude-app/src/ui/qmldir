@@ -13,6 +13,7 @@ AppCombo 1.0 AppCombo.qml
 AppListView 1.0 AppListView.qml
 AppDialog 1.0 AppDialog.qml
 AppMenu 1.0 AppMenu.qml
+AppMenuButton 1.0 AppMenuButton.qml
 AppMenuItem 1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
 AskBar 1.0 AskBar.qml
