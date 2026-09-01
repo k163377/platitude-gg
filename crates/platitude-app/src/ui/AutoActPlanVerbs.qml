@@ -57,6 +57,24 @@ Item {
                 planLoadingTimer.start()
             else
                 planOpenTimer.begin(act)
+        } else if (act === "plan-across-merge" || act === "plan-off-branch"
+                   || act === "plan-unfetched-base") {
+            // The same press, on the three histories a preview turns down before the plan opens (`PlanRefusal`).
+            // Nothing is written and no plan comes back, so the answer is the bar in the middle and the notice
+            // barrier is the only one that can finish the run.
+            //
+            // Each is its own verb because each is caught saying a different heading — the picture cannot tell
+            // a bar that came down from a log that came up, and the three bars differ only in their words.
+            //
+            // The row is what tells the preset's refusal apart: one below the tip is the merge in `rewrite-merge`
+            // and the oldest row a `--depth 2` clone holds in `shallow`, while the commit no branch of
+            // `one-commit` can see is row 0 and has to be named.
+            const refusedOid = arg !== "" ? driver.autoActOid(arg)
+                             : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+            page.openRowMenu(refusedOid)
+            page.startRebasePlan(refusedOid)
+            commitMenu.close()
+            driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
             // The one order in which a plan closing over the boxes meets text that was never the plan's: type the
             // amend first, and open the plan from HEAD's own row so nothing moves the selection. Every other way in
