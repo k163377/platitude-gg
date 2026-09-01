@@ -219,6 +219,7 @@ WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml
 WindowShotMirrors 1.0 WindowShotMirrors.qml
+WindowWaitRing 1.0 WindowWaitRing.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipCommitBlock 1.0 WipCommitBlock.qml
 WipBucketPane 1.0 WipBucketPane.qml

@@ -30,6 +30,12 @@ Item {
                                            && (AppBackend.identityState === "missing"
                                                || AppBackend.identityUnsaved)
                                            && !identityDismissed && !settingsOpen
+
+    /// The settings screen, asked for at its git chapter. Where the gate itself never opens it, the screenshot hook
+    /// at the foot of this file does, and the road there belongs to the window
+    /// (`Main` → `WindowDialogSeat.openSettingsAt`).
+    signal settingsAtGitRequested()
+
     function dismissIdentity() {
         identityDismissed = true
     }
@@ -48,6 +54,21 @@ Item {
                 else
                     identityDialog.close()
             }
+        }
+    }
+
+    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
+    // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,
+    // and every later answer git gives about the identity is not a second press.
+    property bool identityEditShown: false
+    Connections {
+        target: AppBackend
+        enabled: AppBackend.autoIdentity === "edit" && !identityGate.identityEditShown
+        function onIdentityChanged() {
+            if (AppBackend.identityState !== "ready")
+                return
+            identityGate.identityEditShown = true
+            identityGate.settingsAtGitRequested()
         }
     }
 }

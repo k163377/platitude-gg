@@ -144,14 +144,12 @@ ApplicationWindow {
         }
     }
 
-    /// Automation (`PG_AUTO_ACT=replay-running`): stands a hand at `x, y` in scene coordinates and leaves it there.
-    /// A function rather than a binding, so the map runs once against the geometry it is looking at (app-ui.md).
+    /// Automation (`PG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of
+    /// that (`WindowWaitRing`). The two keep their names here — the harness calls them on the window.
     function holdWaitHand(x, y) {
-        waitSeat.handStandIn = waitSeat.mapFromItem(null, x, y)
+        waitRingSeat.holdWaitHand(x, y)
     }
-    /// What the mark beside that hand makes of it. Its own `spinning` rather than its `visible`, for the reason the
-    /// other mark a pointer wears gives (`RefusalBadge`): read from another file `visible` comes back stale.
-    readonly property bool waitRingShown: waitRing.spinning
+    readonly property bool waitRingShown: waitRingSeat.ringShown
 
     // Identity: the dialog and the state that opens it live in the gate below (`IdentityGate`). The way in keeps its
     // name on the window — the harness calls it here (`WindowAutoActDriver`).
@@ -333,20 +331,7 @@ ApplicationWindow {
         id: identityGate
         anchors.fill: parent
         settingsOpen: dialogSeat.settingsOpened
-    }
-    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
-    // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,
-    // and every later answer git gives about the identity is not a second press.
-    property bool identityEditShown: false
-    Connections {
-        target: AppBackend
-        enabled: AppBackend.autoIdentity === "edit" && !root.identityEditShown
-        function onIdentityChanged() {
-            if (AppBackend.identityState !== "ready")
-                return
-            root.identityEditShown = true
-            dialogSeat.openSettingsAt("git")
-        }
+        onSettingsAtGitRequested: dialogSeat.openSettingsAt("git")
     }
 
     // The window's own edge: a frameless window has no non-client area for the platform to put a line around, so the
@@ -385,38 +370,14 @@ ApplicationWindow {
         }
 
         // ---- the wait the hand is given ----------------------------------
-        // A write that replays history stands for seconds (`session::replays_history`), and for all of them the
-        // pointer is the one thing the reader is looking at. The ring goes beside it, over everything, and belongs to
-        // no pane: it answers the hand rather than whatever the hand happens to be over.
-        //
-        // The sheet draws and nothing more — no handler of its own. Hover is taken by the item it is laid over, so a
-        // handler here would put every row and cell below it out (規約 §QML 実装ルール); the pointer is read off the
-        // handler above, which is on this same item and so leaves its own subtree answering (`PointerWatch`).
-        Item {
-            id: waitSeat
+        // The mark that stands beside the pointer while a write replays history (`WindowWaitRing`). Over everything
+        // and belonging to no pane, so its z and its fill are written here rather than carried inside.
+        WindowWaitRing {
+            id: waitRingSeat
             anchors.fill: parent
             z: 10001
-
-            /// Where the hand would have been, for the runs that have none: a point in this sheet, or a negative x
-            /// for the ordinary case where a real pointer answers. The same shape every hover stand-in in this app
-            /// has (`SharedToolTip.handAcross`, `BandStateGroup.pointedAt`) — hover cannot be injected, so automation
-            /// writes what the pointer would have written, into the one answer the mark reads.
-            ///
-            /// **Offscreen does answer**, with a hand at the origin (`SharedToolTip`), so a run without this
-            /// photographs a ring in the window's top corner — drawn, and in no place worth judging it by.
-            property point handStandIn: Qt.point(-1, -1)
-            readonly property bool handKnown: waitSeat.handStandIn.x >= 0 || hand.known
-            readonly property point handAt: waitSeat.handStandIn.x >= 0
-                                            ? waitSeat.handStandIn
-                                            : Qt.point(hand.handX, hand.handY)
-
-            WaitRing {
-                id: waitRing
-                at: waitSeat.handAt
-                // Only the tab on screen has a replay, and only a hand that is over this window has a place to be
-                // told about it (デザイン規約 §進行中・長押しの定数 — the mark is the whole of what says a wait is on).
-                spinning: waitSeat.handKnown && root.curPage !== null && root.curPage.replayRunning
-            }
+            hand: hand
+            page: root.curPage
         }
 
         ColumnLayout {
