@@ -1,11 +1,22 @@
 // Design tokens — a verbatim mirror of internal-docs/デザイン規約.md. Edit the document first, then reflect changes here.
 // Never introduce values that are not in the document's tables. The mirror is complete on purpose: a token no code uses
 // yet still belongs here — do not prune it, and do not read its presence as "the default to pick".
+//
+// Three tiers, in this order (規約 §トークンの三層):
+//   1. 基礎     — ink and rhythm: colour, type, the spacing step, radii, icon squares. No screen in them; anyone reads them.
+//   2. ベーシック — the ordinary window's structure: the chrome, the panes, and the colours only they raise. Anyone
+//                  standing inside that window reads them, dialogs and menus included.
+//   3. 個別     — one named screen's own number. **Only that screen reads it**, and a second screen that wants the
+//                  same measurement gets its own token rather than borrowing this one.
 pragma Singleton
 
 import QtQuick
 
 QtObject {
+    // ================================================================
+    // 1. 基礎(全ページ共通)
+    // ================================================================
+
     // ---- colors: backgrounds ----
     readonly property color bgBase: "#020617"
     readonly property color bgSurface: "#020617"
@@ -48,11 +59,6 @@ QtObject {
     readonly property color warning: "#D97706"
     readonly property color danger: "#EF4444"
 
-    // ---- colors: ref kinds ----
-    // A separate axis from the three above: a tag is a kind, not a severity. Local = accent, remote = textSecondary,
-    // detached HEAD = warning (that one really is a state).
-    readonly property color refTag: "#D946EF"
-
     // ---- colors: dimmed (state, hue kept) ----
     // Two steps down the Tailwind ramp each source came from. For frames, icons and marks only -- dimming *text* is the
     // disabled signal (§無効), and a second meaning for it cannot be read apart. Each is clear of its own source; they
@@ -62,27 +68,6 @@ QtObject {
     readonly property color successDim: "#166534"
     readonly property color warningDim: "#92400E"
     readonly property color dangerDim: "#B91C1C"
-
-    // ---- colors: git / diff ----
-    readonly property color diffAddedFg: "#4ADE80"
-    readonly property color diffAddedBg: "#14301D"
-    readonly property color diffAddedEmphBg: "#144927"
-    readonly property color diffRemovedFg: "#F87171"
-    readonly property color diffRemovedBg: "#351515"
-    readonly property color diffRemovedEmphBg: "#5B1E1F"
-    readonly property color diffHunkHeaderFg: "#94A3B8"
-    readonly property color diffHunkHeaderBg: "#0F172A"
-    readonly property color statusStaged: "#16A34A"
-    readonly property color statusUnstaged: "#D97706"
-    readonly property color statusUntracked: "#64748B"
-    readonly property color statusConflict: "#EF4444"
-
-    // ---- colors: commit graph lanes (cycled modulo length) ----
-    // Okabe-Ito color-universal-design palette (black swapped for a light gray that survives the dark background).
-    readonly property var graphLane: [
-        "#56B4E9", "#E69F00", "#009E73", "#CC79A7",
-        "#F0E442", "#D55E00", "#0072B2", "#DDDDDD"
-    ]
 
     // ---- typography ----
     readonly property int fontSm: 12
@@ -133,7 +118,47 @@ QtObject {
     readonly property int spaceXl: 24
     readonly property int spaceXxl: 32
 
-    // ---- dimensions ----
+    // ---- strokes, corners, icon squares ----
+    readonly property int borderWidth: 1
+    readonly property int radiusSm: 2
+    readonly property int radiusMd: 4
+    readonly property int iconXs: 10
+    readonly property int iconSm: 12
+    readonly property int iconMd: 16
+    readonly property int iconLg: 20
+    readonly property int iconXl: 24
+
+    // ================================================================
+    // 2. ベーシック(通常モードの窓 — その中に立つダイアログ・メニューも読む)
+    // ================================================================
+
+    // ---- colors: ref kinds ----
+    // A separate axis from the state colours above: a tag is a kind, not a severity. Local = accent, remote =
+    // textSecondary, detached HEAD = warning (that one really is a state).
+    readonly property color refTag: "#D946EF"
+
+    // ---- colors: git / diff ----
+    readonly property color diffAddedFg: "#4ADE80"
+    readonly property color diffAddedBg: "#14301D"
+    readonly property color diffAddedEmphBg: "#144927"
+    readonly property color diffRemovedFg: "#F87171"
+    readonly property color diffRemovedBg: "#351515"
+    readonly property color diffRemovedEmphBg: "#5B1E1F"
+    readonly property color diffHunkHeaderFg: "#94A3B8"
+    readonly property color diffHunkHeaderBg: "#0F172A"
+    readonly property color statusStaged: "#16A34A"
+    readonly property color statusUnstaged: "#D97706"
+    readonly property color statusUntracked: "#64748B"
+    readonly property color statusConflict: "#EF4444"
+
+    // ---- colors: commit graph lanes (cycled modulo length) ----
+    // Okabe-Ito color-universal-design palette (black swapped for a light gray that survives the dark background).
+    readonly property var graphLane: [
+        "#56B4E9", "#E69F00", "#009E73", "#CC79A7",
+        "#F0E442", "#D55E00", "#0072B2", "#DDDDDD"
+    ]
+
+    // ---- the window's own structure ----
     readonly property int rowHeight: 24
     readonly property int graphRowHeight: 28
     readonly property int headerHeight: 32
@@ -141,14 +166,6 @@ QtObject {
     readonly property int toolbarHeight: 40
     readonly property int controlHeight: 28
     readonly property int buttonMinWidth: 80
-    readonly property int iconXs: 10
-    readonly property int iconSm: 12
-    readonly property int iconMd: 16
-    readonly property int iconLg: 20
-    readonly property int iconXl: 24
-    readonly property int borderWidth: 1
-    readonly property int radiusSm: 2
-    readonly property int radiusMd: 4
     readonly property int splitterWidth: 4
     readonly property int scrollBarGutter: 9
     // The left panel's own bar, which is a slab held against the pane's edge rather than the style's floating pill:
@@ -156,18 +173,22 @@ QtObject {
     readonly property int navBarReach: 5
     readonly property int navBarGutter: 8
     readonly property int messageMaxHeight: 108
-    // The widest a run of prose is set in this window (デザイン規約 §レイアウト初期値, 640): the card a dialog
-    // stands in, the git gate's lines, the screen a repository would not open on, and the sentences under a settings
-    // chapter. A different seat is not a different amount to read, so they share one width — the boxes beside them
-    // still take whatever the column gives (§設定の画面).
+
+    // ================================================================
+    // 3. 個別(特別な画面 1 枚ごと — 名指しした画面だけが読む)
+    // ================================================================
+
+    // 文を読ませる面: the widest a run of prose is set at (デザイン規約 §レイアウト初期値, 640) — the card a dialog
+    // stands in, the screen a repository would not open on, and the sentences under a settings chapter. A different
+    // seat is not a different amount to read, so those three share one width; the boxes beside them still take
+    // whatever the column gives (§設定の画面).
     readonly property int textWidth: 640
-    // The startup gate's own column (デザイン規約 §レイアウト初期値). **Not `textWidth`** — that number is the width a
+    // 起動ゲート: its own column (デザイン規約 §レイアウト初期値). **Not `textWidth`** — that number is the width a
     // run of prose is read at, and this screen has none: its longest line is a mono path, which is scanned rather
     // than read, and it is the whole of what there is to take away because no repository is open yet and the command
     // log does not exist. Two thirds of the initial window, so the air either side is still the larger part of it.
     readonly property int gateWidth: 960
-    // The settings screen's category rail. **Not the sidebar's 260** — that width is for a column of names nobody
-    // chose (branches, remotes, tags), and this one holds a handful of words this app writes itself
-    // (デザイン規約 §設定の画面).
+    // 設定画面: the category rail. **Not the sidebar's 260** — that width is for a column of names nobody chose
+    // (branches, remotes, tags), and this one holds a handful of words this app writes itself (デザイン規約 §設定の画面).
     readonly property int settingsRailWidth: 160
 }

@@ -23,9 +23,11 @@ Dialog {
     property alias textContent: dialogFace.textContent
 
     anchors.centerIn: parent
+    // The card is set to the width a run of prose is read at (規約 §レイアウト初期値 — the per-screen tier's
+    // `textWidth`, shared with the screen a repository would not open on and the settings screen's chapters).
     width: dialog.fills
-           ? (parent ? parent.width : 640)
-           : Math.min(640, (parent ? parent.width : 640) - 2 * Theme.spaceXxl)
+           ? (parent ? parent.width : Theme.textWidth)
+           : Math.min(Theme.textWidth, (parent ? parent.width : Theme.textWidth) - 2 * Theme.spaceXxl)
     height: dialog.fills ? (parent ? parent.height : 480) : implicitHeight
     modal: true
     closePolicy: Popup.CloseOnEscape

@@ -5,7 +5,7 @@ paths:
 
 # platitude-app 規約(Qt Bridges・QML 配線・意匠の実装対応)
 
-UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-docs/デザイン規約.md)(触る § を見出しの Grep で探してその § だけを読み、値は表から選ぶ。Theme.qml と Main.qml 冒頭の定数ブロックはその写し)。core 側は `.claude/rules/core.md`、ヘッドレス検証の手順と `PG_AUTO_ACT` 動詞表は verify-ui スキル。
+UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-docs/デザイン規約.md)(触る § を見出しの Grep で探してその § だけを読み、値は表から選ぶ。Theme.qml と Main.qml 冒頭の定数ブロックはその写し)。**トークンは 3 層**(規約 §トークンの三層 — 基礎 = 色・字・余白の刻み / ベーシック = 通常モードの窓の骨格 / 個別 = 特別な画面 1 枚ごと)。**個別の層は名指しした画面だけが読む** — 別の画面が同じ寸法を欲しがったら、同じ数でも自分のトークンを足す。core 側は `.claude/rules/core.md`、ヘッドレス検証の手順と `PG_AUTO_ACT` 動詞表は verify-ui スキル。
 
 ## Qt Bridges の要点(罠)
 
