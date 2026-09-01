@@ -1,5 +1,5 @@
-//! The commit guard: the shared session rules ride worktree branches, so a
-//! direct commit of them from the primary checkout is held.
+//! The commit guard: the primary checkout is where this repository is
+//! read, and every commit of it rides a worktree branch.
 
 use super::MAIN_ESCAPE;
 use super::git::unquote;
@@ -7,18 +7,18 @@ use super::launch::resolve;
 use crate::git_query;
 use crate::seats::worktree_root;
 
-/// The primary checkout may commit documents directly, except the files
-/// every session loads: .claude/skills and .claude/rules ride worktree
-/// branches (CLAUDE.md Git 運用). A commit is held only when it
-/// demonstrably carries them — named on the line, already staged, or
-/// swept in by broad staging while they sit changed.
-pub(super) fn shared_rules_denied(command: &str, cwd: &str) -> bool {
-    let Some(commit) = commit(command) else {
+/// The primary checkout commits nothing of its own — implementation,
+/// documents, settings and the shared session rules alike ride worktree
+/// branches, because parallel sessions keep reaching for the same files
+/// and direct commits to main collide with theirs (CLAUDE.md Git 運用).
+/// What the commit carries no longer narrows this: where it would land is
+/// the whole question.
+pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
+    let Some(dir) = commit_dir(command, cwd) else {
         return false;
     };
-    let dir = commit.dir.unwrap_or(cwd);
     // The same bounds as the merge guard: only this repository answers,
-    // and a worktree branch is exactly where these edits belong.
+    // and a worktree branch is exactly where the work belongs.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
         return false;
     };
@@ -28,53 +28,35 @@ pub(super) fn shared_rules_denied(command: &str, cwd: &str) -> bool {
     if worktree_root(&resolve(cwd, dir)).is_some() {
         return false;
     }
-    let carries =
-        commit.named || staged_shared_rules(dir) || (commit.broad && changed_shared_rules(dir));
-    if !carries {
-        return false;
-    }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-         \"This commit would carry .claude/skills, .claude/rules or \
-         .claude/rules-refs onto main from the primary checkout, and those \
-         files ride worktree branches: parallel sessions keep reaching for \
-         them, and direct commits to main collide (CLAUDE.md Git 運用). \
-         Make the edit on a worktree branch and report the branch as ready \
-         to merge. If the user asked for this direct commit in so many \
-         words, run the same command again with {}=1 in front of it.\"}}}}",
+         \"This would commit in the primary checkout, and the primary \
+         checkout is only ever read: implementation, documents, settings \
+         and the shared session rules all ride worktree branches, because \
+         parallel sessions keep reaching for the same files and direct \
+         commits to main collide with theirs (CLAUDE.md Git 運用). Take a \
+         seat — `claude --worktree <letter>`, or EnterWorktree by path — \
+         redo the edit there, and report the branch as ready to merge. If \
+         the user asked for this direct commit in so many words, run the \
+         same command again with {}=1 in front of it.\"}}}}",
         MAIN_ESCAPE
     );
     true
 }
 
-/// A `git commit` found in a shell line, with what the whole line stages
-/// around it.
-struct Commit<'a> {
-    /// The repository it acts on, read the way Reflection reads it.
-    dir: Option<&'a str>,
-    /// Whether a pathspec of a staging or commit verb names the shared
-    /// rules.
-    named: bool,
-    /// Whether staging is broad (`-a`, `add -A`, `add .`), sweeping in
-    /// whatever sits changed without naming it.
-    broad: bool,
-}
-
-/// The first `git commit` in `command`, if any, folding in every staging
-/// verb on the line: `git add X && git commit` stages X only after this
-/// hook has answered, so the line is the only place X shows in time.
-fn commit(command: &str) -> Option<Commit<'_>> {
+/// The repository the first `git commit` in `command` would run in:
+/// `git -C <dir>`, else a `cd` that preceded it, else wherever the session
+/// sits. None when the line commits nothing — `git add X && git commit`
+/// stages X only after this hook has answered, so the line is the only
+/// place a coming commit shows in time.
+pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     let mut cd_dir = None;
-    let mut dir = None;
-    let mut seen = false;
-    let mut named = false;
-    let mut broad = false;
     let mut index = 0;
     while index < tokens.len() {
         if tokens[index] == "cd" {
-            cd_dir = tokens.get(index + 1).map(|d| unquote(d));
+            cd_dir = tokens.get(index + 1).map(|dir| unquote(dir));
             index += 2;
             continue;
         }
@@ -82,152 +64,27 @@ fn commit(command: &str) -> Option<Commit<'_>> {
             index += 1;
             continue;
         }
+        // git's own options come before the subcommand; -C and -c take a
+        // separate value, so stepping one token at a time would read that
+        // value as the subcommand.
         let mut git_dir = None;
         index += 1;
         while let Some(option) = tokens.get(index).filter(|token| token.starts_with('-')) {
             if *option == "-C" {
-                git_dir = tokens.get(index + 1).map(|d| unquote(d));
+                git_dir = tokens.get(index + 1).map(|dir| unquote(dir));
             }
             index += if matches!(*option, "-C" | "-c") { 2 } else { 1 };
         }
-        let Some(subcommand) = tokens.get(index).copied() else {
-            break;
-        };
-        index += 1;
-        if !matches!(subcommand, "commit" | "add" | "stage" | "mv" | "rm") {
-            continue;
-        }
-        while let Some(token) = tokens.get(index).copied() {
-            if token == "git" {
-                break;
-            }
-            if matches!(token, "&&" | "||" | ";" | "|") {
-                index += 1;
-                break;
-            }
-            let span = quoted_span(&tokens, index);
-            if token.starts_with('-') {
-                broad |= stages_broadly(subcommand, token);
-                index = if span == index + 1 && takes_value(subcommand, token) {
-                    quoted_span(&tokens, index + 1)
-                } else {
-                    span
-                };
-                continue;
-            }
-            let path = unquote(token).replace('\\', "/");
-            named |= names_shared_rules(&path);
-            let path = path.trim_end_matches('/');
-            broad |= matches!(path, "." | ":/" | ".claude") || path.ends_with("/.claude");
-            index = span;
-        }
-        if subcommand == "commit" && !seen {
-            seen = true;
-            dir = git_dir.or(cd_dir);
+        match tokens.get(index) {
+            None => break,
+            // Everything past the verb belongs to the commit, message
+            // included: reading no further is what keeps a `cd` quoted
+            // inside a message from being read as a directory change.
+            Some(&"commit") => return Some(git_dir.or(cd_dir).unwrap_or(cwd)),
+            Some(_) => index += 1,
         }
     }
-    seen.then_some(Commit { dir, named, broad })
-}
-
-/// Index past the token at `at`, extended to the closing quote when the
-/// token opens one it does not close: a quoted value is one word to the
-/// shell however many words this whitespace split made of it.
-///
-/// Only a quote opening a word (or a `--flag='…` value) spans words. One
-/// inside a word (`it's-notes.md`) must not: swallowing to the line's end
-/// would carry a `git commit` behind it out of this guard's sight.
-fn quoted_span(tokens: &[&str], at: usize) -> usize {
-    let Some(first) = tokens.get(at) else {
-        return at;
-    };
-    let open = match first.find(['"', '\'']) {
-        Some(0) => 0,
-        Some(eq) if first.as_bytes().get(eq.wrapping_sub(1)) == Some(&b'=') => eq,
-        _ => return at + 1,
-    };
-    let quote = char::from(first.as_bytes()[open]);
-    if first[open + 1..].contains(quote) {
-        return at + 1;
-    }
-    let mut end = at + 1;
-    while let Some(token) = tokens.get(end) {
-        end += 1;
-        if token.contains(quote) {
-            break;
-        }
-    }
-    end
-}
-
-/// Whether `option` makes `subcommand` stage broadly — sweeping in
-/// whatever sits changed without naming it.
-fn stages_broadly(subcommand: &str, option: &str) -> bool {
-    let staging = matches!(subcommand, "add" | "stage");
-    match option {
-        "--all" => staging || subcommand == "commit",
-        "--update" => staging,
-        _ => option.strip_prefix('-').is_some_and(|cluster| {
-            !cluster.starts_with('-')
-                && ((subcommand == "commit" && cluster.contains('a'))
-                    || (staging && cluster.contains(['A', 'u'])))
-        }),
-    }
-}
-
-/// Whether a commit option takes the next token as its value. Only commit
-/// is read this closely — its message is where pathspec-looking words
-/// live; the staging verbs take no values worth skipping.
-fn takes_value(subcommand: &str, option: &str) -> bool {
-    subcommand == "commit"
-        && (matches!(
-            option,
-            "--message"
-                | "--file"
-                | "--author"
-                | "--date"
-                | "--template"
-                | "--cleanup"
-                | "--fixup"
-                | "--squash"
-                | "--trailer"
-                | "--reuse-message"
-                | "--reedit-message"
-                | "--pathspec-from-file"
-        ) || option.strip_prefix('-').is_some_and(|cluster| {
-            !cluster.starts_with('-') && cluster.ends_with(['m', 'F', 'C', 'c', 't'])
-        }))
-}
-
-/// Whether `text` — a pathspec or a line of git status output — names
-/// .claude/skills, .claude/rules or .claude/rules-refs as a path segment.
-/// .claude/settings.json stays directly committable; only the files every
-/// session loads or greps as rules ride worktree branches.
-fn names_shared_rules(text: &str) -> bool {
-    let text = text.replace('\\', "/");
-    [".claude/skills", ".claude/rules-refs", ".claude/rules"]
-        .iter()
-        .any(|shared| {
-            text.match_indices(*shared).any(|(at, _)| {
-                let before = text[..at].chars().next_back();
-                let after = text[at + shared.len()..].chars().next();
-                before.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
-                    && after.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ' '))
-            })
-        })
-}
-
-/// Whether the index already carries the shared rules — staged by an
-/// earlier tool call, with nothing left on this line to name them.
-fn staged_shared_rules(dir: &str) -> bool {
-    git_query(dir, &["diff", "--cached", "--name-only"])
-        .is_some_and(|paths| paths.lines().any(names_shared_rules))
-}
-
-/// Whether they sit changed at all — what broad staging would sweep into
-/// the commit, untracked files included.
-fn changed_shared_rules(dir: &str) -> bool {
-    git_query(dir, &["status", "--porcelain"])
-        .is_some_and(|status| status.lines().any(names_shared_rules))
+    None
 }
 
 /// The repository `dir` belongs to, shared by all of its worktrees, so that
@@ -242,79 +99,67 @@ pub(super) fn common_git_dir(dir: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{commit, names_shared_rules};
+    use super::commit_dir;
+
+    const CWD: &str = "C:/x/platitude-gg";
 
     #[test]
-    fn holds_a_commit_that_names_the_shared_rules() {
-        let staged = commit("git add .claude/rules/core.md && git commit -m \"x\"").unwrap();
-        assert!(staged.named);
-        let direct = commit("git commit .claude/skills/verify-ui/SKILL.md -m \"x\"").unwrap();
-        assert!(direct.named);
-        let quoted =
-            commit("git add \".claude/skills/a b/SKILL.md\" && git commit -m \"x\"").unwrap();
-        assert!(quoted.named);
-        let removed = commit("git rm -r .claude/rules && git commit -m \"x\"").unwrap();
-        assert!(removed.named);
-        assert!(
-            commit("git add .claude/rules/core.md").is_none(),
-            "a line with no commit stages nothing to hold"
+    fn finds_the_commit_however_the_line_reaches_it() {
+        for command in [
+            "git commit -m \"x\"",
+            "git commit -am \"x\"",
+            "git add . && git commit -m \"x\"",
+            "git add \".claude/skills/a b/SKILL.md\" && git commit -m \"x\"",
+            "git rm -r .claude/rules && git commit -m \"x\"",
+            "git add it's-notes.md && git commit -m x",
+        ] {
+            assert_eq!(commit_dir(command, CWD), Some(CWD), "{command}");
+        }
+        assert_eq!(
+            commit_dir("git add .claude/rules/core.md", CWD),
+            None,
+            "a line with no commit commits nothing"
         );
     }
 
     #[test]
-    fn an_apostrophe_inside_a_path_does_not_swallow_the_commit_behind_it() {
-        let seen = commit("git add it's-notes.md && git commit -m x");
-        assert!(seen.is_some(), "the commit after the odd quote is seen");
-        let named = commit("git add it's.md .claude/rules/core.md && git commit -m x").unwrap();
-        assert!(named.named, "and so is the path after it");
-    }
-
-    #[test]
-    fn reads_the_message_as_one_value_not_as_pathspecs() {
-        let mention = commit("git commit -m \"docs: note .claude/rules/core.md moved\"").unwrap();
-        assert!(!mention.named);
-        let glued =
-            commit("git commit --message=\"see .claude/skills for verbs\" CLAUDE.md").unwrap();
-        assert!(!glued.named);
-        let heredoc =
-            commit("git commit -m \"$(cat <<'EOF'\ndocs: .claude/rules/core.md notes\nEOF\n)\"")
-                .unwrap();
-        assert!(!heredoc.named);
-    }
-
-    #[test]
-    fn sees_broad_staging_for_what_it_would_sweep() {
-        assert!(commit("git commit -am \"x\"").unwrap().broad);
-        assert!(commit("git add -A && git commit -m \"x\"").unwrap().broad);
-        assert!(commit("git add . && git commit -m \"x\"").unwrap().broad);
-        assert!(
-            commit("git add .claude && git commit -m \"x\"")
-                .unwrap()
-                .broad
-        );
-        let narrow = commit("git add CLAUDE.md && git commit -m \"x\"").unwrap();
-        assert!(!narrow.broad && !narrow.named);
+    fn holds_the_files_the_narrow_guard_used_to_wave_through() {
+        // Settings and plain documents rode past the old shared-rules
+        // reading; the primary checkout writes none of them now.
+        for command in [
+            "git commit .claude/settings.json -m \"x\"",
+            "git add CLAUDE.md && git commit -m \"x\"",
+            "git commit internal-docs/notes.md -m \"x\"",
+        ] {
+            assert_eq!(commit_dir(command, CWD), Some(CWD), "{command}");
+        }
     }
 
     #[test]
     fn reads_the_directory_the_commit_would_run_in() {
-        let by_option = commit("git -C ../.. commit -m \"x\"").unwrap();
-        assert_eq!(by_option.dir, Some("../.."));
-        let by_cd = commit("cd C:/x/platitude-gg && git commit -am \"x\"").unwrap();
-        assert_eq!(by_cd.dir, Some("C:/x/platitude-gg"));
+        assert_eq!(
+            commit_dir("git -C ../.. commit -m \"x\"", CWD),
+            Some("../..")
+        );
+        assert_eq!(
+            commit_dir("cd C:/x/platitude-gg && git commit -am \"x\"", "C:/other"),
+            Some("C:/x/platitude-gg")
+        );
+        // A -C on a staging verb is that verb's, not the commit's.
+        assert_eq!(
+            commit_dir("git -C ../.. add . && git commit -m \"x\"", CWD),
+            Some(CWD)
+        );
     }
 
     #[test]
-    fn knows_the_shared_directories_by_their_segments() {
-        assert!(names_shared_rules(".claude/rules/core.md"));
-        assert!(names_shared_rules(
-            "C:/x/platitude-gg/.claude/skills/verify-ui/SKILL.md"
-        ));
-        assert!(names_shared_rules(".claude\\rules\\core.md"));
-        assert!(names_shared_rules(".claude/skills"));
-        assert!(names_shared_rules(".claude/rules-refs/app-ui.md"));
-        assert!(!names_shared_rules(".claude/settings.json"));
-        assert!(!names_shared_rules("docs/.claude/rules-of-thumb.md"));
-        assert!(!names_shared_rules("internal-docs/skills.md"));
+    fn reads_a_message_as_text_and_not_as_machinery() {
+        for command in [
+            "git commit -m \"docs: cd into the seat before committing\"",
+            "git commit --message=\"see .claude/skills for verbs\" CLAUDE.md",
+            "git commit -m \"$(cat <<'EOF'\ndocs: cd C:/elsewhere notes\nEOF\n)\"",
+        ] {
+            assert_eq!(commit_dir(command, CWD), Some(CWD), "{command}");
+        }
     }
 }

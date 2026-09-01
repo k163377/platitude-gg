@@ -1,7 +1,7 @@
 //! The git a shell line may not run unasked: landing a branch on main,
 //! and rewriting the branch under the session.
 
-use super::commit::{common_git_dir, shared_rules_denied};
+use super::commit::{common_git_dir, primary_commit_denied};
 use super::payload::string_field;
 use super::{MAIN_ESCAPE, REBASE_ESCAPE};
 use crate::git_query;
@@ -9,8 +9,8 @@ use crate::git_query;
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the
 /// user asks for it in so many words (CLAUDE.md Git 運用) — landing a
 /// branch on main, rewriting a branch under the session, and committing
-/// the shared session rules from the primary checkout. Answers whether it
-/// refused, so the guard after it stays quiet when it did.
+/// anything at all from the primary checkout. Answers whether it refused,
+/// so the guard after it stays quiet when it did.
 pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -19,7 +19,7 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     // Each rule keeps its own escape, so asking for one is not asking for
     // the others: a merge the user called for still may not rebase.
     Ok(guarded_git_denied(&command, &cwd)
-        || (!command.contains(MAIN_ESCAPE) && shared_rules_denied(&command, &cwd)))
+        || (!command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd)))
 }
 
 /// Putting a branch onto main and rewriting the branch under the session

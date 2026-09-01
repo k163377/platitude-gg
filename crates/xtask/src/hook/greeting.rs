@@ -15,16 +15,15 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
     let seats = seat_report(&cwd).unwrap_or_default();
     match worktree_root(&cwd) {
         None => println!(
-            "This session runs in the primary checkout. Implementation work \
-             belongs in a worktree seat (`claude --worktree <letter>`, or \
-             EnterWorktree by path) so parallel sessions do not fight over \
-             target/ and the release exe — see CLAUDE.md ビルド・テスト. \
-             Document edits and review are fine here, except .claude/skills, \
-             .claude/rules and .claude/rules-refs: parallel sessions keep \
-             reaching for those same files, and a direct commit to main \
-             collides with theirs — edit them on a worktree branch and \
-             report the branch as ready to merge (CLAUDE.md Git 運用). \
-             {seats}"
+            "This session runs in the primary checkout, and the primary \
+             checkout is only ever read. Every write belongs in a worktree \
+             seat (`claude --worktree <letter>`, or EnterWorktree by path) \
+             — implementation, documents, settings and the shared session \
+             rules alike: parallel sessions fight over target/ and the \
+             release exe, and they keep reaching for the same files, so a \
+             direct commit to main collides with theirs (CLAUDE.md ビルド・\
+             テスト / Git 運用). Take a seat, make the edit there, and \
+             report the branch as ready to merge. {seats}"
         ),
         Some(root) => {
             let name = root.rsplit('/').next().unwrap_or_default();
