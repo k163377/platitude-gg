@@ -70,84 +70,18 @@ ColumnLayout {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName, detailsPane.details.authorEmail)
     }
-    // ---- the author row's two cards ---------------------------------
-    // `CommitAuthorRow` owns the hover state and raises anchor points; the
-    // cards stay here because they open in pane coordinates and must not
-    // scroll away with the block the row sits on. The pane forwards the
-    // hooks — the automation reads the panes.
-    readonly property var coAuthorRecords: block.coAuthorRecords
-    function coAuthorName(i) {
-        return block.coAuthorName(i)
-    }
-    /// The credit line ran out of room and was elided — what a headless run
-    /// reads in place of an ellipsis it cannot see.
-    readonly property bool coAuthorsClipped: block.matesClipped
-    function showCoAuthors(on) {
-        block.showCoAuthors(on)
-    }
-    /// Whether the card is on screen — the output side, since the input side
-    /// would read true with the binding cut.
-    readonly property bool matesCardOpen: mateCard.opened
-    /// The row raised an anchor in its own coordinates: map it here and open.
-    /// Set on open rather than bound — the answer only matters at the moment
-    /// it is asked.
-    function openMateCard(at) {
-        if (detailsPane.coAuthorRecords.length === 0)
-            return
-        const p = block.valueRow.mapToItem(detailsPane, at.x, at.y)
-        mateCard.records = detailsPane.coAuthorRecords
-        // Measured from where it opens, not from the pane: the card starts
-        // partway across, so the pane's width is not what is left for it.
-        mateCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceXs
-        mateCard.x = p.x
-        // Flush against the underline: a gap is a band the pointer crosses
-        // while touching neither, and the card closes under it. Same rule
-        // the ref list follows.
-        mateCard.y = p.y
-        mateCard.open()
-    }
-    CoAuthorCard {
-        id: mateCard
-    }
-    HoverCardHost {
-        id: mateKeep
-        card: mateCard
-        pointedAt: block.matesPointed
-    }
+    /// The two cards the author row opens, and the block the row is in. **Automation-only exposures**, the same one
+    /// `GraphPane.view` is (app-ui.md): what a run asks about the credits and the two people is the block's answer or
+    /// the cards' own, and a pane that mirrored each of those would be ten forwards that say nothing
+    /// (`AutoActTipVerbs`).
+    readonly property alias authorCards: cards
+    readonly property alias messageBlock: block
 
-    function showAuthor(on) {
-        block.showAuthor(on)
-    }
-    readonly property bool authorCardOpen: authorCard.opened
-    readonly property bool authorNameClipped: block.nameClipped
-    function openAuthorCard(at) {
-        if (detailsPane.details.authorName === "")
-            return
-        const p = block.valueRow.mapToItem(detailsPane, at.x, at.y)
-        authorCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceXs
-        authorCard.x = p.x
-        authorCard.y = p.y
-        authorCard.open()
-    }
-    AuthorCard {
-        id: authorCard
-        authorName: detailsPane.details.authorName
-        authorEmail: detailsPane.details.authorEmail
-        authorFace: detailsPane.details.avatar
-        authorFaceUrl: detailsPane.details.avatarUrl
-        authoredAt: detailsPane.details.authorTime
-        committerName: detailsPane.details.committerName
-        committerEmail: detailsPane.details.committerEmail
-        committerFace: detailsPane.details.committerAvatar
-        committerFaceUrl: detailsPane.details.committerAvatarUrl
-        committedAt: detailsPane.details.committerTime
-        committerDiffers: detailsPane.details.committerDiffers
-        timeDiffers: detailsPane.details.commitTimeDiffers
-    }
-    HoverCardHost {
-        id: authorKeep
-        card: authorCard
-        pointedAt: block.authorPointed
+    DetailsAuthorCards {
+        id: cards
+        host: detailsPane
+        block: block
+        details: detailsPane.details
     }
 
     signal fileActivated(string path, string origPath)
@@ -401,15 +335,15 @@ ColumnLayout {
         avatarPointedAt: detailsPane.avatarPointedAt
         signaturePointedAt: detailsPane.signaturePointedAt
         summaryPointedAt: detailsPane.summaryPointedAt
-        mateCardInside: mateCard.pointerInside
-        authorCardInside: authorCard.pointerInside
+        mateCardInside: cards.matesPointerInside
+        authorCardInside: cards.authorPointerInside
         onAvatarClicked: detailsPane.avatarClicked()
         onCopyRequested: text => detailsPane.copyRequested(text)
         onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
-        onOpenMateRequested: at => detailsPane.openMateCard(at)
-        onSettleMateRequested: mateKeep.settle()
-        onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
-        onSettleAuthorRequested: authorKeep.settle()
+        onOpenMateRequested: at => cards.openMateCard(at)
+        onSettleMateRequested: cards.settleMates()
+        onOpenAuthorRequested: at => cards.openAuthorCard(at)
+        onSettleAuthorRequested: cards.settleAuthor()
         onEscaped: detailsPane.revertMessage()
         onSaveRequested: detailsPane.submitMessage()
     }

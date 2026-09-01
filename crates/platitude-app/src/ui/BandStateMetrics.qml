@@ -8,11 +8,11 @@ import platitude.ui
 ///
 /// **The badges in the band cannot also be what the cap is measured from.** A `RowLayout` that is not being laid out
 /// reports the width it had when it last was, and the row of badges goes away the moment the group folds — so a cap
-/// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide window, and no
-/// width would bring the words back).
+/// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide window,
+/// and no width would bring the words back).
 ///
-/// One of the measuring components the window is settled with (`TabMetrics` / `BandWidest` / `DiffTextMetrics`), and
-/// for the same reason: a width read off the thing being laid out is a width that has already given way.
+/// One of the measuring components the window is settled with (`TabMetrics` / `BandWidest` / `DiffTextMetrics`),
+/// and for the same reason: a width read off the thing being laid out is a width that has already given way.
 Item {
     id: metrics
 

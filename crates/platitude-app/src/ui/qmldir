@@ -55,6 +55,7 @@ SweepPad 1.0 SweepPad.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
 CutName 1.0 CutName.qml
+DetailsAuthorCards 1.0 DetailsAuthorCards.qml
 DetailsChangesBand 1.0 DetailsChangesBand.qml
 DetailsMessageBlock 1.0 DetailsMessageBlock.qml
 DiffCodeScroll 1.0 DiffCodeScroll.qml

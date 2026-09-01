@@ -242,12 +242,13 @@ Item {
             if (!driver.cardSettled)
                 return
             if (AppBackend.autoAct === "author-card-open")
-                detailsPane.showAuthor(true)
-            if (AppBackend.autoAct === "author-card-open" && !detailsPane.authorCardOpen)
+                detailsPane.messageBlock.showAuthor(true)
+            if (AppBackend.autoAct === "author-card-open" && !detailsPane.authorCards.authorCardOpen)
                 return
             authorCardTimer.stop()
             AppBackend.report(
-                "author_card cut=" + detailsPane.authorNameClipped + " open=" + detailsPane.authorCardOpen
+                "author_card cut=" + detailsPane.messageBlock.nameClipped
+                + " open=" + detailsPane.authorCards.authorCardOpen
                 + " author=" + detailsPane.details.authorEmail
                 + " committer=" + detailsPane.details.committerEmail
                 + " other=" + detailsPane.details.committerDiffers
@@ -262,16 +263,17 @@ Item {
             if (!driver.cardSettled)
                 return
             if (AppBackend.autoAct === "co-authors-open")
-                detailsPane.showCoAuthors(true)
-            if (AppBackend.autoAct === "co-authors-open" && !detailsPane.matesCardOpen)
+                detailsPane.messageBlock.showCoAuthors(true)
+            if (AppBackend.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)
                 return
             coAuthorTimer.stop()
             // `open` is the card's own visibility, not the input that asked for it: reporting the input would go green
             // with the binding cut. `cut=` is the credit line's own eliding, read rather than judged (verbs.md).
             AppBackend.report(
-                "co_authors count=" + detailsPane.coAuthorRecords.length + " cut=" + detailsPane.coAuthorsClipped
-                + " first=" + detailsPane.coAuthorName(0)
-                + " open=" + detailsPane.matesCardOpen)
+                "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
+                + " cut=" + detailsPane.messageBlock.matesClipped
+                + " first=" + detailsPane.messageBlock.coAuthorName(0)
+                + " open=" + detailsPane.authorCards.matesCardOpen)
             driver.complete()
         }
     }

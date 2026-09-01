@@ -4,10 +4,10 @@ import QtQuick
 
 /// What a headless run does to the sidebar, and what it reads back off it.
 ///
-/// Every one of these goes in where a hand goes in — the filter field itself, the rail's own `enterAt` / `leaveAt` /
-/// `tapAt`, the header band's `tap` — so what answers is the pane's wiring rather than a second copy of it
-/// (verify-ui スキル §注入はハンドラ本体そのものへ入れる). Hover is the input that cannot be injected, so resting on
-/// something is always "write the one property a real hover writes".
+/// Every one of these goes in where a hand goes in — the filter field itself, the rail's own `enterAt` /
+/// `leaveAt` / `tapAt`, the header band's `tap` — so what answers is the pane's wiring rather than a second copy
+/// of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる). Hover is the input that cannot be injected, so
+/// resting on something is always "write the one property a real hover writes".
 ///
 /// Here rather than on `SidebarPane`: the pane's part in this is the three children it hands over (`autoRail` /
 /// `autoSections` / `autoPeek`) and the one piece of its own state a peek moves (`peekEntered`). Composing them into
@@ -110,8 +110,8 @@ QtObject {
     }
     /// The current branch's sticky stand-in, under the same pointer: it rides the edge its own row went out of, so
     /// resting on that row is resting on this (`HeadPinRow`). What puts the pointer there is the pane's own
-    /// `headPinPointed` — the row it stands for has no place in the list at all while a filter hides it, which is one
-    /// of the two ways the stand-in is on screen.
+    /// `headPinPointed` — the row it stands for has no place in the list at all while a filter hides it, which is
+    /// one of the two ways the stand-in is on screen.
     readonly property bool headPinLit: probe.sections.headPinLit
     readonly property string headPinWords: probe.sections.headPinWords
 
