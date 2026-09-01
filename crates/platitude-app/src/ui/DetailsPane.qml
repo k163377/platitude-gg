@@ -169,8 +169,11 @@ ColumnLayout {
     property string baseOid: ""
     property string baseSubject: ""
     property string baseBody: ""
-    readonly property bool messageDirty: detailsPane.editable
-        && (msgEditor.subjectText !== detailsPane.baseSubject || msgEditor.bodyText !== detailsPane.baseBody)
+    /// The boxes have moved off their resting text. Apart from `messageDirty` because a row that leaves `reword`
+    /// locks the boxes with the typed text still in them — unsavable, and exactly what a closing plan takes.
+    readonly property bool boxMoved: msgEditor.subjectText !== detailsPane.baseSubject
+                                     || msgEditor.bodyText !== detailsPane.baseBody
+    readonly property bool messageDirty: detailsPane.editable && detailsPane.boxMoved
     /// Whether a plan is holding a typed reword for the very commit on
     /// screen: what the boxes have to show instead of the commit's own
     /// message, since the message would offer to save the original back
@@ -200,10 +203,27 @@ ColumnLayout {
         detailsPane.baseSubject = drafted ? detailsPane.planDraftSubject
                                           : detailsPane.details.messageSubject
         detailsPane.baseBody = drafted ? detailsPane.planDraftBody : detailsPane.details.messageBody
-        if (msgEditor.subjectText === detailsPane.baseSubject
-                && msgEditor.bodyText === detailsPane.baseBody)
-            return
-        msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
+        if (msgEditor.subjectText !== detailsPane.baseSubject
+                || msgEditor.bodyText !== detailsPane.baseBody)
+            msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
+        // Last, and after the boxes: the write above reaches `noteTyping` like any keystroke, so a fill made while
+        // a plan stands would otherwise leave the text marked as typed under it.
+        detailsPane.boxFromPlan = drafted
+    }
+    /// Whose the text standing in the boxes is — a question about where it was typed, not about what it says.
+    /// Everything written while the plan is routing these boxes is that row's `reword` input, saved into the plan
+    /// or not; everything else was typed into the plain amend, on a commit the plan never moved the pane off.
+    property bool boxFromPlan: false
+    /// The boxes took a character. Latched, not derived: what decides it is the state the text was written in, and
+    /// by the time a closing plan asks, that state is gone.
+    function noteTyping() {
+        if (detailsPane.intoPlan)
+            detailsPane.boxFromPlan = true
+    }
+    Connections {
+        target: msgEditor
+        function onSubjectTextChanged() { detailsPane.noteTyping() }
+        function onBodyTextChanged() { detailsPane.noteTyping() }
     }
     /// The plan's hold moved without the commit moving, so `syncMessage`'s
     /// own guard would sit still: a row's verb left `reword` and took the
@@ -217,7 +237,12 @@ ColumnLayout {
     /// plan hands the boxes to the plain amend, and a reword left resting
     /// in them would stand there as a one-press rewrite of the history the
     /// reader just walked away from (デザイン規約 §コミットメッセージの 2 つの枠).
+    ///
+    /// **Only what was written under the plan.** A half-written amend from before it stood is the reader's own
+    /// sentence on the reader's own commit, and nothing on screen could give it back.
     function dropDraft() {
+        if (!detailsPane.boxFromPlan)
+            return
         detailsPane.fillMessage(false)
     }
     /// Put the commit's own message back.
@@ -244,6 +269,9 @@ ColumnLayout {
             return
         msgEditor.setTexts(subject, body)
     }
+    /// Smoke hook: what the boxes are holding. `boxMoved` says the text left
+    /// its resting point, never whose text stands there instead.
+    readonly property alias boxSubject: msgEditor.subjectText
     /// Smoke hook: put the caret in the description box, the way a click in
     /// it does. The colour the text takes under a caret is what the shot is of.
     function focusDescription() {

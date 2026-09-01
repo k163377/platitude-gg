@@ -156,6 +156,9 @@ QtObject {
                 // and each step of the walk is entered off the state the one before it asked for — the last of them
                 // waits out a rev-list nobody asked for until the boxes were typed into again.
                 "plan-reword-verb", "plan-reword-out", "plan-reword-ask",
+                // The same sampler shape, entered one step earlier: this one types before there is a plan at all, so
+                // the plan it opens arrives through the feed in the middle of its own walk.
+                "plan-amend-kept",
                 // The same shape once more: the plan arrives through the feed, and the walk over the right pane's
                 // remaining doors is entered a step at a time off what the step before it asked for.
                 "plan-details-held",

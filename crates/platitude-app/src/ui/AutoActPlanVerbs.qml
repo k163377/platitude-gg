@@ -31,7 +31,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// The walks over the right pane, which this file's dispatch starts by name. Theirs is the one subject here that
-    /// is not the plan face itself.
+    /// is not the plan face itself, and one of them begins before a plan exists at all.
     AutoActPlanBoxVerbs { id: boxes; driver: acts.driver }
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
@@ -57,6 +57,14 @@ Item {
                 planLoadingTimer.start()
             else
                 planOpenTimer.begin(act)
+        } else if (act === "plan-amend-kept") {
+            // The one order in which a plan closing over the boxes meets text that was never the plan's: type the
+            // amend first, and open the plan from HEAD's own row so nothing moves the selection. Every other way in
+            // right-clicks a row further down, and **that** is what takes the draft — the arrows and the clicks
+            // walk off an unsaved message the same way (`graph-step-dirty`), which is not what this asks about.
+            const tip = workTree.headOid !== "" ? workTree.headOid : driver.branchesModel.headOid
+            page.jumpToRef(tip)
+            boxes.boxAmend.begin(tip)
         } else {
             return false
         }

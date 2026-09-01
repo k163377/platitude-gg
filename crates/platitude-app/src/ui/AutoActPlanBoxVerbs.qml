@@ -5,8 +5,8 @@ import platitude
 import platitude.ui
 
 /// The runs the plan's dispatcher hands off to: the ones that act on the **right pane** while a plan stands over it,
-/// or just after one has let go. Each is a walk of its own rather than a branch, which is why neither is a step
-/// inside `AutoActPlanVerbs.planOpenTimer`.
+/// or just after one has let go. Each is a walk of its own rather than a branch, and one of them starts before there
+/// is a plan at all — which is why none of them is a step inside `AutoActPlanVerbs.planOpenTimer`.
 ///
 /// Built by `AutoActPlanVerbs`, which starts these by the names below; what they act on hangs off the same driver,
 /// read back once here so the verbs can name it bare.
@@ -24,10 +24,12 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var detailsPane: driver.detailsPane
     readonly property var detailsModel: driver.detailsModel
+    readonly property var commitMenu: driver.commitMenu
     readonly property var renderedBarrier: driver.barrierRendered
 
     // What the dispatcher starts, under names of its own: an alias cannot carry an id's own name.
     readonly property alias boxReword: planRewordTimer
+    readonly property alias boxAmend: planAmendTimer
     readonly property alias boxHeld: planHeldTimer
 
     // What the right pane's boxes do while a plan owns them, and after one lets go of them. A `reword` row types into
@@ -132,6 +134,74 @@ Item {
                 AppBackend.report("plan_reword_ask dirty=" + detailsPane.messageDirty
                                   + " asked=" + (repoTab.publishRange === page.selectedOid + "^!")
                                   + " published=" + page.selectedPublished)
+                renderedBarrier.begin()
+            }
+        }
+    }
+    // The other text a closing plan finds in the boxes: a plain amend the reader had half written before any plan
+    // existed. The walk types it, opens a plan **from HEAD's own row** so the selection never moves, and cancels —
+    // the one order in which the plan is the only thing that could have taken the text (a right-click further down
+    // the graph moves the selection, and walking off an unsaved message drops it either way, `graph-step-dirty`).
+    //
+    // **The picture cannot answer this.** The boxes hold one message whichever way the run went, and the message
+    // they come back to is the one the reader was amending — so kept text and the commit's own text differ by their
+    // wording alone, at the size the shot is taken.
+    SampleTimer {
+        id: planAmendTimer
+        /// The commit the boxes are about, taken once: the plan opens on the same row, so the selection is never
+        /// asked to move and `DetailsPane.syncMessage` never runs.
+        property string tip: ""
+        /// Where in the walk this run is. Each step is entered off the state the step before it asked for — the
+        /// sampler carries only the looking (app-ui.md §UI 自動化の因果性).
+        property string stage: ""
+        /// What is typed into the boxes: neither the commit's own message nor anything a plan would put there.
+        readonly property string typed: "typed by hand"
+        /// Whether the boxes are resting on the commit's own message, which is where the closed plan has to leave
+        /// them — that is what makes what is standing in them unsaved rather than already written.
+        readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
+                                         && detailsPane.baseBody === detailsModel.messageBody
+        function begin(oidHex) {
+            planAmendTimer.tip = oidHex
+            planAmendTimer.stage = "type"
+            planAmendTimer.start()
+        }
+        onTriggered: {
+            if (planAmendTimer.stage === "type") {
+                // The plain amend, which only HEAD's own row offers (`offers::message_edit`) and only once that
+                // commit's own details are the ones on screen.
+                if (!detailsPane.editable)
+                    return
+                detailsPane.setMessageText(planAmendTimer.typed, "")
+                planAmendTimer.stage = "typed"
+                return
+            }
+            if (planAmendTimer.stage === "typed") {
+                // The keystroke has to have landed before the plan is asked for, or what the run photographs is
+                // whether the typing arrived at all.
+                if (detailsPane.boxSubject !== planAmendTimer.typed)
+                    return
+                page.openRowMenu(planAmendTimer.tip)
+                page.startRebasePlan(planAmendTimer.tip)
+                commitMenu.close()
+                planAmendTimer.stage = "stood"
+                return
+            }
+            if (planAmendTimer.stage === "stood") {
+                if (!page.planActive)
+                    return
+                page.rebasePlan.cancelPlan()
+                planAmendTimer.stage = "gone"
+                return
+            }
+            if (planAmendTimer.stage === "gone") {
+                if (page.planActive)
+                    return
+                planAmendTimer.stop()
+                AppBackend.report("plan_amend_kept kept="
+                                  + (detailsPane.boxSubject === planAmendTimer.typed)
+                                  + " restored=" + planAmendTimer.restored
+                                  + " dirty=" + detailsPane.messageDirty
+                                  + " editable=" + detailsPane.editable)
                 renderedBarrier.begin()
             }
         }

@@ -149,6 +149,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_reword_out plan=false restored=true dirty=false editable=true",
     },
+    // The other text the same closing plan finds in the boxes: an amend the
+    // reader had half written before any plan existed, on a row the plan
+    // never asked to move off. `restored=` says the boxes rest on the
+    // commit's own message, so what stands in them is unsaved rather than
+    // written — and `kept=` says it is still the reader's sentence. Nobody
+    // can retype it from the screen, so losing it is not a redraw.
+    Verb {
+        name: "plan-amend-kept",
+        when: &[],
+        plain: "plan_amend_kept kept=true restored=true dirty=true editable=true",
+    },
     // The right pane's other two doors under a standing plan. Every half
     // of this one is invisible: the row highlight is the page's own
     // selection, so a model left behind draws the same picture; a diff

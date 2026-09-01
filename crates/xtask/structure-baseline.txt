@@ -12,3 +12,4 @@
 #
 # <physical lines> <path from the workspace root>
 537 crates/platitude-core/src/conflict.rs
+524 crates/platitude-app/src/ui/DetailsPane.qml
