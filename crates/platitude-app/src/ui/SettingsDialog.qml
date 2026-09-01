@@ -395,7 +395,7 @@ AppDialog {
             // **The bar stands at the window's edge, not against the chapters.** The band's right inset is spent
             // inside this view rather than outside it, so the room the reader can see to the right of the form is
             // where the bar goes (2026-08-30 ユーザー報告「余白が余ってるのにピッタピタにくっつけるのをやめて」) —
-            // the chapters keep their own right edge, level with the `OK` and the `✕`, and nothing of theirs comes
+            // the chapters keep their own right edge, level with the `✕`, and nothing of theirs comes
             // near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and nothing
             // more, which is the same "just barely" in a smaller size.
             // **No margin of its own.** The row's `spacing` is the step on both sides of the line, and an extra one

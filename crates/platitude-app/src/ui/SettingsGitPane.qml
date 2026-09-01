@@ -264,8 +264,8 @@ ColumnLayout {
                 onSubmitted: pane.submitIdentity()
             }
             // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for
-            // them. Everything else on the screen writes as it is finished with, which is why the screen's own way
-            // out is an OK and not a Save.
+            // them. Everything else on the screen writes as it is finished with, which is why the screen itself has
+            // no button that writes — its only way out is the `✕`.
             DialogActions {
                 id: identityActions
                 acceptKind: "check"
