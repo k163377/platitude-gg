@@ -6,6 +6,7 @@
 
 use std::io::Read;
 
+mod attribution;
 mod chips;
 mod commit;
 mod git;
@@ -63,6 +64,9 @@ fn session_end(input: &str) -> Result<(), String> {
 /// guards run in order and the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
     if git::pre_git(input)? {
+        return Ok(());
+    }
+    if attribution::pre_comment(input)? {
         return Ok(());
     }
     if kill::pre_kill(input)? {
