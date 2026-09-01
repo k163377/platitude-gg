@@ -16,8 +16,8 @@ import platitude.ui
 // **It takes the width it is given.** Setting it narrower than the boxes above it — the reading IBM Carbon takes for
 // a dialog, where body copy keeps a right margin and only form inputs expand the whole width — is not open here: a
 // right margin read off the parent's width is a loop, since that width is what the parent computes from its children
-// ("Detected recursive rearrange", measured). Capping the whole column instead is the way that holds, and it needs a
-// number nobody has agreed to yet (P3-確認事項).
+// ("Detected recursive rearrange", measured). Capping the whole column instead is the way that holds, and the column
+// is capped at `Theme.textWidth` where the chapters stand (`SettingsDialog`).
 Label {
     id: help
 
