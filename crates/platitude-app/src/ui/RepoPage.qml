@@ -528,6 +528,19 @@ Item {
     readonly property bool planReword: page.planActive && planModel.selectedAction === "reword"
                                        && planModel.selectedOid !== ""
                                        && planModel.selectedOid === detailsModel.shaHex
+    /// What Cancel is about to take away with the plan: the plan's own edits, and a reword standing in the right
+    /// pane's boxes that the plan has not been given yet. Both are composed here and nowhere else — the screen after
+    /// the press holds no copy of either — so the button is held rather than clicked (デザイン規約 §長押し).
+    ///
+    /// **A half-written amend from before the plan stood is not in this.** The plan closing leaves that text exactly
+    /// where it is (`DetailsPane.dropDraft`), so there is nothing for a hold to guard, and arming one there would
+    /// say the press costs something it does not.
+    ///
+    /// **Read off `boxMoved`, not `messageDirty`.** A row walked back out of `reword` locks the boxes with the
+    /// typed text still standing in them, and the reader can neither save it nor be warned by a button that asks
+    /// whether the boxes still take typing — but Cancel takes that text all the same.
+    readonly property bool planDiscards: page.planActive
+        && (planModel.dirty || (detailsPane.boxFromPlan && detailsPane.boxMoved))
     function startRebasePlan(oidHex) {
         planModel.open(oidHex)
     }
@@ -2658,6 +2671,7 @@ Item {
                             // somebody asked, and the pane keeps them until the newer answer lands, which is the
                             // model's own rule (`RebasePlanModel::open`).
                             waiting: (planModel.loading && !planModel.active) || page.planLoadHeld
+                            discards: page.planDiscards
                             onRowPicked: oidHex => page.activateRow(oidHex)
                         }
                     }

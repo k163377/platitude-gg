@@ -155,10 +155,13 @@ pub(super) const TABLE: &[Verb] = &[
     // commit's own message, so what stands in them is unsaved rather than
     // written — and `kept=` says it is still the reader's sentence. Nobody
     // can retype it from the screen, so losing it is not a redraw.
+    // `guard=false` is the other side of that: this text is not the plan's
+    // to take, so Cancel must not wear the hold that says the press costs
+    // something (`plan-fold-carry` photographs the side that does).
     Verb {
         name: "plan-amend-kept",
         when: &[],
-        plain: "plan_amend_kept kept=true restored=true dirty=true editable=true",
+        plain: "plan_amend_kept kept=true restored=true dirty=true editable=true guard=false",
     },
     // The right pane's other two doors under a standing plan. Every half
     // of this one is invisible: the row highlight is the page's own

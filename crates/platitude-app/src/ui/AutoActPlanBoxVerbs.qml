@@ -160,6 +160,11 @@ Item {
         /// them — that is what makes what is standing in them unsaved rather than already written.
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
+        /// What Cancel was wearing when it was pressed, read while the plan still stands. False is the claim: this
+        /// text is not the plan's to take, so the press costs nothing and the button must not say it does
+        /// (`RepoPage.planDiscards`). The dressed side is a picture — `plan-fold-carry` stands on a plan with a verb
+        /// set and photographs it.
+        property bool guard: false
         function begin(oidHex) {
             planAmendTimer.tip = oidHex
             planAmendTimer.stage = "type"
@@ -189,6 +194,7 @@ Item {
             if (planAmendTimer.stage === "stood") {
                 if (!page.planActive)
                     return
+                planAmendTimer.guard = page.planDiscards
                 page.rebasePlan.cancelPlan()
                 planAmendTimer.stage = "gone"
                 return
@@ -201,7 +207,8 @@ Item {
                                   + (detailsPane.boxSubject === planAmendTimer.typed)
                                   + " restored=" + planAmendTimer.restored
                                   + " dirty=" + detailsPane.messageDirty
-                                  + " editable=" + detailsPane.editable)
+                                  + " editable=" + detailsPane.editable
+                                  + " guard=" + planAmendTimer.guard)
                 renderedBarrier.begin()
             }
         }

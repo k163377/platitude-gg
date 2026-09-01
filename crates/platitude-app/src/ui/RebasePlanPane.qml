@@ -26,6 +26,12 @@ Rectangle {
     /// Which commit the reader picked, for the page to select (the details pane follows it).
     signal rowPicked(string oidHex)
 
+    /// Cancel would take composed work away with the plan — verbs set, rows moved, a reword saved into it, or one
+    /// typed into the right pane's boxes and not yet given to it. None of that can be read back off the screen
+    /// afterwards, so the button is held rather than clicked (デザイン規約 §長押し). Handed in: half the answer is the
+    /// right pane's, and this pane owns nothing but the rows (`RepoPage.planDiscards`).
+    property bool discards: false
+
     /// The list the rows stand in, so a verb can make the same calls a hand on a row makes. An automation-only
     /// exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property alias view: planList
@@ -87,8 +93,14 @@ Rectangle {
                 Item { Layout.fillWidth: true }
                 ActionButton {
                     text: Words.cancel
-                    frameColor: Theme.borderDefault
+                    // The frame carries what is about to be lost, and the word takes the colour only because this is
+                    // a hold (規約 §長押し — `RebasePlanRunBar` と同じ線). The word itself does not change: pressing
+                    // this still puts the plan away, hold or no hold.
+                    frameColor: planPane.discards ? Theme.warning : Theme.borderDefault
+                    tone: planPane.discards ? Theme.warning : Theme.textPrimary
+                    holdMs: planPane.discards ? Metrics.holdMs : 0
                     onActivated: planPane.planModel.cancelPlan()
+                    onHeld: planPane.planModel.cancelPlan()
                 }
             }
             // The mode's own underline, where a standing bar draws its edge.
