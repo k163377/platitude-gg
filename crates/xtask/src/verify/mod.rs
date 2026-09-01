@@ -6,12 +6,14 @@
 //! PG_AUTO_* hooks, a bounded wait with a kill guard, and the
 //! `screenshot saved=true` stderr line as the verdict.
 
+mod child;
 mod options;
 mod outcome;
 mod ownership;
 mod perf;
 mod repos;
 mod run;
+mod seed;
 mod shim;
 mod verbs;
 

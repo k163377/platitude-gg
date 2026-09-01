@@ -247,3 +247,65 @@ pub(super) fn folder_for(
         _ => Ok(String::new()),
     }
 }
+
+/// The repositories one run opens, in the order their tabs come up.
+///
+/// Named repositories win outright; otherwise one fresh demo repository
+/// per preset. Six verbs bring a whole strip of their own instead: what
+/// they are about is how a strip of that shape lays out, so the shape is
+/// the fixture.
+pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, String> {
+    // A named repository and a preset ask for two different fixtures at
+    // once; refusing beats silently running against the wrong one.
+    if !opts.repo.is_empty() && !opts.preset.is_empty() {
+        return Err("--repo and --preset name different fixtures: pass one of them".into());
+    }
+    // Named repositories win outright; otherwise one fresh demo repository
+    // per preset, in the order they were asked for — which is the order
+    // the tabs come up in.
+    let repos = if !opts.repo.is_empty() {
+        opts.repo.clone()
+    } else if opts.verb == "tab-widths" {
+        tab_width_repos(&opts.arg)?
+    } else if opts.verb == "tab-mark" {
+        // Same strip; the argument here names a tab in it rather than
+        // how many there are.
+        tab_width_repos("")?
+    } else if opts.verb == "tab-name" {
+        // A different strip entirely: names that collide, which the
+        // ladder above deliberately has none of.
+        tab_name_repos()?
+    } else if opts.verb == "tab-drag" || opts.verb == "tab-hold" {
+        // Same ladder of names, four of them: the order is what this one
+        // is about, and four differently named tabs say an order a
+        // picture can be read for. The argument names two of them.
+        tab_width_repos("4")?
+    } else if opts.verb == "tab-edge" {
+        // A strip that has to overflow: eight of them, against a window
+        // the verb puts down on its floor.
+        tab_width_repos("8")?
+    } else if opts.verb == "tab-pin" || opts.verb == "tab-pin-go" {
+        // The same floor, four tabs further: what these two photograph is
+        // a stand-in with the strip running underneath it, and eight tabs
+        // leave a run of three pixels on the machine with the wider band
+        // (measured: Linux `run=3` against Windows `run=83`, because the
+        // Linux band carries neither a grab run nor window buttons). The
+        // stand-in stood either way — `must_say` says so — but the
+        // picture was of a strip that had not moved.
+        tab_width_repos("12")?
+    } else {
+        let presets: Vec<String> = if opts.preset.is_empty() {
+            vec!["basic".into()]
+        } else {
+            opts.preset.clone()
+        };
+        let mut made = Vec::with_capacity(presets.len());
+        for preset in &presets {
+            let repo = crate::demo::create(preset, None)?;
+            println!("demo repo ({preset}): {}", repo.display());
+            made.push(repo);
+        }
+        made
+    };
+    Ok(repos)
+}

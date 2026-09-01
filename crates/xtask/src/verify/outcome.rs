@@ -1,4 +1,7 @@
-//! What the run is judged on.
+//! What the run is judged on, how the judgement is made off its own
+//! lines, and how it is said.
+
+use std::path::PathBuf;
 
 /// What the run is judged on.
 ///
@@ -45,6 +48,130 @@ impl Outcome {
     /// reason worth a line of its own, since the run looks well otherwise.
     pub(super) fn write_sank_it(self) -> bool {
         self.write_failures > 0 && !self.allow_write_failure
+    }
+}
+
+/// What the run's own lines make of it.
+pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> Outcome {
+    let (status, err_lines, out_lines, timed_out) =
+        (&ran.status, &ran.err_lines, &ran.out_lines, ran.timed_out);
+
+    let must_say = super::verbs::must_say(&opts.verb, &opts.arg);
+    Outcome {
+        exit_ok: status.as_ref().is_some_and(|s| s.success()),
+        saved: err_lines
+            .iter()
+            .chain(out_lines.iter())
+            .any(|l| l.contains("screenshot saved=true")),
+        timed_out,
+        watchdog_expired: err_lines
+            .iter()
+            .chain(out_lines.iter())
+            .any(|l| l.contains("auto-act watchdog expired")),
+        write_failures: err_lines
+            .iter()
+            .filter(|l| l.contains("write failed"))
+            .count(),
+        allow_write_failure: opts.allow_write_failure,
+        must_say,
+        said: must_say.is_none_or(|wanted| {
+            err_lines
+                .iter()
+                .chain(out_lines.iter())
+                .any(|l| l.contains(wanted))
+        }),
+    }
+}
+
+/// Prints what the run said, files its pictures on the board, and gives
+/// the verdict — the whole of what a person reads off one run.
+pub(super) fn announce(
+    opts: &super::options::Options,
+    shot_dir: &std::path::Path,
+    ran: &super::child::Ran,
+    outcome: &Outcome,
+) -> Result<(), String> {
+    let (status, err_lines, out_lines, timed_out, elapsed) = (
+        &ran.status,
+        &ran.err_lines,
+        &ran.out_lines,
+        ran.timed_out,
+        ran.elapsed,
+    );
+
+    for line in err_lines.iter().chain(out_lines.iter()) {
+        println!("  | {line}");
+    }
+    let mut shots: Vec<PathBuf> = std::fs::read_dir(shot_dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "png"))
+                .collect()
+        })
+        .unwrap_or_default();
+    shots.sort();
+    for shot in &shots {
+        println!("shot: {}", shot.display());
+    }
+    // Onto the board as the run goes, not when somebody remembers: the
+    // seat is read from the working directory there, so a picture that
+    // is registered is a picture that says which tree took it. A pass is
+    // not the condition — a failing run's picture is the one most worth
+    // looking at.
+    if !shots.is_empty() && !opts.no_board {
+        let label = if opts.label.is_empty() {
+            format!("{} {}", opts.verb, opts.arg).trim().to_string()
+        } else {
+            opts.label.clone()
+        };
+        match crate::shots::record(&label, &opts.verb, &shots) {
+            Ok(page) => println!("board: {}", crate::shots::shown(&page)),
+            // The board is not what this run is judging. Say the reason
+            // and let the verdict stand on the pictures themselves.
+            Err(message) => println!("board: not updated ({message})"),
+        }
+    }
+
+    println!(
+        "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",
+        if outcome.passed() { "PASS" } else { "FAIL" },
+        opts.verb,
+        elapsed.as_secs_f32(),
+        status.map_or_else(
+            || "?".into(),
+            |s| s.code().map_or("signal".into(), |c| c.to_string())
+        ),
+        outcome.saved,
+        outcome.write_failures,
+        if timed_out { ", TIMED OUT" } else { "" },
+    );
+    if let Some(wanted) = outcome.must_say
+        && !outcome.said
+    {
+        println!(
+            "  the run never said `{wanted}` — and this verb's picture reads the same \
+             whether it should have or not."
+        );
+    }
+    if outcome.watchdog_expired {
+        println!(
+            "  the app's own watchdog ended this run — the verb never reached its \
+             completion, and a run that wedged between the two grabs still leaves app.png \
+             behind to pass on."
+        );
+    }
+    if outcome.write_sank_it() {
+        println!(
+            "  git refused the write this verb asked for — the shot is of the state it \
+             never reached. If the refusal is what the verb shows, say so with \
+             --allow-write-failure."
+        );
+    }
+    if outcome.passed() {
+        Ok(())
+    } else {
+        Err(format!("verify-ui {} failed", opts.verb))
     }
 }
 
