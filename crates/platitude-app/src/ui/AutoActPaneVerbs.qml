@@ -396,9 +396,8 @@ Item {
     // ink are a quarter apart, which a picture answers badly on a 6px thumb.
     //
     // This is the one bar the window hands a `ScrollView`, whose flickable is not interactive and never calls itself
-    // moving — a box scrolled by the wheel was showing no bar at all until it was told to watch the text instead
-    //. So the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar
-    // answers for itself.
+    // moving — a box scrolled by the wheel was showing no bar at all until it was told to watch the text instead. So
+    // the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar answers for itself.
     SampleTimer {
         id: textBarTimer
         property bool rolled: false

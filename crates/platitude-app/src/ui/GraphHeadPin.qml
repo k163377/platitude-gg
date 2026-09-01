@@ -105,8 +105,8 @@ Rectangle {
 
     // **The graph's own ground, and nothing more.** Opaque it has to be where this stands — the rows run under it, and
     // a stand-in they showed through would read as two commits in one band — but a lighter band would be an emphasis
-    // that is up for as long as the branch is off screen, and the only thing worth emphasising here is one line of it
-    //. What says "this one is yours" is the colour of its words.
+    // that is up for as long as the branch is off screen, and the only thing worth emphasising here is one line of
+    // it. What says "this one is yours" is the colour of its words.
     //
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
     // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after

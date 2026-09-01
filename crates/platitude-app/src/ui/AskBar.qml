@@ -247,8 +247,8 @@ Rectangle {
             property bool tookAPress: false
             /// And whether the focus it holds is the one the bar handed it as it opened. **Nobody reached for it**,
             /// so the ring has nothing to report — a question that comes down wearing a blue frame over its own
-            /// warning one is saying "the keyboard is here" to a reader who has not touched the keyboard
-            ///. Cleared the moment the focus leaves, so a tab back onto the pill rings.
+            /// warning one is saying "the keyboard is here" to a reader who has not touched the keyboard. Cleared the
+            /// moment the focus leaves, so a tab back onto the pill rings.
             property bool tookTheOpening: false
             onActiveFocusChanged: {
                 if (acceptPill.activeFocus)

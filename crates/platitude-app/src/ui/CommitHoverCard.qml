@@ -90,11 +90,11 @@ AppCard {
         // "click"**: the hand reading this is inside the card, where a press does nothing.
         //
         // **It stands with the message**, under the mark and ahead of the author: put at the foot of the card it has
-        // two lines of somebody else's facts between it and the `…` it answers, and reads as a note about the card
-        //. **Centred, alone among these lines** — the others begin at
-        // the left margin because each is a value read down a column, and this one is not a value. **Only when
-        // something was cut**: a message that fits has nowhere further to go, and a line under every row the pointer
-        // crosses would be the card talking about itself.
+        // two lines of somebody else's facts between it and the `…` it answers, and reads as a note about the
+        // card. **Centred, alone among these lines** — the others begin at the left margin because each is a value
+        // read down a column, and this one is not a value. **Only when something was cut**: a message that fits has
+        // nowhere further to go, and a line under every row the pointer crosses would be the card talking about
+        // itself.
         //
         // A `Label` rather than a `CardText`, because this is the card speaking and not the commit: a note that joined
         // the selection would be dragged out along with the message somebody came here to copy.

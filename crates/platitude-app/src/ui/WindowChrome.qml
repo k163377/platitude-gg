@@ -37,10 +37,10 @@ Item {
     }
     /// Whether the scene wants its grab-runs back for a while. They are the parts of the window a press never
     /// reaches — the hit test answers HTCAPTION for them, so the platform takes the press and the scene is told nothing
-    /// — and a card that is meant to close on a press outside it would stand through every click landing there
-    ///. While such a card is up the runs are ordinary client area again, so the
-    /// press closes it; the band gives up drag, snap and the double-click for exactly that long, which is what a
-    /// platform menu does with the click that dismisses it.
+    /// — and a card that is meant to close on a press outside it would stand through every click landing there.
+    /// While such a card is up the runs are ordinary client area again, so the press closes it; the band gives up
+    /// drag, snap and the double-click for exactly that long, which is what a platform menu does with the click that
+    /// dismisses it.
     ///
     /// Only the cards that close on an outside press belong here. A modal dialog is not one of them — nothing about it
     /// would close, and the window would merely stop being draggable while it stood.

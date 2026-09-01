@@ -162,9 +162,9 @@ pub(super) const TABLE: &[Verb] = &[
     // column — which is every repository wide enough for a reader to
     // aim at the middle of a row — and it took presses of its own
     // without handing them to the row, so the gesture did nothing
-    // between the two dividers while working either side of them
-    //. `strip=` says the layer was actually up:
-    // with the lanes inside their column there is nothing to prove.
+    // between the two dividers while working either side of them.
+    // `strip=` says the layer was actually up: with the lanes
+    // inside their column there is nothing to prove.
     Verb {
         name: "graph-reclick-lanes",
         when: &[],
@@ -183,11 +183,11 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "armed=true box=true list=false card=false",
     },
     // The mark the chip wears while the second click waits out its
-    // window — the one thing on screen between the press and the box
-    //. This run ends inside the wait rather than
-    // at the box, so the picture frames the mark; `mark=` is the chip's
-    // own answer, since a shot taken a beat late frames the box and
-    // would read the same either way.
+    // window — the one thing on screen between the press and the box.
+    // This run ends inside the wait rather than at the box, so the
+    // picture frames the mark; `mark=` is the chip's own answer, since
+    // a shot taken a beat late frames the box and would read the same
+    // either way.
     Verb {
         name: "graph-reclick-mark",
         when: &[],

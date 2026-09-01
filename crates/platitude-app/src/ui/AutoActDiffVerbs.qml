@@ -319,8 +319,8 @@ Item {
     }
     // PG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
     // taken by the hand laid over the rows (`AppListView.barRoom`). The bar is drawn *over* the rows, so anything
-    // covering the frame covers the bar with it, and the hand that picks the text out took every press on the trough
-    //. Two claims:
+    // covering the frame covers the bar with it, and the hand that picks the text out took every press on the
+    // trough. Two claims:
     //
     // **`clear=`** — where this hand ends against where the bar begins, read off the two items rather than off the
     // rule that places them. **`reach=`** — the hand still answers at its own last pixel, so the strip was given back

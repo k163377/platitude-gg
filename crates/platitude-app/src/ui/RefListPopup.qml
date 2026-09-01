@@ -62,9 +62,9 @@ AppCard {
     ///
     /// **This card's rows are the graph's rows.** It opens on the chip's own seat once the pointer has rested, so a
     /// reader clicking that spot twice clicks the row the first time and this card the second: an answer of its own
-    /// would make that second click a first one, and the gesture would read as "sometimes it does nothing"
-    ///. It is one target either way — the card's first row *is* the chip (規約 §グラフ行の
-    /// ダブルクリック) — so it goes through one door.
+    /// would make that second click a first one, and the gesture would read as "sometimes it does nothing". It is one
+    /// target either way — the card's first row *is* the chip (規約 §グラフ行のダブルクリック) — so it goes through one
+    /// door.
     property var rowClicks: null
     property string rowOid: ""
     /// The narrowest a row may be — the chip this card is covering, handed over by the owner.

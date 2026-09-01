@@ -121,10 +121,10 @@ Rectangle {
     /// frame, a two-line chip would centre its first line halfway down the box and leave the last one on the border.
     ///
     /// A line box is not where a family puts its ink: it keeps more room above its ascender than below its descender,
-    /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the border
-    ///. How much room is the family's own — a fixed lift squares one family and opens a gap under
-    /// the other — so this asks the family instead. When what is left over will not halve, the pixel goes above, where
-    /// every ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
+    /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the
+    /// border. How much room is the family's own — a fixed lift squares one family and opens a gap under the other —
+    /// so this asks the family instead. When what is left over will not halve, the pixel goes above, where every
+    /// ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
     /// headless picture**, which is drawn in a family neither OS uses (verify-ui スキル §Windows での実行・デバッグの罠).
     function inkTop(ink) {
         const room = Theme.fontChipLine - ink.tightBoundingRect.height

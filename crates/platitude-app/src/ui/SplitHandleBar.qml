@@ -37,7 +37,7 @@ Rectangle {
     // itself and the panes to its contentItem — so a pane that draws past its own edge is drawn under this bar
     // whatever `z` the pane is given. Nothing reaches into this strip in the ordinary way (the layout stops each pane
     // at the bar's edge), so this changes nothing until something crosses it deliberately, and the one thing that does
-    // is the left menu's name box reaching out past its pane (`NavNameBox`). The bar cut the question in half
-    //. The hand still finds it: an uncovered strip has nothing above it to take the press.
+    // is the left menu's name box reaching out past its pane (`NavNameBox`). The bar cut the question in half. The
+    // hand still finds it: an uncovered strip has nothing above it to take the press.
     z: -1
 }

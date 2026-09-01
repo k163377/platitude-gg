@@ -102,9 +102,9 @@ AppCard {
         // at a mark that stayed on screen (デザイン規約 §左メニューの所作),
         // and this list comes and goes with the pointer. Kept, it makes
         // the first click of a later peek a second one, which puts the
-        // whole list back over the diff the fold was made for
-        //. `gestures` is asked for because
-        // closing a tab takes the page's pieces down before this popup.
+        // whole list back over the diff the fold was made for. `gestures`
+        // is asked for because closing a tab takes the page's pieces down
+        // before this popup.
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.forgetClicks()
         peek.kind = ""
