@@ -25,6 +25,7 @@ AutoActDiffStepVerbs 1.0 AutoActDiffStepVerbs.qml
 AutoActDiffVerbs 1.0 AutoActDiffVerbs.qml
 AutoActFileRowVerbs 1.0 AutoActFileRowVerbs.qml
 AutoActFindVerbs 1.0 AutoActFindVerbs.qml
+AutoActGraphReclickVerbs 1.0 AutoActGraphReclickVerbs.qml
 AutoActGraphRowVerbs 1.0 AutoActGraphRowVerbs.qml
 AutoActHistoryVerbs 1.0 AutoActHistoryVerbs.qml
 AutoActLandings 1.0 AutoActLandings.qml
