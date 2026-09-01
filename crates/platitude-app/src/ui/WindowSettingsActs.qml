@@ -88,10 +88,10 @@ Item {
     // PG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
     // row, in git's own spelling (`true` / `input` / `false`) or `inherited` for the row that writes nothing.
     //
-    // **Only the repository level is ever driven.** The chapter above it writes `--global`, which is the developer's
-    // own configuration file on the machine the run happens to be on — a run that wrote there would be changing
-    // something no run owns (規約 §UI 自動化の因果性 「harness は … その harness が所有する値だけを設定する」). The
-    // global chapter's own read is reported beside it, since a picture is the only other evidence for it.
+    // **It is the only level there is.** The screen writes `core.autocrlf` into the repository somebody picked and
+    // nowhere else (規約 §設定の画面), which happens to be the only file a run may write anyway — the machine's own
+    // configuration belongs to whoever is sitting at it, not to the run
+    // (規約 §UI 自動化の因果性 「harness は … その harness が所有する値だけを設定する」).
     //
     // Waited on: the read that fills the chooser (a pick before it would be picking against an empty field), then the
     // read that *follows* the write — the write's own `busy` falls before that one lands, so a run that stopped at it
@@ -118,8 +118,7 @@ Item {
                 endingsTimer.acted = true
             }
             if (!settingsDialog.autoRepoEndingsReady
-                    || settingsDialog.autoRepoEndingHeld !== endingsTimer.wanted
-                    || !settingsDialog.autoGlobalEndingsAnswered)
+                    || settingsDialog.autoRepoEndingHeld !== endingsTimer.wanted)
                 return
             endingsTimer.stop()
             // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.

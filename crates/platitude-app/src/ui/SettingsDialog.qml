@@ -101,14 +101,11 @@ AppDialog {
     function autoOfferRepos() {
         gitPane.autoOfferRepos()
     }
-    // The line-ending chapter of that same group. **Only the repository level is ever driven**: the group above it
-    // writes `--global`, which is the machine's own file and not a run's to touch (verify-ui スキル).
+    // The line-ending chapter of that same group, which is the only chapter on the screen that writes
+    // `core.autocrlf` at all — a run driving it reaches one repository's own file and nothing outside it
+    // (規約 §設定の画面).
     readonly property bool autoRepoEndingsReady: settingsDialog.opened && gitPane.autoRepoEndingsReady
     readonly property string autoRepoEndingHeld: gitPane.autoRepoEndingHeld
-    /// The global chapter's own read has answered. Reported beside the repository one rather than driven: the two
-    /// chapters are one wiring asked at two levels, and the level nothing may write is the level a picture is the
-    /// only other evidence for.
-    readonly property bool autoGlobalEndingsAnswered: settingsDialog.opened && gitPane.autoEndingsAnswered
     function autoPickRepoEnding(value) {
         return gitPane.autoPickRepoEnding(value)
     }
@@ -119,7 +116,6 @@ AppDialog {
         chapters.contentY = Math.max(0, chapterCol.implicitHeight - chapters.height)
     }
     function reportRepoEndings() {
-        gitPane.reportEndings()
         gitPane.reportRepoEndings()
     }
     /// Automation: shows the repository standing at `at` in the strip, through the same call a pick from the list
@@ -152,9 +148,6 @@ AppDialog {
         appPane.load()
         gitPane.loadIdentity()
         gitPane.loadTool()
-        // One `git config` against the user's own file, so it rides the screen opening rather than the category
-        // showing — the same order of cost as the identity read above.
-        gitPane.loadEndings()
         // The git category's repository group lands on the one the reader is looking at, and does it here rather than
         // on the category showing: "first, the repository I am in" is about the screen opening, not about which
         // category is read first — and coming back to the category would otherwise throw away the repository they had

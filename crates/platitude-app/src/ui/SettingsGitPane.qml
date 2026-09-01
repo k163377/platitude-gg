@@ -9,9 +9,11 @@ import platitude.ui
 // — it asks git what it would launch, hands git the identity, and nothing in it is Platitude GG's to keep.
 //
 // **The groups are how far a value reaches, not what it is.** `GLOBAL` is what git reads everywhere on this computer;
-// `REPOSITORY OVERRIDE` is what the repository picked below writes into its own file, standing over the first. The
-// chapters repeat across them where the setting exists at both levels — the identity does, the merge editor does not
-// (`conflict::set_merge_tool`: which editor someone reaches for is a property of their desk).
+// `REPOSITORY OVERRIDE` is what the repository picked below writes into its own file, standing over the first. Only
+// the identity is asked at both levels. The merge editor is `GLOBAL`'s alone (`conflict::set_merge_tool`: which
+// editor someone reaches for is a property of their desk), and the line endings are the repository's alone — **this
+// app does not write `core.autocrlf` outside a repository somebody picked**, because the machine's own configuration
+// is not an application's to rewrite (規約 §設定の画面).
 //
 // The pair is not symmetric on purpose: the second group is not a peer of the first, it sits on top of it, and the
 // word `override` is what says so (規約 §設定の画面).
@@ -122,34 +124,6 @@ ColumnLayout {
         }
     }
 
-    // ---- line endings ----------------------------------------------------
-    // Written the moment a row is picked, the way every field on this screen but the identity is (規約 §設定の画面):
-    // one key, so there is nothing for a Save to hold together. The model reads itself back afterwards, so what the
-    // chooser shows is always what git holds.
-    //
-    // **The read is asked for when the screen opens**, not when this category shows: it is one `git config`, the same
-    // order of cost as the identity read beside it, and the eight-second one (`--tool-help`) is the only thing on
-    // this screen that waits for its own chapter.
-    function loadEndings() {
-        // No path: the user's own configuration is what git resolves outside any repository, which is where this
-        // level lives (`LineEndingsModel.look`).
-        globalEndings.look("")
-    }
-    /// The global read has answered, one way or the other. **Not `state === "ready"`** — this level is read out of
-    /// whatever configuration the machine running the verb happens to have, and a run held until it answered
-    /// *well* would wait out the watchdog on a machine where git cannot resolve one at all.
-    readonly property bool autoEndingsAnswered: globalEndings.state === "ready"
-                                                || globalEndings.state === "error"
-    /// Smoke hook. Output side throughout — `held` is what git answered with, and the row the chooser is showing is
-    /// what a photograph cannot tell apart from one nobody has filled in yet.
-    function reportEndings() {
-        AppBackend.report("line_endings scope=global state=" + globalEndings.state
-                          + " held=" + globalEndings.held
-                          + " shown=" + endingsField.words[endingsField.heldRow]
-                          + " busy=" + globalEndings.busy
-                          + " error=" + globalEndings.error)
-    }
-
     // ---- the identity ----------------------------------------------------
     // Nothing here waits on the answer. The gate keeps a `saving` flag because a landed save is what closes it; this
     // screen was not opened to answer that one question, so it stays standing either way and the marks the fields
@@ -224,20 +198,6 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceXl
 
-    LineEndingsModel {
-        id: globalEndings
-        scope: "global"
-    }
-    // A write here is the value the group below *inherits*, so the sentence under its chooser — what git is doing in
-    // that repository right now — has just moved. Nothing else on the screen would notice: the two chapters read
-    // different files, and only this one of them changed.
-    Connections {
-        target: globalEndings
-        function onWrote() {
-            repoPane.rereadEndings()
-        }
-    }
-
     SettingsGroup {
         caption: qsTr("GLOBAL")
 
@@ -301,21 +261,6 @@ ColumnLayout {
                     onActivated: pane.applyTool()
                     onAccepted: pane.accepted()
                 }
-            }
-        }
-
-        SettingsSection {
-            caption: qsTr("LINE ENDINGS")
-            LineEndingField {
-                id: endingsField
-                held: globalEndings.held
-                ready: globalEndings.state === "ready"
-                busy: globalEndings.busy
-                errorText: globalEndings.error
-                // How far the write reaches is the warning's line above; this one is left with the key, the way the
-                // merge editor's line names `merge.guitool`.
-                note: qsTr("Stored by git as core.autocrlf. What a repository sets for itself stands over it.")
-                onPicked: value => globalEndings.save(value)
             }
         }
     }

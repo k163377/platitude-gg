@@ -132,11 +132,11 @@ pub(super) const TABLE: &[Verb] = &[
     // repository held before it, and it is `false` because that is what
     // every demo repository is built with (`demo::repo`).
     //
-    // Only the repository level has rows here. The chapter above it
-    // writes `--global`, which for a run is the fixture configuration it
-    // was started on (`shim::global_seed`) rather than a repository's own
-    // — a second scope with nothing of this repository in it, and no verb
-    // of its own.
+    // The repository is the only level there is: the screen writes
+    // `core.autocrlf` into the one somebody picked and nowhere else
+    // (規約 §設定の画面), so there is no second scope for a run to reach
+    // — and the one it would have reached is the machine's own file,
+    // which no run owns.
     Verb {
         name: "settings-eol",
         when: &[
