@@ -82,6 +82,10 @@ async fn the_first_commit_has_nothing_to_fold_into() {
     .await
     .expect_err("nothing before the root");
     assert!(err.to_string().contains("first commit"), "{err}");
+    // The refusal carries the report the screen says it with. Without this
+    // the sentence alone passes either way: `#[error("{message}")]` reads
+    // the same whether the kind went back to one that opens the log.
+    assert!(err.report().is_some(), "{err}");
 }
 
 #[tokio::test]
@@ -96,6 +100,7 @@ async fn an_edit_at_the_shallow_edge_is_refused() {
         err.to_string().contains("the commit below the range"),
         "{err}"
     );
+    assert!(err.report().is_some(), "{err}");
 }
 
 #[tokio::test]
@@ -200,6 +205,7 @@ async fn a_commit_outside_the_current_branch_is_refused() {
     .await
     .expect_err("not in this history");
     assert!(err.to_string().contains("not in the history"), "{err}");
+    assert!(err.report().is_some(), "{err}");
 }
 
 #[tokio::test]

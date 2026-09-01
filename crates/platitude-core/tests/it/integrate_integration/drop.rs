@@ -131,6 +131,9 @@ async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
             .await
             .expect_err("a rebase would drop the merge");
         assert!(err.to_string().contains("merge commit"), "{err}");
+        // The refusal carries the report the screen says it with — the
+        // sentence alone reads the same whichever kind it came back as.
+        assert!(err.report().is_some(), "{err}");
         // The refusal is this application's own, and no rebase ever ran.
         // Blaming it on a command's output puts a command the person
         // never saw in front of them (規約 §git が言ったことを読む場所).
@@ -222,6 +225,7 @@ async fn dropping_the_only_commit_is_refused() {
     .await
     .expect_err("nothing would be left to point at");
     assert!(err.to_string().contains("every commit"), "{err}");
+    assert!(err.report().is_some(), "{err}");
     assert!(!err.to_string().contains("unexpected output"), "{err}");
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), only, "nothing ran");
 }
