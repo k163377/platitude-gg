@@ -14,8 +14,9 @@ import platitude.ui
 // fading lanes have already said that this is as far as the graph goes.
 //
 // **And that run of lane goes out rather than stopping.** Full strength where the last row leaves off, gone by the
-// bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground (observed). Nothing is added on top — a mark there said the same thing twice, and the line below already names the
-// cut in words.
+// bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground
+// (observed). Nothing is added on top — a mark there said the same thing twice, and the line below already names
+// the cut in words.
 Item {
     id: tail
 

@@ -160,8 +160,9 @@ Rectangle {
     }
     // The badge itself is not drawn here. A pull that has run out has the hand somewhere outside this box — below it
     // for the ceiling, above it for the floor — and a badge parented to the box lands outside its own parent, where it
-    // is composited with the box among the pane's children: under the author card, under the file list (observed). The page draws the one badge in a layer over everything, and this only says where the hand is and
-    // whether it is being refused (`RepoPage`).
+    // is composited with the box among the pane's children: under the author card, under the file list (observed).
+    // The page draws the one badge in a layer over everything, and this only says where the hand is and whether it
+    // is being refused (`RepoPage`).
     /// A wheel this box had nothing left to do with, in pixels. Whoever put the box on a surface that scrolls moves
     /// that surface by it.
     ///

@@ -197,7 +197,8 @@ Rectangle {
             model: pane.commandsModel
             // Nothing above the first row: the band is already the edge, and a sliver of ground under it reads as the
             // log hanging off its own header rather than as breathing room — 4 pixels of it stood between the band's
-            // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (observed). The graph keeps a top margin because it has no band over it (`GraphList`).
+            // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (observed).
+            // The graph keeps a top margin because it has no band over it (`GraphList`).
             bottomMargin: Theme.spaceXs
 
             /// Whether new rows pull the view along. Reading further up stops that until the end is reached again — the

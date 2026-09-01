@@ -57,8 +57,8 @@ ScrollBar {
     ///
     /// **Keyboard focus is not attention.** A list keeps `activeFocus` long after the reader has gone elsewhere — one
     /// click on a graph row holds it for the rest of the session — so reading it here left a bar bright while its pane
-    /// was not being looked at, and let a send nobody asked for light it from across the window (qmltestrunner measured).
-    /// Two panes then differed for a reason nothing on screen showed.
+    /// was not being looked at, and let a send nobody asked for light it from across the window (qmltestrunner
+    /// measured). Two panes then differed for a reason nothing on screen showed.
     readonly property bool attended: bar.inArea || bar.pressed
 
     /// Whether this bar has been sent since the reader arrived. **Raised by the sending, lowered by leaving** — what

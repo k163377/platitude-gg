@@ -67,7 +67,8 @@ RowLayout {
     /// amounts of air, and a seat that measured them one row at a time would step the names in and out.
     readonly property int seatSize: nameCell.showChange ? Theme.iconMd : Theme.iconXs
     /// Where a mark stands inside that seat: hard against its left edge, which for the trimmed seat above means the
-    /// box it is drawn in hangs a pixel out on the right. **The air is taken off the right alone** (observed) — the left of the mark is what the fold's own step reads as nesting, and centring the mark in a seat
+    /// box it is drawn in hangs a pixel out on the right. **The air is taken off the right alone** (observed) — the
+    /// left of the mark is what the fold's own step reads as nesting, and centring the mark in a seat
     /// narrower than its box would walk it back towards the frame by half of whatever the right gave up. Zero where
     /// the change mark fills its seat: there the box *is* the ink, and the arrow it shares the slot with is centred in
     /// it the way it always was.

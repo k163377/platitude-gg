@@ -182,8 +182,8 @@ Item {
     /// nothing over there can be lost by pressing — but the bar wears the frame and the mark (デザイン規約 §リモートへ送る).
     readonly property bool publishUnsure:
         publishFlow.publishState === "unknown" || publishFlow.publishState === "unreachable"
-    /// The name is taken by commits this history does not have: a plain push cannot land at all (measured), only an overwrite
-    /// can, so the pill becomes the diverged branch's `push -f` — held, warning-coloured (デザイン規約 §リモートへ送る).
+    /// The name is taken by commits this history does not have: a plain push cannot land at all (measured), only an
+    /// overwrite can, so the pill becomes the diverged branch's `push -f` — held, warning-coloured (デザイン規約 §リモートへ送る).
     readonly property bool publishRefused: publishFlow.publishState === "refused"
     /// The commit the question showed on the far side, which is what an overwrite leases against: a remote that moved
     /// since is refused by git rather than flattened (§相手の履歴を置き換える).
@@ -209,8 +209,9 @@ Item {
     // **Nothing is put back when they let go** (`RestoreNone`). `publishAsking` drops at the press that walks away —
     // it has to, or the check timer would still be firing a round trip at a remote for a question nobody is asking any
     // more — and a restore there lands on a bar that is still on screen, retracting: the blue frame this question
-    // wears would turn `warning` for the 200ms it takes to go, which is the flash that was reported (observed). Every one of these is written again by `GraphPane.startAsking`, so the next question dresses the bar
-    // whole and there is nothing for a restore to be right about.
+    // wears would turn `warning` for the 200ms it takes to go, which is the flash that was reported (observed). Every
+    // one of these is written again by `GraphPane.startAsking`, so the next question dresses the bar whole and there
+    // is nothing for a restore to be right about.
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"

@@ -96,8 +96,8 @@ Item {
             changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
             // Moves the view, not a selection (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
-            // than a default window, and even there the room below the fold is two rows (measured) — which is why the plain
-            // walk is one row.
+            // than a default window, and even there the room below the fold is two rows (measured) — which is why
+            // the plain walk is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
             // The hand walks into the pane, through the same door the wheel comes in by: the diff does not take the

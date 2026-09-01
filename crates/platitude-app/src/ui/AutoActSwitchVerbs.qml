@@ -86,8 +86,9 @@ Item {
             page.switchToRef("R", arg)
         } else if (act === "switch-remote-twice") {
             // The same chip pressed twice, which is what the report was: both `switch --create` left in the same
-            // second and git refused the second one, because the first had already made the branch (observed). **The two presses go out in one turn** — `busyCount` only rises when the queue starts the
-            // write, so a run that waited even a tick between them would be answered by the gate the old build had.
+            // second and git refused the second one, because the first had already made the branch (observed). **The
+            // two presses go out in one turn** — `busyCount` only rises when the queue starts the write, so a run
+            // that waited even a tick between them would be answered by the gate the old build had.
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
             page.switchToRef("R", arg)

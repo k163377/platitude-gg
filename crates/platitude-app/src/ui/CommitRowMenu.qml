@@ -253,8 +253,9 @@ Item {
         }
         AppMenuSeparator {}
         // **The very card the chip on this row opens** (RefBranchMenu): a row that carries a branch is a way at that
-        // branch, and a right-click on the row has to offer what a right-click on its chip offers (observed). The card works its own answers out from the name the page hands it, so the two entrances cannot
-        // drift; a row that carries none is handed "" and the card goes with its row.
+        // branch, and a right-click on the row has to offer what a right-click on its chip offers (observed). The
+        // card works its own answers out from the name the page hands it, so the two entrances cannot drift; a row
+        // that carries none is handed "" and the card goes with its row.
         RefBranchMenu {
             id: branchCommitMenu
             heldReason: rowMenu.heldReason

@@ -122,7 +122,8 @@ Rectangle {
         // **A box coming down spends the gesture that opened it.** The press that walks away from a box lands before
         // the click it belongs to (`FocusRelease` fires on the press, `MouseArea.clicked` on the release), so by the
         // time the click is answered the box is already gone — and a click that found no box would come up as a
-        // second one and open it again a window later, which is the blink that was reported twice (observed). Asked here rather than at the click, because this is the one place that knows a box was standing.
+        // second one and open it again a window later, which is the blink that was reported twice (observed). Asked
+        // here rather than at the click, because this is the one place that knows a box was standing.
         if (graphList.namingOid !== "")
             graphList.forgetClicks()
         graphList.namingOid = ""
