@@ -124,9 +124,29 @@ QtObject {
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
-        // Each of these says the one thing about the history that stopped it, in the words of what is on
-        // screen: rows, branches and the commit under the pointer. Never `rebase` — nothing was run, and the
-        // reader chose a fold or a drop rather than a rebase (デザイン規約 §用語表).
+        // The rewrites a fold or a drop is turned down for are said one door further in, because a second door
+        // reaches three of them. **Not a list of their kinds** — a second copy of that list is one a sixth
+        // refusal is added to on one side only, and the row menu would lose its second line without a word.
+        // Everything else quoted somebody outside, and `rewriteRefusedWhy` answers those with the same empty
+        // line this has always given them.
+        default: return Words.rewriteRefusedWhy(kind)
+        }
+    }
+
+    /// Why a rewrite was turned down, said the same way at both doors that turn one down: the row menu, where core
+    /// withheld the write (`writeReportedWhy`), and the plan, which is refused before it opens
+    /// (`RepoPage.onRefusedPlan`). **Three of the five reach that second door** — the other two are about one
+    /// row's own fold or drop, which a preview never asks.
+    ///
+    /// **Only the line is shared.** The heading is the surface's own — one turns down the commit that was pressed
+    /// and the other the range it would replay — and so is the hairline's colour, which follows whether the
+    /// gesture is over (`reportTone`, デザイン規約 §答えの要らない報せ).
+    ///
+    /// Each line says the one thing about the history that stopped it, in the words of what is on screen: rows,
+    /// branches and the commit under the pointer. Never `rebase` — nothing was run, and the reader chose a fold,
+    /// a drop or a plan rather than a rebase (デザイン規約 §用語表).
+    function rewriteRefusedWhy(kind) {
+        switch (kind) {
         case "across-merge":
             return qsTr("A merge sits in the history this would replay, and a replay drops merges. What came back would be flattened.")
         case "off-branch":

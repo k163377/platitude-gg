@@ -41,10 +41,15 @@ impl RebasePlanModel {
     #[qsignal]
     fn changed(&mut self);
 
-    /// The plan could not be opened, before anything was touched: `kind`
-    /// is `merge` (the range holds one) or `off-branch` (the click was on
-    /// another branch's row). The page writes the sentence
-    /// (app-ui.md「Rust に文言を置かない」).
+    /// The plan could not be opened, before anything was touched:
+    /// `across-merge` (the range holds one), `off-branch` (the click was
+    /// on another branch's row) or `unfetched-base` (the range bottoms
+    /// out on a commit this clone never fetched). The page writes the
+    /// sentence (app-ui.md「Rust に文言を置かない」).
+    ///
+    /// **The spellings are the row menu's** (`ReportKind` → `drain`), so
+    /// the one `Words.rewriteRefusedWhy` answers both doors without a
+    /// table in between.
     #[qsignal]
     fn refused_plan(&mut self, kind: String);
 
@@ -430,9 +435,9 @@ impl RebasePlanModel {
                 self.loading = false;
                 self.changed();
                 let kind = match refusal {
-                    platitude_core::rebase_plan::PlanRefusal::AcrossMerge => "merge",
+                    platitude_core::rebase_plan::PlanRefusal::AcrossMerge => "across-merge",
                     platitude_core::rebase_plan::PlanRefusal::OffBranch => "off-branch",
-                    platitude_core::rebase_plan::PlanRefusal::UnfetchedBase => "unfetched",
+                    platitude_core::rebase_plan::PlanRefusal::UnfetchedBase => "unfetched-base",
                 };
                 self.refused_plan(kind.to_string());
             }

@@ -607,24 +607,19 @@ Item {
             page.planRunOut = true
         }
         // Three ways a range cannot be replayed. Only the kind travels — the words are this end's, because git was
-        // never run (app-ui.md「Rust に文言を置かない」).
+        // never run (app-ui.md「Rust に文言を置かない」). **The line under the heading is not this file's**: the row
+        // menu turns down the same three histories and says them the same way (`Words.rewriteRefusedWhy`). What
+        // stays here is what the two surfaces do not share — a heading about the range rather than about the one
+        // commit that was pressed, and `warning` rather than `danger`, because the plan is a gesture still going
+        // (規約 §答えの要らない報せ).
         function onRefusedPlan(kind) {
-            if (kind === "merge") {
-                page.showNotice(
-                    qsTr("A merge is in the way"),
-                    qsTr("Replaying from there drops merges; the history would come back flattened."),
-                    "warning")
-            } else if (kind === "unfetched") {
-                page.showNotice(
-                    qsTr("The history stops here"),
-                    qsTr("The commits below it were never fetched; replaying would cut the branch off from them."),
-                    "warning")
-            } else {
-                page.showNotice(
-                    qsTr("Not on this branch"),
-                    qsTr("A rebase only rewrites the branch you are standing on."),
-                    "warning")
-            }
+            const why = Words.rewriteRefusedWhy(kind)
+            if (kind === "across-merge")
+                page.showNotice(qsTr("A merge is in the way"), why, "warning")
+            else if (kind === "unfetched-base")
+                page.showNotice(qsTr("The history stops here"), why, "warning")
+            else
+                page.showNotice(qsTr("Not on this branch"), why, "warning")
         }
         function onStalePlan() {
             page.showNotice(qsTr("The branch tip moved"),
