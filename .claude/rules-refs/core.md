@@ -61,7 +61,7 @@
 - **バイト数より確保の個数が効く帯がある** — 305,213 個の削減が計数 −3.1MB なのに WorkingSet −12MB(差はヒープ管理領域 = 計数アロケータに見えない側)。`classes=` の**件数**を必ず見る
 - **mimalloc は不採用(実測)** — WorkingSet +38〜55MB / private +83MB、環境変数で抑えても private +43MB。起動・応答に差なし。数字は [perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md) §アロケータと確保の個数
 - **refs に比例する常駐データは「1 要素の器」を作らない**(タグ 45,901 本で実測): `BTreeMap` は 1 件でも 11 スロットのノード(43.5MB → `RemoteTagIndex` 6.5MB)/ `HashMap<K, Vec<V>>` は push 1 回で 4 スロット(20.5MB → `LabelIndex` 6.4MB)/ hex 40 字の `String` は 1 行 1 確保。`String` → `Vec<u8>` では 1 バイトも減らない — 減るのは表現を変えた時だけ
-- **メモリ予算の約半分(`--no-open` 実測 143.6MB — ci/baseline/perf-windows-x64.md)は空リポジトリで既に埋まっている**(Rust ヒープは 1.2MB)。「全部 Qt」と読まない — Qt の床 84MB / 自前 QML シェル 32MB / ページ実体化 16MB(積み方は ci/baseline/perf-windows-x64.md)。software 描画は代替にならない — GPU −25MB だが 56fps で予算割れ(実測)
+- **メモリ予算の約半分(`--no-open` 実測 143.7–145.5MB — ci/baseline/perf-windows-x64.md)は空リポジトリで既に埋まっている**(Rust ヒープは 1.2MB)。「全部 Qt」と読まない — Qt の床 84MB / 自前 QML シェル 32MB / ページ実体化 16MB(積み方は ci/baseline/perf-windows-x64.md)。software 描画は代替にならない — GPU −25MB だが 56fps で予算割れ(実測)
 
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に別実行ファイル `pg-todo-editor` を差す。**配布物に同梱必須**(本体と同じディレクトリ)
 - **駆動 rebase だけ `--no-rebase-merges` で釘付け**(`integrate::rebase_command` の `todo_editor` 側)— `rebase.rebaseMerges` が立つと git の書く todo が `label onto` / `reset onto`(`--root` は `reset [new root]`)で始まる。helper が todo を丸ごと差し替えるので**今は結果が変わらない**(2.55 実測: 素・`--root`・reword の `exec` 行・`--update-refs` 併用の全形で config 有無が同一)が、それは merge backend が label 無しの todo を通す偶然に乗っているだけなので、プランの全体を git に言わせる形に固定する。**素の rebase は釘付けしない**(守るプランが無い = config は利用者のもの)。網は `integrate_integration::todo::a_plan_runs_whole_with_rebase_merges_set_in_the_config`(最低バージョンでの実測を兼ねる — 2.43 のマニュアルは `--no-rebase-merges` を明記している)
