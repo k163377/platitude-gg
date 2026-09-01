@@ -22,6 +22,7 @@ AutoActSwitchVerbs 1.0 AutoActSwitchVerbs.qml
 AutoActTipVerbs 1.0 AutoActTipVerbs.qml
 AutoActWipVerbs 1.0 AutoActWipVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
+PageAutoStart 1.0 PageAutoStart.qml
 PageHarness 1.0 PageHarness.qml
 PagePerfDriver 1.0 PagePerfDriver.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml

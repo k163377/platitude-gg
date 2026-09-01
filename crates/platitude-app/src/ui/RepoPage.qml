@@ -2223,11 +2223,15 @@ Item {
         page.closeDiff()
     }
 
+    /// Something other than the reader is picking the row this run stands on: a run told to select, to measure, or to
+    /// open the working tree makes its own choice, and the default below would land first and be photographed instead
+    /// (`PageAutoStart`). All three are false in a build that carries no harness.
+    readonly property bool harnessPicks: AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
+
     // Selection policy: restore across the tag-swap reset, and default to the current branch's newest commit on first
     // load so the details pane always shows something.
     function trySelectDefault() {
-        if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect
-                || AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
+        if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect || page.harnessPicks
                 || graphModel.rowTotal === 0)
             return
         // Refs decide which commit is "current" — wait for them instead of guessing the newest row too early.
@@ -2374,72 +2378,6 @@ Item {
             page.followEmptySide()
             // **The face's own exit is not here** — it is asked of the status headline, one snapshot at a time
             // (`leaveWipWhenDone`), because half the ways out of it move no row in this list at all.
-
-            // Smoke hook (PG_AUTO_WIP=1): open the WIP view once uncommitted changes are known.
-            if (AppBackend.autoWip && worktreeModel.total > 0 && !page.wipShown) {
-                graphPane.setCurrentRow(0)
-                page.showWip()
-            }
-        }
-    }
-
-    // Smoke hook (PG_SCROLL_TO=top|bottom|nav-bottom): jump the graph — or the sidebar's branch list — after the final
-    // pass settles, using the same clamped math as the wheel. Parks the view once and then stays out of the way:
-    // re-running on every pass would drag a background refresh back to the edge, which is the one thing a scrolled view
-    // must not do on its own.
-    property bool scrolledTo: false
-    Timer {
-        id: scrollToTimer
-        interval: 600
-        onTriggered: {
-            page.scrolledTo = true
-            if (AppBackend.scrollTo === "nav-bottom") {
-                sidebarPane.scrollBranchesToEnd()
-                return
-            }
-            graphPane.view.contentY = graphPane.view.clampY(AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
-        }
-    }
-    Connections {
-        target: graphModel
-        enabled: AppBackend.scrollTo !== "" && !page.scrolledTo
-        function onStatsChanged() {
-            if (graphModel.finishCount > 0)
-                scrollToTimer.restart()
-        }
-    }
-
-
-    // Automation (PG_AUTO_SELECT=1): select the newest commit, then open the first changed file's diff — exercises the
-    // full pipeline for screenshot-based smoke tests.
-    property bool autoSelected: false
-    Connections {
-        target: graphModel
-        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
-        function onStatsChanged() {
-            if (page.autoSelected || graphModel.rowTotal === 0)
-                return
-            // **The newest commit, not the newest row.** A dirty working tree puts the WIP row on top, and selecting
-            // that one shows the pending changes instead of a commit — no details are asked for, so a measurement that
-            // reads the interaction budget off this hook measures nothing and says so (`xtask perf`'s `missing`). Every
-            // demo repository is dirty.
-            for (let row = 0; row < graphModel.rowTotal; row++) {
-                const oid = graphModel.oidAt(row)
-                if (oid !== "" && !GitFacts.wipOid(oid)) {
-                    page.autoSelected = true
-                    graphPane.setCurrentRow(row)
-                    page.activateRow(oid)
-                    return
-                }
-            }
-        }
-    }
-    Connections {
-        target: detailsModel
-        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
-        function onChanged() {
-            if (detailsModel.shaHex !== "" && detailsModel.fileTotal > 0 && diffModel.title === "")
-                page.toggleDiff("commit", detailsModel.filePathAt(0), detailsModel.fileOrigPathAt(0))
         }
     }
 

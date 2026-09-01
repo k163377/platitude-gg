@@ -53,6 +53,17 @@ Item {
             actsLoader.item.begin()
     }
 
+    // What a run can be told to do to the page without giving it a verb at all.
+    PageAutoStart {
+        page: harness.page
+        graphModel: harness.graphModel
+        detailsModel: harness.detailsModel
+        diffModel: harness.diffModel
+        worktreeModel: harness.worktreeModel
+        graphPane: harness.graphPane
+        sidebarPane: harness.sidebarPane
+    }
+
     // Built only when a verb was given, so a run that is only being measured carries none of the verbs.
     Loader {
         id: actsLoader
