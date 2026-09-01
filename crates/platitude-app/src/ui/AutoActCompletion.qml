@@ -34,7 +34,7 @@ QtObject {
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
-                "fold-across-merge", "fold-off-branch", "fold-first-commit", "drop-last-commit",
+                "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
@@ -96,7 +96,7 @@ QtObject {
                 "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
                 // The bar is what these wait for, and it comes down after the write's own answer.
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
-                "fold-across-merge", "fold-off-branch", "fold-first-commit", "drop-last-commit",
+                "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
                 "report-tone", "rename-tag-box",
                 // The write barrier is behind this one: what it photographs is the box still standing after git's

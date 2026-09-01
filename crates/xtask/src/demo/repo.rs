@@ -35,6 +35,13 @@ impl DemoRepo {
         };
         std::fs::create_dir_all(&repo.work).map_err(|e| e.to_string())?;
         repo.git(&["init", "-b", "main"])?;
+        repo.configure()?;
+        Ok(repo)
+    }
+
+    /// The settings every preset builds under. Applied again wherever a
+    /// preset ends up standing on a repository this did not init.
+    fn configure(&mut self) -> Result<(), String> {
         for (key, value) in [
             ("user.name", "Demo User"),
             ("user.email", "demo@example.com"),
@@ -42,9 +49,9 @@ impl DemoRepo {
             ("tag.gpgSign", "false"),
             ("core.autocrlf", "false"),
         ] {
-            repo.git(&["config", key, value])?;
+            self.git(&["config", key, value])?;
         }
-        Ok(repo)
+        Ok(())
     }
 
     pub(super) fn command(&mut self, dir: &Path, args: &[&str]) -> Command {
@@ -187,13 +194,46 @@ impl DemoRepo {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
+    /// The bare repository `origin` points at, which lives beside the
+    /// work tree rather than inside it.
+    fn origin_bare(&self) -> PathBuf {
+        self.root.join("origin.git")
+    }
+
     pub(super) fn add_origin(&mut self) -> Result<(), String> {
-        let bare = self.root.join("origin.git");
+        let bare = self.origin_bare();
         std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;
         self.git_at(&bare.clone(), &["init", "--bare", "-b", "main"])?;
         let url = file_url(&bare);
         self.git(&["remote", "add", "origin", &url])?;
         Ok(())
+    }
+
+    /// Replaces the work tree with a `--depth` clone of its own origin,
+    /// which has to have been pushed to first.
+    ///
+    /// The only route to a repository whose oldest commit names a parent
+    /// it does not hold: core reads the commit object itself
+    /// (`sequencer::plan::base_of`), so a `.git/shallow` written over a
+    /// full object store answers exactly as no shallow file at all.
+    /// **`file://` is what makes `--depth` mean anything** — git ignores
+    /// the depth on a plain local path and takes the whole store.
+    pub(super) fn reclone_shallow(&mut self, depth: usize) -> Result<(), String> {
+        let name = self
+            .work
+            .file_name()
+            .ok_or("the work tree has no name to clone back into")?
+            .to_string_lossy()
+            .to_string();
+        let url = file_url(&self.origin_bare());
+        std::fs::remove_dir_all(&self.work)
+            .map_err(|e| format!("removing {}: {e}", self.work.display()))?;
+        let root = self.root.clone();
+        self.git_at(
+            &root,
+            &["clone", "--depth", &depth.to_string(), &url, &name],
+        )?;
+        self.configure()
     }
 }
 

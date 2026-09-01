@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
-    basic, detached, dirty, eol, noremote, one_commit, plan, rewrite_merge, stashes,
+    basic, detached, dirty, eol, noremote, one_commit, plan, rewrite_merge, shallow, stashes,
 };
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
@@ -81,6 +81,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "detached" => detached(&mut repo)?,
         "rewrite-merge" => rewrite_merge(&mut repo)?,
         "one-commit" => one_commit(&mut repo)?,
+        "shallow" => shallow(&mut repo)?,
         "behind" => behind(&mut repo)?,
         "diverged" => diverged(&mut repo)?,
         "unpublished" => unpublished(&mut repo)?,

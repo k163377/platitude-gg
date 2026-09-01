@@ -43,8 +43,8 @@ Item {
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
         if (act === "squash" || act === "fold-across-merge" || act === "fold-off-branch"
-                || act === "fold-first-commit") {
-            // One press, four landings: the fold itself, and the three shapes a history is turned down for
+                || act === "fold-first-commit" || act === "fold-unfetched-base") {
+            // One press, five landings: the fold itself, and the four shapes a history is turned down for
             // (`report::rewrite_across_merge` 他). Each refusal is its own verb because each has a different line
             // to be caught saying — the picture alone cannot tell a bar that came down from a log that came up.
             // The tip without an argument, and any row with one: the refusal about a commit the branch cannot

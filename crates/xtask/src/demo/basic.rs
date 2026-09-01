@@ -257,3 +257,24 @@ pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
     Ok(())
 }
+
+/// A clone made with `--depth`, so the commit under the oldest row it
+/// holds was never fetched and a fold of the newest one is turned down
+/// before git is asked (`report::rewrite_unfetched_base`).
+///
+/// **Depth 2 is what puts the refusal on the tip**: a fold takes the row
+/// above it in, so its range bottoms out at the oldest commit held, whose
+/// own parent is the one that is not here (実測). A drop of the same tip
+/// reaches only itself and plans onto that commit fine — the depth, not
+/// the row, is what decides.
+pub(super) fn shallow(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/one.txt", "one\n", "feat: the first step")?;
+    repo.commit("src/two.txt", "two\n", "feat: the second step")?;
+    repo.commit("src/three.txt", "three\n", "feat: the third step")?;
+    repo.commit("src/four.txt", "four\n", "feat: the fourth step")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.reclone_shallow(2)?;
+    Ok(())
+}

@@ -64,7 +64,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The rewrites turned down before git is asked. **The picture is
     // half the claim** — a bar came down over the graph — and the line
-    // is the other half: which of the four it was, and that the report
+    // is the other half: which of the five it was, and that the report
     // reached the page at all rather than the log coming up in its place
     // (デザイン規約 §答えの要らない報せ). `ref=/` because a rewrite is about no
     // ref: the row it was pressed on is what it is about, and the row is
@@ -83,6 +83,12 @@ pub(super) const TABLE: &[Verb] = &[
     },
     Verb {
         name: "fold-first-commit",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                said=The history was not rewritten",
+    },
+    Verb {
+        name: "fold-unfetched-base",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The history was not rewritten",
