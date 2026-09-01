@@ -161,6 +161,11 @@ QtObject {
     // chapter. A different seat is not a different amount to read, so they share one width — the boxes beside them
     // still take whatever the column gives (§設定の画面).
     readonly property int textWidth: 640
+    // The startup gate's own column (デザイン規約 §レイアウト初期値). **Not `textWidth`** — that number is the width a
+    // run of prose is read at, and this screen has none: its longest line is a mono path, which is scanned rather
+    // than read, and it is the whole of what there is to take away because no repository is open yet and the command
+    // log does not exist. Two thirds of the initial window, so the air either side is still the larger part of it.
+    readonly property int gateWidth: 960
     // The settings screen's category rail. **Not the sidebar's 260** — that width is for a column of names nobody
     // chose (branches, remotes, tags), and this one holds a handful of words this app writes itself
     // (デザイン規約 §設定の画面).

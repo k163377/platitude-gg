@@ -50,7 +50,7 @@ Item {
         id: gateColumn
         anchors.centerIn: parent
         spacing: Theme.spaceLg
-        width: Math.min(640, gate.width - 2 * Theme.spaceXxl)
+        width: Math.min(Theme.gateWidth, gate.width - 2 * Theme.spaceXxl)
         CardText {
             text: Words.appName
             pixelSize: Theme.fontXl
