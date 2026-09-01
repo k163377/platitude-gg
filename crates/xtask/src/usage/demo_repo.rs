@@ -35,6 +35,13 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         drop-stops       a drop that stops part-way, over a dirty tree
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
+        rewrite-merge  a merge inside the stretch a rewrite of the tip
+                  would replay: the fold turned down before git is asked
+                  (fold-across-merge)
+        one-commit  one commit on the branch and one beside it nobody
+                  took: the fold and the drop with nowhere to go, and the
+                  commit the branch cannot see (fold-first-commit,
+                  drop-last-commit, fold-off-branch row:0)
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
         outrun    the same, NOT fetched, with a commit of our own on top:

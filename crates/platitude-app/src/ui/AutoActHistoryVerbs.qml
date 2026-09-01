@@ -42,9 +42,20 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
-        if (act === "squash") {
-            page.openRowMenu(branchesModel.headOid)
-            page.squashCommit(branchesModel.headOid)
+        if (act === "squash" || act === "fold-across-merge" || act === "fold-off-branch"
+                || act === "fold-first-commit") {
+            // One press, four landings: the fold itself, and the three shapes a history is turned down for
+            // (`report::rewrite_across_merge` 他). Each refusal is its own verb because each has a different line
+            // to be caught saying — the picture alone cannot tell a bar that came down from a log that came up.
+            // The tip without an argument, and any row with one: the refusal about a commit the branch cannot
+            // see needs a row that is not on it (`row:` / an oid).
+            const foldOid = driver.autoActOid(arg)
+            page.openRowMenu(foldOid)
+            page.squashCommit(foldOid)
+            // The refusals are waited on all the way down: the answer raises the bar, and a picture taken on the
+            // answer catches one whose words are written and whose height is still nothing (`AutoActDriver`).
+            if (act !== "squash")
+                driver.barrierNotice.start()
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
                    || act === "edit-message-focus") {
@@ -97,7 +108,8 @@ Item {
                 commitMenu.openSub(commitTagCard)
             AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
-        } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops") {
+        } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
+                   || act === "drop-last-commit") {
             // The plan is built by object name, the way a graph row hands one over — a symbolic name is not what this
             // takes.
             page.openRowMenu(driver.autoActOid(arg))
@@ -116,6 +128,9 @@ Item {
                     dropCommitItem.completeHold()
                 else
                     page.dropCommit(commitMenuState.menuOid)
+                // The drop with nowhere to land comes back as a report, and the bar it comes down in is the shot.
+                if (act === "drop-last-commit")
+                    driver.barrierNotice.start()
             }
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"

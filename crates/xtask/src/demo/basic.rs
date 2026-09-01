@@ -220,3 +220,40 @@ pub(super) fn detached(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "--detach", "v1.0"])?;
     Ok(())
 }
+
+/// A merge inside the stretch a rewrite of the newest commit would
+/// replay, so a fold or a drop of the tip is turned down before git is
+/// asked (`report::rewrite_across_merge`).
+pub(super) fn rewrite_merge(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.git(&["switch", "--create", "side"])?;
+    repo.commit("side.txt", "side v1\n", "feat: work on the side")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("main.txt", "main v1\n", "feat: work on main")?;
+    repo.git(&["merge", "--no-ff", "--no-edit", "side"])?;
+    repo.commit("main.txt", "main v2\n", "feat: carry on after the merge")?;
+    Ok(())
+}
+
+/// One commit on the branch: it is the first as well as the newest, so a
+/// fold has nothing to fold into and a drop would take the whole history
+/// with it (`report::fold_first_commit` / `report::drop_all_commits`).
+///
+/// `apart` holds one more that main never took, committed last so it is
+/// the newest of the two and the graph draws it first: the third refusal,
+/// about a commit the current branch cannot see
+/// (`report::rewrite_off_branch`). **It belongs to a history with no
+/// merge in it** — a merge anywhere in the branch answers first, since
+/// the range a rewrite would replay is read before the commit is looked
+/// for in it (実測).
+pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nJust the one.\n",
+        "docs: start the readme",
+    )?;
+    repo.git(&["switch", "--create", "apart"])?;
+    repo.commit("apart.txt", "apart v1\n", "feat: work nobody took")?;
+    repo.git(&["switch", "main"])?;
+    Ok(())
+}

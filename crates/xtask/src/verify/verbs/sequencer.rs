@@ -62,6 +62,37 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true stashes=1",
     },
+    // The rewrites turned down before git is asked. **The picture is
+    // half the claim** — a bar came down over the graph — and the line
+    // is the other half: which of the four it was, and that the report
+    // reached the page at all rather than the log coming up in its place
+    // (デザイン規約 §答えの要らない報せ). `ref=/` because a rewrite is about no
+    // ref: the row it was pressed on is what it is about, and the row is
+    // in the picture.
+    Verb {
+        name: "fold-across-merge",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                said=The history was not rewritten",
+    },
+    Verb {
+        name: "fold-off-branch",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                said=The history was not rewritten",
+    },
+    Verb {
+        name: "fold-first-commit",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                said=The history was not rewritten",
+    },
+    Verb {
+        name: "drop-last-commit",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                said=The history was not rewritten",
+    },
     // The other end of the same merge: the button under the card is
     // what finishes it, and an empty box commits the message git
     // wrote when it stopped. Neither half is in the picture — a
