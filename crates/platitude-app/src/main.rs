@@ -5,8 +5,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod encode;
+mod harness;
 mod hub;
-mod memprobe;
 mod models;
 mod urlpath;
 mod winframe;
@@ -22,7 +22,7 @@ use qtbridge::QApp;
 
 #[expect(clippy::too_many_lines)]
 fn main() {
-    models::PerfProbe::start_clock();
+    harness::PerfProbe::start_clock();
     init_tracing();
     // Said once, before anything else can fail: a run whose window never
     // comes up, or whose stderr is all a verify-ui report keeps, still
@@ -298,7 +298,7 @@ fn main() {
     let code = app
         .register::<AppBackend>()
         .register::<GitFacts>()
-        .register::<models::PerfProbe>()
+        .register::<harness::PerfProbe>()
         .register::<TabsModel>()
         .register::<CloneModel>()
         .register::<RepoConfigModel>()

@@ -287,7 +287,7 @@ impl Hub {
         }
         tab.feeds.release_all();
         self.park_writes_of(&session);
-        crate::memprobe::forget(id);
+        crate::harness::memprobe::forget(id);
         tracing::info!(tab = id, "released repository tab");
     }
 
@@ -319,7 +319,7 @@ impl Hub {
                 session.close();
                 self.park_writes_of(&session);
             }
-            crate::memprobe::forget(id);
+            crate::harness::memprobe::forget(id);
             tracing::info!(tab = id, "closed repository tab");
         }
     }

@@ -44,8 +44,8 @@ impl GraphModel {
             }
         }
         self.settle_head();
-        if crate::memprobe::enabled() {
-            crate::memprobe::note("graph-rows", self.tab_id, &self.rows);
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("graph-rows", self.tab_id, &self.rows);
         }
         self.stats_changed();
     }

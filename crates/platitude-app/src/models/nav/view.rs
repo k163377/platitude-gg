@@ -362,13 +362,13 @@ impl NavSectionModel {
     /// says the view is reading the source directly, and a single number
     /// would hide the day that stops being true.
     pub(super) fn note_footprint(&self) {
-        crate::memprobe::note_bytes(
+        crate::harness::memprobe::note_bytes(
             &format!("nav-{}-all", self.named()),
             self.tab_id,
             platitude_core::mem::Footprint::heap_bytes(&self.all),
             self.all.len(),
         );
-        crate::memprobe::note_bytes(
+        crate::harness::memprobe::note_bytes(
             &format!("nav-{}-arranged", self.named()),
             self.tab_id,
             self.arranged

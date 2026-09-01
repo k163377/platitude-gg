@@ -370,8 +370,8 @@ impl CommandsModel {
         if touched {
             self.changed();
         }
-        if crate::memprobe::enabled() {
-            crate::memprobe::note("command-rows", self.tab_id, &self.rows);
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("command-rows", self.tab_id, &self.rows);
         }
     }
 }

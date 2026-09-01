@@ -83,7 +83,7 @@ impl Default for AppBackend {
             auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
             auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
             auto_perf: std::env::var("PG_AUTO_PERF").as_deref() == Ok("1"),
-            mem_report: crate::memprobe::enabled(),
+            mem_report: crate::harness::memprobe::enabled(),
             auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
             plain_chrome: std::env::var("PG_PLAIN_CHROME").as_deref() == Ok("1"),
             automated: platitude_core::settings::Env::system().automated(),

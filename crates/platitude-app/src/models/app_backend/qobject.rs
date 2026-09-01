@@ -110,7 +110,7 @@ impl AppBackend {
     /// and the models' filings at a moment nothing is half-written.
     #[qslot]
     fn note_memory(&self, label: String) {
-        if !crate::memprobe::enabled() {
+        if !crate::harness::memprobe::enabled() {
             return;
         }
         let (session_parts, waiting) = Hub::with(|hub| {
@@ -123,7 +123,7 @@ impl AppBackend {
             )
         })
         .unwrap_or_default();
-        crate::memprobe::report(&label, &session_parts, &waiting);
+        crate::harness::memprobe::report(&label, &session_parts, &waiting);
     }
 
     /// How many open tabs are holding a repository.

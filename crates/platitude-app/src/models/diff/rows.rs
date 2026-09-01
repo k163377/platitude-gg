@@ -85,8 +85,8 @@ impl DiffModel {
         // and a coloured row spells it inside markup.
         self.has_wide = has_wide(&patches);
         self.extend_notified(rows);
-        if crate::memprobe::enabled() {
-            crate::memprobe::note("diff-lines", self.tab_id, &self.lines);
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("diff-lines", self.tab_id, &self.lines);
         }
     }
 

@@ -183,8 +183,8 @@ impl DetailsModel {
         self.folder_overrides.clear();
         self.rebuild_rows();
         self.reset();
-        if crate::memprobe::enabled() {
-            crate::memprobe::note("details-files", self.tab_id, &self.raw_files);
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("details-files", self.tab_id, &self.raw_files);
         }
         self.changed();
     }

@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use qtbridge::qobject;
 
-use super::qml_register;
+use crate::models::qml_register;
 
 static START: OnceLock<Instant> = OnceLock::new();
 

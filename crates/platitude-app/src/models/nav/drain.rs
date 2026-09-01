@@ -93,7 +93,7 @@ impl NavSectionModel {
         if stashes_arrived {
             self.stashes_settled();
         }
-        if crate::memprobe::enabled() {
+        if crate::harness::memprobe::enabled() {
             self.note_footprint();
         }
     }
