@@ -65,6 +65,35 @@ pub enum ReportKind {
     /// **The reports about something half done**, which is why they wear
     /// a state colour (デザイン規約 §状態 — 進行中で対処が要る).
     HalfRenamed,
+
+    /// The four shapes a history cannot be rewritten in, worked out from
+    /// the commits themselves before a rebase is ever spawned
+    /// ([`crate::sequencer::plan_edit`]). **git is never asked**, so
+    /// unlike every kind above there is no row in the log to read: what
+    /// the reader is told is the whole of what happened.
+    ///
+    /// One kind each because the heading they share says only that
+    /// nothing was rewritten, and the reason is the part worth knowing —
+    /// four different reasons, four sentences the screen picks from
+    /// (`Words.writeReportedWhy`).
+    ///
+    /// A merge inside the range a rewrite would replay. A plain
+    /// interactive rebase drops merges, so it would come back flattened.
+    RewriteAcrossMerge,
+    /// A commit the current branch cannot see. Its row is on screen — the
+    /// graph draws every branch — but a rebase only ever rewrites the one
+    /// the tree is standing on.
+    RewriteOffBranch,
+    /// A fold with nothing to fold into: the commit is the first one.
+    FoldFirstCommit,
+    /// The commit under the range is not in this clone — a shallow one,
+    /// where replaying from there would cut the branch off from the
+    /// history it was made on.
+    RewriteUnfetchedBase,
+    /// Every commit in the branch dropped at once. git replays what is
+    /// left onto a made-up empty commit, leaving the branch pointing at
+    /// an empty tree with no message (実測), so this end stops first.
+    DropAllCommits,
 }
 
 /// One report: the two halves the screen is made of, and the names the
@@ -143,6 +172,70 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
     }
 }
 
+/// The four rewrites this end turns down for itself, in the words the log
+/// keeps.
+///
+/// **Nothing ran.** A plan is built out of what `rev-list` answered, and
+/// these are the shapes it cannot make a todo list out of, so there is no
+/// command to name and nobody else's words to quote: the report carries no
+/// reason and the screen writes both of its lines
+/// (`Words.writeReported` / `writeReportedWhy`, app-ui.md「Rust に文言を
+/// 置かない」). The sentence here is the record the log holds, and the one
+/// place these four are worded in this crate.
+fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {
+    crate::error::GitError::Withheld {
+        message,
+        report: Box::new(WriteReport::local(kind, String::new())),
+    }
+}
+
+/// A rewrite whose range holds a merge commit.
+#[must_use]
+pub fn rewrite_across_merge() -> crate::error::GitError {
+    withheld(
+        ReportKind::RewriteAcrossMerge,
+        "this range contains a merge commit, which a rebase would drop".to_string(),
+    )
+}
+
+/// A rewrite of a commit the current branch cannot see.
+#[must_use]
+pub fn rewrite_off_branch(oid: &str) -> crate::error::GitError {
+    withheld(
+        ReportKind::RewriteOffBranch,
+        format!("{oid} is not in the history of the current branch"),
+    )
+}
+
+/// A fold of the first commit, which has nothing before it.
+#[must_use]
+pub fn fold_first_commit(oid: &str) -> crate::error::GitError {
+    withheld(
+        ReportKind::FoldFirstCommit,
+        format!("{oid} is the first commit, so it has nothing to fold into"),
+    )
+}
+
+/// A rewrite whose range stands on a commit this clone does not have.
+#[must_use]
+pub fn rewrite_unfetched_base() -> crate::error::GitError {
+    withheld(
+        ReportKind::RewriteUnfetchedBase,
+        "this clone does not have the commit below the range, so a rebase there \
+         would cut the branch off from the rest of its history"
+            .to_string(),
+    )
+}
+
+/// A drop that would take the last commit with it.
+#[must_use]
+pub fn drop_all_commits() -> crate::error::GitError {
+    withheld(
+        ReportKind::DropAllCommits,
+        "dropping every commit would leave the branch with no history".to_string(),
+    )
+}
+
 impl WriteReport {
     /// A report about a ref on a remote.
     #[must_use]
@@ -203,6 +296,23 @@ mod tests {
         assert!(
             err.to_string().contains("the stash list moved"),
             "the step's own words reach the log: {err}"
+        );
+    }
+
+    /// A rewrite turned down before git was asked quotes nobody and names
+    /// no command: the log gets the sentence on its own, and the screen
+    /// writes both of its lines from the kind.
+    #[test]
+    fn a_withheld_rewrite_names_no_command_and_quotes_nobody() {
+        let err = rewrite_off_branch("c74dfaf");
+
+        let report = err.report().expect("a report");
+        assert_eq!(report.kind, ReportKind::RewriteOffBranch);
+        assert!(report.reason.is_empty());
+        assert_eq!(
+            err.to_string(),
+            "c74dfaf is not in the history of the current branch",
+            "the log holds the sentence and nothing about a command"
         );
     }
 }

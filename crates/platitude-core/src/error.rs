@@ -101,6 +101,21 @@ pub enum GitError {
     /// against that did not take effect all the same. Shown as is.
     #[error("{message}")]
     Rejected { message: String },
+
+    /// A write this end worked out could not stand, and never asked git
+    /// for — carrying the [`WriteReport`] the screen states it from.
+    ///
+    /// The same pair as [`GitError::Failed`] and [`GitError::Reported`],
+    /// one step earlier: those two are git's answer with and without
+    /// something to report, these two are this end's own. **Nothing ran**,
+    /// which is the whole of why this variant names no command and no exit
+    /// code — putting one in front of the reader would name a command they
+    /// never ran (デザイン規約 §git が言ったことを読む場所).
+    #[error("{message}")]
+    Withheld {
+        message: String,
+        report: Box<WriteReport>,
+    },
 }
 
 impl GitError {
@@ -113,7 +128,7 @@ impl GitError {
     /// ones that does.
     pub fn report(&self) -> Option<&WriteReport> {
         match self {
-            GitError::Reported { report, .. } => Some(report),
+            GitError::Reported { report, .. } | GitError::Withheld { report, .. } => Some(report),
             _ => None,
         }
     }

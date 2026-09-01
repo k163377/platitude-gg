@@ -9,6 +9,7 @@ use crate::error::GitError;
 use crate::integrate::{RebaseOptions, RebaseOutcome, rebase_command};
 use crate::process::GitExecutor;
 use crate::repo::RepoInfo;
+use crate::report;
 use crate::scratch::ScratchFile;
 
 use super::todo::{RebaseStep, TodoAction, TodoLine, render_todo};
@@ -71,9 +72,7 @@ pub async fn rebase_interactive(
     // makes up, and with every line dropped that placeholder is what the
     // branch is left pointing at: an empty tree with no message (measured).
     if options.root && steps.iter().all(|s| s.action == TodoAction::Drop) {
-        return Err(GitError::Rejected {
-            message: "dropping every commit would leave the branch with no history".to_string(),
-        });
+        return Err(report::drop_all_commits());
     }
 
     let io_error = |source| GitError::Io {
@@ -97,6 +96,10 @@ pub async fn rebase_interactive(
         if step.action != TodoAction::Reword {
             continue;
         }
+        // No report of its own: the box a message is typed into will not
+        // save an empty one (`DetailsPane.canSave`), so nothing on screen
+        // can reach here to be told about. A backstop for a plan built by
+        // hand, and the log is where a backstop belongs.
         let Some(message) = step.message.as_deref().filter(|m| !m.trim().is_empty()) else {
             return Err(GitError::Rejected {
                 message: format!("reword of {} has no message", step.oid),

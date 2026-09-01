@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::integrate::RebaseOptions;
 use crate::process::GitExecutor;
+use crate::report;
 
 use super::todo::{RebaseStep, TodoAction};
 
@@ -72,11 +73,11 @@ pub async fn plan_edit(
     edit: Edit,
     cancel: &CancellationToken,
 ) -> Result<EditPlan, GitError> {
-    // These refusals are this application's own, decided before a rebase
-    // is ever spawned. Naming a command as having said something
-    // unexpected would put a command the person never ran in front of
-    // them; `Rejected` is shown as it stands (規約 §git が言ったことを読む場所).
-    let fail = |message: String| GitError::Rejected { message };
+    // The refusals below are this application's own, decided before a
+    // rebase is ever spawned, and the screen states each of them in its
+    // own words: they are `report`'s to word, so that the sentence the
+    // reader gets and the sentence the log keeps stay one decision
+    // (規約 §git が言ったことを読む場所).
 
     // The oldest commit the plan takes in; what sits under *that* is the
     // upstream. History shorter than the plan needs means the range starts
@@ -88,13 +89,7 @@ pub async fn plan_edit(
     let (upstream, root) = match base_of(executor, workdir, &bottom, cancel).await? {
         Base::Commit(oid) => (oid, false),
         Base::Root => (String::new(), true),
-        Base::Unfetched => {
-            return Err(fail(
-                "this clone does not have the commit below the range, so a rebase there \
-                 would cut the branch off from the rest of its history"
-                    .to_string(),
-            ));
-        }
+        Base::Unfetched => return Err(report::rewrite_unfetched_base()),
     };
 
     // One read answers both questions: the rows, and whether a merge sits
@@ -104,9 +99,7 @@ pub async fn plan_edit(
         crate::rebase_plan::read_rows(executor, workdir, &range_arg(&upstream, root), cancel)
             .await?;
     if read.merges {
-        return Err(fail(
-            "this range contains a merge commit, which a rebase would drop".to_string(),
-        ));
+        return Err(report::rewrite_across_merge());
     }
 
     let mut steps: Vec<RebaseStep> = read
@@ -115,18 +108,12 @@ pub async fn plan_edit(
         .map(|row| RebaseStep::pick(row.oid, row.subject))
         .collect();
     let Some(index) = steps.iter().position(|s| s.oid == oid) else {
-        return Err(fail(format!(
-            "{} is not in the history of the current branch",
-            short(oid)
-        )));
+        return Err(report::rewrite_off_branch(short(oid)));
     };
     match edit {
         Edit::SquashIntoParent => {
             if index == 0 {
-                return Err(fail(format!(
-                    "{} is the first commit, so it has nothing to fold into",
-                    short(oid)
-                )));
+                return Err(report::fold_first_commit(short(oid)));
             }
             steps[index].action = TodoAction::Squash;
         }
