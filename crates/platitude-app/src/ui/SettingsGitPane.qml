@@ -167,29 +167,10 @@ ColumnLayout {
         repoPane.reloadIdentity()
     }
 
-    // ---- what the repository group answers for, forwarded ------------------
-    // The second group lives in `SettingsRepoPane`; the window's harness asks the screen, the screen asks this, and
-    // this passes it on — one more link than the tools have, and the same shape.
-    readonly property bool autoRepoReady: repoPane.autoRepoReady
-    readonly property bool autoRepoComboOpen: repoPane.autoRepoComboOpen
-    readonly property int autoRepoRows: repoPane.autoRepoRows
-    function autoOfferRepos() {
-        repoPane.autoOfferRepos()
-    }
-    function autoShowRepoAt(at) {
-        return repoPane.showRepoAt(at)
-    }
-    function reportRepo() {
-        repoPane.reportRepo()
-    }
-    readonly property bool autoRepoEndingsReady: repoPane.autoEndingsReady
-    readonly property string autoRepoEndingHeld: repoPane.autoEndingHeld
-    function autoPickRepoEnding(value) {
-        return repoPane.autoPickEnding(value)
-    }
-    function reportRepoEndings() {
-        repoPane.reportEndings()
-    }
+    /// The second group, handed over whole. **Automation-only exposure**, the same one `GraphPane.view` is
+    /// (app-ui.md): everything a run asks about the repository chooser and its line endings is that group's answer,
+    /// and passing each question through here would be one more link that says nothing (`WindowSettingsActs`).
+    readonly property alias autoRepoPane: repoPane
     /// Lands the second group on the repository the reader is looking at, for the screen that just opened.
     function landOnFront() {
         repoPane.landOnFront()

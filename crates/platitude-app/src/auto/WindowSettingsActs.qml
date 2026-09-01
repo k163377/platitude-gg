@@ -18,6 +18,13 @@ Item {
     required property var window
     required property var settingsDialog
 
+    /// The three panes the screen is made of, named once here rather than
+    /// spelled out at every question below. The screen hands over the two
+    /// it holds and the git one hands over the third (`SettingsDialog`).
+    readonly property var appPane: acts.settingsDialog.autoAppPane
+    readonly property var gitPane: acts.settingsDialog.autoGitPane
+    readonly property var repoPane: acts.settingsDialog.autoGitPane.autoRepoPane
+
     // The tools popup has two separately latched output states: a real loading edge and the populated, settled
     // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
     // the same door the menu entry uses.
@@ -30,12 +37,12 @@ Item {
                 return
             }
             const ready = AppBackend.autoAct === "settings-tools-loading"
-                        ? settingsDialog.autoGitPane.autoToolsLoadingReady
-                        : settingsDialog.autoGitPane.autoToolsSettledReady
+                        ? acts.gitPane.autoToolsLoadingReady
+                        : acts.gitPane.autoToolsSettledReady
             if (!ready)
                 return
             stop()
-            settingsDialog.autoGitPane.reportTool()
+            acts.gitPane.reportTool()
             window.finishAutoAct()
         }
     }
@@ -60,27 +67,27 @@ Item {
             if (!repoSettingsTimer.acted) {
                 // A repository has to be there to pick before anything is asked of it, and the strip's rows arrive
                 // with the window rather than with the screen.
-                if (settingsDialog.autoGitPane.autoRepoRows === 0)
+                if (acts.repoPane.autoRepoRows === 0)
                     return
                 // **The screen has to be showing one repository before another is picked.** The screen lands on the
                 // one the reader is in as it opens (`SettingsDialog.onOpened`), and waiting for that read makes the
                 // argument below a *switch* — boxes already carrying values, replaced by another repository's —
                 // rather than a first look that happens to name a row. The two are not the same road.
-                if (!settingsDialog.autoGitPane.autoRepoReady)
+                if (!acts.repoPane.autoRepoReady)
                     return
                 if (AppBackend.autoActArg !== ""
-                        && !settingsDialog.autoGitPane.autoShowRepoAt(Number(AppBackend.autoActArg)))
+                        && !acts.repoPane.showRepoAt(Number(AppBackend.autoActArg)))
                     return
                 if (AppBackend.autoAct === "settings-repo-pick")
-                    settingsDialog.autoGitPane.autoOfferRepos()
+                    acts.repoPane.autoOfferRepos()
                 repoSettingsTimer.acted = true
             }
-            if (!settingsDialog.autoGitPane.autoRepoReady)
+            if (!acts.repoPane.autoRepoReady)
                 return
-            if (AppBackend.autoAct === "settings-repo-pick" && !settingsDialog.autoGitPane.autoRepoComboOpen)
+            if (AppBackend.autoAct === "settings-repo-pick" && !acts.repoPane.autoRepoComboOpen)
                 return
             repoSettingsTimer.stop()
-            settingsDialog.autoGitPane.reportRepo()
+            acts.repoPane.reportRepo()
             settingsDialog.reportFit()
             window.finishAutoAct()
         }
@@ -112,19 +119,19 @@ Item {
             if (!endingsTimer.acted) {
                 // A repository has to be there to write into, and the strip's rows arrive with the window rather
                 // than with the screen.
-                if (settingsDialog.autoGitPane.autoRepoRows === 0 || !settingsDialog.autoGitPane.autoRepoEndingsReady)
+                if (acts.repoPane.autoRepoRows === 0 || !acts.repoPane.autoEndingsReady)
                     return
-                if (!settingsDialog.autoGitPane.autoPickRepoEnding(endingsTimer.wanted))
+                if (!acts.repoPane.autoPickEnding(endingsTimer.wanted))
                     return
                 endingsTimer.acted = true
             }
-            if (!settingsDialog.autoGitPane.autoRepoEndingsReady
-                    || settingsDialog.autoGitPane.autoRepoEndingHeld !== endingsTimer.wanted)
+            if (!acts.repoPane.autoEndingsReady
+                    || acts.repoPane.autoEndingHeld !== endingsTimer.wanted)
                 return
             endingsTimer.stop()
             // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.
             settingsDialog.autoShowChapterFoot()
-            settingsDialog.autoGitPane.reportRepoEndings()
+            acts.repoPane.reportEndings()
             window.finishAutoAct()
         }
     }
@@ -147,19 +154,19 @@ Item {
                     settingsDialog.openAt("app")
                     return
                 }
-                if (!settingsDialog.autoAppPane.autoAppShown)
+                if (!acts.appPane.autoAppShown)
                     return
                 categorySwitchTimer.wasApp = true
                 if (!settingsDialog.autoTapCategory("git"))
                     return
                 categorySwitchTimer.acted = true
             }
-            if (!settingsDialog.autoGitPane.visible)
+            if (!acts.gitPane.visible)
                 return
             categorySwitchTimer.stop()
             AppBackend.report("settings_switch was_app=" + categorySwitchTimer.wasApp
-                              + " app=" + settingsDialog.autoAppPane.autoAppShown
-                              + " git=" + settingsDialog.autoGitPane.visible)
+                              + " app=" + acts.appPane.autoAppShown
+                              + " git=" + acts.gitPane.visible)
             window.finishAutoAct()
         }
     }
@@ -186,7 +193,7 @@ Item {
                 }
                 // Nothing may be counted as unsaved before git has answered for the boxes — a run that pressed the
                 // way out mid-read would be photographing the read rather than the way out.
-                if (settingsDialog.category === "git" && !settingsDialog.autoGitPane.autoRepoReady)
+                if (settingsDialog.category === "git" && !acts.repoPane.autoRepoReady)
                     return
                 escapeTimer.wasOpen = true
                 settingsDialog.escapeOut()
@@ -198,8 +205,8 @@ Item {
             // The two halves of `unsaved` are named apart: a way out that stopped says nothing about *which* of the
             // two chapters thought it was holding an edit, and they are read out of different files.
             AppBackend.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
-                              + " global=" + settingsDialog.autoGitPane.unsavedIsGlobal
-                              + " repo=" + settingsDialog.autoGitPane.unsavedIsRepo
+                              + " global=" + acts.gitPane.unsavedIsGlobal
+                              + " repo=" + acts.gitPane.unsavedIsRepo
                               + " was_open=" + escapeTimer.wasOpen
                               + " now_open=" + settingsDialog.opened)
             window.finishAutoAct()
@@ -228,7 +235,7 @@ Item {
                 // the read that had not landed yet.
                 if (settingsDialog.unsavedIdentities !== 0)
                     return
-                settingsDialog.autoGitPane.autoTypeIdentity("Someone Else")
+                acts.gitPane.autoTypeIdentity("Someone Else")
                 if (settingsDialog.unsavedIdentities === 0)
                     return
                 settingsDialog.escapeOut()
@@ -265,34 +272,34 @@ Item {
                     return
                 // A run that filed a picture on its way in has to have it in the list before any of this means
                 // anything; one that filed nothing — the round-trip read — has whatever the store gave it.
-                if (AppBackend.autoActArg !== "" && !settingsDialog.autoAppPane.autoAvatarRowPainted(0))
+                if (AppBackend.autoActArg !== "" && !acts.appPane.autoAvatarRowPainted(0))
                     return
                 if (act === "avatar-row-lit") {
-                    if (!settingsDialog.autoAppPane.autoAvatarRowLit(0))
+                    if (!acts.appPane.autoAvatarRowLit(0))
                         return
                 } else if (act === "avatar-combo") {
                     // Asked again while it is still shut: the field defers the list by a turn of the loop, and a list
                     // taken back down under an unwinding grab has to be asked for a second time (`AppCombo.pressField`).
-                    if (!settingsDialog.autoAppPane.autoAvatarComboOpen) {
-                        settingsDialog.autoAppPane.autoAvatarOfferCombo()
+                    if (!acts.appPane.autoAvatarComboOpen) {
+                        acts.appPane.autoAvatarOfferCombo()
                         return
                     }
                 } else if (act === "avatar-remove") {
-                    if (!settingsDialog.autoAppPane.autoAvatarHoldRemove(0))
+                    if (!acts.appPane.autoAvatarHoldRemove(0))
                         return
-                    avatarCardTimer.rowsBefore = settingsDialog.autoAppPane.autoAvatarRows
+                    avatarCardTimer.rowsBefore = acts.appPane.autoAvatarRows
                 }
                 avatarCardTimer.acted = true
             }
             // The hold is the one move whose answer arrives after it: the store has to have let the row go.
-            if (act === "avatar-remove" && settingsDialog.autoAppPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
+            if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
                 return
             avatarCardTimer.stop()
-            AppBackend.report("avatar_card rows=" + settingsDialog.autoAppPane.autoAvatarRows
-                              + " painted=" + settingsDialog.autoAppPane.autoAvatarRowPainted(0)
-                              + " lit=" + settingsDialog.autoAppPane.autoAvatarRowLit(0)
-                              + " combo=" + settingsDialog.autoAppPane.autoAvatarComboOpen
-                              + " removed=" + (avatarCardTimer.rowsBefore > settingsDialog.autoAppPane.autoAvatarRows))
+            AppBackend.report("avatar_card rows=" + acts.appPane.autoAvatarRows
+                              + " painted=" + acts.appPane.autoAvatarRowPainted(0)
+                              + " lit=" + acts.appPane.autoAvatarRowLit(0)
+                              + " combo=" + acts.appPane.autoAvatarComboOpen
+                              + " removed=" + (avatarCardTimer.rowsBefore > acts.appPane.autoAvatarRows))
             window.finishAutoAct()
         }
     }
