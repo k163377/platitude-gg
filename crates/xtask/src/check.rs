@@ -90,6 +90,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "warnings",
         ]),
         words(&["cargo", "test", "--workspace"]),
+        // Before the verbs, and for the reason they cannot answer for it:
+        // every one of them builds the app *with* the harness, and the
+        // build without it is the only one that can fail to load its QML
+        // at all. It leaves a featureless binary behind, which the first
+        // verb below rebuilds over.
+        xtask(&["shipped"]),
     ];
     let mut linux_steps: Vec<Vec<String>> = vec![
         xtask(&["linux", "test", "-p", "platitude-core"]),

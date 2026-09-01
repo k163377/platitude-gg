@@ -64,7 +64,18 @@ commands:
 ";
 
 // No `"\` continuation on the opening line (see `demo_repo`).
-const TAIL: &str = "  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown]
+const TAIL: &str = "  shipped [--no-build]
+      Starts the build nobody else here makes: `cargo build --release`
+      with no features, which is the one without the verification
+      harness. Offscreen, bounded, reaped — a shipped build has no
+      watchdog of its own, because that is a harness knob.
+      What it is for is the failure only this build has: a QML file in
+      `platitude.ui` that reaches into `platitude.auto` resolves in every
+      build this runner drives and loads nothing in the shipped one.
+      `structure` catches the type names statically; this catches the
+      rest, an import of the absent module included.
+
+  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown]
       The measurement behind ci/baseline/perf-windows-x64.md, run the
       same way every time: release build, a real window (offscreen
       reports neither memory nor fps honestly), the PG_AUTO_* hooks,

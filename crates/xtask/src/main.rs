@@ -15,6 +15,7 @@ mod linux;
 mod perf;
 mod qt;
 mod seats;
+mod shipped;
 mod shots;
 mod structure;
 mod usage;
@@ -39,6 +40,7 @@ fn main() -> ExitCode {
         }),
         Some("verify-ui") => verify::run(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
+        Some("shipped") => shipped::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
         Some("shots") => shots::run(&args[1..]),
