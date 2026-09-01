@@ -45,8 +45,8 @@ pub(super) fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) ->
 /// user's home. git resolves configuration from a directory, and outside
 /// a repository that is exactly the user's own (global + system)
 /// configuration — what a first-run prompt is about, and what the
-/// settings screen's global chapters write into
-/// (`models::line_endings`). The process working directory would answer
+/// settings screen's `GLOBAL` identity chapter writes into
+/// (`AppBackend::save_identity`). The process working directory would answer
 /// the same *except* when the app is launched from a terminal standing
 /// inside a checkout, where it would quietly fold that repository's
 /// local values into the user's own.

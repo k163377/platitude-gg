@@ -1,12 +1,11 @@
-//! What one of git's configuration files says about line endings, for a
-//! screen that offers the same question at two levels.
+//! What one repository's own git configuration says about line endings.
 //!
-//! **One type, standing at whichever level it was given.** The settings
-//! screen writes `core.autocrlf` twice — once into the user's own file and
-//! once into a chosen repository's — and the two differ in nothing but the
-//! file: the same key, the same three answers, and an empty row that means
-//! "not written here" at both. Two models for that would be one shape kept
-//! in step by hand.
+//! **That file and no other.** The settings screen writes `core.autocrlf`
+//! into the repository somebody picked and nowhere else (規約 §設定の画面):
+//! the machine's own configuration is not an application's to rewrite, and
+//! that is exactly where the other git GUIs' accidents come from. So this
+//! model is handed a work tree and asks git `--local` about it — there is
+//! no level above for it to stand at.
 //!
 //! **Off the sessions, for the reason `repo_config` is off them.** Only
 //! the tab in front has a session (`RepoPageStack`) and the screen offers
@@ -32,8 +31,8 @@ mod work;
 
 /// What a spawned read or write sends back.
 enum EolMsg {
-    /// A read landed: what that file holds, and — where the screen asked
-    /// for it — what git would use in that repository as things stand.
+    /// A read landed: what that file holds, and what git would use in that
+    /// repository as things stand.
     Read {
         /// The path the read was asked about, carried back so an answer
         /// for a repository the reader has already moved off can be
@@ -50,24 +49,20 @@ enum EolMsg {
 }
 
 pub struct LineEndingsModel {
-    /// Which of git's files this stands at: `"global"` or `"local"`.
-    /// Written by the screen before it looks at anything.
-    scope: String,
-    /// The work tree the reads and the write are spawned in. Empty is the
-    /// application's own directory, which is where git resolves the
-    /// user's own configuration and nothing else's.
+    /// The work tree the reads and the write are spawned in, which is the
+    /// repository whose own file they are about. Empty until the screen
+    /// has named one, which is what `"idle"` below says.
     repo_path: String,
     /// "idle" | "reading" | "ready" | "error" — the read's, not the
     /// write's. A pick leaves the field standing and says how it went in
     /// the line under it.
     state: String,
     /// What that file sets, spelled the way git spells it
-    /// (`eol::setting::AutoCrlf`); empty for a level that sets nothing,
-    /// which is what the empty row asks for.
+    /// (`eol::setting::AutoCrlf`); empty for a repository that sets
+    /// nothing of its own, which is what the empty row asks for.
     held: String,
-    /// What git would use in the repository on screen right now. Empty
-    /// where the screen did not ask (the global level has no repository to
-    /// ask about).
+    /// What git would use in that repository right now, wherever it
+    /// resolved the value from.
     effective: String,
     /// A pick is out. Nothing waits on it — the field stays standing
     /// either way — but it stops a second pick from racing the first.
@@ -82,7 +77,6 @@ pub struct LineEndingsModel {
 impl Default for LineEndingsModel {
     fn default() -> Self {
         Self {
-            scope: "global".into(),
             repo_path: String::new(),
             state: "idle".into(),
             held: String::new(),

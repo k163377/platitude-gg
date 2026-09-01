@@ -16,23 +16,8 @@ impl LineEndingsModel {
         self.attached = true;
     }
 
-    /// Which of git's files this stands at. `"local"` is the only word
-    /// that reaches the repository's own file — anything else is the
-    /// user's own, which is the level the screen opens on.
-    fn scope(&self) -> ConfigScope {
-        if self.scope == "local" {
-            ConfigScope::Local
-        } else {
-            ConfigScope::Global
-        }
-    }
-
     /// Shows `path`, from the top: whatever the field was holding belonged
     /// to another repository.
-    ///
-    /// An empty path is the application's own directory, which is where
-    /// git resolves the user's own configuration — so the global level
-    /// asks with one and never has to be told a repository.
     pub(super) fn read_at(&mut self, path: String) {
         self.repo_path = path;
         self.state = "reading".into();
@@ -54,30 +39,26 @@ impl LineEndingsModel {
     /// pick just landed is still worth showing, and the field has a value
     /// to keep standing while the answer is out.
     ///
-    /// Nothing to ask before the screen has named a level: `"idle"` is a
-    /// model no chapter has looked at yet.
+    /// Nothing to ask before the screen has named a repository: `"idle"`
+    /// is a model no chapter has looked at yet.
     pub(super) fn refresh(&mut self) {
         if self.state != "idle" {
             self.ask();
         }
     }
 
-    /// Asks git what this level sets, and — for a repository — what it
-    /// would use there.
+    /// Asks git what that repository's own file sets, and what git would
+    /// use there.
     ///
-    /// Two reads rather than one at the repository level: the effective
-    /// level cannot say which of its records came out of that repository's
-    /// own file (`config::get_regexp_at`), and both halves of the chapter
-    /// need an answer — the field holds the override, the line under it
-    /// names what git is doing right now. The global level asks once: what
-    /// it would resolve to outside any repository is what it holds, since
-    /// the only file under it is the machine's, and a global value stands
-    /// over that one anyway.
+    /// Two reads rather than one: the effective level cannot say which of
+    /// its records came out of that repository's own file
+    /// (`config::get_regexp_at`), and both halves of the chapter need an
+    /// answer — the field holds the override, the line under it names what
+    /// git is doing right now.
     fn ask(&mut self) {
         self.listen();
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
-        let scope = self.scope();
         let spawned = Hub::with(|hub| {
             let Some(handle) = hub.runtime_handle() else {
                 return false;
@@ -85,15 +66,11 @@ impl LineEndingsModel {
             let executor = hub.executor();
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
-                let workdir = workdir_of(&path);
-                let held = setting::held(&executor, &workdir, scope, &cancel).await;
-                let effective = if scope == ConfigScope::Local {
-                    setting::effective(&executor, &workdir, &cancel)
-                        .await
-                        .map(spelled)
-                } else {
-                    Ok(String::new())
-                };
+                let workdir = PathBuf::from(&path);
+                let held = setting::held(&executor, &workdir, ConfigScope::Local, &cancel).await;
+                let effective = setting::effective(&executor, &workdir, &cancel)
+                    .await
+                    .map(spelled);
                 let msg = match (held, effective) {
                     (Ok(held), Ok(effective)) => EolMsg::Read {
                         path,
@@ -117,8 +94,8 @@ impl LineEndingsModel {
         }
     }
 
-    /// Writes `value` into this level, where an empty value asks for the
-    /// key to be taken out (`eol::setting::set`).
+    /// Writes `value` into that repository's own file, where an empty
+    /// value asks for the key to be taken out (`eol::setting::set`).
     pub(super) fn write_value(&mut self, value: String) {
         if self.busy {
             return;
@@ -129,7 +106,6 @@ impl LineEndingsModel {
         self.changed();
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
-        let scope = self.scope();
         let spawned = Hub::with(|hub| {
             let Some(handle) = hub.runtime_handle() else {
                 return false;
@@ -137,9 +113,10 @@ impl LineEndingsModel {
             let executor = hub.executor();
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
-                let workdir = workdir_of(&path);
+                let workdir = PathBuf::from(&path);
                 let wanted = AutoCrlf::spoken(&value);
-                let written = setting::set(&executor, &workdir, scope, wanted, &cancel).await;
+                let written =
+                    setting::set(&executor, &workdir, ConfigScope::Local, wanted, &cancel).await;
                 let msg = match written {
                     // What git answers, not what was picked: the write
                     // reads itself back, so a value that did not land
@@ -218,28 +195,13 @@ impl LineEndingsModel {
         self.changed();
         if reread {
             self.refresh();
-            // After the re-read is asked for, so a chapter woken by this
-            // is asking git at the same time rather than behind us.
-            self.wrote();
         }
     }
 }
 
-/// Where the reads and the write run. An empty path is the application's
-/// own directory, which outside a repository is exactly the user's own
-/// configuration — what the global level is about (`AppBackend`'s identity
-/// read reaches it the same way).
-fn workdir_of(path: &str) -> PathBuf {
-    if path.is_empty() {
-        super::super::app_backend::app_workdir()
-    } else {
-        PathBuf::from(path)
-    }
-}
-
-/// git's own spelling, or empty for a level that sets nothing — which is
-/// the same thing the empty row asks for, so the field and the write agree
-/// on one vocabulary.
+/// git's own spelling, or empty for a repository that sets nothing of its
+/// own — which is the same thing the empty row asks for, so the field and
+/// the write agree on one vocabulary.
 fn spelled(value: Option<AutoCrlf>) -> String {
     value.map(AutoCrlf::spelled).unwrap_or_default().to_string()
 }

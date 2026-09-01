@@ -8,9 +8,10 @@ import platitude.ui
 // a write of it: the chooser, the line saying where it lands, the line saying what git is doing right now, and git's
 // own words when the write did not take.
 //
-// Two chapters ask the same question — the settings screen's `GLOBAL` group and its `REPOSITORY OVERRIDE` — so the
-// field is one file and the callers differ only in which of git's files is behind it and what the empty row is called
-// there (`LineEndingsModel.scope`). The shape `IdentityFields` keeps, for the same reason.
+// **One chapter asks it: the settings screen's `REPOSITORY OVERRIDE`** (規約 §設定の画面). This app writes
+// `core.autocrlf` into the repository somebody picked and nowhere else — the machine's own configuration is not an
+// application's to rewrite — so everything here is about one repository's file. A file of its own all the same,
+// because a chooser, the two lines around it and git's words are a chapter's worth of shape (`IdentityFields`).
 //
 // **The words are here and the values are git's.** `core.autocrlf` takes three answers and the model hands them over
 // spelled the way git spells them; what a reader is shown is a sentence about what happens, because a setting's UI
@@ -22,25 +23,17 @@ import platitude.ui
 ColumnLayout {
     id: field
 
-    /// What that level of git's configuration sets, in git's own spelling; empty for a level that sets nothing.
+    /// What that repository's own configuration sets, in git's own spelling; empty for one that sets nothing.
     property string held: ""
     /// What git would use in the repository this chapter is about, in the same spelling. Empty is an answer of its
-    /// own here — nothing anywhere sets it — so whether the line is said at all is `saysEffective`.
+    /// own here — nothing anywhere sets it — which is why the line below says it in words rather than showing a value.
     property string effective: ""
-    /// Say what git is doing in that repository right now, under the chooser. The repository chapter does: what its
-    /// empty row falls back to lives in a file this screen is not showing. The global chapter does not — it is the
-    /// highest level this app writes, so what it says there is what git does, and a line repeating the chooser would
-    /// be one more thing to read for nothing.
-    property bool saysEffective: false
     /// A read has landed, so an empty chooser can be believed. Until then it looks exactly like a field nobody has
     /// filled in (規約 app-ui.md §「まだ答えが無い」と値 0 / false を分ける).
     property bool ready: false
     /// A write is out. The chooser stays standing — it says what git holds, and a pick that did not take is what the
     /// line at the foot is for — but a second pick would be racing the first.
     property bool busy: false
-    /// What the row for "this level writes nothing" is called. The global level has nothing above it to fall back to
-    /// and says so; a repository's override falls back to that value and says *that*.
-    property string unwrittenWord: qsTr("Not set")
     /// The line under the chooser: where the value lands, and what the empty row means there.
     property string note: ""
     /// git's own words, unedited.
@@ -59,18 +52,19 @@ ColumnLayout {
         return field.values.indexOf(value)
     }
 
-    /// The values, and the words for them, at matching indexes. The first row is the one that writes nothing, which
-    /// is why it is the one whose word the caller replaces.
+    /// The values, and the words for them, at matching indexes. The first row is the one that writes nothing — what
+    /// it gets you is the value above, rather than one of the three answers, so it is named for that and not for the
+    /// key it leaves out (the `inherited` the identity boxes use as a placeholder).
     readonly property var values: ["", "true", "input", "false"]
     readonly property var words: [
-        field.unwrittenWord,
+        qsTr("Inherited"),
         qsTr("Store LF, check out CRLF"),
         qsTr("Store LF, check out LF"),
         qsTr("Store the file's own endings")
     ]
-    /// The row `held` names. Nothing git wrote that this app can spell falls outside the list, and a level that sets
-    /// nothing is the first row — so an unrecognised answer and an unset one land in the same place, which is where
-    /// picking anything at all is the way out (`eol::setting::AutoCrlf::of_record`).
+    /// The row `held` names. Nothing git wrote that this app can spell falls outside the list, and a repository
+    /// that sets nothing of its own is the first row — so an unrecognised answer and an unset one land in the same
+    /// place, which is where picking anything at all is the way out (`eol::setting::AutoCrlf::of_record`).
     readonly property int heldRow: Math.max(0, field.values.indexOf(field.held))
     /// The whole sentence for what git is doing there now, one per answer rather than a phrase dropped into a frame:
     /// a sentence assembled from pieces cannot be translated (規約 §改行コードの警告).
@@ -123,7 +117,7 @@ ColumnLayout {
     // falls back to lives in a file this screen is not showing, and git resolves it through more than one of them.
     // **This one stays under** — it is not what the setting is, it is where the setting has got to.
     HelpText {
-        visible: field.saysEffective && field.ready
+        visible: field.ready
         text: field.effectiveLine
     }
     Label {
