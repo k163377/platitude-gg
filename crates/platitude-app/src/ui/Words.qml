@@ -99,6 +99,14 @@ QtObject {
         case "conflicted-part": return qsTr("Nothing was taken from this file")
         case "rename": return qsTr("%1 was not renamed").arg(name)
         case "half-rename": return qsTr("The rename did not finish")
+        // The four a rewrite is turned down for. **One heading between them**: what did not happen is the same
+        // thing each time, and which of the four it was is the reason underneath — where a reader who already
+        // knows what they pressed will look for it.
+        case "across-merge":
+        case "off-branch":
+        case "fold-first":
+        case "unfetched-base":
+        case "drop-all": return qsTr("The history was not rewritten")
         default: return qsTr("The commit was not made")
         }
     }
@@ -116,6 +124,19 @@ QtObject {
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
+        // Each of these says the one thing about the history that stopped it, in the words of what is on
+        // screen: rows, branches and the commit under the pointer. Never `rebase` — nothing was run, and the
+        // reader chose a fold or a drop rather than a rebase (デザイン規約 §用語表).
+        case "across-merge":
+            return qsTr("A merge sits in the history this would replay, and a replay drops merges. What came back would be flattened.")
+        case "off-branch":
+            return qsTr("This commit is not in the current branch's history. Switch to a branch that has it first.")
+        case "fold-first":
+            return qsTr("This is the first commit, so there is nothing before it to fold into.")
+        case "unfetched-base":
+            return qsTr("The commit below this one is not in this clone. Replaying from here would cut the branch off from the rest of its history.")
+        case "drop-all":
+            return qsTr("This is the last commit, and a branch cannot be left with no history at all.")
         default: return ""
         }
     }
