@@ -2,7 +2,8 @@
 //!
 //! The page lives at a fixed path and is rewritten in place, so a window
 //! already showing the board is one keypress away from showing the run
-//! that was just taken: F5, and the newest is at the top. A second
+//! that was just taken: F5, and the board is read from the top down in
+//! the order the runs were put up (`board::load_runs`). A second
 //! window gains nothing and costs the reader the only thing they have to
 //! be sure of — which of the windows in front of them is the board as it
 //! stands now.
@@ -61,8 +62,8 @@ pub(super) fn standing(board: &Path) -> Option<Standing> {
 pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String> {
     if !again && let Some(open) = standing(board) {
         println!(
-            "board: a window is already open (seat {}, opened {}) — press F5 there, \
-             the newest run is at the top",
+            "board: a window is already open (seat {}, opened {}) — press F5 there \
+             and read from the top down",
             open.named_seat(),
             ago(open.at),
         );
@@ -104,7 +105,7 @@ impl Standing {
 pub(super) fn how_to_see_it(board: &Path) -> String {
     match standing(board) {
         Some(open) => format!(
-            "a window is open (seat {}) — F5 there, the newest run is at the top",
+            "a window is open (seat {}) — F5 there and read from the top down",
             open.named_seat()
         ),
         None => "no window open yet — `cargo xtask shots open` opens the one".to_string(),

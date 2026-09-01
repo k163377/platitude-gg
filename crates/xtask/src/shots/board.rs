@@ -188,9 +188,15 @@ pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf,
     record(label, verb, &shots)
 }
 
-/// Every run on the board, newest first. A run file that cannot be read
-/// or parsed is skipped rather than fatal: one bad file must not cost
-/// the board every other picture on it.
+/// Every run on the board, in the order it was put up. A run file that
+/// cannot be read or parsed is skipped rather than fatal: one bad file
+/// must not cost the board every other picture on it.
+///
+/// Oldest first, because the order the runs went up *is* the order they
+/// are to be read in: the machine being worked on first, then the order
+/// they were explained in (verify-ui skill §board). The page is the only
+/// place that order survives, so reversing it here would hand the reader
+/// the last picture of an explanation before its first.
 pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
     let Ok(entries) = std::fs::read_dir(runs) else {
         return Vec::new();
@@ -202,7 +208,7 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
         .filter_map(|path| std::fs::read_to_string(path).ok())
         .filter_map(|text| parse_run(&text))
         .collect();
-    out.sort_by_key(|run| std::cmp::Reverse(run.at));
+    out.sort_by_key(|run| run.at);
     out
 }
 
@@ -340,7 +346,7 @@ fn one_line(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Run, Shot, one_line, parse_run, slug};
+    use super::{Run, Shot, load_runs, one_line, parse_run, slug, write_run};
 
     #[test]
     fn a_run_survives_the_round_trip() {
@@ -415,10 +421,13 @@ mod tests {
         assert_eq!(one_line("two\tlines\nhere"), "two lines here");
     }
 
-    /// The board reads newest first, so a run's own time is what orders
-    /// it — not the order the directory happened to hand them back.
+    /// The board is read top down in the order the runs were put up, so
+    /// what `load_runs` answers is the reading order itself — never the
+    /// order the directory happened to hand the files back.
     #[test]
-    fn runs_carry_their_own_order() {
+    fn runs_come_back_in_the_order_they_went_up() {
+        let runs = std::env::temp_dir().join(format!("pg-shots-order-{}", std::process::id()));
+        std::fs::create_dir_all(&runs).expect("a runs directory to write into");
         let run = |at| Run {
             label: "x".to_string(),
             verb: String::new(),
@@ -434,8 +443,15 @@ mod tests {
                 height: 1,
             }],
         };
-        let mut runs = [run(1), run(3), run(2)];
-        runs.sort_by_key(|run| std::cmp::Reverse(run.at));
-        assert_eq!(runs.iter().map(|r| r.at).collect::<Vec<_>>(), vec![3, 2, 1]);
+        // Written out of order, so a directory order that reached the
+        // page would show up here as one.
+        for at in [3, 1, 2] {
+            write_run(&runs, &format!("{at}-a-x"), &run(at)).expect("the run is written");
+        }
+        assert_eq!(
+            load_runs(&runs).iter().map(|r| r.at).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        std::fs::remove_dir_all(&runs).expect("the temporary board goes");
     }
 }

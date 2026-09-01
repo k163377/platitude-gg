@@ -38,11 +38,13 @@ cargo xtask shots <command>
   open [--again]
       Put the board in front of the reader, in one window and only one:
       the page is rewritten at a fixed path, so a window already open
-      is one F5 away from the newest run, and this says so instead of
-      opening another. That holds across seats and sessions — the board
-      is shared, and six windows of it are six answers to \"which one is
-      current\". --again is the reader's own word that they closed it,
-      and the only way past: nothing here can see a closed window
+      is one F5 away from the board as it stands, and this says so
+      instead of opening another. The page is read top down in the
+      order the runs went up, so the newest is at the bottom. That
+      holds across seats and sessions — the board is shared, and six
+      windows of it are six answers to \"which one is current\".
+      --again is the reader's own word that they closed it, and the
+      only way past: nothing here can see a closed window
       (shots/window.rs).
 
   list        One line per run: when, seat, count, label.

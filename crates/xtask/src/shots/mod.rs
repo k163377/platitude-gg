@@ -15,7 +15,12 @@
 //!
 //! And it is read in *one* window, however many seats and sessions put
 //! pictures on it: the page is rewritten where it stands, so the window
-//! already open is one F5 away from the newest run (`window.rs`).
+//! already open is one F5 away from the board as it stands (`window.rs`).
+//!
+//! The page is read top down in the order the runs were put up, which
+//! makes the order they are added in the order they are read in — the
+//! machine being worked on first, then the order they were explained in
+//! (verify-ui skill §board).
 
 mod board;
 mod cli;
