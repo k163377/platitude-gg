@@ -66,7 +66,7 @@ pub enum ReportKind {
     /// a state colour (デザイン規約 §状態 — 進行中で対処が要る).
     HalfRenamed,
 
-    /// The four shapes a history cannot be rewritten in, worked out from
+    /// The five shapes a history cannot be rewritten in, worked out from
     /// the commits themselves before a rebase is ever spawned
     /// ([`crate::sequencer::plan_edit`]). **git is never asked**, so
     /// unlike every kind above there is no row in the log to read: what
@@ -74,7 +74,7 @@ pub enum ReportKind {
     ///
     /// One kind each because the heading they share says only that
     /// nothing was rewritten, and the reason is the part worth knowing —
-    /// four different reasons, four sentences the screen picks from
+    /// five different reasons, five sentences the screen picks from
     /// (`Words.writeReportedWhy`).
     ///
     /// A merge inside the range a rewrite would replay. A plain
@@ -172,7 +172,7 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
     }
 }
 
-/// The four rewrites this end turns down for itself, in the words the log
+/// The five rewrites this end turns down for itself, in the words the log
 /// keeps.
 ///
 /// **Nothing ran.** A plan is built out of what `rev-list` answered, and
@@ -181,7 +181,7 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
 /// reason and the screen writes both of its lines
 /// (`Words.writeReported` / `writeReportedWhy`, app-ui.md「Rust に文言を
 /// 置かない」). The sentence here is the record the log holds, and the one
-/// place these four are worded in this crate.
+/// place these five are worded in this crate.
 fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {
     crate::error::GitError::Withheld {
         message,

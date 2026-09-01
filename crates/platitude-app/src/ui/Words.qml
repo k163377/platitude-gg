@@ -99,8 +99,8 @@ QtObject {
         case "conflicted-part": return qsTr("Nothing was taken from this file")
         case "rename": return qsTr("%1 was not renamed").arg(name)
         case "half-rename": return qsTr("The rename did not finish")
-        // The four a rewrite is turned down for. **One heading between them**: what did not happen is the same
-        // thing each time, and which of the four it was is the reason underneath — where a reader who already
+        // The five a rewrite is turned down for. **One heading between them**: what did not happen is the same
+        // thing each time, and which of the five it was is the reason underneath — where a reader who already
         // knows what they pressed will look for it.
         case "across-merge":
         case "off-branch":
