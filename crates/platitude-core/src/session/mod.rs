@@ -84,6 +84,8 @@ mod rows;
 mod snapshot;
 mod stash_round;
 mod state;
+#[cfg(test)]
+mod state_tests;
 mod walk;
 mod write;
 

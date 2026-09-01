@@ -48,6 +48,8 @@ pub mod session;
 pub mod settings;
 pub mod stage;
 pub mod stash;
+#[cfg(test)]
+mod stash_tests;
 pub mod status;
 #[cfg(test)]
 mod status_tests;
