@@ -63,72 +63,27 @@ AppDialog {
         }
         return false
     }
-    /// Automation: which chapters the screen is actually showing, for the verb that presses the rail — the category
-    /// property is the input side, and a run that read it back would be reporting its own press.
-    readonly property bool autoAppShown: appPane.autoAppShown
-    readonly property bool autoGitShown: gitPane.visible
+    /// The two panes the screen is made of, handed over whole. **Automation-only exposure**, the same one
+    /// `GraphPane.view` is (app-ui.md): what a run asks about the avatars, the merge editor, the repository group and
+    /// its line endings is the *pane's* answer, and a screen that mirrored each of those questions would be twenty
+    /// forwards that mean nothing to anyone reading the screen (`WindowSettingsActs`).
+    ///
+    /// A hidden pane still answers, so a run that wants "the screen is showing this" pairs the pane with
+    /// [`opened`] itself.
+    readonly property alias autoAppPane: appPane
+    readonly property alias autoGitPane: gitPane
 
-    // ---- what the application category answers for, forwarded ------------
-    // The avatar verbs are the window's, so they are finished by `WindowAutoActDriver` and ask the screen; the screen
-    // passes the question on to the pane that owns the list.
-    readonly property int autoAvatarRows: appPane.autoAvatarRows
-    readonly property bool autoAvatarComboOpen: appPane.autoAvatarComboOpen
-    function autoAvatarRowLit(at) {
-        return appPane.autoAvatarRowLit(at)
-    }
-    function autoAvatarRowPainted(at) {
-        return appPane.autoAvatarRowPainted(at)
-    }
-    function autoAvatarOfferCombo() {
-        appPane.autoAvatarOfferCombo()
-    }
-    function autoAvatarHoldRemove(at) {
-        return appPane.autoAvatarHoldRemove(at)
-    }
-
-    // ---- what the git category answers for, forwarded ---------------------
-    // The half of the screen that talks to git lives in `SettingsGitPane`, both of its groups; the window's harness
-    // asks the screen, so the screen passes the question on. `opened` is the screen's to add — a pane that is only
-    // hidden still answers.
-    readonly property bool autoToolsLoadingReady: settingsDialog.opened && gitPane.autoToolsLoadingReady
-    readonly property bool autoToolsSettledReady: settingsDialog.opened && gitPane.autoToolsSettledReady
-    function reportTool() {
-        gitPane.reportTool()
-    }
-    readonly property bool autoRepoReady: settingsDialog.opened && gitPane.autoRepoReady
-    readonly property bool autoRepoComboOpen: gitPane.autoRepoComboOpen
-    readonly property int autoRepoRows: gitPane.autoRepoRows
-    function autoOfferRepos() {
-        gitPane.autoOfferRepos()
-    }
-    // The line-ending chapter of that same group, which is the only chapter on the screen that writes
-    // `core.autocrlf` at all — a run driving it reaches one repository's own file and nothing outside it
-    // (規約 §設定の画面).
-    readonly property bool autoRepoEndingsReady: settingsDialog.opened && gitPane.autoRepoEndingsReady
-    readonly property string autoRepoEndingHeld: gitPane.autoRepoEndingHeld
-    function autoPickRepoEnding(value) {
-        return gitPane.autoPickRepoEnding(value)
-    }
     /// Sends the chapters to their foot, where the group this run is about stands. The screen is two groups deep and
-    /// the window is not that tall (`settings_fit`), so a run that photographed the resting position would be
+    /// the window is not that tall ([`reportFit`]), so a run that photographed the resting position would be
     /// photographing the group above the one it just wrote into.
     function autoShowChapterFoot() {
         chapters.contentY = Math.max(0, chapterCol.implicitHeight - chapters.height)
     }
-    function reportRepoEndings() {
-        gitPane.reportRepoEndings()
-    }
-    /// Automation: shows the repository standing at `at` in the strip, through the same call a pick from the list
-    /// makes. Answers whether there was such a row.
-    function autoShowRepoAt(at) {
-        return gitPane.autoShowRepoAt(at)
-    }
-    function reportRepo() {
-        gitPane.reportRepo()
-        // Whether every chapter can be got to: they fit, or the bar that sends them is standing. **A photograph
-        // cannot say it** — a column cut off at the window's edge is drawn exactly like one that ends there (the
-        // blind spot `details-fit` exists for), and the one thing that silently breaks it is a content height read
-        // off implicit sizes that a wrapping label under-reports.
+    /// Whether every chapter can be got to: they fit, or the bar that sends them is standing. **A photograph cannot
+    /// say it** — a column cut off at the window's edge is drawn exactly like one that ends there (the blind spot
+    /// `details-fit` exists for), and the one thing that silently breaks it is a content height read off implicit
+    /// sizes that a wrapping label under-reports. The screen's own, because the column is.
+    function reportFit() {
         AppBackend.report("settings_fit reach="
                           + (chapterCol.implicitHeight <= chapters.height || chaptersBar.visible)
                           + " content=" + Math.round(chapterCol.implicitHeight)
@@ -191,10 +146,6 @@ AppDialog {
     /// thing on this screen that can be lost** — every other field writes as it is finished with, so this is the
     /// only place a Save stands between what is typed and what git holds (規約 §設定の画面).
     readonly property int unsavedIdentities: gitPane.unsavedIdentities
-    /// The same, told apart: the two chapters read out of different files, so a way out that stopped has to be able
-    /// to say which of them stopped it.
-    readonly property bool autoUnsavedGlobal: gitPane.unsavedIsGlobal
-    readonly property bool autoUnsavedRepo: gitPane.unsavedIsRepo
     /// How wide the screen's one block is: the rail, the line beside it, and the column of chapters, with the same
     /// step on both sides of that line. Everything on the screen that is not a full-width rule is laid inside it.
     /// **Symmetric on purpose**: one `spaceXxl` of air outside the rail, and one on the far side of the column for
@@ -239,10 +190,6 @@ AppDialog {
     /// Typing again takes the arming off: the mark is about a press the reader made, not about the state of the
     /// boxes, and an edit made after it is one they have not been shown yet.
     onUnsavedIdentitiesChanged: settingsDialog.askingLeave = false
-    /// Automation: leaves the global identity holding an edit, so the way out has something to stop for.
-    function autoTypeIdentity(text) {
-        gitPane.autoTypeIdentity(text)
-    }
 
     // Two bands, and the rule between them is what says the top one does not move (規約 §設定の画面). It runs the
     // whole width — the screen covers the window, so a line stopped short of the frame would read as an unfinished
