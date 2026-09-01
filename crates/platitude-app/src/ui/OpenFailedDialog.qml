@@ -85,7 +85,7 @@ AppDialog {
 
         DialogActions {
             id: actions
-            cancelText: qsTr("Cancel")
+            cancelText: Words.cancel
             acceptKind: "folder"
             // `again`, not `another`: on two of the three the folder was the wrong one and the heading has already said
             // so, and on the third nobody knows that it was — a button that says "a different one" would be claiming

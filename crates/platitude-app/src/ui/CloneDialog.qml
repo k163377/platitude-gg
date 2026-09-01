@@ -197,7 +197,7 @@ AppDialog {
         }
 
         DialogActions {
-            cancelText: qsTr("Cancel")
+            cancelText: Words.cancel
             // The mark a fetch wears: this is the first one, and the seat it stands in is where the ring turns while
             // git is out (§進行中・長押しの定数 — 待てるボタンには席が要る).
             acceptKind: "fetch"

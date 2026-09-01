@@ -21,6 +21,11 @@ QtObject {
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
     readonly property string addRemote: qsTr("Add remote…")
 
+    /// The way out that writes nothing, as the three dialogs' foot and the plan's header bar say it. One word for
+    /// every seat it stands in: a dialog is dismissed and a plan is put away, but what the reader is promised is the
+    /// same — nothing that was typed or arranged here goes anywhere.
+    readonly property string cancel: qsTr("Cancel")
+
     /// Why a menu row is out while it cannot be chosen (`AppMenuItem.blockedWhy` — デザイン規約 §無効: the line is the
     /// whole reason the row stays). One state and one line: git is out and the answer is to wait — the line the
     /// delete table has always worn, and the whole of what the held doors say while a rewrite replays behind the

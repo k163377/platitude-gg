@@ -86,7 +86,7 @@ Rectangle {
                 }
                 Item { Layout.fillWidth: true }
                 ActionButton {
-                    text: qsTr("Cancel")
+                    text: Words.cancel
                     frameColor: Theme.borderDefault
                     onActivated: planPane.planModel.cancelPlan()
                 }

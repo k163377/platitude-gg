@@ -168,7 +168,7 @@ AppDialog {
 
         DialogActions {
             id: actions
-            cancelText: qsTr("Cancel")
+            cancelText: Words.cancel
             acceptKind: remoteDialog.editing === "" ? "plus" : "check"
             acceptText: remoteDialog.editing === "" ? qsTr("Add") : qsTr("Save")
             acceptEnabled: remoteDialog.wantedUrl !== ""
