@@ -147,121 +147,18 @@ Rectangle {
             sidebar.addRemoteRequested()
     }
 
-    /// Smoke hook (PG_AUTO_ACT=nav-filter): type into the filter band.
-    /// Written into the field itself, so what the sections are asked is
-    /// what a typist asks them.
-    function typeFilter(text) {
-        sections.filterText = text
-        return sections.filterText
-    }
+    /// The three the pane is made of, handed over whole. **Automation-only exposures**, the same one
+    /// `GraphPane.view` is (app-ui.md): what a headless run does to the sidebar — typing into the filter, resting on
+    /// a cell, closing a band, reading a row's tooltip back — is composed from these by `auto/NavProbe.qml`, and a
+    /// pane that mirrored each of those would be twenty forwards that mean nothing to anyone reading it.
+    readonly property alias autoRail: rail
+    readonly property alias autoSections: sections
+    readonly property alias autoPeek: peek
 
-    /// Smoke hook (PG_AUTO_ACT=nav-peek): rest on one section's cell.
-    /// Named rather than hovered — hover cannot be injected (verify-ui
-    /// スキル). Whether that opens anything is the cell's answer: an
-    /// empty section answers no.
-    function peekAt(kind) {
-        rail.enterAt(kind, rail.topOf(kind))
-    }
-    /// Smoke hooks (PG_AUTO_ACT=nav-peek-away / nav-peek-shut): walk the
-    /// pointer off the cell that opened it, and click that cell. All of
-    /// these go in at the rail, so what the cells decide and report is
-    /// part of what is being tested (NavRail.enterAt).
-    function peekAway(kind) {
-        rail.leaveAt(kind)
-    }
-    function peekTap(kind) {
-        rail.tapAt(kind)
-    }
-    /// Smoke hooks (PG_AUTO_ACT=nav-peek-into / nav-peek-out): the pointer
-    /// walked off the cell down into the open section, and then out of the
-    /// section the other way (into the diff or the graph) instead of back
-    /// over the cell. They write the same `peekEntered` the popup's own
-    /// hover writes — the leaving and the being-inside are one state, and
-    /// a headless run that cannot say "inside" cannot tell the exit that
-    /// closes it from the one that must not.
-    function peekInto(kind) {
-        rail.leaveAt(kind)
-        sidebar.peekEntered = true
-    }
-    function peekOut() {
-        sidebar.peekEntered = false
-    }
-
-    /// Smoke hook (PG_AUTO_ACT=nav-close): close one section by putting a
-    /// click in where the header band takes one — a hook that set
-    /// `expTags` itself would be a second answer, and would open a
-    /// section the band itself refuses to (`NavHeader.tap`).
-    function closeSection(kind) {
-        const head = sidebar.headOf(kind)
-        if (head)
-            head.tap()
-    }
-    function headOf(kind) {
-        return sections.headOf(kind)
-    }
-    /// Smoke hook (PG_AUTO_ACT=nav-add-remote): press the `+` at the end
-    /// of the REMOTES band. It goes in at the band's own signal, so what
-    /// answers is the page's wiring and not a second way in.
-    function tapAddRemote() {
-        sections.headOf("remote").addRemoteRequested()
-    }
-    /// Smoke hook (PG_AUTO_ACT=tags-eye): press the eye at the end of the
-    /// TAGS band, at the button's own press (`NavHeader.tapTags`).
-    function tapTagEye() {
-        sections.headOf("tag").tapTags()
-    }
-    /// Where a section's header band has come to rest, and where the
-    /// ground under the last section begins — what PG_AUTO_ACT=nav-close
-    /// reads to see the sections packed against the top.
-    function headerTopOf(kind) {
-        const head = sidebar.headOf(kind)
-        return head ? head.y : -1
-    }
-    readonly property real groundTop: sections.groundTop
-    /// Where the section the folded rail has open begins and ends, for the
-    /// smoke hooks (PG_AUTO_ACT=nav-peek). The panel is a popup, so a
-    /// headless run reads its placement here rather than off the picture:
-    /// it starts at the top edge of the cell that opened it and stops
-    /// inside the pane, whatever the section's row count.
-    readonly property real peekY: peek.y
-    readonly property real peekBottom: peek.y + peek.height
-
-    /// Smoke hooks (PG_AUTO_ACT=nav-tip): rest the pointer on one
-    /// section's row, and read back what that row answers about a
-    /// tooltip. Hover cannot be injected (verify-ui スキル), so it goes in
-    /// at the same `pointedTipRow` the file lists carry, and what comes
-    /// out is the row's own attached ToolTip and the shared instance.
-    function listOf(kind) {
-        return sections.listOf(kind)
-    }
-    function pointTipAt(kind, row) {
-        const list = sidebar.listOf(kind)
-        if (list)
-            list.pointedTipRow = row
-    }
-    function tipWordsAt(kind, row) {
-        const list = sidebar.listOf(kind)
-        return list ? list.rowTipWords(row) : ""
-    }
-    function tipNameAt(kind, row) {
-        const list = sidebar.listOf(kind)
-        return list ? list.rowNameAt(row) : ""
-    }
-    /// The current branch's sticky stand-in, under the same pointer: it
-    /// rides the edge its own row went out of, so resting on that row is
-    /// resting on this (`HeadPinRow`). Named separately as well, since the
-    /// row it stands for has no place in the list at all while a filter
-    /// hides it — which is one of the two ways the stand-in is on screen.
+    /// The pointer is on the current branch's sticky stand-in, which rides the edge its own row went out of
+    /// (`HeadPinRow`). The pane's own, because its bindings read it: hover is the input that cannot be injected, so a
+    /// headless run writes the one property a real hover writes.
     property bool headPinPointed: false
-    readonly property bool headPinLit: sections.headPinLit
-    readonly property string headPinWords: sections.headPinWords
-
-    /// Smoke hook (PG_SCROLL_TO=nav-bottom): jump the branches list to
-    /// its end. The current branch's sticky row only changes edges
-    /// under scroll, which a headless run cannot produce otherwise.
-    function scrollBranchesToEnd() {
-        sections.scrollBranchesToEnd()
-    }
 
     // The width the list goes back to. Read off the pane as it folds
     // rather than fixed, so one that has been widened comes back the

@@ -32,6 +32,7 @@ Item {
     readonly property var tagsModel: driver.tagsModel
     readonly property var graphPane: driver.graphPane
     readonly property var sidebarPane: driver.sidebarPane
+    readonly property var navProbe: driver.navProbe
     readonly property var refMenu: driver.refMenu
     readonly property var renderedBarrier: driver.barrierRendered
 
@@ -167,7 +168,7 @@ Item {
             const section = sidebarPane.peekSection
             if (acts.farStep === 0) {
                 if (sidebarPane.peekKind === "") {
-                    sidebarPane.peekAt("tag")
+                    navProbe.peekAt("tag")
                     return
                 }
                 section.scrollToEnd()
@@ -243,30 +244,30 @@ Item {
             if (!navTipTimer.lit) {
                 // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a
                 // miss reads exactly like a row that wants no tooltip (`NavList.clickRow`).
-                sidebarPane.pointTipAt("worktree", 0)
+                navProbe.pointTipAt("worktree", 0)
                 if (!tip.visible)
                     return
                 navTipTimer.lit = true
-                sidebarPane.pointTipAt("worktree", -1)
+                navProbe.pointTipAt("worktree", -1)
                 // The stand-in stands while its own branch has no row of its own — and the filter that takes that row
                 // away would take the control row with it, so it goes in only once the control has answered.
                 if (navTipTimer.hide !== "")
-                    sidebarPane.typeFilter(navTipTimer.hide)
+                    navProbe.typeFilter(navTipTimer.hide)
                 if (navTipTimer.head)
                     sidebarPane.headPinPointed = true
                 return
             }
             const target = navTipTimer.head ? branchesModel.headRow : navTipTimer.row
             if (!navTipTimer.head)
-                sidebarPane.pointTipAt(navTipTimer.kind, target)
+                navProbe.pointTipAt(navTipTimer.kind, target)
             // Nothing is attached to the stand-in, so what is read there is that the pointer is on it and the
             // instance went back down.
             const name = navTipTimer.head ? branchesModel.headName
-                       : sidebarPane.tipNameAt(navTipTimer.kind, target)
-            if (name === "" || (navTipTimer.head && !sidebarPane.headPinLit))
+                       : navProbe.tipNameAt(navTipTimer.kind, target)
+            if (name === "" || (navTipTimer.head && !navProbe.headPinLit))
                 return
-            const words = navTipTimer.head ? sidebarPane.headPinWords
-                        : sidebarPane.tipWordsAt(navTipTimer.kind, target)
+            const words = navTipTimer.head ? navProbe.headPinWords
+                        : navProbe.tipWordsAt(navTipTimer.kind, target)
             // A row with something to say is not photographed until the instance is up; one with nothing to say is not
             // photographed until the control's own tip has left the screen.
             if ((words !== "") !== tip.visible)
@@ -277,7 +278,7 @@ Item {
                 + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
                 + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
                 // Last, and after a text that may carry anything: the judged trio above has to stay one substring.
-                + (navTipTimer.head ? " pin=" + sidebarPane.headPinLit : ""))
+                + (navTipTimer.head ? " pin=" + navProbe.headPinLit : ""))
             driver.complete()
         }
     }
@@ -356,7 +357,7 @@ Item {
                 return
             }
             const key = navNameBoxTimer.kind + ":" + navNameBoxTimer.ref
-            const list = sidebarPane.listOf(navNameBoxTimer.kind)
+            const list = navProbe.listOf(navNameBoxTimer.kind)
             const drawn = list.rowBoxWidth(row)
             if (navNameBoxTimer.step === 1) {
                 // On the row, and built: a row the view has not laid out yet answers 0 for its box, the same as a row

@@ -45,7 +45,7 @@ Item {
         onTriggered: {
             start.scrolled = true
             if (AppBackend.scrollTo === "nav-bottom") {
-                start.sidebarPane.scrollBranchesToEnd()
+                start.sidebarPane.autoSections.scrollBranchesToEnd()
                 return
             }
             start.graphPane.view.contentY =

@@ -31,6 +31,7 @@ Item {
     readonly property var stashesModel: driver.stashesModel
     readonly property var tagsModel: driver.tagsModel
     readonly property var sidebarPane: driver.sidebarPane
+    readonly property var navProbe: driver.navProbe
     readonly property var remoteDialog: driver.remoteDialog
     readonly property var refSwitchItem: driver.refSwitchItem
     readonly property var commitMenu: driver.commitMenu
@@ -60,24 +61,24 @@ Item {
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
             if (act === "nav-peek")
-                sidebarPane.peekAt(arg)
+                navProbe.peekAt(arg)
             else if (act === "nav-peek-away") {
-                sidebarPane.peekAt(arg)
-                sidebarPane.peekAway(arg)
+                navProbe.peekAt(arg)
+                navProbe.peekAway(arg)
             } else if (act === "nav-peek-into" || act === "nav-peek-out") {
-                sidebarPane.peekAt(arg)
-                sidebarPane.peekInto(arg)
+                navProbe.peekAt(arg)
+                navProbe.peekInto(arg)
                 if (act === "nav-peek-out")
-                    sidebarPane.peekOut()
+                    navProbe.peekOut()
             } else if (act === "nav-peek-shut") {
-                sidebarPane.peekAt(arg)
-                sidebarPane.peekTap(arg)
+                navProbe.peekAt(arg)
+                navProbe.peekTap(arg)
             } else if (act === "nav-unfold")
                 page.foldByHand(false)
             else if (act === "nav-peek-rename") {
                 // Typing a name into a peeked row: the box lands on that row, in the section standing beside the rail,
                 // and holds it open — the list is not put back for it (SidebarPane.startEdit).
-                sidebarPane.peekAt("branch")
+                navProbe.peekAt("branch")
                 sidebarPane.beginRename("branch", workTree.branch,
                                         workTree.branch)
             }
@@ -114,9 +115,9 @@ Item {
             // the cells give (`peekTap`), so the routing being tested is the cell's.
             if (arg === "folded") {
                 page.foldByHand(true)
-                sidebarPane.peekTap("remote")
+                navProbe.peekTap("remote")
             } else {
-                sidebarPane.tapAddRemote()
+                navProbe.tapAddRemote()
             }
             navAddRemoteTimer.start()
         } else if (act === "doors-held") {
@@ -132,10 +133,10 @@ Item {
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.
-            sidebarPane.closeSection(arg)
+            navProbe.closeSection(arg)
             navSectionTimer.start()
         } else if (act === "nav-filter") {
-            sidebarPane.typeFilter(arg)
+            navProbe.typeFilter(arg)
             navFilterTimer.start()
         } else if (act === "diff-fold" || act === "diff-unfold"
                    || act === "diff-fold-by-hand"
@@ -151,7 +152,7 @@ Item {
             if (act === "diff-fold-by-hand")
                 page.foldByHand(false)
             else if (act === "diff-fold-by-rename") {
-                sidebarPane.peekAt("branch")
+                navProbe.peekAt("branch")
                 sidebarPane.beginRename("branch", workTree.branch,
                                         workTree.branch)
             } else if (act !== "diff-fold")
@@ -184,9 +185,9 @@ Item {
             // panel begins — they are the same number or the list has walked away from its own cell — the failure a
             // section too tall for the pane invites. `end` against `pane` is the other half: it grows down into the
             // pane and stops at the foot of it.
-            + " top=" + Math.round(sidebarPane.peekY)
+            + " top=" + Math.round(navProbe.peekY)
             + " cell=" + Math.round(sidebarPane.peekTop)
-            + " end=" + Math.round(sidebarPane.peekBottom)
+            + " end=" + Math.round(navProbe.peekBottom)
             + " pane=" + Math.round(sidebarPane.height))
             driver.complete()
         }
@@ -271,7 +272,7 @@ Item {
                           + " drop=" + acts.heldDrop
                           // The pane's: the box, the `+`, and the menu its rows raise.
                           + " box=" + acts.heldBox
-                          + " plus=" + sidebarPane.headOf("remote").addHeld
+                          + " plus=" + navProbe.headOf("remote").addHeld
                           + " menu=" + acts.heldMenu
                           + " switchrow=" + refSwitchItem.blocked
                           + " why=" + (refSwitchItem.blockedWhy !== ""))
@@ -303,7 +304,7 @@ Item {
                     return
                 acts.tagEyeStep = 1
                 acts.tagEyeFinish = graphModel.finishCount
-                sidebarPane.tapTagEye()
+                navProbe.tapTagEye()
                 return
             }
             if (graphModel.finishCount === acts.tagEyeFinish)
@@ -314,7 +315,7 @@ Item {
                 if (acts.tagEyeBack) {
                     acts.tagEyeStep = 2
                     acts.tagEyeFinish = graphModel.finishCount
-                    sidebarPane.tapTagEye()
+                    navProbe.tapTagEye()
                     return
                 }
             } else if (!there)
@@ -357,7 +358,7 @@ Item {
         function peeked() {
             if (sidebarPane.peekKind !== "")
                 return true
-            sidebarPane.peekAt(reclickTimer.kind)
+            navProbe.peekAt(reclickTimer.kind)
             return false
         }
         onTriggered: {
@@ -367,7 +368,7 @@ Item {
                     return
                 acts.reclickStep = acts.reclickAway ? 1 : 3
             } else if (acts.reclickStep === 1) {
-                sidebarPane.peekAway(reclickTimer.kind)
+                navProbe.peekAway(reclickTimer.kind)
                 acts.reclickStep = 2
             } else if (acts.reclickStep === 2) {
                 // The pointer leaving is answered a beat later, so the section is gone when it says so and not before.
@@ -431,8 +432,8 @@ Item {
             AppBackend.report(
             "nav_section closed=" + AppBackend.autoActArg
             + " header=" + Math.round(
-                sidebarPane.headerTopOf(AppBackend.autoActArg))
-            + " ground=" + Math.round(sidebarPane.groundTop)
+                navProbe.headerTopOf(AppBackend.autoActArg))
+            + " ground=" + Math.round(navProbe.groundTop)
             + " pane=" + Math.round(sidebarPane.height))
             driver.complete()
         }

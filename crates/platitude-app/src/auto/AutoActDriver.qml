@@ -387,6 +387,14 @@ Item {
     // Handed the driver and nothing else — what a verb reaches into, it reads back off this one property.
     AutoActWipVerbs { id: wipVerbs; driver: driver }
     AutoActFileRowVerbs { id: fileRowVerbs; driver: driver }
+    /// What a run does to the sidebar and reads back off it, composed from the three children the pane hands over.
+    /// One for the two nav families, so a peek one of them opened is the peek the other reads.
+    NavProbe {
+        id: navigation
+        sidebar: driver.sidebarPane
+    }
+    readonly property alias navProbe: navigation
+
     AutoActNavVerbs { id: navVerbs; driver: driver }
     AutoActNavBoxVerbs { id: navBoxVerbs; driver: driver }
     AutoActRefVerbs { id: refVerbs; driver: driver }
