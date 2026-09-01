@@ -38,9 +38,8 @@ impl NavSectionModel {
                         self.head_name = head.map(|b| b.short.to_string()).unwrap_or_default();
                         self.head_oid = head.map(|b| b.oid.to_hex()).unwrap_or_default();
                         self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                        self.head_has_pr = head.is_some_and(|b| {
-                            crate::encode::fake_pr_set().contains(b.short.as_str())
-                        });
+                        self.head_has_pr = head
+                            .is_some_and(|b| crate::encode::pr_set().contains(b.short.as_str()));
                         self.take(Source::Locals(snapshot))
                     }
                     "remotes" => self.take(Source::Remotes(snapshot)),

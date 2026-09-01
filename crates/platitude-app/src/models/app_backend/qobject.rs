@@ -442,10 +442,13 @@ impl AppBackend {
         Hub::with(|hub| hub.flush_state());
     }
 
-    /// Benchmark/automation reporting channel (QML → tracing).
+    /// Benchmark/automation reporting channel (QML → tracing). The slot
+    /// stays whatever the build is — production QML calls it behind the
+    /// `autoAct` guard — and a build without the harness has nothing to
+    /// say it to (`harness::report`).
     #[qslot]
     fn report(&self, message: String) {
-        tracing::info!(target: "bench", "{message}");
+        crate::harness::report(&message);
     }
 
     /// Starts the git version check (call once from QML on startup).

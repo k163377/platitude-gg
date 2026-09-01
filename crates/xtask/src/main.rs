@@ -70,11 +70,24 @@ pub(crate) fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The app's verification harness, which is not in a build that did not
+/// ask for it: the `PG_*` protocol, the drivers, and the `platitude.auto`
+/// QML module (`platitude-app` §features). Everything this task runner
+/// starts drives the app over that protocol, so everything it builds asks
+/// for it — the shipped build is the plain `cargo build --release` nobody
+/// here runs.
+const HARNESS_FEATURE: &str = "automation";
+
 /// Builds the app in release unless `build` says not to, and answers
 /// where its binary sits either way — `--no-build` still needs the path.
 ///
-/// `extra` follows `build --release`: the package and features a caller
-/// needs, and the `--features` value names itself in the building line.
+/// Always with [`HARNESS_FEATURE`], including the window `launch` opens:
+/// it is inert without a `PG_*` variable, and asking for it every time is
+/// what keeps one release binary between the two commands instead of a
+/// relink every time somebody moves from a window to a verify-ui run.
+///
+/// `extra` follows `build --release`: the package and any further features
+/// a caller needs, and every feature names itself in the building line.
 /// `path` is the PATH the *build* runs with, which is not always the one
 /// the run itself gets — verify-ui stages a git shim onto its child's
 /// PATH, and building against that would build against the shim.
@@ -85,14 +98,16 @@ pub(crate) fn app_exe(
     extra: &[&str],
 ) -> Result<PathBuf, String> {
     if build {
-        let features = extra
-            .windows(2)
-            .find(|pair| pair[0] == "--features")
-            .map(|pair| format!(", {}", pair[1]))
-            .unwrap_or_default();
-        println!("building (release{features})…");
+        let mut features = vec![HARNESS_FEATURE];
+        features.extend(
+            extra
+                .windows(2)
+                .filter(|pair| pair[0] == "--features")
+                .map(|pair| pair[1]),
+        );
+        println!("building (release, {})…", features.join(" + "));
         let status = std::process::Command::new("cargo")
-            .args(["build", "--release"])
+            .args(["build", "--release", "--features", HARNESS_FEATURE])
             .args(extra)
             .current_dir(root)
             .env("PATH", path)

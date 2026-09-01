@@ -1,5 +1,6 @@
 import QtQuick
 import platitude
+import platitude.ui
 
 /// Owns the process-level end of a PG_AUTO_PERF run. The page supplies the repository half; without a repository, the
 /// next rendered frame is the measurement's only observable completion point.

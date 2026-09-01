@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Window
 import platitude
+import platitude.ui
 
 // The two grabbable stand-ins a headless shot is taken from, and nothing else.
 // Both sit behind everything the window draws and are never looked at: what

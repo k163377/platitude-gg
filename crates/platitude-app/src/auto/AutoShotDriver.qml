@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import platitude
+import platitude.ui
 
 /// Owns one automated run from completion through a rendered screenshot. The ordinary application constructs it too,
 /// but every timer stays idle unless the PG_AUTO_* harness variables were supplied.

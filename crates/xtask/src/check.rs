@@ -72,11 +72,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // cannot name, and this answers before anything compiles.
         xtask(&["waits"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
+        // `--all-features`, because the code a feature switches off is
+        // code nothing else here compiles: the verification harness
+        // (`automation`) and the counting allocator (`memprobe`) are
+        // both off by default, and a warning inside either would
+        // otherwise reach nobody until a release run. The arms those two
+        // features switch *out* are compiled by the test line below,
+        // which runs on the default set.
         words(&[
             "cargo",
             "clippy",
             "--workspace",
             "--all-targets",
+            "--all-features",
             "--",
             "-D",
             "warnings",
@@ -99,6 +107,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "clippy",
             "--workspace",
             "--all-targets",
+            "--all-features",
             "--",
             "-D",
             "warnings",

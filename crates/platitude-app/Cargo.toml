@@ -13,9 +13,15 @@ name = "platitude-gg"
 path = "src/main.rs"
 
 [features]
-# Installs the counting global allocator (src/memprobe.rs) so a run can say
-# how much of its footprint is Rust heap. Off in a shipped build: the two
-# atomics per allocation exist only to be measured.
+# Builds the verification harness in (src/harness + the `platitude.auto`
+# QML module): the `PG_*` protocol `cargo xtask verify-ui`, `cargo xtask
+# perf` and the screenshot runs drive the app over. Off in a shipped
+# build, which is what `cargo build --release` gives you — every xtask
+# that drives the app asks for it back.
+automation = []
+# Installs the counting global allocator (src/harness/memprobe.rs) so a run
+# can say how much of its footprint is Rust heap. Off in a shipped build:
+# the two atomics per allocation exist only to be measured.
 memprobe = []
 
 [dependencies]

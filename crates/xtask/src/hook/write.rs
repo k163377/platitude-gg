@@ -58,9 +58,15 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
 /// dodge review because the wrong form still renders fine on the machine
 /// it was written on.
 fn qml_notes(path: &str) -> Result<Vec<String>, String> {
-    if !path.ends_with(".qml") || !path.contains("crates/platitude-app/src/ui/") {
+    // Both QML modules: `src/ui` is `platitude.ui`, `src/auto` is the
+    // verification harness's `platitude.auto`. Each has its own qmldir,
+    // and both are embedded from the one main.rs.
+    let module = ["src/ui/", "src/auto/"]
+        .into_iter()
+        .find(|dir| path.contains(&format!("crates/platitude-app/{dir}")));
+    let (Some(module), true) = (module, path.ends_with(".qml")) else {
         return Ok(Vec::new());
-    }
+    };
     let Some(file_name) = path.rsplit('/').next().map(str::to_string) else {
         return Ok(Vec::new());
     };
@@ -68,19 +74,19 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         .parent()
         .ok_or("qml path has no parent")?;
     let mut notes: Vec<String> = Vec::new();
-    let mut missing: Vec<&str> = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
     // Missing registries are someone else's layout problem, not this hook's:
     // only judge the files that are actually there.
     if let Ok(qmldir) = std::fs::read_to_string(ui_dir.join("qmldir"))
         && !qmldir.contains(&file_name)
     {
-        missing.push("src/ui/qmldir");
+        missing.push(format!("{module}qmldir"));
     }
     if let Some(src_dir) = ui_dir.parent()
         && let Ok(main_rs) = std::fs::read_to_string(src_dir.join("main.rs"))
         && !main_rs.contains(&file_name)
     {
-        missing.push("main.rs (include_bytes_qml!)");
+        missing.push("main.rs (include_bytes_qml!)".to_string());
     }
     if !missing.is_empty() {
         notes.push(format!(

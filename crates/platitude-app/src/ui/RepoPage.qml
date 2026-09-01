@@ -1319,64 +1319,45 @@ Item {
         }
     }
 
-    // ---- smoke hook ------------------------------------------------
-    // The whole of this page's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none of
-    // it. A file of its own cannot see this one's ids, so everything the verbs act on is named here — an
-    // automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
-    Loader {
-        id: autoActLoader
-        active: AppBackend.autoAct !== ""
-        sourceComponent: AutoActDriver {
-            page: page
-            repoTab: repoTab
-            workTree: workTree
-            graphModel: graphModel
-            detailsModel: detailsModel
-            branchesModel: branchesModel
-            remotesModel: remotesModel
-            worktreeModel: worktreeModel
-            stashesModel: stashesModel
-            tagsModel: tagsModel
-            graphPane: graphPane
-            sidebarPane: sidebarPane
-            detailsPane: detailsPane
-            diffPane: diffPane
-            wipPane: wipPane
-            planPane: planPane
-            gitCorner: gitCorner
-            refMenu: refRowMenu.menu
-            refBranchCard: refRowMenu.branchCard
-            refTagCard: refRowMenu.tagCard
-            refDeleteItem: refRowMenu.deleteItem
-            refUpstreamItem: refRowMenu.upstreamItem
-            refStashDropItem: refRowMenu.stashDropItem
-            refSwitchItem: refRowMenu.switchItem
-            refPushTagItem: refRowMenu.pushTagItem
-            refTagDeleteItem: refRowMenu.deleteTagItem
-            refTagHereItem: refRowMenu.tagHereItem
-            refRemoteTagDeleteItem: refRowMenu.deleteRemoteTagItem
-            refTagBothDeleteItem: refRowMenu.deleteTagBothItem
-            fileRowMenu: fileRowMenu
-            fileMenu: fileRowMenu.menu
-            fileDiscardItem: fileRowMenu.discardItem
-            diffRowMenu: diffRowMenu
-            clipboard: clipboard
-            commitMenuState: commitMenuState
-            commitMenu: commitRowMenu.menu
-            dropCommitItem: commitRowMenu.dropItem
-            tagHereCommitItem: commitRowMenu.tagHereItem
-            stashDeleteItem: commitRowMenu.stashDropItem
-            resetMenu: commitRowMenu.resetSubmenu
-            commitBranchCard: commitRowMenu.branchCard
-            commitTagCard: commitRowMenu.tagCard
-            hardResetItem: commitRowMenu.hardResetRow
-            publishFlow: publishFlow
+    // ---- the harness -----------------------------------------------
+    // The whole of this tab's verification harness, which a shipped build does not carry (`HarnessSeat`). Everything
+    // the verbs and the measurements act on is handed over here — a module of its own cannot see this one's ids — and
+    // naming them is an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    HarnessSeat {
+        id: harness
+        anchors.fill: parent
+        part: "PageHarness.qml"
+        wanted: AppBackend.automated
+        seats: ({
+            page: page,
+            repoTab: repoTab,
+            workTree: workTree,
+            graphModel: graphModel,
+            detailsModel: detailsModel,
+            diffModel: diffModel,
+            branchesModel: branchesModel,
+            remotesModel: remotesModel,
+            worktreeModel: worktreeModel,
+            stashesModel: stashesModel,
+            tagsModel: tagsModel,
+            graphPane: graphPane,
+            sidebarPane: sidebarPane,
+            detailsPane: detailsPane,
+            diffPane: diffPane,
+            wipPane: wipPane,
+            planPane: planPane,
+            gitCorner: gitCorner,
+            refRowMenu: refRowMenu,
+            fileRowMenu: fileRowMenu,
+            diffRowMenu: diffRowMenu,
+            commitRowMenu: commitRowMenu,
+            remoteRowMenu: remoteRowMenu,
+            rowHost: rowHost,
+            clipboard: clipboard,
+            commitMenuState: commitMenuState,
+            publishFlow: publishFlow,
             upstreamFlow: upstreamFlow
-            remoteDialog: publishFlow.dialog
-            remoteMenu: remoteRowMenu.menu
-            refList: rowHost.listPopup
-            rowCard: rowHost.hoverCard
-        }
+        })
     }
 
     // ---- a report with nothing to answer ----------------------------
@@ -1989,8 +1970,9 @@ Item {
         stashesModel.attachSection(page.tab_id, "stashes")
         tagsModel.attachSection(page.tab_id, "tags")
         page.restoreDraft()
-        if (autoActLoader.item)
-            autoActLoader.item.begin()
+        const acts = harness.ask()
+        if (acts !== null)
+            acts.begin()
     }
 
     /// The window's focus epoch (bumped when the window regains focus) triggers a quick refresh of the visible page.
@@ -2427,19 +2409,6 @@ Item {
         }
     }
 
-    Loader {
-        active: AppBackend.autoPerf && !page.blank
-        sourceComponent: PagePerfDriver {
-            page: page
-            repoTab: repoTab
-            graphModel: graphModel
-            worktreeModel: workTree
-            branchesModel: branchesModel
-            detailsModel: detailsModel
-            diffModel: diffModel
-            graphPane: graphPane
-        }
-    }
 
     // Automation (PG_AUTO_SELECT=1): select the newest commit, then open the first changed file's diff — exercises the
     // full pipeline for screenshot-based smoke tests.

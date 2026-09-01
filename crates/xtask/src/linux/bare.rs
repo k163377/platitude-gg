@@ -23,7 +23,17 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
     // short of what interactive rebase needs.
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
-    let build = ["cargo", "build", "--release"].map(String::from);
+    // With the harness, like everything else this runner builds
+    // (`crate::HARNESS_FEATURE`): the script below drives the app with
+    // `PG_AUTO_ACT`, which a build without it does not answer.
+    let build = [
+        "cargo",
+        "build",
+        "--release",
+        "--features",
+        crate::HARNESS_FEATURE,
+    ]
+    .map(String::from);
     in_container(root, &app, &build, false)?;
 
     if discover {

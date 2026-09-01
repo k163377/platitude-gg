@@ -6,17 +6,12 @@ use platitude_core::session::{LabelKind, RefLabel};
 use super::graph::avatar_code;
 use super::{FIELD_SEP, RECORD_SEP};
 
-fn env_name_set(var: &str) -> std::collections::HashSet<String> {
-    std::env::var(var)
-        .map(|v| v.split(',').map(str::to_string).collect())
-        .unwrap_or_default()
-}
-
-/// Branch names previewing the PR badge (`PG_FAKE_PR=a,b`). Real PR data
-/// joins in Phase 4; this hook exists so the design can be reviewed.
-pub(crate) fn fake_pr_set() -> &'static std::collections::HashSet<String> {
-    static SET: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
-    SET.get_or_init(|| env_name_set("PG_FAKE_PR"))
+/// Branch names wearing the PR badge. Real PR data joins in Phase 4; until
+/// then the only thing that ever fills this is the harness, so the design
+/// can be reviewed (`harness::Knobs::fake_pr`) — and a build without the
+/// harness has an empty set here and no way to be handed a full one.
+pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
+    &crate::harness::knobs().fake_pr
 }
 
 /// How many flag digits stand between the kind letter and the name. The
@@ -30,7 +25,7 @@ const FLAGS: usize = 5;
 ///
 /// The letter is `H`ead / `L`ocal / `R`emote / `T`ag; the flags, in order,
 /// are is-head, has-remote, has-PR (`pr` names the branches wearing it —
-/// the callers pass [`fake_pr_set`], the preview until Phase 4),
+/// the callers pass [`pr_set`], the preview until Phase 4),
 /// is-it-here and is-it-out-in-another-working-copy. The fourth is what
 /// the chip writes in the name's colour: a remote branch and a tag only a
 /// remote has are both somewhere else, and read the same way for it. The

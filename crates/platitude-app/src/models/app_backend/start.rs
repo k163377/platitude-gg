@@ -58,6 +58,11 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
 
 impl Default for AppBackend {
     fn default() -> Self {
+        // Whatever is driving this run, if anything is. A build without
+        // the harness answers with an idle record and reads no
+        // environment at all (`harness::knobs`), so every hook below
+        // comes up in the arm a person at the window gets.
+        let harness = crate::harness::knobs();
         Self {
             git_state: "checking".into(),
             git_version: String::new(),
@@ -72,28 +77,21 @@ impl Default for AppBackend {
             identity_name_saved: false,
             identity_email_saved: false,
             identity_unsaved: false,
-            auto_open: std::env::var("PG_AUTO_OPEN").unwrap_or_default(),
-            shot_dir: std::env::var("PG_SHOT_DIR")
-                .unwrap_or_default()
-                .replace('\\', "/"),
-            auto_watchdog_ms: std::env::var("PG_AUTO_WATCHDOG_MS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0),
-            auto_select: std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1"),
-            auto_scroll: std::env::var("PG_AUTO_SCROLL").as_deref() == Ok("1"),
-            auto_perf: std::env::var("PG_AUTO_PERF").as_deref() == Ok("1"),
+            auto_open: harness.open.clone(),
+            shot_dir: harness.shot_dir.clone(),
+            auto_watchdog_ms: harness.watchdog_ms,
+            auto_select: harness.select,
+            auto_scroll: harness.scroll,
+            auto_perf: harness.perf,
             mem_report: crate::harness::memprobe::enabled(),
-            auto_wip: std::env::var("PG_AUTO_WIP").as_deref() == Ok("1"),
-            plain_chrome: std::env::var("PG_PLAIN_CHROME").as_deref() == Ok("1"),
+            auto_wip: harness.wip,
+            plain_chrome: harness.plain_chrome,
             automated: platitude_core::settings::Env::system().automated(),
-            auto_identity: std::env::var("PG_AUTO_IDENTITY").unwrap_or_default(),
-            auto_identity_save: std::env::var("PG_AUTO_IDENTITY_SAVE").as_deref() == Ok("1"),
-            // Smoke-test hook: "top" / "bottom" jumps the graph after
-            // load; "nav-bottom" jumps the sidebar's branch list instead.
-            scroll_to: std::env::var("PG_SCROLL_TO").unwrap_or_default(),
-            auto_act: std::env::var("PG_AUTO_ACT").unwrap_or_default(),
-            auto_act_arg: std::env::var("PG_AUTO_ACT_ARG").unwrap_or_default(),
+            auto_identity: harness.identity.clone(),
+            auto_identity_save: harness.identity_save,
+            scroll_to: harness.scroll_to.clone(),
+            auto_act: harness.act.clone(),
+            auto_act_arg: harness.act_arg.clone(),
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,

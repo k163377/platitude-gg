@@ -88,7 +88,7 @@ impl GraphModel {
             tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
         }
         let avatars = crate::hub::AvatarUrls::current();
-        let pr = crate::encode::fake_pr_set();
+        let pr = crate::encode::pr_set();
         let mut items: Vec<GraphRowItem> = rows
             .iter()
             .map(|row| to_row_item(row, &avatars, pr))
@@ -113,7 +113,7 @@ impl GraphModel {
             // chips belong to other commits here.
             return;
         }
-        let pr = crate::encode::fake_pr_set();
+        let pr = crate::encode::pr_set();
         for (row, labels) in rows {
             let idx = row as usize;
             if let Some(existing) = self.rows.get(idx) {
@@ -160,7 +160,7 @@ impl GraphModel {
         }
         self.generation = generation;
         let avatars = crate::hub::AvatarUrls::current();
-        let pr = crate::encode::fake_pr_set();
+        let pr = crate::encode::pr_set();
         let mut items: Vec<GraphRowItem> = rows
             .iter()
             .map(|row| to_row_item(row, &avatars, pr))

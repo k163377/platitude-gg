@@ -14,7 +14,7 @@ mod rows_tests;
 
 pub use columns::{any_wide, has_wide, widest_columns};
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
-pub(crate) use labels::fake_pr_set;
+pub(crate) use labels::pr_set;
 pub use labels::{
     co_author_pairs, encode_co_authors, encode_labels, gone_keys, label_key, label_kind_word,
     label_name_of, label_names, labels_head, labels_shown,

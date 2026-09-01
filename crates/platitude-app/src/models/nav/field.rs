@@ -73,16 +73,12 @@ impl NavSectionModel {
                 _ => "",
             }),
             Role::HasPr => Value::Flag(match of {
-                Entry::Local(branch) => {
-                    crate::encode::fake_pr_set().contains(branch.short.as_str())
-                }
-                Entry::Remote(branch) => {
-                    crate::encode::fake_pr_set().contains(pr_key(&branch.short))
-                }
+                Entry::Local(branch) => crate::encode::pr_set().contains(branch.short.as_str()),
+                Entry::Remote(branch) => crate::encode::pr_set().contains(pr_key(&branch.short)),
                 Entry::Worktree { entry, .. } => entry
                     .branch
                     .as_deref()
-                    .is_some_and(|branch| crate::encode::fake_pr_set().contains(branch)),
+                    .is_some_and(|branch| crate::encode::pr_set().contains(branch)),
                 Entry::Tag(_) | Entry::Stash(_) | Entry::File { .. } => false,
             }),
             Role::Change => match of {

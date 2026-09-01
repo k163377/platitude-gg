@@ -173,12 +173,15 @@ ApplicationWindow {
     // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1); the page's bench reads it through Window.window.
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
-    function claimAutoPageAct() { return autoShotDriver.claimPageAct() }
-    function finishAutoAct() { quitGate.yieldToRun(); autoShotDriver.finish() }
-
-    WindowPerfDriver {
-        window: root
-        page: root.curPage
+    function claimAutoPageAct() {
+        const acts = harness.ask()
+        return acts !== null && acts.claimPageAct()
+    }
+    function finishAutoAct() {
+        quitGate.yieldToRun()
+        const acts = harness.ask()
+        if (acts !== null)
+            acts.finish()
     }
 
     TabsModel {
@@ -237,28 +240,40 @@ ApplicationWindow {
         if (AppBackend.autoAct !== "" && AppBackend.autoAct !== "open-picker")
             AppBackend.report("picker folder=" + folderDialog.currentFolder)
     }
-    // ---- smoke hooks -----------------------------------------------
-    // The whole of the window's PG_AUTO_ACT harness, built only when a verb was given so an ordinary run carries none
-    // of it. A file of its own cannot see this one's ids, so everything the verbs act on is handed over here.
-    Loader {
-        id: autoActLoader
-        active: AppBackend.autoAct !== ""
-        sourceComponent: WindowAutoActDriver {
-            window: root
-            tabsModel: tabsModel
-            pageRepeater: pages.seats
-            topBar: topBar
-            chrome: chrome
-            mainUi: mainUi
-            gate: gate
-            openFailedDialog: openFailedDialog
-            identityDialog: identityGate.dialog
-            cloneModel: dialogSeat.cloneModel
-            cloneDialog: dialogSeat.cloneDialog
-            folderDialog: folderDialog
-            settingsDialog: dialogSeat.settingsDialog
+    // ---- the harness -----------------------------------------------
+    // The whole of the window's verification harness, which a shipped build does not carry (`HarnessSeat`): the verbs,
+    // the measurements, and the stand-ins a headless shot is taken from. Everything they act on is handed over here —
+    // a module of its own cannot see this one's ids — and the `z` is for the stand-ins, which have to sit behind
+    // everything the window draws.
+    HarnessSeat {
+        id: harness
+        anchors.fill: parent
+        z: -10000
+        part: "WindowHarness.qml"
+        wanted: AppBackend.automated
+        seats: ({
+            window: root,
+            tabsModel: tabsModel,
+            pageRepeater: pages.seats,
+            topBar: topBar,
+            chrome: chrome,
+            mainUi: mainUi,
+            gate: gate,
+            openFailedDialog: openFailedDialog,
+            identityDialog: identityGate.dialog,
+            cloneModel: dialogSeat.cloneModel,
+            cloneDialog: dialogSeat.cloneDialog,
+            folderDialog: folderDialog,
+            settingsDialog: dialogSeat.settingsDialog,
             quitWaitDialog: quitGate.dialog
-        }
+        })
+    }
+    // The tab in front is the one seat that moves under the harness, so it is written rather than handed over once.
+    Binding {
+        target: harness.driver
+        property: "page"
+        value: root.curPage
+        when: harness.driver !== null
     }
 
     // While git is still writing, the close is put off rather than taken (`WindowQuitGate`); a close that passes
@@ -296,27 +311,9 @@ ApplicationWindow {
                 tabsModel.restoreTabs()
             }
         }
-        if (autoActLoader.item)
-            autoActLoader.item.begin()
-        autoShotDriver.begin()
-    }
-    // The two grabbable stand-ins a headless shot is taken from, behind everything the window draws
-    // (`WindowShotMirrors`), and the driver that schedules them.
-    WindowShotMirrors {
-        id: shotMirrors
-        anchors.fill: parent
-        z: -10000
-        window: root
-        mainUi: mainUi
-        gate: gate
-    }
-    AutoShotDriver {
-        id: autoShotDriver
-        window: root
-        overlayMirror: shotMirrors.overlayMirror
-        sceneMirror: shotMirrors.sceneMirror
-        mainUi: mainUi
-        gate: gate
+        const acts = harness.ask()
+        if (acts !== null)
+            acts.begin()
     }
 
     // The two ways the window has nothing to show: no git to ask, or another process already has the files. The id

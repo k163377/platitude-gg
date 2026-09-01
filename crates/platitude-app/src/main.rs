@@ -22,7 +22,7 @@ use qtbridge::QApp;
 
 #[expect(clippy::too_many_lines)]
 fn main() {
-    harness::PerfProbe::start_clock();
+    harness::start_clock();
     init_tracing();
     // Said once, before anything else can fail: a run whose window never
     // comes up, or whose stderr is all a verify-ui report keeps, still
@@ -84,31 +84,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/AppMenuSeparator.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AskBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AuthorCard.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActDriver.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActCompletion.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActDetailsVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActDiffStepVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActDiffVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActFileRowVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActFindVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActGraphReclickVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActGraphRowVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActHistoryVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActLandings.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActNavBoxVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActNavVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActPaneVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActPlanBoxVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActPlanVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActPublishVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActRefVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActStepVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActSwitchVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActTipVerbs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoActWipVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AutoScrollBar.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/AutoShotDriver.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/PagePerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AvatarAssignRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/AvatarButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChangeIcon.qml", "qt/qml/platitude");
@@ -178,6 +154,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/GraphRowDelegate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphRowWalk.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/GraphTailFooter.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/HarnessSeat.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HashPlate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadPinRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/HeadTrack.qml", "qt/qml/platitude");
@@ -274,20 +251,10 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/UpstreamFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamForm.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WaitRing.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowAutoActDriver.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowBadgeActs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowBandActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowChrome.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowDialogActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowDialogSeat.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowSettingsActs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowFrameActs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowTabActs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowTabPinActs.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowPerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowShape.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/WindowShotMirrors.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowWaitRing.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
@@ -295,10 +262,11 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipTallyRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
+    embed_harness_qml();
+    harness::install(&mut app);
     let code = app
         .register::<AppBackend>()
         .register::<GitFacts>()
-        .register::<harness::PerfProbe>()
         .register::<TabsModel>()
         .register::<CloneModel>()
         .register::<RepoConfigModel>()
@@ -378,3 +346,51 @@ fn init_tracing() {
         .with_writer(std::io::stderr)
         .init();
 }
+
+/// Embeds the verification harness's QML module (`src/auto`, `platitude.auto`)
+/// — the verb files, the drivers and the shot stand-ins. Nothing in a
+/// shipped build, where the seats that would load them stay empty
+/// (`ui/HarnessSeat.qml`).
+#[cfg(feature = "automation")]
+fn embed_harness_qml() {
+    qtbridge::include_bytes_qml!("auto/AutoActCompletion.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActDetailsVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActDiffStepVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActDiffVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActFileRowVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActFindVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActGraphReclickVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActGraphRowVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActHistoryVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActLandings.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActNavBoxVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActNavVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActPaneVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActPlanBoxVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActPlanVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActPublishVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActRefVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActStepVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActSwitchVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActTipVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActWipVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoShotDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/PageHarness.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/PagePerfDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowAutoActDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowBadgeActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowBandActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowDialogActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowFrameActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowHarness.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowPerfDriver.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowSettingsActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowShotMirrors.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowTabActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowTabPinActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/qmldir", "qt/qml/platitude");
+}
+
+#[cfg(not(feature = "automation"))]
+fn embed_harness_qml() {}
