@@ -18,8 +18,8 @@ import platitude.ui
 ///
 /// **The bar and nothing else.** Whether the hand is in the pane is the pane's own answer and has to stay there: a
 /// `HoverHandler` put in a wrapper item over the list **takes the hover away from every row underneath** — hover goes to
-/// the topmost item that accepts it, and an item carrying a handler accepts it for its whole area (observed with qmltestrunner
-///  でmeasured, after a report of rows that would not light and cards that would not close).
+/// the topmost item that accepts it, and an item carrying a handler accepts it for its whole area (observed with
+/// qmltestrunner, after a report of rows that would not light and cards that would not close).
 AutoScrollBar {
     id: laneBar
 

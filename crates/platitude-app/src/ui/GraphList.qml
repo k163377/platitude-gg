@@ -33,7 +33,7 @@ AppListView {
         graphList.forceActiveFocus()
     }
     /// And gives it up when this pane is taken off the screen. Qt leaves active focus on an item it has just made
-    /// invisible, and the keys go on arriving there (qmltestrunner でmeasured, a StackLayout child swapped away
+    /// invisible, and the keys go on arriving there (measured with qmltestrunner, a StackLayout child swapped away
     /// reports `visible=false activeFocus=true`, and the next Down still fires; `focus = false` is what lets go).
     /// Opening a diff over the graph did exactly that: the arrows walked the selection behind the diff, and moving
     /// the selection closes the diff — so the screen was pulled back to the graph.
