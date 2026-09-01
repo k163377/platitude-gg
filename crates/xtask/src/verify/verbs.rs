@@ -135,23 +135,18 @@ mod tests {
     /// their picture and belong in no table at all.
     #[test]
     fn every_verb_is_one_the_drivers_dispatch() {
-        let ui = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../crates/platitude-app/src/ui");
-        // Every file of the harness, found rather than listed: the verbs are
-        // grouped by what they act on and live across a score of files, and a
-        // list would answer "unreachable" for a verb that had only moved.
-        //
-        // Two names carry the harness — `AutoAct…` anywhere in the name (both
-        // drivers, the page's families, the completion lists) and `…Acts.qml`
-        // (the window's). Anchoring the first at the head would drop
-        // `WindowAutoActDriver` itself, which still holds the two verbs that
-        // read its change signals.
+        // The harness is a QML module of its own, so every file in it is
+        // one of the drivers — no name filter to keep in step with what
+        // the verbs are grouped by (.claude/rules/app-ui.md §QML モジュール).
+        let auto = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/platitude-app/src/auto");
         let mut drivers = String::new();
         let mut found = 0;
-        for entry in std::fs::read_dir(&ui).unwrap_or_else(|e| panic!("{}: {e}", ui.display())) {
-            let entry = entry.unwrap_or_else(|e| panic!("{}: {e}", ui.display()));
+        for entry in std::fs::read_dir(&auto).unwrap_or_else(|e| panic!("{}: {e}", auto.display()))
+        {
+            let entry = entry.unwrap_or_else(|e| panic!("{}: {e}", auto.display()));
             let name = entry.file_name().to_string_lossy().into_owned();
-            if !(name.contains("AutoAct") || name.ends_with("Acts.qml")) {
+            if !name.ends_with(".qml") {
                 continue;
             }
             drivers.push_str(
@@ -163,7 +158,7 @@ mod tests {
             found > 2,
             "found {found} harness file(s) under {} — the search stopped matching, and a test that \
              reads nothing passes every row",
-            ui.display()
+            auto.display()
         );
         for verb in every_verb() {
             assert!(

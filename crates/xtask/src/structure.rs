@@ -21,11 +21,18 @@
 //! * **neither** — the ceiling applies as written, so a file that crosses it
 //!   for the first time fails on the run that first sees it.
 //!
+//! One other thing about how the tree is divided is counted here, because
+//! it is the same shape of question and the same second of work: the
+//! product's QML may not name a type from the verification harness's
+//! module ([`modules`]).
+//!
 //! Physical lines, not code lines: that is what structure.md says, and a
 //! count anybody can reproduce with an editor's line number is worth more
 //! here than one that argues about comments. The fn ceiling is the other
 //! half of the same § and is left to clippy's `too_many_lines`, which
 //! already knows where functions begin and end.
+
+mod modules;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -82,18 +89,26 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .partition(|file| ledger.iter().any(|entry| names(entry, &file.path)));
     let (pinned, over) = check_baseline(&root, &rest, counted.len())?;
     failures.extend(over);
+    let (crossed, harness_types) = modules::check(&root)?;
+    let boundary_broken = crossed.len();
+    failures.extend(crossed);
 
     for failure in &failures {
         println!("structure: {failure}");
     }
     if failures.is_empty() {
         println!(
-            "structure: {} files counted, {} on the ledger, {pinned} pinned by the baseline \
-             — PASS",
+            "structure: {} files counted, {} on the ledger, {pinned} pinned by the baseline, \
+             {harness_types} harness types out of the product's reach — PASS",
             counted.len(),
             ledgered.len()
         );
         Ok(())
+    } else if boundary_broken == failures.len() {
+        Err(format!(
+            "{boundary_broken} product file(s) naming a harness type \
+             (.claude/rules/app-ui.md §QML モジュール)"
+        ))
     } else {
         Err(format!(
             "{} file(s) over the length they are held to ({RULES} §上限)",
