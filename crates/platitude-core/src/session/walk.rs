@@ -187,10 +187,18 @@ impl RepoSession {
     /// A different question from "is the tree dirty". Resolving every
     /// conflict of a merge as ours and staging it leaves `git status`
     /// empty with `MERGE_HEAD` still standing, and the commit written
-    /// there is still a merge carrying both parents (measured 2.55 — a
-    /// cherry-pick in the same state refuses the commit instead, which is
-    /// why a stopped sequence is not this row). The row draws the commit
-    /// that is about to be written, so it is there whenever there is one.
+    /// there is still a merge carrying both parents. The row draws the
+    /// commit that is about to be written, so it is there whenever there
+    /// is one — which a standing operation is enough for on its own
+    /// (`refresh::publish_status` raises `wip_dirty` for one, because an
+    /// `edit` stop and an emptied-commit stop both land on this row over a
+    /// clean tree).
+    ///
+    /// **Sides are the merge's alone**: a stopped cherry-pick raises the
+    /// row the same way, but nothing it could write carries a second
+    /// parent — and in this very state it writes nothing at all, because
+    /// resolving as ours left the tree at HEAD, which a cherry-pick
+    /// refuses to commit where a merge still records one (measured 2.55).
     ///
     /// One answer for the row and for the walk, because they are one
     /// decision: the sides join the walk only to give the row's dotted
