@@ -164,6 +164,12 @@ Item {
         mainUi: driver.mainUi
         identityDialog: driver.identityDialog
     }
+    WindowBadgeActs {
+        window: driver.window
+        topBar: driver.topBar
+        mainUi: driver.mainUi
+        identityDialog: driver.identityDialog
+    }
     WindowFrameActs {
         window: driver.window
         tabsModel: driver.tabsModel
