@@ -30,6 +30,7 @@ AutoActLandings 1.0 AutoActLandings.qml
 AutoActNavBoxVerbs 1.0 AutoActNavBoxVerbs.qml
 AutoActNavVerbs 1.0 AutoActNavVerbs.qml
 AutoActPaneVerbs 1.0 AutoActPaneVerbs.qml
+AutoActPlanBoxVerbs 1.0 AutoActPlanBoxVerbs.qml
 AutoActPlanVerbs 1.0 AutoActPlanVerbs.qml
 AutoActPublishVerbs 1.0 AutoActPublishVerbs.qml
 AutoActRefVerbs 1.0 AutoActRefVerbs.qml
