@@ -1,4 +1,5 @@
 use super::*;
+use crate::perf::options::parse;
 
 #[test]
 fn a_tracing_field_reads_up_to_the_next_space() {
