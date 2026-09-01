@@ -39,9 +39,14 @@ Item {
     property bool grabbable: true
     /// Which end the width takes when the value is wider than the row it stands in. `"end"` drops the tail, which is
     /// right for a name or a stamp — the head is what tells two of them apart. `"start"` drops the head and keeps the
-    /// tail on screen, which is right for a path: the leaf is the half that names the file, and a band that cut it
-    /// would be saying which folder is open rather than which file (`DiffPaneHeader`). The same choice `CutName`
-    /// spells with its own `cutAt`, said here for a field rather than for a pair of labels.
+    /// tail on screen. `"middle"` drops the middle, which is right for a path told apart by both of its ends: the
+    /// leaf names the file, and the first folders say which tree it is in (`DiffPaneHeader`). The same choice
+    /// `CutName` spells with its own `cutAt`, said here for a field rather than for a pair of labels.
+    ///
+    /// **The middle cut is drawn, not elided.** The field is held against the far edge exactly as `"start"` holds it,
+    /// and the head is painted onto the mark's own ground beside the `…` — so it is a mark that happens to spell the
+    /// head, never a second Text carrying a piece of the value. That is what keeps the copy whole where three Texts
+    /// would hand over a value with its middle missing (規約 §右のペインの字は掴める).
     ///
     /// **The whole value is in the field either way** — only what is on screen moves. That is the difference between
     /// this and an elide, and it is the whole reason these are fields: a reader who drags gets the value, never a
@@ -51,9 +56,15 @@ Item {
     /// The width ran out and the tail is not on screen. The output side, and what a headless run reads in place of a
     /// mark it cannot see — the answer `Text.truncated` gives on a Label.
     readonly property bool clipped: Math.ceil(ruler.implicitWidth) > line.width + 0.5
-    /// The half that went off screen is the head, so the words are held against the far edge and the mark stands at
-    /// the near one. Only ever true while there is something to cut.
-    readonly property bool cutsHead: line.cutAt === "start" && line.clipped
+    /// The half the width took came off the head, so the words are held against the far edge and the mark stands at
+    /// the near one. Only ever true while there is something to cut. A middle cut is held the same way — what the
+    /// mark spells is the only difference between the two.
+    readonly property bool cutsHead: (line.cutAt === "start" || line.cutAt === "middle") && line.clipped
+    /// What the mark spells: `…` on its own, or the head and then the `…` where the cut is taken out of the middle.
+    /// The split is the one `Text.ElideMiddle` makes at this width, read off a ruler — the field below is untouched,
+    /// so this is what the band paints over the value rather than anything the value became.
+    readonly property string markText: (line.cutAt === "middle" && line.clipped
+                                        ? line.headOf(line.text, middleRuler.elidedText) : "") + "…"
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
     /// This is a value a sweep from the air around it can land on. The pane's own row names its values one by one
@@ -81,6 +92,15 @@ Item {
     }
     function deselect() {
         field.deselect()
+    }
+    /// The head of an elided value. **Looked for rather than assumed** — `…` is a character a value may hold of its
+    /// own — so the answer is the first mark that leaves a real head and a real tail of the value behind it.
+    function headOf(whole, elided) {
+        for (let i = elided.indexOf("…"); i >= 0; i = elided.indexOf("…", i + 1)) {
+            if (whole.startsWith(elided.substring(0, i)) && whole.endsWith(elided.substring(i + 1)))
+                return elided.substring(0, i)
+        }
+        return ""
     }
 
     // ---- driven from outside ----------------------------------------
@@ -129,6 +149,15 @@ Item {
         text: line.text
         font: field.font
         wrapMode: Text.NoWrap
+    }
+    /// The second ruler, and only ever asked about a middle cut: where the elide would put its mark at this width.
+    /// Given no text in the other two modes so a value that is never cut in the middle is never laid out twice.
+    TextMetrics {
+        id: middleRuler
+        font: field.font
+        elide: Text.ElideMiddle
+        elideWidth: line.width
+        text: line.cutAt === "middle" ? line.text : ""
     }
 
     TextEdit {
@@ -184,7 +213,7 @@ Item {
             id: markLabel
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
-            text: "…"
+            text: line.markText
             color: line.color
             font: field.font
         }

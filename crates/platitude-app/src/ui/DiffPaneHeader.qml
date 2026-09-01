@@ -66,11 +66,11 @@ Rectangle {
             // where the eye already is while the diff is being read, and the path here is the same one the list's
             // own row hands over from its hover.
             //
-            // **Cut at the head, not in the middle.** A field has no `elide` — that is what selecting costs — and a
-            // path elided into one would hand over `crates/pl…/notes.txt` to whoever dragged it. What a cut may not
-            // take is the leaf, since that is the half that names the file, so the words are held against the far
-            // edge and the mark stands at the near one (`LineText.cutAt`). The whole path stays in the field either
-            // way, so a drag and `Ctrl+A` both come away with all of it.
+            // **Cut in the middle** (`LineText.cutAt`): a path is told apart by both of its ends — the leaf names the
+            // file and the first folders say which tree it is in — and this band has nothing beside it to carry
+            // either. A field has no `elide`, so the field itself is held against the far edge and the head is
+            // painted onto the mark's ground beside the `…`; the whole path stays in the field, so a drag and
+            // `Ctrl+A` both come away with all of it and never with a `…`.
             LineText {
                 id: titleField
                 // Takes the slack, so the pair above stays put (FileRowDelegate learned this the hard way).
@@ -79,7 +79,7 @@ Rectangle {
                 pixelSize: Theme.fontMd
                 weight: Font.DemiBold
                 color: Theme.textSecondary
-                cutAt: "start"
+                cutAt: "middle"
                 ground: Theme.bgElevated
             }
         }
