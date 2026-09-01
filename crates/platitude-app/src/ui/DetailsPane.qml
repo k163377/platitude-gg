@@ -55,9 +55,9 @@ ColumnLayout {
     /// read as green. `pointedTipRow` -1 points at no row.
     property bool avatarPointedAt: false
     property bool signaturePointedAt: false
-    readonly property bool signatureTipShown: authorRow.signatureTipShown
+    readonly property bool signatureTipShown: block.signatureTipShown
     property bool summaryPointedAt: false
-    readonly property bool summaryTipShown: msgEditor.summaryTipShown
+    readonly property bool summaryTipShown: block.summaryTipShown
     property int pointedTipRow: -1
     /// A right-click menu of the page's is standing over this pane — the
     /// menus are the page's, so only it can say (デザイン規約 §メニュー).
@@ -75,15 +75,15 @@ ColumnLayout {
     // cards stay here because they open in pane coordinates and must not
     // scroll away with the block the row sits on. The pane forwards the
     // hooks — the automation reads the panes.
-    readonly property var coAuthorRecords: authorRow.coAuthorRecords
+    readonly property var coAuthorRecords: block.coAuthorRecords
     function coAuthorName(i) {
-        return authorRow.coAuthorName(i)
+        return block.coAuthorName(i)
     }
     /// The credit line ran out of room and was elided — what a headless run
     /// reads in place of an ellipsis it cannot see.
-    readonly property bool coAuthorsClipped: authorRow.matesClipped
+    readonly property bool coAuthorsClipped: block.matesClipped
     function showCoAuthors(on) {
-        authorRow.showCoAuthors(on)
+        block.showCoAuthors(on)
     }
     /// Whether the card is on screen — the output side, since the input side
     /// would read true with the binding cut.
@@ -94,7 +94,7 @@ ColumnLayout {
     function openMateCard(at) {
         if (detailsPane.coAuthorRecords.length === 0)
             return
-        const p = authorRow.mapToItem(detailsPane, at.x, at.y)
+        const p = block.valueRow.mapToItem(detailsPane, at.x, at.y)
         mateCard.records = detailsPane.coAuthorRecords
         // Measured from where it opens, not from the pane: the card starts
         // partway across, so the pane's width is not what is left for it.
@@ -112,18 +112,18 @@ ColumnLayout {
     HoverCardHost {
         id: mateKeep
         card: mateCard
-        pointedAt: authorRow.matesPointed
+        pointedAt: block.matesPointed
     }
 
     function showAuthor(on) {
-        authorRow.showAuthor(on)
+        block.showAuthor(on)
     }
     readonly property bool authorCardOpen: authorCard.opened
-    readonly property bool authorNameClipped: authorRow.nameClipped
+    readonly property bool authorNameClipped: block.nameClipped
     function openAuthorCard(at) {
         if (detailsPane.details.authorName === "")
             return
-        const p = authorRow.mapToItem(detailsPane, at.x, at.y)
+        const p = block.valueRow.mapToItem(detailsPane, at.x, at.y)
         authorCard.maxRowWidth = detailsPane.width - p.x - 2 * Theme.spaceXs
         authorCard.x = p.x
         authorCard.y = p.y
@@ -147,7 +147,7 @@ ColumnLayout {
     HoverCardHost {
         id: authorKeep
         card: authorCard
-        pointedAt: authorRow.authorPointed
+        pointedAt: block.authorPointed
     }
 
     signal fileActivated(string path, string origPath)
@@ -158,7 +158,7 @@ ColumnLayout {
     signal copyRequested(string text)
     /// Automation only: the row that draws the commit's values, handed to a run whole (verify-ui). A dozen one-line
     /// relays here would say nothing this does not.
-    readonly property alias valueRow: authorRow
+    readonly property alias valueRow: block.valueRow
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal messageSubmitted(string oidHex, string subject, string body)
@@ -171,8 +171,8 @@ ColumnLayout {
     property string baseBody: ""
     /// The boxes have moved off their resting text. Apart from `messageDirty` because a row that leaves `reword`
     /// locks the boxes with the typed text still in them — unsavable, and exactly what a closing plan takes.
-    readonly property bool boxMoved: msgEditor.subjectText !== detailsPane.baseSubject
-                                     || msgEditor.bodyText !== detailsPane.baseBody
+    readonly property bool boxMoved: block.subjectText !== detailsPane.baseSubject
+                                     || block.bodyText !== detailsPane.baseBody
     readonly property bool messageDirty: detailsPane.editable && detailsPane.boxMoved
     /// Whether a plan is holding a typed reword for the very commit on
     /// screen: what the boxes have to show instead of the commit's own
@@ -203,9 +203,9 @@ ColumnLayout {
         detailsPane.baseSubject = drafted ? detailsPane.planDraftSubject
                                           : detailsPane.details.messageSubject
         detailsPane.baseBody = drafted ? detailsPane.planDraftBody : detailsPane.details.messageBody
-        if (msgEditor.subjectText !== detailsPane.baseSubject
-                || msgEditor.bodyText !== detailsPane.baseBody)
-            msgEditor.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
+        if (block.subjectText !== detailsPane.baseSubject
+                || block.bodyText !== detailsPane.baseBody)
+            block.setMessage(detailsPane.baseSubject, detailsPane.baseBody)
         // Last, and after the boxes: the write above reaches `noteTyping` like any keystroke, so a fill made while
         // a plan stands would otherwise leave the text marked as typed under it.
         detailsPane.boxFromPlan = drafted
@@ -221,7 +221,7 @@ ColumnLayout {
             detailsPane.boxFromPlan = true
     }
     Connections {
-        target: msgEditor
+        target: block
         function onSubjectTextChanged() { detailsPane.noteTyping() }
         function onBodyTextChanged() { detailsPane.noteTyping() }
     }
@@ -247,46 +247,46 @@ ColumnLayout {
     }
     /// Put the commit's own message back.
     function revertMessage() {
-        msgEditor.setTexts(detailsPane.baseSubject, detailsPane.baseBody)
+        block.setTexts(detailsPane.baseSubject, detailsPane.baseBody)
     }
     /// git took the new message: what was written becomes the resting text,
     /// since the model still holds the old one until the selection follows.
     function noteMessageSaved() {
-        detailsPane.baseSubject = msgEditor.subjectText
-        detailsPane.baseBody = msgEditor.bodyText
+        detailsPane.baseSubject = block.subjectText
+        detailsPane.baseBody = block.bodyText
     }
     function submitMessage() {
         // Nothing changed is nothing to do: the button stands from the moment someone is writing rather than from the
         // moment the text differs (`MessageActionsRow.editing`), so this press is ordinary, not a mistake.
-        if (!detailsPane.editable || !detailsPane.messageDirty || msgEditor.subjectText.trim() === "")
+        if (!detailsPane.editable || !detailsPane.messageDirty || block.subjectText.trim() === "")
             return
-        detailsPane.messageSubmitted(detailsPane.details.shaHex, msgEditor.subjectText, msgEditor.bodyText)
+        detailsPane.messageSubmitted(detailsPane.details.shaHex, block.subjectText, block.bodyText)
     }
     /// Smoke hook: type into the boxes the way a keystroke would — including
     /// not at all when they are read-only.
     function setMessageText(subject, body) {
         if (!detailsPane.editable)
             return
-        msgEditor.setTexts(subject, body)
+        block.setTexts(subject, body)
     }
     /// Smoke hook: what the boxes are holding. `boxMoved` says the text left
     /// its resting point, never whose text stands there instead.
-    readonly property alias boxSubject: msgEditor.subjectText
+    readonly property alias boxSubject: block.subjectText
     /// Smoke hook: put the caret in the description box, the way a click in
     /// it does. The colour the text takes under a caret is what the shot is of.
     function focusDescription() {
-        msgEditor.focusDescription()
+        block.focusDescription()
     }
     /// What the box paints — the input side (activeFocus) would read green
     /// with the binding cut.
-    readonly property color descriptionColor: msgEditor.descriptionColor
-    readonly property bool descriptionFocused: msgEditor.descriptionFocused
+    readonly property color descriptionColor: block.descriptionColor
+    readonly property bool descriptionFocused: block.descriptionFocused
     /// Smoke hooks: the wheel over the description box, and how much ink its
     /// own bar carries as a result (デザイン規約 §QML 実装ルール のバーの明るさ).
-    function rollDescription(dy) { msgEditor.rollDescription(dy) }
-    function holdDescriptionBar(on) { msgEditor.holdDescriptionBar(on) }
-    readonly property real descriptionBarInk: msgEditor.descriptionBarInk
-    readonly property real descriptionAt: msgEditor.descriptionAt
+    function rollDescription(dy) { block.rollDescription(dy) }
+    function holdDescriptionBar(on) { block.holdDescriptionBar(on) }
+    readonly property real descriptionBarInk: block.descriptionBarInk
+    readonly property real descriptionAt: block.descriptionAt
 
     // -- what this pane lends the message editor --
     //
@@ -300,31 +300,23 @@ ColumnLayout {
     /// bottom (規約 §窓の床).
     readonly property real blockRoom: Math.max(0, detailsPane.height - Theme.headerHeight
         - (changesBand.visible ? changesBand.height : 0) - 2 * Theme.rowHeight)
-    /// Moves the block by a wheel a box on it could not use: the boxes cover
-    /// most of the block, so a box that keeps the wheel at its own end
-    /// leaves the block unreachable by wheel.
-    function rollBlock(pixels) {
-        const max = Math.max(0, blockScroll.contentHeight - blockScroll.height)
-        // Taken away, not added: content travels against `contentY`.
-        blockScroll.contentY = Math.max(0, Math.min(max, blockScroll.contentY - pixels))
-    }
     // -- smoke hooks and readouts, said under the pane's name because the
     // automation reads the panes (`MessageEditor` holds the numbers) --
-    function growDescription(dy) { msgEditor.growDescription(dy) }
-    function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
+    function growDescription(dy) { block.growDescription(dy) }
+    function pullDescriptionPast(down) { block.pullDescriptionPast(down) }
     /// Whether the grip is refusing a pull, and where the hand is while it
     /// does (scene coordinates). The page draws the badge — see `RepoPage`
     /// on why it cannot be drawn in the box.
-    readonly property alias descRefuses: msgEditor.descRefuses
-    readonly property alias descPoint: msgEditor.descPoint
-    readonly property bool descGrips: msgEditor.descGrips
-    readonly property real descHeight: msgEditor.descHeight
-    readonly property real descWants: msgEditor.descWants
-    readonly property real descCap: msgEditor.descCap
-    readonly property int descListRows: msgEditor.descListRows
+    readonly property alias descRefuses: block.descRefuses
+    readonly property alias descPoint: block.descPoint
+    readonly property bool descGrips: block.descGrips
+    readonly property real descHeight: block.descHeight
+    readonly property real descWants: block.descWants
+    readonly property real descCap: block.descCap
+    readonly property int descListRows: block.descListRows
     /// Whether anything in the block is below the fold, and its complement.
-    readonly property bool blockScrolls: msgEditor.blockScrolls
-    readonly property bool descKeeps: msgEditor.descKeeps
+    readonly property bool blockScrolls: block.blockScrolls
+    readonly property bool descKeeps: block.descKeeps
     /// How much of the bottom edge is left bare for the corner text the page
     /// hangs there (the same measurement `WipPane.bottomRoom` makes).
     readonly property real bottomRoom: detailsPane.height - fileList.y
@@ -385,103 +377,41 @@ ColumnLayout {
         onApplyRequested: selector => detailsPane.applyStashRequested(selector)
         onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
-    // Everything between the two bands, in a surface of its own that scrolls
-    // when the pane is too short to hold it: the boxes, the author row and
-    // the save row keep their heights by construction, so the file list was
-    // the only thing that could give and past zero the rest ran out of the
-    // pane's bottom (規約 §窓の床).
-    Flickable {
-        id: blockScroll
+    DetailsMessageBlock {
+        id: block
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.min(blockCol.implicitHeight, detailsPane.blockRoom)
-        contentWidth: width
-        contentHeight: blockCol.implicitHeight
-        clip: true
-        // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
-        boundsBehavior: Flickable.StopAtBounds
-        // What moves here is the block; the words inside the message boxes
-        // move under a bar of their own, and that one is the style's.
-        ScrollBar.vertical: PaneScrollBar {}
-        ColumnLayout {
-            id: blockCol
-            width: blockScroll.width
-            spacing: 0
-
-            // Inset on all four sides, one step each — the message box carries
-            // its own frame, and flush against the header band the two borders
-            // read as one welded block, so band → summary → description →
-            // author → band is one even rhythm (デザイン規約 §余白). The right
-            // is the exception and is not padding: it is the gutter this
-            // block's scroll bar is drawn in, and anything short of it draws
-            // the bar over the boxes' frame and the parent hash's tail.
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.margins: Theme.spaceXs
-                Layout.rightMargin: Theme.navBarGutter
-                spacing: Theme.spaceXs
-                visible: detailsPane.details.shaHex !== ""
-
-                // Who wrote it, first: avatar + name/date on the left, own
-                // hash over parent hash on the right (rows aligned). The pane
-                // reads top to bottom the way the commit itself does — whose
-                // it is, what it says, what it touched.
-                CommitAuthorRow {
-                    id: authorRow
-                    // Said out loud: this row is an `Item`, and a plain item takes its own width and stops, which parks
-                    // the hash plate against the end of the name.
-                    Layout.fillWidth: true
-                    details: detailsPane.details
-                    signatureKind: detailsPane.signatureKind
-                    signatureCode: detailsPane.signatureCode
-                    signatureSigner: detailsPane.signatureSigner
-                    avatarPointedAt: detailsPane.avatarPointedAt
-                    signaturePointedAt: detailsPane.signaturePointedAt
-                    paneWidth: detailsPane.width
-                    mateCardInside: mateCard.pointerInside
-                    authorCardInside: authorCard.pointerInside
-                    onAvatarClicked: detailsPane.avatarClicked()
-                    onCopyRequested: text => detailsPane.copyRequested(text)
-                    onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
-                    onOpenMateRequested: at => detailsPane.openMateCard(at)
-                    onSettleMateRequested: mateKeep.settle()
-                    onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
-                    onSettleAuthorRequested: authorKeep.settle()
-                }
-                // Then the message: the same pair, in the same component the
-                // commit editor writes in, one block of one height
-                // (デザイン規約 §コミットメッセージの 2 つの枠).
-                MessageEditor {
-                    id: msgEditor
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: msgEditor.pairHeight
-                    readOnly: !detailsPane.editable
-                    blockedTip: detailsPane.editBlocked
-                    summaryPointedAt: detailsPane.summaryPointedAt
-                    listHeight: fileList.height
-                    blockRoom: detailsPane.blockRoom
-                    blockHeight: blockCol.implicitHeight
-                    onWheelPastEnd: pixels => detailsPane.rollBlock(pixels)
-                    // Escape drops the draft and puts the commit's own message back. Nothing asks: the reader said so
-                    // (デザイン規約 §コミットメッセージの 2 つの枠).
-                    onEscaped: detailsPane.revertMessage()
-                }
-                // Only once something is actually changed (`MessageActionsRow`).
-                MessageActionsRow {
-                    Layout.fillWidth: true
-                    dirty: detailsPane.messageDirty
-                    editing: detailsPane.editable && msgEditor.anyFocused
-                    intoPlan: detailsPane.intoPlan
-                    published: detailsPane.published
-                    busy: detailsPane.busy
-                    canSave: msgEditor.subjectText.trim() !== ""
-                    committerFace: detailsPane.committerFace
-                    committerFaceUrl: detailsPane.committerFaceUrl
-                    signature: detailsPane.signsCommits ? "signed" : ""
-                    signatureTip: detailsPane.signingTip
-                    onSaveRequested: detailsPane.submitMessage()
-                }
-            }
-        }
+        Layout.preferredHeight: Math.min(block.wants, detailsPane.blockRoom)
+        details: detailsPane.details
+        blockRoom: detailsPane.blockRoom
+        listHeight: fileList.height
+        paneWidth: detailsPane.width
+        editable: detailsPane.editable
+        editBlocked: detailsPane.editBlocked
+        busy: detailsPane.busy
+        published: detailsPane.published
+        intoPlan: detailsPane.intoPlan
+        messageDirty: detailsPane.messageDirty
+        signatureKind: detailsPane.signatureKind
+        signatureCode: detailsPane.signatureCode
+        signatureSigner: detailsPane.signatureSigner
+        committerFace: detailsPane.committerFace
+        committerFaceUrl: detailsPane.committerFaceUrl
+        signsCommits: detailsPane.signsCommits
+        signingTip: detailsPane.signingTip
+        avatarPointedAt: detailsPane.avatarPointedAt
+        signaturePointedAt: detailsPane.signaturePointedAt
+        summaryPointedAt: detailsPane.summaryPointedAt
+        mateCardInside: mateCard.pointerInside
+        authorCardInside: authorCard.pointerInside
+        onAvatarClicked: detailsPane.avatarClicked()
+        onCopyRequested: text => detailsPane.copyRequested(text)
+        onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
+        onOpenMateRequested: at => detailsPane.openMateCard(at)
+        onSettleMateRequested: mateKeep.settle()
+        onOpenAuthorRequested: at => detailsPane.openAuthorCard(at)
+        onSettleAuthorRequested: authorKeep.settle()
+        onEscaped: detailsPane.revertMessage()
+        onSaveRequested: detailsPane.submitMessage()
     }
     // Outside the block above: it is the list's own band, and a list whose
     // heading has scrolled away is a list of nothing in particular.

@@ -77,6 +77,7 @@ BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
 CutName 1.0 CutName.qml
 DetailsChangesBand 1.0 DetailsChangesBand.qml
+DetailsMessageBlock 1.0 DetailsMessageBlock.qml
 DiffCodeScroll 1.0 DiffCodeScroll.qml
 DiffFileNotices 1.0 DiffFileNotices.qml
 DiffPane 1.0 DiffPane.qml
