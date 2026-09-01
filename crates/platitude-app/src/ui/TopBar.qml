@@ -169,14 +169,8 @@ Rectangle {
     function runOffset() { return tabStrip.runOffset() }
     function sendTabRunAway() { return tabStrip.sendRunAway() }
     function pressTabPin() { return tabStrip.pressTabPin() }
-    function tabPaths() { return tabStrip.tabPaths() }
-    function tabTitles() { return tabStrip.tabTitles() }
-    function tabItemCount() { return tabStrip.tabItemCount() }
-    function hasTabPath(path) { return tabStrip.hasTabPath(path) }
-    function tabPathAt(index) { return tabStrip.tabPathAt(index) }
-    function tabWidths() { return tabStrip.tabWidths() }
-    function pointAtTab(index) { tabStrip.pointAtTab(index) }
-    function tabMarks() { return tabStrip.tabMarks() }
+    /// The strip's own list, passed on for the harness's probe (`TabStrip.tabsView`).
+    readonly property alias tabsView: tabStrip.tabsView
 
     /// The word all three toolbar buttons are measured for: one box for the set keeps any of them from shifting the
     /// others, and which wording is wider is a question about the installed fonts. Settled once rather than bound: a

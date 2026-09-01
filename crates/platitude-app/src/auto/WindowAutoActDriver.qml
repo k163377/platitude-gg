@@ -148,6 +148,7 @@ Item {
         tabsModel: driver.tabsModel
         pageRepeater: driver.pageRepeater
         topBar: driver.topBar
+        tabProbe: tabProbe
         mainUi: driver.mainUi
         gate: driver.gate
     }
@@ -156,6 +157,13 @@ Item {
         tabsModel: driver.tabsModel
         pageRepeater: driver.pageRepeater
         topBar: driver.topBar
+        tabProbe: tabProbe
+    }
+    /// What the strip's own items came out as. Here rather than in the strip: reading tabs back is the harness's
+    /// business, and the strip's part in it is the one name it hands over (`TabStrip.tabsView`).
+    TabProbe {
+        id: tabProbe
+        view: driver.topBar.tabsView
     }
     WindowBandActs {
         window: driver.window

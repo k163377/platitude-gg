@@ -19,6 +19,8 @@ Item {
     required property TabsModel tabsModel
     required property Repeater pageRepeater
     required property TopBar topBar
+    /// The harness's own window onto the strip's laid-out tabs (`auto/TabProbe.qml`).
+    required property TabProbe tabProbe
 
     /// How far the staging below has got. Only one verb runs in a process, so the two timers share it.
     property bool floorSet: false
@@ -39,7 +41,7 @@ Item {
     function staged(front) {
         // Every row standing in the strip, not merely open: the stand-in is drawn off the item the view built for the
         // tab in front, and a row the model has only just gained has none until the next layout.
-        if (acts.pageRepeater.count < 2 || acts.topBar.tabItemCount() !== acts.pageRepeater.count)
+        if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count)
             return false
         // And the page under the strip settled, so what is photographed underneath is a repository rather than one
         // still opening — the switch below builds a new page, and an unfinished one frames the same either way.

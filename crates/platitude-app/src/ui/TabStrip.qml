@@ -192,16 +192,10 @@ Item {
         return true
     }
 
-    /// Automation: what the strip's own items came out as, asked of `TabProbe` and handed on under the names the band
-    /// already calls them by (`TopBar`).
-    function tabItemCount() { return tabProbe.tabItemCount() }
-    function hasTabPath(path) { return tabProbe.hasTabPath(path) }
-    function tabPaths() { return tabProbe.tabPaths() }
-    function tabTitles() { return tabProbe.tabTitles() }
-    function tabPathAt(index) { return tabProbe.tabPathAt(index) }
-    function tabWidths() { return tabProbe.tabWidths() }
-    function pointAtTab(index) { tabProbe.pointAtTab(index) }
-    function tabMarks() { return tabProbe.tabMarks() }
+    /// Automation-only exposure, the same one `GraphPane.view` is (app-ui.md): the strip's own list, which the harness
+    /// reads the laid-out tabs off (`auto/TabProbe.qml`). One name rather than the eight answers it gives, so what the
+    /// strip carries for a headless run is the list it was laying out anyway.
+    readonly property alias tabsView: tabs
 
     /// Hands the run out among the tab names, the longest giving way last (デザイン規約 §ウィンドウの縁); below `tabTitleMinW`
     /// the strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of items, and a
@@ -350,11 +344,6 @@ Item {
         id: tabCarry
         view: tabs
         tabsModel: tabStrip.tabsModel
-    }
-    // The headless run's window onto that same list, declared after it for the same reason.
-    TabProbe {
-        id: tabProbe
-        view: tabs
     }
     // The tab in front, standing at the edge its own row went out of. Beside the list rather than inside it: a
     // Flickable's declared children are taken by its content item and travel with the scroll, and this is the one

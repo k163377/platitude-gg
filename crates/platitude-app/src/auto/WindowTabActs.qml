@@ -21,6 +21,8 @@ Item {
     required property TabsModel tabsModel
     required property Repeater pageRepeater
     required property TopBar topBar
+    /// The harness's own window onto the strip's laid-out tabs (`auto/TabProbe.qml`).
+    required property TabProbe tabProbe
     required property Item mainUi
     required property Item gate
 
@@ -39,7 +41,7 @@ Item {
                     return
                 middleCloseTimer.beforeCount = pageRepeater.count
                 const at = Number(AppBackend.autoActArg)
-                middleCloseTimer.closedPath = topBar.tabPathAt(at)
+                middleCloseTimer.closedPath = tabProbe.tabPathAt(at)
                 // Latched on the strip's answer rather than on the asking: the press has to land on an item, and the
                 // row the model has just gained gets one with the layout.
                 middleCloseTimer.requested = topBar.middleClickTab(at)
@@ -47,7 +49,7 @@ Item {
             }
             // The strip is read back below, so it has to have caught up with the model before there is anything true to
             // say about which repository went and which is still standing.
-            if (pageRepeater.count >= middleCloseTimer.beforeCount || topBar.tabItemCount() !== pageRepeater.count)
+            if (pageRepeater.count >= middleCloseTimer.beforeCount || tabProbe.tabItemCount() !== pageRepeater.count)
                 return
             // And the tab that stayed has to be showing its repository: "the neighbour is still there" is the half of
             // this verb the picture carries, and a page still opening photographs the same whether it survived the
@@ -61,10 +63,10 @@ Item {
             // The verdict leads, and it is about the tab the press landed on: a count that merely fell would pass with
             // the wrong tab closed, and the titles cannot tell them apart.
             AppBackend.report("middle_close gone="
-                              + !topBar.hasTabPath(middleCloseTimer.closedPath)
+                              + !tabProbe.hasTabPath(middleCloseTimer.closedPath)
                               + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
-                              + " open=" + topBar.tabPaths())
+                              + " open=" + tabProbe.tabPaths())
             window.finishAutoAct()
         }
     }
@@ -84,7 +86,7 @@ Item {
             if (!tabDragTimer.requested) {
                 // Every row standing in the strip, not merely open: the carry measures against the tabs' own places,
                 // and a row the model has only just gained has none until the next layout.
-                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
                 // And the page under the strip settled, so that what is photographed underneath is a repository rather
                 // than one still opening. A precondition of the carry and read nowhere else: the carry moves to the tab
@@ -97,14 +99,14 @@ Item {
                 const asked = (AppBackend.autoActArg || "3:1").split(":")
                 tabDragTimer.from = Number(asked[0])
                 tabDragTimer.to = Number(asked[1])
-                tabDragTimer.before = topBar.tabPaths()
+                tabDragTimer.before = tabProbe.tabPaths()
                 // Latched on the strip's answer, the way the middle click is: a carry that found no tab to take up
                 // never happened, and reporting it as one would leave the wait to the watchdog.
                 tabDragTimer.requested = topBar.dragTabTo(tabDragTimer.from, tabDragTimer.to)
                 return
             }
-            const paths = topBar.tabPaths()
-            if (paths === tabDragTimer.before || topBar.tabItemCount() !== pageRepeater.count)
+            const paths = tabProbe.tabPaths()
+            if (paths === tabDragTimer.before || tabProbe.tabItemCount() !== pageRepeater.count)
                 return
             stop()
             // The verdict leads, and it is about the tab that was carried: an order that merely changed would pass
@@ -130,7 +132,7 @@ Item {
         property bool requested: false
         onTriggered: {
             if (!tabHoldTimer.requested) {
-                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
                 const front = window.curPage
                 if (front === null || front.pageTab.state !== "open"
@@ -148,7 +150,7 @@ Item {
             AppBackend.report("tab_hold lifted=true at=" + (AppBackend.autoActArg || 0)
                               + " shift=" + shift
                               + " active=" + tabsModel.currentIndex
-                              + " open=" + topBar.tabPaths())
+                              + " open=" + tabProbe.tabPaths())
             window.finishAutoAct()
         }
     }
@@ -165,7 +167,7 @@ Item {
         property int from: 0
         onTriggered: {
             if (!tabEdgeTimer.requested) {
-                if (pageRepeater.count < 2 || topBar.tabItemCount() !== pageRepeater.count)
+                if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
                 const front = window.curPage
                 if (front === null || front.pageTab.state !== "open"
@@ -195,7 +197,7 @@ Item {
                               + " run=" + topBar.runOffset()
                               + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
-                              + " open=" + topBar.tabPaths())
+                              + " open=" + tabProbe.tabPaths())
             window.finishAutoAct()
         }
     }
@@ -219,7 +221,7 @@ Item {
                 // item for a row the model has just gained arrives with the next layout. Asking with the "" it answers
                 // until then opens nothing, and nothing opened is what this verb's completion looks like — it went
                 // green having asked for nothing at all (measured).
-                const path = AppBackend.autoActArg !== "" ? AppBackend.autoActArg : topBar.tabPathAt(0)
+                const path = AppBackend.autoActArg !== "" ? AppBackend.autoActArg : tabProbe.tabPathAt(0)
                 if (path === "")
                     return
                 openAgainTimer.asked = path
@@ -236,7 +238,7 @@ Item {
                     || (openAgainTimer.wantIndex >= 0
                         && tabsModel.currentIndex !== openAgainTimer.wantIndex)
                     // The strip is read back below (`middle-close` above).
-                    || topBar.tabItemCount() !== pageRepeater.count)
+                    || tabProbe.tabItemCount() !== pageRepeater.count)
                 return
             // And the tab it arrived at has to be showing its repository: which tab came to the front is what the
             // picture carries here, and a page still opening looks the same whichever one it is (`middle-close` above,
@@ -249,7 +251,7 @@ Item {
             AppBackend.report("open_again tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
                               + " asked=" + openAgainTimer.asked
-                              + " open=" + topBar.tabPaths())
+                              + " open=" + tabProbe.tabPaths())
             window.finishAutoAct()
         }
     }
@@ -349,7 +351,7 @@ Item {
                 + " content=" + Math.round(topBar.bandTabContent)
                 + " view=" + Math.round(topBar.bandTabsWidth)
                 + " scrolls=" + topBar.bandTabScrolls
-                + " widths=" + topBar.tabWidths())
+                + " widths=" + tabProbe.tabWidths())
             window.finishAutoAct()
         }
     }
@@ -367,18 +369,18 @@ Item {
                 return
             if (!tabMarkActTimer.requested) {
                 tabMarkActTimer.requested = true
-                tabMarkActTimer.beforeMarks = topBar.tabMarks()
-                topBar.pointAtTab(pointed)
+                tabMarkActTimer.beforeMarks = tabProbe.tabMarks()
+                tabProbe.pointAtTab(pointed)
                 return
             }
-            if (topBar.tabMarks() === tabMarkActTimer.beforeMarks)
+            if (tabProbe.tabMarks() === tabMarkActTimer.beforeMarks)
                 return
             stop()
             AppBackend.report(
                 "tab_marks tabs=" + topBar.bandTabCount
                 + " current=" + tabsModel.currentIndex
                 + " pointed=" + pointed
-                + " marks=" + topBar.tabMarks())
+                + " marks=" + tabProbe.tabMarks())
             window.finishAutoAct()
         }
     }
@@ -394,11 +396,11 @@ Item {
         onTriggered: {
             // Every row has to have an item before the names are read: the strip's answer for a row the layout has not
             // reached yet is the empty string, which reads exactly like a name that came out blank.
-            if (topBar.bandTabCount === 0 || topBar.tabItemCount() < topBar.bandTabCount)
+            if (topBar.bandTabCount === 0 || tabProbe.tabItemCount() < topBar.bandTabCount)
                 return
             if (!tabNameActTimer.requested) {
                 tabNameActTimer.requested = true
-                topBar.pointAtTab(tabNameActTimer.pointed)
+                tabProbe.pointAtTab(tabNameActTimer.pointed)
                 return
             }
             const tip = mainUi.ToolTip.toolTip
@@ -408,7 +410,7 @@ Item {
             stop()
             // `unique=` rather than the names themselves as the judged claim: what a name comes out as is spelled with
             // the platform's own separator, and no two tabs reading alike is the rule either way (`verify/verbs.rs`).
-            const titles = topBar.tabTitles()
+            const titles = tabProbe.tabTitles()
             const names = titles.split(",")
             AppBackend.report(
                 "tab_names tabs=" + topBar.bandTabCount
