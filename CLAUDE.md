@@ -34,7 +34,7 @@
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動し、即報告してターンを終える。**起動したら監視しない**(背景タスク・生存確認・撃ち直しを後ろに吊らない — ターンが終わらない間ユーザーの次の指示は届かない)。**`launch` をパイプ・コマンド置換に通さない**(窓の寿命だけターンが返らない。hook が deny)。Done の基準は不変で、段 2 はユーザーが検証・反映を指示した時に走らせる。手順は verify-ui スキル §起動 fast path
 - **テストは thread / process の並行実行が既定** — `--test-threads` を下げて通さず、固定 temp path / port / 設定名や process-global 可変状態を共有しない。非同期テストの因果的な待ち方と反復判定は core 規約 §非同期・並行テストの実装方針
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。Linux ではその場で実行 — `bare` だけは常にコンテナ)。イメージは core / app / runtime(**宣言した依存だけ**)から自動選択、ビルド先は docker volume。最低 git バージョンを積んだ唯一の環境。**`bare` は建てた場所の外で動くかだけを見る**(実測は P5-確認事項 §実測済み)
-- **実装作業は worktree 座席 `a`〜`f` で行う**(`claude --worktree <席>` / EnterWorktree で空き席の path へ。本体 checkout はドキュメント・レビューのみ — `target/` と release exe の取り合いを避ける)。空き状況は挨拶が言う。**先に空きを調べない — まず座る**: 入席時に hook が `git worktree lock` で claim し、取られていれば deny するので、**その deny が答え**(別の空き文字へ入り直す。席は早い者勝ち・非座席名の新造は hook が確認を挟む)。調べてから座ると、調べた瞬間と座る瞬間の間で取られる — `cargo xtask seats` は状況を読む道具であって、座るかどうかの判断には使わない。**claim の返却も自動: land が成功した席をその場で unlock し(反映完了 = 離席)、以後の追加作業は席内への最初の編集で hook が再 claim する**。手動 `git worktree unlock` は消えたセッションの席の回収だけ。マージ済みの席は `git reset --hard main` で先頭に揃えてから始める。未マージの席は続きの仕事以外触らない — 全席詰まりなら増設せず報告。**完了しても main へは戻さない**(§Git 運用)
+- **書く作業は worktree 座席 `a`〜`f` で行う**(`claude --worktree <席>` / EnterWorktree で空き席の path へ。ドキュメントも含めて全部 — 本体 checkout は読むだけ。`target/` と release exe の取り合いを避ける)。空き状況は挨拶が言う。**先に空きを調べない — まず座る**: 入席時に hook が `git worktree lock` で claim し、取られていれば deny するので、**その deny が答え**(別の空き文字へ入り直す。席は早い者勝ち・非座席名の新造は hook が確認を挟む)。調べてから座ると、調べた瞬間と座る瞬間の間で取られる — `cargo xtask seats` は状況を読む道具であって、座るかどうかの判断には使わない。**claim の返却も自動: land が成功した席をその場で unlock し(反映完了 = 離席)、以後の追加作業は席内への最初の編集で hook が再 claim する**。手動 `git worktree unlock` は消えたセッションの席の回収だけ。マージ済みの席は `git reset --hard main` で先頭に揃えてから始める。未マージの席は続きの仕事以外触らない — 全席詰まりなら増設せず報告。**完了しても main へは戻さない**(§Git 運用)
 - **worktree からのアプリ起動は headless(`cargo xtask verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ **`PG_ALLOW_GUI=1 cargo xtask launch`**(自ツリーの居残り回収→ビルド→起動→生存確認まで一括)。exe が掴まれている・二重起動ゲートが出た時は **`cargo xtask kill`** — 原因は常に自ツリーの居残りで、これはそれだけを落とす(**画像名 kill は他席とユーザーの窓を巻き込むので hook が deny**)。本体 checkout からの起動は対象外(ユーザー自身の起動)。**窓のビルドがどのツリーのものかは右下が名乗る**(実装は rules-refs/app-ui.md)
 - 開発補助ツールを **.ps1 / .bat で作らない** — タスクランナーは `cargo xtask` パターン(ワークスペース内クレート + `.cargo/config.toml` の alias、依存は std のみ)で 3OS 同一に書き、OS 差はコード内の分岐に焼き込む。just / make 等の外部タスクランナーも導入しない
 
@@ -45,6 +45,7 @@
 - `#[expect(...)]` を `#[allow(...)]` より優先
 - `unsafe` は原則禁止(やむを得ない場合は `// SAFETY:` コメント必須)
 - 識別子・コメント・ログ・コミットメッセージは英語(docs は日本語可)。ログは `tracing`(`println!` / `eprintln!` 禁止)
+- **コメントは現在形の制約と罠だけ**(`.rs` / `.qml` 共通)— 日付付きの帰属注記(「2026-xx-xx ユーザー指示」等)・決定経緯・変更履歴を書かない
 - スナップショット(insta)の手編集禁止。再生成して差分をレビューする
 - パーサのテストは実 git の出力を fixture に。git 実行系は一時ディレクトリに実リポジトリを作る統合テストで検証する
 - **git の挙動に確信が無ければ、実装前に使い捨てリポジトリで実測する**(`tests/it/support` の `TestRepo`)。観測をテストへ固定してから実装。動確で壊れたら、直す前に再現テストが赤になるのを確認する
@@ -61,7 +62,7 @@
 - force push しない
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む)。worktree ブランチが main より遅れたままは正常(例外は座席のマージ済みブランチの `reset --hard main`)。`hook pre-shell` が deny(`--abort` / `--quit` は除く)— 指示があった時だけ `PG_ALLOW_REBASE=1` を先頭に付ける
 - **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格 — 自分の Done ゲートや段 2 の完了待ちを前提条件にしない)。land はどのセッションからでも動き、本体 checkout の HEAD がどこに居ても安全な手を選ぶ(worktree セッションの git は自ツリーに隔離され、手動 `git merge` は本体に届かない。`branch -f` / `update-ref` の手動反映は本体の index を置き去りにする既知の罠)。hook が main を書く git を deny して land へ誘導する
-- 本体 checkout での直コミットは可(ドキュメント等。**`.claude/skills` / `.claude/rules` / `.claude/rules-refs` は除く** — worktree に積んで反映指示を待つ)
+- **本体 checkout への直コミットはしない** — ドキュメントも設定も規約も、**その場でユーザーが main への直接の変更を許可したケース以外は全部席を取って進める**(worktree に積んで反映指示を待つ)。本体 checkout に残るのは読むことだけ
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
