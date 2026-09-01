@@ -20,8 +20,9 @@ Rectangle {
     // the other (デザイン規約 §長押し — 語が払う字下げは印 1 個分より小さい).
     readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
     /// Whether leaving the stopped commit out costs nothing — the stop is on a commit that came out empty, which a
-    /// clean tree under a stopped operation is what tells. The rule, its measurement and the revisit note for `edit`
-    /// stops are core's (offers::skip_is_free).
+    /// clean tree under a stopped operation is what tells. The rule, its measurement and why a clean tree alone
+    /// cannot answer it (an `edit` stop is exactly as clean, and git's own mark overrules the tree) are core's
+    /// (offers::skip_is_free).
     readonly property bool skipIsFree: opExitCard.workTree.opSkipFree
     readonly property real codeColW: {
         let widest = 0
