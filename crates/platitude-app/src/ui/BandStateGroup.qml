@@ -65,27 +65,17 @@ Item {
     /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
     /// names keep three.
     readonly property int stateMinChars: 2
-    /// Settled by `settleStateBadgeMinW` rather than bound: `advanceWidth`
-    /// is a method and takes no binding dependency, so a binding on it
-    /// holds whatever the *default* font measured (app-ui.md
-    /// 「FontMetrics.advanceWidth も同じ側」).
-    property real stateBadgeMinW: 0
+    /// Settled rather than bound, and settled where it is measured
+    /// (`BandStateMetrics`).
+    readonly property real stateBadgeMinW: badgeMetrics.minW
     readonly property bool stateHasAlso: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
     readonly property bool stateHasStep: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
-    /// Whole pixels, for the reason the tab names are settled in them (規約 §ウィンドウの縁): a word asks for a fractional
-    /// width, a box is laid out on a whole one, and a ceiling summed from the fractions is a few pixels under what the
-    /// same widths add up to when each is rounded — so the group is handed exactly its natural width and the share-out
-    /// still finds itself short, and every word elides in a band with room to spare (measured, on Linux:
-    /// `cap=103` with `groupW=270`, which was the natural width).
-    readonly property int opBadgeW: Math.ceil(mOpText.implicitWidth
-                                               + (stateGroup.stateHasAlso
-                                                  ? 2 * Theme.spaceXs + mDot.implicitWidth + mOpAlso.implicitWidth : 0)
-                                               + (stateGroup.stateHasStep ? Theme.spaceXs + mOpStep.implicitWidth : 0))
-        + 2 * Theme.spaceXs
-    readonly property int conflictBadgeW: Math.ceil(mConflict.implicitWidth) + 2 * Theme.spaceXs
-    readonly property int identityBadgeW: Math.ceil(mIdentity.implicitWidth) + 2 * Theme.spaceXs
-    readonly property int oldGitBadgeW: Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
-    readonly property int staleBadgeW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
+    /// What each badge would like to be, measured off labels that are never drawn (`BandStateMetrics`).
+    readonly property int opBadgeW: badgeMetrics.opW
+    readonly property int conflictBadgeW: badgeMetrics.conflictW
+    readonly property int identityBadgeW: badgeMetrics.identityW
+    readonly property int oldGitBadgeW: badgeMetrics.oldGitW
+    readonly property int staleBadgeW: badgeMetrics.staleW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
     /// came back with. The conditions above are what asks for a state; these are what the band made of it
@@ -138,12 +128,6 @@ Item {
     readonly property alias stateLit: stateKeep.lit
 
     signal identityEditRequested()
-
-    function settleStateBadgeMinW() {
-        stateGroup.stateBadgeMinW = Math.ceil(stateFont.advanceWidth("…")
-                                              + stateGroup.stateMinChars * stateFont.averageCharacterWidth)
-            + 2 * Theme.spaceXs
-    }
 
     /// Opens the card; `stateKeep` is what closes it a beat after the last thing asking for it lets go.
     function settleStateCard() {
@@ -204,61 +188,13 @@ Item {
         card: stateCard
         pointedAt: groupHover.hovered || stateGroup.pointedAt
     }
-    FontMetrics {
-        id: stateFont
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontSm
-        font.weight: Font.DemiBold
-        // On the metrics' own change signal, so the ellipsis is measured
-        // in the settled font — the initial evaluation still sees the
-        // default one.
-        onFontChanged: stateGroup.settleStateBadgeMinW()
-        Component.onCompleted: stateGroup.settleStateBadgeMinW()
-    }
 
-    /// The three badges at their natural width, measured off labels that are never drawn.
-    ///
-    /// The badges in the band cannot also be what the cap is measured from. A `RowLayout` that is not being laid out
-    /// reports the width it had when it last was, and the row of badges goes away the moment the group folds — so a cap
-    /// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide
-    /// window, and no width would bring the words back).
-    component BadgeWord: Label {
-        visible: false
-        font.pixelSize: Theme.fontSm
-        font.weight: Font.DemiBold
-    }
-    BadgeWord {
-        id: mOpText
-        text: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""
-    }
-    BadgeWord {
-        id: mOpAlso
-        text: stateGroup.stateWt !== null ? stateGroup.stateWt.opAlso : ""
-    }
-    BadgeWord {
-        id: mOpStep
-        text: stateGroup.stateWt === null ? ""
-              : qsTr("%1/%2").arg(stateGroup.stateWt.opStep).arg(stateGroup.stateWt.opSteps)
-    }
-    BadgeWord {
-        id: mConflict
-        text: Words.badgeConflicts
-    }
-    BadgeWord {
-        id: mIdentity
-        text: Words.badgeSetIdentity
-    }
-    BadgeWord {
-        id: mOldGit
-        text: Words.badgeOldGit
-    }
-    BadgeWord {
-        id: mStale
-        text: Words.badgeStaleGraph
-    }
-    DotMark {
-        id: mDot
-        visible: false
+    BandStateMetrics {
+        id: badgeMetrics
+        stateWt: stateGroup.stateWt
+        hasAlso: stateGroup.stateHasAlso
+        hasStep: stateGroup.stateHasStep
+        minChars: stateGroup.stateMinChars
     }
 
     // A handler rather than an area: it is passive, so the identity badge under it still takes its own press
