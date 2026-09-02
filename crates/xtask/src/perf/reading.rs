@@ -74,12 +74,42 @@ pub(super) struct Reading {
     pub(super) perf_done: bool,
 }
 
+/// What the parent watches while the app talks: whether the scroll bench
+/// has begun, and whether it has ended.
+///
+/// The bench is the one phase with a deadline of its own. It is driven by
+/// an animation, the animation is advanced by the render loop, and a
+/// window nothing is drawing — covered by another window, or behind a
+/// locked session — advances neither. Nothing then arrives until the
+/// outer watchdog fires minutes later, which says "the app stopped
+/// answering" about a machine that simply covered it up.
+#[derive(Default)]
+pub(super) struct Scroll {
+    began: std::sync::atomic::AtomicBool,
+    ended: std::sync::atomic::AtomicBool,
+}
+
+impl Scroll {
+    /// How long the bench has been running with nothing to show for it,
+    /// or `None` when it has not begun or has already ended.
+    pub(super) fn stalled_for(&self, since: Instant) -> Option<std::time::Duration> {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.began.load(Relaxed) && !self.ended.load(Relaxed)).then(|| since.elapsed())
+    }
+}
+
 pub(super) fn read_app(
     stderr: Option<std::process::ChildStderr>,
     started: Instant,
     mut log: std::fs::File,
     harness: bool,
-) -> (mpsc::Receiver<bool>, std::thread::JoinHandle<Reading>) {
+) -> (
+    mpsc::Receiver<bool>,
+    std::sync::Arc<Scroll>,
+    std::thread::JoinHandle<Reading>,
+) {
+    let scroll = std::sync::Arc::new(Scroll::default());
+    let watched = std::sync::Arc::clone(&scroll);
     let (done_tx, done_rx) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let mut found = Reading::default();
@@ -96,6 +126,16 @@ pub(super) fn read_app(
                 }
                 if line.contains("perf_failed") {
                     found.failure = Some(line.clone());
+                }
+                if line.contains("perf_scroll_begin") {
+                    watched
+                        .began
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                if line.contains("scroll_bench") {
+                    watched
+                        .ended
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 absorb(&line, &mut found);
                 // A build with no harness never says `perf_done`, so the
@@ -122,7 +162,7 @@ pub(super) fn read_app(
         }
         found
     });
-    (done_rx, reader)
+    (done_rx, scroll, reader)
 }
 
 /// Refuses a reading that lost a number this run was asked to take: a

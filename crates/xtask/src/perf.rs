@@ -66,6 +66,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
+    // Held for the whole invocation rather than per run, and taken
+    // before the build: the screen goes dark between runs as readily as
+    // during one, and a release build is minutes of exactly the idle
+    // that darkens it (`sampler::keep_awake`).
+    let _awake = sampler::keep_awake();
+
     let exe = if opts.harness {
         let mut extra = vec!["-p", "platitude-app"];
         if opts.breakdown {
@@ -164,10 +170,14 @@ impl Bench<'_> {
     ///
     /// This is the gate that focus cannot be. A window that is not in
     /// front is still composited and still presents — the app does not
-    /// always take the focus off the shell that started it — but a window
-    /// that was covered, on a screen that slept, or behind a locked
-    /// session stops receiving frames entirely, and there is no API that
-    /// answers "was it covered". The frames themselves answer it.
+    /// always take the focus off the shell that started it — and there
+    /// is no API that answers "was it covered". The frames answer it.
+    ///
+    /// **Too few frames, not none.** A bench that received nothing at
+    /// all never finished, so it never reached here: it was killed at
+    /// `measure::SCROLL_CEILING` and classified there. What is left for
+    /// this to catch is a bench that ran to the end on so few frames
+    /// that its fps is not a reading of the application.
     fn frames_delivered(&self, reading: &Reading) -> Option<String> {
         frames_delivered(
             self.screen.map(|screen| screen.hz),
@@ -206,13 +216,21 @@ impl Bench<'_> {
             std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
                 .map_err(|e| e.to_string())?;
             display::capture(&run_dir, "after")?;
-            let reading = result?;
-            let Some(complaint) = reading
-                .conditions
-                .complaint(&self.opts.limits)
-                .or_else(|| self.frames_delivered(&reading))
-            else {
-                return Ok(reading);
+            let complaint = match result {
+                // Only the host is worth another attempt. An application
+                // that stopped answering will stop answering again, and
+                // retrying it three more times only delays the report.
+                Err(measure::Spoiled::Run(said)) => return Err(said),
+                Err(measure::Spoiled::Host(said)) => said,
+                // The host conditions were read inside `measure`, which
+                // is what an `Ok` means — what is left to ask is the one
+                // question only the frames answer.
+                Ok(reading) => {
+                    let Some(complaint) = self.frames_delivered(&reading) else {
+                        return Ok(reading);
+                    };
+                    complaint
+                }
             };
             attempt += 1;
             *retries += 1;
@@ -355,7 +373,9 @@ mod tests {
         assert!(frames_delivered(None, Some(1.0), &limits).is_none());
         assert!(frames_delivered(Some(0), Some(1.0), &limits).is_none());
         assert!(frames_delivered(Some(180), None, &limits).is_none());
-        // --allow-noisy publishes what a covered window produced.
+        // --allow-noisy publishes the frames a covered window did
+        // deliver. One that delivered none still dies at
+        // `measure::SCROLL_CEILING`, where there is no reading to open.
         assert!(frames_delivered(Some(180), Some(1.0), &Limits::OPEN).is_none());
     }
 

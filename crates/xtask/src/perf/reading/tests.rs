@@ -1,6 +1,21 @@
 use super::*;
 use crate::perf::options::parse;
 
+/// The bench's deadline exists only between its two lines: before the
+/// first there is nothing to be late for, and after the second a clock
+/// still running would kill a run that had already finished.
+#[test]
+fn the_bench_clock_runs_only_between_its_two_lines() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let scroll = Scroll::default();
+    let since = Instant::now();
+    assert!(scroll.stalled_for(since).is_none());
+    scroll.began.store(true, Relaxed);
+    assert!(scroll.stalled_for(since).is_some());
+    scroll.ended.store(true, Relaxed);
+    assert!(scroll.stalled_for(since).is_none());
+}
+
 #[test]
 fn a_tracing_field_reads_up_to_the_next_space() {
     let line = "INFO first_chunk_ms=873 graph first chunk";
