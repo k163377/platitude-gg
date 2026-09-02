@@ -7,6 +7,7 @@
 mod app_env;
 mod app_out;
 mod check;
+mod corpus;
 mod demo;
 mod deny;
 mod gate;
@@ -47,6 +48,7 @@ fn main() -> ExitCode {
             println!("{}", path.display());
         }),
         Some("verify-ui") => verify::run(&args[1..]),
+        Some("corpus") => corpus::run(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("shipped") => shipped::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),

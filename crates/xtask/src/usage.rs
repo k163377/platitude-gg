@@ -145,6 +145,23 @@ const TAIL: &str = "  shipped [--no-build]
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
+  corpus [--force] [--path <dir>]
+      Builds the repository `perf` measures against, and says where it
+      is. 200,000 commits and 50,000 refs from one fast-import stream —
+      about a hundred seconds and 94MB, once. A run that finds it
+      already there does nothing.
+      It is generated rather than cloned because a clone of somebody's
+      working repository is fetched behind the measurement's back, and a
+      fetch changes the rows the graph draws, the ref tables the memory
+      is mostly made of, and the commit whose diff is timed, all while
+      HEAD holds still. It is not in git because the generator is the
+      thing worth keeping: the dates and the strings are fixed, so a
+      corpus deleted and built again is the same corpus, down to the
+      object ids.
+      It lives beside the primary checkout so all six seats measure one
+      corpus. --path puts it somewhere else; --force builds over one
+      that is already there.
+
   perf --repo <path> [--label <name>] [--runs <n>] [--breakdown] [--shipped]
       The measurement behind ci/baseline/perf-windows-x64.md, run the
       same way every time: release build, a real window (offscreen
@@ -156,7 +173,9 @@ const TAIL: &str = "  shipped [--no-build]
       taken again rather than published: the session locking, the window
       going down or moving screens, frames not arriving at the rate the
       screen could show, and the share of the machine that went to
-      something else. The screen is held awake for the length of a run.
+      something else. The screen is kept awake for the whole invocation,
+      builds and waits included, because a screen that went dark between
+      two runs is as unmeasurable as one that went dark during one.
       --breakdown builds with the `memprobe` feature and adds
       PG_MEM_REPORT=1, then prints the largest `mem report` line the run
       produced: live Rust heap, the models and the session parts holding
