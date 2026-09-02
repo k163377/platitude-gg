@@ -124,6 +124,9 @@ QtObject {
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
+                // The list has to be up before one of its rows can be pressed, and the menu up before the report can
+                // say the list stayed — one sampler owns the whole of it.
+                "list-menu",
                 "ref-list", "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",

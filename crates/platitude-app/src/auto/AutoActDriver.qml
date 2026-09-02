@@ -71,6 +71,10 @@ Item {
     property AppMenu resetMenu
     property AppMenu commitBranchCard
     property AppMenu commitTagCard
+    /// The delete row inside that branch card — the same row the sidebar's menu carries, read where a verb has to say
+    /// what the graph row's own entrance offered (`chip-menu`).
+    property AppMenuItem commitDeleteItem
+    property AppMenuItem switchCommitItem
     property AppMenuItem hardResetItem
     property PublishFlow publishFlow
     property UpstreamFlow upstreamFlow

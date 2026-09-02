@@ -131,6 +131,42 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "agrees=true",
     },
+    // Naming one of the stacked names: the row's own menu, aimed at
+    // that one instead of at the one the chip draws. Three things the
+    // picture cannot carry. **`list=`** — the card the press was made
+    // on has to still be standing under the menu, and a list that went
+    // down leaves a menu that frames exactly like one raised from the
+    // row. **`branch=` / `tag=`** — which card the naming brought up is
+    // the whole of what this gesture decides, and a card that is on the
+    // menu but not opened is not drawn at all. The tag row of the
+    // stacked list is the case worth pinning: it must swap the cards
+    // over, not merely add one.
+    // The chip's own entrance, which raises the row's menu aimed at
+    // that name — there is no second menu on the chip's side of the
+    // column any more (デザイン規約 §グラフ行の右クリック). **`ref=`
+    // is the one that must not come up**: a picture of the ref menu
+    // and a picture of this one differ by rows nobody counts by eye.
+    // **Read as a pair** — `switch` is offered on a branch the tree is
+    // not on and gone on the one it is, so either run alone would pass
+    // an implementation that always draws the row, or never does.
+    Verb {
+        name: "chip-menu",
+        when: &[],
+        plain: "chip_menu ref=false commit=true switch=true",
+    },
+    Verb {
+        name: "chip-menu-current",
+        when: &[],
+        plain: "chip_menu ref=false commit=true switch=false",
+    },
+    Verb {
+        name: "list-menu",
+        when: &[(
+            Arg::Is("1:1"),
+            "list_menu list=true menu=true branch=false tag=true",
+        )],
+        plain: "list_menu list=true menu=true",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame

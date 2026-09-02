@@ -802,24 +802,6 @@ Item {
             graphPane.startTagging(oidHex)
     }
 
-    /// A chip's right-click: the ref menu for the name the chip shows. A chip that names nothing to act on — the
-    /// detached-HEAD marker, a stash, the current branch (whose ref menu has no rows) — falls back to the row's commit
-    /// menu. The stacked list's rows pass no `oidHex` and have no row to fall back to (デザイン規約 §メニュー).
-    function openRecordMenu(record, oidHex) {
-        const kind = GitFacts.recordKind(record)
-        if (kind === "") {
-            if (oidHex !== "")
-                page.openRowMenu(oidHex)
-            return
-        }
-        const name = GitFacts.recordName(record)
-        const oid = kind === "branch" ? branchesModel.oidOfName(name)
-                  : kind === "remote" ? remotesModel.oidOfName(name)
-                  : tagsModel.oidOfName(name)
-        if (!page.openRefMenu(kind, name, name, oid, false) && oidHex !== "")
-            page.openRowMenu(oidHex)
-    }
-
     // ---- what the sidebar's rows ask for ---------------------------
     /// Unconfirmed: a name is not history. A tag and a stash are re-made under the new name by core — the only rename
     /// git has for them.
@@ -1062,34 +1044,32 @@ Item {
     }
 
     // ---- context menu on a graph row -------------------------------
-    /// The one door into that menu: the graph's rows, a chip that names nothing to act on, and the automation all come
-    /// through here.
-    /// The branch a graph row carries, in the words the chip records use — the first one the row shows, which is the
-    /// one a double-click on it already goes to (`GraphRowDelegate.primaryRecord`). The rows already taken off the
-    /// screen ahead of git's answer are filtered out the same way the delegate filters them, so a chip that is gone
-    /// does not put a card up over a branch that is not there any more (デザイン規約 §消す操作は先に画面から消す).
-    function branchRecordAt(oidHex) {
+    /// The name a graph row draws, in the words the chip records use — its first one, whatever kind it is, which is
+    /// what the row hands over when a hand presses it (`GraphRowDelegate.renameRecord`). Asked of the model for the
+    /// callers that have no row in hand. The records already taken off the screen ahead of git's answer are filtered
+    /// out the same way the delegate filters them, so a name that is gone does not put a card up over a ref that is
+    /// not there any more (デザイン規約 §消す操作は先に画面から消す).
+    function rowRecordAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
         if (row < 0)
             return ""
         const shown = GitFacts.labelsShown(graphModel.labelsAt(row), graphModel.goneChips)
         if (shown === "")
             return ""
-        const records = shown.split(String.fromCharCode(31))
-        for (let i = 0; i < records.length; i++) {
-            const kind = GitFacts.recordKind(records[i])
-            if (kind === "branch" || kind === "remote")
-                return records[i]
-        }
-        return ""
+        const first = shown.split(String.fromCharCode(31))[0]
+        return GitFacts.recordKind(first) === "" ? "" : first
     }
 
-    function openRowMenu(oidHex) {
-        // The row's own branch, so the card at the foot of its menu is the card that branch's chip opens — the two
-        // are ways at the same thing.
-        const record = page.branchRecordAt(oidHex)
-        commitRowMenu.rowBranchKind = GitFacts.recordKind(record)
-        commitRowMenu.rowBranch = record === "" ? "" : GitFacts.recordName(record)
+    /// The one door into that menu: the graph's rows wherever they are pressed, the rows of the stacked list a chip
+    /// unfolds into, and the automation all come through here. `record` is the name the menu is aimed at — the one
+    /// the chip draws, or the one pressed in the list — and empty aims it at nothing, which is a row that draws no
+    /// name at all. **The first level does not move with it**: it is the same commit either way, so what a naming in
+    /// the list changes is which card comes up (デザイン規約 §グラフ行の右クリック). Left out, the row's own name is
+    /// asked of the model, which is what the callers with no row in hand do.
+    function openRowMenu(oidHex, record) {
+        const named = record === undefined ? page.rowRecordAt(oidHex) : record
+        commitRowMenu.targetKind = GitFacts.recordKind(named)
+        commitRowMenu.targetName = commitRowMenu.targetKind === "" ? "" : GitFacts.recordName(named)
         commitMenuState.openRowMenu(oidHex)
     }
 
@@ -1098,6 +1078,7 @@ Item {
         repoTab: repoTab
         workTree: workTree
         graphModel: graphModel
+        worktreesModel: worktreesModel
         menu: commitRowMenu
     }
 
@@ -1110,16 +1091,21 @@ Item {
         workTree: workTree
         branchesModel: branchesModel
         worktreesModel: worktreesModel
+        tagsModel: tagsModel
         branch: workTree.branch
         oid: commitMenuState.menuOid
         stashRef: commitMenuState.menuStashRef
         published: commitMenuState.menuPublished
+        canSwitch: commitMenuState.menuCanSwitch
+        switchAsks: commitMenuState.menuSwitchAsks
         canSequence: commitMenuState.menuCanSequence
         canIntegrate: commitMenuState.menuCanIntegrate
         canEditHistory: commitMenuState.menuCanEditHistory
         canMoveBranch: commitMenuState.menuCanMoveBranch
         canBranchHere: commitMenuState.menuCanBranchHere
         stashCanWrite: commitMenuState.menuStashCanWrite
+        // The same road the row's double-click takes, held on the same answers (`switchToRef`).
+        onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
         // Straight to the graph row: this menu is only ever raised on one.
         onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
         onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
@@ -1134,6 +1120,9 @@ Item {
         onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
         onDeleting: (kind, id) => page.showGone(kind, id)
         onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+        // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
+        // whether it stays now is the pointer's to answer again.
+        onDismissed: rowHost.settleRefList()
     }
 
     ClipboardHelper {
@@ -1216,12 +1205,13 @@ Item {
         id: rowHost
         graphPane: graphPane
         currentBranch: workTree.branch
-        menuStanding: refRowMenu.opened
+        menuStanding: commitRowMenu.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
         // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
-        onRecordMenuAsked: record => page.openRecordMenu(record, "")
+        // A right-click on one of the card's rows raises the row's own menu, aimed at the name that was pressed.
+        onRecordMenuAsked: (oidHex, record) => page.openRowMenu(oidHex, record)
     }
 
     // ---- rewriting one commit --------------------------------------
@@ -2512,8 +2502,7 @@ Item {
                                 if (oidHex !== "" && oidHex !== page.selectedOid)
                                     page.activateRow(oidHex)
                             }
-                            onRowMenuOpenRequested: oidHex => page.openRowMenu(oidHex)
-                            onChipMenuOpenRequested: (oidHex, record) => page.openRecordMenu(record, oidHex)
+                            onRowMenuOpenRequested: (oidHex, record) => page.openRowMenu(oidHex, record)
                             onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
                             onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)

@@ -72,9 +72,11 @@ Item {
     // to. Empty means the row shows no branch, which is the offer to put one there.
     readonly property string primaryRecord:
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
-    // What the spaced second click names: the chip's own first record, whatever kind it is. **Not `primaryRecord`** —
-    // that one answers "where does this row lead", and a tag leads nowhere while still being a name that can be
-    // changed (デザイン規約 §左メニューの所作). The HEAD marker names no ref, so it answers `""`.
+    // **The name this row draws**: the chip's own first record, whatever kind it is. What the spaced second click
+    // changes, and what a right-click aims the menu's cards at — one answer, so the row cannot rename one name and
+    // offer another. **Not `primaryRecord`** — that one answers "where does this row lead", and a tag leads nowhere
+    // while still being a name that can be changed (デザイン規約 §左メニューの所作). The HEAD marker names no ref, so
+    // it answers `""`.
     readonly property string renameRecord:
         rowItem.labelRecords.length > 0 && GitFacts.recordKind(rowItem.labelRecords[0]) !== ""
             ? rowItem.labelRecords[0] : ""
@@ -386,16 +388,15 @@ Item {
             }
             rowItem.claimRow()
             // The synthetic WIP row is not a commit, so nothing in the commit menu applies to it.
-            if (!rowItem.isWip) {
-                // In the chip's half the menu is the named ref's — what the name on screen names — and in the other
-                // half the row's. **The same division the hover uses** (`partAt`): one boundary, so the button and the
-                // rest cannot answer a point differently. The stacked names under +N take the same right-click on the
-                // list the chip unfolds into.
-                if (rowItem.partAt(mouse.x) === "chip")
-                    rowItem.ListView.view.chipMenuRequested(rowItem.oid_hex, rowItem.labelRecords[0])
-                else
-                    rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex)
-            }
+            //
+            // **The row is not divided here.** Wherever along it the press landed, one menu comes up: its rows are
+            // about this commit, and the cards at its foot are about the name the chip is drawing — which is what
+            // `renameRecord` already is, the first record the chip reads out (デザイン規約 §グラフ行の右クリック).
+            // The hover still reads the division (`partAt`), because the two things a rest opens are two different
+            // things; a right-click opens one, so it has nothing to divide. The stacked names under +N aim the same
+            // menu at one of themselves, through the right-click on the list the chip unfolds into.
+            if (!rowItem.isWip)
+                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameRecord)
         }
         // Where the row leads: the chip it shows, or — with no branch on it — the offer to put one there. The page
         // decides which.

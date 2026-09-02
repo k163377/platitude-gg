@@ -25,6 +25,8 @@ Item {
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var commitMenu: driver.commitMenu
+    readonly property var commitBranchCard: driver.commitBranchCard
+    readonly property var commitTagCard: driver.commitTagCard
     readonly property var refList: driver.refList
     readonly property var rowCard: driver.rowCard
 
@@ -49,6 +51,15 @@ Item {
             rowPartReport.want = parts[2]
             rowPartReport.x = Number(parts[1])
             rowPartTimer.start()
+        } else if (act === "list-menu") {
+            // The stacked list, and then the right-click on one of its rows: the row's own menu, aimed at the name
+            // that was pressed rather than at the one the chip draws (デザイン規約 §グラフ行の右クリック). The
+            // argument is `<行>[:<カードの行>]`, the same shape `graph-reclick-list` takes.
+            const at = arg.split(":")
+            refListOpenTimer.row = at[0] === "" ? 0 : Number(at[0])
+            refListOpenTimer.cards = false
+            refListOpenTimer.menuRow = at.length > 1 ? Number(at[1]) : 0
+            refListOpenTimer.start()
         } else if (act === "ref-list" || act === "ref-list-card") {
             // Hover cannot be injected, so this enters where the hover timer would — from the sampler, so an early
             // `itemAtIndex` miss retries. `-card` walks row → card → chip → asked again from under the list: both
@@ -90,6 +101,8 @@ Item {
         id: refListOpenTimer
         property int row: 0
         property bool cards: false
+        /// Which row of the list `list-menu` presses; -1 for the verbs that only open it.
+        property int menuRow: -1
         onTriggered: {
             const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
             if (!stacked)
@@ -103,8 +116,32 @@ Item {
                 graphPane.view.rowHoverRequested(stacked, true)
                 rowCardTimer.row = refListOpenTimer.row
                 rowCardTimer.start()
-            } else
+            } else if (refListOpenTimer.menuRow >= 0)
+                listMenuTimer.start()
+            else
                 refListShownTimer.start()
+        }
+    }
+    // The right-click on a row of that list, put in once the list is actually up — the rows are the popup's own, and
+    // an unopened popup has none to press.
+    SampleTimer {
+        id: listMenuTimer
+        onTriggered: {
+            if (!refList.opened)
+                return
+            if (!refList.menuRow(refListOpenTimer.menuRow))
+                return
+            listMenuTimer.stop()
+            // **`list=` is read after the menu is up**: the card the press was made on has to still be standing under
+            // it, or what the reader named goes out from under the hand that named it (デザイン規約 §メニュー の
+            // 例外). `branch=` / `tag=` are the cards themselves — which one the naming brought up is the whole of
+            // what this gesture decides.
+            AppBackend.report("list_menu list=" + refList.opened
+                              + " menu=" + commitMenu.opened
+                              + " branch=" + commitBranchCard.applies
+                              + " tag=" + commitTagCard.applies
+                              + " rows=" + commitMenu.offeredRows)
+            driver.complete()
         }
     }
     // The bare verb's own end: the list is up (an unopened popup frames as the plain screen).

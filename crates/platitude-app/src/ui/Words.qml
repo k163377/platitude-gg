@@ -15,6 +15,11 @@ QtObject {
     /// rebase entries say it with one voice (デザイン規約 §可否・警告の出し場所).
     readonly property string rewritesPushed: qsTr("rewrites pushed commits")
 
+    /// A branch of one's own started where the row stands, as the graph row's menu and the sidebar's ref menu both
+    /// offer it — one seat apart, one sentence (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文). The box a tag
+    /// is typed into says it the same way, from inside the TAG card that both menus carry (`RefTagMenu`).
+    readonly property string createBranchHere: qsTr("Create branch here…")
+
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
     readonly property string openRepository: qsTr("Open repository…")
 

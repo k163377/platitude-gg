@@ -111,6 +111,8 @@ Item {
             resetMenu: harness.commitRowMenu.resetSubmenu
             commitBranchCard: harness.commitRowMenu.branchCard
             commitTagCard: harness.commitRowMenu.tagCard
+            commitDeleteItem: harness.commitRowMenu.branchCard.deleteItem
+            switchCommitItem: harness.commitRowMenu.switchItem
             hardResetItem: harness.commitRowMenu.hardResetRow
             publishFlow: harness.publishFlow
             upstreamFlow: harness.upstreamFlow

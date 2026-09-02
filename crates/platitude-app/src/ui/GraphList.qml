@@ -139,8 +139,9 @@ AppListView {
     /// A row was clicked. **The row number travels with the commit**: the page has to place the selection, and
     /// looking a row up is a walk over every loaded one (`RepoPage.activateRow`).
     signal rowSelected(string oidHex, int atRow)
-    signal rowMenuRequested(string oidHex)
-    signal chipMenuRequested(string oidHex, string record)
+    /// A row was right-clicked, anywhere along it. `record` is the name its chip draws (kind + flags + name), empty
+    /// where it draws none — what the menu's cards are aimed at (デザイン規約 §グラフ行の右クリック).
+    signal rowMenuRequested(string oidHex, string record)
     signal rowSwitchRequested(string oidHex, string record)
     /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
     /// being changed. `record` is the chip's first one, whatever kind it names.

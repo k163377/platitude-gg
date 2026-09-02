@@ -78,7 +78,7 @@ Item {
     /// on are one target.
     signal recordActivated(string record)
     signal recordChosen(string oidHex, int atRow)
-    signal recordMenuAsked(string record)
+    signal recordMenuAsked(string oidHex, string record)
 
     anchors.fill: parent
 
@@ -192,7 +192,9 @@ Item {
         rowOid: host.refListOid
         onPicked: record => host.recordActivated(record)
         onChose: host.recordChosen(host.refListOid, host.refListRow)
-        onMenuAsked: record => host.recordMenuAsked(record)
+        // The row this card stands on travels with the name: the menu it raises is that row's, aimed at the name that
+        // was pressed (デザイン規約 §グラフ行の右クリック).
+        onMenuAsked: record => host.recordMenuAsked(host.refListOid, record)
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
         // under a popup sees no hover at all. Until the card itself has

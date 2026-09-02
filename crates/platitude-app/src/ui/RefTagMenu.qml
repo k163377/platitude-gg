@@ -5,24 +5,27 @@ import platitude.ui
 // Everything a tag's name answers for, behind the tag's own mark: made here, sent, and taken away from either side
 // (デザイン規約 §メニュー の入れ子).
 //
-// Its own file for length alone, split out of `RefRowMenu` (structure.md §分割). Every answer these rows
-// read is decided as the menu opens and handed down from there; nothing here asks the repository anything.
+// **One card, two entrances**, the same as the branch's (`RefBranchMenu`): the graph row's menu and the sidebar's ref
+// menu both carry this instance, and it works out its own answers rather than being handed them — `offerOn` freezes
+// them as the menu opens, the way every other menu freezes what it shows (デザイン規約 §メニュー).
 AppMenu {
     id: tagMenu
 
     required property RepoTab repoTab
-    /// The row the menu above stands on, and what it offers — the same values `RefRowMenu` froze as it opened.
-    required property string kind
-    required property string refId
-    required property string refOid
-    required property string pushRemote
-    /// Where the remote was last heard to have this name, when that is somewhere else. Empty for the plain push.
-    required property string tagDriftOid
-    required property bool canBranchHere
-    required property bool canPushTag
-    required property bool canDelete
-    required property bool canDeleteRemoteTag
-    required property bool canDeleteTagEverywhere
+    required property WorkTreeModel workTree
+    /// Where a remote was last heard to have a tag that is here as well (`remoteTagDrift`), and which sides of a name
+    /// exist (`tagSides`) — the readings live in this section alone.
+    required property NavSectionModel tagsModel
+
+    /// Whether a name can be made on the commit this card stands on. **Handed in rather than worked out here**: the
+    /// two menus that carry the card ask it of different rules — a graph row asks the commit's, a sidebar row the
+    /// ref's — and `Create tag here…` is a row about the commit, not about the tag.
+    property bool canBranchHere: false
+
+    /// The tag this card is about, frozen by `offerOn`. `kind` is `tag` on a row that names one; anything else leaves
+    /// the card holding `Create tag here…` alone, and `stash` takes the card off the menu.
+    readonly property alias kind: state.kind
+    readonly property alias refId: state.refId
 
     /// The box a name is typed into, which the page owns.
     signal tagHereRequested(string oidHex)
@@ -38,6 +41,56 @@ AppMenu {
     readonly property alias deleteRemoteTagItem: refRemoteTagDeleteItem
     readonly property alias deleteTagBothItem: refBothTagDeleteItem
 
+    /// Everything this card reads, worked out once as the menu opens and left alone while it stands.
+    QtObject {
+        id: state
+        property string kind: ""
+        property string refId: ""
+        property string refOid: ""
+        property string pushRemote: ""
+        /// Where the remote was last heard to have this name, when that is somewhere else. Empty for the plain push.
+        property string tagDriftOid: ""
+        property bool canPushTag: false
+        property bool canDelete: false
+        property bool canDeleteRemoteTag: false
+        property bool canDeleteTagEverywhere: false
+    }
+
+    /// Opens on that tag, if the row names one. `oidHex` is the commit the card stands on — the one a name would be
+    /// made at — which is the row's own commit whether or not a tag is on it.
+    function offerOn(kind, full, oidHex) {
+        state.kind = kind
+        state.refId = full
+        state.refOid = oidHex
+        // Where a push would go, and what that remote already has under this name. Both settle before the offers are
+        // asked for, so the push row's whole shape is decided by the time the card is on screen.
+        state.pushRemote = tagMenu.repoTab.defaultRemote
+        state.tagDriftOid = kind === "tag"
+            ? tagMenu.tagsModel.remoteTagDrift(full, state.pushRemote) : ""
+        if (kind !== "tag") {
+            state.canPushTag = false
+            state.canDelete = false
+            state.canDeleteRemoteTag = false
+            state.canDeleteTagEverywhere = false
+            return
+        }
+        // Which sides of the name exist, which is what tells the three delete rows apart. The lookup is the model's;
+        // what the rows may offer on it is core's rule (offers::ref_menu).
+        const offers = GitFacts.refMenuOffers(
+            kind, full, oidHex,
+            // Nothing running, while the doors are held: the hold already answers for every row of this card
+            // (`RefRowMenu.askBusy` — the same rule at the other entrance).
+            tagMenu.repoTab.state === "open",
+            tagMenu.heldReason !== "" ? 0 : tagMenu.repoTab.busyCount,
+            tagMenu.workTree.branch, tagMenu.workTree.detached,
+            tagMenu.workTree.opText, tagMenu.workTree.conflictCount,
+            "", "", state.pushRemote, tagMenu.tagsModel.tagSides(full)).split(" ")
+        state.canPushTag = offers.includes("push-tag")
+        state.canDelete = offers.includes("delete")
+        state.canDeleteRemoteTag = offers.includes("delete-remote-tag")
+        state.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
+    }
+
     /// Both cards go at once: this one, and the one it hangs off.
     function dismiss() {
         tagMenu.close()
@@ -48,7 +101,7 @@ AppMenu {
     titleTint: Theme.refTag
     title: qsTr("TAG")
     // A stash is nobody's history, so there is no tag to make on it and no card to open.
-    applies: tagMenu.kind !== "stash"
+    applies: state.kind !== "stash"
 
     // The mark left where this row stands. Same words as the commit menu's row (デザイン規約 §メニュー: 入口が違っても
     // 同じ操作は同じ文), and offered on the same answer as the branch card's own first row: every row that names a
@@ -57,7 +110,7 @@ AppMenu {
         id: refTagHereItem
         text: qsTr("Create tag here…")
         offered: tagMenu.canBranchHere
-        onTriggered: tagMenu.tagHereRequested(tagMenu.refOid)
+        onTriggered: tagMenu.tagHereRequested(state.refOid)
     }
     // A tag sent to where this repository pushes — the only row in this menu that leaves the machine of its own
     // accord. The branches' own push is the toolbar's, which is where the counts that decide how hard it may push
@@ -70,17 +123,17 @@ AppMenu {
     // spelling because a menu row is measured against the widest row (§git 用語のコード表記).
     AppMenuItem {
         id: refPushTagItem
-        code: tagMenu.tagDriftOid === "" ? "push" : "push --force"
+        code: state.tagDriftOid === "" ? "push" : "push --force"
         //: Follows the `push` chip: "push to origin".
-        text: qsTr("to %1").arg(tagMenu.pushRemote)
-        offered: tagMenu.canPushTag
-        holdMs: tagMenu.tagDriftOid === "" ? 0 : Metrics.holdMs
+        text: qsTr("to %1").arg(state.pushRemote)
+        offered: state.canPushTag
+        holdMs: state.tagDriftOid === "" ? 0 : Metrics.holdMs
         // Reaching past this machine is the warning tone, as it is on the remote-branch delete (デザイン規約 §状態).
         holdTone: Theme.warning
-        onTriggered: tagMenu.repoTab.pushTag(tagMenu.pushRemote, tagMenu.refId, "")
+        onTriggered: tagMenu.repoTab.pushTag(state.pushRemote, state.refId, "")
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.repoTab.pushTag(tagMenu.pushRemote, tagMenu.refId, tagMenu.tagDriftOid)
+            tagMenu.repoTab.pushTag(state.pushRemote, state.refId, state.tagDriftOid)
         }
     }
     AppMenuSeparator {}
@@ -96,23 +149,23 @@ AppMenu {
         code: "tag --delete"
         // The name is data, not sentence — the delete rows' one exception to saying nothing twice, so that what is
         // about to go is readable under the hand during the hold (デザイン規約 §メニュー).
-        text: tagMenu.refId
+        text: state.refId
         growsForText: false
-        offered: tagMenu.kind === "tag" && tagMenu.canDelete
+        offered: state.kind === "tag" && state.canDelete
         holdMs: Metrics.holdMs
         holdTone: Theme.danger
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleting("tag", tagMenu.refId)
-            tagMenu.repoTab.deleteTag(tagMenu.refId)
+            tagMenu.deleting("tag", state.refId)
+            tagMenu.repoTab.deleteTag(state.refId)
         }
     }
     AppMenuItem {
         id: refRemoteTagDeleteItem
         code: "push --delete"
-        text: tagMenu.refId
+        text: state.refId
         growsForText: false
-        offered: tagMenu.kind === "tag" && tagMenu.canDeleteRemoteTag
+        offered: state.kind === "tag" && state.canDeleteRemoteTag
         holdMs: Metrics.holdMs
         // Reaching past this machine is warning, not danger — what goes is a name over there, and whatever it marked
         // stays wherever it is (デザイン規約 §状態).
@@ -121,9 +174,9 @@ AppMenu {
             tagMenu.dismiss()
             // A name only the remote had leaves the sidebar with it; one held here keeps its row and loses the badge,
             // which the read after the write brings back (デザイン規約 §消す操作は先に画面から消す).
-            if (!tagMenu.canDeleteTagEverywhere)
-                tagMenu.deleting("tag", tagMenu.refId)
-            tagMenu.repoTab.deleteRemoteTag(tagMenu.pushRemote, tagMenu.refId)
+            if (!state.canDeleteTagEverywhere)
+                tagMenu.deleting("tag", state.refId)
+            tagMenu.repoTab.deleteRemoteTag(state.pushRemote, state.refId)
         }
     }
     // A composite of two commands is no one command, so words rather than a chip — the same row the branch table
@@ -131,15 +184,15 @@ AppMenu {
     AppMenuItem {
         id: refBothTagDeleteItem
         text: qsTr("Delete both")
-        offered: tagMenu.kind === "tag" && tagMenu.canDeleteTagEverywhere
+        offered: state.kind === "tag" && state.canDeleteTagEverywhere
         holdMs: Metrics.holdMs
         // The local half of a tag throws nothing away that the commit is not still holding — git keeps the object and
         // only the name goes — so this pair never reaches the danger the branch's `-D` does.
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleting("tag", tagMenu.refId)
-            tagMenu.repoTab.deleteTagEverywhere(tagMenu.refId, tagMenu.pushRemote)
+            tagMenu.deleting("tag", state.refId)
+            tagMenu.repoTab.deleteTagEverywhere(state.refId, state.pushRemote)
         }
     }
 }

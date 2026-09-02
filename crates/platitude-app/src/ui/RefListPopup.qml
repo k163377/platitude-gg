@@ -100,6 +100,15 @@ AppCard {
         row.doubleClick()
         return true
     }
+    /// The right-click on one of these rows, as the row answers one: the graph row's own menu, aimed at this name
+    /// instead of the one the chip draws (デザイン規約 §グラフ行の右クリック).
+    function menuRow(i) {
+        const row = rowsRepeater.itemAt(i)
+        if (!row)
+            return false
+        row.rightClick()
+        return true
+    }
     function rowArmed(i) {
         const row = rowsRepeater.itemAt(i)
         return row && refList.rowClicks ? refList.rowClicks.rowRenameArmed(row.modelData) : false
@@ -248,12 +257,18 @@ AppCard {
                     onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
                     onDoubleTapped: refRow.doubleClick()
                 }
+                /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
+                /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the
+                /// row would have decided (PG_AUTO_ACT=list-menu).
+                function rightClick() {
+                    refList.menuAsked(refRow.modelData)
+                }
                 TapHandler {
                     acceptedButtons: Qt.RightButton
                     enabled: !refRow.unavailable
                     // The list stays: the menu opens over it, and the owner keeps the list up for as long as the menu
                     // stands (its settle checks the menu).
-                    onTapped: refList.menuAsked(refRow.modelData)
+                    onTapped: refRow.rightClick()
                 }
             }
         }

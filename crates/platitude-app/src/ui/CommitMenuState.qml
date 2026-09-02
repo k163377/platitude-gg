@@ -15,6 +15,9 @@ QtObject {
     required property RepoTab repoTab
     required property WorkTreeModel workTree
     required property GraphModel graphModel
+    /// Which working copy has a branch checked out — the one answer the `switch` row reads that the commit's own
+    /// rules cannot give (`RefRowMenu` asks it the same way at the other entrance).
+    required property NavSectionModel worktreesModel
     /// The menu these answers are handed to, and the one this opens.
     required property CommitRowMenu menu
 
@@ -35,6 +38,34 @@ QtObject {
     property bool menuCanMoveBranch: false
     property bool menuCanBranchHere: false
     property bool menuStashCanWrite: false
+    /// Whether the name this row draws is somewhere to move to, and whether the press raises a question first. Off
+    /// the ref rules rather than the commit's: it is the name that is the destination, not the commit
+    /// (offers::ref_menu).
+    property bool menuCanSwitch: false
+    property bool menuSwitchAsks: false
+
+    /// What the `switch` row reads, asked of the name the menu is aimed at. Empty on a row that draws none, which is
+    /// what takes the row off the menu.
+    function askSwitch(kind, name, oidHex) {
+        menuState.menuCanSwitch = false
+        menuState.menuSwitchAsks = false
+        if (kind !== "branch" && kind !== "remote")
+            return
+        // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
+        const held = kind === "branch"
+            ? menuState.worktreesModel.worktreeHolding(name)
+            : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(name))
+        const offers = GitFacts.refMenuOffers(
+            kind, name, oidHex,
+            menuState.repoTab.state === "open",
+            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
+            menuState.workTree.branch, menuState.workTree.detached,
+            menuState.workTree.opText, menuState.workTree.conflictCount,
+            held, "", menuState.repoTab.defaultRemote, "").split(" ")
+        menuState.menuCanSwitch = offers.includes("switch")
+        menuState.menuSwitchAsks = offers.includes("asks")
+    }
+
     function openRowMenu(oidHex) {
         menuState.menuOid = oidHex
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
@@ -57,6 +88,7 @@ QtObject {
         menuState.menuCanEditHistory = offers.includes("edit-history")
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
+        menuState.askSwitch(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
         if (menuState.repoTab.state === "open")
             menuState.repoTab.checkPublish(oidHex + "^!")
         menuState.menu.offerCommit()

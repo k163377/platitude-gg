@@ -22,7 +22,8 @@ Item {
     /// this level that the answer changes.
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
-    /// Where a remote last had a tag that is here as well (`remoteTagDrift`) — the readings live in this section alone.
+    /// Handed to the tag card, which reads the sides a name stands on and where a remote last had it out of this
+    /// section alone (`RefTagMenu`).
     required property NavSectionModel tagsModel
 
     /// Why every row here is out, in one line, while the window's write doors are held — a write that replays is
@@ -51,21 +52,9 @@ Item {
     property bool switchAsks: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
+    /// The stash's own drop — the only delete this level answers for. What a branch's name and a tag's name offer is
+    /// their own cards' question, worked out inside them (`RefBranchMenu` / `RefTagMenu`).
     property bool canDelete: false
-    /// A tag sent to the remote this repository pushes to, and where that remote already has the name when it has it
-    /// somewhere else. **Both are read as the menu opens**: the drift is what decides whether the row is a plain push
-    /// or the leased overwrite, and a row that changed from a click to a hold while the card stood would be a row that
-    /// moved under the hand (デザイン規約 §メニュー「開いている間は動かさない」). The commit is what the lease is pinned to, so a
-    /// remote that has moved since is refused rather than flattened (§相手の履歴を置き換える).
-    property bool canPushTag: false
-    property string tagDriftOid: ""
-    /// The tag taken off the remote, and both copies at once. A tag has no namespace, so one row of TAGS carries both
-    /// sides of a name — which of the delete rows have anything to name is core's answer off `tagSides`.
-    property bool canDeleteRemoteTag: false
-    property bool canDeleteTagEverywhere: false
-    /// Where this repository's pushes go. Not read per row — it is the repository's answer — but latched with the rest
-    /// so the row that names it cannot be renamed out from under the hand.
-    property string pushRemote: ""
 
     // ---- bringing two lines of history together --------------------
     /// The commits a rebase onto this row would rewrite. Asked as the menu opens — the answer is a whole git call away,
@@ -130,16 +119,10 @@ Item {
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
         refRowMenu.rebasePublished = false
-        // Where a push would go, and what that remote already has under this name. Both settle before the offers are
-        // asked for, so the push row's whole shape is decided by the time the card is on screen.
-        refRowMenu.pushRemote = refRowMenu.repoTab.defaultRemote
-        refRowMenu.tagDriftOid = kind === "tag"
-            ? refRowMenu.tagsModel.remoteTagDrift(full, refRowMenu.pushRemote) : ""
-        // Which sides of the name exist, which is what tells the three delete rows apart.
-        const sides = kind === "tag" ? refRowMenu.tagsModel.tagSides(full) : ""
-        // The deletes are the branch card's own question, and it works its answers out for itself — the same card the
-        // graph row's menu carries, asked the same way (RefBranchMenu).
+        // Both cards are their own question, and each works its answers out for itself — the very cards the graph
+        // row's menu carries, asked the same way (RefBranchMenu / RefTagMenu).
         branchMenu.offerOn(kind, name, full, oidHex)
+        tagMenu.offerOn(kind, full, oidHex)
         // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and the
         // row wears the `!` for it rather than greying — this level's one use of the answer; the delete rows read
         // their own copy inside the card. A remote row lands on the local branch of the same name, so it is that one
@@ -156,15 +139,12 @@ Item {
             refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
-            held, "", refRowMenu.pushRemote, sides).split(" ")
+            held, "", refRowMenu.repoTab.defaultRemote, "").split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canDelete = offers.includes("delete")
-        refRowMenu.canPushTag = offers.includes("push-tag")
-        refRowMenu.canDeleteRemoteTag = offers.includes("delete-remote-tag")
-        refRowMenu.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
         if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
             refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
         return refMenu.offer()
@@ -186,16 +166,16 @@ Item {
         // cards at the foot hold what is *done to* a ref rather than gone from it.
         //
         // A branch of one's own, started where this row stands, is one of those moves and not a thing done to this
-        // ref: it is where the reader carries on from. Ahead of `switch` rather than beside
-        // it — nothing moves anywhere until a name has been typed — and the same words in
-        // the same seat as the commit menu's row (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+        // ref: it is where the reader carries on from. **Beside `switch`, in one group**: what it runs is
+        // `switch --create`, so it is that row's other form — the move to a branch that does not exist yet
+        // (デザイン規約 §ブランチ・コミットへの移動). Same words in the same seat as the graph row's menu
+        // (§メニュー: 入口が違っても同じ操作は同じ文).
         AppMenuItem {
             id: refBranchHereItem
-            text: qsTr("Create branch here…")
+            text: Words.createBranchHere
             offered: refRowMenu.canBranchHere
             onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
-        AppMenuSeparator {}
         AppMenuItem {
             id: refSwitchItem
             code: "switch"
@@ -213,6 +193,7 @@ Item {
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
         }
+        AppMenuSeparator {}
         AppMenuItem {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
@@ -263,21 +244,15 @@ Item {
             onCloseRequested: refMenu.close()
         }
         AppMenuSeparator {}
-        // Everything a tag's name answers for, behind its own mark — its own file for length alone (RefTagMenu).
+        // Everything a tag's name answers for, behind its own mark — the very card the graph row's menu carries
+        // (RefTagMenu).
         RefTagMenu {
             id: tagMenu
             heldReason: refRowMenu.heldReason
             repoTab: refRowMenu.repoTab
-            kind: refRowMenu.kind
-            refId: refRowMenu.refId
-            refOid: refRowMenu.refOid
-            pushRemote: refRowMenu.pushRemote
-            tagDriftOid: refRowMenu.tagDriftOid
+            workTree: refRowMenu.workTree
+            tagsModel: refRowMenu.tagsModel
             canBranchHere: refRowMenu.canBranchHere
-            canPushTag: refRowMenu.canPushTag
-            canDelete: refRowMenu.canDelete
-            canDeleteRemoteTag: refRowMenu.canDeleteRemoteTag
-            canDeleteTagEverywhere: refRowMenu.canDeleteTagEverywhere
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
             onCloseRequested: refMenu.close()

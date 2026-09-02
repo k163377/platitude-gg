@@ -16,10 +16,9 @@ Rectangle {
     property bool blank: false
 
     signal rowActivated(string oidHex, int atRow)
-    signal rowMenuOpenRequested(string oidHex)
-    /// Right-click on the chip itself: the menu is the named ref's rather than the row's — and the page still falls
-    /// back to the row's where the chip names nothing to act on. `record` is the chip as drawn (kind + flags + name).
-    signal chipMenuOpenRequested(string oidHex, string record)
+    /// Right-click on a row, wherever along it. `record` is the name its chip draws (kind + flags + name), empty on a
+    /// row that draws none — the menu is the row's either way, and that name is what its cards are about.
+    signal rowMenuOpenRequested(string oidHex, string record)
     /// A row was double-clicked. `record` is the chip it shows (kind + flags + name); empty when the row shows no
     /// branch at all.
     signal rowSwitchRequested(string oidHex, string record)
@@ -366,8 +365,7 @@ Rectangle {
         // which is the only thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
-        onRowMenuRequested: oidHex => graphArea.rowMenuOpenRequested(oidHex)
-        onChipMenuRequested: (oidHex, record) => graphArea.chipMenuOpenRequested(oidHex, record)
+        onRowMenuRequested: (oidHex, record) => graphArea.rowMenuOpenRequested(oidHex, record)
         onRowSelected: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
         onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)

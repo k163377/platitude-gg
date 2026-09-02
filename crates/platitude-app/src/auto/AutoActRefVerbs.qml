@@ -45,6 +45,9 @@ Item {
     readonly property var commitMenu: driver.commitMenu
     readonly property var tagHereCommitItem: driver.tagHereCommitItem
     readonly property var commitTagCard: driver.commitTagCard
+    readonly property var commitBranchCard: driver.commitBranchCard
+    readonly property var commitDeleteItem: driver.commitDeleteItem
+    readonly property var switchCommitItem: driver.switchCommitItem
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
@@ -107,12 +110,14 @@ Item {
             refMenu.openSub(refBranchCard)
             refusedRowTimer.start()
         } else if (act === "chip-menu") {
-            // Only the kind letter and the name of the record are read.
-            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            // The chip's own entrance. **It raises the row's menu, aimed at that name** — there is no second menu on
+            // the other side of the chip column any more (デザイン規約 §グラフ行の右クリック). Only the kind letter
+            // and the name of the record are read.
+            page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
-            page.openRecordMenu("L10010" + workTree.branch,
-                                branchesModel.oidOfName(workTree.branch))
+            page.openRowMenu(branchesModel.oidOfName(workTree.branch),
+                             "L10010" + workTree.branch)
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced rather than hovered: the pointer cannot be put on a row from here, and this writes to the property
@@ -120,21 +125,19 @@ Item {
             // reason: without one it is the branch you are standing on, with one it is a branch another working copy
             // has checked out (the flags say which, and the current branch is the only chip that carries them).
             const blockedOn = arg === "" ? workTree.branch : arg
-            page.openRecordMenu((arg === "" ? "L10010" : "L00000") + blockedOn,
-                                branchesModel.oidOfName(blockedOn))
+            page.openRefMenu("branch", blockedOn, blockedOn, branchesModel.oidOfName(blockedOn))
             refMenu.openSub(refBranchCard)
             refDeleteItem.tipForced = true
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here.
-            page.openRecordMenu("L00000" + (arg === "" ? workTree.branch : arg),
-                                branchesModel.oidOfName(
-                                    arg === "" ? workTree.branch : arg))
+            const litOn = arg === "" ? workTree.branch : arg
+            page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
             AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
-            page.openRecordMenu("L00000" + arg, branchesModel.oidOfName(arg))
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             refMenu.openSub(refBranchCard)
             earlyDeleteTimer.start()
         } else if (act === "branch-at-tag") {
@@ -222,10 +225,13 @@ Item {
             if (!refMenu.opened && !commitMenu.opened)
                 return
             chipMenuTimer.stop()
+            // `ref=` is the menu that must **not** come up: the chip and the rest of the row are one target now, and a
+            // second menu on the chip's side is the very split this entrance was joined to end.
             AppBackend.report("chip_menu ref=" + refMenu.opened
                                        + " commit=" + commitMenu.opened
-                                       + " delete=" + refDeleteItem.code
-                                       + " " + refDeleteItem.text)
+                                       + " switch=" + switchCommitItem.offered
+                                       + " delete=" + commitDeleteItem.code
+                                       + " " + commitDeleteItem.text)
             driver.complete()
         }
     }
