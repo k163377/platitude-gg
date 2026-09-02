@@ -132,7 +132,13 @@ impl Hub {
         let feeds = Arc::clone(&tab.feeds);
         let applied = self.settings.defaults.clone();
         let sink = Arc::new(BridgeSink::new(feeds));
-        let session = RepoSession::open(executor, handle, path, Arc::clone(&sink) as _);
+        let session = RepoSession::open(
+            executor,
+            handle,
+            path,
+            Arc::clone(&sink) as _,
+            crate::harness::pass_hooks(),
+        );
         apply_repo_settings(&session, &applied);
         // The saved tags flag takes the same door the settings do: the
         // page's restore runs before this session exists, so its

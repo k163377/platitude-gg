@@ -285,6 +285,7 @@ async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession
         tokio::runtime::Handle::current(),
         work.path.clone(),
         Arc::clone(&sink) as Arc<dyn SessionSink>,
+        None,
         Recording::WithBackground,
     );
     sink.wait_for("Opened", |evs| {

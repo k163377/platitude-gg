@@ -30,15 +30,10 @@ pub struct RepoSession {
     /// The graph passes that could still walk, whether or not the stream
     /// is still theirs (see [`GraphPasses`]).
     pub(super) graph_passes: Arc<GraphPasses>,
-    /// What the next graph pass to reach a given step runs there
-    /// ([`RepoSession::run_inside_next_pass`]). Empty in the application,
-    /// which never leaves anything here: the only caller is a test ending
-    /// a pass the one way nothing else can.
-    pub(super) pass_step: Mutex<Option<PassStepHook>>,
-    /// What every graph pass reaching a given step fails with instead
-    /// of walking ([`RepoSession::fail_every_pass`]). Empty except while a
-    /// caller is driving the failure on purpose.
-    pub(super) pass_fault: Mutex<Option<(PassStep, String)>>,
+    /// What the outside was let into the graph passes with when this
+    /// session was opened ([`PassHooks`]) — `None` in the application as
+    /// shipped, where no pass asks anything and nothing is held for it.
+    pub(super) pass_hooks: Option<Arc<dyn PassHooks>>,
     /// Whether the graph on screen has been left behind the repository:
     /// a rebuild that would have replaced it did not land, so every row
     /// standing there is real and none of them is current.

@@ -3,7 +3,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::support::{Patience, TestRepo};
-use platitude_core::session::{RepoSession, SessionEvent, SessionSink};
+use platitude_core::GitError;
+use platitude_core::session::{PassHooks, PassStep, RepoSession, SessionEvent, SessionSink};
 
 /// Picks the event a [`CaptureSink`] hook fires on.
 type When = Box<dyn Fn(&SessionEvent) -> bool + Send>;
@@ -310,14 +311,16 @@ pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
 /// [`opened`] without the wait — for a test whose first assertion is about
 /// an event before, or instead of, `Opened`.
 pub fn open_unawaited(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
-    (sink, session)
+    start(repo, crate::support::exec::isolated(), None)
+}
+
+/// [`open_unawaited`], with the doors into its graph passes in hand — for
+/// the tests that end a pass from inside it.
+pub fn open_with_doors(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
+    let doors = Arc::new(PassDoors::default());
+    let hooks: Arc<dyn PassHooks> = Arc::clone(&doors) as _;
+    let (sink, session) = start(repo, crate::support::exec::isolated(), Some(hooks));
+    (sink, session, doors)
 }
 
 /// [`opened`] on an executor of the caller's own — for a session that has
@@ -327,13 +330,7 @@ pub async fn opened_with(
     repo: &TestRepo,
     exec: platitude_core::process::GitExecutor,
 ) -> (Arc<CaptureSink>, Arc<RepoSession>) {
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        exec,
-        tokio::runtime::Handle::current(),
-        repo.path.clone(),
-        sink.clone(),
-    );
+    let (sink, session) = start(repo, exec, None);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .any(|e| matches!(e, SessionEvent::Opened { .. }))
@@ -341,6 +338,85 @@ pub async fn opened_with(
     })
     .await;
     (sink, session)
+}
+
+/// Opens `repo` on `exec`, watched by a fresh sink. `None` for the doors
+/// is the shape the application opens in, and the one every test not
+/// about the passes themselves opens in too.
+fn start(
+    repo: &TestRepo,
+    exec: platitude_core::process::GitExecutor,
+    doors: Option<Arc<dyn PassHooks>>,
+) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        exec,
+        tokio::runtime::Handle::current(),
+        repo.path.clone(),
+        sink.clone(),
+        doors,
+    );
+    (sink, session)
+}
+
+/// The two doors into a graph pass the tests drive one through, let in
+/// by the seam the session is opened with ([`PassHooks`]) —
+/// [`open_with_doors`] hands them over.
+#[derive(Default)]
+pub struct PassDoors {
+    /// What the next pass to reach a given step runs there.
+    step: Mutex<Option<(PassStep, Then)>>,
+    /// The step every pass fails at from now on.
+    fault: Mutex<Option<PassStep>>,
+}
+
+impl PassDoors {
+    /// Leaves `run` for the next graph pass to reach `at`, to be run
+    /// there, on that pass's own task, once — the door a test ends a
+    /// pass through (`PassHooks::before`). Taken by the pass that runs
+    /// it, so exactly one falls over; a pass reaching a step nobody left
+    /// anything at is a lock and a look.
+    pub fn run_inside_next_pass(&self, at: PassStep, run: impl FnOnce() + Send + 'static) {
+        *self.step.lock().unwrap() = Some((at, Box::new(run)));
+    }
+
+    /// Every graph pass that reaches `at` from here on fails there, in
+    /// place of the walk it would have made — the door a screen is driven
+    /// through (`PassHooks::fault`), held here so the arm it reaches the
+    /// walk by is proved from this side too.
+    pub fn fail_every_pass(&self, at: PassStep) {
+        *self.fault.lock().unwrap() = Some(at);
+    }
+}
+
+impl PassHooks for PassDoors {
+    /// Taken out under the lock and run outside it: what it is here to do
+    /// is unwind, and a guard held across that would poison the lock —
+    /// which the pass behind this one would then take, run, and unwind
+    /// through in turn.
+    fn before(&self, at: PassStep) {
+        let run = {
+            let mut left = self.step.lock().unwrap();
+            match left.take() {
+                Some((step, run)) if step == at => Some(run),
+                other => {
+                    *left = other;
+                    None
+                }
+            }
+        };
+        if let Some(run) = run {
+            run();
+        }
+    }
+
+    fn fault(&self, at: PassStep) -> Option<GitError> {
+        let standing = *self.fault.lock().unwrap();
+        (standing == Some(at)).then(|| GitError::UnexpectedOutput {
+            command: "git log".to_string(),
+            message: "the graph walk was made to fail".to_string(),
+        })
+    }
 }
 
 /// Whether the session said this write came to rest on a stop rather

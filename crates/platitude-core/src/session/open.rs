@@ -11,13 +11,25 @@ impl RepoSession {
     /// The command log holds what the user asks for and nothing else;
     /// [`RepoSession::open_recording`] is the door for an opening whose
     /// own reads are to be kept as well.
+    ///
+    /// `pass_hooks` is what the graph passes let the outside in with
+    /// ([`PassHooks`]) — `None` for a session nobody drives, which then
+    /// holds nothing for it.
     pub fn open(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
+        pass_hooks: Option<Arc<dyn PassHooks>>,
     ) -> Arc<Self> {
-        Self::open_recording(executor, runtime, path, sink, Recording::UserOnly)
+        Self::open_recording(
+            executor,
+            runtime,
+            path,
+            sink,
+            pass_hooks,
+            Recording::UserOnly,
+        )
     }
 
     /// [`RepoSession::open`], with what the command log keeps decided
@@ -29,6 +41,7 @@ impl RepoSession {
         runtime: tokio::runtime::Handle,
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
+        pass_hooks: Option<Arc<dyn PassHooks>>,
         recording: Recording,
     ) -> Arc<Self> {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -53,8 +66,7 @@ impl RepoSession {
             plan_read: Mutex::new(PlanRead::default()),
             write_replays: std::sync::atomic::AtomicBool::new(false),
             graph_passes: Arc::default(),
-            pass_step: Mutex::new(None),
-            pass_fault: Mutex::new(None),
+            pass_hooks,
             graph_stale: std::sync::atomic::AtomicBool::new(false),
             wip_dirty: std::sync::atomic::AtomicBool::new(false),
             merge_incoming: Mutex::new(Vec::new()),

@@ -16,6 +16,7 @@ UI の色・寸法・用語の正本は [デザイン規約.md](../../internal-d
 - `QModelItem` のロール型はプリミティブと `String` のみ(`Vec` 不可)— 配列的なデータは文字列にエンコードし、QML 側で機械デコードする(グラフの形状・ラベルが前例)
 - `QModelIndex` の公開パスは `qtbridge::qtbridge_type_lib::QModelIndex`
 - `ConvertToCamelCase` はスロット/シグナルのメタ名を camel 化する — そのオブジェクトへの `invoke_method!` も camel 名で呼ぶこと(混在事故を防ぐため、invoker で呼ぶ対象には付けないのが安全)
+- **`#[qslot]` に `#[cfg]` は効かない** — マクロは内側の cfg を見ずに登録と dispatch 腕を出し、fn だけが後から消える(feature 無しで E0599。実測)。ビルドで消したい入口は slot を残して本体を feature 付きの fn へ出す(`harness::report` / `harness::fail_graph_pass` の形 — 出荷 exe の meta-object にも slot 名は残る)
 - QML モジュール名は既定で Cargo パッケージ名(ハイフン不可)だが、`#[qobject(NoQmlElement)]` + 手動 `impl QmlRegister`(URI 定数)で任意にできる
 - Qt Widgets 不可・C++ 混在不可。必要になった時点で CXX-Qt 移行を検討
 - 参照実装は公式 examples(`hello_world` / `minimal_app` / `host_monitor` = tokio 連携 / `color_palette`)。ドキュメント https://doc-snapshots.qt.io/qtbridge-rust/qtbridge/index.html / リポジトリ https://github.com/qt/qtbridge-rust / フォールバックの CXX-Qt book https://kdab.github.io/cxx-qt/book/

@@ -163,6 +163,7 @@ async fn open_failure_is_reported() {
         tokio::runtime::Handle::current(),
         dir.path().to_path_buf(),
         sink.clone(),
+        None,
     );
     sink.wait_for("OpenFailed", |evs| {
         evs.iter()

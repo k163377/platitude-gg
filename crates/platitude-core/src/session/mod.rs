@@ -105,8 +105,8 @@ pub use graph_refresh::{
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
 use ops_integrate::PlanRead;
-pub use pass_watch::PassStep;
-use pass_watch::{PassStepHook, PassWatch};
+use pass_watch::PassWatch;
+pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
 pub use query::{DiffRefreshOutcome, DiffRefreshTask};
 use read_slot::{ReadSlot, SlotHeld};

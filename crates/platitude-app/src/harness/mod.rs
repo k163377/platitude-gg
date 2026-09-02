@@ -14,11 +14,13 @@
 //! that drives the app asks for the feature back (`crate::app_exe`), so
 //! the shipped binary is the only one that has to be remembered about.
 
+mod faults;
 mod knobs;
 pub(crate) mod memprobe;
 #[cfg(feature = "automation")]
 mod perf_probe;
 
+pub(crate) use faults::{fail_graph_pass, pass_hooks};
 pub(crate) use knobs::knobs;
 
 /// Starts the clock every measurement is taken against.

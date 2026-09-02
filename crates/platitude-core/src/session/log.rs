@@ -234,7 +234,7 @@ impl RepoSession {
         let started = Instant::now();
         // A fault left here stands in for the walk, so what follows is
         // the same reporting arm a git that failed would have reached
-        // (`fail_every_pass`).
+        // (`PassHooks::fault`).
         let walk = match self.pass_fault(PassStep::Streaming) {
             Some(error) => Err(error),
             None => self.stream_log(workdir, generation, options, cancel).await,

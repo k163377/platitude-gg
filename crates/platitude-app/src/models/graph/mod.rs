@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use platitude_core::find::{Query, Row};
-use platitude_core::session::{LogRow, PassStep};
+use platitude_core::session::LogRow;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};

@@ -38,15 +38,8 @@ enum Told {
     Operation,
 }
 
-/// A place inside a graph pass that a test can be let into.
-///
-/// **The one ending in the session nothing outside can ask for.**
-/// `PassWatch` speaks for a pass that stopped without a word, and the
-/// only thing that stops one that way is a panic — which the runtime
-/// swallows at the task boundary, so a report that stopped working would
-/// look exactly like the silence it exists to break. Every other ending
-/// is asked for from outside and can be driven from there; this one has
-/// to be caused from inside the pass, which is what these are for.
+/// A place inside a graph pass that the outside is let into
+/// ([`PassHooks`]).
 ///
 /// The two steps are the two answers (`Told`): past the first the pass
 /// owns an empty column, past the second it owns nothing on screen.
@@ -60,82 +53,71 @@ pub enum PassStep {
     Swapping,
 }
 
-/// What the next pass to reach a given step runs there.
-pub(super) type PassStepHook = (PassStep, Box<dyn FnOnce() + Send>);
-
-impl RepoSession {
-    /// Leaves `run` for the next graph pass to reach `at`, to be run
-    /// there, on that pass's own task, once.
+/// What the outside is let into a graph pass with.
+///
+/// **The one ending in the session nothing outside can ask for.**
+/// `PassWatch` speaks for a pass that stopped without a word, and the
+/// only thing that stops one that way is a panic — which the runtime
+/// swallows at the task boundary, so a report that stopped working would
+/// look exactly like the silence it exists to break. Every other ending
+/// is asked for from outside and can be driven from there; this one has
+/// to be caused from inside the pass, which is what this is for: every
+/// pass asks it at each [`PassStep`], on its own task.
+///
+/// **Handed in when the session is opened** ([`RepoSession::open`]), in
+/// the shape the sink and the command observer take, and for the same
+/// reason: what implements it lives with whoever drives the session —
+/// the tests, the application's harness — and a session opened with
+/// `None` neither asks nor holds anything for it. Nothing in this crate
+/// implements one, so the shipped binary has no door here.
+pub trait PassHooks: Send + Sync + 'static {
+    /// Called by every pass that reaches `at`, on that pass's own task.
+    /// Whether anything runs there, and how many times, is the
+    /// implementation's to decide.
     ///
     /// **The door a test ends a pass through**, since nothing it can ask
     /// for ends one the way `PassWatch` answers for: a failed git, a
     /// timeout and a cancellation all leave by a `match` that reports
     /// itself, and only an unwind leaves by no arm at all. So the fault
-    /// has to be raised inside the pass, and `run` is what raises it —
-    /// the panic is the caller's, which is why there is none here.
+    /// has to be raised inside the pass, and this is what raises it —
+    /// the panic is the implementation's, which is why the pass has none.
     ///
-    /// Taken by the pass that runs it, so exactly one falls over. A pass
-    /// reaching a step nobody left anything at is a lock and a look.
-    pub fn run_inside_next_pass(&self, at: PassStep, run: impl FnOnce() + Send + 'static) {
-        *relock(&self.pass_step) = Some((at, Box::new(run)));
-    }
+    /// Called outside every lock the pass holds, because what runs here
+    /// may unwind, and a guard held across that would poison a lock the
+    /// pass behind this one takes next. An implementation that hands
+    /// something out to be run once owes the same to its own lock: take
+    /// it out under the lock, run it outside.
+    fn before(&self, at: PassStep);
 
-    /// Every graph pass that reaches `at` from here on fails there, in
-    /// place of the walk it would have made.
+    /// The fault standing at `at`, as the error the walk there would have
+    /// come back with. The pass fails there in place of the walk, by the
+    /// same reporting arm a git that failed would have left through —
+    /// the report, the words and the mark are all the ordinary ones.
     ///
-    /// **The door a *screen* is driven through**, where
-    /// [`Self::run_inside_next_pass`] is the one a test ends a pass
-    /// through. What the band says about a graph that is not the
-    /// repository's cannot be photographed otherwise: the state needs a
-    /// git that fails, and a demo repository built to be walked has no
-    /// such git in it. The pass leaves by the same `match` arm a real
-    /// failure would — the report, the words and the mark are all the
-    /// ordinary ones — so what is drawn is what a reader whose git had
-    /// failed would see.
+    /// **The door a *screen* is driven through**, where [`Self::before`]
+    /// is the one a test ends a pass through. What the band says about a
+    /// graph that is not the repository's cannot be photographed
+    /// otherwise: the state needs a git that fails, and a demo repository
+    /// built to be walked has no such git in it.
     ///
-    /// **It stands, where the other one is taken by the first pass to
-    /// reach it.** That one raises a fault *at* a pass and answers for
-    /// that pass alone; this one asks for a *state*, and a state that one
-    /// pass could lift would be a race — the pass already walking takes
-    /// the fault, the pass the caller then asks for succeeds, and the
-    /// mark goes up and straight back down before anything can be read
-    /// off it. Nothing takes it back: a session driven into this is being
-    /// photographed, not used.
-    pub fn fail_every_pass(&self, at: PassStep) {
-        *relock(&self.pass_fault) = Some((at, "the graph walk was made to fail".to_string()));
-    }
+    /// **Asked of every pass, and meant to stand.** A fault one pass
+    /// could lift would be a race — the pass already walking takes it,
+    /// the pass the caller then asks for succeeds, and the mark goes up
+    /// and straight back down before anything can be read off it.
+    fn fault(&self, at: PassStep) -> Option<GitError>;
+}
 
-    /// The fault standing at `at`, as the error a walk there would have
-    /// come back with.
-    pub(super) fn pass_fault(&self, at: PassStep) -> Option<GitError> {
-        let left = relock(&self.pass_fault);
-        let (_, message) = left.as_ref().filter(|(step, _)| *step == at)?;
-        Some(GitError::UnexpectedOutput {
-            command: "git log".to_string(),
-            message: message.clone(),
-        })
-    }
-
-    /// Runs what was left at `at`, if that is the step it was left at.
-    ///
-    /// Taken out under the lock and run outside it: what it is here to do
-    /// is unwind, and a guard held across that would poison the lock —
-    /// which the pass behind this one would then take, run, and unwind
-    /// through in turn.
+impl RepoSession {
+    /// Lets what was handed in at opening into the pass at `at`.
     pub(super) fn run_pass_step(&self, at: PassStep) {
-        let run = {
-            let mut left = relock(&self.pass_step);
-            match left.take() {
-                Some((step, run)) if step == at => Some(run),
-                other => {
-                    *left = other;
-                    None
-                }
-            }
-        };
-        if let Some(run) = run {
-            run();
+        if let Some(hooks) = &self.pass_hooks {
+            hooks.before(at);
         }
+    }
+
+    /// The fault standing at `at`, if anything was handed in that has one.
+    pub(super) fn pass_fault(&self, at: PassStep) -> Option<GitError> {
+        self.pass_hooks.as_ref().and_then(|hooks| hooks.fault(at))
     }
 }
 
