@@ -58,10 +58,12 @@ commands:
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only
       what main's move touched. A commit whose every step is green is
-      stamped, and the reference-transaction hook lets main move onto
-      stamped commits only. A component no verb's census names stops
-      the gate by name: run a verb that shows it once, and the gate
-      picks that verb from then on. The verbs rewrite their own census
+      stamped, and the reference-transaction hook lets a session's git
+      move main onto stamped commits only — a git the user runs carries
+      no CLAUDECODE mark, and the hook does not answer for it. A
+      component no verb's census names stops the gate by name: run a
+      verb that shows it once, and the gate picks that verb from then
+      on. The verbs rewrite their own census
       lines as they run, so a gate that finds the file rewritten stops
       before stamping — commit the generated file and run it again.
       options:

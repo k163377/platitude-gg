@@ -105,6 +105,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         forward_ref(&here, primary, &branch)?;
     }
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
+    // Again, now that main carries what it carries: git runs the copy
+    // beside .git, and a landing that changed the script would otherwise
+    // leave the old copy answering until some later session start.
+    println!("{}", crate::gate::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
     release_claim(&here, &trees, &branch);
     clear_the_board(&listing, &branch);

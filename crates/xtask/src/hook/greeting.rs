@@ -20,6 +20,21 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         Ok(_) => {}
         Err(why) => println!("The gate's git hook could not be installed: {why}"),
     }
+    // This event is a session by definition, so the mark that tells a
+    // session's git from the user's has to be in this environment. If it
+    // ever is not, the gate has stopped holding anything — and it would
+    // stop silently, which is the one way it could fail unnoticed
+    // (gate::hooks).
+    if std::env::var_os(crate::gate::SESSION).is_none_or(|mark| mark.is_empty()) {
+        println!(
+            "The gate cannot tell this session's git from the user's: {} is not in this \
+             environment, so refs/heads/main is open to any git this session runs. Say so \
+             rather than using it — the name the gate reads is in \
+             crates/xtask/src/gate/hooks.rs, and it is the whole of what holds main to the \
+             pre-merge tests.",
+            crate::gate::SESSION
+        );
+    }
     let seats = seat_report(&cwd).unwrap_or_default();
     match worktree_root(&cwd) {
         None => println!(

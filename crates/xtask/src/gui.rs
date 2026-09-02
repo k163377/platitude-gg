@@ -54,11 +54,20 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
     let exe = crate::tree::app_exe(&root, &path, build, &[])?;
-    let child = Command::new(&exe)
+    let mut command = Command::new(&exe);
+    command
         .current_dir(&root)
         .env("PATH", &path)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    // The window is the user's to drive, so the git it runs is the user's
+    // too: it answers to the gate on main no more than the git in their
+    // IDE does (gate::hooks). Which holds only of a window nothing is
+    // driving — so the automation knobs go first, as they do for every
+    // other app child started here, and the harness stays inert.
+    crate::app_env::clear_automation(&mut command);
+    command.env_remove(crate::gate::SESSION);
+    let child = command
         .spawn()
         .map_err(|e| format!("failed to start {}: {e}", exe.display()))?;
     // Long enough for a Qt platform plugin failure to have ended the

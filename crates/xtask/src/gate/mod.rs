@@ -34,7 +34,7 @@ use plan::{Plan, Required, Side};
 use stamp::{CommitStamp, Store};
 
 pub(crate) use census::{names_in, record};
-pub(crate) use hooks::{SKIP, install};
+pub(crate) use hooks::{SESSION, SKIP, install};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {

@@ -16,7 +16,7 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
         return Ok(false);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
-    if gate_skip_denied(&command) {
+    if gate_escape_denied(&command) {
         return Ok(true);
     }
     // Each rule keeps its own escape, so asking for one is not asking for
@@ -25,22 +25,26 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
         || (!command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd)))
 }
 
-/// The gate's escape is the user's alone: a session that spells it is
-/// stepping around the pre-merge tests, which is the one thing the gate
-/// exists to make impossible (internal-docs/反映前テストの機械化.md).
-fn gate_skip_denied(command: &str) -> bool {
-    if !command.contains(crate::gate::SKIP) {
+/// The two names that decide whether refs/heads/main answers to the gate
+/// at all: its escape, and the mark that tells a session's git from the
+/// user's. A session that spells either is stepping around the pre-merge
+/// tests, which is the one thing the gate exists to make impossible
+/// (internal-docs/反映前テストの機械化.md).
+fn gate_escape_denied(command: &str) -> bool {
+    let names = [crate::gate::SKIP, crate::gate::SESSION];
+    let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
         return false;
-    }
+    };
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-         \"{} is the user's own way past the gate on refs/heads/main, and a session may not \
-         spell it: the gate is what makes the pre-merge tests impossible to skip. Run \
-         `cargo xtask gate` (or `land`, which gates on the way) and let the stamp open \
-         main; if the gate is wrong about what it owes, say so and leave the escape to \
-         the user.\"}}}}",
-        crate::gate::SKIP
+         \"{name} decides whether refs/heads/main answers to the gate ({} is the user's own \
+         way past it, {} is how the gate knows a session's git from the user's), so a \
+         session may spell neither. Run `cargo xtask gate` (or `land`, which gates on the \
+         way) and let the stamp open main; if the gate is wrong about what it owes, say so \
+         and leave the escape to the user.\"}}}}",
+        crate::gate::SKIP,
+        crate::gate::SESSION
     );
     true
 }

@@ -61,7 +61,12 @@ impl Sandbox {
             .env("LC_ALL", "C")
             .env("PG_GATE_FAKE_LOG", &self.fake_log)
             .env_remove("PG_GATE_FAKE_FAIL")
-            .env_remove("PG_GATE_SKIP");
+            .env_remove("PG_GATE_SKIP")
+            // The gate answers for a session's git and nobody else's, so
+            // the sandbox's git is a session's — whether or not the run
+            // that started these tests was one (CI's is not, a session's
+            // own `cargo test` is).
+            .env("CLAUDECODE", "1");
     }
 
     fn git(&self, dir: &Path, args: &[&str], extra: &[(&str, &str)]) -> Result<String, String> {
@@ -653,6 +658,40 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     sb.gate_ok(&sb.seat, &[]);
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
     assert_eq!(sb.main_sha(), tip);
+}
+
+/// The gate is held over sessions and over nobody else: without the mark
+/// in the environment a direct commit on main and a rewind both go
+/// through, with no stamp anywhere and no escape spelled. That git is
+/// the user's — a terminal of their own, an IDE, a window they are
+/// clicking in — and an IDE's has no cargo on PATH to reach a verdict
+/// with either.
+#[test]
+fn the_users_own_git_moves_main_with_no_stamp() {
+    let sb = Sandbox::new("user");
+    let unmarked = [("CLAUDECODE", "")];
+    let main_before = sb.main_sha();
+    sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nthe user\n");
+    sb.git_ok(&sb.repo, &["add", "-A"]);
+    let session = sb.git(&sb.repo, &["commit", "-q", "-m", "docs: a session"], &[]);
+    assert!(
+        session.as_ref().is_err_and(|e| e.contains("no gate stamp")),
+        "{session:?}"
+    );
+    sb.git(
+        &sb.repo,
+        &["commit", "-q", "-m", "docs: the user"],
+        &unmarked,
+    )
+    .expect("the user commits on their own main");
+    assert_ne!(sb.main_sha(), main_before, "main moved for the user");
+    sb.git(
+        &sb.repo,
+        &["reset", "-q", "--hard", &main_before],
+        &unmarked,
+    )
+    .expect("the user rewinds their own main");
+    assert_eq!(sb.main_sha(), main_before);
 }
 
 #[test]

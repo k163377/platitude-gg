@@ -5,10 +5,12 @@
 //! through — merge, fetch with a refspec, branch -f, update-ref, a commit
 //! on main, a reset on main — and in its `prepared` state a non-zero exit
 //! aborts the update. So one checked-in shell script (`.githooks/`)
-//! guards main against every road, and the verdict itself stays here
-//! where it can be tested. The script is POSIX sh: git for Windows runs
-//! hooks in its own sh, and Linux and macOS have one, so a single file
-//! serves all three (CLAUDE.md ビルド・テスト: no .ps1 / .bat).
+//! guards main against every road a session can take — and against no
+//! road of the user's, which is what [`SESSION`] in the environment
+//! tells apart — and the verdict itself stays here where it can be
+//! tested. The script is POSIX sh: git for Windows runs hooks in its own
+//! sh, and Linux and macOS have one, so a single file serves all three
+//! (CLAUDE.md ビルド・テスト: no .ps1 / .bat).
 //!
 //! The installed copy lives beside the repository's own `.git`
 //! (`pg-gate/hooks/`), where no worktree edits it and no seat's reset or
@@ -27,6 +29,13 @@ use crate::subprocess::git_query;
 /// The user's own way past the gate, by name. Sessions may not spell it:
 /// the pre-shell hook refuses a command that does.
 pub(crate) const SKIP: &str = "PG_GATE_SKIP";
+
+/// The mark Claude Code leaves in the environment of everything it runs,
+/// and so in every git a session starts. It is what tells the gate whose
+/// ref update it is being asked about, and sessions may not spell it
+/// either — unsetting it would be the same step around the tests as
+/// spelling [`SKIP`].
+pub(crate) const SESSION: &str = "CLAUDECODE";
 
 /// Where the hook is checked in, from a checkout's root.
 const HOOKS_DIR: &str = ".githooks";
@@ -109,6 +118,15 @@ fn write_executable(path: &Path, text: &str) -> Result<(), String> {
 /// on main. The refusal reason goes to stderr, which is what git shows
 /// the person whose command was stopped.
 pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
+    // The gate holds sessions to the tests and holds nobody else. A git
+    // without [`SESSION`] in its environment is the user's own — their
+    // terminal, their IDE, a window they are clicking in — and their
+    // main is theirs to move, rewinds included. The hook script asks
+    // this first, before it needs cargo; here it is asked again for the
+    // hand-run `gate verdict` and for the tests.
+    if std::env::var_os(SESSION).is_none_or(|mark| mark.is_empty()) {
+        return Ok(());
+    }
     if std::env::var(SKIP).is_ok_and(|v| v == "1") {
         eprintln!("gate: {SKIP}=1 — main moves without a gate (the user's own call)");
         return Ok(());
@@ -159,4 +177,26 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
     }
     eprintln!("gate: {short} carries a full, on-main stamp — main may move onto it");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// The script decides whose git it is looking at before it pays for
+    /// cargo, so it spells the mark itself — and the two spellings have
+    /// to be the same one, or the user's git would reach a verdict that
+    /// waves it through only after failing to find cargo.
+    #[test]
+    fn the_hook_script_reads_the_same_session_mark() {
+        let script = include_str!("../../../../.githooks/reference-transaction");
+        let mark = script
+            .find(super::SESSION)
+            .unwrap_or_else(|| panic!("the hook script has to read {} itself", super::SESSION));
+        let cargo = script.find("command -v cargo").expect("the cargo guard");
+        assert!(
+            mark < cargo,
+            "a git without {} has to be past the hook before cargo is asked for — an IDE's \
+             has no cargo on PATH, and the guard below fails closed",
+            super::SESSION
+        );
+    }
 }
