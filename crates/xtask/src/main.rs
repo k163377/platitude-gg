@@ -7,6 +7,7 @@
 mod app_env;
 mod check;
 mod demo;
+mod deny;
 mod gate;
 mod gui;
 mod hook;
@@ -37,6 +38,7 @@ fn main() -> ExitCode {
         Some("gate") => gate::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),
+        Some("deny") => deny::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {
             // The path is the output: scripts consume `(cargo xtask ...)`.
             println!("{}", path.display());

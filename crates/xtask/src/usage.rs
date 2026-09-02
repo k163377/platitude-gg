@@ -102,6 +102,16 @@ commands:
       timeout, so a silent hang fails by test name instead of sitting
       until the CI kill. Second step of `check`; subsecond on its own.
 
+  deny
+      cargo-deny over deny.toml: the bans that keep networking crates and
+      git implementations out of the closure (CLAUDE.md 絶対制約), the
+      registries, and the license allow list. Three checks, not four —
+      advisories fetches the RustSec database from github.com, and stage
+      2 stays offline; CI runs the full set. Needs cargo-deny installed
+      (`cargo install --locked cargo-deny`), and says so rather than
+      passing without it. `gate` runs this when deny.toml or a manifest
+      moved, which is every way the closure can change.
+
 ";
 
 // No `"\` continuation on the opening line (see `demo_repo`).
