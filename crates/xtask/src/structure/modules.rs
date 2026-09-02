@@ -103,22 +103,30 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
 /// Read out of the source rather than listed here, so a knob added to the
 /// harness is out of the product's reach without anybody remembering to
 /// add it twice.
+///
+/// A function only counts behind `#[qslot]` — the file's own `Default` is
+/// a `fn` too, and QML has never heard of it.
 fn singleton_members(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(HARNESS_SINGLETON);
     let text = std::fs::read_to_string(&path)
         .map_err(|e| format!("could not read {}: {e}", path.display()))?;
     let mut members = Vec::new();
+    let mut is_slot = false;
     for line in text.lines() {
         let code = line.trim_start();
         if let Some(rest) = code.strip_prefix("qproperty!(\"")
             && let Some(name) = rest.split('"').next()
         {
             members.push(name.to_string());
-        } else if let Some(rest) = code.strip_prefix("fn ")
+        } else if is_slot
+            && let Some(rest) = code.strip_prefix("fn ")
             && let Some(name) = rest.split('(').next()
         {
             members.push(camel(name));
         }
+        // The attribute and the signature it belongs to are a line apart,
+        // and nothing else stands between them.
+        is_slot = code == "#[qslot]";
     }
     if members.is_empty() {
         return Err(format!("{HARNESS_SINGLETON} puts nothing in front of QML"));
@@ -290,6 +298,19 @@ mod tests {
     fn a_slot_is_looked_for_under_the_name_qt_registers_it_by() {
         assert_eq!(camel("open_session_count"), "openSessionCount");
         assert_eq!(camel("report"), "report");
+    }
+
+    /// What the singleton actually puts in front of QML, and what it only
+    /// looks like it does.
+    #[test]
+    fn only_the_slots_and_the_properties_are_read_off_the_singleton() {
+        let members = singleton_members(&crate::tree::workspace_root()).expect("read the harness");
+        assert!(members.iter().any(|name| name == "autoAct"));
+        assert!(members.iter().any(|name| name == "openSessionCount"));
+        assert!(
+            !members.iter().any(|name| name == "default"),
+            "the file's own `Default` is a `fn` QML has never heard of"
+        );
     }
 
     /// The rule the count is for: the tree it runs on passes it.
