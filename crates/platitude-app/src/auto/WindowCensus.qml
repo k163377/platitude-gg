@@ -63,9 +63,12 @@ Item {
         if (!object)
             return
         const key = String(object)
-        if (census.visited[key])
+        // One visit per object per walk, **unless the second one is the showing one**: a property can point back up
+        // the tree, so a branch can be met through it before the road that shows it is walked, and an early return
+        // there would drop that branch and everything under it from the run's census.
+        if (census.visited[key] === true || (census.visited[key] !== undefined && !shown))
             return
-        census.visited[key] = true
+        census.visited[key] = shown === true
         if (object.opened !== undefined)
             shown = object.visible === true || offered === true
         if (shown)
@@ -74,6 +77,21 @@ Item {
         if (owned !== undefined && owned !== null)
             for (let i = 0; i < owned.length; i++)
                 visit(owned[i], shown, false)
+        // A `QtObject` has no `data` and no `contentData`, so what it holds is reachable by name and no other road:
+        // the author's card and the co-authors' card hang off `DetailsAuthorCards`, which is a QtObject because an
+        // item declared in its seat would draw as a row. Without this the walk dead-ends there and **no verb can
+        // record those cards at all** — the gate then stops by name on a component nothing can bring up.
+        //
+        // **Only a QML-defined holder is walked by name, and only for the values that are themselves QML-defined.**
+        // A Popup has no `data` either but carries `contentData` and is reached the ordinary way; a model's property
+        // surface is wide, names nothing this census records, and reading all of it on the clock would cost the run
+        // what it is measuring.
+        if (owned === undefined && object.contentData === undefined && key.indexOf("_QMLTYPE_") > 0)
+            for (const name in object) {
+                const held = object[name]
+                if (held && typeof held === "object" && String(held).indexOf("_QMLTYPE_") > 0)
+                    visit(held, shown, false)
+            }
         const content = object.contentData
         if (content !== undefined && content !== null)
             for (let i = 0; i < content.length; i++)
