@@ -14,6 +14,12 @@ use std::collections::HashSet;
 /// One record rather than a lookup apiece: the values are read together,
 /// held for the length of the run, and handed to the properties QML reads
 /// them off (`AppBackend`). Nothing here is ever written after startup.
+///
+/// The `perf_*` group is the one part that is not in every build: the only
+/// thing that reads it is the probe the feature brings in
+/// (`harness::perf_probe`), so a build without one carries no field for it
+/// either. Everything else is here in both, empty, because the app asks
+/// the same questions however it was compiled.
 #[derive(Default)]
 pub(crate) struct Knobs {
     /// `PG_AUTO_ACT` — the one operation to run once the repository is
@@ -51,6 +57,39 @@ pub(crate) struct Knobs {
     /// `PG_SCROLL_TO` — `top` / `bottom` jumps the graph once the final
     /// pass settles; `nav-bottom` jumps the sidebar's branch list instead.
     pub scroll_to: String,
+    /// `PG_MEM_REPORT` — file and print the memory breakdown. The walks
+    /// it turns on are O(rows) per drain, so a run that did not ask for
+    /// it pays nothing (`memprobe::enabled`).
+    pub mem_report: bool,
+    /// `PG_PERF_SELECTION` — what the interaction measurement selects
+    /// (`none` / `first` / `head`). Empty leaves it to [`Knobs::select`],
+    /// which is what a run that only asked for a selection wants.
+    #[cfg(feature = "automation")]
+    pub perf_selection: String,
+    /// `PG_PERF_OID` / `PG_PERF_FILE` — the commit it selects and the
+    /// changed file it opens, when the run names them.
+    #[cfg(feature = "automation")]
+    pub perf_oid: String,
+    #[cfg(feature = "automation")]
+    pub perf_file: String,
+    /// `PG_PERF_DIFF=0` — leave the diff out of the measurement.
+    ///
+    /// Spelled as the refusal rather than the permission because an idle
+    /// harness is every flag off, and the diff is *in* unless a run says
+    /// otherwise.
+    #[cfg(feature = "automation")]
+    pub perf_no_diff: bool,
+    /// `PG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
+    /// benchmark. A diagnostic run only: the flush can move the last
+    /// frame it is measuring.
+    #[cfg(feature = "automation")]
+    pub perf_trace_frames: bool,
+    /// Whether anything at all is driving this run
+    /// (`settings::Env::automated` — any `PG_*` knob but the three that
+    /// say nothing about who is at the window). The settings store is
+    /// what reads it, and gives a driven run no files at all
+    /// (`settings::Build::driven`).
+    pub automated: bool,
     /// `PG_FAKE_PR` — branch names wearing the PR badge, so the design can
     /// be reviewed before Phase 4 joins the real thing in. **The only
     /// harness knob that reaches what a row says about a repository**, and
@@ -89,6 +128,13 @@ fn read() -> Knobs {
         identity: text("PG_AUTO_IDENTITY"),
         identity_save: on("PG_AUTO_IDENTITY_SAVE"),
         scroll_to: text("PG_SCROLL_TO"),
+        mem_report: on("PG_MEM_REPORT"),
+        perf_selection: text("PG_PERF_SELECTION"),
+        perf_oid: text("PG_PERF_OID"),
+        perf_file: text("PG_PERF_FILE"),
+        perf_no_diff: text("PG_PERF_DIFF") == "0",
+        perf_trace_frames: on("PG_PERF_TRACE_FRAMES"),
+        automated: platitude_core::settings::Env::system().automated(),
         fake_pr: text("PG_FAKE_PR")
             .split(',')
             .filter(|name| !name.is_empty())
@@ -116,6 +162,20 @@ mod tests {
         assert!(knobs.identity.is_empty() && knobs.scroll_to.is_empty());
         assert!(!knobs.select && !knobs.scroll && !knobs.perf && !knobs.wip);
         assert!(!knobs.plain_chrome && !knobs.identity_save);
+        assert!(!knobs.mem_report);
+        #[cfg(feature = "automation")]
+        {
+            assert!(knobs.perf_selection.is_empty() && knobs.perf_oid.is_empty());
+            assert!(knobs.perf_file.is_empty() && !knobs.perf_trace_frames);
+            assert!(
+                !knobs.perf_no_diff,
+                "the diff is in until a run asks for it out"
+            );
+        }
+        assert!(
+            !knobs.automated,
+            "a build that reads no environment cannot find anything driving it"
+        );
         assert_eq!(knobs.watchdog_ms, 0);
         assert!(
             knobs.fake_pr.is_empty(),

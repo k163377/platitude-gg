@@ -13,10 +13,11 @@
 //!   the report sums them, and prints what is left over as a remainder
 //!   rather than pretending the named parts are everything.
 //!
-//! Off unless asked for. The counting is behind the `memprobe` feature (a
-//! shipped build counts nothing), and even in that build the per-model
-//! walks only run when `PG_MEM_REPORT=1` — they are O(rows), and a
-//! measurement must not pay for itself on every drain of a normal run.
+//! Off unless asked for, and a shipped build cannot be asked. The counting
+//! is behind the `memprobe` feature, and the per-model walks need that
+//! feature *and* `PG_MEM_REPORT=1` (`harness::knobs`, the crate's only
+//! reader of one) — they are O(rows), and a measurement must not pay for
+//! itself on every drain of a normal run.
 //!
 //! The process's allocator is chosen here too, because there is only one
 //! `#[global_allocator]` slot and the counter has to sit in front of
@@ -24,7 +25,10 @@
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+// Only the counting half reads a counter, and a build without it must not
+// carry an import nothing uses.
+#[cfg(feature = "memprobe")]
+use std::sync::atomic::Ordering;
 
 use platitude_core::mem::{Footprint, Part};
 
@@ -201,21 +205,17 @@ pub fn size_classes() -> String {
 // The registry
 // ---------------------------------------------------------------------------
 
-/// Whether the per-model walks run at all (`PG_MEM_REPORT=1`).
+/// Whether the per-model walks run at all.
 ///
-/// Read once. The models ask before every walk, and an environment lookup
-/// per drain would be its own small cost on a path this measurement is
-/// supposed to leave alone.
+/// Two things, and both have to hold: the counting allocator has to be in
+/// this build, because attributed parts with no counted total to hold them
+/// against are half a report; and the run has to have asked
+/// (`PG_MEM_REPORT=1`, through `harness::knobs`, which is the only place
+/// in the crate that reads one). A shipped build has neither, and the
+/// `cfg!` is what takes the walk out of it rather than a flag that
+/// happens to be off.
 pub fn enabled() -> bool {
-    static ON: AtomicUsize = AtomicUsize::new(usize::MAX);
-    match ON.load(Ordering::Relaxed) {
-        usize::MAX => {
-            let on = usize::from(std::env::var("PG_MEM_REPORT").as_deref() == Ok("1"));
-            ON.store(on, Ordering::Relaxed);
-            on == 1
-        }
-        on => on == 1,
-    }
+    cfg!(feature = "memprobe") && super::knobs().mem_report
 }
 
 /// What each model last reported, keyed by kind and tab. Sorted, so two

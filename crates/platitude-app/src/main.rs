@@ -51,6 +51,10 @@ fn main() {
     let (store, held_elsewhere, _lock) = claim_store(Build {
         tree: &tree,
         debug: cfg!(debug_assertions),
+        // Asked of the harness, not of the environment: a build without
+        // one is never driven, so no `PG_*` variable left in somebody's
+        // shell can take their settings away.
+        driven: harness::knobs().automated,
     });
     Hub::install(runtime, store, held_elsewhere);
 

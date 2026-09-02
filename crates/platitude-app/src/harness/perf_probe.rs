@@ -23,20 +23,24 @@ pub struct PerfProbe {
 }
 
 impl Default for PerfProbe {
+    /// Built out of what is driving the run, which is read in one place
+    /// (`harness::knobs`) rather than looked up here.
     fn default() -> Self {
+        let knobs = super::knobs();
         Self {
-            selection: std::env::var("PG_PERF_SELECTION").unwrap_or_else(|_| {
-                if std::env::var("PG_AUTO_SELECT").as_deref() == Ok("1") {
-                    "first".into()
-                } else {
-                    "none".into()
-                }
-            }),
-            oid: std::env::var("PG_PERF_OID").unwrap_or_default(),
-            file_path: std::env::var("PG_PERF_FILE").unwrap_or_default(),
-            with_diff: std::env::var("PG_PERF_DIFF").as_deref() != Ok("0"),
-            verifying: std::env::var("PG_AUTO_ACT").as_deref() == Ok("perf"),
-            trace_frames: std::env::var("PG_PERF_TRACE_FRAMES").as_deref() == Ok("1"),
+            // A run that named no selection but asked for one takes the
+            // first row, which is what makes `--select` on its own a
+            // measurement with something in the panes.
+            selection: if knobs.perf_selection.is_empty() {
+                if knobs.select { "first" } else { "none" }.into()
+            } else {
+                knobs.perf_selection.clone()
+            },
+            oid: knobs.perf_oid.clone(),
+            file_path: knobs.perf_file.clone(),
+            with_diff: !knobs.perf_no_diff,
+            verifying: knobs.act == "perf",
+            trace_frames: knobs.perf_trace_frames,
             scroll_start: None,
             frames: Vec::new(),
         }

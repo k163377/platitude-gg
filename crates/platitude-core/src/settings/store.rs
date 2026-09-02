@@ -38,10 +38,15 @@ impl Store {
     }
 
     /// `PG_CONFIG_DIR` wins: a path puts both files in it, and an empty
-    /// value asks for no files at all. With it unset, any other `PG_*`
-    /// variable still means no files — otherwise a screenshot run would
-    /// write its window geometry into the developer's real settings, and
-    /// the next run would start from it.
+    /// value asks for no files at all. With it unset, a build that says it
+    /// is being driven still gets no files — otherwise a screenshot run
+    /// would write its window geometry into the developer's real settings,
+    /// and the next run would start from it.
+    ///
+    /// The build says so ([`Build::driven`]) rather than the environment
+    /// being read here: only a binary carrying a verification harness can
+    /// be driven at all, and what ships must not lose somebody their
+    /// settings to a `PG_*` variable left in their shell.
     ///
     /// A named directory is a named directory, whichever build is asking:
     /// two runs sharing one `--config-dir` are how the saved layout is
@@ -54,7 +59,7 @@ impl Store {
             }
             return Self::at(Path::new(dir));
         }
-        if env.automated() {
+        if build.driven {
             return Self::ephemeral();
         }
         Self::platform_paths(platform, env, build)
@@ -328,6 +333,7 @@ mod tests {
             Build {
                 tree: "solo",
                 debug: true,
+                ..Build::SHIPPED
             },
         );
         assert_ne!(dev, real, "a development build writes files of its own");

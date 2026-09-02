@@ -65,6 +65,10 @@ impl Env {
     }
 
     /// True when anything is driving this process.
+    ///
+    /// Asked by a build that carries a verification harness, and handed
+    /// back as [`Build::driven`]. A shipped build never asks, so a `PG_*`
+    /// variable somebody happens to have exported costs them nothing.
     pub fn automated(&self) -> bool {
         self.vars
             .iter()
@@ -89,12 +93,20 @@ pub struct Build<'a> {
     pub tree: &'a str,
     /// Built with debug assertions on.
     pub debug: bool,
+    /// Something rather than somebody is driving this run, so it gets no
+    /// files at all — otherwise a screenshot run would write its window
+    /// geometry into a person's real settings and the next run would open
+    /// on it. [`Env::automated`] is how a caller works it out, but only a
+    /// build carrying a verification harness ever asks: what ships passes
+    /// `false` without reading the environment.
+    pub driven: bool,
 }
 
 impl Build<'_> {
     pub const SHIPPED: Build<'static> = Build {
         tree: "",
         debug: false,
+        driven: false,
     };
 
     pub fn is_dev(&self) -> bool {
@@ -178,50 +190,45 @@ mod tests {
         assert!(Store::locate(Platform::Windows, &empty, Build::SHIPPED).is_ephemeral());
     }
 
+    /// The build that ships is the one that never says it, whatever is in
+    /// the environment around it.
+    const DRIVEN: Build<'static> = Build {
+        driven: true,
+        ..Build::SHIPPED
+    };
+
     #[test]
-    fn an_automated_run_never_reaches_the_real_files() {
-        let env = Env::from_pairs(&[("APPDATA", "/roaming"), ("PG_AUTO_ACT", "open-picker")]);
+    fn a_driven_run_never_reaches_the_real_files() {
+        let env = Env::from_pairs(&[("APPDATA", "/roaming")]);
         assert!(
-            Store::locate(Platform::Windows, &env, Build::SHIPPED).is_ephemeral(),
+            Store::locate(Platform::Windows, &env, DRIVEN).is_ephemeral(),
             "a driven process must not write where a person's settings are"
         );
-
-        let told = Env::from_pairs(&[
-            ("APPDATA", "/roaming"),
-            ("PG_AUTO_ACT", "open-picker"),
-            (CONFIG_DIR_ENV, "/tmp/run-7"),
-        ]);
         assert_eq!(
-            Store::locate(Platform::Windows, &told, Build::SHIPPED).state_path(),
+            Store::locate(Platform::Windows, &env, Build::SHIPPED).settings_path(),
+            Some(Path::new("/roaming/platitude-gg/settings.toml")),
+            "and the same environment costs a build nobody is driving nothing"
+        );
+
+        let told = Env::from_pairs(&[("APPDATA", "/roaming"), (CONFIG_DIR_ENV, "/tmp/run-7")]);
+        assert_eq!(
+            Store::locate(Platform::Windows, &told, DRIVEN).state_path(),
             Some(Path::new("/tmp/run-7/state.toml")),
             "a run that names a directory gets it"
         );
     }
 
+    /// What a caller hands to [`Build::driven`], which is the only place
+    /// the environment still decides this.
     #[test]
-    fn turning_the_logging_up_does_not_cost_you_your_settings() {
-        let env = Env::from_pairs(&[
-            ("APPDATA", "C:/Roaming"),
-            ("LOCALAPPDATA", "C:/Local"),
-            ("PG_LOG", "info"),
-        ]);
-        assert_eq!(
-            Store::locate(Platform::Windows, &env, Build::SHIPPED).settings_path(),
-            Some(Path::new("C:/Roaming/platitude-gg/settings.toml")),
+    fn a_knob_is_what_says_something_is_driving() {
+        assert!(Env::from_pairs(&[("PG_AUTO_ACT", "open-picker")]).automated());
+        assert!(
+            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PG_LOG", "info")]).automated(),
             "PG_LOG says how loud to be, not who is driving"
         );
-    }
-
-    #[test]
-    fn asking_for_a_window_does_not_cost_you_your_tabs() {
-        let env = Env::from_pairs(&[
-            ("APPDATA", "C:/Roaming"),
-            ("LOCALAPPDATA", "C:/Local"),
-            ("PG_ALLOW_GUI", "1"),
-        ]);
-        assert_eq!(
-            Store::locate(Platform::Windows, &env, Build::SHIPPED).state_path(),
-            Some(Path::new("C:/Local/platitude-gg/state.toml")),
+        assert!(
+            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PG_ALLOW_GUI", "1")]).automated(),
             "the window a person asked for opens on the tabs they left"
         );
     }
@@ -302,6 +309,7 @@ mod tests {
             Build {
                 tree: "",
                 debug: true,
+                ..Build::SHIPPED
             },
         );
         assert_eq!(
@@ -315,6 +323,7 @@ mod tests {
             Build {
                 tree: "solo",
                 debug: true,
+                ..Build::SHIPPED
             },
         );
         assert_eq!(
@@ -329,7 +338,8 @@ mod tests {
                 &env,
                 Build {
                     tree: "solo",
-                    debug: false
+                    debug: false,
+                    ..Build::SHIPPED
                 }
             ),
             "one tree is one build to a person, however it was compiled"
@@ -341,6 +351,7 @@ mod tests {
             Build {
                 tree: "labels",
                 debug: false,
+                ..Build::SHIPPED
             },
         );
         assert_eq!(
@@ -360,7 +371,8 @@ mod tests {
                 &env,
                 Build {
                     tree: "solo",
-                    debug: true
+                    debug: true,
+                    ..Build::SHIPPED
                 }
             ),
             Store::locate(Platform::Windows, &env, Build::SHIPPED)
