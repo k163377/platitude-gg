@@ -36,21 +36,19 @@ Item {
     /// over once (`Main.qml`'s `Binding`).
     property var page: null
 
-    /// The window is up: the verbs may start, and the shot clock and the census with them.
+    /// The window is up: the verbs may start, and the shot clock with them.
     function begin() {
         if (actsLoader.item)
             actsLoader.item.begin()
-        census.begin()
         shotDriver.begin()
     }
     /// One run has one owner of the page-level act (app-ui.md §UI 自動化の因果性).
     function claimPageAct() {
         return shotDriver.claimPageAct()
     }
-    /// The census reports before the shot is asked for: what the run showed is settled by then, and the report line
-    /// has to be out before the process quits on the saved picture.
+    /// One run has one ending. The census is not asked for here: it reports on the picture the shot driver saves
+    /// (`AutoShotDriver.appPictured`), which is the scene the completion edge finished building.
     function finish() {
-        census.report()
         shotDriver.finish()
     }
 
@@ -81,6 +79,7 @@ Item {
         sceneMirror: shotMirrors.sceneMirror
         mainUi: harness.mainUi
         gate: harness.gate
+        onAppPictured: census.report()
     }
 
     // Built only when a verb was given: a run that is only being measured or photographed carries none of the verbs.

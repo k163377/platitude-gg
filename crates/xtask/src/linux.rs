@@ -62,6 +62,10 @@ const WORK: &str = "/work";
 const TARGET_MOUNT: &str = "/work/target";
 const REGISTRY_MOUNT: &str = "/usr/local/cargo/registry";
 const OUT_MOUNT: &str = "/out";
+/// Set for everything the container runs, and by nothing else: the mark a
+/// run reads to know it is not on the machine whose checkout it is
+/// writing.
+pub(crate) const IN_CONTAINER: &str = "PG_IN_CONTAINER";
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
@@ -336,7 +340,13 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg("--volume")
         .arg(format!("{IMAGE}-registry:{REGISTRY_MOUNT}"))
         .arg("--workdir")
-        .arg(WORK);
+        .arg(WORK)
+        // The checkout is mounted, so anything in here writes the host's
+        // own files. What is generated from a run rather than typed says
+        // which machine ran it, and the container is never that machine
+        // (`verify::options::census_line`).
+        .arg("--env")
+        .arg(format!("{IN_CONTAINER}=1"));
 
     let mut command = command.to_vec();
     let keepsake = keepsakes::bridge(&mut command, OUT_MOUNT)?;

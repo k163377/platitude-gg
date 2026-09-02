@@ -541,15 +541,19 @@ fn binary_steps(
     }
     let mut verb_inputs = binary_inputs.clone();
     verb_inputs.extend(HARNESS.iter().map(|s| (*s).to_string()));
-    // `--no-census`: a run the gate asks for is a re-run of a recorded
-    // line, and writing the census back mid-gate would dirty the tree
-    // under the stamp (and the seat `land` is about to hand back). The
-    // census grows from the runs somebody types.
+    // The runs rewrite their own census lines — the container's does not
+    // (`verify::options::census_line` refuses there), so the file stays
+    // one machine's answer rather than a race between the two sides. That
+    // is why the gate records rather than leaving the file to whoever next
+    // types the line: it re-runs exactly the lines a QML change made
+    // stale, and a census only hand-typed runs refresh goes dirty in the
+    // middle of unrelated work. A gate whose runs moved it stops before it
+    // stamps, because the stamp names a commit and the tree that passed is
+    // no longer the one it holds (`gate::execute`).
     for line in &lines {
         let verb_words: Vec<&str> = line.split_whitespace().collect();
         let mut host = xtask(&["verify-ui"]);
         host.extend(words(&verb_words));
-        host.push("--no-census".to_string());
         let mut host_step = step(
             &format!("verify {line}"),
             Side::Host,
@@ -561,7 +565,6 @@ fn binary_steps(
         steps.push(host_step);
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(words(&verb_words));
-        linux.push("--no-census".to_string());
         let mut linux_inputs = verb_inputs.clone();
         linux_inputs.push(DOCKERFILE.to_string());
         let mut linux_step = step(

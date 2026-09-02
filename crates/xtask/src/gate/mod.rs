@@ -10,7 +10,10 @@
 //! runs nothing, and a rebase reruns only what main's move touched. A
 //! commit whose every owed step is green is stamped, and the
 //! `reference-transaction` hook lets `refs/heads/main` move onto stamped
-//! commits only ([`hooks`]).
+//! commits only ([`hooks`]). The host's verb runs rewrite their own
+//! census lines as they go, so the file follows the change that moved it;
+//! a gate that finds it rewritten stops before stamping, because the
+//! commit that passed has to be the one holding it.
 //!
 //! `--host-only` is the daily tier (CLAUDE.md 確認は 3 段: no container);
 //! its stamps are reused by the full run, which then owes the container
@@ -173,6 +176,9 @@ fn execute(plan: &Plan) -> Result<(), String> {
             census::FILE
         ));
     }
+    // What the census said before the verbs ran, so that a line one of
+    // them rewrote can be told from the file as it was committed.
+    let census_before = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
     let store = Store::open(&plan.dir)?;
     let host: Vec<&Required> = plan
         .required
@@ -199,11 +205,32 @@ fn execute(plan: &Plan) -> Result<(), String> {
     });
     let secs = started.elapsed().as_secs();
     println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
+    let head = plan.head.chars().take(10).collect::<String>();
+    // A verb that passed rewrote its census line whether or not another
+    // step went red, so this is said on both roads out. A tree left dirty
+    // without a word is the next gate refusing to run over a change
+    // nobody made — which is the whole complaint the recording answers.
+    let rewrote = if std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before
+    {
+        format!(
+            " The verbs rewrote {}: it is generated, so review the diff and commit it (never by \
+             hand), and the gate can stamp the commit that holds it.",
+            census::FILE
+        )
+    } else {
+        String::new()
+    };
     if !failures.is_empty() {
         return Err(format!(
-            "gate failed: {} — nothing stamped for {}",
-            failures.join(" / "),
-            plan.head.chars().take(10).collect::<String>()
+            "gate failed: {} — nothing stamped for {head}.{rewrote}",
+            failures.join(" / ")
+        ));
+    }
+    // Green, and the tree that passed is no longer the commit: a stamp
+    // names one, so the file has to be in it before a stamp is written.
+    if !rewrote.is_empty() {
+        return Err(format!(
+            "the verbs passed and the tree moved with them — nothing stamped for {head}.{rewrote}"
         ));
     }
     let stamp = CommitStamp {
@@ -225,8 +252,7 @@ fn execute(plan: &Plan) -> Result<(), String> {
     };
     store.mark_commit(&plan.head, &stamp)?;
     println!(
-        "gate: PASS — {} stamped ({}, {})",
-        plan.head.chars().take(10).collect::<String>(),
+        "gate: PASS — {head} stamped ({}, {})",
         if stamp.full { "full" } else { "host-only" },
         if stamp.onto_main {
             "on main"

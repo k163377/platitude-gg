@@ -41,6 +41,12 @@ Item {
     // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
     readonly property bool causal: AppBackend.autoAct !== ""
 
+    /// The window's picture is on disk, so the scene it came out of is the settled one: **the completion edge is often
+    /// what builds that scene** (see `grabApp`), and a list whose rows stand up in the frame the grab is fulfilled in
+    /// has no delegates at all before it. Anything reading the tree for what this run showed reads it from here
+    /// (`WindowCensus`), and this is still ahead of the quit, which waits on the parts.
+    signal appPictured()
+
     function claimPageAct() {
         if (driver.pageActClaimed)
             return false
@@ -198,6 +204,7 @@ Item {
             driver.appSaved = true
             const saved = res.saveToFile(path)
             console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
+            driver.appPictured()
             // The scene this picture came out of is what the composite mirrors, so it is asked for from here.
             if (driver.sceneWanted && !driver.sceneAsked) {
                 driver.sceneAsked = true
@@ -209,6 +216,7 @@ Item {
             console.warn("grabToImage returned false")
             driver.appGrabbing = false
             driver.appSaved = true
+            driver.appPictured()
             driver.partDone()
         }
     }

@@ -35,9 +35,10 @@ pub(super) struct Options {
     /// Keep this run off the board. For a sweep measuring flakiness,
     /// where ten identical pictures bury what somebody wanted to look at.
     pub(super) no_board: bool,
-    /// Do not record what the run showed in the verb census. The gate
-    /// asks for it: its runs are re-runs of recorded lines, and a write
-    /// mid-gate would dirty the tree under the stamp.
+    /// Do not record what the run showed in the verb census. For the runs
+    /// that are not about what the line shows — a verb repeated to measure
+    /// how steady it is, or to look at a picture — where moving a
+    /// checked-in file is noise the tree then has to be cleaned of.
     pub(super) no_census: bool,
 }
 
@@ -46,8 +47,19 @@ impl Options {
     /// would type to run it again, options that change the run included
     /// and options that only change where its output goes left out. None
     /// for a run nobody can type again elsewhere (`--repo`, `--restore`).
+    ///
+    /// **The container never records.** It runs against the host's own
+    /// checkout over a mount, so a run there would write the census of a
+    /// machine that is not the one the file follows, and the two sides of
+    /// the gate — which run at the same time — would take the line in
+    /// turns.
     pub(super) fn census_line(&self) -> Option<String> {
-        if self.no_census || !self.repo.is_empty() || self.restore || self.config_dir.is_some() {
+        if self.no_census
+            || !self.repo.is_empty()
+            || self.restore
+            || self.config_dir.is_some()
+            || std::env::var_os(crate::linux::IN_CONTAINER).is_some()
+        {
             return None;
         }
         let mut words = vec![self.verb.clone()];

@@ -59,7 +59,9 @@ commands:
       stamped, and the reference-transaction hook lets main move onto
       stamped commits only. A component no verb's census names stops
       the gate by name: run a verb that shows it once, and the gate
-      picks that verb from then on.
+      picks that verb from then on. The verbs rewrite their own census
+      lines as they run, so a gate that finds the file rewritten stops
+      before stamping — commit the generated file and run it again.
       options:
         --host-only   the daily tier: no container; stamps the host half
         --all         every file counts as changed — stage 2 in full

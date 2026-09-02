@@ -3,11 +3,23 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 
-/// Every QML component alive in the window at any moment of a verb's run, by type name.
+/// Every QML component the window is showing as a verb's run finishes, by type name.
 ///
 /// The gate (`cargo xtask gate`) owes a change the verbs that show what it touched, and this is how a verb says what it
-/// shows: the item tree is walked on a short clock through the run and once more as the run finishes, and every type
-/// met is reported as `census=A,B,C` for verify-ui to record against the line that ran (`crates/xtask/verb-census.txt`).
+/// shows: the item tree is walked once, on the picture the run saved, and every type met is reported as
+/// `census=A,B,C` for verify-ui to record against the line that ran (`crates/xtask/verb-census.txt`).
+///
+/// **One walk, on the saved picture — never on a clock.** A sampled walk records where its ticks landed rather than
+/// what the run did: a row a run raises and takes away again is in the census of the machine whose tick caught it and
+/// out of the census of the machine whose tick came late, so the file the gate reads moves under work that never
+/// touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks and nothing else). What a
+/// verb shows is what it leaves standing, which is what its picture holds.
+///
+/// **And the picture is the edge, not the completion.** A list whose rows stand up in the very frame the grab is
+/// fulfilled in has no delegates before that frame, so a walk taken at `finishAutoAct()` names them or misses them by
+/// a turn (measured: `commit-menu --preset tags` dropped `FileRowDelegate` in one run of ten). `AutoShotDriver`
+/// says when the scene the picture came out of is the settled one, and the walk goes from there.
+///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
 /// the runner drops them. Popups stand under the window's overlay, which is a child of the root item, so one walk from
@@ -19,13 +31,8 @@ Item {
     /// The window whose tree is walked. `var` because `Main` is the file the engine loads, not a type anything names.
     required property var window
 
-    /// The names met so far, as an object used for its keys.
+    /// The names met, as an object used for its keys.
     property var seen: ({})
-
-    function begin() {
-        if (AppBackend.autoAct !== "")
-            clock.start()
-    }
 
     /// One walk: the window itself (a Window is no item, so the root item's tree never names `Main`), then from the
     /// root item down.
@@ -104,6 +111,11 @@ Item {
         const face = object.contentItem
         if (face !== undefined && face !== null && face !== object)
             visit(face, shown, false)
+        // A Control's background is neither its content nor its data, and every card and every menu wears the same
+        // one (`AppCardFace`), so without this road no verb shows it at all.
+        const back = object.background
+        if (back !== undefined && back !== null && back !== object)
+            visit(back, shown, false)
         // A Loader's object is its child but not in its `data` when it is no item (the dialogs `WindowDialogSeat`
         // loads are popups), so it is reached by name.
         const loaded = object.item
@@ -111,19 +123,11 @@ Item {
             visit(loaded, shown, false)
     }
 
-    /// The run is finishing: one last walk, then the report line.
+    /// The run is finishing: the walk, then the report line.
     function report() {
-        clock.stop()
         if (AppBackend.autoAct === "")
             return
         walk()
         AppBackend.report("census=" + Object.keys(census.seen).sort().join(","))
-    }
-
-    Timer {
-        id: clock
-        interval: 100
-        repeat: true
-        onTriggered: census.walk()
     }
 }
