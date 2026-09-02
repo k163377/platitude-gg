@@ -4,7 +4,10 @@
 
 use super::launch::resolve;
 use super::payload::string_field;
-use crate::seats::{self, SEAT_CLAIM, SEATS, WorktreeBlock, worktree_blocks, worktree_root};
+use crate::seats::{
+    self, Claim, SEATS, Standing, WorktreeBlock, lock_reason, lock_seat, standing, worktree_blocks,
+    worktree_root,
+};
 use crate::subprocess::git_query;
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
@@ -159,48 +162,6 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
         .map(|entry| entry.tree.path)
 }
 
-/// How an attempt to claim a seat came out.
-pub(super) enum Claim {
-    /// Locked by us now, or in some state git could not judge — the tool
-    /// call itself will surface whatever is actually wrong.
-    OursOrMoot,
-    /// Somebody holds it: the lock's reason, possibly empty.
-    Held(String),
-}
-
-/// One atomic claim: `git worktree lock` refuses a second lock, so the
-/// loser of a race is told here and not after settling in. What to make
-/// of a seat somebody already holds is the caller's — a session entering
-/// one has somewhere else to go, a session already sitting in one does
-/// not.
-pub(super) fn lock_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
-    let reason = format!("{SEAT_CLAIM} {session}");
-    let mut command = std::process::Command::new("git");
-    command
-        .arg("-C")
-        .arg(cwd)
-        // The "already locked" branch below reads git's message, and a
-        // translated one would fall through to OursOrMoot — the allow
-        // side. Pin the locale so the deny keeps its teeth.
-        .env("LC_ALL", "C")
-        .args(["worktree", "lock", "--reason", &reason, seat_path]);
-    let Ok(output) = crate::subprocess::run_captured(&mut command) else {
-        return Claim::OursOrMoot;
-    };
-    if output.status.success() {
-        return Claim::OursOrMoot;
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if let Some(rest) = stderr.split("already locked").nth(1) {
-        let reason = rest
-            .split_once("reason:")
-            .map(|(_, reason)| reason.trim().to_string())
-            .unwrap_or_default();
-        return Claim::Held(reason);
-    }
-    Claim::OursOrMoot
-}
-
 /// A string sanitized for splicing into the hook's hand-built JSON:
 /// everything that could end the string or the payload early is dropped.
 fn printable(text: &str) -> String {
@@ -211,13 +172,6 @@ fn printable(text: &str) -> String {
             other => other,
         })
         .collect()
-}
-
-/// The reason on this worktree's own lock, if it is locked at all.
-pub(super) fn lock_reason(cwd: &str) -> Option<String> {
-    let git_dir = git_query(cwd, &["rev-parse", "--path-format=absolute", "--git-dir"])?;
-    let reason = std::fs::read_to_string(format!("{git_dir}/locked")).ok()?;
-    Some(reason.trim().to_string())
 }
 
 /// SessionEnd: a seat claimed by this session is handed back, and the
@@ -290,26 +244,6 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
     }
 }
 
-/// Where a seat's lock stands relative to this session. Pure so the tests
-/// can ask.
-enum Standing {
-    /// No lock at all.
-    Free,
-    /// This session's claim — or a session id too empty to judge by,
-    /// where fighting over the seat helps nobody.
-    Ours,
-    /// Somebody else's claim, or a lock a person wrote by hand.
-    Foreign(String),
-}
-
-fn standing(reason: Option<String>, session: &str) -> Standing {
-    match reason {
-        None => Standing::Free,
-        Some(reason) if session.is_empty() || reason.contains(session) => Standing::Ours,
-        Some(reason) => Standing::Foreign(reason),
-    }
-}
-
 /// The warning an edit into somebody else's seat rides out on.
 fn collision(name: &str, reason: &str) -> String {
     format!(
@@ -338,7 +272,7 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 
 #[cfg(test)]
 mod tests {
-    use super::{Standing, printable, roster_seat, standing, tree_named, worktree_objection};
+    use super::{printable, roster_seat, tree_named, worktree_objection};
     use crate::seats::WorktreeBlock;
 
     const PRIMARY: &str = "C:/x/platitude-gg";
@@ -377,7 +311,11 @@ mod tests {
             Some(seat_e.clone())
         );
         assert_eq!(
-            tree_named(&trees, PRIMARY, "C:\\x\\platitude-gg\\.claude\\worktrees\\e"),
+            tree_named(
+                &trees,
+                PRIMARY,
+                "C:\\x\\platitude-gg\\.claude\\worktrees\\e"
+            ),
             Some(seat_e)
         );
         // A path that is no tree of this repository stays unjudged, and
@@ -413,28 +351,6 @@ mod tests {
             printable("claude-seat abc\"def\\x\ny"),
             "claude-seat abc'def'x y"
         );
-    }
-
-    #[test]
-    fn stands_a_lock_relative_to_the_session() {
-        assert!(matches!(standing(None, "s1"), Standing::Free));
-        assert!(matches!(
-            standing(Some("claude-seat s1".into()), "s1"),
-            Standing::Ours
-        ));
-        assert!(matches!(
-            standing(Some("claude-seat s2".into()), "s1"),
-            Standing::Foreign(_)
-        ));
-        assert!(matches!(
-            standing(Some("parked by hand".into()), "s1"),
-            Standing::Foreign(_)
-        ));
-        // An empty session id can match no claim — leave whatever holds.
-        assert!(matches!(
-            standing(Some("claude-seat s2".into()), ""),
-            Standing::Ours
-        ));
     }
 
     #[test]

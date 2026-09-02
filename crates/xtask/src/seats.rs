@@ -1,5 +1,5 @@
-//! The worktree seat survey (`cargo xtask seats`), shared with the
-//! session-start greeting.
+//! The worktree seat roster: the survey (`cargo xtask seats`) the
+//! session-start greeting shares, and the claim that says whose a seat is.
 //!
 //! The greeting reports where the seats stood when the session began, and
 //! that snapshot goes stale: a seat it called free was measured minutes
@@ -24,6 +24,76 @@ pub(crate) const SEAT_CLAIM: &str = "claude-seat";
 
 /// The directory every worktree of this repository sits under.
 const WORKTREES: &str = "/.claude/worktrees/";
+
+/// How an attempt to claim a seat came out.
+pub(crate) enum Claim {
+    /// Locked by us now, or in some state git could not judge — the tool
+    /// call itself will surface whatever is actually wrong.
+    OursOrMoot,
+    /// Somebody holds it: the lock's reason, possibly empty.
+    Held(String),
+}
+
+/// One atomic claim: `git worktree lock` refuses a second lock, so the
+/// loser of a race is told here and not after settling in. What to make
+/// of a seat somebody already holds is the caller's — a session entering
+/// one has somewhere else to go, a session already sitting in one does
+/// not.
+pub(crate) fn lock_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
+    let reason = format!("{SEAT_CLAIM} {session}");
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(cwd)
+        // The "already locked" branch below reads git's message, and a
+        // translated one would fall through to OursOrMoot — the allow
+        // side. Pin the locale so the deny keeps its teeth.
+        .env("LC_ALL", "C")
+        .args(["worktree", "lock", "--reason", &reason, seat_path]);
+    let Ok(output) = crate::subprocess::run_captured(&mut command) else {
+        return Claim::OursOrMoot;
+    };
+    if output.status.success() {
+        return Claim::OursOrMoot;
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if let Some(rest) = stderr.split("already locked").nth(1) {
+        let reason = rest
+            .split_once("reason:")
+            .map(|(_, reason)| reason.trim().to_string())
+            .unwrap_or_default();
+        return Claim::Held(reason);
+    }
+    Claim::OursOrMoot
+}
+
+/// The reason on this worktree's own lock, if it is locked at all.
+pub(crate) fn lock_reason(cwd: &str) -> Option<String> {
+    let git_dir =
+        crate::subprocess::git_query(cwd, &["rev-parse", "--path-format=absolute", "--git-dir"])?;
+    let reason = std::fs::read_to_string(format!("{git_dir}/locked")).ok()?;
+    Some(reason.trim().to_string())
+}
+
+/// Where a seat's lock stands relative to this session. Pure so the tests
+/// can ask.
+pub(crate) enum Standing {
+    /// No lock at all.
+    Free,
+    /// This session's claim — or a session id too empty to judge by,
+    /// where fighting over the seat helps nobody.
+    Ours,
+    /// Somebody else's claim, or a lock a person wrote by hand.
+    Foreign(String),
+}
+
+pub(crate) fn standing(reason: Option<String>, session: &str) -> Standing {
+    match reason {
+        None => Standing::Free,
+        Some(reason) if session.is_empty() || reason.contains(session) => Standing::Ours,
+        Some(reason) => Standing::Foreign(reason),
+    }
+}
 
 /// One seat of the roster, surveyed.
 pub(crate) struct Seat {
@@ -319,8 +389,33 @@ pub(crate) fn format_age(age: Option<Duration>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Seat, SeatEntry, SeatState, WorktreeBlock, format_age, render, seat_entries};
+    use super::{
+        Seat, SeatEntry, SeatState, Standing, WorktreeBlock, format_age, render, seat_entries,
+        standing,
+    };
     use std::time::Duration;
+
+    #[test]
+    fn stands_a_lock_relative_to_the_session() {
+        assert!(matches!(standing(None, "s1"), Standing::Free));
+        assert!(matches!(
+            standing(Some("claude-seat s1".into()), "s1"),
+            Standing::Ours
+        ));
+        assert!(matches!(
+            standing(Some("claude-seat s2".into()), "s1"),
+            Standing::Foreign(_)
+        ));
+        assert!(matches!(
+            standing(Some("parked by hand".into()), "s1"),
+            Standing::Foreign(_)
+        ));
+        // An empty session id can match no claim — leave whatever holds.
+        assert!(matches!(
+            standing(Some("claude-seat s2".into()), ""),
+            Standing::Ours
+        ));
+    }
 
     #[test]
     fn reads_seats_out_of_a_worktree_listing() {

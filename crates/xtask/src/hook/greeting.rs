@@ -2,8 +2,7 @@
 //! free letter it should take.
 
 use super::payload::string_field;
-use super::seat::{lock_reason, lock_seat};
-use crate::seats::{self, SEATS, commits_in, worktree_root};
+use crate::seats::{self, SEATS, commits_in, lock_reason, lock_seat, worktree_root};
 use crate::subprocess::git_query;
 
 /// SessionStart: sessions opened in the primary checkout get the worktree
