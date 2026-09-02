@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "t
 # Settings/state files. Used through `toml::Table` rather than a derive:
 # per-key fallback needs the parsed tree anyway, and skipping the derive
 # keeps serde_derive/syn out of the build (measured: 14 -> 8 crates, -38KB).
-toml = "0.9"
+toml = "1"
 tokio-util = "0.7"
 tracing = "0.1"
 
