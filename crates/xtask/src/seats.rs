@@ -92,6 +92,14 @@ pub(crate) fn claim_liveness(reason: &str) -> &'static str {
     }
 }
 
+/// Whether a lock is a claim nobody is behind any more. Only a claim that
+/// names its process can answer; anything else is left standing.
+pub(crate) fn claim_is_dead(reason: &str) -> bool {
+    holder(reason)
+        .and_then(|holder| holder.pid)
+        .is_some_and(|pid| !crate::subprocess::process_exists(pid))
+}
+
 /// Who a claim names, read back out of a lock's reason. None when the
 /// lock carries no claim of ours — a person's lock, which nothing
 /// automatic touches.
@@ -222,6 +230,10 @@ pub(crate) struct SeatState {
     pub locked: bool,
     /// The lock's reason, empty when unlocked or given none.
     pub lock_reason: String,
+    /// Whether that lock is a claim whose Claude process is gone. Such a
+    /// seat is free: the roster takes it back on its own, so nobody has
+    /// to judge a long-still seat and nobody unlocks a live one by hand.
+    pub claim_dead: bool,
     /// Commits main does not have (`main..HEAD`); None when git could not
     /// answer. Ranges run on HEAD, not the branch name, so a detached
     /// seat still counts.
@@ -235,6 +247,204 @@ pub(crate) struct SeatState {
     /// the seat refreshes it, so a fresh age means hands on the seat
     /// recently, whatever the counted columns say.
     pub index_age: Option<Duration>,
+}
+
+/// A seat this session holds, whether it just took it or already had it.
+pub(crate) struct Assigned {
+    pub seat: &'static str,
+    pub path: String,
+    /// What the roster did to the seat on the way in, if anything.
+    pub note: String,
+    /// Whether the session was already holding it before this ran.
+    pub held: bool,
+}
+
+impl Assigned {
+    /// What the session is told. An instruction and not a menu: this path
+    /// is the one EnterWorktree argument that will be let through, because
+    /// the claim behind it is already this session's.
+    pub(crate) fn report(&self) -> String {
+        let standing = if self.held {
+            "was already this session's"
+        } else {
+            "is this session's now"
+        };
+        format!(
+            "seat {} {standing}{}\nenter it with EnterWorktree path={}",
+            self.seat, self.note, self.path
+        )
+    }
+}
+
+/// `cargo xtask seat`: the roster hands this session a seat.
+///
+/// Nobody names a letter, because naming one means choosing it from a
+/// survey, and a survey is a snapshot two sessions can agree on while
+/// both are wrong about it. Only the lock ever decided which of them got
+/// the seat, so the choosing happens here, behind that lock: letters are
+/// tried until one is claimed, and the letter comes back as an answer
+/// rather than going in as a request (CLAUDE.md ビルド・テスト).
+pub fn take(args: &[String]) -> Result<(), String> {
+    if !args.is_empty() {
+        return Err(format!("seat takes no arguments (got {args:?})"));
+    }
+    let root = crate::tree::workspace_root();
+    let assigned = assign(&root.to_string_lossy(), &Identity::current(None))?;
+    println!("{}", assigned.report());
+    Ok(())
+}
+
+/// The seat this session holds, taking one if it holds none.
+///
+/// Every refusal on the way is a seat somebody else is in, so the loop
+/// walks the roster rather than stopping at the first no. What it hands
+/// back is a tree that is ready to be worked in: claimed, empty, and at
+/// main's tip.
+pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
+    let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])
+        .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
+    // The listing's first entry is the primary checkout, which is where a
+    // seat is created and the tree every seat path is written against.
+    let primary = worktree_blocks(&listing)
+        .first()
+        .ok_or("git worktree list named no tree at all")?
+        .path
+        .clone();
+    let entries = seat_entries(&listing);
+    if let Some(held) = held_seat(&entries, me) {
+        return Ok(held);
+    }
+    for name in spread_order() {
+        let taken = match entries.iter().find(|entry| entry.seat == name) {
+            Some(entry) => claim_existing(&primary, &entry.tree.path, name, me),
+            None => create_seat(&primary, name, me),
+        };
+        if let Some(taken) = taken {
+            return Ok(taken);
+        }
+    }
+    Err(
+        "every seat a-f is held, carrying unmerged commits, or holding \
+         uncommitted work — no seat is free to hand out. Tell the user; \
+         seats are not added past f (CLAUDE.md ビルド・テスト)"
+            .into(),
+    )
+}
+
+/// The seat this session already holds, if it holds one. A session works
+/// one seat at a time, and asking twice must give the same answer rather
+/// than a second seat.
+fn held_seat(entries: &[SeatEntry], me: &Identity) -> Option<Assigned> {
+    entries
+        .iter()
+        .find(|entry| matches!(standing(lock_reason(&entry.tree.path), me), Standing::Ours))
+        .map(|entry| Assigned {
+            seat: entry.seat,
+            path: entry.tree.path.clone(),
+            note: String::new(),
+            held: true,
+        })
+}
+
+/// Claims one seat that already exists. Everything is judged again after
+/// the lock takes: what the listing said was a snapshot, and the state
+/// that decides whether this seat can be worked is the state behind the
+/// claim. A seat that turns out to hold somebody's work is handed back.
+fn claim_existing(
+    primary: &str,
+    path: &str,
+    seat: &'static str,
+    me: &Identity,
+) -> Option<Assigned> {
+    if !matches!(take_seat(primary, path, me), Standing::Ours) {
+        return None;
+    }
+    let ahead = commits_in(path, "main..HEAD");
+    let dirty = dirty_lines(path);
+    // Commits main does not have are a merge waiting to happen, and
+    // uncommitted files are somebody's afternoon: neither is this
+    // session's to start on top of.
+    if ahead != Some(0) || dirty != Some(0) {
+        unlock_seat(primary, path);
+        return None;
+    }
+    Some(Assigned {
+        seat,
+        path: path.to_string(),
+        note: start_at_main(path, seat),
+        held: false,
+    })
+}
+
+/// Puts a claimed seat on its own letter's branch at main's tip, which is
+/// where a stretch of work begins (CLAUDE.md ビルド・テスト). Safe only
+/// because the caller proved the seat merged and clean behind its lock.
+fn start_at_main(path: &str, seat: &str) -> String {
+    let branch = format!("worktree-{seat}");
+    let on_branch = crate::subprocess::git_query(path, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .is_some_and(|head| head == branch);
+    if on_branch && commits_in(path, "HEAD..main") == Some(0) {
+        return String::new();
+    }
+    match crate::subprocess::git_query(path, &["switch", "-C", &branch, "main"]) {
+        Some(_) => format!(", started at main's tip on {branch}"),
+        None => format!(
+            ", but it could not be put at main's tip — run `git switch -C {branch} main` there \
+             before working"
+        ),
+    }
+}
+
+/// Creates a letter the roster never made, locked in the same step that
+/// makes it: `worktree add --lock` leaves no moment between the tree
+/// existing and being claimed for a second session to arrive in.
+fn create_seat(primary: &str, seat: &'static str, me: &Identity) -> Option<Assigned> {
+    let branch = format!("worktree-{seat}");
+    // A letter with no tree can still own a branch, left behind when its
+    // worktree was removed. Reusing that name is only safe once main has
+    // its commits; a branch still carrying work is skipped, not reset.
+    if commits_in(primary, &format!("main..{branch}")).is_some_and(|ahead| ahead > 0) {
+        return None;
+    }
+    let path = format!("{primary}{WORKTREES}{seat}");
+    crate::subprocess::git_query(
+        primary,
+        &[
+            "worktree",
+            "add",
+            "--lock",
+            "--reason",
+            &me.reason(),
+            "-B",
+            &branch,
+            &path,
+            "main",
+        ],
+    )?;
+    Some(Assigned {
+        seat,
+        path,
+        note: ", newly created — the roster had not made this letter yet".to_string(),
+        held: false,
+    })
+}
+
+/// The letters to try, in an order that differs run to run. The lock is
+/// what actually decides, so this only keeps sessions started in one
+/// burst from queueing on one letter and paying a refusal each.
+fn spread_order() -> [&'static str; SEATS.len()] {
+    let offset = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.subsec_nanos() as usize);
+    std::array::from_fn(|index| SEATS[(index + offset) % SEATS.len()])
+}
+
+/// Uncommitted changes in `dir`, untracked files included. --no-optional-
+/// locks because a plain status opportunistically rewrites the index it
+/// refreshed, and the survey reports index mtimes.
+fn dirty_lines(dir: &str) -> Option<usize> {
+    crate::subprocess::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
+        .map(|status| status.lines().filter(|line| !line.is_empty()).count())
 }
 
 /// `cargo xtask seats`: one line per seat, and how to read them.
@@ -285,10 +495,10 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
         branch: entry.tree.branch.clone(),
         locked: entry.tree.locked,
         lock_reason: entry.tree.reason.clone(),
+        claim_dead: entry.tree.locked && claim_is_dead(&entry.tree.reason),
         ahead: commits_in(dir, "main..HEAD"),
         behind: commits_in(dir, "HEAD..main"),
-        dirty: crate::subprocess::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
-            .map(|status| status.lines().filter(|line| !line.is_empty()).count()),
+        dirty: dirty_lines(dir),
         index_age: index_age(dir, now),
     }
 }
@@ -393,9 +603,10 @@ pub(crate) fn worktree_root(cwd: &str) -> Option<String> {
 }
 
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.
-const GUIDE: &str = "reading: dirty>0 or ahead>0 = in use; dirty=0 and ahead=0 = free \
-    (start with `git reset --hard main` unless at-main is yes); a locked seat is held \
-    by the session that locked it.";
+const GUIDE: &str = "reading: dirty>0 or ahead>0 = in use; dirty=0 and ahead=0 = free, and \
+    `cargo xtask seat` is what takes one — it claims the seat and puts it at main's tip \
+    itself, so nothing here is a letter to pick; a locked seat is held by the session its \
+    claim names, unless the note says that session has ended.";
 
 /// The table: a header, one line per seat, and the reading. Pure so the
 /// tests can hand it seats git never made.
@@ -464,10 +675,15 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
     let dirty = state
         .dirty
         .map_or("?".to_string(), |value| value.to_string());
+    let held = if state.claim_dead {
+        "claim left by a session that ended"
+    } else {
+        "locked"
+    };
     let note = match (state.locked, state.lock_reason.is_empty()) {
         (false, _) => String::new(),
-        (true, true) => "locked".to_string(),
-        (true, false) => format!("locked ({})", state.lock_reason),
+        (true, true) => held.to_string(),
+        (true, false) => format!("{held} ({})", state.lock_reason),
     };
     (
         [
@@ -632,6 +848,7 @@ mod tests {
                     branch: "worktree-a".to_string(),
                     locked: false,
                     lock_reason: String::new(),
+                    claim_dead: false,
                     ahead: Some(1),
                     behind: Some(0),
                     dirty: Some(13),
@@ -644,6 +861,7 @@ mod tests {
                     branch: String::new(),
                     locked: true,
                     lock_reason: "claude-seat abc123".to_string(),
+                    claim_dead: false,
                     ahead: Some(0),
                     behind: Some(0),
                     dirty: Some(0),
@@ -656,6 +874,7 @@ mod tests {
                     branch: "worktree-c".to_string(),
                     locked: false,
                     lock_reason: String::new(),
+                    claim_dead: false,
                     ahead: None,
                     behind: None,
                     dirty: None,

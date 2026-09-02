@@ -45,6 +45,7 @@ fn main() -> ExitCode {
         Some("perf") => perf::run(&args[1..]),
         Some("shipped") => shipped::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
+        Some("seat") => seats::take(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
         Some("shots") => shots::run(&args[1..]),
         Some("land") => land::run(&args[1..]),

@@ -5,29 +5,41 @@
 use super::payload::string_field;
 use super::seat;
 
-/// PreToolUse(Write): a new .rs directly under crates/platitude-core/tests/
-/// would become a second, serialized test binary — integration tests are one
-/// binary by rule (tests/it/).
+/// PreToolUse(Write|Edit): where the write would land, judged before it
+/// lands. One decision per call — two JSON objects on stdout is not a
+/// payload — so the objections run in order and the first is the answer.
 pub(super) fn pre_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
     };
     let path = path.replace('\\', "/");
-    let Some(rest) = path.split("crates/platitude-core/tests/").nth(1) else {
+    let Some((decision, reason)) = second_test_binary(&path)
+        .map(|reason| ("deny", reason))
+        .or_else(|| seat::write_objection(input, &path))
+    else {
         return Ok(());
     };
-    if rest.ends_with(".rs") && !rest.contains('/') {
-        println!(
-            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-             \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-             \"Integration tests are one binary: cargo test runs test binaries \
-             one after another, so a file directly under tests/ becomes a second, \
-             serialized binary and a second link. Add the test as a module under \
-             crates/platitude-core/tests/it/ and register it in tests/it/main.rs \
-             (.claude/rules/core.md).\"}}}}"
-        );
-    }
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"{decision}\",\"permissionDecisionReason\":\
+         \"{reason}\"}}}}"
+    );
     Ok(())
+}
+
+/// A new .rs directly under crates/platitude-core/tests/ would become a
+/// second, serialized test binary — integration tests are one binary by
+/// rule (tests/it/).
+fn second_test_binary(path: &str) -> Option<String> {
+    let rest = path.split("crates/platitude-core/tests/").nth(1)?;
+    (rest.ends_with(".rs") && !rest.contains('/')).then(|| {
+        "Integration tests are one binary: cargo test runs test binaries one \
+         after another, so a file directly under tests/ becomes a second, \
+         serialized binary and a second link. Add the test as a module under \
+         crates/platitude-core/tests/it/ and register it in tests/it/main.rs \
+         (.claude/rules/core.md)."
+            .to_string()
+    })
 }
 
 /// PostToolUse(Write|Edit): the seat re-claim, then the QML rules a

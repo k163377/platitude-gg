@@ -25,13 +25,18 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         None => println!(
             "This session runs in the primary checkout, and the primary \
              checkout is only ever read. Every write belongs in a worktree \
-             seat (`claude --worktree <letter>`, or EnterWorktree by path) \
-             — implementation, documents, settings and the shared session \
-             rules alike: parallel sessions fight over target/ and the \
-             release exe, and they keep reaching for the same files, so a \
-             direct commit to main collides with theirs (CLAUDE.md ビルド・\
-             テスト / Git 運用). Take a seat, make the edit there, and \
-             report the branch as ready to merge. {seats}"
+             seat — implementation, documents, settings and the shared \
+             session rules alike: parallel sessions fight over target/ and \
+             the release exe, and they keep reaching for the same files, so \
+             a direct commit to main collides with theirs (CLAUDE.md \
+             ビルド・テスト / Git 運用). Nothing has to be decided about \
+             that now: the first edit that would land here is held, and \
+             `cargo xtask seat` is what answers it — the roster claims a \
+             free letter for this session and prints the path to enter. \
+             Never name a letter yourself, and do not survey for one; the \
+             claim is the only thing that ever decided who gets a seat. \
+             Make the edit in the seat you are given, and report the branch \
+             as ready to merge. {seats}"
         ),
         Some(root) => {
             let name = root.rsplit('/').next().unwrap_or_default();
@@ -48,8 +53,8 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
                     "This session runs in worktree '{name}', outside the \
                      seat roster a-f. Continue this branch's pending work if \
                      that is what the session is for; otherwise take a seat \
-                     with EnterWorktree by path (CLAUDE.md ビルド・テスト). \
-                     {seats}"
+                     with `cargo xtask seat` and enter the path it prints \
+                     (CLAUDE.md ビルド・テスト). {seats}"
                 );
             }
         }
@@ -122,71 +127,45 @@ fn seat_report(cwd: &str) -> Option<String> {
     if !buckets.missing.is_empty() {
         parts.push(format!("not created yet: {}", buckets.missing.join(", ")));
     }
-    let mut report = format!("Worktree seats — {}.", parts.join("; "));
-    if let Some(pick) = spread_pick(&buckets.takeable) {
-        report.push_str(&format!(
-            " Take seat {pick} this session — the recommendation is \
-             randomized so sessions started in one burst spread out. \
-             Sitting down *is* the check: enter {pick} straight away and \
-             let the claim answer, because the hook takes `git worktree \
-             lock` on the way in and denies the call when somebody already \
-             holds it. A denial is that answer, not a failure — move to \
-             another free letter and enter it the same way. Do not survey \
-             first: this listing is from the session's start and `cargo \
-             xtask seats` is only ever a snapshot, so a seat either one \
-             calls free can be gone by the time you act on it. `seats` is \
-             for reading how the seats stand, never for deciding whether \
-             to sit."
-        ));
-    }
-    Some(report)
+    Some(format!(
+        "Worktree seats, as they stood when this session began — {}. That \
+         is a snapshot for the reader, not a menu to pick from: `cargo \
+         xtask seat` is what hands this session a seat, and it decides \
+         behind the claim, where the decision is real.",
+        parts.join("; ")
+    ))
 }
 
-/// The greeting's buckets, and the seats a new session may take.
+/// The greeting's buckets.
 struct SeatBuckets {
     free: Vec<String>,
     pending: Vec<String>,
     in_use: Vec<String>,
     missing: Vec<&'static str>,
-    takeable: Vec<&'static str>,
 }
 
-/// Sorts a survey into the greeting's buckets. A lock is a session's own
-/// claim, uncommitted changes are a session's work in progress, and
-/// commits ahead of main are a merge waiting to happen. Only a seat with
-/// none of those is takeable. Pure so the tests can hand it surveys git
-/// never produced.
+/// Sorts a survey into the greeting's buckets. A live claim is a session
+/// sitting there, uncommitted changes are work in progress, and commits
+/// ahead of main are a merge waiting to happen. Pure so the tests can
+/// hand it surveys git never produced.
 fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
     let mut buckets = SeatBuckets {
         free: Vec::new(),
         pending: Vec::new(),
         in_use: Vec::new(),
         missing: Vec::new(),
-        takeable: Vec::new(),
     };
     for seat in survey {
         let name = seat.name;
         let Some(state) = &seat.state else {
             buckets.missing.push(name);
-            buckets.takeable.push(name);
             continue;
         };
-        if state.locked {
-            // A claim outlives a session that died with it: index-age is
-            // the tell, and hours of stillness under a lock reads as a
-            // leftover, not a session.
-            let idle = state
-                .index_age
-                .filter(|age| age.as_secs() >= 3600)
-                .map(|age| {
-                    format!(
-                        ", idle {} — stale? `git worktree unlock \
-                         .claude/worktrees/{name}` if its session is gone",
-                        seats::format_age(Some(age))
-                    )
-                })
-                .unwrap_or_default();
-            buckets.in_use.push(format!("{name} (locked{idle})"));
+        // A claim whose process is gone is not a session in the seat, and
+        // saying so is what keeps anyone from unlocking one by hand and
+        // landing on top of a session that was only quiet.
+        if state.locked && !state.claim_dead {
+            buckets.in_use.push(format!("{name} (locked)"));
             continue;
         }
         match (state.ahead, state.behind, state.dirty) {
@@ -210,42 +189,20 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
                     .push(format!("{name} ({dirty} uncommitted change(s))"));
             }
             (Some(0), Some(behind), Some(0)) => {
-                if state.branch.is_empty() {
-                    // Detached HEAD: nothing pre-git guards stands on it, so
-                    // treat it like a merged seat that wants resetting to
-                    // the tip.
-                    buckets
-                        .free
-                        .push(format!("{name} (detached — reset --hard main first)"));
-                } else if behind > 0 {
-                    buckets
-                        .free
-                        .push(format!("{name} (reset --hard main first)"));
-                } else {
-                    buckets.free.push(format!("{name} (at main)"));
-                }
-                buckets.takeable.push(name);
+                // Where a free seat stands is the reader's business only:
+                // whoever is handed one is put on its branch at main's tip
+                // by the assignment itself.
+                let at = match (state.branch.is_empty(), behind) {
+                    (true, _) => "detached",
+                    (false, 0) => "at main",
+                    (false, behind) => &format!("{behind} behind main"),
+                };
+                buckets.free.push(format!("{name} ({at})"));
             }
             _ => buckets.in_use.push(format!("{name} (state unreadable)")),
         }
     }
     buckets
-}
-
-/// One takeable seat, chosen off the clock's nanoseconds. Sessions started
-/// in one burst all read the same inventory, and a deterministic "first
-/// free letter" would send every one of them to the same seat. A spread
-/// recommendation lets a burst self-assign; the losers of any remaining
-/// race are told above to move on rather than retry.
-fn spread_pick(takeable: &[&'static str]) -> Option<&'static str> {
-    if takeable.is_empty() {
-        return None;
-    }
-    let entropy = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.subsec_nanos() as usize)
-        .unwrap_or(0);
-    takeable.get(entropy % takeable.len()).copied()
 }
 
 #[cfg(test)]
@@ -258,6 +215,7 @@ mod tests {
             branch: branch.to_string(),
             locked,
             lock_reason: String::new(),
+            claim_dead: false,
             ahead: Some(ahead),
             behind: Some(behind),
             dirty: Some(dirty),
@@ -266,17 +224,16 @@ mod tests {
     }
 
     #[test]
-    fn an_hour_idle_lock_is_flagged_as_maybe_stale() {
+    fn a_claim_whose_session_ended_is_not_a_seat_in_use() {
         let mut state = surveyed("worktree-a", true, 0, 0, 0);
-        state.index_age = Some(std::time::Duration::from_secs(6 * 3600));
+        state.claim_dead = true;
         let survey = vec![Seat {
             name: "a",
             state: Some(state),
         }];
         let buckets = seat_buckets(&survey);
-        assert_eq!(buckets.in_use.len(), 1, "{:?}", buckets.in_use);
-        assert!(buckets.in_use[0].contains("stale?"), "{:?}", buckets.in_use);
-        assert!(buckets.takeable.is_empty(), "{:?}", buckets.takeable);
+        assert!(buckets.in_use.is_empty(), "{:?}", buckets.in_use);
+        assert_eq!(buckets.free, vec!["a (at main)"]);
     }
 
     #[test]
@@ -288,7 +245,6 @@ mod tests {
         let buckets = seat_buckets(&survey);
         assert_eq!(buckets.in_use, vec!["a (13 uncommitted change(s))"]);
         assert!(buckets.free.is_empty(), "{:?}", buckets.free);
-        assert!(buckets.takeable.is_empty(), "{:?}", buckets.takeable);
     }
 
     #[test]
@@ -323,15 +279,10 @@ mod tests {
         assert_eq!(buckets.pending, vec!["a (worktree-a +1, 13 uncommitted)"]);
         assert_eq!(
             buckets.free,
-            vec![
-                "b (at main)",
-                "c (detached — reset --hard main first)",
-                "e (reset --hard main first)",
-            ]
+            vec!["b (at main)", "c (detached)", "e (2 behind main)"]
         );
         assert_eq!(buckets.in_use, vec!["f (locked)"]);
         assert_eq!(buckets.missing, vec!["d"]);
-        assert_eq!(buckets.takeable, vec!["b", "c", "d", "e"]);
     }
 
     #[test]
@@ -342,6 +293,7 @@ mod tests {
                 branch: "worktree-e".to_string(),
                 locked: false,
                 lock_reason: String::new(),
+                claim_dead: false,
                 ahead: None,
                 behind: None,
                 dirty: None,
@@ -350,6 +302,6 @@ mod tests {
         }];
         let buckets = seat_buckets(&survey);
         assert_eq!(buckets.in_use, vec!["e (state unreadable)"]);
-        assert!(buckets.takeable.is_empty(), "{:?}", buckets.takeable);
+        assert!(buckets.free.is_empty(), "{:?}", buckets.free);
     }
 }

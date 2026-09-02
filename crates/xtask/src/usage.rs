@@ -214,16 +214,32 @@ const TAIL: &str = "  shipped [--no-build]
       keeps a per-tree settings store on its own, so seats never fight
       over one instance lock.
 
+  seat
+      Hands this session a worktree seat, and takes no argument: the
+      letter is the answer, never the request (CLAUDE.md ビルド・テスト).
+      Letters are tried until `git worktree lock` takes one, so the seat
+      comes back already claimed — the lock is the only step that ever
+      decided which of two sessions got a seat, and a session that picks
+      a letter off a survey first is deciding from something the other
+      session can read the same way. What comes back is a tree ready to
+      work in: claimed, with nothing uncommitted, on its own letter's
+      branch at main's tip, created if the roster never made it. Asking
+      twice gives the same seat. It prints the path EnterWorktree wants,
+      and that is the only path the entry hook will let through, because
+      the claim behind it is this session's. When every letter is held or
+      holds unmerged work it fails and says so — seats are not added
+      past f.
+
   seats
       Where the six worktree seats a-f stand right now, one line each:
       branch, whether HEAD sits at main's tip, commits ahead of main
       (main..HEAD), uncommitted changes (status --porcelain lines), and
-      how long since the seat's own index was written. The session
-      greeting reads the same survey, but only once, when the session
-      starts — a seat that looked free then can hold another session's
-      work minutes later, so this is the line to read before entering
-      one (CLAUDE.md ビルド・テスト). Ends with how to read the columns,
-      and a locked seat carries the mark past them.
+      how long since the seat's own index was written. For reading how
+      the roster stands — `seat` is what sits down, and nothing here is
+      a letter to choose from. A locked seat carries its claim past the
+      columns, and a claim whose Claude process is gone says so, so a
+      long-still seat needs no guess and no `git worktree unlock` by
+      hand. Ends with how to read the columns.
 
   shots <add|prune|open [--again]|list|path>
       The shot board: pictures land on a page that opens in a window of
