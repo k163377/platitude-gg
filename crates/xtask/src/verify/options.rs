@@ -12,6 +12,13 @@ pub(super) struct Options {
     pub(super) preset: Vec<String>,
     pub(super) build: bool,
     pub(super) select: bool,
+    /// Ask for the window shape the two platforms that cannot fold the
+    /// band into the title bar get (`PG_SYSTEM_TITLE_BAR`), so the layout
+    /// they come up in can be photographed from a machine that merges.
+    /// The variable alone does not reach the app: `app_env` clears every
+    /// `PG_*` the parent shell carries from the runs xtask starts, so a
+    /// headless run has no way to ask for it but this.
+    pub(super) system_title_bar: bool,
     /// Diagnostic ceiling for a run whose causal completion never arrives.
     pub(super) watchdog_ms: u64,
     pub(super) shot_dir: Option<PathBuf>,
@@ -73,6 +80,9 @@ impl Options {
         if self.select {
             words.push("--select".to_string());
         }
+        if self.system_title_bar {
+            words.push("--system-title-bar".to_string());
+        }
         if self.allow_write_failure {
             words.push("--allow-write-failure".to_string());
         }
@@ -106,6 +116,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         preset: Vec::new(),
         build: true,
         select: false,
+        system_title_bar: false,
         watchdog_ms: 120_000,
         shot_dir: None,
         config_dir: None,
@@ -128,6 +139,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 .push(it.next().ok_or("--preset needs a name")?.clone()),
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
+            "--system-title-bar" => opts.system_title_bar = true,
             "--label" => opts.label = it.next().ok_or("--label needs a phrase")?.clone(),
             "--no-board" => opts.no_board = true,
             "--no-census" => opts.no_census = true,

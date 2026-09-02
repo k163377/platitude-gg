@@ -39,6 +39,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           Both repeat: one tab per repository, in order.
         --no-build        reuse the existing release binary
         --select          also set PG_AUTO_SELECT=1
+        --system-title-bar
+                          also set PG_SYSTEM_TITLE_BAR=1: the window shape
+                          mac and Linux come up in, asked for from a
+                          machine that folds the band into the title bar
         --watchdog-ms <n> maximum run time; never chooses the shot (default 120000)
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per

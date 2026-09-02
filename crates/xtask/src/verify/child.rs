@@ -149,6 +149,9 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
+    if opts.system_title_bar {
+        cmd.env("PG_SYSTEM_TITLE_BAR", "1");
+    }
     super::perf::configure(&mut cmd, &opts.verb, arg)?;
     // The screen the identity verbs are about: the seed written above is
     // theirs, and this is what the dialog standing on it is told to do.
