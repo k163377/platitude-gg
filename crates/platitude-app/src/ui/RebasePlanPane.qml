@@ -5,8 +5,8 @@ import platitude.ui
 
 // The interactive-rebase plan, stood where the graph was: the rows of `from^..HEAD` newest-first, the verb each one
 // carries, and the base they land on as the list's own last row. Composing runs nothing — the one door out of here
-// that touches the repository is the run button standing at the right pane's foot, and Cancel up here only puts the
-// draft away (デザイン規約 §履歴を合流させる).
+// that touches the repository is the run button standing at the right pane's foot, and `Discard` up here only puts
+// the draft away (デザイン規約 §履歴を合流させる).
 //
 // While this pane stands, the surfaces that could move the history under it are held down by the page (the sidebar,
 // find, the toolbar's writes); what cannot be held — another session, a terminal — is answered by the model putting
@@ -26,7 +26,7 @@ Rectangle {
     /// Which commit the reader picked, for the page to select (the details pane follows it).
     signal rowPicked(string oidHex)
 
-    /// Cancel would take composed work away with the plan — verbs set, rows moved, a reword saved into it, or one
+    /// `Discard` would take composed work away with the plan — verbs set, rows moved, a reword saved into it, or one
     /// typed into the right pane's boxes and not yet given to it. None of that can be read back off the screen
     /// afterwards, so the button is held rather than clicked (デザイン規約 §長押し). Handed in: half the answer is the
     /// right pane's, and this pane owns nothing but the rows (`RepoPage.planDiscards`).
@@ -113,7 +113,13 @@ Rectangle {
                 Item { Layout.fillWidth: true }
                 ActionButton {
                     id: cancelButton
-                    text: Words.cancel
+                    //: The way out of the plan being composed. What it throws away is the draft on screen.
+                    text: qsTr("Discard")
+                    // **Not a command chip, and not a flag.** Nothing has run and nothing runs from this button, so
+                    // `--abort` here would name a command git refuses on this screen (デザイン規約 §git 用語のコード表記
+                    // — コマンドでないものに着せない). The word takes its object from the screen it stands on, the way
+                    // the file row's own `Discard` takes its object from the row under the pointer.
+                    //
                     // The frame carries what is about to be lost, and the word takes the colour only because this is
                     // a hold (規約 §長押し — `RebasePlanRunBar` と同じ線). The word itself does not change: pressing
                     // this still puts the plan away, hold or no hold. All three read the latch, not the live answer,

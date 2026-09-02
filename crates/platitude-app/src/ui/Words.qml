@@ -21,9 +21,9 @@ QtObject {
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
     readonly property string addRemote: qsTr("Add remote…")
 
-    /// The way out that writes nothing, as the three dialogs' foot and the plan's header bar say it. One word for
-    /// every seat it stands in: a dialog is dismissed and a plan is put away, but what the reader is promised is the
-    /// same — nothing that was typed or arranged here goes anywhere.
+    /// The way out that writes nothing, as the three dialogs' foot says it. **Dialogs only**: what a dialog's way out
+    /// puts away is the box itself, and the reader can see its edges. The plan takes the graph's whole seat with no
+    /// box to dismiss, so its own way out names what goes instead (`RebasePlanPane` — `Discard`).
     readonly property string cancel: qsTr("Cancel")
 
     /// Why a menu row is out while it cannot be chosen (`AppMenuItem.blockedWhy` — デザイン規約 §無効: the line is the

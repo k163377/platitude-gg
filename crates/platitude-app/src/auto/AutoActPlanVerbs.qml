@@ -89,7 +89,7 @@ Item {
         return true
     }
     // ---- the face the press puts up before any of that -----------------
-    // The pane in the graph's seat with nothing in it but the mode's one word, Cancel and the turning mark. The face
+    // The pane in the graph's seat with nothing in it but the mode's one word, `Discard` and the turning mark. The face
     // is **held** from the edge that raised it (`RepoPage.planLoadHeld`): the rows arrive through the feed and can
     // land while the asynchronous grab is still out, and the picture would then be of the plan rather than of the
     // wait for it (verify-ui スキル §中間状態は実 edge を latch する).

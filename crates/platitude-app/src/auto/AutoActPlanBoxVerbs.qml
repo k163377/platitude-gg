@@ -160,7 +160,7 @@ Item {
         /// them — that is what makes what is standing in them unsaved rather than already written.
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
-        /// What Cancel was wearing when it was pressed, read while the plan still stands. False is the claim: this
+        /// What `Discard` was wearing when it was pressed, read while the plan still stands. False is the claim: this
         /// text is not the plan's to take, so the press costs nothing and the button must not say it does
         /// (`RepoPage.planDiscards`). The dressed side is a picture — `plan-fold-carry` stands on a plan with a verb
         /// set and photographs it.
@@ -217,13 +217,13 @@ Item {
     // is for — but both reach past the pane, and this is the one screen where reaching past it lands somewhere the
     // reader cannot see (規約 §フル interactive rebase「右の詳細ペインがそのまま生きる」, and how far that goes).
     //
-    // Three presses and a Cancel: the parent hash of a commit the plan holds — a walk *down* the plan, which has to
+    // Three presses and a `Discard`: the parent hash of a commit the plan holds — a walk *down* the plan, which has to
     // take the model's own row with it; the base's hash — a walk *out* of it, which has no row on this screen to land
     // on; and a file row, which used to read a diff into the pane the plan is standing on.
     //
     // **Not one of the four is in the picture.** The row highlight reads `page.selectedOid`, so a model left behind
     // photographs exactly like one that followed; a diff opened under the plan is drawn nowhere at all; and where the
-    // middle lands after Cancel is the whole of the last claim.
+    // middle lands after `Discard` is the whole of the last claim.
     SampleTimer {
         id: planHeldTimer
         /// Where in the walk this run is — each step entered off the state the step before it asked for

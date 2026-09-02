@@ -528,7 +528,7 @@ Item {
     readonly property bool planReword: page.planActive && planModel.selectedAction === "reword"
                                        && planModel.selectedOid !== ""
                                        && planModel.selectedOid === detailsModel.shaHex
-    /// What Cancel is about to take away with the plan: the plan's own edits, and a reword standing in the right
+    /// What `Discard` is about to take away with the plan: the plan's own edits, and a reword standing in the right
     /// pane's boxes that the plan has not been given yet. Both are composed here and nowhere else — the screen after
     /// the press holds no copy of either — so the button is held rather than clicked (デザイン規約 §長押し).
     ///
@@ -538,7 +538,7 @@ Item {
     ///
     /// **Read off `boxMoved`, not `messageDirty`.** A row walked back out of `reword` locks the boxes with the
     /// typed text still standing in them, and the reader can neither save it nor be warned by a button that asks
-    /// whether the boxes still take typing — but Cancel takes that text all the same.
+    /// whether the boxes still take typing — but `Discard` takes that text all the same.
     readonly property bool planDiscards: page.planActive
         && (planModel.dirty || (detailsPane.boxFromPlan && detailsPane.boxMoved))
     function startRebasePlan(oidHex) {
@@ -546,7 +546,7 @@ Item {
     }
     // What the pane's arrival and departure do, on the edge the *seat* changes rather than the one the rows do: the
     // graph is gone from the press, and a diff opened over it goes with it. Either way out of the read — rows, a
-    // refusal, a failure, Cancel pressed on the empty face — comes back through here, so the fold has no exceptions.
+    // refusal, a failure, `Discard` pressed on the empty face — comes back through here, so the fold has no exceptions.
     onPlanShownChanged: {
         if (page.planShown) {
             page.closeDiff()
@@ -569,7 +569,7 @@ Item {
             if (planModel.publishRange !== "")
                 repoTab.checkPublish(planModel.publishRange)
         } else {
-            // Cancelled, stale, run, or put away under a standing operation — the plan is gone either way, and so is
+            // Discarded, stale, run, or put away under a standing operation — the plan is gone either way, and so is
             // the row that was going to carry whatever a `reword` left in the right pane's boxes. Nothing moved the
             // commit on screen, so the pane's own guard would sit still (`DetailsPane.syncMessage`) and leave that
             // text where the plain amend this hands back can reach it: on the newest commit that is a one-press
