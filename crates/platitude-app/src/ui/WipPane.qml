@@ -117,8 +117,10 @@ ColumnLayout {
     /// they stand, and **-1 for a bucket that is not standing**; the answer is what each one gets, in the same order.
     ///
     /// Smallest want first: a bucket asking for less than an even share settles for what it asked, and what it did not
-    /// take is shared out again among the ones still asking. Whatever is left once every bucket is satisfied goes to
-    /// the last one standing, so the bare ground is at the foot of the pane — where one list would have left it.
+    /// take is shared out again among the ones still asking. Whatever is left once every bucket is satisfied is split
+    /// evenly between them: room going spare is room no bucket was cramped for, and a bucket that is not cramped has no
+    /// claim on another's share. Handed to the last one standing instead, one file against none draws an empty bucket
+    /// holding the whole pane over the one holding the file pressed into a single row.
     function shareOut(room, wants) {
         const out = []
         const standing = []
@@ -136,7 +138,9 @@ ColumnLayout {
             out[at] = Math.min(wants[at], left / (asked.length - i))
             left -= out[at]
         }
-        out[standing[standing.length - 1]] += left
+        const spare = left / standing.length
+        for (let i = 0; i < standing.length; i++)
+            out[standing[i]] += spare
         return out
     }
 
