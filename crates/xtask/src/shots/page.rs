@@ -14,6 +14,11 @@
 //! have runs, the row would reorder itself every time a seat's last run
 //! swept away or a new seat took its first picture — a button that moves
 //! between two readings of the same board is one nobody can aim at.
+//!
+//! Which of them is chosen rides in the page's fragment. F5 is how the
+//! board is re-read (`window.rs`) and it carries nothing else over, so a
+//! filter held only in a variable comes back as `all` on the one press
+//! whose whole point was the picture the reader has just taken.
 
 use super::Run;
 
@@ -106,15 +111,28 @@ const ROSTER=['a','b','c','d','e','f','main'];
 const held=new Set(RUNS.map(r=>r.seat));
 const seats=ROSTER.concat([...held].filter(s=>!ROSTER.includes(s)));
 const filter=document.getElementById('filter');
+const chips=new Map();
+function pick(seat){chips.forEach((b,s)=>b.classList.toggle('on',s===seat));
+ side.querySelectorAll('.run').forEach(
+  r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))}
+// The chosen seat goes in the fragment, which is what the reload F5 makes
+// carries over. replaceState rather than location.hash: a file:// page is
+// allowed it (measured) and it leaves no history entry behind every chip.
+// A browser that refuses simply does not remember, so this is written
+// after the filter has already moved.
+function remember(seat){try{history.replaceState(null,'',seat?'#seat-'+seat:'#')}catch(e){}}
 function chip(seat,text,empty){const b=document.createElement('button');b.textContent=text;
  if(empty){b.disabled=true;b.title='nothing from seat '+seat+' on the board'}
- else{if(seat)b.style.color=ink(seat);
-  b.onclick=()=>{filter.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-   side.querySelectorAll('.run').forEach(
-    r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))}}
- filter.append(b);return b}
-chip('','all',false).classList.add('on');
+ else{if(seat)b.style.color=ink(seat);chips.set(seat,b);
+  b.onclick=()=>{pick(seat);remember(seat)}}
+ filter.append(b)}
+chip('','all',false);
 seats.forEach(s=>chip(s,'seat '+s,!held.has(s)));
+// A seat whose last picture swept away between two readings has a
+// disabled chip and nothing behind it: fall back to the whole board
+// rather than to a filter that hides every run on it.
+const asked=/^#seat-(.+)$/.exec(location.hash);
+pick(asked&&chips.has(asked[1])?asked[1]:'');
 let i=0,z=1,x=0,y=0;
 function draw(){imgs.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
  document.getElementById('zoom').textContent=(z*100).toFixed(0)+'%'}
@@ -294,6 +312,17 @@ mod tests {
         let roster = "const ROSTER=['a','b','c','d','e','f','main']";
         assert!(render(&[]).contains(roster));
         assert!(render(&[run("a", "chip padding")]).contains(roster));
+    }
+
+    /// F5 carries the fragment and nothing else, so the chosen seat has
+    /// to be written there and read back out of it: the reader who
+    /// filtered the board down to their own seat pressed it to see the
+    /// picture they had just taken, not everybody's.
+    #[test]
+    fn the_chosen_seat_survives_a_reload() {
+        let page = render(&[run("a", "chip padding")]);
+        assert!(page.contains("history.replaceState(null,'',seat?'#seat-'+seat:'#')"));
+        assert!(page.contains("/^#seat-(.+)$/.exec(location.hash)"));
     }
 
     /// A pair reaches the page as one view: the flag the script reads to
