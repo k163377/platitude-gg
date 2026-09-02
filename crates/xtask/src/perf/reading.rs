@@ -32,6 +32,10 @@ pub(super) struct Reading {
     pub(super) first_chunk_ms: Option<u64>,
     pub(super) total_ms: Option<u64>,
     pub(super) fps: Option<f64>,
+    /// Frame intervals the scroll bench measured over 16.7ms — the count
+    /// of frames a person would have seen as a stutter, which is the same
+    /// question on a 100Hz screen and a 180Hz one.
+    pub(super) over_16_ms: Option<usize>,
     pub(super) details_ms: Vec<u64>,
     pub(super) details_frame_ms: Vec<f64>,
     pub(super) diff_frame_ms: Vec<f64>,
@@ -43,8 +47,18 @@ pub(super) struct Reading {
     pub(super) scroll_visible: bool,
     pub(super) scroll_framed: bool,
     pub(super) selection: Option<String>,
+    /// The commit the run actually selected. Recorded because the default
+    /// `--selection first` names no commit — it takes the newest
+    /// ref-reachable one, which a `git fetch` replaces (`perf::corpus`).
+    pub(super) selected_oid: Option<String>,
     pub(super) scenario_complete: Option<String>,
     pub(super) rows: Option<usize>,
+    /// What Qt said about the graphics device it chose, from `QSG_INFO`.
+    /// This machine has more than one adapter and Qt does not always take
+    /// the same one (ci/baseline/perf-windows-x64.md §この記録の読み方 3).
+    pub(super) graphics: Vec<String>,
+    /// What the machine around the process was doing while it ran.
+    pub(super) conditions: super::sampler::Conditions,
     pub(super) failure: Option<String>,
     /// The `mem report` line with the largest `rust_live`, verbatim.
     pub(super) breakdown: Option<String>,
@@ -72,12 +86,11 @@ pub(super) fn read_app(
                     found.failure = Some(line.clone());
                 }
                 absorb(&line, &mut found);
-                let completion = if found.failure.is_some() {
-                    Some(false)
-                } else if line.contains("perf_done") {
-                    Some(true)
-                } else {
-                    None
+                let ended = line.contains("perf_done");
+                let completion = match (found.failure.is_some(), ended) {
+                    (true, _) => Some(false),
+                    (false, true) => Some(true),
+                    (false, false) => None,
                 };
                 if let Some(done) = completion
                     && done_tx.send(done).is_err()
@@ -176,6 +189,27 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.join(", ")
     ))
 }
+/// The line the graph stream says when it has finished — ordinary
+/// application logging, not the harness.
+fn graph_finished(line: &str) -> bool {
+    line.contains("graph stream finished") || line.contains("graph replaced in place")
+}
+
+/// What Qt says about the device it is drawing on and the rate it thinks
+/// it has, under `QSG_INFO=1`. Kept verbatim: two runs on different
+/// adapters are not each other's control, and this machine offers three
+/// (an NVIDIA discrete, an AMD integrated, and the basic render driver).
+fn graphics_note(line: &str) -> bool {
+    [
+        "Creating QRhi with backend",
+        "Adapter ",
+        "using this adapter",
+        "using vsync:",
+    ]
+    .iter()
+    .any(|mark| line.contains(mark))
+}
+
 pub(super) fn absorb(line: &str, found: &mut Reading) {
     if line.contains("perf_frame ") {
         found.traced_frames += 1;
@@ -183,10 +217,25 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
     if line.contains("perf_done") {
         found.perf_done = true;
     }
+    if graphics_note(line) && found.graphics.len() < 12 {
+        // Qt says the same thing once per window it builds, and names the
+        // window it is saying it about — an address that is new every
+        // process. The record wants the set of facts, which is what two
+        // runs can be held to having in common.
+        let said = line
+            .split(" for window")
+            .next()
+            .unwrap_or(line)
+            .trim()
+            .to_string();
+        if !found.graphics.contains(&said) {
+            found.graphics.push(said);
+        }
+    }
     if let Some(v) = field(line, "first_chunk_ms=") {
         found.first_chunk_ms = v.parse().ok();
     }
-    if (line.contains("graph stream finished") || line.contains("graph replaced in place"))
+    if graph_finished(line)
         && let Some(v) = field(line, "elapsed_ms=")
     {
         found.total_ms = v.parse().ok();
@@ -199,6 +248,7 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
     }
     if line.contains("perf_selection") {
         found.selection = field(line, "mode=").map(str::to_string);
+        found.selected_oid = field(line, "oid=").map(str::to_string);
     }
     if line.contains("perf_complete") {
         found.scenario_complete = Some(line.to_string());
@@ -230,6 +280,7 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
             && field(line, "frame_count=")
                 .and_then(|v| v.parse::<u64>().ok())
                 .is_some_and(|v| v > 0);
+        found.over_16_ms = field(line, "over_16_ms=").and_then(|v| v.parse().ok());
         found.frame_p95_ms = field(line, "frame_p95_ms=").and_then(|v| v.parse().ok());
         found.frame_p99_ms = field(line, "frame_p99_ms=").and_then(|v| v.parse().ok());
         found.frame_max_ms = field(line, "frame_max_ms=").and_then(|v| v.parse().ok());
@@ -246,6 +297,17 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
         }
     }
 }
+/// One `key=value` off a line whose keys are whole words: the tables the
+/// runner writes for itself (`perf::display`, `perf::sampler`).
+///
+/// Not [`field`], which finds the key anywhere in the line — that answers
+/// `false` for `y=` on a line carrying `primary=false`, and a screen whose
+/// coordinate would not parse is a screen the window cannot be placed on.
+pub(super) fn token<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    line.split_whitespace()
+        .find_map(|word| word.strip_prefix(key))
+}
+
 fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     line.split(key)
         .nth(1)
