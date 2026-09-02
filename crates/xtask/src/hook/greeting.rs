@@ -12,6 +12,13 @@ use crate::subprocess::git_query;
 /// context for this event.
 pub(super) fn session_start(input: &str) -> Result<(), String> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
+    // The hook that holds main to the gate's stamp goes in on every
+    // session start, so no clone and no seat is ever without it. A
+    // failure is said, not fatal: the greeting still has to be given.
+    match crate::gate::install(std::path::Path::new(&cwd)) {
+        Ok(_) => {}
+        Err(why) => println!("The gate's git hook could not be installed: {why}"),
+    }
     let seats = seat_report(&cwd).unwrap_or_default();
     match worktree_root(&cwd) {
         None => println!(

@@ -8,17 +8,37 @@
 //! branch (both observed). This verb reads where main actually is and
 //! picks the safe move; the pre-shell hook still demands PG_ALLOW_MAIN
 //! in front of it, so the transcript records that the user asked.
+//!
+//! The order is the gate's (internal-docs/反映前テストの機械化.md): a
+//! branch behind main is rebased onto it in its own worktree first, then
+//! gated there — every step its diff owes, cached by what each step
+//! reads, so a run taken before the rebase is not paid twice — and only
+//! then is main fast-forwarded, which the reference-transaction hook
+//! allows onto a stamped commit and nothing else. History stays linear,
+//! and a landed seat already stands at main's tip.
 
 use crate::seats::{SEAT_CLAIM, WorktreeBlock, worktree_blocks};
 use crate::subprocess::git_query;
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let root = crate::tree::workspace_root();
+    let mut root = crate::tree::workspace_root();
+    let mut branch: Option<String> = None;
+    let mut at = 0;
+    while let Some(arg) = args.get(at) {
+        match arg.as_str() {
+            "--dir" => {
+                at += 1;
+                root = std::path::PathBuf::from(args.get(at).ok_or("--dir needs a path")?);
+            }
+            name if branch.is_none() && !name.starts_with('-') => branch = Some(name.to_string()),
+            other => return Err(format!("land takes one branch at most (got {other:?})")),
+        }
+        at += 1;
+    }
     let here = root.to_string_lossy().replace('\\', "/");
-    let branch = match args {
-        [] => current_branch(&here)?,
-        [name] => name.clone(),
-        more => return Err(format!("land takes one branch at most (got {more:?})")),
+    let branch = match branch {
+        Some(name) => name,
+        None => current_branch(&here)?,
     };
     if branch == "main" {
         return Err("land moves a branch onto main; main itself is not one".into());
@@ -45,26 +65,82 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let Some(primary) = trees.first() else {
         return Err("git worktree list answered with no trees at all".into());
     };
+    if let Some(tree) = trees.iter().find(|tree| tree.branch == "main")
+        && tree.path != primary.path
+    {
+        // A seat sitting on main would receive the merge into its own
+        // working tree — nobody expects a seat to be main's window.
+        return Err(format!(
+            "main is checked out in {}, not in the primary checkout — \
+             free it (switch that tree to another branch) and land again",
+            tree.path
+        ));
+    }
+    let Some(seat) = trees.iter().find(|tree| tree.branch == branch) else {
+        return Err(format!(
+            "{branch} is checked out nowhere — the gate runs in the branch's own worktree. \
+             Check it out in a seat and land again."
+        ));
+    };
+    let seat_dir = std::path::Path::new(&seat.path);
+    let dirty = git_query(&seat.path, &["status", "--porcelain"]).unwrap_or_default();
+    if !dirty.is_empty() {
+        return Err(format!(
+            "{} has uncommitted changes — what would land is not what is there. Commit or \
+             stash first:\n{dirty}",
+            seat.path
+        ));
+    }
+    // The hook that holds main to the stamp, in place before main moves.
+    println!("{}", crate::gate::install(&root)?);
+    if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
+        println!("{branch} is behind main — rebasing it in {}", seat.path);
+        rebase(&seat.path)?;
+    }
+    crate::gate::for_landing(seat_dir, "main")?;
     let before = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
-    let holder = trees.iter().find(|tree| tree.branch == "main");
-    match holder {
-        Some(tree) if tree.path == primary.path => merge_in(&tree.path.clone(), &branch)?,
-        Some(tree) => {
-            // A seat sitting on main would receive the merge into its own
-            // working tree — nobody expects a seat to be main's window.
-            return Err(format!(
-                "main is checked out in {}, not in the primary checkout — \
-                 free it (switch that tree to another branch) and land again",
-                tree.path
-            ));
-        }
-        None => forward_ref(&here, primary, &branch)?,
+    if primary.branch == "main" {
+        forward_in(&primary.path, &branch)?;
+    } else {
+        forward_ref(&here, primary, &branch)?;
     }
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
     release_claim(&here, &trees, &branch);
     clear_the_board(&listing, &branch);
     Ok(())
+}
+
+/// `git rebase main` in the seat, non-interactively. A rebase that stops
+/// is walked back and reported — resolving conflicts unattended is
+/// nobody's instruction.
+fn rebase(seat: &str) -> Result<(), String> {
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(seat)
+        .env("GIT_EDITOR", "true")
+        .env("GIT_SEQUENCE_EDITOR", "true")
+        .args(["rebase", "main"]);
+    let output = crate::subprocess::run_captured(&mut command)?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let mut abort = std::process::Command::new("git");
+    abort.arg("-C").arg(seat).args(["rebase", "--abort"]);
+    let walked_back =
+        crate::subprocess::run_captured(&mut abort).is_ok_and(|out| out.status.success());
+    Err(format!(
+        "the rebase onto main stopped and was {}:\n{}{}\n\
+         resolve it with the user — a conflict is nobody's to settle unattended",
+        if walked_back {
+            "walked back"
+        } else {
+            "left standing (the abort failed too — the seat is mid-rebase)"
+        },
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    ))
 }
 
 /// The seat's pictures go with its claim (CLAUDE.md ビルド・テスト): the
@@ -139,50 +215,31 @@ fn current_branch(here: &str) -> Result<String, String> {
     Ok(branch)
 }
 
-/// Merge into the tree that has main checked out (the primary). A merge
-/// that stops is walked back and reported — resolving conflicts on main
-/// unattended is nobody's instruction.
-fn merge_in(primary: &str, branch: &str) -> Result<(), String> {
+/// Fast-forward main in the tree that has it checked out (the primary).
+/// The branch was just rebased onto main, so anything but a
+/// fast-forward means main moved meanwhile — land again.
+fn forward_in(primary: &str, branch: &str) -> Result<(), String> {
     let mut command = std::process::Command::new("git");
-    command.arg("-C").arg(primary).args(["merge", branch]);
+    command
+        .arg("-C")
+        .arg(primary)
+        .args(["merge", "--ff-only", branch]);
     let output = crate::subprocess::run_captured(&mut command)?;
     if output.status.success() {
         return Ok(());
     }
-    let mut abort = std::process::Command::new("git");
-    abort.arg("-C").arg(primary).args(["merge", "--abort"]);
-    // run_captured only fails on a spawn error — the abort's own exit
-    // code has to be read, or "walked back" is claimed over a primary
-    // still standing mid-merge.
-    let walked_back =
-        crate::subprocess::run_captured(&mut abort).is_ok_and(|out| out.status.success());
     Err(format!(
-        "the merge into main stopped and was {}:\n{}{}\n\
-         resolve it with the user — a conflict on main is not resolved unattended",
-        if walked_back {
-            "walked back"
-        } else {
-            "left standing (the abort failed too — the primary checkout is mid-merge)"
-        },
+        "the fast-forward of main in the primary checkout was refused:\n{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     ))
 }
 
 /// Main is checked out nowhere, so the ref can move without leaving any
-/// index behind — but only forward: without a working tree there is no
-/// place for a real merge to happen.
+/// index behind — forward only, which the rebase made it.
 fn forward_ref(here: &str, primary: &WorktreeBlock, branch: &str) -> Result<(), String> {
-    if git_query(here, &["merge-base", "--is-ancestor", "main", branch]).is_none() {
-        return Err(format!(
-            "main and {branch} have diverged, and main is checked out nowhere \
-             (the primary checkout sits on {}) — put the primary back on main \
-             (`git switch main` there, with the user) and land again",
-            head_name(primary)
-        ));
-    }
     git_query(here, &["fetch", ".", &format!("{branch}:main")])
-        .ok_or("the fast-forward of refs/heads/main failed")?;
+        .ok_or("the fast-forward of refs/heads/main was refused (see the hook's reason above)")?;
     reattach(primary);
     Ok(())
 }
@@ -209,18 +266,9 @@ fn reattach(primary: &WorktreeBlock) {
     }
 }
 
-/// What to call the primary checkout's HEAD in a sentence.
-fn head_name(tree: &WorktreeBlock) -> &str {
-    if tree.branch.is_empty() {
-        "a detached HEAD"
-    } else {
-        tree.branch.as_str()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{head_name, landed_claim};
+    use super::landed_claim;
     use crate::seats::worktree_blocks;
 
     #[test]
@@ -256,7 +304,6 @@ mod tests {
         assert_eq!(trees.len(), 2);
         assert_eq!(trees[0].path, "C:/x/platitude-gg");
         assert!(trees[0].branch.is_empty());
-        assert_eq!(head_name(&trees[0]), "a detached HEAD");
         assert_eq!(trees[1].branch, "worktree-a");
     }
 }

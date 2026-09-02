@@ -85,16 +85,16 @@ pub(crate) fn post_chip(input: &str) -> Result<(), String> {
 /// passes through states no single call can approve — the replacement is
 /// stacked before the chip it replaces is dismissed, so the set is
 /// briefly two of everything. What matters is where it comes to rest.
-pub(crate) fn stop(input: &str) -> Result<(), String> {
+pub(crate) fn stop(input: &str) -> Result<bool, String> {
     // A block already asked once. Asking again on the answer to it is
     // how a session is wedged rather than corrected.
     if bool_field(input, "stop_hook_active") == Some(true) {
-        return Ok(());
+        return Ok(false);
     }
     let live = load(input);
     let problems = problems(&live);
     if problems.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     println!(
         "{{\"decision\":\"block\",\"reason\":\"{}\"}}",
@@ -109,7 +109,7 @@ pub(crate) fn stop(input: &str) -> Result<(), String> {
             roster(&live)
         ))
     );
-    Ok(())
+    Ok(true)
 }
 
 /// Records a chip that was actually stacked, and says out loud what the

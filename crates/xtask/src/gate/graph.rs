@@ -1,0 +1,1349 @@
+//! The file dependency graph, and the reach of a change read off it.
+//!
+//! Nodes are files (workspace-relative, slashes forward; a directory node
+//! ends in `/`). An edge `a -> b` says a reads b: a `use` path or an
+//! inline `crate::` / `super::` / `self::` / `platitude_core::` / bare
+//! child-module path that resolves into b's module (through `pub use`
+//! re-exports), a string literal naming b's path, an insta snapshot b of
+//! a's tests, a QML type name that is b's file, a QML mention of a
+//! `#[qobject]` type b defines. A `mod x;` declaration is *not* an edge:
+//! declaring a module is not reading it, and the declaring file — a crate
+//! root or a mod.rs — is the hub every other file would reach through.
+//! For the same reason a crate root defines nothing anybody names
+//! (`the_crate_roots_have_no_readers`).
+//!
+//! Comments are stripped before paths are read: a comment naming
+//! `Main.qml` or `crate::stash` is not a dependency, and the QML tree
+//! names its neighbours in comments all the time. Inside an inline
+//! `mod tests { … }`, `super` is the file itself.
+//!
+//! The reverse closure of the changed files is then everything whose
+//! behaviour the change can have moved, and the tests to run are the
+//! tests *in* that closure — read by module path, which is what `cargo
+//! test`'s filter takes. QML and Rust are two worlds: a QML change
+//! reaches other QML, never a Rust module's tests, except through a Rust
+//! test that reads QML files off the disk (a directory literal).
+//!
+//! Everything here over-approximates on purpose: a module is the unit (an
+//! item's file, not the item), a glob re-export lands on every file it
+//! could mean, and a path that stops resolving early lands on the
+//! deepest module it did reach. The one failure this must not have is an
+//! edge missing, so unresolvable paths are counted and printed.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+#[derive(Clone, Debug)]
+pub(crate) struct Module {
+    /// `platitude_core`, `platitude_app`, `xtask`, or `platitude_core::it`
+    /// for the integration binary, which is a crate of its own.
+    pub krate: String,
+    /// Module path from the crate root, empty at the root.
+    pub path: Vec<String>,
+    /// The cargo package (`-p`).
+    pub package: String,
+    /// The `--test` name for an integration binary; None for the lib/bin.
+    pub test_binary: Option<String>,
+    /// Tests are defined in the file itself: a `#[test]` or an inline
+    /// `mod tests {`. A `#[cfg(test)] mod x_tests;` declaration is not
+    /// one — the tests are x_tests's.
+    pub has_tests: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct Graph {
+    pub deps: BTreeMap<String, BTreeSet<String>>,
+    pub rdeps: BTreeMap<String, BTreeSet<String>>,
+    pub modules: BTreeMap<String, Module>,
+    /// (krate, module path) -> file
+    index: BTreeMap<(String, Vec<String>), String>,
+    /// crate ident -> root file, for the crates another crate can name.
+    crate_roots: BTreeMap<String, String>,
+    /// file -> the child modules it declares, which its own code names bare.
+    children: BTreeMap<String, BTreeSet<String>>,
+    /// file -> exported name -> the path it re-exports.
+    reexports: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    /// file -> the paths it re-exports by glob.
+    globs: BTreeMap<String, Vec<Vec<String>>>,
+    pub unresolved: Vec<(String, String)>,
+    /// `#[qobject]` type names the app defines -> file, so a QML file
+    /// naming a model depends on the model's file.
+    app_types: BTreeMap<String, String>,
+}
+
+fn rel(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+        .replace('\\', "/")
+}
+
+fn is_ident(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+impl Graph {
+    fn edge(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        self.deps
+            .entry(from.to_string())
+            .or_default()
+            .insert(to.to_string());
+    }
+
+    /// Everything that reads one of `changed`, transitively, plus
+    /// `changed` itself. A QML node hands on only to QML readers and to
+    /// directory nodes (a Rust test reading the QML tree off the disk).
+    pub(crate) fn reach(&self, changed: &[String]) -> BTreeSet<String> {
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut queue: Vec<String> = changed.to_vec();
+        while let Some(file) = queue.pop() {
+            if !seen.insert(file.clone()) {
+                continue;
+            }
+            let Some(readers) = self.rdeps.get(&file) else {
+                continue;
+            };
+            let qml = file.ends_with(".qml");
+            for reader in readers {
+                if qml && !(reader.ends_with(".qml") || reader.ends_with('/')) {
+                    continue;
+                }
+                queue.push(reader.clone());
+            }
+        }
+        seen
+    }
+
+    /// How `target` got into the reach of `changed`: the chain of readers
+    /// from a changed file to it, when there is one.
+    pub(crate) fn why(&self, changed: &[String], target: &str) -> Option<Vec<String>> {
+        let mut parent: BTreeMap<String, String> = BTreeMap::new();
+        let mut queue: std::collections::VecDeque<String> = changed.iter().cloned().collect();
+        let mut seen: BTreeSet<String> = changed.iter().cloned().collect();
+        while let Some(file) = queue.pop_front() {
+            if file == target {
+                let mut chain = vec![file.clone()];
+                let mut at = file;
+                while let Some(from) = parent.get(&at) {
+                    chain.push(from.clone());
+                    at = from.clone();
+                }
+                chain.reverse();
+                return Some(chain);
+            }
+            let Some(readers) = self.rdeps.get(&file) else {
+                continue;
+            };
+            let qml = file.ends_with(".qml");
+            for reader in readers {
+                if qml && !(reader.ends_with(".qml") || reader.ends_with('/')) {
+                    continue;
+                }
+                if seen.insert(reader.clone()) {
+                    parent.insert(reader.clone(), file.clone());
+                    queue.push_back(reader.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// What `files` read, transitively — the inputs a cache key for tests
+    /// selected in `files` has to name.
+    pub(crate) fn inputs(&self, files: &[String]) -> BTreeSet<String> {
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut queue: Vec<String> = files.to_vec();
+        while let Some(file) = queue.pop() {
+            if !seen.insert(file.clone()) {
+                continue;
+            }
+            if let Some(read) = self.deps.get(&file) {
+                queue.extend(read.iter().cloned());
+            }
+        }
+        seen
+    }
+}
+
+pub(crate) fn build(root: &Path) -> Result<Graph, String> {
+    let mut g = Graph::default();
+    let crates = root.join("crates");
+    let mut packages: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(&crates).map_err(|e| format!("{}: {e}", crates.display()))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path().is_dir() {
+            packages.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    packages.sort();
+    for package in &packages {
+        roots_of(root, &crates.join(package), package, &mut g)?;
+    }
+    let files: Vec<String> = g.modules.keys().cloned().collect();
+    let mut texts: BTreeMap<String, (String, String)> = BTreeMap::new();
+    for file in &files {
+        let raw = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
+        let code = strip_comments(&raw);
+        if file.starts_with("crates/platitude-app/") {
+            for name in qobject_names(&code) {
+                g.app_types.entry(name).or_insert_with(|| file.clone());
+            }
+        }
+        let (named, globs) = reexports_in(&code);
+        g.reexports.insert(file.clone(), named);
+        g.globs.insert(file.clone(), globs);
+        if let Some(module) = g.modules.get_mut(file) {
+            module.has_tests = defines_tests(&code);
+        }
+        texts.insert(file.clone(), (raw, code));
+    }
+    for file in &files {
+        let (raw, code) = &texts[file];
+        let bare = bare_roots(&g, file, code);
+        for segments in paths_in(code, &g.crate_roots, &bare) {
+            let targets = resolve(&g, file, &segments, 0);
+            if targets.is_empty() {
+                g.unresolved.push((file.clone(), segments.join("::")));
+            }
+            for target in targets {
+                g.edge(file, &target);
+            }
+        }
+        // An integration binary's strings are its fixtures — a sandbox
+        // laid out like this tree names this tree's files without
+        // reading one of them.
+        if g.modules.get(file).is_some_and(|m| m.test_binary.is_none()) {
+            for target in literal_paths(root, file, raw) {
+                g.edge(file, &target);
+            }
+        }
+    }
+    snapshots(root, &mut g)?;
+    qml(root, &mut g)?;
+    directories(root, &mut g)?;
+    let deps = g.deps.clone();
+    for (from, to) in deps {
+        for target in to {
+            g.rdeps.entry(target).or_default().insert(from.clone());
+        }
+    }
+    Ok(g)
+}
+
+/// Whether the file defines tests of its own: a test attribute of any
+/// runtime (`#[test]`, `#[tokio::test]`, `#[tokio::test(flavor = …)]`)
+/// or an inline `mod tests {`. A `#[cfg(test)]` is not one — the tests
+/// it guards may be a declared sibling's.
+fn defines_tests(code: &str) -> bool {
+    code.contains("mod tests {")
+        || code.lines().any(|line| {
+            let line = line.trim_start();
+            line.starts_with("#[") && (line.ends_with("test]") || line.contains("test("))
+        })
+}
+
+/// The words `code` may start a path with bare, and what each stands
+/// for: the file's own child modules (`stash::x` after `mod stash;`
+/// reads as `self::stash::x`), and the children and re-exports of every
+/// module it glob-imports (`use super::*;` puts the parent's `refs` in
+/// scope, so a following `refs::x` reads as `super::refs::x`).
+fn bare_roots(g: &Graph, file: &str, code: &str) -> BTreeMap<String, Vec<String>> {
+    let mut bare: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for child in g.children.get(file).into_iter().flatten() {
+        bare.insert(child.clone(), vec!["self".to_string(), child.clone()]);
+    }
+    let inline = inline_modules(code);
+    let mut from = 0;
+    while let Some(at) = code[from..].find("::*") {
+        let at = from + at;
+        from = at + 3;
+        let head = &code[..at];
+        let start = head
+            .rfind(|c: char| !(is_ident(c) || c == ':'))
+            .map_or(0, |p| p + 1);
+        let mut segments: Vec<String> = head[start..]
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        let Some(first) = segments.first_mut() else {
+            continue;
+        };
+        if first == "super" && inline.iter().any(|(open, close)| at > *open && at < *close) {
+            *first = "self".to_string();
+        }
+        for target in resolve(g, file, &segments, 0) {
+            for child in g.children.get(&target).into_iter().flatten() {
+                let mut path = segments.clone();
+                path.push(child.clone());
+                bare.entry(child.clone()).or_insert(path);
+            }
+            for name in g
+                .reexports
+                .get(&target)
+                .into_iter()
+                .flat_map(BTreeMap::keys)
+            {
+                let mut path = segments.clone();
+                path.push(name.clone());
+                bare.entry(name.clone()).or_insert(path);
+            }
+        }
+    }
+    bare
+}
+
+/// The crate roots of one package, each walked into the module index:
+/// the lib, the bin, the `it` binary, and every other file directly
+/// under tests/ (crates/xtask/tests/gate.rs), which is an integration
+/// binary — a crate — of its own.
+fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
+    let ident = package.replace('-', "_");
+    // The root files, spelled in pieces: a whole path in a string here
+    // would be read as this file reading every crate root.
+    let lib = dir.join("src").join("lib.rs");
+    if lib.is_file() {
+        g.crate_roots.insert(ident.clone(), rel(root, &lib));
+    }
+    let mut roots = vec![
+        (dir.join("src").join("lib.rs"), ident.clone(), None),
+        (dir.join("src").join("main.rs"), ident.clone(), None),
+        (
+            dir.join("tests").join("it").join("main.rs"),
+            format!("{ident}::it"),
+            Some("it".to_string()),
+        ),
+    ];
+    let mut binaries: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("tests"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == "rs"))
+        .collect();
+    binaries.sort();
+    for file in binaries {
+        let stem = stem_of(&file.display().to_string());
+        roots.push((file, format!("{ident}::{stem}"), Some(stem)));
+    }
+    for (file, krate, binary) in roots {
+        if !file.is_file() {
+            continue;
+        }
+        let module = Module {
+            krate,
+            path: Vec::new(),
+            package: package.to_string(),
+            test_binary: binary,
+            has_tests: false,
+        };
+        walk_modules(root, &rel(root, &file), module, g)?;
+    }
+    Ok(())
+}
+
+/// Registers `file` as `module` and follows its `mod x;` declarations
+/// into the module index — an index, not an edge.
+fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Result<(), String> {
+    g.index.insert(
+        (module.krate.clone(), module.path.clone()),
+        file.to_string(),
+    );
+    g.modules.insert(file.to_string(), module.clone());
+    let text = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
+    let path = Path::new(file);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
+    let parent = path.parent().unwrap_or(Path::new(""));
+    let owns_dir = matches!(name.as_ref(), "mod.rs" | "lib.rs" | "main.rs");
+    let children_dir = if owns_dir {
+        parent.to_path_buf()
+    } else {
+        parent.join(
+            path.file_stem()
+                .map(|s| s.to_string_lossy())
+                .unwrap_or_default()
+                .as_ref(),
+        )
+    };
+    let mut explicit: Option<String> = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("#[path = \"") {
+            explicit = rest.split('"').next().map(str::to_string);
+            continue;
+        }
+        if line.starts_with("#[") {
+            continue;
+        }
+        let Some(child) = mod_declaration(line) else {
+            explicit = None;
+            continue;
+        };
+        let candidates: Vec<std::path::PathBuf> = match explicit.take() {
+            Some(named) => vec![parent.join(named)],
+            None => vec![
+                children_dir.join(format!("{child}.rs")),
+                children_dir.join(child).join("mod.rs"),
+            ],
+        };
+        let Some(found) = candidates.into_iter().find(|c| root.join(c).is_file()) else {
+            continue;
+        };
+        let found = found.display().to_string().replace('\\', "/");
+        let mut path = module.path.clone();
+        path.push(child.to_string());
+        let sub = Module {
+            path,
+            ..module.clone()
+        };
+        g.children
+            .entry(file.to_string())
+            .or_default()
+            .insert(child.to_string());
+        walk_modules(root, &found, sub, g)?;
+    }
+    Ok(())
+}
+
+/// The name in `mod x;` / `pub mod x;` / `pub(crate) mod x;`, if the line
+/// is one.
+fn mod_declaration(line: &str) -> Option<&str> {
+    let line = line.strip_suffix(';')?;
+    let words: Vec<&str> = line.split_whitespace().collect();
+    if !(words.first() == Some(&"mod") || words.first().is_some_and(|w| w.starts_with("pub"))) {
+        return None;
+    }
+    let at = words.iter().rposition(|w| *w == "mod")?;
+    let name = words.get(at + 1)?;
+    (words.len() == at + 2 && name.chars().all(is_ident)).then_some(*name)
+}
+
+/// `text` without its comments (`//` to end of line, nested `/* */`) and
+/// without the insides of its string literals (`"…"`, `r"…"`, `r#"…"#`):
+/// a path spelled in a test's fixture string is not a dependency of the
+/// test, and a comment naming a file is not one either. The quotes
+/// themselves stay, and so do newlines, so anything counting lines or
+/// spans still lines up. File paths in strings are read separately, off
+/// the raw text ([`literal_paths`]).
+pub(crate) fn strip_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    let mut depth = 0;
+    while i < bytes.len() {
+        if depth > 0 {
+            if bytes[i..].starts_with(b"/*") {
+                depth += 1;
+                i += 2;
+            } else if bytes[i..].starts_with(b"*/") {
+                depth -= 1;
+                i += 2;
+            } else {
+                if bytes[i] == b'\n' {
+                    out.push('\n');
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if bytes[i..].starts_with(b"/*") {
+            depth = 1;
+            i += 2;
+        } else if bytes[i..].starts_with(b"//") {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+        } else if bytes[i] == b'\'' {
+            // A char literal ('x', '\n', '"') is skipped whole so its quote
+            // cannot open a string; a lifetime tick is copied as it is.
+            let end = char_literal_end(bytes, i);
+            out.push_str(&text[i..end]);
+            i = end;
+        } else if let Some((body_start, end, hashes)) = string_literal(bytes, i) {
+            out.push_str(&text[i..body_start]);
+            for b in &bytes[body_start..end] {
+                if *b == b'\n' {
+                    out.push('\n');
+                }
+            }
+            out.push('"');
+            out.push_str(&"#".repeat(hashes));
+            i = end + 1 + hashes;
+        } else {
+            let c = text[i..].chars().next().unwrap_or('\0');
+            out.push(c);
+            i += c.len_utf8();
+        }
+    }
+    out
+}
+
+/// Where the char literal at `at` ends (one past its closing tick), or
+/// `at + 1` when the tick is a lifetime's.
+fn char_literal_end(bytes: &[u8], at: usize) -> usize {
+    let rest = &bytes[at + 1..];
+    let body = if rest.first() == Some(&b'\\') {
+        // '\n', '\'', '\\', '\u{…}': everything up to the closing tick.
+        rest.iter().skip(1).position(|b| *b == b'\'').map(|p| p + 2)
+    } else {
+        let c = std::str::from_utf8(rest)
+            .ok()
+            .and_then(|s| s.chars().next())
+            .map_or(1, char::len_utf8);
+        (rest.get(c) == Some(&b'\'')).then_some(c + 1)
+    };
+    match body {
+        Some(len) => at + 1 + len,
+        None => at + 1,
+    }
+}
+
+/// The string literal opening at `at`, if one does: (start of its body,
+/// index of its closing quote, hashes of a raw string).
+fn string_literal(bytes: &[u8], at: usize) -> Option<(usize, usize, usize)> {
+    let (body_start, hashes) = if bytes[at] == b'"' {
+        (at + 1, 0)
+    } else if bytes[at] == b'r'
+        && (at == 0 || !is_ident(bytes[at - 1] as char))
+        && bytes[at + 1..]
+            .first()
+            .is_some_and(|b| *b == b'"' || *b == b'#')
+    {
+        let hashes = bytes[at + 1..].iter().take_while(|b| **b == b'#').count();
+        if bytes.get(at + 1 + hashes) != Some(&b'"') {
+            return None;
+        }
+        (at + 2 + hashes, hashes)
+    } else {
+        return None;
+    };
+    let mut i = body_start;
+    while i < bytes.len() {
+        if hashes == 0 && bytes[i] == b'\\' {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b'"' {
+            let closes = bytes[i + 1..].iter().take(hashes).all(|b| *b == b'#')
+                && bytes[i + 1..].len() >= hashes;
+            if closes {
+                return Some((body_start, i, hashes));
+            }
+        }
+        i += 1;
+    }
+    Some((body_start, bytes.len(), hashes))
+}
+
+/// Every path in `code` that starts from a root this graph knows: the
+/// keyword roots, the crates another crate can name, and the words
+/// `bare` says stand for a path ([`bare_roots`]). Braced groups are
+/// split into one path each; a `self` or `*` item is the group's base.
+fn paths_in(
+    code: &str,
+    crate_roots: &BTreeMap<String, String>,
+    bare: &BTreeMap<String, Vec<String>>,
+) -> Vec<Vec<String>> {
+    let mut out = Vec::new();
+    let bytes = code.as_bytes();
+    let inline = inline_modules(code);
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if !is_ident(c) || (i > 0 && is_ident(bytes[i - 1] as char)) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < bytes.len() && is_ident(bytes[i] as char) {
+            i += 1;
+        }
+        let word = &code[start..i];
+        let keyword = matches!(word, "crate" | "super" | "self");
+        let stands_for = bare.get(word);
+        if !(keyword || stands_for.is_some() || crate_roots.contains_key(word))
+            || !code[i..].starts_with("::")
+        {
+            continue;
+        }
+        // Inside an inline `mod tests { … }`, `super` is this very file —
+        // `use super::*` names no other file. One level deep is the shape
+        // the tree has; a deeper nest keeps its first `super` for the file.
+        let nested = inline
+            .iter()
+            .any(|(open, close)| start > *open && start < *close);
+        let mut segments = if let Some(prefix) = stands_for {
+            prefix.clone()
+        } else if nested && word == "super" {
+            vec!["self".to_string()]
+        } else {
+            vec![word.to_string()]
+        };
+        while code[i..].starts_with("::") {
+            i += 2;
+            if code[i..].starts_with('{') {
+                let close = matching_brace(bytes, i);
+                for item in group_items(&code[i + 1..close]) {
+                    let mut path = segments.clone();
+                    path.extend(item);
+                    out.push(path);
+                }
+                i = close + 1;
+                segments.clear();
+                break;
+            }
+            let seg_start = i;
+            while i < bytes.len() && is_ident(bytes[i] as char) {
+                i += 1;
+            }
+            if i == seg_start {
+                break;
+            }
+            segments.push(code[seg_start..i].to_string());
+        }
+        if !segments.is_empty() {
+            out.push(segments);
+        }
+    }
+    out
+}
+
+/// The byte spans of the inline `mod name { … }` blocks in `code`.
+fn inline_modules(code: &str) -> Vec<(usize, usize)> {
+    let bytes = code.as_bytes();
+    let mut spans = Vec::new();
+    let mut from = 0;
+    while let Some(at) = code[from..].find("mod ") {
+        let at = from + at;
+        from = at + 4;
+        let line_start = code[..at].rfind('\n').map_or(0, |n| n + 1);
+        let head = code[line_start..at].trim();
+        if !(head.is_empty() || head.starts_with("pub") || head.starts_with("#[")) {
+            continue;
+        }
+        let rest = &code[at + 4..];
+        let name_len = rest.chars().take_while(|c| is_ident(*c)).count();
+        if name_len == 0 {
+            continue;
+        }
+        let after = rest[name_len..].trim_start();
+        if !after.starts_with('{') {
+            continue;
+        }
+        let open = at + 4 + name_len + (rest[name_len..].len() - after.len());
+        let close = matching_brace(bytes, open);
+        spans.push((open, close));
+        from = open + 1;
+    }
+    spans
+}
+
+/// The items of a `{…}` group, each as its own segments; nested groups
+/// contribute their prefix and each inner item.
+fn group_items(group: &str) -> Vec<Vec<String>> {
+    let mut items = Vec::new();
+    let mut depth = 0;
+    let mut current = String::new();
+    for c in group.chars() {
+        match c {
+            '{' => {
+                depth += 1;
+                current.push(c);
+            }
+            '}' => {
+                depth -= 1;
+                current.push(c);
+            }
+            ',' if depth == 0 => {
+                items.push(std::mem::take(&mut current));
+            }
+            _ => current.push(c),
+        }
+    }
+    items.push(current);
+    let mut out = Vec::new();
+    for item in items {
+        let item = item.trim();
+        if item.is_empty() {
+            continue;
+        }
+        if let Some(open) = item.find('{') {
+            let close = item.rfind('}').unwrap_or(item.len());
+            let prefix: Vec<String> = item[..open]
+                .split("::")
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+            for inner in group_items(&item[open + 1..close]) {
+                let mut path = prefix.clone();
+                path.extend(inner);
+                out.push(path);
+            }
+            continue;
+        }
+        let item = item.split(" as ").next().unwrap_or("").trim();
+        let path: Vec<String> = item
+            .split("::")
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && *s != "self" && *s != "*")
+            .map(str::to_string)
+            .collect();
+        out.push(path);
+    }
+    out
+}
+
+fn matching_brace(bytes: &[u8], open: usize) -> usize {
+    let mut depth = 0;
+    let mut i = open;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    bytes.len().saturating_sub(1)
+}
+
+/// The `pub use` lines of a file: exported name -> path, and the glob
+/// paths. The path is as written (relative to the file's module), for
+/// [`resolve`] to follow from there.
+fn reexports_in(code: &str) -> (BTreeMap<String, Vec<String>>, Vec<Vec<String>>) {
+    let mut named = BTreeMap::new();
+    let mut globs = Vec::new();
+    let mut rest = code;
+    // The earliest of `pub use` and `pub(…) use`, whichever comes first.
+    let next = |text: &str| -> Option<usize> {
+        let plain = text.find("pub use ");
+        let scoped = text.find("pub(").filter(|&p| {
+            text[p..]
+                .find(')')
+                .is_some_and(|close| text[p + close..].starts_with(") use "))
+        });
+        match (plain, scoped) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    };
+    while let Some(at) = next(rest) {
+        let stmt_start = rest[at..].find("use ").map(|u| at + u + 4).unwrap_or(at);
+        let Some(end) = rest[stmt_start..].find(';') else {
+            break;
+        };
+        let stmt = &rest[stmt_start..stmt_start + end];
+        rest = &rest[stmt_start + end + 1..];
+        let stmt: String = stmt.split_whitespace().collect::<Vec<_>>().join(" ");
+        /// One exported item: its path as written, and its `as` name.
+        type Export = (Vec<String>, Option<String>);
+        let (prefix, items): (Vec<String>, Vec<Export>) = match stmt.find('{') {
+            Some(open) => {
+                let close = stmt.rfind('}').unwrap_or(stmt.len());
+                let prefix: Vec<String> = stmt[..open]
+                    .split("::")
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                let mut items = Vec::new();
+                for raw in split_top_level(&stmt[open + 1..close]) {
+                    let raw = raw.trim();
+                    let (path, alias) = match raw.split_once(" as ") {
+                        Some((p, a)) => (p.trim(), Some(a.trim().to_string())),
+                        None => (raw, None),
+                    };
+                    let path: Vec<String> = path
+                        .split("::")
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string)
+                        .collect();
+                    items.push((path, alias));
+                }
+                (prefix, items)
+            }
+            None => {
+                let (path, alias) = match stmt.split_once(" as ") {
+                    Some((p, a)) => (p.trim(), Some(a.trim().to_string())),
+                    None => (stmt.as_str(), None),
+                };
+                let path: Vec<String> = path
+                    .split("::")
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                (Vec::new(), vec![(path, alias)])
+            }
+        };
+        for (item, alias) in items {
+            let mut full = prefix.clone();
+            full.extend(item);
+            match full.last().map(String::as_str) {
+                Some("*") => {
+                    full.pop();
+                    globs.push(full);
+                }
+                Some("self") => {
+                    full.pop();
+                    let name = alias.or_else(|| full.last().cloned());
+                    if let Some(name) = name {
+                        named.insert(name, full);
+                    }
+                }
+                Some(last) => {
+                    let name = alias.unwrap_or_else(|| last.to_string());
+                    named.insert(name, full);
+                }
+                None => {}
+            }
+        }
+    }
+    (named, globs)
+}
+
+/// The comma-separated items of a group, braces flattened away — a
+/// braced sub-group inside a `pub use` lands on the group's prefix file,
+/// which is the over-approximating side.
+fn split_top_level(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut depth = 0;
+    let mut current = String::new();
+    for c in text.chars() {
+        match c {
+            '{' => {
+                depth += 1;
+                current.push(c);
+            }
+            '}' => {
+                depth -= 1;
+                current.push(c);
+            }
+            ',' if depth == 0 => out.push(std::mem::take(&mut current)),
+            _ => current.push(c),
+        }
+    }
+    if !current.trim().is_empty() {
+        out.push(current);
+    }
+    out.into_iter()
+        .map(|item| item.replace(['{', '}'], ""))
+        .collect()
+}
+
+/// The files the path lands in: the deepest module along it that exists,
+/// followed through `pub use` re-exports; a glob re-export lands on
+/// every file it could mean, and on the re-exporting file itself.
+fn resolve(g: &Graph, from: &str, segments: &[String], depth: usize) -> Vec<String> {
+    if depth > 8 {
+        return Vec::new();
+    }
+    let Some(module) = g.modules.get(from) else {
+        return Vec::new();
+    };
+    let mut at = 1;
+    let (krate, mut path) = match segments.first().map(String::as_str) {
+        Some("crate") => (module.krate.clone(), Vec::new()),
+        Some("self") => (module.krate.clone(), module.path.clone()),
+        Some("super") => {
+            let mut path = module.path.clone();
+            if path.pop().is_none() {
+                return Vec::new();
+            }
+            (module.krate.clone(), path)
+        }
+        Some(other) if g.crate_roots.contains_key(other) => (other.to_string(), Vec::new()),
+        _ => return Vec::new(),
+    };
+    while segments.get(at).is_some_and(|s| s == "super") {
+        if path.pop().is_none() {
+            return Vec::new();
+        }
+        at += 1;
+    }
+    let Some(mut file) = g.index.get(&(krate.clone(), path.clone())).cloned() else {
+        return Vec::new();
+    };
+    while let Some(seg) = segments.get(at) {
+        let mut next = path.clone();
+        next.push(seg.clone());
+        match g.index.get(&(krate.clone(), next.clone())) {
+            Some(found) => {
+                file = found.clone();
+                path = next;
+                at += 1;
+            }
+            None => break,
+        }
+    }
+    let Some(seg) = segments.get(at) else {
+        return vec![file];
+    };
+    if let Some(target) = g.reexports.get(&file).and_then(|m| m.get(seg)) {
+        let mut through = resolve(g, &file, &self_relative(g, target), depth + 1);
+        if through.is_empty() {
+            through.push(file);
+        }
+        return through;
+    }
+    let mut targets = vec![file.clone()];
+    for glob in g.globs.get(&file).into_iter().flatten() {
+        let mut through = glob.clone();
+        through.push(seg.clone());
+        targets.extend(resolve(g, &file, &self_relative(g, &through), depth + 1));
+    }
+    targets
+}
+
+/// A `pub use` path as written is relative to its own module unless it
+/// starts from a root: `pub use error::GitError` means `self::error`.
+fn self_relative(g: &Graph, path: &[String]) -> Vec<String> {
+    match path.first().map(String::as_str) {
+        Some("crate" | "self" | "super") => path.to_vec(),
+        Some(first) if g.crate_roots.contains_key(first) => path.to_vec(),
+        _ => {
+            let mut out = vec!["self".to_string()];
+            out.extend(path.iter().cloned());
+            out
+        }
+    }
+}
+
+/// String literals in `text` that name a file or directory of the
+/// workspace, resolved against the file's own directory, its crate, and
+/// the workspace root. A literal has to look like a path (a slash or a
+/// dot) — `"crates"` alone would otherwise pull in the world.
+fn literal_paths(root: &Path, file: &str, text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let file_dir = Path::new(file).parent().unwrap_or(Path::new(""));
+    let crate_dir: std::path::PathBuf = Path::new(file).iter().take(2).collect();
+    let Ok(real_root) = root.canonicalize() else {
+        return out;
+    };
+    for literal in string_bodies(text) {
+        let literal = literal.as_str();
+        if literal.len() < 3
+            || literal.len() > 200
+            || !(literal.contains('/') || literal.contains('.'))
+            || literal.contains(' ')
+            || literal.starts_with("http")
+            || literal.contains("::")
+        {
+            continue;
+        }
+        for base in [file_dir, crate_dir.as_path(), Path::new("")] {
+            let candidate = root.join(base).join(literal);
+            if !candidate.exists() {
+                continue;
+            }
+            let Ok(real) = candidate.canonicalize() else {
+                continue;
+            };
+            let Ok(inside) = real.strip_prefix(&real_root) else {
+                continue;
+            };
+            let mut name = inside.display().to_string().replace('\\', "/");
+            if name.starts_with("target") || name.is_empty() {
+                continue;
+            }
+            if real.is_dir() {
+                name.push('/');
+            }
+            out.push(name);
+            break;
+        }
+    }
+    out
+}
+
+/// The bodies of the string literals in `text`, read with the same
+/// tokenizer [`strip_comments`] uses: a `"` in a comment or a `'"'` char
+/// literal opens nothing, and a `\"` closes nothing — pairing quotes by
+/// `find` would read the rest of the file inside out after either.
+fn string_bodies(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    let mut depth = 0;
+    while i < bytes.len() {
+        if depth > 0 {
+            if bytes[i..].starts_with(b"/*") {
+                depth += 1;
+                i += 2;
+            } else if bytes[i..].starts_with(b"*/") {
+                depth -= 1;
+                i += 2;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        if bytes[i..].starts_with(b"/*") {
+            depth = 1;
+            i += 2;
+        } else if bytes[i..].starts_with(b"//") {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+        } else if bytes[i] == b'\'' {
+            i = char_literal_end(bytes, i);
+        } else if let Some((body_start, end, hashes)) = string_literal(bytes, i) {
+            out.push(text[body_start..end].to_string());
+            i = end + 1 + hashes;
+        } else {
+            i += text[i..].chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    out
+}
+
+/// The type each `#[qobject]` block is for: the `impl X` under it.
+fn qobject_names(code: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut armed = false;
+    for line in code.lines() {
+        let line = line.trim();
+        if line.starts_with("#[qobject") {
+            armed = true;
+            continue;
+        }
+        if !armed || line.starts_with("#[") || line.is_empty() {
+            continue;
+        }
+        armed = false;
+        if let Some(rest) = line.strip_prefix("impl ") {
+            let name: String = rest.chars().take_while(|c| is_ident(*c)).collect();
+            if !name.is_empty() {
+                out.push(name);
+            }
+        }
+    }
+    out
+}
+
+/// An insta snapshot belongs to the module its name spells:
+/// `<crate>__<module>__…__<test>.snap`.
+fn snapshots(root: &Path, g: &mut Graph) -> Result<(), String> {
+    let mut snaps = Vec::new();
+    collect(root, &root.join("crates"), "snap", &mut snaps)?;
+    for snap in snaps {
+        let stem = Path::new(&snap)
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let parts: Vec<&str> = stem.split("__").collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let krate = parts[0].to_string();
+        let mut path: Vec<String> = parts[1..parts.len() - 1]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        let owner = loop {
+            if let Some(file) = g.index.get(&(krate.clone(), path.clone())) {
+                break Some(file.clone());
+            }
+            if path.pop().is_none() {
+                break None;
+            }
+        };
+        if let Some(owner) = owner {
+            g.edge(&owner, &snap);
+        }
+    }
+    Ok(())
+}
+
+/// QML: a capitalised word that is another QML file's name is a type
+/// reference, and one that is a `#[qobject]` type is a model reference.
+fn qml(root: &Path, g: &mut Graph) -> Result<(), String> {
+    let mut files = Vec::new();
+    collect(
+        root,
+        &root.join("crates/platitude-app/src"),
+        "qml",
+        &mut files,
+    )?;
+    let by_name: BTreeMap<String, String> = files.iter().map(|f| (stem_of(f), f.clone())).collect();
+    for file in &files {
+        let raw = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
+        let code = strip_comments(&raw);
+        let mut targets = BTreeSet::new();
+        let bytes = code.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let c = bytes[i] as char;
+            if !c.is_ascii_uppercase() || (i > 0 && is_ident(bytes[i - 1] as char)) {
+                i += 1;
+                continue;
+            }
+            let start = i;
+            while i < bytes.len() && is_ident(bytes[i] as char) {
+                i += 1;
+            }
+            let word = &code[start..i];
+            if let Some(target) = by_name.get(word) {
+                targets.insert(target.clone());
+            } else if let Some(target) = g.app_types.get(word) {
+                targets.insert(target.clone());
+            }
+        }
+        for target in targets {
+            g.edge(file, &target);
+        }
+    }
+    Ok(())
+}
+
+/// A file's name without directory or extension — what a QML type is
+/// called, and what the census records.
+pub(crate) fn stem_of(file: &str) -> String {
+    Path::new(file)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// A directory node reads every file under it, so a reader of the
+/// directory is a reader of each.
+fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
+    let dirs: Vec<String> = g
+        .deps
+        .values()
+        .flatten()
+        .filter(|t| t.ends_with('/'))
+        .cloned()
+        .collect();
+    for dir in dirs {
+        let mut files = Vec::new();
+        collect(root, &root.join(&dir), "", &mut files)?;
+        for file in files {
+            g.edge(&dir, &file);
+        }
+    }
+    Ok(())
+}
+
+/// Every file under `dir` with `extension` (any, when empty), as
+/// workspace-relative paths.
+pub(crate) fn collect(
+    root: &Path,
+    dir: &Path,
+    extension: &str,
+    out: &mut Vec<String>,
+) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == "target" || name.starts_with('.') {
+            continue;
+        }
+        if path.is_dir() {
+            collect(root, &path, extension, out)?;
+        } else if extension.is_empty() || path.extension().is_some_and(|e| e == extension) {
+            out.push(rel(root, &path));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build, defines_tests, mod_declaration, paths_in, reexports_in, string_bodies,
+        strip_comments,
+    };
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn a_test_of_any_runtime_counts_and_a_cfg_guard_does_not() {
+        assert!(defines_tests("#[test]\nfn t() {}\n"));
+        assert!(defines_tests("#[tokio::test]\nasync fn t() {}\n"));
+        assert!(defines_tests(
+            "#[tokio::test(flavor = \"multi_thread\")]\nasync fn t() {}\n"
+        ));
+        assert!(defines_tests("#[cfg(test)]\nmod tests {\n}\n"));
+        assert!(!defines_tests("#[cfg(test)]\nmod state_tests;\n"));
+    }
+
+    #[test]
+    fn strings_are_read_by_the_tokenizer_not_by_pairing_quotes() {
+        let bodies = string_bodies(
+            "let a = '\"';\nlet b = \"crates/x.rs\"; // \"not/this.rs\"\nlet c = \"two\\\"quotes\";\n\
+             let d = r#\"raw \"inner\" path/y.rs\"#;\n",
+        );
+        assert_eq!(
+            bodies,
+            vec!["crates/x.rs", "two\\\"quotes", "raw \"inner\" path/y.rs"]
+        );
+    }
+
+    #[test]
+    fn reads_module_declarations_and_nothing_that_merely_mentions_mod() {
+        assert_eq!(mod_declaration("mod stash;"), Some("stash"));
+        assert_eq!(mod_declaration("pub(crate) mod refs;"), Some("refs"));
+        assert_eq!(mod_declaration("mod tests {"), None);
+        assert_eq!(mod_declaration("// mod x;"), None);
+    }
+
+    #[test]
+    fn splits_paths_and_groups_from_every_root_it_knows() {
+        let roots: BTreeMap<String, String> =
+            [("platitude_core".to_string(), "x".to_string())].into();
+        // Bare words: the file's own child `stash`, and `refs` brought in
+        // by a glob import of the parent.
+        let bare: BTreeMap<String, Vec<String>> = [
+            (
+                "stash".to_string(),
+                vec!["self".to_string(), "stash".to_string()],
+            ),
+            (
+                "refs".to_string(),
+                vec!["super".to_string(), "refs".to_string()],
+            ),
+        ]
+        .into();
+        let found = paths_in(
+            "use crate::stash::{Stash, self};\nlet x = super::refs::RemoteBranches::new();\n\
+             use platitude_core::session as s;\nuse std::io;\nfoo::bar();\nstash::Stash::new();\n\
+             refs::RemoteBranches::new()",
+            &roots,
+            &bare,
+        );
+        let joined: Vec<String> = found.iter().map(|p| p.join("::")).collect();
+        assert_eq!(
+            joined,
+            vec![
+                "crate::stash::Stash",
+                "crate::stash",
+                "super::refs::RemoteBranches::new",
+                "platitude_core::session",
+                "self::stash::Stash::new",
+                "super::refs::RemoteBranches::new",
+            ]
+        );
+    }
+
+    #[test]
+    fn super_inside_an_inline_module_is_the_file_itself() {
+        let roots: BTreeMap<String, String> = BTreeMap::new();
+        let bare: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let found = paths_in(
+            "use super::sibling::X;\n#[cfg(test)]\nmod tests {\n    use super::*;\n    use super::super::other::Y;\n}\n",
+            &roots,
+            &bare,
+        );
+        let joined: Vec<String> = found.iter().map(|p| p.join("::")).collect();
+        assert_eq!(
+            joined,
+            vec!["super::sibling::X", "self", "self::super::other::Y"]
+        );
+    }
+
+    #[test]
+    fn a_comment_is_not_a_path() {
+        let code =
+            strip_comments("use crate::a; // see crate::b\n/* crate::c\n */ crate::d::e();\n");
+        assert!(code.contains("crate::a") && code.contains("crate::d::e"));
+        assert!(!code.contains("crate::b") && !code.contains("crate::c"));
+        assert_eq!(
+            code.lines().count(),
+            3,
+            "line structure survives for anything counting lines"
+        );
+    }
+
+    #[test]
+    fn a_string_is_not_a_path_and_a_char_quote_opens_none() {
+        let code = strip_comments(
+            "let a = \"crate::x\";\nlet b = '\"';\nlet c = r#\"crate::y \"quoted\"\"#;\n\
+             let d = 'a';\ncrate::z();\nlet e = \"two\\\"quotes\";\ncrate::w();\n",
+        );
+        assert!(
+            code.contains("crate::z") && code.contains("crate::w"),
+            "{code}"
+        );
+        assert!(
+            !code.contains("crate::x") && !code.contains("crate::y"),
+            "{code}"
+        );
+        assert_eq!(code.lines().count(), 7, "{code}");
+    }
+
+    #[test]
+    fn reads_re_exports_by_the_name_they_export() {
+        let (named, globs) = reexports_in(
+            "pub use error::GitError;\npub use model::{CommitMeta, StrPool as Pool};\n\
+             pub(crate) use process::{\n    Executor,\n    outcome::Outcome,\n};\npub use walk::*;\n",
+        );
+        assert_eq!(named["GitError"], vec!["error", "GitError"]);
+        assert_eq!(named["Pool"], vec!["model", "StrPool"]);
+        assert_eq!(named["Executor"], vec!["process", "Executor"]);
+        assert_eq!(named["Outcome"], vec!["process", "outcome", "Outcome"]);
+        assert_eq!(globs, vec![vec!["walk".to_string()]]);
+    }
+
+    /// The whole tree, as it stands: every path resolves, and the crate
+    /// roots are read by nobody — a root that defines a helper or a type
+    /// is the hub through which any change reaches everything, and this
+    /// is what keeps the roots to declarations and re-exports
+    /// (.claude/rules/structure.md §クレート root).
+    #[test]
+    fn the_crate_roots_have_no_readers_and_every_path_resolves() {
+        let root = crate::tree::workspace_root();
+        let g = build(&root).expect("the graph of this tree");
+        assert!(
+            g.unresolved.is_empty(),
+            "paths that resolve nowhere: {:?}",
+            &g.unresolved[..g.unresolved.len().min(10)]
+        );
+        // Spelled in pieces: a whole path in a string here would be read
+        // as this very file reading the root.
+        let roots = [
+            ("platitude-core", "src", "lib.rs"),
+            ("platitude-app", "src", "main.rs"),
+            ("xtask", "src", "main.rs"),
+            ("platitude-core", "tests/it", "main.rs"),
+        ];
+        for (package, dir, name) in roots {
+            let file = &format!("crates/{package}/{dir}/{name}");
+            assert!(g.modules.contains_key(file), "{file} is not in the graph");
+            let readers: Vec<&String> = g
+                .rdeps
+                .get(file)
+                .into_iter()
+                .flatten()
+                // A directory node reads everything under it, the
+                // `*_tests.rs` siblings a root declares read its scope
+                // with `use super::*`, and an integration binary names
+                // files in its fixtures — none is a helper on the root.
+                .filter(|r| !r.ends_with('/') && !r.ends_with("_tests.rs"))
+                .filter(|r| g.modules.get(*r).is_none_or(|m| m.test_binary.is_none()))
+                .collect();
+            assert!(
+                readers.is_empty(),
+                "{file} is read by {readers:?}: a crate root holds declarations and re-exports \
+                 only, or every change reaches everything through it"
+            );
+        }
+    }
+}

@@ -1,0 +1,38 @@
+#!/bin/sh
+# platitude-gg: refs/heads/main moves only onto a gated commit.
+#
+# Every ref update passes through this hook (merge, fetch with a refspec,
+# branch -f, update-ref, a commit or reset on main), and a non-zero exit
+# in the `prepared` state aborts it. The verdict is the task runner's
+# (`cargo xtask gate verdict`): a fast-forward onto a commit that carries a
+# full, on-main gate stamp, and nothing else. PG_GATE_SKIP=1 is the user's
+# own way past it; sessions may not spell it (the pre-shell hook).
+#
+# `cargo xtask gate install` copies this file beside the repository's .git
+# (pg-gate/hooks/) and writes `tree` next to the copy: the checkout whose
+# task runner answers. The verdict runs there, whichever tree the git
+# command ran in — git's own environment for the hook is dropped so that
+# cargo and git read that tree and not this one. Every session start and
+# every land installs. POSIX sh: git for Windows runs hooks in its own
+# sh, so one file serves all three systems. Every other ref costs one
+# `read`; cargo starts only when main is in the transaction.
+[ "$1" = "prepared" ] || exit 0
+while read -r old new ref; do
+  case "$ref" in
+    refs/heads/main)
+      here="$(dirname "$0")"
+      tree="$(cat "$here/tree" 2>/dev/null)"
+      if [ -z "$tree" ] || ! cd "$tree"; then
+        echo "gate: the tree that installed the hook is gone ($tree) — run \`cargo xtask gate install\` from a tree that has the gate; refs/heads/main stays where it is" >&2
+        exit 1
+      fi
+      unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+      if ! command -v cargo >/dev/null 2>&1; then
+        echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PG_GATE_SKIP=1 as the user)" >&2
+        exit 1
+      fi
+      exec cargo run --quiet -p xtask -- gate verdict "$old" "$new"
+      ;;
+  esac
+done
+exit 0

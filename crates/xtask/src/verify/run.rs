@@ -139,5 +139,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
         opts: &opts,
     })?;
     let verdict = outcome::judge(&opts, &ran);
+    // A passing run tells the census what it showed, so the gate can pick
+    // this line by itself the next time one of those components changes
+    // (gate::census). Only a run somebody can type again is recorded.
+    if verdict.passed()
+        && let Some(line) = opts.census_line()
+        && let Some(names) = crate::gate::names_in(&ran.err_lines)
+    {
+        match crate::gate::record(&root, &line, &names) {
+            Ok(count) => println!("census: {line} — {count} component(s) recorded"),
+            Err(why) => println!("census: not recorded ({why})"),
+        }
+    }
     outcome::announce(&opts, &shot_dir, &ran, &verdict)
 }

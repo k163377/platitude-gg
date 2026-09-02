@@ -205,18 +205,7 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
         match outcome {
             Ok(true) => {
                 println!("[{side}] ok   {display} ({secs}s)");
-                // A green verify-ui is only half of Done — the PNGs still
-                // get eyeballed (verify-ui skill), so where they landed
-                // survives the capture.
-                for line in text.lines() {
-                    let line = line.trim();
-                    if line.starts_with("shot: ")
-                        || line.starts_with("screenshot: ")
-                        || line.contains("screenshots and settings:")
-                    {
-                        println!("[{side}]      {line}");
-                    }
-                }
+                print_shots(side, &log);
             }
             Ok(false) => {
                 // The whole log: a failure with its tail cut off sends
@@ -238,10 +227,26 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
     Vec::new()
 }
 
+/// A green verify-ui is only half of Done — the PNGs still get eyeballed
+/// (verify-ui skill), so where they landed survives the capture.
+pub(crate) fn print_shots(side: &str, log: &Path) {
+    let text = String::from_utf8_lossy(&std::fs::read(log).unwrap_or_default()).into_owned();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with("shot: ")
+            || line.starts_with("screenshot: ")
+            || line.contains("screenshots and settings:")
+        {
+            println!("[{side}]      {line}");
+        }
+    }
+}
+
 /// One step against its log file: spawned with both streams on the file,
 /// watched rather than awaited. `Ok` is the step's own verdict; `Err` is a
 /// ceiling or a spawn failure — the reasons a check used to sit forever.
-fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool, String> {
+/// The gate runs its steps through here too.
+pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool, String> {
     let out = std::fs::File::create(log).map_err(|e| format!("{}: {e}", log.display()))?;
     let err = out
         .try_clone()

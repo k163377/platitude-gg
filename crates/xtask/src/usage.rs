@@ -38,6 +38,45 @@ commands:
       --verb the summary says the touched verbs still have to run — it
       never passes for the whole of stage 2 on its own.
 
+  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]...
+      The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
+      internal-docs/反映前テストの機械化.md). Reads the branch's diff
+      against main, follows every file that reads a changed file — a
+      `use` path, a re-export, a string naming the file, a QML type
+      name, a QML mention of a #[qobject] model — and runs the tests in
+      that reach: unit tests by module path, the integration binary by
+      module, clippy per crate entered, shipped when the app's QML or
+      entry point moved, the verify-ui verbs whose census names a
+      reached component (crates/xtask/verb-census.txt, written by the
+      runs themselves), bare when the app moved. structure, waits and
+      fmt run every time, and a build input that changed (Cargo.toml,
+      Cargo.lock, the toolchain, the Dockerfile) makes the reach the
+      whole tree. Host and container sides run in parallel;
+      each step is stamped by the object ids of what it reads, so a
+      second run of one commit runs nothing and a rebase reruns only
+      what main's move touched. A commit whose every step is green is
+      stamped, and the reference-transaction hook lets main move onto
+      stamped commits only. A component no verb's census names stops
+      the gate by name: run a verb that shows it once, and the gate
+      picks that verb from then on.
+      options:
+        --host-only   the daily tier: no container; stamps the host half
+        --all         every file counts as changed — stage 2 in full
+        --fresh       ignore the stamps and run everything owed
+        --dry-run     print the reach and the steps, run nothing
+        --verb <l>    a verify-ui line to run besides the census's
+        --dir <tree>  gate that tree instead of this one
+      gate verdict <old> <new>   the hook's question (exit 0 = may move)
+      gate install               copy .githooks/reference-transaction
+                                 beside .git (pg-gate/hooks/), note the
+                                 tree whose xtask answers, point
+                                 core.hooksPath there; every session
+                                 start and every land does this
+      gate deps [--file <p>]... [--why <p>]... [--history <n>] [--show]
+                                 the graph itself: what a change reaches,
+                                 how a file got there, what the last n
+                                 commits would have owed
+
   structure
       The per-file length backstop of .claude/rules/structure.md (1000
       code lines — blank and comment-only lines do not count) over
@@ -146,15 +185,19 @@ const TAIL: &str = "  shipped [--no-build]
   land [<branch>]
       Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
       the pre-shell hook asks for PG_ALLOW_MAIN=1 in front, which is how
-      the transcript records that the user asked). Reads where main is
-      checked out before moving anything: merges in the primary checkout
-      when it sits on main; fast-forwards the ref (and reattaches a
-      detached primary) when main is checked out nowhere; refuses the
-      ambiguous rest with what to do instead. Bare `land` from a seat
-      lands the seat's own branch. A landed branch's seat is handed
-      back: its claude-seat claim is released once the commits are on
-      main, and the next edit there claims it back (a lock written by
-      hand stays).
+      the transcript records that the user asked). In the branch's own
+      worktree: rebases it onto main when it is behind (a rebase that
+      stops is walked back), runs `gate` there — cached steps are not
+      paid twice — and only then fast-forwards main, in the primary
+      checkout when it sits on main or on the bare ref (reattaching a
+      detached primary) when main is checked out nowhere; the
+      reference-transaction hook checks the stamp on the way. History
+      stays linear and a landed seat stands at main's tip. Refuses a
+      branch checked out nowhere, a dirty seat, and a seat that holds
+      main. Bare `land` from a seat lands the seat's own branch. A
+      landed branch's seat is handed back: its claude-seat claim is
+      released once the commits are on main, and the next edit there
+      claims it back (a lock written by hand stays).
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe
@@ -220,6 +263,7 @@ const TAIL: &str = "  shipped [--no-build]
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
-      pre-shell, pre-worktree, post-worktree, session-start,
-      session-end.
+      pre-shell, pre-chip, post-chip, stop, pre-worktree,
+      post-worktree, session-start (which also installs the gate's git
+      hook), session-end.
 ";

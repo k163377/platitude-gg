@@ -42,13 +42,31 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "pre-shell" => pre_shell(&input),
         "pre-chip" => chips::pre_spawn(&input),
         "post-chip" => chips::post_chip(&input),
-        "stop" => chips::stop(&input),
+        "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),
     }
+}
+
+/// Stop: one JSON object at most. The chip guard's block comes first;
+/// when it has nothing to say, the seat's gate standing goes to the user
+/// as a system message — a seat reported before its tip was gated is
+/// what the user reads there.
+fn stop(input: &str) -> Result<(), String> {
+    if chips::stop(input)? {
+        return Ok(());
+    }
+    let cwd = payload::string_field(input, "cwd").unwrap_or_default();
+    if let Some(standing) = crate::gate::standing(&cwd) {
+        println!(
+            "{{\"systemMessage\":\"{}\"}}",
+            standing.replace('"', "'").replace('\n', " ")
+        );
+    }
+    Ok(())
 }
 
 /// SessionEnd: everything a session leaves behind for itself alone —

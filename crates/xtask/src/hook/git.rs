@@ -16,10 +16,33 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
         return Ok(false);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
+    if gate_skip_denied(&command) {
+        return Ok(true);
+    }
     // Each rule keeps its own escape, so asking for one is not asking for
     // the others: a merge the user called for still may not rebase.
     Ok(guarded_git_denied(&command, &cwd)
         || (!command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd)))
+}
+
+/// The gate's escape is the user's alone: a session that spells it is
+/// stepping around the pre-merge tests, which is the one thing the gate
+/// exists to make impossible (internal-docs/反映前テストの機械化.md).
+fn gate_skip_denied(command: &str) -> bool {
+    if !command.contains(crate::gate::SKIP) {
+        return false;
+    }
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+         \"{} is the user's own way past the gate on refs/heads/main, and a session may not \
+         spell it: the gate is what makes the pre-merge tests impossible to skip. Run \
+         `cargo xtask gate` (or `land`, which gates on the way) and let the stamp open \
+         main; if the gate is wrong about what it owes, say so and leave the escape to \
+         the user.\"}}}}",
+        crate::gate::SKIP
+    );
+    true
 }
 
 /// Putting a branch onto main and rewriting the branch under the session

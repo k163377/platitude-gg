@@ -35,6 +35,41 @@ pub(super) struct Options {
     /// Keep this run off the board. For a sweep measuring flakiness,
     /// where ten identical pictures bury what somebody wanted to look at.
     pub(super) no_board: bool,
+    /// Do not record what the run showed in the verb census. The gate
+    /// asks for it: its runs are re-runs of recorded lines, and a write
+    /// mid-gate would dirty the tree under the stamp.
+    pub(super) no_census: bool,
+}
+
+impl Options {
+    /// The line the census records a passing run under: what somebody
+    /// would type to run it again, options that change the run included
+    /// and options that only change where its output goes left out. None
+    /// for a run nobody can type again elsewhere (`--repo`, `--restore`).
+    pub(super) fn census_line(&self) -> Option<String> {
+        if self.no_census || !self.repo.is_empty() || self.restore || self.config_dir.is_some() {
+            return None;
+        }
+        let mut words = vec![self.verb.clone()];
+        if !self.arg.is_empty() {
+            words.push(self.arg.clone());
+        }
+        for preset in &self.preset {
+            words.push("--preset".to_string());
+            words.push(preset.clone());
+        }
+        if self.select {
+            words.push("--select".to_string());
+        }
+        if self.allow_write_failure {
+            words.push("--allow-write-failure".to_string());
+        }
+        if !self.old_git.is_empty() {
+            words.push("--old-git".to_string());
+            words.push(self.old_git.clone());
+        }
+        Some(words.join(" "))
+    }
 }
 
 /// A path off the command line, pinned to where it was typed.
@@ -67,6 +102,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         old_git: String::new(),
         label: String::new(),
         no_board: false,
+        no_census: false,
     };
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
@@ -82,6 +118,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--select" => opts.select = true,
             "--label" => opts.label = it.next().ok_or("--label needs a phrase")?.clone(),
             "--no-board" => opts.no_board = true,
+            "--no-census" => opts.no_census = true,
             "--quit-ms" => {
                 return Err(
                     "unknown verify-ui option: --quit-ms (shots are not picked by wall clock; use --watchdog-ms only as a diagnostic ceiling)"
