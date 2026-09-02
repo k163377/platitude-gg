@@ -264,6 +264,6 @@ const TAIL: &str = "  shipped [--no-build]
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
       pre-shell, pre-chip, post-chip, stop, pre-worktree,
-      post-worktree, session-start (which also installs the gate's git
-      hook), session-end.
+      post-worktree, prompt-submit, session-start (which also installs
+      the gate's git hook), session-end.
 ";

@@ -14,6 +14,7 @@ mod greeting;
 mod kill;
 mod launch;
 mod payload;
+mod review;
 mod seat;
 mod write;
 
@@ -45,6 +46,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
+        "prompt-submit" => review::prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),

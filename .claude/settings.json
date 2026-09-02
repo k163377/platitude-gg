@@ -77,6 +77,16 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo xtask hook prompt-submit"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
