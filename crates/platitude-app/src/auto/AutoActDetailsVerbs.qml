@@ -47,6 +47,12 @@ Item {
             detailsSelectTimer.which = cut > 0 ? rest.substring(0, cut) : rest
             page.activateRow(graphModel.oidAt(cut > 0 ? Number(rest.substring(cut + 1)) : 0))
             detailsSelectTimer.start()
+        } else if (act === "hash-tip" || act === "hash-tip-counting") {
+            // The two orders the press and the tip can arrive in. `-counting` is the one where the press lands first,
+            // while the tip is still counting out its rest.
+            page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
+            hashTipTimer.counting = act === "hash-tip-counting"
+            hashTipTimer.start()
         } else if (act === "details-hand") {
             // The plate's own two gestures, on the graph row the argument names (the top one by default — what this
             // is about is the plate rather than which commit is in it).
@@ -185,6 +191,63 @@ Item {
             // text rides along for the eye.
             Harness.report("details_select match=" + (want !== "" && got === want)
                               + " which=" + detailsSelectTimer.which + " text=" + got)
+            driver.complete()
+        }
+    }
+
+    /// What the plate's one word does when the press it is offering has just been made — read **off the tip that is
+    /// already up**, because that is where the reader is looking and a tip does not go down to change its mind.
+    ///
+    /// The tip is raised through the same property the real hover writes (`tipForced`): the pointer is the one thing
+    /// a run cannot inject (verify-ui §hover の絵の撮り方). Whether the words a control offers change at all is asked
+    /// where a pointer can be made (qmltestrunner `tst_hashplate`); this is the other half, in the app.
+    ///
+    /// **Neither claim spells the words.** Both compare what is on screen against what the control says it is
+    /// offering, so a run stays green through a translation and red through a tip that kept the old sentence.
+    SampleTimer {
+        id: hashTipTimer
+        /// Whether the press goes in ahead of the tip rather than into one already standing.
+        property bool counting: false
+        property bool asked: false
+        /// What the tip was carrying when the press landed — empty in the `-counting` run, which is that run's
+        /// setup half.
+        property string was: ""
+        onTriggered: {
+            const row = detailsPane.valueRow
+            if (!driver.cardSettled || !row.valueReady("hash"))
+                return
+            if (!hashTipTimer.asked) {
+                row.forceHashTip(true)
+                hashTipTimer.asked = true
+                // The press goes in on the same beat the tip was asked for, which is a reader clicking before it
+                // arrives. Nothing is up yet, and that is the whole of what this half claims.
+                if (hashTipTimer.counting) {
+                    hashTipTimer.was = row.hashTipSaid()
+                    row.tapHash()
+                }
+                return
+            }
+            // The tip waits out its own rest; nothing here counts it, and an empty answer is "not up yet".
+            const up = row.hashTipSaid()
+            if (up === "")
+                return
+            hashTipTimer.stop()
+            if (hashTipTimer.counting) {
+                // **The tip that follows carries the word the control has now**, not the one it had when the pointer
+                // arrived — which is what the attached property hands over unless the answer re-arms it.
+                Harness.report("hash_tip_counting counting=" + (hashTipTimer.was === "")
+                                  + " said=" + (up === row.hashTipWords())
+                                  + " now=" + up)
+                driver.complete()
+                return
+            }
+            hashTipTimer.was = up
+            const offered = up === row.hashTipWords()
+            row.tapHash()
+            const after = row.hashTipSaid()
+            const said = after !== "" && after !== hashTipTimer.was && after === row.hashTipWords()
+            Harness.report("hash_tip offered=" + offered + " said=" + said
+                              + " was=" + hashTipTimer.was + " now=" + after)
             driver.complete()
         }
     }

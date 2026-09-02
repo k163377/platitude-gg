@@ -54,6 +54,7 @@ ColumnLayout {
     /// What the two controls' handlers call, and the only way in (verify-ui §壊れない動詞の実装).
     function copyFullNow() {
         plate.copyRequested(plate.fullSha)
+        hashCopy.copied = true
     }
     function goToParentNow() {
         if (plate.parentSha === "")
@@ -89,6 +90,36 @@ ColumnLayout {
         hand.takeAt(near.x, near.y)
         hand.followAt(far.x, far.y)
         hand.releaseNow()
+    }
+    /// Automation: the one word the copy control is offering, and whether it is on screen. **Hover cannot be
+    /// injected** (verify-ui), so a run reads the word off the control; that the shared tip carries it while it is
+    /// already up is measured where a pointer can be made (qmltestrunner `tst_hashplate`).
+    function tipWords() {
+        return hashCopy.ToolTip.text
+    }
+    /// Automation: the words the shared tip is **carrying on screen**, which is not the same question as what this
+    /// control is offering — they part company if a tip that is already up does not take a new text, and taking one
+    /// is the whole of what a copy has to do to a tip the reader is looking at. Empty while nothing is up.
+    function tipSaid() {
+        return plate.tipStanding ? hashCopy.ToolTip.toolTip.text : ""
+    }
+    /// Whether the shared tip is up **for this control** — the instance is one for the whole window, so its being
+    /// visible says nothing on its own about which target raised it.
+    readonly property bool tipStanding: {
+        const tip = hashCopy.ToolTip.toolTip
+        return !!tip && tip.visible && tip.parent === hashCopy
+    }
+    /// **The attached tooltip is handed its words when `visible` rises, not when it opens** (measured, qmltestrunner
+    /// Qt 6.10.3: a text changed while the tip was still counting out its rest came up carrying the old one). A press
+    /// made before the tip arrives would therefore be answered with the offer it had snapshotted — so the words are
+    /// put right as the tip comes up, which is the one place that covers both orders. A tip already standing takes a
+    /// new text on its own (measured, same scene), and this writes it the same one again.
+    onTipStandingChanged: {
+        if (plate.tipStanding)
+            hashCopy.ToolTip.toolTip.text = hashCopy.ToolTip.text
+    }
+    function forceTip(on) {
+        hashCopy.tipForced = on
     }
     /// Automation: and that there is a hand at all — a run enters the functions above rather than the pointer, so a
     /// hand taken out, disabled or shrunk would answer every gesture it was asked and never see a press.
@@ -182,13 +213,23 @@ ColumnLayout {
         topPadding: 0
         bottomPadding: 0
         readonly property bool lit: hovered || visualFocus
+        /// The press that just landed here took the hash away, and the one word this control has says so instead of
+        /// offering again (規約 §hover のツールチップ — 結論を先頭に 1 文で). It stands until the pointer is done with
+        /// the plate; there is no beat to wait out, so nothing here counts one.
+        property bool copied: false
+        // **Arriving clears it too, not only leaving.** A copy taken from the keyboard leaves the mark standing with
+        // no pointer anywhere near, and the next hand would be greeted by the answer to something it did not do.
+        onHoveredChanged: hashCopy.copied = false
+        /// Automation: raise the tooltip with no pointer behind it. The same property the real hover drives, so a run
+        /// that never reached the plate reads the tip a reader would have (verify-ui §hover の絵の撮り方).
+        property bool tipForced: false
         // The pointer's press is the hand's below, so the face has to be told when it is being pressed — and told to
         // stop once the press has travelled, because from there the gesture is the words'. The keyboard's own press
         // rides along: `Space` never travels.
         down: hashCopy.pressed || (hashHand.containsPress && !hashHand.dragging)
-        ToolTip.visible: hovered
+        ToolTip.visible: hashCopy.hovered || hashCopy.tipForced
         ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: qsTr("Copy full hash")
+        ToolTip.text: hashCopy.copied ? qsTr("Copied!") : qsTr("Copy full hash")
         // The keyboard's way in. The pointer's is the hand below, which is the only one that can tell a click from a
         // drag.
         onClicked: plate.copyFullNow()

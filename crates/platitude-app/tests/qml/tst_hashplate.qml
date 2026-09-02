@@ -50,6 +50,20 @@ Item {
             return f.mapToItem(root, f.width * fx, f.height / 2)
         }
 
+        // The press answers with the control's one word instead of offering again. **First in the file on purpose**:
+        // the answer stands until the pointer leaves the plate, and this platform delivers no `hovered` to a
+        // `Control` at all, so nothing here can put the offer back once a press has taken it.
+        //
+        // **Only the words are asked here.** What a pointer would have seen — the open tip taking the new words —
+        // is asked in the app, where a tip can be raised without one (verify-ui, `hash-tip`).
+        function test_a0_the_press_changes_what_the_control_offers() {
+            const p = pointIn("hash", 0.5)
+            compare(plate.tipWords(), "Copy full hash", "before the press it offers")
+            mouseClick(root, p.x, p.y)
+            compare(root.copies, 1, "the click still copied")
+            compare(plate.tipWords(), "Copied!", "after the press it answers")
+        }
+
         function test_a_click_on_the_digits_copies_the_whole_hash() {
             const p = pointIn("hash", 0.5)
             mouseClick(root, p.x, p.y)
@@ -136,8 +150,11 @@ Item {
             compare(plate.shaSelected, "", "and the hash let its selection go")
         }
 
+        // The one word the copy control has says what the press did. **The tip is already up when the press lands**,
+        // so the words have to reach the shared instance while it is open — a run in the app cannot ask this at all,
+        // because hover is the one thing it cannot inject (verify-ui).
         // One selection in the window: the second drag takes the first field's away with the caret.
-        function test_i_a_second_drag_takes_the_first_selection_away() {
+        function test_j_a_second_drag_takes_the_first_selection_away() {
             const from = pointIn("hash", 0)
             const to = pointIn("hash", 1)
             mousePress(root, from.x, from.y)

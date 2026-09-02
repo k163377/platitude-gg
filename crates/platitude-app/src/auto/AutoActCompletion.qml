@@ -134,7 +134,7 @@ QtObject {
                 "row-card", "card-sweep", "menu-hover",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
-                "details-fit", "details-select", "details-select-away", "details-sweep", "details-hand",
+                "details-fit", "details-select", "details-select-away", "details-sweep", "details-hand", "hash-tip", "hash-tip-counting",
                 "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "graph-step-hold",
                 "diff-step",

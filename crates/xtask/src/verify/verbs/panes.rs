@@ -122,6 +122,31 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_hand acted=true held=true quiet=true let=true hand=true",
     },
+    // The other half of that press: the one word the control has says
+    // what it did, and it has to say so on the tip the reader is
+    // already looking at — a tip does not go down to change its mind.
+    // Neither claim spells the words, so a translation leaves this
+    // green and a tip that kept the old sentence turns it red. The
+    // photograph does carry it (the tip is in overlay.png), but only
+    // for a reader who knows which of the two sentences was due.
+    Verb {
+        name: "hash-tip",
+        when: &[],
+        plain: "hash_tip offered=true said=true",
+    },
+    // And the other order, which is the one that breaks: the press
+    // lands before the tip arrives. The attached tooltip takes its
+    // words when `visible` rises rather than when it opens, so a tip
+    // still counting out its rest comes up answering a press with the
+    // offer unless the answer re-arms it. `counting=` is the setup
+    // half — nothing was up when the press went in — and it has to be
+    // said, because a run where the tip had already arrived would
+    // answer the other half on its own.
+    Verb {
+        name: "hash-tip-counting",
+        when: &[],
+        plain: "hash_tip_counting counting=true said=true",
+    },
     // The author's name, capped at its own width so the signature's one
     // word stays against it. A ceiling drawn a fraction of a pixel under
     // that width cuts the name, and a cut is what a picture answers

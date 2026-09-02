@@ -207,6 +207,11 @@ Item {
     function tapHash() { hashPlate.tapAt("hash") }
     function dragHash() { hashPlate.dragAcross("hash") }
     function hashHandStands() { return hashPlate.handStands("hash") }
+    /// The plate's one word, from either side: what the copy control is offering, and what the tip is carrying on
+    /// screen. Raised without a pointer, which is the only way a run can raise one at all (`HashPlate`).
+    function forceHashTip(on) { hashPlate.forceTip(on) }
+    function hashTipWords() { return hashPlate.tipWords() }
+    function hashTipSaid() { return hashPlate.tipSaid() }
     /// What the plate's own control hands over, which is more than the row is showing.
     readonly property string fullShown: authorRow.details.shaHex
     /// The sweep as a hand makes it, and what it came away with (`SweepRoom`).
