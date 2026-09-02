@@ -1,19 +1,21 @@
-# Canvasの撮影待ちの回帰テスト
+# QMLのテスト
 
-`tst_ink.qml` はQt付属の `qmltestrunner` で実行する。Rustの登録型を使わず、
-本体の `Ink.qml` と `InkCanvas.qml` を隔離したimportディレクトリにコピーして読む。
-通常の `cargo test` には含まれない。
+`tst_*.qml` はRustの登録型を使わず、本体のQMLモジュールをQtの `qmltestrunner`
+に読ませる。ここにあるのはRustのテストが届かないもの — Canvasが撮影に負っている
+paintが済んだかどうかは、モデルではなくアイテムツリーの事実。
 
-Windows / PowerShell（QtのbinをPATHへ追加済みの場合）:
-
-```powershell
-$moduleDir = 'target/ink-probe/platitude/ui'
-New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
-Copy-Item -LiteralPath crates/platitude-app/src/ui/Ink.qml,crates/platitude-app/src/ui/InkCanvas.qml -Destination $moduleDir
-Set-Content -LiteralPath target/ink-probe/platitude/ui/qmldir -Value "module platitude.ui`nsingleton Ink 1.0 Ink.qml`nInkCanvas 1.0 InkCanvas.qml"
-qmltestrunner -platform offscreen -input crates/platitude-app/tests/qml/tst_ink.qml -import target/ink-probe
+```
+cargo xtask qmltest
+cargo xtask linux qmltest
 ```
 
-Linuxも同じ2ファイルとqmldirを配置し、Qtの `qmltestrunner` に同じ引数を渡す。
-親が非表示の場合、初回描画前の非表示化→再表示、実際のpaint完了後の再表示を検証する。
-前2ケースは修正前に `Ink.owed = 1`（期待0）で失敗する。固定sleepは使わない。
+**手順の正本はコード** (`crates/xtask/src/qmltest.rs`)。importツリーの組み方
+(`platitude.ui` はディレクトリ名で解決するので `src/ui` のままでは読めない)、
+出力の受け取り方(Windowsではリダイレクトしたstdoutが空で返る)はそこにある。
+
+`cargo xtask gate` は、本体のQMLモジュールかこのディレクトリに変更が届いた時に
+両OSで走らせる。
+
+`tst_ink.qml`: 親が非表示の場合、初回描画前の非表示化→再表示、実際のpaint完了後の
+再表示を検証する。前2ケースは修正前に `Ink.owed = 1`(期待0)で失敗する。
+固定sleepは使わない。

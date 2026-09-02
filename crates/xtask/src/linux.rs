@@ -69,7 +69,7 @@ pub(crate) const IN_CONTAINER: &str = "PG_IN_CONTAINER";
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
-const XTASK_VERBS: [&str; 2] = ["verify-ui", "demo-repo"];
+const XTASK_VERBS: [&str; 3] = ["verify-ui", "demo-repo", "qmltest"];
 
 /// Cargo verbs that build something, and so care which stage they run in.
 const BUILD_VERBS: [&str; 7] = ["build", "check", "test", "clippy", "bench", "run", "doc"];
@@ -184,8 +184,9 @@ fn stage_for(rest: &[String]) -> &'static str {
         return "core";
     };
     if XTASK_VERBS.contains(&verb) {
-        // verify-ui builds the app and runs it; demo-repo only wants git,
-        // but it is not worth a second answer.
+        // verify-ui builds the app and runs it, and qmltest wants
+        // qmltestrunner and the QtTest QML module, which ship with Qt;
+        // demo-repo only wants git, but it is not worth a second answer.
         return "app";
     }
     if !BUILD_VERBS.contains(&verb) {

@@ -88,6 +88,17 @@ const CARGO: [&str; 3] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"];
 /// What the harness runs read besides the app: the runner and the demo
 /// repositories it builds.
 const HARNESS: [&str; 2] = ["crates/xtask/src/verify", "crates/xtask/src/demo"];
+/// What a QML test run reads besides [`qml_dirs`]: the recipe that
+/// stages the module for it.
+const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
+
+/// The app's QML: the module the product ships, and the QtTest files that
+/// read it. Spelled in pieces for the reason [`binary_steps`] gives — a
+/// whole path in a string here is an edge from this file to everything
+/// under it.
+fn qml_dirs() -> (String, String) {
+    (format!("{APP}/src/ui"), format!("{APP}/tests/qml"))
+}
 
 pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
     let here = dir.display().to_string();
@@ -293,10 +304,16 @@ fn tested_on_linux(package: &str) -> bool {
 /// whole tree, and a filter naming every module says the same thing
 /// less plainly.
 fn sort(g: &Graph, reach: &BTreeSet<String>, whole: bool) -> Sorted {
+    let (_, qml_tests) = qml_dirs();
     let mut sorted = Sorted::default();
     for file in reach {
         if file.ends_with(".qml") {
-            sorted.qml.insert(stem_of(file));
+            // A QtTest file is not a component of the app: nothing ships
+            // it and no verb's census can name it, so it belongs to
+            // `qmltest_steps` alone.
+            if !under(file, &qml_tests) {
+                sorted.qml.insert(stem_of(file));
+            }
             continue;
         }
         let Some(module) = g.modules.get(file) else {
@@ -358,6 +375,7 @@ fn select(
     let sorted = sort(g, reach, whole);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, whole));
+    steps.extend(qmltest_steps(reach, whole));
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
@@ -412,6 +430,50 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
     );
     let inputs: Vec<String> = inputs.into_iter().collect();
     vec![step("deny", Side::Host, false, xtask(&["deny"]), &inputs)]
+}
+
+/// The QtTest files, when the change reaches them or the QML module they
+/// read. Both sides: the two Qt builds paint through different stacks,
+/// and what these ask about is when a Canvas has painted.
+///
+/// Ahead of clippy because it compiles nothing of the app — the runner
+/// stages the product's QML and hands it to `qmltestrunner`. Its inputs
+/// are the whole module rather than the components a test names: the
+/// staging copies all of it, so any of it can be what a test resolves
+/// through (`crate::qmltest`).
+///
+/// `whole` selects it outright, the way it does cargo-deny: neither the
+/// qmldir nor a QtTest file is a node of the source graph, so a reach of
+/// "everything" is not one that can be asked about them.
+fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
+    let (ui, tests) = qml_dirs();
+    // The module is reached whole — the qmldir as much as the components,
+    // since it is what declares the singletons — but of the tests
+    // directory only what the runner picks up by name, so the README
+    // beside them is a document like any other. The runner itself counts:
+    // the staging is what a run resolves through, and nothing else here
+    // would exercise a change to it.
+    let reads = |file: &String| {
+        file == QMLTEST
+            || under(file, &ui)
+            || (under(file, &tests) && file.ends_with(".qml") && stem_of(file).starts_with("tst_"))
+    };
+    if !whole && !reach.iter().any(reads) {
+        return Vec::new();
+    }
+    let inputs = [ui, tests, QMLTEST.to_string()];
+    let mut linux_inputs = inputs.to_vec();
+    linux_inputs.push(DOCKERFILE.to_string());
+    vec![
+        step("qmltest", Side::Host, false, xtask(&["qmltest"]), &inputs),
+        step(
+            "qmltest-linux",
+            Side::Linux,
+            false,
+            xtask(&["linux", "qmltest"]),
+            &linux_inputs,
+        ),
+    ]
 }
 
 /// clippy for every crate the reach enters, on both sides: the host's
@@ -594,9 +656,13 @@ fn binary_steps(
 /// QML components in the reach that stand in the item tree and no verb's
 /// census names.
 fn uncovered(dir: &Path, census: &Census, reach: &BTreeSet<String>) -> Vec<String> {
+    let (_, qml_tests) = qml_dirs();
     reach
         .iter()
         .filter(|f| f.ends_with(".qml"))
+        // A QtTest file stands in a runner of its own, never in the app's
+        // window: `qmltest_steps` is what shows it.
+        .filter(|f| !under(f, &qml_tests))
         .filter(|f| census::instantiable(dir, f))
         .filter(|f| !census.covers(&stem_of(f)))
         .cloned()

@@ -22,10 +22,10 @@ cargo xtask <command>
 commands:
   check [--verb <v>]...
       Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
-      container running in parallel: structure, fmt, clippy and the
-      workspace tests here, while the container runs test -p
-      platitude-core, that same clippy for Linux, verify-ui for each
-      --verb, and bare. Clippy runs on both sides because the host's
+      container running in parallel: structure, qmltest, fmt, clippy and
+      the workspace tests here, while the container runs test -p
+      platitude-core, qmltest, that same clippy for Linux, verify-ui for
+      each --verb, and bare. Clippy runs on both sides because the host's
       cannot answer for the other one: a name reachable only under
       #[cfg(not(windows))] is not compiled here at all, so an unused
       import or an orphaned fn behind that cfg would reach CI unseen.
@@ -46,8 +46,10 @@ commands:
       name, a QML mention of a #[qobject] model — and runs the tests in
       that reach: unit tests by module path, the integration binary by
       module, clippy per crate entered, cargo-deny when deny.toml or a
-      manifest moved, shipped when the app's QML or entry point moved,
-      the verify-ui verbs whose census names a reached component
+      manifest moved, qmltest when the product's QML module, the QtTest
+      files that read it, or the runner that stages it moved, shipped when
+      the app's QML or entry point
+      moved, the verify-ui verbs whose census names a reached component
       (crates/xtask/verb-census.txt, written by the
       runs themselves), bare when the app moved. structure, waits and
       fmt run every time, and a build input that changed (Cargo.toml,
@@ -104,6 +106,18 @@ commands:
       step — must sit under support::wait::bounded or an explicit
       timeout, so a silent hang fails by test name instead of sitting
       until the CI kill. Second step of `check`; subsecond on its own.
+
+  qmltest
+      The QtTest files under crates/platitude-app/tests/qml, run through
+      Qt's own qmltestrunner (offscreen, one process per file). They hold
+      what only QML can be asked — whether a Canvas that owes the
+      screenshot a paint has painted — and no Rust test reaches it. The
+      product's whole QML module is staged under target/qmltest with its
+      shipped qmldir, because `import platitude.ui` resolves by directory
+      name and the product's directory is called `ui`. Nothing of the app
+      is compiled, so a file answers in a fraction of a second. `gate`
+      runs it, on both sides, when the change reaches that module or the
+      tests themselves; `cargo xtask linux qmltest` is the container.
 
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and

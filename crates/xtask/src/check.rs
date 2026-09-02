@@ -71,6 +71,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // Same reasoning, same cost: a naked wait is a hang the suite
         // cannot name, and this answers before anything compiles.
         xtask(&["waits"]),
+        // The QtTest files, which compile nothing of the app either: the
+        // product's QML is staged into an import tree and handed to Qt's
+        // own runner, and a whole file answers in a fraction of a second.
+        xtask(&["qmltest"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
         // `--all-features`, because the code a feature switches off is
         // code nothing else here compiles: the verification harness
@@ -99,6 +103,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     ];
     let mut linux_steps: Vec<Vec<String>> = vec![
         xtask(&["linux", "test", "-p", "platitude-core"]),
+        // The other Qt build: these ask when a Canvas has painted, and
+        // the two stacks paint through different software.
+        xtask(&["linux", "qmltest"]),
         // The same line as the host's clippy above, because the host's
         // cannot answer for it: a name reachable only under
         // #[cfg(not(windows))] is not compiled on Windows at all, so an

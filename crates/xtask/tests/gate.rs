@@ -219,12 +219,20 @@ impl Sandbox {
                 "crates/platitude-app/src/ui/Theme.qml",
                 "pragma Singleton\nQtObject {}\n",
             ),
+            (
+                "crates/platitude-app/src/ui/qmldir",
+                "module platitude.ui\nsingleton Theme 1.0 Theme.qml\nMain 1.0 Main.qml\n",
+            ),
             ("crates/platitude-app/src/auto/Driver.qml", "Item {}\n"),
-            ("crates/xtask/src/main.rs", "mod seats;\nfn main() {}\n"),
+            (
+                "crates/xtask/src/main.rs",
+                "mod qmltest;\nmod seats;\nfn main() {}\n",
+            ),
             (
                 "crates/xtask/src/seats.rs",
                 "#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
             ),
+            ("crates/xtask/src/qmltest.rs", "pub fn run() {}\n"),
             (
                 "crates/xtask/verb-census.txt",
                 "# census\nstash --preset basic\tDriver Main StashPane\n",
@@ -248,6 +256,12 @@ impl Sandbox {
             .expect("chmod");
         }
         self.commit_all(&self.repo, "seed", &[("PG_GATE_SKIP", "1")]);
+        self.install_and_seat();
+    }
+
+    /// The hook on the primary checkout and the seat worktree beside it —
+    /// the shape every test starts from.
+    fn install_and_seat(&self) {
         let (ok, text) = self.gate(&self.repo, &["install"], &[]);
         assert!(ok && text.contains("core.hooksPath ="), "install: {text}");
         let (ok, text) = self.gate(&self.repo, &["install"], &[]);
@@ -396,6 +410,8 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     assert_eq!(
         ran,
         set(&[
+            "qmltest",
+            "qmltest-linux",
             "shipped",
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
@@ -403,6 +419,67 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
         ]),
         "{ran:?}"
     );
+}
+
+#[test]
+fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
+    let sb = Sandbox::new("qmltest");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/qml/tst_probe.qml",
+        "import QtTest\nItem {\n    TestCase { name: \"Probe\" }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "test(app-ui): probe", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    // It stands in a runner of its own, so no census owes it a verb and
+    // nothing here is built: not shipped, not a verb, not bare.
+    let ran = without_always(&sb.ran());
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+
+    // The qmldir declares the singletons the tests resolve through, so it
+    // is as much of the module as the components are. The file above goes
+    // again, so what stands against main is this and nothing else.
+    std::fs::remove_file(sb.seat.join("crates/platitude-app/tests/qml/tst_probe.qml")).expect("rm");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/qmldir",
+        "module platitude.ui\nsingleton Theme 1.0 Theme.qml\nMain 1.0 Main.qml\nX 1.0 X.qml\n",
+    );
+    sb.commit_all(&sb.seat, "chore(app-ui): declare X", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+
+    // Their README is not something the runner reads, so it is a document
+    // like any other and nothing at all is owed for it.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/qmldir",
+        "module platitude.ui\nsingleton Theme 1.0 Theme.qml\nMain 1.0 Main.qml\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/qml/README.md",
+        "# how they are run\n",
+    );
+    sb.commit_all(&sb.seat, "docs: how they are run", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(text.contains("no step reads these"), "{text}");
+    let ran = without_always(&sb.ran());
+    assert!(ran.is_empty(), "{ran:?}");
+
+    // The staging is what a run resolves through, so a change to the
+    // runner is a change nothing else here would exercise.
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/qmltest.rs",
+        "pub fn run() { let _ = 1; }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(xtask): stage it differently", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    assert!(ran.contains("qmltest"), "{ran:?}");
+    assert!(ran.contains("qmltest-linux"), "{ran:?}");
 }
 
 #[test]
@@ -797,6 +874,7 @@ fn a_build_input_change_owes_everything() {
         "test it (all)",
         "clippy platitude-core",
         "clippy xtask",
+        "qmltest",
         "shipped",
         "verify stash --preset basic",
         "bare",

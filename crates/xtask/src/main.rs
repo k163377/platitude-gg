@@ -15,6 +15,7 @@ mod keepsakes;
 mod land;
 mod linux;
 mod perf;
+mod qmltest;
 mod qt;
 mod seats;
 mod shipped;
@@ -38,6 +39,7 @@ fn main() -> ExitCode {
         Some("gate") => gate::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),
+        Some("qmltest") => qmltest::run(&args[1..]),
         Some("deny") => deny::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {
             // The path is the output: scripts consume `(cargo xtask ...)`.

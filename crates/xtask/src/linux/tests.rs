@@ -23,6 +23,8 @@ fn anything_that_can_reach_the_app_takes_the_other_one() {
     assert_eq!(stage_for(&words("build --workspace")), "app");
     assert_eq!(stage_for(&words("clippy -p platitude-app")), "app");
     assert_eq!(stage_for(&words("verify-ui commit --preset basic")), "app");
+    // qmltestrunner and the QtTest QML module both ship with Qt.
+    assert_eq!(stage_for(&words("qmltest")), "app");
 }
 
 #[test]
