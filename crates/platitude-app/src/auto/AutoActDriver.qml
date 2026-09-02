@@ -343,6 +343,9 @@ Item {
     /// answers a write before it publishes what that write invalidated — and each has a report of its own to make about
     /// where the reader was put (`AutoActLandings`).
     AutoActLandings { id: landings; driver: driver }
+    /// The edges the page's own wiring puts out, written as report lines. A file of their own for the reason the
+    /// landings are one: none of them is a state a later reading could recover (`PageReports`).
+    PageReports { driver: driver }
     /// Arms the stash landing — called once the graph the row went out of has settled.
     function awaitStashLanding() {
         landings.awaitStash()

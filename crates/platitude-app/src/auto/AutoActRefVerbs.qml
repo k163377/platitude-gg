@@ -64,8 +64,10 @@ Item {
         } else if (act === "delete-gone") {
             // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
             // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
-            // *back* from a refusal, which `delete-branch-refused` photographs. The page holds the in-between open
-            // for the shot (`RepoPage.goneHeldForShot`); a demo repository answers before a picture can be grabbed.
+            // *back* from a refusal, which `delete-branch-refused` photographs. The page is asked to hold the
+            // in-between open for the shot before the press rather than off it (`RepoPage.holdGoneRows`); a demo
+            // repository answers before a picture can be grabbed.
+            page.holdGoneRows = true
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
             refTagDeleteItem.completeHold()

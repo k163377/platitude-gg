@@ -1,0 +1,75 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import platitude
+import platitude.ui
+
+/// What the page's own wiring says it did, written out as report lines.
+///
+/// Each of these is an **edge**, not a state: the question bar carries no name to read the branch back off, the row
+/// that is being stood in for looks the same as one nothing was asked about, the held delete is offered on whichever
+/// card happens to be standing, and git's answer to a write is one message wide. None of them can be recovered by
+/// reading the page a moment later, so the page says so with a signal apiece and the line is written from here —
+/// where the whole of it can be left out of a build.
+///
+/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given: the same guard every one of these
+/// lines carried when the page still wrote them itself.
+// An `Item` only because that is what the driver's children are; it draws nothing and is never given a size.
+Item {
+    id: reports
+
+    /// The driver these belong to. `var` because naming its type here would be a circle: it is the file that builds
+    /// this one.
+    required property var driver
+
+    // The driver's own names, read once so the handlers below can name them bare.
+    readonly property var page: driver.page
+    readonly property var repoTab: driver.repoTab
+    readonly property var fileRowMenu: driver.fileRowMenu
+    readonly property var diffRowMenu: driver.diffRowMenu
+
+    Connections {
+        target: reports.page
+
+        function onMoveBranchAsked(local) {
+            AppBackend.report("move_branch_asked local=" + local)
+        }
+        function onRenameRemoteAsked(from, to) {
+            AppBackend.report("rename_remote_asked from=" + from + " to=" + to)
+        }
+        function onGoneShown(kind, id) {
+            AppBackend.report("gone_shown kind=" + kind + " id=" + id)
+        }
+        function onForceDeleteOffered(branch) {
+            AppBackend.report("force_delete_offered branch=" + branch)
+        }
+        // What the write was about is still on the tab when this goes out — the page clears its own standing
+        // questions, not the tab's report of the answer.
+        function onWriteReported() {
+            AppBackend.report("write_reported kind=" + reports.repoTab.writeReportKind
+                              + " ref=" + reports.repoTab.writeReportRemote
+                              + "/" + reports.repoTab.writeReportName)
+        }
+    }
+
+    Connections {
+        target: reports.fileRowMenu
+        function onOffered(bucket) {
+            AppBackend.report("file_menu bucket=" + bucket
+                              + " rows=" + reports.fileRowMenu.menu.offeredRows)
+        }
+    }
+
+    Connections {
+        target: reports.diffRowMenu
+        // `shown` is the card's own answer, not the conditions behind it: a card that refused to open because it had
+        // nothing to put in it is the one failure a picture of an empty overlay cannot tell from a card nobody asked
+        // for.
+        function onOffered(shown) {
+            AppBackend.report("diff_menu open=" + shown
+                              + " rows=" + reports.diffRowMenu.menu.offeredRows
+                              + " copy=" + reports.diffRowMenu.canCopy
+                              + " removed=" + reports.diffRowMenu.removed)
+        }
+    }
+}

@@ -58,9 +58,12 @@ Item {
         // command is going to reach.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
         fileMenu.offer()
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("file_menu bucket=" + bucket + " rows=" + fileMenu.offeredRows)
+        fileRowMenu.offered(bucket)
     }
+
+    /// The card was asked for on a row of `bucket`. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md) — how many rows it came up with is on [`menu`] already.
+    signal offered(string bucket)
 
     /// What the chosen rows' discard would cost, asked across the bridge: the rows go over keyed `<bucket>:<path>` —
     /// which row was chosen is the choice's to say, since a file changed on both sides has a row in each bucket — and

@@ -43,17 +43,18 @@ Item {
 
     anchors.fill: parent
 
+    /// The card was asked for, and whether it came up. `offer()`'s own answer, not the conditions behind it: a card
+    /// that refused to open because it had nothing to put in it is the one failure a picture of an empty overlay
+    /// cannot tell from a card nobody asked for. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md) — the rest of what it says is on this object already.
+    signal offered(bool shown)
+
     /// Opens on whatever the selection holds. Says nothing about where the click landed: a selection that takes
     /// neither side has no row to offer, and an empty card is not an answer (規約 §メニュー).
     function offer() {
         diffRowMenu.canCopy = diffRowMenu.diffModel.selHasNew
         diffRowMenu.removed = diffRowMenu.diffModel.selRemoved
-        // `offer()`'s own answer, not the conditions behind it: a card that refused to open because it had nothing to
-        // put in it is the one failure a picture of an empty overlay cannot tell from a card nobody asked for.
-        const shown = codeMenu.offer()
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("diff_menu open=" + shown + " rows=" + codeMenu.offeredRows
-                              + " copy=" + diffRowMenu.canCopy + " removed=" + diffRowMenu.removed)
+        diffRowMenu.offered(codeMenu.offer())
     }
 
     /// What each row does, named so a headless run enters where the row enters rather than beside it (verify-ui).

@@ -109,27 +109,31 @@ Item {
         return true
     }
 
-    /// Automation: the drag and its answer for every boundary in the
-    /// window (`PG_AUTO_ACT=divider-refuse`).
-    function reportDividerRefusal(which) {
-        // The graph's own dividers know what was asked; a split bar is
-        // read from where the pointer went instead.
-        const split = which === "sidebar-min" || which === "details-min" || which === "log-min"
-        if (split)
+    /// Whether `which` names one of this page's own split bars rather than
+    /// a divider inside the graph. The two are dragged from different ends
+    /// — the graph's dividers know what the hand asked for, a `SplitView`
+    /// bar is read from where the pointer went — so every caller has to
+    /// tell them apart, and one answer is what keeps them from drifting.
+    function isSplitBar(which) {
+        return which === "sidebar-min" || which === "details-min" || which === "log-min"
+    }
+
+    /// The drag past whichever boundary `which` names, for the hand that
+    /// cannot be injected.
+    function dragPast(which) {
+        if (watch.isSplitBar(which))
             watch.dragSplitPast(which)
         else
             watch.graphPane.dragDividerPast(which)
-        AppBackend.report("divider_refuse refuses=" + watch.shown
-                          // The boundary itself, still drawn and still
-                          // promising the drag the other way. For a split
-                          // bar this also catches a hook that never found
-                          // one to put in hand.
-                          + " line=" + (split
-                                        ? (watch.heldSplit ? watch.heldSplit.visible
-                                                           : false)
-                                        : watch.graphPane.refusedLineShown)
-                          + " case=" + which + " labelW=" + watch.graphPane.labelW
-                          + " graphW=" + watch.graphPane.graphColW)
+    }
+
+    /// The boundary itself, still drawn and still promising the drag the
+    /// other way. For a split bar this also answers a hook that never
+    /// found one to put in hand.
+    function lineShown(which) {
+        if (!watch.isSplitBar(which))
+            return watch.graphPane.refusedLineShown
+        return watch.heldSplit ? watch.heldSplit.visible : false
     }
 
     SplitRefusalOverlay {

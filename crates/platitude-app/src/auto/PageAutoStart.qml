@@ -22,6 +22,15 @@ Item {
     required property var graphPane
     required property var sidebarPane
 
+    /// The page's own default selection stays out of the way while one of the three below is picking: it would land
+    /// first and be photographed instead (`RepoPage.rowPickedElsewhere`). A `Binding` rather than an assignment,
+    /// because the page is handed over before it has read the property once.
+    Binding {
+        target: start.page
+        property: "rowPickedElsewhere"
+        value: AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
+    }
+
     // PG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
     Connections {
         target: start.worktreeModel

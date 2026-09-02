@@ -469,9 +469,11 @@ Item {
             qsTr("Move"),
             function () { page.switchTo("force", local, local, remoteRef) },
             true)
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("move_branch_asked local=" + local)
+        page.moveBranchAsked(local)
     }
+    /// Automation: the question above was raised, about `local`. An automation-only exposure, the same one
+    /// `GraphPane.view` is (app-ui.md) — the bar itself carries no name a run could read the branch back off.
+    signal moveBranchAsked(string local)
 
     // ---- the standing question --------------------------------------
     // One bar over the graph (デザイン規約 §可否・警告の出し場所); Escape, another ask or a click anywhere else walks away from it.
@@ -867,9 +869,11 @@ Item {
             function () { repoTab.renameRemoteBranch(remote, from, name) },
             true,
             qsTr("Hold to rename. git has no rename on a remote: %1 is pushed, then %2 is deleted. Anything the old name carried — an open pull request, a running check — does not follow it.").arg(remote + "/" + name).arg(remoteRef))
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("rename_remote_asked from=" + remoteRef + " to=" + name)
+        page.renameRemoteAsked(remoteRef, name)
     }
+    /// Automation: the question above was raised, and the two names it is between. An automation-only exposure, the
+    /// same one `GraphPane.view` is (app-ui.md).
+    signal renameRemoteAsked(string from, string to)
 
     /// A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than guessed at
     /// beforehand (デザイン規約 §左メニューの所作). A tag and a stash have no such refusal in git, so they are asked about up front.
@@ -924,16 +928,15 @@ Item {
     /// Automation: the run that photographs a row already gone holds it there.
     ///
     /// What it photographs is the in-between — the row taken away, git not yet answered for it — and a demo
-    /// repository answers in tens of milliseconds, which is over before the picture is grabbed. Latched at the press
-    /// itself, which is the real edge rather than a stand-in for one (verify-ui スキル §壊れない動詞の実装と反復).
-    property bool goneHeldForShot: false
+    /// repository answers in tens of milliseconds, which is over before the picture is grabbed. Asked for before the
+    /// press rather than off it, so what holds the row up is a standing decision and not a second edge to get right
+    /// (verify-ui スキル §壊れない動詞の実装と反復).
+    property bool holdGoneRows: false
 
     /// Takes a row away before git has answered for it. `id` is what git is being asked to delete, which is also what
     /// the row is keyed by — so a refusal puts back exactly what was taken.
     function showGone(kind, id) {
         page.goneAtSeq = repoTab.writeSeq
-        if (AppBackend.autoAct === "delete-gone")
-            page.goneHeldForShot = true
         if (kind === "branch")
             page.goneBranch = id
         else if (kind === "remote")
@@ -942,9 +945,11 @@ Item {
             page.goneTag = id
         else if (kind === "stash")
             page.goneStash = id
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("gone_shown kind=" + kind + " id=" + id)
+        page.goneShown(kind, id)
     }
+    /// Automation: a row was stood in for, and which one. An automation-only exposure, the same one `GraphPane.view`
+    /// is (app-ui.md) — the four `gone*` names below say what is standing in, not that this is the moment it started.
+    signal goneShown(string kind, string id)
     /// Puts every one of them back: git refused, and what it refused is still there.
     ///
     /// **Only for the answer to the write that took them away** — `goneAtSeq` is read before the write goes out, so
@@ -966,7 +971,7 @@ Item {
     }
     /// Whether a listing arriving now is one that can answer for the delete.
     readonly property bool goneAnswered:
-        page.goneAtSeq >= 0 && repoTab.writeSeq > page.goneAtSeq && !page.goneHeldForShot
+        page.goneAtSeq >= 0 && repoTab.writeSeq > page.goneAtSeq && !page.holdGoneRows
     /// The refs the delete moved have arrived, so what the sidebar and the chips now hold is the truth — whichever
     /// way it went, nothing is being stood in for any more. **The stash is not one of them**: its listing is asked
     /// for after the graph is rebuilt rather than beside the refs (`session::write`), so it has a word of its own.
@@ -1010,9 +1015,11 @@ Item {
         // same component, and only one of them is ever standing.
         refRowMenu.branchCard.noteRefused(name)
         commitRowMenu.branchCard.noteRefused(name)
-        if (AppBackend.autoAct !== "")
-            AppBackend.report("force_delete_offered branch=" + name)
+        page.forceDeleteOffered(name)
     }
+    /// Automation: the held row above was offered, and for which branch. An automation-only exposure, the same one
+    /// `GraphPane.view` is (app-ui.md) — which of the two cards carries it is not something the page decides.
+    signal forceDeleteOffered(string branch)
 
     // ---- context menu on a working-tree file row --------------------
     function openFileMenu(bucket, path) {
@@ -1362,6 +1369,10 @@ Item {
                         reason !== "" ? reason : Words.writeReportedWhy(kind),
                         Words.reportTone(kind))
     }
+    /// Automation: git's answer to a write has been taken all the way — the bar raised, the mark taken down, the
+    /// standing questions cleared. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md); what the
+    /// write was about is still on `repoTab.writeReport*` when this goes out.
+    signal writeReported()
     /// Raises the report. `label` is what did not happen, `detail` whoever said no in their own words, `tone` the
     /// state it is in if it is in one at all.
     function showNotice(label, detail, tone) {
@@ -1458,10 +1469,7 @@ Item {
                 page.pendingDeleteBranch = ""
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
-                if (AppBackend.autoAct !== "")
-                    AppBackend.report("write_reported kind=" + repoTab.writeReportKind
-                                      + " ref=" + repoTab.writeReportRemote
-                                      + "/" + repoTab.writeReportName)
+                page.writeReported()
                 return
             }
             // The one refusal this page has a second move for: a branch delete git would not do on its own.
@@ -2213,15 +2221,15 @@ Item {
         page.closeDiff()
     }
 
-    /// Something other than the reader is picking the row this run stands on: a run told to select, to measure, or to
-    /// open the working tree makes its own choice, and the default below would land first and be photographed instead
-    /// (`PageAutoStart`). All three are false in a build that carries no harness.
-    readonly property bool harnessPicks: AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
+    /// Something other than the reader is picking the row this page stands on, so the default below stays out of its
+    /// way — it would land first and be photographed instead (`PageAutoStart`). Written from outside and false
+    /// wherever nobody wrote it, which is every window a person opens.
+    property bool rowPickedElsewhere: false
 
     // Selection policy: restore across the tag-swap reset, and default to the current branch's newest commit on first
     // load so the details pane always shows something.
     function trySelectDefault() {
-        if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect || page.harnessPicks
+        if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect || page.rowPickedElsewhere
                 || graphModel.rowTotal === 0)
             return
         // Refs decide which commit is "current" — wait for them instead of guessing the newest row too early.
@@ -2763,10 +2771,13 @@ Item {
         splitWatch.holdSplitBar(bar, held)
     }
 
-    /// Automation: the drag and its answer for every boundary in the window (`PG_AUTO_ACT=divider-refuse`;
-    /// AutoActDriver calls through the page).
-    function reportDividerRefusal(which) {
-        splitWatch.reportDividerRefusal(which)
+    /// Automation: the drag past whichever boundary `which` names, and whether that boundary is still drawn
+    /// (`PG_AUTO_ACT=divider-refuse`; AutoActDriver calls through the page).
+    function dragDividerPast(which) {
+        splitWatch.dragPast(which)
+    }
+    function refusalLineShown(which) {
+        return splitWatch.lineShown(which)
     }
 
     /// Whichever boundary is refusing, or null. One pointer, so the order only decides which answers in the frame where

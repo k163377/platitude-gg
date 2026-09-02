@@ -22,6 +22,7 @@ Item {
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
+    readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
     readonly property var gitCorner: driver.gitCorner
@@ -107,7 +108,7 @@ Item {
                 descGrowTimer.refuse = arg
                 descGrowTimer.start()
             } else {
-                page.reportDividerRefusal(arg)
+                acts.dragDividerPast(arg)
                 renderedBarrier.begin()
             }
         } else {
@@ -115,6 +116,18 @@ Item {
         }
         return true
     }
+    /// The drag past whichever boundary `which` names, and what the window did with it
+    /// (`PG_AUTO_ACT=divider-refuse`). **A picture cannot answer any of it**: every refusal frames the same way, the
+    /// boundary is drawn whether or not it still promises the drag back, and the two column widths are not on screen
+    /// as numbers.
+    function dragDividerPast(which) {
+        page.dragDividerPast(which)
+        AppBackend.report("divider_refuse refuses=" + page.refusalShown
+                          + " line=" + page.refusalLineShown(which)
+                          + " case=" + which + " labelW=" + graphPane.labelW
+                          + " graphW=" + graphPane.graphColW)
+    }
+
     SampleTimer {
         id: detailsFailure
         onTriggered: {
@@ -371,7 +384,7 @@ Item {
             if (!page.commandsOpen || !page.commandsShown)
                 return
             splitRefuseTimer.stop()
-            page.reportDividerRefusal(AppBackend.autoActArg)
+            acts.dragDividerPast(AppBackend.autoActArg)
             renderedBarrier.begin()
         }
     }
