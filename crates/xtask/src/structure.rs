@@ -23,14 +23,16 @@
 //! * **neither** — the backstop applies as written, so a file that crosses
 //!   it for the first time fails on the run that first sees it.
 //!
-//! One other thing about how the tree is divided is counted here, because
-//! it is the same shape of question and the same second of work: the
-//! product's QML may not name a type from the verification harness's
-//! module ([`modules`]).
+//! Two other things about how the tree is divided are counted here,
+//! because they are the same shape of question and the same second of
+//! work: the product's QML may not name a type from the verification
+//! harness's module ([`modules`]), and the app's Rust may not look a
+//! `PG_*` variable up outside the one module that owns them ([`env`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`, which
 //! already knows where functions begin and end.
 
+mod env;
 mod modules;
 
 use std::collections::BTreeMap;
@@ -105,8 +107,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (pinned, over) = check_baseline(&root, &rest, counted.len())?;
     failures.extend(over);
     let (crossed, harness_types) = modules::check(&root)?;
-    let boundary_broken = crossed.len();
+    let (looked_up, app_files) = env::check(&root)?;
+    let boundary_broken = crossed.len() + looked_up.len();
     failures.extend(crossed);
+    failures.extend(looked_up);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -117,7 +121,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!(
             "structure: {} files counted, {code} code lines in {physical} physical \
              ({}% comment and blank), {} on the ledger, {pinned} pinned by the baseline, \
-             {harness_types} harness types out of the product's reach — PASS",
+             {harness_types} harness types out of the product's reach, \
+             {app_files} app files off the environment — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -125,8 +130,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Ok(())
     } else if boundary_broken == failures.len() {
         Err(format!(
-            "{boundary_broken} product file(s) naming a harness type \
-             (.claude/rules/app-ui.md §QML モジュール)"
+            "{boundary_broken} file(s) reaching for something a shipped build does not \
+             carry (.claude/rules/app-ui.md)"
         ))
     } else {
         Err(format!(
