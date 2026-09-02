@@ -26,7 +26,7 @@ Item {
     // a picture: the app is the whole screen, so there is no desktop left beside it to show a gap against.
     SampleTimer {
         id: fillActTimer
-        running: AppBackend.autoAct === "window-fill"
+        running: Harness.autoAct === "window-fill"
         property bool maximizeRequested: false
         onTriggered: {
             if (!fillActTimer.maximizeRequested) {
@@ -53,7 +53,7 @@ Item {
             if (at.x !== 0 || at.y !== 0 || mainUi.width !== window.width || mainUi.height !== window.height)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "window_fill fills=" + (at.x === 0 && at.y === 0
                                         && mainUi.width === window.width
                                         && mainUi.height === window.height)
@@ -74,12 +74,12 @@ Item {
     // rise the other way — put down on the floor without the log, then the log opened
     SampleTimer {
         id: floorActTimer
-        running: AppBackend.autoAct === "window-floor"
+        running: Harness.autoAct === "window-floor"
         property bool shapeRequested: false
         onTriggered: {
             if (window.floorPage === null)
                 return
-            if (AppBackend.autoActArg === "") {
+            if (Harness.autoActArg === "") {
                 if (window.width < window.floorWidth || window.height < window.floorHeight)
                     return
                 stop()
@@ -88,18 +88,18 @@ Item {
             }
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true
-                if (AppBackend.autoActArg === "fold")
+                if (Harness.autoActArg === "fold")
                     window.floorPage.sidebarCollapsed = true
-                else if (AppBackend.autoActArg === "wip")
+                else if (Harness.autoActArg === "wip")
                     window.floorPage.showWip()
-                else if (AppBackend.autoActArg !== "log")
+                else if (Harness.autoActArg !== "log")
                     return
                 return
             }
-            if (AppBackend.autoActArg === "fold"
+            if (Harness.autoActArg === "fold"
                     && !window.floorPage.sidebarCollapsed)
                 return
-            if (AppBackend.autoActArg === "wip" && !window.floorPage.wipShown)
+            if (Harness.autoActArg === "wip" && !window.floorPage.wipShown)
                 return
             floorShrinkTimer.start()
             stop()
@@ -111,9 +111,9 @@ Item {
         property bool resized: false
         onTriggered: {
             if (!floorShrinkTimer.resized
-                    && (AppBackend.autoActArg === "wip"
+                    && (Harness.autoActArg === "wip"
                         || window.floorPage.sidebarCollapsed
-                        || AppBackend.autoActArg === "log")) {
+                        || Harness.autoActArg === "log")) {
                 window.width = Math.ceil(window.floorWidth)
                 window.height = Math.ceil(window.floorHeight)
                 acts.floorStoodAt = window.width + "x" + window.height
@@ -136,20 +136,20 @@ Item {
         id: floorRaiseTimer
         property bool raised: false
         onTriggered: {
-            if (!floorRaiseTimer.raised && AppBackend.autoActArg === "fold") {
+            if (!floorRaiseTimer.raised && Harness.autoActArg === "fold") {
                 window.floorPage.sidebarCollapsed = false
                 floorRaiseTimer.raised = true
                 return
             }
-            if (!floorRaiseTimer.raised && AppBackend.autoActArg === "log") {
+            if (!floorRaiseTimer.raised && Harness.autoActArg === "log") {
                 window.floorPage.commandsOpen = true
                 floorRaiseTimer.raised = true
                 return
             }
-            if (AppBackend.autoActArg === "fold"
+            if (Harness.autoActArg === "fold"
                     && window.floorPage.sidebarCollapsed)
                 return
-            if (AppBackend.autoActArg === "log"
+            if (Harness.autoActArg === "log"
                     && !window.floorPage.commandsOpen)
                 return
             stop()
@@ -162,13 +162,13 @@ Item {
             if (window.width < Math.ceil(window.floorWidth)
                     || window.height < Math.ceil(window.floorHeight))
                 return
-            if (AppBackend.autoActArg === "fold"
+            if (Harness.autoActArg === "fold"
                     && window.floorPage.sidebarCollapsed)
                 return
-            if (AppBackend.autoActArg === "log"
+            if (Harness.autoActArg === "log"
                     && !window.floorPage.commandsOpen)
                 return
-            if (AppBackend.autoActArg === "wip"
+            if (Harness.autoActArg === "wip"
                     && !window.floorPage.wipBlockScrolls)
                 return
             stop()
@@ -179,7 +179,7 @@ Item {
     function reportFloor() {
         const floorW = Math.ceil(window.floorWidth)
         const floorH = Math.ceil(window.floorHeight)
-        AppBackend.report(
+        Harness.report(
             // The verdict leads: the pair "this verb" and "it held" has to be caught in one substring, and only
             // neighbours can be.
             "window_floor fits="
@@ -212,14 +212,14 @@ Item {
     // agree with itself.
     SampleTimer {
         id: stateActTimer
-        running: AppBackend.autoAct === "state"
+        running: Harness.autoAct === "state"
         property bool stateRequested: false
         onTriggered: {
             if (window.curPage === null || window.curPage.pageTab.state !== "open")
                 return
             if (!stateActTimer.stateRequested) {
                 stateActTimer.stateRequested = true
-                if (AppBackend.autoActArg === "change" && window.curPage !== null) {
+                if (Harness.autoActArg === "change" && window.curPage !== null) {
                     window.curPage.sidebarCollapsed = true
                     window.curPage.commandsOpen = true
                     window.curPage.setDetailsWidth(520)
@@ -227,11 +227,11 @@ Item {
                     AppBackend.setAutoFetchMinutes(7)
                     AppBackend.setInitialCommits(3000)
                 }
-                if (AppBackend.autoActArg === "minimize")
+                if (Harness.autoActArg === "minimize")
                     window.visibility = Window.Maximized
                 return
             }
-            if (AppBackend.autoActArg === "minimize" && window.visibility !== Window.Maximized)
+            if (Harness.autoActArg === "minimize" && window.visibility !== Window.Maximized)
                 return
             stop()
             stateReportTimer.start()
@@ -241,9 +241,9 @@ Item {
     SampleTimer {
         id: stateReportTimer
         onTriggered: {
-            if (AppBackend.autoActArg === "minimize" && window.visibility !== Window.Maximized)
+            if (Harness.autoActArg === "minimize" && window.visibility !== Window.Maximized)
                 return
-            if (AppBackend.autoActArg === "change"
+            if (Harness.autoActArg === "change"
                     && (window.curPage === null
                         || !window.curPage.sidebarCollapsed
                         || !window.curPage.commandsOpen
@@ -253,12 +253,12 @@ Item {
             // Up, then down, with a report from each: what the file holds once the window is down has to be what it
             // held while it was up. Without the first report there is nothing for the second one to leave alone, and
             // the verb passes either way.
-            if (AppBackend.autoActArg === "minimize") {
+            if (Harness.autoActArg === "minimize") {
                 window.reportState()
                 window.visibility = Window.Minimized
             }
             window.reportState()
-            AppBackend.report(
+            Harness.report(
                 "state tabs=" + pageRepeater.count
                 + " active=" + tabsModel.currentIndex
                 + " opened=" + (window.curPage !== null ? window.curPage.pageTab.state : "-")
@@ -280,7 +280,7 @@ Item {
             // Back up for the shot: `grabToImage` has nothing to hand back from a window that is down. Windowed rather
             // than maximised, so the picture is the size every other verb's is — the offscreen platform maximises to
             // its own 800x800 screen, and a shot that shape is a shot of the harness.
-            if (AppBackend.autoActArg === "minimize")
+            if (Harness.autoActArg === "minimize")
                 window.visibility = Window.Windowed
             stop()
             window.finishAutoAct()

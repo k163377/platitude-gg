@@ -275,7 +275,7 @@ Item {
             // panel did not raise itself over the same news, and the mark in the corner is not calling it an error
             // (デザイン規約 §答えの要らない報せ). A window that never opened the log frames exactly like one that opened and
             // closed it.
-            AppBackend.report("write_notice open=" + page.noticeCard.open
+            Harness.report("write_notice open=" + page.noticeCard.open
                               + " clears=" + page.noticeClears
                               + " why=" + (page.noticeCard.detail !== "")
                               + " tone=" + (page.noticeCard.tone === "" ? "none" : page.noticeCard.tone)
@@ -310,7 +310,7 @@ Item {
             // Where the row went is the other half of the claim: a file resolved into the index and a file discarded
             // out of the tree both leave the bucket they were named in, and the two are told apart by what holds them
             // afterwards ("" being nothing at all).
-            AppBackend.report("tree_settled from=" + from
+            Harness.report("tree_settled from=" + from
                               + " landed=" + worktreeModel.bucketOf(path)
                               + " conflicts=" + workTree.conflictCount
                               + " staged=" + workTree.stagedCount
@@ -328,12 +328,12 @@ Item {
                     || stashesModel.total === driver.stashTotalBefore)
                 return
             graphBarrier.stop()
-            AppBackend.report("graph_settled gone=true top=" + driver.graphTopKind()
+            Harness.report("graph_settled gone=true top=" + driver.graphTopKind()
                               + " named=" + driver.stashNamed()
                               + " back=" + driver.stashCameBack()
                               + " rows=" + graphModel.rowTotal
                               + " stashes=" + stashesModel.total)
-            if (AppBackend.autoAct === "stash-lands")
+            if (Harness.autoAct === "stash-lands")
                 driver.awaitStashLanding()
             else
                 renderedBarrier.begin()
@@ -418,8 +418,8 @@ Item {
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
 
     function runAutoAct() {
-        const act = AppBackend.autoAct
-        const arg = AppBackend.autoActArg
+        const act = Harness.autoAct
+        const arg = Harness.autoActArg
         if (act === "perf") return // WindowPerfDriver owns this verb's causal completion.
         driver.prepareCompletion(act)
         // First family to know the verb runs it — the same first match the one chain had, and no verb is
@@ -446,10 +446,10 @@ Item {
             // window verbs are (they defer to Main's own driver), so this
             // is a misspelling. It must not pass as a green run of the
             // plain screen: say so and leave the run to the watchdog.
-            AppBackend.report("auto_act unknown=" + act)
+            Harness.report("auto_act unknown=" + act)
             return
         }
-        AppBackend.report("auto_act ran=" + act)
+        Harness.report("auto_act ran=" + act)
         // The file-row acts have not acted yet — they are waiting on their rows (`fileRowsTimer`),
         // and finishing here would photograph the scene before the menu is up. Their sampler
         // finishes the dispatch after `runFileRowAct` has run.

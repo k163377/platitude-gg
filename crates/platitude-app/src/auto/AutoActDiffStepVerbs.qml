@@ -53,7 +53,7 @@ Item {
     /// can be caught losing.
     readonly property real readY: 400
     function reportPlace(at, room) {
-        AppBackend.report("diff_place at=" + Math.round(at)
+        Harness.report("diff_place at=" + Math.round(at)
                           + " want=" + Math.round(acts.readY)
                           + " room=" + Math.round(room))
     }
@@ -124,7 +124,7 @@ Item {
             if (!lineBackTimer.wroteAndSettled() || page.diffKind !== "staged" || rows === 0)
                 return
             lineBackTimer.stop()
-            AppBackend.report("line_back back=" + lineBackTimer.back
+            Harness.report("line_back back=" + lineBackTimer.back
                               + " shrank=" + lineBackTimer.shrank
                               + " followed=" + (page.diffKind + ":" + page.diffPath)
                               + " rows0=" + lineBackTimer.rows0
@@ -148,7 +148,7 @@ Item {
             lineRunTimer.start()
         }
         function report() {
-            AppBackend.report("line_run staged=" + lineRunTimer.done
+            Harness.report("line_run staged=" + lineRunTimer.done
                               + " want=" + lineRunTimer.want
                               + " rows=" + diffPane.view.count
                               + " waited=" + lineRunTimer.waited)
@@ -228,7 +228,7 @@ Item {
                 return
             followTimer.stop()
             followTimer.landed = now
-            AppBackend.report("diff_follow shown=" + page.diffShown
+            Harness.report("diff_follow shown=" + page.diffShown
                               + " alone=" + followTimer.alone
                               + " was=" + followTimer.was
                               + " landed=" + followTimer.landed)
@@ -255,7 +255,7 @@ Item {
                     && diffPane.view.contentHeight > 0
         }
         function report() {
-            AppBackend.report("code_send bar=" + diffPane.codeBarShown
+            Harness.report("code_send bar=" + diffPane.codeBarShown
                               + " hand=" + diffPane.codeHandOn
                               + " at=" + Math.round(diffPane.codeAt)
                               + " max=" + Math.round(diffPane.codeMax)
@@ -338,7 +338,7 @@ Item {
             // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
             // `ours=` reads the way `details_sweep` reads it — false is the pass, and it says the heading's own two
             // words kept every press across their face.
-            AppBackend.report("diff_sweep reach=" + reach + "/" + tries
+            Harness.report("diff_sweep reach=" + reach + "/" + tries
                               + " ground=" + hand.hasGround
                               + " ours=" + ours
                               + " hunkRow=" + hunkRow
@@ -422,7 +422,7 @@ Item {
             if (!diffPane.diffModel.coloured)
                 return
             colourPlaceTimer.stop()
-            AppBackend.report("colour_place coloured="
+            Harness.report("colour_place coloured="
                               + diffPane.diffModel.coloured
                               + " at=" + Math.round(diffPane.view.contentY)
                               + " rows=" + diffPane.view.count

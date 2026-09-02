@@ -61,7 +61,7 @@ Item {
                 publishSettleTimer.start()
             // `dialog=` / `name=` say whether the remote dialog stands and what its name box holds — the no-remote push
             // opens it by itself, and only this line can say so headless.
-            AppBackend.report("publish state=" + page.pushState
+            Harness.report("publish state=" + page.pushState
                               + " remote=" + publishFlow.publishRemote
                               + " branch=" + publishFlow.publishBranch
                               + " dialog=" + remoteDialog.visible
@@ -149,7 +149,7 @@ Item {
                 return
             pushDefaultTimer.stop()
             // The judged fields lead, and together: `must_say` reads one run of the line, not a set of words in it.
-            AppBackend.report("push_default local=" + repoTab.pushDefaultLocal
+            Harness.report("push_default local=" + repoTab.pushDefaultLocal
                               + " marked=" + repoTab.pushDefault
                               + " target=" + repoTab.defaultRemote
                               + " remotes=" + repoTab.remoteCount)
@@ -169,7 +169,7 @@ Item {
             if (!workTree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0)
                 return
             pushTargetTimer.stop()
-            AppBackend.report("push_target label=" + page.pushTargetLabel
+            Harness.report("push_target label=" + page.pushTargetLabel
                               + " state=" + page.pushState
                               + " branch_mark=" + workTree.pushRemote
                               + " repo_mark=" + repoTab.pushDefault
@@ -194,7 +194,7 @@ Item {
                 return
             }
             publishMarkedTimer.stop()
-            AppBackend.report("publish_remotes open=" + publishFlow.publishRemotesOpen()
+            Harness.report("publish_remotes open=" + publishFlow.publishRemotesOpen()
                               + " marked=" + publishFlow.publishRemotesMarked()
                               + " name=" + repoTab.pushDefault)
             driver.complete()
@@ -213,7 +213,7 @@ Item {
             if (!driver.remoteMenu.opened)
                 return
             remoteMenuTimer.stop()
-            AppBackend.report("remote_menu open=" + driver.remoteMenu.opened
+            Harness.report("remote_menu open=" + driver.remoteMenu.opened
                               + " rows=" + driver.remoteMenu.offeredRows
                               + " remote=" + driver.remoteTarget
                               + " marked=" + repoTab.pushDefault)
@@ -232,7 +232,7 @@ Item {
                 return
             }
             remoteUrlTimer.stop()
-            AppBackend.report("remote_url dialog=" + driver.remoteDialog.visible
+            Harness.report("remote_url dialog=" + driver.remoteDialog.visible
                               + " box=" + driver.remoteDialog.marked
                               + " remote=" + driver.remoteDialog.editing
                               + " local=" + driver.remoteDialog.markLocal)
@@ -246,7 +246,7 @@ Item {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
                 return
             const stacked = graphPane.view.itemAtIndex(
-                Number(AppBackend.autoActArg))
+                Number(Harness.autoActArg))
             if (!stacked)
                 return
             fetchedRefListTimer.stop()
@@ -263,7 +263,7 @@ Item {
             if (!page.pushFailed || repoTab.busyCount !== 0)
                 return
             pushRetryTimer.stop()
-            AppBackend.report("push_retry refused=" + page.pushFailed
+            Harness.report("push_retry refused=" + page.pushFailed
                               + " branch=" + publishFlow.pushFailBranch)
             driver.writeSeqBefore = repoTab.writeSeq
             page.forcePush()
@@ -308,7 +308,7 @@ Item {
                 // デモリモートの URL を疑う).
                 if (acts.fetchAskFails >= 0 && repoTab.fetchFailures <= acts.fetchAskFails) {
                     fetchFailTimer.stop()
-                    AppBackend.report("fetch_fail reachable=true fails=" + repoTab.fetchFailures)
+                    Harness.report("fetch_fail reachable=true fails=" + repoTab.fetchFailures)
                     return
                 }
                 acts.fetchAskFails = repoTab.fetchFailures
@@ -327,16 +327,16 @@ Item {
                 return
             }
             fetchFailTimer.stop()
-            if (AppBackend.autoAct === "fetch-resume")
+            if (Harness.autoAct === "fetch-resume")
                 // What the picture cannot hold: the button was stopped when the hold came down, and a fetch ran
                 // again after it. The one it ends on is a button back at work, which is the warning shape — the same
                 // picture `fetch-fail 1` takes.
-                AppBackend.report("fetch_resume stopped=" + acts.fetchStopped
+                Harness.report("fetch_resume stopped=" + acts.fetchStopped
                                   + " fetched=" + (repoTab.fetchFailures > 0)
                                   + " fails=" + repoTab.fetchFailures
                                   + " suspended=" + repoTab.autoFetchSuspended)
             else
-                AppBackend.report("fetch_fail stopped=" + repoTab.autoFetchSuspended
+                Harness.report("fetch_fail stopped=" + repoTab.autoFetchSuspended
                                   + " fails=" + repoTab.fetchFailures
                                   + " wanted=" + acts.fetchFailRuns)
             driver.complete()
@@ -382,7 +382,7 @@ Item {
                 return
             publishDismissTimer.stop()
             graphPane.askCard.dismiss()
-            AppBackend.report("ask_dismissed shut=" + graphPane.askCard.shut
+            Harness.report("ask_dismissed shut=" + graphPane.askCard.shut
                               + " words=" + (graphPane.askCard.label !== "")
                               + " detail=" + (graphPane.askDetail !== "")
                               + " code=" + graphPane.askCode
@@ -431,7 +431,7 @@ Item {
             if (!publishFlow.publishChecked)
                 return
             publishSettleTimer.stop()
-            AppBackend.report("publish settled far="
+            Harness.report("publish settled far="
                                        + publishFlow.publishState
                                        + " code=" + graphPane.askCode
                                        + " hold=" + graphPane.askHold
@@ -450,7 +450,7 @@ Item {
             publishAnswerTimer.stop()
             // `far` is what the far side turned out to hold — the other line's `state` is this end's own push state,
             // and the two answer different questions.
-            AppBackend.report("publish answering far="
+            Harness.report("publish answering far="
                               + publishFlow.publishState
                               + " unsure=" + publishFlow.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)

@@ -30,7 +30,7 @@ Item {
     Binding {
         target: acts.appPane
         property: "pointedAtRow"
-        value: AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
+        value: Harness.autoAct === "avatar-row-lit" ? 0 : -1
     }
 
     /// The real loading edge, kept alive until the picture has been grabbed. Raised off the moment git was asked
@@ -38,7 +38,7 @@ Item {
     /// first and can start after it; the box is told to hold its indicator up, and the screen closing puts that down.
     property bool toolLoadingSeen: false
     function noteToolLoading() {
-        if (AppBackend.autoAct !== "settings-tools-loading" || !acts.window.curPage)
+        if (Harness.autoAct !== "settings-tools-loading" || !acts.window.curPage)
             return
         if (!acts.window.curPage.pageTab.mergeToolsLoading)
             return
@@ -66,13 +66,13 @@ Item {
         }
     }
     function reportTool() {
-        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
-            AppBackend.report("merge_editor " + acts.gitPane.toolTally())
+        if (Harness.autoAct === "settings-tools" || Harness.autoAct === "settings-tools-loading")
+            Harness.report("merge_editor " + acts.gitPane.toolTally())
     }
     /// Whether every chapter can be got to: they fit, or the bar that sends them is standing. The claim is the
     /// harness's; the three lengths it is made of are the screen's (`SettingsDialog.chaptersContent`).
     function reportFit() {
-        AppBackend.report("settings_fit reach="
+        Harness.report("settings_fit reach="
                           + (settingsDialog.chaptersContent <= settingsDialog.chaptersView
                              || settingsDialog.chaptersBarShown)
                           + " content=" + Math.round(settingsDialog.chaptersContent)
@@ -84,15 +84,15 @@ Item {
     // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
     // the same door the menu entry uses, told on the way in to bring the list down with it.
     SampleTimer {
-        running: AppBackend.autoAct === "settings-tools"
-                 || AppBackend.autoAct === "settings-tools-loading"
+        running: Harness.autoAct === "settings-tools"
+                 || Harness.autoAct === "settings-tools-loading"
         onTriggered: {
             if (!settingsDialog.opened) {
                 settingsDialog.pressToolOnOpen = true
                 settingsDialog.openAt("git")
                 return
             }
-            const ready = AppBackend.autoAct === "settings-tools-loading"
+            const ready = Harness.autoAct === "settings-tools-loading"
                         ? (acts.toolLoadingSeen && acts.gitPane.toolListOpen)
                         : (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length > 0
                            && acts.gitPane.toolListOpen)
@@ -113,7 +113,7 @@ Item {
     // is what the run set on the way in.
     SampleTimer {
         id: repoSettingsTimer
-        running: AppBackend.autoAct === "settings-repo" || AppBackend.autoAct === "settings-repo-pick"
+        running: Harness.autoAct === "settings-repo" || Harness.autoAct === "settings-repo-pick"
         /// The row of the strip has been picked and the list, where one is wanted, pressed down.
         property bool acted: false
         onTriggered: {
@@ -132,19 +132,19 @@ Item {
                 // rather than a first look that happens to name a row. The two are not the same road.
                 if (!acts.repoPane.autoRepoReady)
                     return
-                if (AppBackend.autoActArg !== ""
-                        && !acts.repoPane.showRepoAt(Number(AppBackend.autoActArg)))
+                if (Harness.autoActArg !== ""
+                        && !acts.repoPane.showRepoAt(Number(Harness.autoActArg)))
                     return
-                if (AppBackend.autoAct === "settings-repo-pick")
+                if (Harness.autoAct === "settings-repo-pick")
                     acts.repoPane.autoOfferRepos()
                 repoSettingsTimer.acted = true
             }
             if (!acts.repoPane.autoRepoReady)
                 return
-            if (AppBackend.autoAct === "settings-repo-pick" && !acts.repoPane.autoRepoComboOpen)
+            if (Harness.autoAct === "settings-repo-pick" && !acts.repoPane.autoRepoComboOpen)
                 return
             repoSettingsTimer.stop()
-            AppBackend.report("repo_config " + acts.repoPane.repoTally())
+            Harness.report("repo_config " + acts.repoPane.repoTally())
             acts.reportFit()
             window.finishAutoAct()
         }
@@ -163,11 +163,11 @@ Item {
     // would photograph the value it had just replaced.
     SampleTimer {
         id: endingsTimer
-        running: AppBackend.autoAct === "settings-eol"
+        running: Harness.autoAct === "settings-eol"
         /// The row has been picked.
         property bool acted: false
         /// The argument as the model spells it: the row that writes nothing is empty there.
-        readonly property string wanted: AppBackend.autoActArg === "inherited" ? "" : AppBackend.autoActArg
+        readonly property string wanted: Harness.autoActArg === "inherited" ? "" : Harness.autoActArg
         onTriggered: {
             if (!settingsDialog.opened) {
                 settingsDialog.openAt("git")
@@ -188,7 +188,7 @@ Item {
             endingsTimer.stop()
             // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.
             settingsDialog.autoShowChapterFoot()
-            AppBackend.report("line_endings " + acts.repoPane.endingsTally())
+            Harness.report("line_endings " + acts.repoPane.endingsTally())
             window.finishAutoAct()
         }
     }
@@ -200,7 +200,7 @@ Item {
     // input side, and a run that read it would be reporting its own press.
     SampleTimer {
         id: categorySwitchTimer
-        running: AppBackend.autoAct === "settings-switch"
+        running: Harness.autoAct === "settings-switch"
         /// The press has been made, so what had to be true before it is not read again.
         property bool acted: false
         /// The application category was standing first — half the claim, and the half the picture cannot hold.
@@ -221,7 +221,7 @@ Item {
             if (!acts.gitPane.visible)
                 return
             categorySwitchTimer.stop()
-            AppBackend.report("settings_switch was_app=" + categorySwitchTimer.wasApp
+            Harness.report("settings_switch was_app=" + categorySwitchTimer.wasApp
                               + " app=" + acts.appPane.autoAppShown
                               + " git=" + acts.gitPane.visible)
             window.finishAutoAct()
@@ -237,7 +237,7 @@ Item {
     // 因果性 — the harness has no keyboard). It proves the road is there and ends where it says it does.
     SampleTimer {
         id: escapeTimer
-        running: AppBackend.autoAct === "settings-escape"
+        running: Harness.autoAct === "settings-escape"
         /// The screen was up before the way out was taken — the half the shot cannot hold.
         property bool wasOpen: false
         onTriggered: {
@@ -245,7 +245,7 @@ Item {
                 if (!settingsDialog.opened) {
                     // The argument names the category, because the way out is not the same road from both: the git
                     // one has the two chapters a Save stands in front of, and its reads land after the screen is up.
-                    settingsDialog.openAt(AppBackend.autoActArg === "" ? "app" : AppBackend.autoActArg)
+                    settingsDialog.openAt(Harness.autoActArg === "" ? "app" : Harness.autoActArg)
                     return
                 }
                 // Nothing may be counted as unsaved before git has answered for the boxes — a run that pressed the
@@ -261,7 +261,7 @@ Item {
             escapeTimer.stop()
             // The two halves of `unsaved` are named apart: a way out that stopped says nothing about *which* of the
             // two chapters thought it was holding an edit, and they are read out of different files.
-            AppBackend.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
+            Harness.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
                               + " global=" + acts.gitPane.unsavedIsGlobal
                               + " repo=" + acts.gitPane.unsavedIsRepo
                               + " was_open=" + escapeTimer.wasOpen
@@ -279,7 +279,7 @@ Item {
     // carrying the question is drawn like a foot carrying anything else until it is read.
     SampleTimer {
         id: leaveTimer
-        running: AppBackend.autoAct === "settings-leave"
+        running: Harness.autoAct === "settings-leave"
         /// The edit has been made and the way out pressed.
         property bool acted: false
         onTriggered: {
@@ -301,7 +301,7 @@ Item {
             if (!settingsDialog.askingLeave)
                 return
             leaveTimer.stop()
-            AppBackend.report("settings_leave unsaved=" + settingsDialog.unsavedIdentities
+            Harness.report("settings_leave unsaved=" + settingsDialog.unsavedIdentities
                               + " asked=" + settingsDialog.askingLeave
                               + " open=" + settingsDialog.opened)
             window.finishAutoAct()
@@ -314,8 +314,8 @@ Item {
     // length (`Metrics.holdMs`). Nothing here reads a clock.
     SampleTimer {
         id: avatarCardTimer
-        running: AppBackend.autoAct === "avatar-settings" || AppBackend.autoAct === "avatar-row-lit"
-                 || AppBackend.autoAct === "avatar-combo" || AppBackend.autoAct === "avatar-remove"
+        running: Harness.autoAct === "avatar-settings" || Harness.autoAct === "avatar-row-lit"
+                 || Harness.autoAct === "avatar-combo" || Harness.autoAct === "avatar-remove"
         /// Raised once this verb's own move has been made, so nothing after it re-reads what had to be true before it.
         /// The removal's answer is a row going away, and a gate still wanting that row would never let go of it (the
         /// wait `middle-close` describes).
@@ -323,13 +323,13 @@ Item {
         /// How many rows the hold was made against, read in the branch that presses and nowhere else.
         property int rowsBefore: -1
         onTriggered: {
-            const act = AppBackend.autoAct
+            const act = Harness.autoAct
             if (!avatarCardTimer.acted) {
                 if (!settingsDialog.opened)
                     return
                 // A run that filed a picture on its way in has to have it in the list before any of this means
                 // anything; one that filed nothing — the round-trip read — has whatever the store gave it.
-                if (AppBackend.autoActArg !== "" && !acts.appPane.autoAvatarRowPainted(0))
+                if (Harness.autoActArg !== "" && !acts.appPane.autoAvatarRowPainted(0))
                     return
                 if (act === "avatar-row-lit") {
                     if (!acts.appPane.autoAvatarRowLit(0))
@@ -352,7 +352,7 @@ Item {
             if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
                 return
             avatarCardTimer.stop()
-            AppBackend.report("avatar_card rows=" + acts.appPane.autoAvatarRows
+            Harness.report("avatar_card rows=" + acts.appPane.autoAvatarRows
                               + " painted=" + acts.appPane.autoAvatarRowPainted(0)
                               + " lit=" + acts.appPane.autoAvatarRowLit(0)
                               + " combo=" + acts.appPane.autoAvatarComboOpen

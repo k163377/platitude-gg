@@ -83,8 +83,8 @@ Item {
     // frames exactly like one standing in for a tab that is nowhere on it, so `onScreen=false` has to be said out loud.
     SampleTimer {
         id: tabPinTimer
-        running: AppBackend.autoAct === "tab-pin"
-        readonly property int front: Number(AppBackend.autoActArg || 0)
+        running: Harness.autoAct === "tab-pin"
+        readonly property int front: Number(Harness.autoActArg || 0)
         onTriggered: {
             if (!acts.staged(tabPinTimer.front))
                 return
@@ -92,7 +92,7 @@ Item {
             // The two halves of the rule first and next to each other: the line is judged as a run of words, and a
             // reading put between them is a reading the table would have to spell out to get past
             // (`verify/verbs.rs`). Which edge it took comes after, because only the default argument fixes it.
-            AppBackend.report(
+            Harness.report(
                 "tab_pin stood=" + acts.topBar.tabPinShown
                 + " onScreen=" + acts.topBar.frontTabWhole
                 + " left=" + acts.topBar.tabPinRidesLeft
@@ -112,8 +112,8 @@ Item {
     // `from=` and `run=` are the two ends of it — and `gone=` is the stand-in's own answer to having arrived.
     SampleTimer {
         id: tabPinGoTimer
-        running: AppBackend.autoAct === "tab-pin-go"
-        readonly property int front: Number(AppBackend.autoActArg || 0)
+        running: Harness.autoAct === "tab-pin-go"
+        readonly property int front: Number(Harness.autoActArg || 0)
         property bool pressed: false
         property int from: 0
         onTriggered: {
@@ -132,7 +132,7 @@ Item {
             if (acts.topBar.tabRunTravelling || !acts.topBar.frontTabWhole || acts.topBar.tabPinShown)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "tab_pin_go gone=" + !acts.topBar.tabPinShown
                 + " onScreen=" + acts.topBar.frontTabWhole
                 + " travelled=" + (acts.topBar.runOffset() !== tabPinGoTimer.from)

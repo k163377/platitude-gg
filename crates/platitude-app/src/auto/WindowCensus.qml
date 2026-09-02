@@ -125,9 +125,9 @@ Item {
 
     /// The run is finishing: the walk, then the report line.
     function report() {
-        if (AppBackend.autoAct === "")
+        if (Harness.autoAct === "")
             return
         walk()
-        AppBackend.report("census=" + Object.keys(census.seen).sort().join(","))
+        Harness.report("census=" + Object.keys(census.seen).sort().join(","))
     }
 }

@@ -39,7 +39,7 @@ Item {
     property int inkWaited: 0
     // Every PG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
     // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
-    readonly property bool causal: AppBackend.autoAct !== ""
+    readonly property bool causal: Harness.autoAct !== ""
 
     /// The window's picture is on disk, so the scene it came out of is the settled one: **the completion edge is often
     /// what builds that scene** (see `grabApp`), and a list whose rows stand up in the frame the grab is fulfilled in
@@ -55,18 +55,18 @@ Item {
     }
 
     function begin() {
-        if (AppBackend.autoWatchdogMs > 0)
+        if (Harness.autoWatchdogMs > 0)
             watchdog.start()
     }
 
     function finish() {
         if (!driver.causal || driver.shotTaken || driver.shotPending)
             return
-        if (AppBackend.shotDir === "") {
+        if (Harness.shotDir === "") {
             Qt.quit()
             return
         }
-        AppBackend.report("auto_act complete=" + AppBackend.autoAct)
+        Harness.report("auto_act complete=" + Harness.autoAct)
         driver.shotPending = true
         window.requestUpdate()
         // A quiet scene may not emit another frameSwapped even after an update request. The next event-loop turn is
@@ -104,9 +104,9 @@ Item {
 
     Timer {
         id: watchdog
-        interval: Math.max(AppBackend.autoWatchdogMs, 1)
+        interval: Math.max(Harness.autoWatchdogMs, 1)
         onTriggered: {
-            console.warn("auto-act watchdog expired verb=" + AppBackend.autoAct)
+            console.warn("auto-act watchdog expired verb=" + Harness.autoAct)
             console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
                          + " parts=" + driver.shotParts + " ink=" + Ink.owed)
             Qt.quit()
@@ -127,7 +127,7 @@ Item {
         const mirror = overlayMirror.item
         const popups = mirror.sourceItem ? mirror.sourceItem.children.length : 0
         const overlayOk = mirror.grabToImage(function (res) {
-            const saved = res.saveToFile(AppBackend.shotDir + "/overlay.png")
+            const saved = res.saveToFile(Harness.shotDir + "/overlay.png")
             console.warn("overlay saved=" + saved + " popups=" + popups)
             driver.partDone()
         })
@@ -166,7 +166,7 @@ Item {
     function grabScene() {
         const scene = driver.sceneMirror.item
         const ok = scene.grabToImage(function (res) {
-            const saved = res.saveToFile(AppBackend.shotDir + "/scene.png")
+            const saved = res.saveToFile(Harness.shotDir + "/scene.png")
             console.warn("scene saved=" + saved)
             driver.partDone()
         })
@@ -192,7 +192,7 @@ Item {
         if (driver.appSaved || driver.appGrabbing)
             return
         driver.appGrabbing = true
-        const path = AppBackend.shotDir + "/app.png"
+        const path = Harness.shotDir + "/app.png"
         const shown = gate.visible ? gate : mainUi
         const ok = shown.grabToImage(function (res) {
             driver.appGrabbing = false

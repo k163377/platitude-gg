@@ -55,7 +55,7 @@ Item {
                 page.foldByHand(true)
             else
                 page.releasePressedAway(null)
-            AppBackend.report("nav_drop how=" + arg
+            Harness.report("nav_drop how=" + arg
                               + " collapsed=" + page.sidebarCollapsed
                               + " box=" + (sidebarPane.editKey !== "")
                               + " editing=" + sidebarPane.editKey)
@@ -88,7 +88,7 @@ Item {
             // and a box that took the name frames the same as one that would not. `was=` is the name it is being
             // weighed against, so a run that opened the box on the wrong row says so instead of passing.
             sidebarPane.beginRename("tag", tagsModel.nameAt(0), arg)
-            AppBackend.report("tag_name_box was=" + tagsModel.nameAt(0)
+            Harness.report("tag_name_box was=" + tagsModel.nameAt(0)
                               + " typed=" + arg
                               + " refused=" + sidebarPane.editRefused
                               + " why=" + sidebarPane.editRefusedWhy)
@@ -150,7 +150,7 @@ Item {
             if (repoTab.busyCount !== 0 || !sidebarPane.editRefused || !page.noticeCard.settled)
                 return
             renameTakenTimer.stop()
-            AppBackend.report("rename_taken open=" + (sidebarPane.editKey !== "")
+            Harness.report("rename_taken open=" + (sidebarPane.editKey !== "")
                               + " refused=" + sidebarPane.editRefused
                               + " bar=" + page.noticeCard.open
                               + " tone=" + page.noticeCard.tone
@@ -184,7 +184,7 @@ Item {
                 if (sidebarPane.editKey === "")
                     return
                 farTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "nav_far row=" + tagsModel.nameAt(0)
                 + " shown=" + section.rowInView(0)
                 + " box=" + (sidebarPane.editKey !== "")
@@ -207,7 +207,7 @@ Item {
             renameAskTimer.stop()
             // `code=` being empty is part of the claim: a push and a delete make no one command, so the pill answers
             // in the ordinary voice (規約 §git 用語のコード表記 の 1:1 規則 — the same reading `move_ask` makes).
-            AppBackend.report("rename_ask hold=" + graphPane.askHold
+            Harness.report("rename_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode)
             driver.complete()
         }
@@ -273,7 +273,7 @@ Item {
             if ((words !== "") !== tip.visible)
                 return
             navTipTimer.stop()
-            AppBackend.report("nav_tip section=" + (navTipTimer.head ? "head" : navTipTimer.kind)
+            Harness.report("nav_tip section=" + (navTipTimer.head ? "head" : navTipTimer.kind)
                 + " row=" + target + " name=" + name
                 + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
                 + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
@@ -380,7 +380,7 @@ Item {
             }
             navNameBoxTimer.stop()
             const whole = list.rowBoxWhole(row)
-            AppBackend.report("nav_name_box mode=" + navNameBoxTimer.mode
+            Harness.report("nav_name_box mode=" + navNameBoxTimer.mode
                               + " ref=" + navNameBoxTimer.ref
                               + " row=" + row
                               + " pane=" + Math.round(sidebarPane.width)
@@ -451,7 +451,7 @@ Item {
                 acts.boxOutStep = 3
             } else if (acts.boxOutStep === 3) {
                 boxOutTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "rename_box_out route=" + boxOutTimer.route
                 + " box=" + (graphPane.namingOid !== "")
                 // A wait left running is how a box that has just been walked away from comes back on its own.

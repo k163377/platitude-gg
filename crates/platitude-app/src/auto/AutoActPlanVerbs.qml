@@ -98,7 +98,7 @@ Item {
     // and the answer to a five-commit range can be back before the next tick, so a sampler looking for it would find
     // a state that had already gone and wait out the watchdog in silence.
     Connections {
-        target: AppBackend.autoAct === "plan-loading" ? page.rebasePlan : null
+        target: Harness.autoAct === "plan-loading" ? page.rebasePlan : null
         function onChanged() {
             const plan = page.rebasePlan
             if (page.planLoadHeld || !plan.loading || plan.active)
@@ -121,7 +121,7 @@ Item {
             if (!page.planLoadHeld || !page.planShown || page.planActive)
                 return
             planLoadingTimer.stop()
-            AppBackend.report("plan_loading held=true shown=true standing=" + page.planActive
+            Harness.report("plan_loading held=true shown=true standing=" + page.planActive
                               + " rows=" + planLoadingTimer.sawRows
                               + " onto=" + planLoadingTimer.sawOnto)
             renderedBarrier.begin()
@@ -153,7 +153,7 @@ Item {
                 plan.setAction(1, "squash")
                 plan.setAction(2, "drop")
                 page.activateRow(workTree.headOid)
-                AppBackend.report("rebase_plan rows=" + plan.stepCount + " dirty=" + plan.dirty
+                Harness.report("rebase_plan rows=" + plan.stepCount + " dirty=" + plan.dirty
                                   + " drops=" + plan.dropCount + " onto=" + (plan.ontoRef !== "")
                                   + " pushed=" + page.planPushed + " selected=" + plan.selectedRow)
                 renderedBarrier.begin()
@@ -193,7 +193,7 @@ Item {
                 const underHand = plan.selectedAction
                 planPane.view.moveRequested(carried + 1, carried)
                 planPane.view.moveEnded()
-                AppBackend.report("plan_fold_carry carried=" + underHand
+                Harness.report("plan_fold_carry carried=" + underHand
                                   + " landed=" + plan.selectedAction
                                   + " row=" + plan.selectedRow + " rows=" + plan.stepCount
                                   + " dirty=" + plan.dirty)
@@ -240,7 +240,7 @@ Item {
                     || graphModel.rowOf(planRanTimer.headBefore) >= 0)
                 return
             planRanTimer.stop()
-            AppBackend.report("rebase_plan_ran op=" + planRanTimer.answeredOp
+            Harness.report("rebase_plan_ran op=" + planRanTimer.answeredOp
                               + " moved=" + (workTree.headOid !== planRanTimer.headBefore)
                               + " gone=" + (graphModel.rowOf(planRanTimer.headBefore) < 0)
                               + " stopped=" + planRanTimer.answeredStopped
@@ -283,7 +283,7 @@ Item {
             if (repoTab.busyCount !== 0 || !page.wipShown || !workTree.opEditing)
                 return
             planEditStopTimer.stop()
-            AppBackend.report("edit_stop editing=" + workTree.opEditing
+            Harness.report("edit_stop editing=" + workTree.opEditing
                               + " skipfree=" + workTree.opSkipFree
                               + " oid=" + (workTree.opEditOid !== "")
                               + " cont=" + wipPane.offersOpExit("--continue")
@@ -293,7 +293,7 @@ Item {
                 renderedBarrier.begin()
                 return
             }
-            AppBackend.report("op_exit_held " + wipPane.completeOpExit("--continue"))
+            Harness.report("op_exit_held " + wipPane.completeOpExit("--continue"))
             driver.awaitOpExitLanding()
         }
     }

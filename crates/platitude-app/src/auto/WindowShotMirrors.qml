@@ -33,7 +33,7 @@ Item {
     // offscreen platform, where no OS window exists to shoot from outside.
     Loader {
         id: overlayMirror
-        active: AppBackend.shotDir !== ""
+        active: Harness.shotDir !== ""
         anchors.fill: parent
         z: -10000
         sourceComponent: ShaderEffectSource {
@@ -48,7 +48,7 @@ Item {
     // board nobody reads.
     Loader {
         id: sceneMirror
-        active: AppBackend.shotDir !== ""
+        active: Harness.shotDir !== ""
         anchors.fill: parent
         z: -10001
         sourceComponent: Item {

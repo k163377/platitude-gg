@@ -106,14 +106,14 @@ Item {
                 commitMenu.openSub(commitBranchCard)
             else if (act === "tag-card")
                 commitMenu.openSub(commitTagCard)
-            AppBackend.report("commit_menu rows=" + commitMenu.offeredRows
+            Harness.report("commit_menu rows=" + commitMenu.offeredRows
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
             // The plan is built by object name, the way a graph row hands one over — a symbolic name is not what this
             // takes.
             page.openRowMenu(driver.autoActOid(arg))
-            AppBackend.report("drop_row " + dropCommitItem.code
+            Harness.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
@@ -212,7 +212,7 @@ Item {
             // that the badge is counting a range out at all.
             const counted = workTree.opStep > 0 && workTree.opStep <= workTree.opSteps
                             && workTree.opSteps > 1
-            AppBackend.report("replay_running op=" + workTree.opText + " counted=" + counted
+            Harness.report("replay_running op=" + workTree.opText + " counted=" + counted
                               + " ring=" + win.waitRingShown
                               + " held=" + page.replayRunning
                               + " step=" + workTree.opStep + " steps=" + workTree.opSteps)
@@ -255,7 +255,7 @@ Item {
                     || !driver.cardSettled)
                 return
             tipLandedTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "tip_landed follows="
                 + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
@@ -305,7 +305,7 @@ Item {
             if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
                 return
             mergeStoppedTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "merge_stopped wip=" + page.wipShown
                 + " conflicts=" + (workTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
@@ -339,7 +339,7 @@ Item {
                     || (opStoppedTimer.carried && stashesModel.total === 0))
                 return
             opStoppedTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "write_stopped wip=" + page.wipShown
                 + " conflicts=" + (workTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
@@ -364,26 +364,26 @@ Item {
             rewordTimer.stop()
             // "edit-message-focus" types nothing: the commit's own body is what the caret has to be photographed on top
             // of, and an empty box would only show the placeholder.
-            if (AppBackend.autoAct === "edit-message-focus") {
+            if (Harness.autoAct === "edit-message-focus") {
                 detailsPane.focusDescription()
-                AppBackend.report("message_focus pane=details focused="
+                Harness.report("message_focus pane=details focused="
                                   + detailsPane.descriptionFocused
                                   + " color=" + detailsPane.descriptionColor)
                 driver.complete()
                 return
             }
-            detailsPane.setMessageText(AppBackend.autoActArg, "")
+            detailsPane.setMessageText(Harness.autoActArg, "")
             // "edit-message" stops here, with the save row on screen.
-            if (AppBackend.autoAct === "reword") {
+            if (Harness.autoAct === "reword") {
                 driver.writeSeqBefore = repoTab.writeSeq
             }
-            if (AppBackend.autoAct === "reword")
+            if (Harness.autoAct === "reword")
                 detailsPane.submitMessage()
             // "edit-message-leave" walks away from the unsaved text. Nothing asks any more — the draft goes and the
             // next commit's own message arrives, which is what the shot is of.
-            else if (AppBackend.autoAct === "edit-message-leave")
+            else if (Harness.autoAct === "edit-message-leave")
                 page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
-            if (AppBackend.autoAct === "reword")
+            if (Harness.autoAct === "reword")
                 writeBarrier.start()
             else
                 renderedBarrier.begin()

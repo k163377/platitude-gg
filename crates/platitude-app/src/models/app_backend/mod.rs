@@ -85,39 +85,18 @@ pub struct AppBackend {
     /// above because it also carries "a save has been tried", which is
     /// what keeps the marks and the toolbar badge out of a fresh window.
     identity_unsaved: bool,
-    auto_open: String,
-    shot_dir: String,
-    /// Harness-only deadline. It never chooses when a screenshot is
-    /// taken; it only keeps a broken causal run bounded.
-    auto_watchdog_ms: i32,
-    auto_select: bool,
-    auto_scroll: bool,
-    auto_perf: bool,
-    /// `PG_MEM_REPORT=1`: the window drives the memory breakdown off a
-    /// timer instead of leaving it to whoever remembers to ask.
-    mem_report: bool,
-    auto_wip: bool,
-    /// Verification hook: take the shape the platforms that cannot merge
-    /// the band into the title bar get — the two that cannot be run here.
-    plain_chrome: bool,
-    /// Whether something rather than somebody is driving this run
-    /// (`Env::automated` — any `PG_*` knob but the three that say nothing
-    /// about who is at the window). What reads it is the window: a run
-    /// nobody is looking at keeps the size it was configured with instead
-    /// of being fitted to a screen (`WindowShape.insideScreen`), and the screen
-    /// the headless platform reports is 800x800.
-    automated: bool,
-    /// Screenshot hook: `"<name>|<email>"` prefills the identity screen.
-    auto_identity: String,
-    /// Screenshot hook: submit that prefilled identity straight away.
-    auto_identity_save: bool,
-    scroll_to: String,
-    /// Smoke hook: one operation to run once the repository is loaded —
-    /// a write, or a surface left standing for the overlay shot — and
-    /// its argument. A bare verb rather than a script, so QML dispatches
-    /// on equality; the argument passes through as the verb needs it.
-    auto_act: String,
-    auto_act_arg: String,
+    /// The window keeps the platform's own title bar above an ordinary tab
+    /// row instead of folding the two together (`Main.captionMerged`).
+    /// **Read as the window is created and never again** — a window that
+    /// came up without a way to close it cannot be taken back — so it is
+    /// here rather than somewhere a run could write it later.
+    system_title_bar: bool,
+    /// This build carries the verification harness, so the seats that load
+    /// it by URL have something to load (`HarnessSeat.wanted`). The one
+    /// thing the product knows about the harness at all; everything a run
+    /// was told to do is on `Harness`, which a shipped build has no type
+    /// for (`crate::harness::singleton`).
+    harness_present: bool,
     /// Auto-fetch interval in minutes; 0 is off. Application-wide, because
     /// the answer is about how often this computer should talk to remotes.
     auto_fetch_minutes: i32,

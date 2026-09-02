@@ -74,7 +74,7 @@ Item {
             // the argument it wanted was left off (measured, `line-run` staged one line of nothing and read
             // `rows=0`, `line-back` waited out the watchdog).
             if (wtPath === "") {
-                AppBackend.report("diff_arg act=" + act + " named=false")
+                Harness.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
                 // A known verb answers true even on this early way out —
                 // falsy would read as "not mine" to the dispatch chain.
@@ -88,7 +88,7 @@ Item {
             // (`stageRowTimer`), not the ask. No path is a run with nothing to open: said and stopped on the rendered
             // surface, rather than holding a wait no read will answer — the wanted line is what fails it.
             if (arg === "") {
-                AppBackend.report("diff_arg act=" + act + " named=false")
+                Harness.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
             } else {
                 page.toggleDiff(act === "preview" ? "untracked"
@@ -112,7 +112,7 @@ Item {
         const removedRow = diffPane.firstRemovedRow()
         const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
         diffPane.pickText(1, 0, lastRow, driver.pastLineEnd)
-        AppBackend.report("diff_pick " + diffPane.pickTally()
+        Harness.report("diff_pick " + diffPane.pickTally()
                           + " removedRow=" + removedRow + " to=" + lastRow)
         if (act === "diff-select")
             return
@@ -136,7 +136,7 @@ Item {
     function reportCopy(name) {
         const text = driver.clipboard.lastCopied
         const removed = diffPane.diffModel.removedText()
-        AppBackend.report(name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
+        Harness.report(name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
                           + " lines=" + (text === "" ? 0 : text.split("\n").length))
     }
     // The diff has to arrive before a row of it can be staged. Asked for rather than waited out: a fixed wait
@@ -164,7 +164,7 @@ Item {
             // the whole of what it waits for — a file with no changed line in its first hunk still has a path in the
             // band, and demanding one would leave that run waiting out its watchdog.
             if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep",
-                 "preview", "preview-unstaged", "preview-staged"].indexOf(AppBackend.autoAct) >= 0)
+                 "preview", "preview-unstaged", "preview-staged"].indexOf(Harness.autoAct) >= 0)
                 return diffPane.diffSettled()
             return diffPane.firstChangedLine(0) >= 0
         }
@@ -174,13 +174,13 @@ Item {
             if (!arrived)
                 return
             stageRowTimer.stop()
-            const act = AppBackend.autoAct
+            const act = Harness.autoAct
             // Which line the line-level verbs mean. Not 0: a hunk numbers its lines through the context it carries, and
             // the context is not part of the change (see `firstChangedLine`).
             const line = diffPane.firstChangedLine(0)
             // Said before the acting, so a verb that goes on to fail its write says both. `waited=` is ticks, not a
             // clock.
-            AppBackend.report("diff_row act=" + act + " ready=" + arrived
+            Harness.report("diff_row act=" + act + " ready=" + arrived
                               + " rows=" + diffPane.view.count
                               + " line=" + line
                               + " waited=" + stageRowTimer.waited)
@@ -188,7 +188,7 @@ Item {
             // four kinds the pane decided on).
             if (act === "diff-file") {
                 const d = diffPane.diffModel
-                AppBackend.report("line_endings kind=" + d.endingKind
+                Harness.report("line_endings kind=" + d.endingKind
                                   + " scope=" + d.endingScope
                                   + " lines=" + d.endingLines
                                   + " text=" + Words.lineEndings(
@@ -202,7 +202,7 @@ Item {
             // being read (規約 §右のペインの字は掴める). `cut=` is the half the picture cannot answer on a wide pane:
             // whether the field is holding a value longer than the band, which is where the head-side cut is decided.
             if (act === "diff-band-sweep") {
-                AppBackend.report("diff_band_sweep "
+                Harness.report("diff_band_sweep "
                     + diffPane.headerHand.sweepAir(7, "cut=" + diffPane.headerCut))
                 driver.complete()
                 return
@@ -210,7 +210,7 @@ Item {
             // Which rows the two sides are named on. The bands themselves are in the picture, but "how many rows
             // should have carried one" is not — and a resolved conflict is exactly where none of them did.
             if (act === "conflict-sides") {
-                AppBackend.report("conflict_sides " + diffPane.sideTally())
+                Harness.report("conflict_sides " + diffPane.sideTally())
                 driver.complete()
                 return
             }
@@ -220,7 +220,7 @@ Item {
             // of the claim: a tick must not put the pane back into the state a click does.
             if (act === "diff-tick") {
                 const asked = page.pollDiff()
-                AppBackend.report("diff_tick asked=" + asked
+                Harness.report("diff_tick asked=" + asked
                                   + " loading=" + diffPane.diffModel.loading
                                   + " rows=" + diffPane.view.count)
                 driver.complete()
@@ -230,7 +230,7 @@ Item {
             // the picture cannot say it (a pane the read never reached photographs as the same black under the same
             // DIFF header).
             if (act === "preview" || act === "preview-unstaged" || act === "preview-staged") {
-                AppBackend.report("preview_pane kind=" + diffPane.diffModel.previewKind
+                Harness.report("preview_pane kind=" + diffPane.diffModel.previewKind
                                   + " binary=" + diffPane.diffModel.isBinary)
                 driver.complete()
                 return
@@ -341,7 +341,7 @@ Item {
                 return
             }
             diffBarTimer.stop()
-            AppBackend.report("diff_bar " + diffPane.textHand.barTally())
+            Harness.report("diff_bar " + diffPane.textHand.barTally())
             renderedBarrier.begin()
         }
     }

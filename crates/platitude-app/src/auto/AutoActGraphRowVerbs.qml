@@ -136,7 +136,7 @@ Item {
             // it, or what the reader named goes out from under the hand that named it (デザイン規約 §メニュー の
             // 例外). `branch=` / `tag=` are the cards themselves — which one the naming brought up is the whole of
             // what this gesture decides.
-            AppBackend.report("list_menu list=" + refList.opened
+            Harness.report("list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
@@ -165,7 +165,7 @@ Item {
                 return
             rowCardTimer.stop()
             const asked = graphPane.view.itemAtIndex(rowCardTimer.row)
-            AppBackend.report(
+            Harness.report(
             // `lit=` sits next to `open=`: the pair is what the run is judged on, and the judge reads one unbroken
             // stretch of the line (`verify::verbs::must_say`).
             "row_card open=" + rowCard.opened
@@ -207,7 +207,7 @@ Item {
             // The whole of the sweep is the pad's own sentence now (`SweepPad.sweepAir`) — seven surfaces carry this
             // hand and were each asking it the same four things. `open=` is this verb's own half and goes in where it
             // always stood.
-            AppBackend.report("card_sweep "
+            Harness.report("card_sweep "
                 + rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened))
             driver.complete()
         }
@@ -238,7 +238,7 @@ Item {
                 return
             rowPartTimer.stop()
             const got = refList.opened ? "chip" : "row"
-            AppBackend.report(
+            Harness.report(
             "row_part x=" + rowPartReport.x
             + " want=" + rowPartReport.want
             + " got=" + got
@@ -274,7 +274,7 @@ Item {
                 return
             }
             menuHoverTimer.stop()
-            AppBackend.report("menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
+            Harness.report("menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
                               + " list=" + refList.opened)
             driver.complete()
         }

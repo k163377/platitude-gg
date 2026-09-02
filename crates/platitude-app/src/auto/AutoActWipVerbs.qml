@@ -128,7 +128,7 @@ Item {
             // The row menu on the first stash's row; the argument "go" holds the delete row down.
             const menuOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRowMenu(menuOid)
-            AppBackend.report("row_menu stash=" + commitMenuState.menuStashRef)
+            Harness.report("row_menu stash=" + commitMenuState.menuStashRef)
             if (act === "delete-stash-row" && arg === "go") {
                 // The drop takes this row off the graph — the same second
                 // barrier stash-pop-row waits on, for the same reason.
@@ -157,7 +157,7 @@ Item {
             // Read the two together: `status::Kinds` counts rows, so the kinds have to add up to `rows` — a drift means
             // one of the two stopped reading the same status.
             page.showWip()
-            AppBackend.report("wip_tally added=" + graphPane.view.wipAdded
+            Harness.report("wip_tally added=" + graphPane.view.wipAdded
                               + " modified=" + graphPane.view.wipModified
                               + " deleted=" + graphPane.view.wipDeleted
                               + " renamed=" + graphPane.view.wipRenamed
@@ -172,7 +172,7 @@ Item {
                                arg === "" ? "And the description under it." : arg)
             if (act === "wip-message-focus")
                 wipPane.focusDescription()
-            AppBackend.report("message_focus pane=wip focused="
+            Harness.report("message_focus pane=wip focused="
                               + wipPane.descriptionFocused
                               + " color=" + wipPane.descriptionColor)
         } else if (act === "merge-commit") {
@@ -182,7 +182,7 @@ Item {
             page.showWip()
             wipPane.clearMessage()
             mergeCommitTimer.begin()
-            AppBackend.report("merge_commit pressed=" + wipPane.pressCommit())
+            Harness.report("merge_commit pressed=" + wipPane.pressCommit())
         } else if (act === "op-exit" || act === "op-exit-go") {
             // "-go" runs the row the argument names to its end — the hold where the row has one, the plain press where
             // it has not (`OpExitRow.completeHold`).
@@ -193,14 +193,14 @@ Item {
             // run that forgot it matches nothing and says `op_exit_held false`, which is the line it is judged on.
             page.showWip()
             if (act === "op-exit-go")
-                AppBackend.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
+                Harness.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
         } else if (act === "op-exit-lands") {
             // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
             // the write's own answer (`AutoActDriver.awaitOpExitLanding`). The argument is the bare word for the same
             // reason as above, and here it does have a default: this verb asks after one landing rather than after a
             // row.
             page.showWip()
-            AppBackend.report("op_exit_held "
+            Harness.report("op_exit_held "
                               + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))
             driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
@@ -262,7 +262,7 @@ Item {
             if (driver.graphTopKind() !== "wip")
                 return
             wipLanesTimer.stop()
-            AppBackend.report("wip_lanes geometry=" + graphModel.geometryAt(0)
+            Harness.report("wip_lanes geometry=" + graphModel.geometryAt(0)
                               + " lanes=" + graphModel.maxLanes)
             driver.complete()
         }
@@ -275,7 +275,7 @@ Item {
             if (repoTab.headAuthorName === "")
                 return
             amendAuthorTimer.stop()
-            AppBackend.report("amend_author differs=" + repoTab.headAuthorDiffers
+            Harness.report("amend_author differs=" + repoTab.headAuthorDiffers
                               + " name=" + repoTab.headAuthorName)
             driver.complete()
         }
@@ -287,11 +287,11 @@ Item {
             if (repoTab.headAuthorName === "")
                 return
             resetAuthorTimer.stop()
-            AppBackend.report("head_author differs="
+            Harness.report("head_author differs="
                               + repoTab.headAuthorDiffers
                               + " name=" + repoTab.headAuthorName)
             wipPane.setResetAuthorChecked(true)
-            wipPane.setMessage(AppBackend.autoActArg, "")
+            wipPane.setMessage(Harness.autoActArg, "")
             // The run is deferred, so nothing raises a barrier for it on the way out: the commit is sent from here and
             // waited out from here. Both marks are re-read on the spot rather than carried over from
             // `prepareCompletion` — the page's own opening fetch can have answered in between.
@@ -323,7 +323,7 @@ Item {
                     || !driver.cardSettled)
                 return
             resetAuthorLandedTimer.stop()
-            AppBackend.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
+            Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
                               + " head=" + branchesModel.headOid.substring(0, 8)
                               + " shown=" + detailsModel.shaHex.substring(0, 8)
                               + " author=" + detailsModel.authorName
@@ -340,7 +340,7 @@ Item {
             if (!wipPane.eolCardOpen)
                 return
             eolCommitTimer.stop()
-            AppBackend.report("eol_commit staged=" + workTree.stagedCount
+            Harness.report("eol_commit staged=" + workTree.stagedCount
                               + " warned=" + workTree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
             driver.complete()
@@ -353,7 +353,7 @@ Item {
             if (!wipPane.signingTipShown)
                 return
             commitFaceTimer.stop()
-            AppBackend.report("commit_face signs=" + repoTab.signsCommits
+            Harness.report("commit_face signs=" + repoTab.signsCommits
                               + " tip=" + wipPane.signingTipShown)
             driver.complete()
         }
@@ -362,11 +362,11 @@ Item {
     SampleTimer {
         id: eolHoverTimer
         onTriggered: {
-            wipPane.pointEol(AppBackend.autoActArg)
+            wipPane.pointEol(Harness.autoActArg)
             if (!wipPane.eolCardOpen)
                 return
             eolHoverTimer.stop()
-            AppBackend.report("eol_hover path=" + wipPane.pointedEolPath
+            Harness.report("eol_hover path=" + wipPane.pointedEolPath
                               + " card=" + wipPane.eolCardOpen
                               + " text=" + wipPane.pointedEolText)
             driver.complete()
@@ -438,7 +438,7 @@ Item {
             if (repoTab.headCommitSeq === mergeCommitTimer.seenHead)
                 return
             mergeCommitTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "merge_committed merging=" + (workTree.opText !== "")
                 + " kept=" + (mergeCommitTimer.wanted !== ""
                               && repoTab.headSubject === mergeCommitTimer.wanted)

@@ -18,8 +18,9 @@ Item {
 
     /// The part's file name inside the harness module.
     required property string part
-    /// Whether this run asked for the part at all. False leaves the seat empty even in a build that carries the
-    /// harness, so an ordinary run pays for nothing but this Item.
+    /// Whether this build carries the harness at all (`AppBackend.harnessPresent`) — **the whole of what the product
+    /// knows about it**. What a run was told to do is the part's own to read, and a shipped build leaves the seat
+    /// empty and pays for nothing but this Item.
     required property bool wanted
     /// What the part is handed as it is built — its `required property` list, by name.
     property var seats: ({})

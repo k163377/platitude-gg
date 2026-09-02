@@ -52,11 +52,11 @@ Item {
         // A verb reads a screen's properties before opening it, and a null there is a dead run rather than a
         // refusal. Only where a verb or the identity hook is going to want one: holding the two ready costs the bare
         // window ~8MB of working set (`WindowDialogSeat`).
-        harness.dialogSeat.keepBuilt = AppBackend.autoAct !== "" || AppBackend.autoIdentity !== ""
+        harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
-        harness.windowShape.keepSavedSize = AppBackend.automated
+        harness.windowShape.keepSavedSize = Harness.automated
         // A turning ring photographs differently every time.
-        Motion.stilled = AppBackend.shotDir !== ""
+        Motion.stilled = Harness.shotDir !== ""
         harness.screensUp = true
     }
 
@@ -65,7 +65,7 @@ Item {
     Binding {
         target: harness.sharedToolTip
         property: "handAcross"
-        value: AppBackend.autoAct !== "" ? 0.25 : -1
+        value: Harness.autoAct !== "" ? 0.25 : -1
     }
     // The photograph is of the wait itself, and a seeded write can land while the shot pipeline is still grabbing —
     // the close the dialog would fire takes the window, and the PNGs, down with it (`finishAutoAct` ends a run, never
@@ -73,16 +73,16 @@ Item {
     Binding {
         target: harness.quitWaitDialog
         property: "selfCloses"
-        value: AppBackend.autoAct === ""
+        value: Harness.autoAct === ""
     }
     // PG_AUTO_OPEN: ';'-separated repositories open as tabs in order, instead of the ones that were left.
     Connections {
         target: harness.window
         function onStartingTabs() {
-            if (AppBackend.autoOpen === "")
+            if (Harness.autoOpen === "")
                 return
             harness.window.tabsClaimed = true
-            const paths = AppBackend.autoOpen.split(";")
+            const paths = Harness.autoOpen.split(";")
             for (let i = 0; i < paths.length; i++) {
                 if (paths[i] !== "")
                     harness.tabsModel.openRepositoryPath(paths[i])
@@ -139,7 +139,7 @@ Item {
     // Built only when a verb was given: a run that is only being measured or photographed carries none of the verbs.
     Loader {
         id: actsLoader
-        active: harness.screensUp && AppBackend.autoAct !== ""
+        active: harness.screensUp && Harness.autoAct !== ""
         sourceComponent: WindowAutoActDriver {
             window: harness.window
             tabsModel: harness.tabsModel
@@ -161,7 +161,7 @@ Item {
     // The identity hooks are not verbs and run without one (`PG_AUTO_IDENTITY`), so they are built off their own
     // knob rather than beside the verbs.
     Loader {
-        active: harness.screensUp && AppBackend.autoIdentity !== ""
+        active: harness.screensUp && Harness.autoIdentity !== ""
         sourceComponent: WindowIdentityActs {
             identityGate: harness.identityGate
             identityDialog: harness.identityDialog

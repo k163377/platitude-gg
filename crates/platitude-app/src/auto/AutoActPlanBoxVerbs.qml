@@ -99,7 +99,7 @@ Item {
                 if (!detailsPane.editable)
                     return
                 planRewordTimer.stop()
-                AppBackend.report("plan_reword_verb verb=" + plan.selectedAction
+                Harness.report("plan_reword_verb verb=" + plan.selectedAction
                                   + " restored=" + planRewordTimer.restored
                                   + " dirty=" + detailsPane.messageDirty
                                   + " editable=" + detailsPane.editable
@@ -110,7 +110,7 @@ Item {
             if (planRewordTimer.stage === "gone") {
                 if (plan.active)
                     return
-                AppBackend.report("plan_reword_out plan=" + plan.active
+                Harness.report("plan_reword_out plan=" + plan.active
                                   + " restored=" + planRewordTimer.restored
                                   + " dirty=" + detailsPane.messageDirty
                                   + " editable=" + detailsPane.editable)
@@ -131,7 +131,7 @@ Item {
                 if (repoTab.publishRange !== page.selectedOid + "^!")
                     return
                 planRewordTimer.stop()
-                AppBackend.report("plan_reword_ask dirty=" + detailsPane.messageDirty
+                Harness.report("plan_reword_ask dirty=" + detailsPane.messageDirty
                                   + " asked=" + (repoTab.publishRange === page.selectedOid + "^!")
                                   + " published=" + page.selectedPublished)
                 renderedBarrier.begin()
@@ -203,7 +203,7 @@ Item {
                 if (page.planActive)
                     return
                 planAmendTimer.stop()
-                AppBackend.report("plan_amend_kept kept="
+                Harness.report("plan_amend_kept kept="
                                   + (detailsPane.boxSubject === planAmendTimer.typed)
                                   + " restored=" + planAmendTimer.restored
                                   + " dirty=" + detailsPane.messageDirty
@@ -300,7 +300,7 @@ Item {
             if (plan.active || page.planShown)
                 return
             planHeldTimer.stop()
-            AppBackend.report("plan_details_held row=" + planHeldTimer.sawRow
+            Harness.report("plan_details_held row=" + planHeldTimer.sawRow
                               + " oid=" + planHeldTimer.sawOid
                               + " outside=" + planHeldTimer.sawOutside
                               + " diff=" + planHeldTimer.sawDiff

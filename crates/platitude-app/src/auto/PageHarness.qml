@@ -67,7 +67,7 @@ Item {
     // Built only when a verb was given, so a run that is only being measured carries none of the verbs.
     Loader {
         id: actsLoader
-        active: AppBackend.autoAct !== ""
+        active: Harness.autoAct !== ""
         sourceComponent: AutoActDriver {
             page: harness.page
             repoTab: harness.repoTab
@@ -124,7 +124,7 @@ Item {
     }
 
     Loader {
-        active: AppBackend.autoPerf && !harness.page.blank
+        active: Harness.autoPerf && !harness.page.blank
         sourceComponent: PagePerfDriver {
             page: harness.page
             repoTab: harness.repoTab

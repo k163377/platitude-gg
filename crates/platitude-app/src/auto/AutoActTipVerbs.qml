@@ -93,7 +93,7 @@ Item {
             if (!page.signatureIsForSelection)
                 return
             signatureTimer.stop()
-            AppBackend.report("signature kind=" + page.selectedSignatureKind
+            Harness.report("signature kind=" + page.selectedSignatureKind
                               + " code=" + page.selectedSignatureCode
                               + " signer=" + page.selectedSignatureSigner)
             driver.complete()
@@ -118,7 +118,7 @@ Item {
             if (!detailsPane.signatureTipShown)
                 return
             signatureTipReport.stop()
-            AppBackend.report("signature_tip code=" + page.selectedSignatureCode
+            Harness.report("signature_tip code=" + page.selectedSignatureCode
                               + " tip=" + detailsPane.signatureTipShown)
             driver.complete()
         }
@@ -139,7 +139,7 @@ Item {
             if (!detailsPane.summaryTipShown)
                 return
             stashTipReport.stop()
-            AppBackend.report(
+            Harness.report(
             "stash_tip blocked=" + (detailsPane.editBlocked !== "")
             + " tip=" + detailsPane.summaryTipShown + " why=" + detailsPane.editBlocked)
             driver.complete()
@@ -171,7 +171,7 @@ Item {
             if (!tip.visible)
                 return
             pathTipReport.stop()
-            AppBackend.report("path_tip pane="
+            Harness.report("path_tip pane="
                 + (pathTipTimer.wipSide ? "wip" : "details")
                 + " tree=" + (pathTipTimer.wipSide ? worktreeModel.treeView : detailsModel.treeView)
                 + " tip=" + tip.visible
@@ -198,7 +198,7 @@ Item {
                 return
             tipCopyTimer.stop()
             tip.contentItem.selectAll()
-            AppBackend.report("tip_copy tip=" + tip.visible
+            Harness.report("tip_copy tip=" + tip.visible
                 + " copied=" + (tip.contentItem.selected === tip.text)
                 + " text=" + tip.text)
             driver.complete()
@@ -231,7 +231,7 @@ Item {
             // holding the keyboard, so a value picked out without one is not a value the reader can take away. The
             // sentence itself is the pad's (`SweepPad.sweepAir`), which is where the seven surfaces that carry this
             // hand say it once.
-            AppBackend.report("tip_sweep " + tip.background.pad.sweepAir(7))
+            Harness.report("tip_sweep " + tip.background.pad.sweepAir(7))
             driver.complete()
         }
     }
@@ -241,12 +241,12 @@ Item {
         onTriggered: {
             if (!driver.cardSettled)
                 return
-            if (AppBackend.autoAct === "author-card-open")
+            if (Harness.autoAct === "author-card-open")
                 detailsPane.messageBlock.showAuthor(true)
-            if (AppBackend.autoAct === "author-card-open" && !detailsPane.authorCards.authorCardOpen)
+            if (Harness.autoAct === "author-card-open" && !detailsPane.authorCards.authorCardOpen)
                 return
             authorCardTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "author_card cut=" + detailsPane.messageBlock.nameClipped
                 + " open=" + detailsPane.authorCards.authorCardOpen
                 + " author=" + detailsPane.details.authorEmail
@@ -262,14 +262,14 @@ Item {
         onTriggered: {
             if (!driver.cardSettled)
                 return
-            if (AppBackend.autoAct === "co-authors-open")
+            if (Harness.autoAct === "co-authors-open")
                 detailsPane.messageBlock.showCoAuthors(true)
-            if (AppBackend.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)
+            if (Harness.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)
                 return
             coAuthorTimer.stop()
             // `open` is the card's own visibility, not the input that asked for it: reporting the input would go green
             // with the binding cut. `cut=` is the credit line's own eliding, read rather than judged (verbs.md).
-            AppBackend.report(
+            Harness.report(
                 "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
                 + " cut=" + detailsPane.messageBlock.matesClipped
                 + " first=" + detailsPane.messageBlock.coAuthorName(0)

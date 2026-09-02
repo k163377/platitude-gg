@@ -171,7 +171,7 @@ Item {
             if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
                 return
             navRailTimer.stop()
-            AppBackend.report(
+            Harness.report(
             // The three that are read together: what the centre holds, and what is being typed into. A box opens where
             // its row is, and folded that is the section beside the rail — putting the list back would take an open
             // file down with it (デザイン規約 §左メニューを畳む), so the three are neighbours or they cannot be judged in one
@@ -202,7 +202,7 @@ Item {
     Connections {
         target: acts.repoTab
         function onReplayingChanged() {
-            if (AppBackend.autoAct === "doors-held" && acts.repoTab.replaying)
+            if (Harness.autoAct === "doors-held" && acts.repoTab.replaying)
                 page.autoReplayHeld = true
         }
     }
@@ -264,7 +264,7 @@ Item {
         // **`frozen=` is in the line because the two states frame differently on purpose**: the plan's freeze takes the
         // pane whole and dims it, and this one must not — a run that photographed the wrong one of the two would leave
         // a picture nobody could tell apart from the other verb's.
-        AppBackend.report("doors_held held=" + (page.doorsHeldWhy !== "")
+        Harness.report("doors_held held=" + (page.doorsHeldWhy !== "")
                           + " frozen=" + page.sidebarFrozen
                           // The graph's side: the road every switch there arrives by, and the menu its rows raise.
                           + " road=" + acts.heldSwitch
@@ -323,9 +323,9 @@ Item {
             tagEyeTimer.stop()
             // `there` is the half a picture cannot carry on its own, and `shown=` is the switch's own answer: a run
             // whose press never reached the band photographs the state it started in, which is a real state.
-            AppBackend.report("tags_eye shown=" + repoTab.tagsShown
+            Harness.report("tags_eye shown=" + repoTab.tagsShown
                               + " there=" + there
-                              + " tag=" + AppBackend.autoActArg
+                              + " tag=" + Harness.autoActArg
                               + " rows=" + graphModel.rowTotal
                               + " tags=" + tagsModel.total)
             driver.complete()
@@ -344,12 +344,12 @@ Item {
         /// Which section, and which of its rows. A section whose names fold into folders has no row to rename at the
         /// top of it, so the row travels with the argument (`branch:1`) and defaults to the first.
         readonly property string kind: {
-            const arg = AppBackend.autoActArg
+            const arg = Harness.autoActArg
             const cut = arg.indexOf(":")
             return cut < 0 ? arg : arg.substring(0, cut)
         }
         readonly property int row: {
-            const arg = AppBackend.autoActArg
+            const arg = Harness.autoActArg
             const cut = arg.indexOf(":")
             return cut < 0 ? 0 : Number(arg.substring(cut + 1))
         }
@@ -388,7 +388,7 @@ Item {
                 if (acts.reclickArmed && sidebarPane.editKey === "")
                     return
                 reclickTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "nav_reclick section=" + reclickTimer.kind
                 + " row=" + reclickTimer.row
                 + " marked=" + sidebarPane.activeKey
@@ -415,7 +415,7 @@ Item {
             if (!remoteDialog.visible)
                 return
             navAddRemoteTimer.stop()
-            AppBackend.report("nav_add_remote dialog=" + remoteDialog.visible
+            Harness.report("nav_add_remote dialog=" + remoteDialog.visible
                               + " collapsed=" + page.sidebarCollapsed
                               + " remotes=" + remotesModel.total
                               + " name=" + remoteDialog.wantedName)
@@ -429,10 +429,10 @@ Item {
             if (sidebarPane.height <= 0)
                 return
             navSectionTimer.stop()
-            AppBackend.report(
-            "nav_section closed=" + AppBackend.autoActArg
+            Harness.report(
+            "nav_section closed=" + Harness.autoActArg
             + " header=" + Math.round(
-                navProbe.headerTopOf(AppBackend.autoActArg))
+                navProbe.headerTopOf(Harness.autoActArg))
             + " ground=" + Math.round(navProbe.groundTop)
             + " pane=" + Math.round(sidebarPane.height))
             driver.complete()
@@ -446,8 +446,8 @@ Item {
             if (sidebarPane.width <= 0)
                 return
             navFilterTimer.stop()
-            AppBackend.report(
-            "nav_filter typed=" + AppBackend.autoActArg
+            Harness.report(
+            "nav_filter typed=" + Harness.autoActArg
             + " branches=" + branchesModel.shown() + "/" + branchesModel.total
             + " remotes=" + remotesModel.shown() + "/" + remotesModel.total
             + " tags=" + tagsModel.shown() + "/" + tagsModel.total

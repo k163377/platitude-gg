@@ -29,15 +29,15 @@ Item {
         target: acts.topBar.curPage ? acts.topBar.curPage.pageTab : null
         function onBusyOpChanged() {
             const op = acts.topBar.curPage.pageTab.busyOp
-            if (AppBackend.autoAct === "force-push-hold" && op === "push")
+            if (Harness.autoAct === "force-push-hold" && op === "push")
                 acts.topBar.holdPushBusy = true
-            if (AppBackend.autoAct === "fetch-busy" && op === "fetch")
+            if (Harness.autoAct === "fetch-busy" && op === "fetch")
                 acts.topBar.holdFetchBusy = true
         }
     }
 
     SampleTimer {
-        running: AppBackend.autoAct === "force-push-hold"
+        running: Harness.autoAct === "force-push-hold"
         property bool requested: false
         onTriggered: {
             if (topBar.curPage === null || topBar.pushMode !== "diverged")
@@ -47,10 +47,10 @@ Item {
                 topBar.completePushHold()
                 return
             }
-            if (!acts.pushBusySeen)
+            if (!topBar.holdPushBusy)
                 return
             stop()
-            AppBackend.report("push_hold mode=" + topBar.pushMode + " busy=" + acts.pushBusySeen)
+            Harness.report("push_hold mode=" + topBar.pushMode + " busy=" + topBar.holdPushBusy)
             window.finishAutoAct()
         }
     }
@@ -58,12 +58,12 @@ Item {
     // The same edge on the button the wait is drawn for: bare, unframed, and the one a timer can start on its own. The
     // fetch itself is fired by the page's driver; all this waits for is the edge above.
     SampleTimer {
-        running: AppBackend.autoAct === "fetch-busy"
+        running: Harness.autoAct === "fetch-busy"
         onTriggered: {
-            if (!acts.fetchBusySeen)
+            if (!topBar.holdFetchBusy)
                 return
             stop()
-            AppBackend.report("fetch_busy busy=" + acts.fetchBusySeen
+            Harness.report("fetch_busy busy=" + topBar.holdFetchBusy
                               + " fails=" + topBar.fetchFails + " framed=" + topBar.fetchFramed)
             window.finishAutoAct()
         }
@@ -77,7 +77,7 @@ Item {
     // the live side waits for the button itself, the dim side for a repository that has finished landing with nothing
     // running on it, so a band read before the remotes arrived cannot pass for either.
     SampleTimer {
-        running: AppBackend.autoAct === "fetch-tip"
+        running: Harness.autoAct === "fetch-tip"
         onTriggered: {
             // The graph as well as the refs, for the picture rather than for the answer: the band settles first, and a
             // half-drawn page under a settled band is a worse photograph of it.
@@ -88,14 +88,14 @@ Item {
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
                 return
-            if (AppBackend.autoActArg === "off") {
+            if (Harness.autoActArg === "off") {
                 if (tab.remoteCount !== 0)
                     return
             } else if (!topBar.fetchLive) {
                 return
             }
             stop()
-            AppBackend.report("fetch_tip enabled=" + topBar.fetchLive
+            Harness.report("fetch_tip enabled=" + topBar.fetchLive
                               + " tip=" + topBar.fetchTipShown
                               + " remotes=" + (topBar.curPage !== null
                                                ? topBar.curPage.pageTab.remoteCount : -1))
@@ -111,7 +111,7 @@ Item {
     // Four runs, because a dim button frames the same whichever refusal put it there: only the set says that the
     // conditions are told apart at all (デザイン規約 §変更を退避する).
     SampleTimer {
-        running: AppBackend.autoAct === "stash-state"
+        running: Harness.autoAct === "stash-state"
         onTriggered: {
             // The graph as well, for the picture rather than for the answer — the same reason `fetch-tip` waits on it.
             // `empty` has no rows at all, so that repository is judged settled on its working tree alone.
@@ -120,10 +120,10 @@ Item {
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
                 return
-            if (topBar.stashMode !== AppBackend.autoActArg)
+            if (topBar.stashMode !== Harness.autoActArg)
                 return
             stop()
-            AppBackend.report("stash_state mode=" + topBar.stashMode
+            Harness.report("stash_state mode=" + topBar.stashMode
                               + " enabled=" + topBar.stashLive
                               + " tip=" + topBar.stashTipShown)
             window.finishAutoAct()
@@ -134,16 +134,16 @@ Item {
     // a band that lost the grab run or pushed its buttons off the end looks fine in the picture.
     SampleTimer {
         id: bandActTimer
-        running: AppBackend.autoAct === "band"
+        running: Harness.autoAct === "band"
         onTriggered: {
             // No tabs is a valid laid-out band, not an unanswered one. Read readiness from the window and bar
             // themselves, then let `tabsW=0` describe the empty output.
             if (!window.visible || mainUi.width <= 0 || topBar.width <= 0)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "band merged=" + window.captionMerged
-                + " plain=" + AppBackend.plainChrome
+                + " plain=" + AppBackend.systemTitleBar
                 + " grabRun=" + topBar.bandGrabRun + " dividerRun=" + topBar.bandDividerRun
                 + " buttonsX=" + topBar.bandButtonsX
                 + " width=" + topBar.width
@@ -162,14 +162,14 @@ Item {
     // band is not the window's title bar there is no strip either way, and `merged=` says which run this was.
     SampleTimer {
         id: appMenuActTimer
-        running: AppBackend.autoAct === "app-menu" || AppBackend.autoAct === "app-menu-reclick"
+        running: Harness.autoAct === "app-menu" || Harness.autoAct === "app-menu-reclick"
         /// How many presses have gone in. The second one has to land on a card that was observed standing, or the
         /// gesture being reported is not the one a hand makes.
         property int pressed: 0
         onTriggered: {
             if (!window.visible || topBar.width <= 0)
                 return
-            const twice = AppBackend.autoAct === "app-menu-reclick"
+            const twice = Harness.autoAct === "app-menu-reclick"
             if (appMenuActTimer.pressed === 0) {
                 appMenuActTimer.pressed = 1
                 topBar.clickAppMenu()
@@ -187,7 +187,7 @@ Item {
             if (twice && topBar.appMenuOpen)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "app_menu open=" + topBar.appMenuOpen
                 + " yield=" + chrome.captionYielded
                 + " strip=" + chrome.sentStrip
@@ -201,10 +201,10 @@ Item {
     // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.
     SampleTimer {
         id: actionsActTimer
-        running: AppBackend.autoAct === "band-actions"
-                 || AppBackend.autoAct === "band-actions-none"
-                 || AppBackend.autoAct === "band-actions-fold"
-                 || AppBackend.autoAct === "band-actions-alert"
+        running: Harness.autoAct === "band-actions"
+                 || Harness.autoAct === "band-actions-none"
+                 || Harness.autoAct === "band-actions-fold"
+                 || Harness.autoAct === "band-actions-alert"
         property bool pushRequested: false
         onTriggered: {
             // The box the set shares is settled once the band has loaded (`TopBar.widestAction`), and every width
@@ -223,7 +223,7 @@ Item {
             // plain push is the road to hearing so (`push-retry` の仕込み). Sent through the page rather than through
             // the button, because in this state the button is a **hold** — its plain press is not wired to anything,
             // and force is the go that lands rather than the one that is refused.
-            if (AppBackend.autoAct === "band-actions-alert") {
+            if (Harness.autoAct === "band-actions-alert") {
                 if (!actionsActTimer.pushRequested) {
                     window.curPage.pushNow()
                     actionsActTimer.pushRequested = true
@@ -239,8 +239,8 @@ Item {
             // costs nothing and closes no ring: the target is read off the wordings and the floor, neither of which
             // the window's width moves.
             const wanted = acts.actionsWidthFor(
-                AppBackend.autoAct === "band-actions" ? AppBackend.autoActArg
-                : AppBackend.autoAct === "band-actions-none" ? "whole" : "fold")
+                Harness.autoAct === "band-actions" ? Harness.autoActArg
+                : Harness.autoAct === "band-actions-none" ? "whole" : "fold")
             if (Math.round(window.width) !== wanted) {
                 window.width = wanted
                 window.height = Math.ceil(window.floorHeight)
@@ -281,7 +281,7 @@ Item {
     /// that ends in `…` of its own reads like an elided one, and a band photographed at one width says nothing about
     /// the width the shape was supposed to change at.
     function reportBandActions() {
-        AppBackend.report(
+        Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
             // The four that are judged lead and stand together: only neighbours can be caught in one substring.
             + " folded=" + topBar.actionsFolded

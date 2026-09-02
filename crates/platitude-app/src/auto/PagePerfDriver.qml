@@ -33,7 +33,7 @@ Item {
 
     function fail(reason) {
         driver.stage = "failed"
-        AppBackend.report("perf_failed reason=" + reason)
+        Harness.report("perf_failed reason=" + reason)
         if (PerfProbe.verifying)
             Qt.quit()
     }
@@ -66,7 +66,7 @@ Item {
             // page never activated a commit. Clear that visual selection too.
             const hadCurrent = graphPane.view.currentIndex >= 0
             graphPane.setCurrentRow(-1)
-            AppBackend.report("perf_selection mode=none oid=none")
+            Harness.report("perf_selection mode=none oid=none")
             if (hadCurrent)
                 driver.waitFrame("none-frame")
             else
@@ -102,13 +102,13 @@ Item {
         driver.actionStart = PerfProbe.clockMs()
         page.releasePressedAway(null)
         item.leftClick(0)
-        AppBackend.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid)
+        Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid)
         driver.tick()
     }
 
     function afterDetails() {
         driver.sawDetails = true
-        AppBackend.report("perf_details_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
+        Harness.report("perf_details_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
                           + " oid=" + detailsModel.shaHex + " boundary=handler-to-frame")
         if (!PerfProbe.withDiff) {
             driver.afterInteraction()
@@ -130,13 +130,13 @@ Item {
         }
         driver.stage = "diff"
         driver.actionStart = PerfProbe.clockMs()
-        AppBackend.report("perf_file path=" + detailsModel.filePathAt(file))
+        Harness.report("perf_file path=" + detailsModel.filePathAt(file))
         page.openDiff("commit", detailsModel.filePathAt(file), detailsModel.fileOrigPathAt(file))
         driver.tick()
     }
 
     function afterInteraction() {
-        if (AppBackend.autoScroll) {
+        if (Harness.autoScroll) {
             const returning = page.diffShown
             if (returning)
                 page.closeDiff()
@@ -152,9 +152,9 @@ Item {
 
     function finish() {
         driver.stage = "finished"
-        AppBackend.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
+        Harness.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
                           + " diff=" + driver.sawDiff + " graph=" + driver.graphVisible
-                          + " scrolled=" + AppBackend.autoScroll + " rows=" + graphModel.rowTotal)
+                          + " scrolled=" + Harness.autoScroll + " rows=" + graphModel.rowTotal)
         page.perfFinished()
     }
 
@@ -173,7 +173,7 @@ Item {
 
     function reportViewport(at) {
         const view = graphPane.view
-        AppBackend.report("perf_viewport clock_ms=" + PerfProbe.clockMs() + " at=" + at
+        Harness.report("perf_viewport clock_ms=" + PerfProbe.clockMs() + " at=" + at
                           + " y=" + view.contentY + " origin=" + view.originY
                           + " height=" + view.contentHeight + " viewport=" + view.height
                           + " row=" + view.indexAt(view.width / 2, view.contentY + view.height / 2))
@@ -196,7 +196,7 @@ Item {
                 driver.fail("first-graph-hidden")
                 return
             }
-            AppBackend.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true")
+            Harness.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true")
             driver.stage = "ready"
             driver.tick()
         } else if (driver.stage === "none-frame") {
@@ -208,7 +208,7 @@ Item {
             driver.afterDetails()
         } else if (driver.stage === "diff-frame") {
             driver.sawDiff = true
-            AppBackend.report("perf_diff_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart))
+            Harness.report("perf_diff_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart))
             driver.afterInteraction()
         } else if (driver.stage === "scroll-frame") {
             driver.beginScroll()
@@ -220,7 +220,7 @@ Item {
                 driver.fail("scroll-ended-without-visible-row")
                 return
             }
-            AppBackend.report("perf_scroll_frame visible=true row=" + row)
+            Harness.report("perf_scroll_frame visible=true row=" + row)
             driver.finish()
         }
     }

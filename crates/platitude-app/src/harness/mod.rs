@@ -19,6 +19,8 @@ mod knobs;
 pub(crate) mod memprobe;
 #[cfg(feature = "automation")]
 mod perf_probe;
+#[cfg(feature = "automation")]
+mod singleton;
 
 pub(crate) use faults::{fail_graph_pass, pass_hooks};
 pub(crate) use knobs::knobs;
@@ -36,21 +38,26 @@ pub(crate) fn start_clock() {
 /// Registers the harness's own QML types. Nothing in a build without it —
 /// and nothing asks for them either, because the QML that names them is
 /// the module the same feature leaves out.
+///
+/// `Harness` is where everything a run was told to do reaches QML. It is a
+/// type of its own rather than fields on `AppBackend` because that is what
+/// makes it disappear: `#[cfg]` does not reach inside `#[qslot]`, but a
+/// whole type behind the feature leaves no property, slot or name behind
+/// (`singleton`).
 #[cfg(feature = "automation")]
 pub(crate) fn install(app: &mut qtbridge::QApp) {
-    app.register::<perf_probe::PerfProbe>();
+    app.register::<perf_probe::PerfProbe>()
+        .register::<singleton::Harness>();
 }
 
 #[cfg(not(feature = "automation"))]
 pub(crate) fn install(_app: &mut qtbridge::QApp) {}
 
 /// The reporting channel the harness reads its answers off (QML →
-/// tracing → `xtask`). A build without the harness has nobody to say
-/// anything to, and says nothing.
+/// tracing → `xtask`). No arm for a build without the harness: the only
+/// caller is the slot on [`singleton::Harness`], and that type is not
+/// compiled either.
 #[cfg(feature = "automation")]
 pub(crate) fn report(message: &str) {
     tracing::info!(target: "bench", "{message}");
 }
-
-#[cfg(not(feature = "automation"))]
-pub(crate) fn report(_message: &str) {}

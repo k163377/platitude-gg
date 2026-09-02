@@ -11,11 +11,11 @@ Item {
     property var page
     property bool finished: false
     property int frameBefore: 0
-    readonly property bool expectsPage: AppBackend.autoOpen !== ""
+    readonly property bool expectsPage: Harness.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
     // ScreenInfo names can be friendly labels, not OS device IDs. The runner
     // separately records the native window's monitor; never infer its Hz from fps.
-    readonly property string displayInfo: !AppBackend.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
+    readonly property string displayInfo: !Harness.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
         screen: window.screen.name, model: window.screen.model, manufacturer: window.screen.manufacturer,
         screenX: window.screen.virtualX, screenY: window.screen.virtualY,
         screenWidth: window.screen.width, screenHeight: window.screen.height,
@@ -25,17 +25,17 @@ Item {
     })
 
     function reportDisplay(phase) {
-        if (AppBackend.autoPerf)
-            AppBackend.report("perf_display clock_ms=" + PerfProbe.clockMs() + " phase=" + phase
+        if (Harness.autoPerf)
+            Harness.report("perf_display clock_ms=" + PerfProbe.clockMs() + " phase=" + phase
                               + " data=" + driver.displayInfo)
     }
 
     function begin() {
-        if (!AppBackend.autoPerf || driver.finished)
+        if (!Harness.autoPerf || driver.finished)
             return
         if (AppBackend.identityState === "missing" || AppBackend.identityState === "error") {
             driver.finished = true
-            AppBackend.report("perf_failed reason=identity-gate")
+            Harness.report("perf_failed reason=identity-gate")
             if (PerfProbe.verifying)
                 Qt.quit()
             return
@@ -53,15 +53,15 @@ Item {
             return
         driver.finished = true
         driver.reportDisplay("complete")
-        AppBackend.noteMemory("perf-done")
-        AppBackend.report("perf_done open=" + (driver.page !== null))
+        Harness.noteMemory("perf-done")
+        Harness.report("perf_done open=" + (driver.page !== null))
         if (PerfProbe.verifying)
             window.finishAutoAct()
     }
 
     Connections {
         target: driver.window
-        enabled: AppBackend.autoPerf && !driver.expectsPage && driver.page === null && !driver.finished
+        enabled: Harness.autoPerf && !driver.expectsPage && driver.page === null && !driver.finished
         function onFrameSwapped() {
             if (driver.identityReady && driver.window.frameCounter > driver.frameBefore)
                 driver.finish()
@@ -70,7 +70,7 @@ Item {
 
     Connections {
         target: driver.page
-        enabled: AppBackend.autoPerf && driver.page !== null && !driver.finished
+        enabled: Harness.autoPerf && driver.page !== null && !driver.finished
         function onPerfFinished() { driver.finish() }
     }
 
@@ -79,9 +79,9 @@ Item {
     Timer {
         interval: 500
         repeat: true
-        running: AppBackend.memReport
+        running: Harness.memReport
         triggeredOnStart: true
-        onTriggered: AppBackend.noteMemory(driver.page === null ? "idle" : "open")
+        onTriggered: Harness.noteMemory(driver.page === null ? "idle" : "open")
     }
 
     Component.onCompleted: {

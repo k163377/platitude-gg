@@ -6,6 +6,14 @@
 //! [`knobs`] answers from [`Knobs::default`] — every string empty, every
 //! flag off — so the app takes the arm a person at the window takes and
 //! carries no other.
+//!
+//! Which is also why most of the record below is read by nothing there:
+//! what reads it is the QML-facing `Harness`, and that type is not
+//! compiled either (`harness::singleton`). `allow` rather than `expect`,
+//! because the tests at the foot read every field whenever tests are
+//! compiled and an expectation that goes unfulfilled is a warning of its
+//! own.
+#![cfg_attr(not(feature = "automation"), allow(dead_code))]
 
 use std::collections::HashSet;
 

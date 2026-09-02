@@ -80,20 +80,8 @@ impl AppBackend {
         Member = identity_unsaved,
         Notify = identity_changed
     );
-    qproperty!("autoIdentity", Member = auto_identity, Constant);
-    qproperty!("autoIdentitySave", Member = auto_identity_save, Constant);
-    qproperty!("autoOpen", Member = auto_open, Constant);
-    qproperty!("shotDir", Member = shot_dir, Constant);
-    qproperty!("autoWatchdogMs", Member = auto_watchdog_ms, Constant);
-    qproperty!("autoSelect", Member = auto_select, Constant);
-    qproperty!("autoScroll", Member = auto_scroll, Constant);
-    qproperty!("autoPerf", Member = auto_perf, Constant);
-    qproperty!("autoWip", Member = auto_wip, Constant);
-    qproperty!("plainChrome", Member = plain_chrome, Constant);
-    qproperty!("automated", Member = automated, Constant);
-    qproperty!("scrollTo", Member = scroll_to, Constant);
-    qproperty!("autoAct", Member = auto_act, Constant);
-    qproperty!("autoActArg", Member = auto_act_arg, Constant);
+    qproperty!("systemTitleBar", Member = system_title_bar, Constant);
+    qproperty!("harnessPresent", Member = harness_present, Constant);
     qproperty!(
         "autoFetchMinutes",
         Member = auto_fetch_minutes,
@@ -121,28 +109,6 @@ impl AppBackend {
     qproperty!("buildTree", Member = build_tree, Constant);
     qproperty!("alreadyRunning", Member = already_running, Constant);
     qproperty!("heldElsewhere", Member = held_elsewhere, Constant);
-    qproperty!("memReport", Member = mem_report, Constant);
-
-    /// Writes one line of the memory breakdown, tagged with where the run
-    /// had got to (`PG_MEM_REPORT=1` only). Asked from QML because the
-    /// sessions live on the Qt main thread — what it does is the probe's
-    /// (`harness::memprobe::note_now`).
-    #[qslot]
-    fn note_memory(&self, label: String) {
-        crate::harness::memprobe::note_now(&label);
-    }
-
-    /// How many open tabs are holding a repository.
-    ///
-    /// One, however many tabs the strip has: a tab that is not in front
-    /// has let go of everything it read (`Hub::release_tab`), and one that
-    /// has never been in front never read anything. Read by the harness —
-    /// this is the whole of what a released tab looks like from outside,
-    /// and it is the one thing a picture cannot say.
-    #[qslot]
-    fn open_session_count(&self) -> i32 {
-        Hub::with(|hub| i32::try_from(hub.sessions().len()).unwrap_or(i32::MAX)).unwrap_or(0)
-    }
 
     /// Whether the window may go now: nothing git was asked to write is
     /// still queued or running (`Hub::writes_settled`). Asked when a
@@ -439,15 +405,6 @@ impl AppBackend {
     #[qslot]
     fn flush_state(&self) {
         Hub::with(|hub| hub.flush_state());
-    }
-
-    /// Benchmark/automation reporting channel (QML → tracing). The slot
-    /// stays whatever the build is — production QML calls it behind the
-    /// `autoAct` guard — and a build without the harness has nothing to
-    /// say it to (`harness::report`).
-    #[qslot]
-    fn report(&self, message: String) {
-        crate::harness::report(&message);
     }
 
     /// Starts the git version check (call once from QML on startup).

@@ -32,21 +32,21 @@ Item {
         target: reports.page
 
         function onMoveBranchAsked(local) {
-            AppBackend.report("move_branch_asked local=" + local)
+            Harness.report("move_branch_asked local=" + local)
         }
         function onRenameRemoteAsked(from, to) {
-            AppBackend.report("rename_remote_asked from=" + from + " to=" + to)
+            Harness.report("rename_remote_asked from=" + from + " to=" + to)
         }
         function onGoneShown(kind, id) {
-            AppBackend.report("gone_shown kind=" + kind + " id=" + id)
+            Harness.report("gone_shown kind=" + kind + " id=" + id)
         }
         function onForceDeleteOffered(branch) {
-            AppBackend.report("force_delete_offered branch=" + branch)
+            Harness.report("force_delete_offered branch=" + branch)
         }
         // What the write was about is still on the tab when this goes out — the page clears its own standing
         // questions, not the tab's report of the answer.
         function onWriteReported() {
-            AppBackend.report("write_reported kind=" + reports.repoTab.writeReportKind
+            Harness.report("write_reported kind=" + reports.repoTab.writeReportKind
                               + " ref=" + reports.repoTab.writeReportRemote
                               + "/" + reports.repoTab.writeReportName)
         }
@@ -55,7 +55,7 @@ Item {
     Connections {
         target: reports.fileRowMenu
         function onOffered(bucket) {
-            AppBackend.report("file_menu bucket=" + bucket
+            Harness.report("file_menu bucket=" + bucket
                               + " rows=" + reports.fileRowMenu.menu.offeredRows)
         }
     }
@@ -66,7 +66,7 @@ Item {
         // nothing to put in it is the one failure a picture of an empty overlay cannot tell from a card nobody asked
         // for.
         function onOffered(shown) {
-            AppBackend.report("diff_menu open=" + shown
+            Harness.report("diff_menu open=" + shown
                               + " rows=" + reports.diffRowMenu.menu.offeredRows
                               + " copy=" + reports.diffRowMenu.canCopy
                               + " removed=" + reports.diffRowMenu.removed)

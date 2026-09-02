@@ -95,7 +95,7 @@ Item {
             remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             refMenu.openSub(refBranchCard)
-            AppBackend.report("ref_menu kind=remote delete=" + refDeleteItem.code
+            Harness.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)
             if (act === "delete-remote-go" || act === "remote-refused")
                 refDeleteItem.completeHold()
@@ -136,7 +136,7 @@ Item {
             const litOn = arg === "" ? workTree.branch : arg
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
-            AppBackend.report("menu_highlight index=" + refMenu.currentIndex)
+            Harness.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
@@ -161,7 +161,7 @@ Item {
             // chip column asking the second of its two questions (`GraphRowChips`).
             if (arg.endsWith(":box")) {
                 graphPane.view.namingText = arg.slice(0, -4)
-                AppBackend.report("create_tag box=" + (graphPane.view.namingOid !== "")
+                Harness.report("create_tag box=" + (graphPane.view.namingOid !== "")
                                   + " mode=" + graphPane.view.namingMode)
                 renderedBarrier.begin()
             } else {
@@ -198,7 +198,7 @@ Item {
             if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0 || refDeleteItem.holdMs <= 0)
                 return
             forceDeleteTimer.stop()
-            AppBackend.report("ref_menu delete=" + refDeleteItem.text
+            Harness.report("ref_menu delete=" + refDeleteItem.text
                               + " note=" + refDeleteItem.note)
             driver.writeSeqBefore = repoTab.writeSeq
             refDeleteItem.completeHold()
@@ -214,7 +214,7 @@ Item {
             if (!refDeleteItem.ToolTip.visible)
                 return
             blockedTipTimer.stop()
-            AppBackend.report(
+            Harness.report(
             "delete_blocked code=" + refDeleteItem.code
             + " tip=" + refDeleteItem.ToolTip.visible
             + " reason=" + refDeleteItem.blockedReason)
@@ -229,7 +229,7 @@ Item {
             chipMenuTimer.stop()
             // `ref=` is the menu that must **not** come up: the chip and the rest of the row are one target now, and a
             // second menu on the chip's side is the very split this entrance was joined to end.
-            AppBackend.report("chip_menu ref=" + refMenu.opened
+            Harness.report("chip_menu ref=" + refMenu.opened
                                        + " commit=" + commitMenu.opened
                                        + " switch=" + switchCommitItem.offered
                                        + " delete=" + commitDeleteItem.code
@@ -243,12 +243,12 @@ Item {
     SampleTimer {
         id: createTagTimer
         onTriggered: {
-            const oid = tagsModel.oidOfName(AppBackend.autoActArg)
+            const oid = tagsModel.oidOfName(Harness.autoActArg)
             if (oid === "" || repoTab.busyCount !== 0)
                 return
             createTagTimer.stop()
-            AppBackend.report("create_tag tag=" + AppBackend.autoActArg
-                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+            Harness.report("create_tag tag=" + Harness.autoActArg
+                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
                               + " total=" + tagsModel.total
                               + " at=" + (oid === acts.createTagOid))
             renderedBarrier.begin()
@@ -309,7 +309,7 @@ Item {
             // **The order is the judging order.** `must_say` matches a run of this line, so what one run has to
             // assert together has to sit together: the sides and the four rows they decide first, the push row's
             // own shape after them (`verify/verbs/remote.rs`).
-            AppBackend.report("tag_menu tag=" + tagMenuTimer.tag
+            Harness.report("tag_menu tag=" + tagMenuTimer.tag
                               + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
                               + " local_del=" + refTagDeleteItem.offered
                               + " remote_del=" + refRemoteTagDeleteItem.offered
@@ -367,7 +367,7 @@ Item {
             if (now === tagGoneTimer.was)
                 return
             tagGoneTimer.stop()
-            AppBackend.report("tag_gone tag=" + tagGoneTimer.tag
+            Harness.report("tag_gone tag=" + tagGoneTimer.tag
                               + " was=" + tagGoneTimer.was
                               + " sides=" + now
                               + " row=" + tagsModel.rowOfName(tagGoneTimer.tag)
@@ -382,10 +382,10 @@ Item {
             // The row's `code` is never empty on a branch, so it cannot tell "git has not answered yet" from "answered
             // merged" — both wear `branch --delete`. What readiness there is comes from the echo of the branch asked
             // about, which the asking clears before the question goes out (app-ui.md §UI 自動化の因果性).
-            if (repoTab.branchDeleteAsked !== AppBackend.autoActArg)
+            if (repoTab.branchDeleteAsked !== Harness.autoActArg)
                 return
             earlyDeleteTimer.stop()
-            AppBackend.report("delete_early asked="
+            Harness.report("delete_early asked="
                                        + (repoTab.branchDeleteAsked !== "")
                                        + " merged=" + repoTab.branchDeleteMerged
                                        + " code=" + refDeleteItem.code
@@ -400,7 +400,7 @@ Item {
             if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
                 return
             refusedRowTimer.stop()
-            AppBackend.report("ref_menu delete=" + refDeleteItem.code
+            Harness.report("ref_menu delete=" + refDeleteItem.code
                                        + " " + refDeleteItem.text
                                        + " note=" + refDeleteItem.note)
             driver.complete()
@@ -411,11 +411,11 @@ Item {
     SampleTimer {
         id: goneRowTimer
         onTriggered: {
-            if (tagsModel.rowOfName(AppBackend.autoActArg) >= 0)
+            if (tagsModel.rowOfName(Harness.autoActArg) >= 0)
                 return
             goneRowTimer.stop()
-            AppBackend.report("gone_row tag=" + AppBackend.autoActArg
-                              + " row=" + tagsModel.rowOfName(AppBackend.autoActArg)
+            Harness.report("gone_row tag=" + Harness.autoActArg
+                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
                               + " total=" + tagsModel.total
                               + " chips=" + (graphModel.goneChips !== ""))
             driver.complete()

@@ -73,10 +73,11 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
 
 impl Default for AppBackend {
     fn default() -> Self {
-        // Whatever is driving this run, if anything is. A build without
-        // the harness answers with an idle record and reads no
-        // environment at all (`harness::knobs`), so every hook below
-        // comes up in the arm a person at the window gets.
+        // The one thing here a run can change is the shape the window
+        // comes up in, and it has to be known before the window exists. A
+        // build without the harness answers from an idle record and reads
+        // no environment at all (`harness::knobs`), so it comes up in the
+        // arm a person at the window gets.
         let harness = crate::harness::knobs();
         Self {
             git_state: "checking".into(),
@@ -92,21 +93,8 @@ impl Default for AppBackend {
             identity_name_saved: false,
             identity_email_saved: false,
             identity_unsaved: false,
-            auto_open: harness.open.clone(),
-            shot_dir: harness.shot_dir.clone(),
-            auto_watchdog_ms: harness.watchdog_ms,
-            auto_select: harness.select,
-            auto_scroll: harness.scroll,
-            auto_perf: harness.perf,
-            mem_report: crate::harness::memprobe::enabled(),
-            auto_wip: harness.wip,
-            plain_chrome: harness.plain_chrome,
-            automated: platitude_core::settings::Env::system().automated(),
-            auto_identity: harness.identity.clone(),
-            auto_identity_save: harness.identity_save,
-            scroll_to: harness.scroll_to.clone(),
-            auto_act: harness.act.clone(),
-            auto_act_arg: harness.act_arg.clone(),
+            system_title_bar: harness.plain_chrome,
+            harness_present: cfg!(feature = "automation"),
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,

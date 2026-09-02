@@ -95,7 +95,7 @@ Item {
             // (`Outcome::must_say`) — a count in between would split the claim in two. `conflicts=` is the one that
             // answers the opposite way: that bucket comes and goes with git's own state, so marking the whole of it
             // resolved has to take its heading off the screen (規約 §その他の操作).
-            AppBackend.report("wip_heads from=" + bucketAllTimer.from
+            Harness.report("wip_heads from=" + bucketAllTimer.from
                               + " unstaged=" + wipPane.bucketHeaded("unstaged")
                               + " staged=" + wipPane.bucketHeaded("staged")
                               + " conflicts=" + wipPane.bucketHeaded("conflicts")
@@ -119,7 +119,7 @@ Item {
             const moved = mate ? mate.bucket + ":" + mate.fullName : ""
             if (mate)
                 wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
-            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            Harness.report("chosen count=" + wipPane.chosenCount)
             if (head) {
                 wipPane.showStageTools(head.bucket, head.fullName)
                 if (act.endsWith("-go")) {
@@ -138,9 +138,9 @@ Item {
             const dropped = other ? other.bucket + ":" + other.fullName : ""
             if (other)
                 wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
-            AppBackend.report("chosen count=" + wipPane.chosenCount)
+            Harness.report("chosen count=" + wipPane.chosenCount)
             page.openFileMenu(other ? other.bucket : "unstaged", arg)
-            AppBackend.report("discard_row " + fileDiscardItem.text)
+            Harness.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
                 driver.treeGoneRow = dropped
@@ -153,9 +153,9 @@ Item {
             page.openFileMenu(menuBucket, arg)
             if (menuBucket === "conflicts") {
                 const row = wipPane.rowFor(arg)
-                AppBackend.report("conflict_kind " + (row ? row.conflictWords() : "-"))
+                Harness.report("conflict_kind " + (row ? row.conflictWords() : "-"))
             } else {
-                AppBackend.report("discard_row " + fileDiscardItem.text)
+                Harness.report("discard_row " + fileDiscardItem.text)
             }
         } else if (act === "take-side-ours" || act === "take-side-theirs") {
             wipPane.chooseOnly("conflicts", arg)
@@ -179,7 +179,7 @@ Item {
             // the watchdog with the tool's name reported all the same. The count is what tells the two apart.
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
-            AppBackend.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
+            Harness.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
             // Named only where something was actually handed over: a fixture a previous run consumed queues no write
             // at all, and a barrier waiting for a row that left the bucket before this run began would report a
             // landing nothing here caused.
@@ -194,7 +194,7 @@ Item {
                          : act.startsWith("discard-staged") ? "staged" : "unstaged"
             wipPane.chooseOnly(bucket, arg)
             page.openFileMenu(bucket, arg)
-            AppBackend.report("discard_row " + fileDiscardItem.text)
+            Harness.report("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
                 driver.treeGoneRow = bucket + ":" + arg
@@ -211,18 +211,18 @@ Item {
     SampleTimer {
         id: fileRowsTimer
         onTriggered: {
-            const act = AppBackend.autoAct
+            const act = Harness.autoAct
             // The named row has to be walkable — and for the pairs that start from the head row,
             // that row too. One walk answering is every walk answering: they read the same
             // delegates.
-            if (wipPane.rowFor(AppBackend.autoActArg) === null)
+            if (wipPane.rowFor(Harness.autoActArg) === null)
                 return
             if ((act === "stage-many" || act === "stage-many-go"
                  || act === "discard-many" || act === "discard-many-go")
                 && wipPane.rowAt(0) === null)
                 return
             fileRowsTimer.stop()
-            acts.runFileRowAct(act, AppBackend.autoActArg)
+            acts.runFileRowAct(act, Harness.autoActArg)
             driver.dispatchFinished()
         }
     }
@@ -242,7 +242,7 @@ Item {
             if (graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning)
                 return
             openFetchTimer.stop()
-            AppBackend.report("open_fetch fails=" + repoTab.fetchFailures
+            Harness.report("open_fetch fails=" + repoTab.fetchFailures
                               + " rows=" + graphModel.rowTotal
                               + " wanted=" + acts.openFetchRows)
             driver.complete()

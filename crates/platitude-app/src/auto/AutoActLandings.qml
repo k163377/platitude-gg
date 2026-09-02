@@ -63,7 +63,7 @@ Item {
                 return
             stashLandTimer.stop()
             const row = graphModel.rowOf(branchesModel.headOid)
-            AppBackend.report("stash_landed wip=" + page.wipShown
+            Harness.report("stash_landed wip=" + page.wipShown
                               + " follows=" + (page.selectedOid === branchesModel.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               + " lit=" + (graphPane.view.currentIndex === row)
@@ -108,7 +108,7 @@ Item {
             }
             opExitLandTimer.stop()
             const row = graphModel.rowOf(branchesModel.headOid)
-            AppBackend.report("op_exit_landed wip=" + page.wipShown
+            Harness.report("op_exit_landed wip=" + page.wipShown
                               + " op=" + workTree.opText
                               + " follows=" + (page.selectedOid === branchesModel.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)

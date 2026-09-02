@@ -15,8 +15,9 @@ ApplicationWindow {
     /// Whether the tab row is the window's title bar. Decided by platform, not read back from the hints: hints are read
     /// when the window is created, and a window that came up without a way to close it cannot be taken back. Only
     /// Windows is known to work; everywhere else keeps the platform's own title bar above an ordinary tab row
-    /// (P3-確認事項 §ウィンドウ chrome). `PG_PLAIN_CHROME=1` asks for the other shape from here.
-    readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.plainChrome
+    /// (P3-確認事項 §ウィンドウ chrome). `AppBackend.systemTitleBar` asks for that other shape here as well, which is
+    /// the one window decision that cannot be made after the fact.
+    readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.systemTitleBar
 
     // No frame at all: an expanded client area over the caption still leaves a real non-client frame — inflated past
     // the screen when maximised, a white pixel no DWM attribute moves, a remembered size coming back too wide.
@@ -243,7 +244,7 @@ ApplicationWindow {
         anchors.fill: parent
         z: -10000
         part: "WindowHarness.qml"
-        wanted: AppBackend.automated
+        wanted: AppBackend.harnessPresent
         seats: ({
             window: root,
             tabsModel: tabsModel,

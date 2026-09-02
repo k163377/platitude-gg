@@ -31,7 +31,7 @@ Item {
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.
     SampleTimer {
         id: middleCloseTimer
-        running: AppBackend.autoAct === "middle-close"
+        running: Harness.autoAct === "middle-close"
         property bool requested: false
         property int beforeCount: -1
         property string closedPath: ""
@@ -40,7 +40,7 @@ Item {
                 if (pageRepeater.count < 2)
                     return
                 middleCloseTimer.beforeCount = pageRepeater.count
-                const at = Number(AppBackend.autoActArg)
+                const at = Number(Harness.autoActArg)
                 middleCloseTimer.closedPath = tabProbe.tabPathAt(at)
                 // Latched on the strip's answer rather than on the asking: the press has to land on an item, and the
                 // row the model has just gained gets one with the layout.
@@ -62,7 +62,7 @@ Item {
             stop()
             // The verdict leads, and it is about the tab the press landed on: a count that merely fell would pass with
             // the wrong tab closed, and the titles cannot tell them apart.
-            AppBackend.report("middle_close gone="
+            Harness.report("middle_close gone="
                               + !tabProbe.hasTabPath(middleCloseTimer.closedPath)
                               + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
@@ -77,7 +77,7 @@ Item {
     // afterwards, "the order is not the one it started as" is this verb's own answer.
     SampleTimer {
         id: tabDragTimer
-        running: AppBackend.autoAct === "tab-drag"
+        running: Harness.autoAct === "tab-drag"
         property bool requested: false
         property string before: ""
         property int from: 0
@@ -96,7 +96,7 @@ Item {
                 if (front === null || front.pageTab.state !== "open"
                         || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
                     return
-                const asked = (AppBackend.autoActArg || "3:1").split(":")
+                const asked = (Harness.autoActArg || "3:1").split(":")
                 tabDragTimer.from = Number(asked[0])
                 tabDragTimer.to = Number(asked[1])
                 tabDragTimer.before = tabProbe.tabPaths()
@@ -112,7 +112,7 @@ Item {
             // The verdict leads, and it is about the tab that was carried: an order that merely changed would pass
             // with any two tabs swapped, and every demo working tree is called the same thing in the picture.
             const was = tabDragTimer.before.split(",")
-            AppBackend.report("tab_drag moved="
+            Harness.report("tab_drag moved="
                               + (paths.split(",")[tabDragTimer.to] === was[tabDragTimer.from])
                               + " from=" + tabDragTimer.from
                               + " to=" + tabDragTimer.to
@@ -128,7 +128,7 @@ Item {
     // jumped between rows, so the offset the transform is carrying says itself.
     SampleTimer {
         id: tabHoldTimer
-        running: AppBackend.autoAct === "tab-hold"
+        running: Harness.autoAct === "tab-hold"
         property bool requested: false
         onTriggered: {
             if (!tabHoldTimer.requested) {
@@ -138,7 +138,7 @@ Item {
                 if (front === null || front.pageTab.state !== "open"
                         || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
                     return
-                tabHoldTimer.requested = topBar.holdTabAt(Number(AppBackend.autoActArg || 0))
+                tabHoldTimer.requested = topBar.holdTabAt(Number(Harness.autoActArg || 0))
                 return
             }
             // The tab has to be drawn off its row before there is a picture worth taking; nothing is waited for
@@ -147,7 +147,7 @@ Item {
             if (shift === 0)
                 return
             stop()
-            AppBackend.report("tab_hold lifted=true at=" + (AppBackend.autoActArg || 0)
+            Harness.report("tab_hold lifted=true at=" + (Harness.autoActArg || 0)
                               + " shift=" + shift
                               + " active=" + tabsModel.currentIndex
                               + " open=" + tabProbe.tabPaths())
@@ -161,7 +161,7 @@ Item {
     // differently on each OS), and this verb needs a strip that overflows on every machine.
     SampleTimer {
         id: tabEdgeTimer
-        running: AppBackend.autoAct === "tab-edge"
+        running: Harness.autoAct === "tab-edge"
         property bool sized: false
         property bool requested: false
         property int from: 0
@@ -183,7 +183,7 @@ Item {
                 // thing this cannot assume.
                 if (!topBar.bandTabScrolls)
                     return
-                tabEdgeTimer.from = Number(AppBackend.autoActArg || 0)
+                tabEdgeTimer.from = Number(Harness.autoActArg || 0)
                 tabEdgeTimer.requested = topBar.carryTabPastEnd(tabEdgeTimer.from)
                 return
             }
@@ -193,7 +193,7 @@ Item {
                 return
             stop()
             topBar.dropCarriedTab()
-            AppBackend.report("tab_edge landed=true from=" + tabEdgeTimer.from
+            Harness.report("tab_edge landed=true from=" + tabEdgeTimer.from
                               + " run=" + topBar.runOffset()
                               + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
@@ -205,7 +205,7 @@ Item {
     // Reopening an existing path must select its tab without adding one.
     SampleTimer {
         id: openAgainTimer
-        running: AppBackend.autoAct === "open-again"
+        running: Harness.autoAct === "open-again"
         property bool requested: false
         property string asked: ""
         property int beforeCount: -1
@@ -221,11 +221,11 @@ Item {
                 // item for a row the model has just gained arrives with the next layout. Asking with the "" it answers
                 // until then opens nothing, and nothing opened is what this verb's completion looks like — it went
                 // green having asked for nothing at all (measured).
-                const path = AppBackend.autoActArg !== "" ? AppBackend.autoActArg : tabProbe.tabPathAt(0)
+                const path = Harness.autoActArg !== "" ? Harness.autoActArg : tabProbe.tabPathAt(0)
                 if (path === "")
                     return
                 openAgainTimer.asked = path
-                openAgainTimer.wantIndex = AppBackend.autoActArg !== "" ? -1 : 0
+                openAgainTimer.wantIndex = Harness.autoActArg !== "" ? -1 : 0
                 openAgainTimer.beforeCount = pageRepeater.count
                 openAgainTimer.requested = true
                 tabsModel.openRepositoryPath(path)
@@ -248,7 +248,7 @@ Item {
                     || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
                 return
             stop()
-            AppBackend.report("open_again tabs=" + pageRepeater.count
+            Harness.report("open_again tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
                               + " asked=" + openAgainTimer.asked
                               + " open=" + tabProbe.tabPaths())
@@ -269,7 +269,7 @@ Item {
     // themselves.
     SampleTimer {
         id: tabCarryTimer
-        running: AppBackend.autoAct === "tab-carry"
+        running: Harness.autoAct === "tab-carry"
         /// 0 = mark the first tab, 1 = read the second, 2 = read the first again.
         property int step: 0
         /// The tab the mark was left on, so the walk knows which landing it is at without counting rows.
@@ -319,8 +319,8 @@ Item {
             // `sessions=` is the release itself, and the only thing here a picture cannot say: two tabs in the strip,
             // one repository in memory. `finishCount` being above zero on a page built after the switch is the other
             // side of the same coin — the graph read itself again from nothing.
-            AppBackend.report("tab_carry tabs=" + pageRepeater.count
-                              + " sessions=" + AppBackend.openSessionCount()
+            Harness.report("tab_carry tabs=" + pageRepeater.count
+                              + " sessions=" + Harness.openSessionCount()
                               + " folded=" + tabCarryTimer.folded
                               + " log=" + tabCarryTimer.log
                               + " empty=" + tabCarryTimer.otherEmpty
@@ -336,12 +336,12 @@ Item {
     // like one that got it right. `widths=` is the answer.
     SampleTimer {
         id: tabWidthActTimer
-        running: AppBackend.autoAct === "tab-widths"
+        running: Harness.autoAct === "tab-widths"
         onTriggered: {
             if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "tab_widths tabs=" + topBar.bandTabCount
                 + " run=" + Math.round(topBar.bandTabRun)
                 + " cap=" + Math.round(topBar.tabTitleCap)
@@ -360,11 +360,11 @@ Item {
     // nothing the picture of any other verb does not already say.
     SampleTimer {
         id: tabMarkActTimer
-        running: AppBackend.autoAct === "tab-mark"
+        running: Harness.autoAct === "tab-mark"
         property bool requested: false
         property string beforeMarks: ""
         onTriggered: {
-            const pointed = Number(AppBackend.autoActArg || 1)
+            const pointed = Number(Harness.autoActArg || 1)
             if (topBar.bandTabCount < pointed)
                 return
             if (!tabMarkActTimer.requested) {
@@ -376,7 +376,7 @@ Item {
             if (tabProbe.tabMarks() === tabMarkActTimer.beforeMarks)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "tab_marks tabs=" + topBar.bandTabCount
                 + " current=" + tabsModel.currentIndex
                 + " pointed=" + pointed
@@ -390,9 +390,9 @@ Item {
     // stands on — asked of the strip and then of the hover (デザイン規約 §タブの所作 / §hover のツールチップ).
     SampleTimer {
         id: tabNameActTimer
-        running: AppBackend.autoAct === "tab-name"
+        running: Harness.autoAct === "tab-name"
         property bool requested: false
-        readonly property int pointed: Number(AppBackend.autoActArg || 0)
+        readonly property int pointed: Number(Harness.autoActArg || 0)
         onTriggered: {
             // Every row has to have an item before the names are read: the strip's answer for a row the layout has not
             // reached yet is the empty string, which reads exactly like a name that came out blank.
@@ -412,7 +412,7 @@ Item {
             // the platform's own separator, and no two tabs reading alike is the rule either way (`verify/verbs.rs`).
             const titles = tabProbe.tabTitles()
             const names = titles.split(",")
-            AppBackend.report(
+            Harness.report(
                 "tab_names tabs=" + topBar.bandTabCount
                 + " pointed=" + tabNameActTimer.pointed
                 + " unique=" + names.every((name, at) => names.indexOf(name) === at)
@@ -427,12 +427,12 @@ Item {
     // picture is of the mechanism and not of a flag that imitates it.
     SampleTimer {
         id: soloActTimer
-        running: AppBackend.autoAct === "solo"
+        running: Harness.autoAct === "solo"
         onTriggered: {
             if (!AppBackend.alreadyRunning || !gate.visible)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "solo blocked=" + AppBackend.alreadyRunning
                 + " held=" + (AppBackend.heldElsewhere !== "")
                 + " gate=" + gate.visible

@@ -25,8 +25,8 @@ Item {
     // width; `floor` puts it down on the floor the three badges leave.
     SampleTimer {
         id: badgesActTimer
-        running: AppBackend.autoAct === "badges"
-                 || AppBackend.autoAct === "badges-hover"
+        running: Harness.autoAct === "badges"
+                 || Harness.autoAct === "badges-hover"
         property bool stateRequested: false
         property bool sizeRequested: false
         property int requestedWidth: -1
@@ -36,12 +36,12 @@ Item {
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
-            const arg = AppBackend.autoActArg
+            const arg = Harness.autoActArg
             const wantedW = parseInt(arg)
             const sized = arg === "floor" || (!isNaN(wantedW) && wantedW > 0)
             // The pointer, where headless cannot put one. Written to the same one property the real hover writes, so
             // the card cannot be opened by a road the hand does not have (app-ui.md).
-            if (AppBackend.autoAct === "badges-hover" && !stateRequested) {
+            if (Harness.autoAct === "badges-hover" && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true
             }
@@ -65,7 +65,7 @@ Item {
                         ? window.width < badgesActTimer.requestedWidth
                         : Math.round(window.width) !== badgesActTimer.requestedWidth)))
                 return
-            if (AppBackend.autoAct === "badges-hover") {
+            if (Harness.autoAct === "badges-hover") {
                 if (!topBar.stateCardOpen)
                     return
             }
@@ -80,7 +80,7 @@ Item {
     /// never crowded.
     function reportBadges() {
         const floorW = Math.ceil(window.floorWidth)
-        AppBackend.report(
+        Harness.report(
             "badges fits=" + (window.width >= floorW)
             + " op=" + topBar.opBadgeShown
             + " conflicts=" + topBar.conflictBadgeShown
@@ -115,7 +115,7 @@ Item {
     // needs a git that fails, and a demo repository has none in it.
     SampleTimer {
         id: staleActTimer
-        running: AppBackend.autoAct === "graph-stale" || AppBackend.autoAct === "graph-stopped"
+        running: Harness.autoAct === "graph-stale" || Harness.autoAct === "graph-stopped"
         property bool faultArmed: false
         onTriggered: {
             if (window.curPage === null)
@@ -127,7 +127,7 @@ Item {
                 if (graph.loading || graph.finishCount <= 0 || graph.rowTotal <= 0)
                     return
                 staleActTimer.faultArmed = true
-                graph.failGraphPass(AppBackend.autoAct === "graph-stale" ? "swapping" : "streaming")
+                graph.failGraphPass(Harness.autoAct === "graph-stale" ? "swapping" : "streaming")
                 return
             }
             if (!topBar.staleBadgeShown || graph.loading)
@@ -147,7 +147,7 @@ Item {
     /// `card=` is there because the line under the badge is the only place the two states are told apart.
     function reportStale() {
         const graph = window.curPage.pageGraph
-        AppBackend.report(
+        Harness.report(
             "graph_stale badge=" + topBar.staleBadgeShown
             + " stopped=" + graph.failed
             + " stale=" + graph.stale
@@ -166,9 +166,9 @@ Item {
     // real program.
     SampleTimer {
         id: oldGitActTimer
-        running: AppBackend.autoAct === "old-git"
-                 || AppBackend.autoAct === "old-git-card"
-                 || AppBackend.autoAct === "old-git-fold"
+        running: Harness.autoAct === "old-git"
+                 || Harness.autoAct === "old-git-card"
+                 || Harness.autoAct === "old-git-fold"
         property bool stateRequested: false
         property bool sizeRequested: false
         property int requestedWidth: -1
@@ -178,8 +178,8 @@ Item {
                 return
             // `-fold` brings its own width: the shape it is for is a folded group with nothing red in it — the only
             // place the mark's colour is the mark's whole meaning (規約 §状態).
-            const arg = AppBackend.autoAct === "old-git-fold"
-                        ? "floor" : AppBackend.autoActArg
+            const arg = Harness.autoAct === "old-git-fold"
+                        ? "floor" : Harness.autoActArg
             const wantedW = parseInt(arg)
             if (!oldGitActTimer.sizeRequested && arg === "floor") {
                 oldGitActTimer.requestedWidth = Math.ceil(window.floorWidth)
@@ -205,17 +205,17 @@ Item {
             // The card decides whether it has any rows on the pointer edge. Pointing before the version badge exists
             // would ask an empty group once and leave `pointedAt` true, so no later edge could reopen it when the badge
             // arrives.
-            if (AppBackend.autoAct === "old-git-card" && !stateRequested) {
+            if (Harness.autoAct === "old-git-card" && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true
                 return
             }
-            if (AppBackend.autoAct === "old-git-card" && !topBar.stateCardOpen)
+            if (Harness.autoAct === "old-git-card" && !topBar.stateCardOpen)
                 return
             stop()
             // `version=` says which git answered — a run whose shim never got onto PATH photographs an ordinary window,
             // and an ordinary window photographs well.
-            AppBackend.report(
+            Harness.report(
                 "old-git badge=" + topBar.oldGitBadgeShown
                 + " card=" + topBar.stateCardOpen
                 + " rows=" + topBar.stateCardRows

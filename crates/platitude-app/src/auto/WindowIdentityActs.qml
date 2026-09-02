@@ -28,15 +28,15 @@ Item {
         }
     }
     function applyIdentity() {
-        if (AppBackend.autoIdentity === "skip") {
+        if (Harness.autoIdentity === "skip") {
             hooks.identityDialog.close()
             return
         }
-        if (AppBackend.autoIdentity === "edit")
+        if (Harness.autoIdentity === "edit")
             return
-        const parts = AppBackend.autoIdentity.split("|")
+        const parts = Harness.autoIdentity.split("|")
         hooks.identityDialog.fill(parts[0], parts.length > 1 ? parts[1] : "")
-        if (AppBackend.autoIdentitySave)
+        if (Harness.autoIdentitySave)
             hooks.identityDialog.submit()
     }
 
@@ -46,7 +46,7 @@ Item {
     property bool settingsAsked: false
     Connections {
         target: AppBackend
-        enabled: AppBackend.autoIdentity === "edit" && !hooks.settingsAsked
+        enabled: Harness.autoIdentity === "edit" && !hooks.settingsAsked
         function onIdentityChanged() {
             if (AppBackend.identityState !== "ready")
                 return

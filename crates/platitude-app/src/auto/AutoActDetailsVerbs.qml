@@ -122,7 +122,7 @@ Item {
     /// as numbers.
     function dragDividerPast(which) {
         page.dragDividerPast(which)
-        AppBackend.report("divider_refuse refuses=" + page.refusalShown
+        Harness.report("divider_refuse refuses=" + page.refusalShown
                           + " line=" + page.refusalLineShown(which)
                           + " case=" + which + " labelW=" + graphPane.labelW
                           + " graphW=" + graphPane.graphColW)
@@ -134,7 +134,7 @@ Item {
             if (driver.detailsModel.loading || !driver.repoTab.lastError.startsWith("details: "))
                 return
             detailsFailure.stop()
-            AppBackend.report("details_failure loading=false error=true")
+            Harness.report("details_failure loading=false error=true")
             renderedBarrier.begin()
         }
     }
@@ -168,7 +168,7 @@ Item {
                 // The fault this pane shipped with: every field kept what it was holding, so a reader who swept a
                 // second value found the first still lit (observed — three at once). **Both halves are
                 // said**: a run that simply cleared everything would answer `dropped=true` on its own.
-                AppBackend.report("details_select_away dropped="
+                Harness.report("details_select_away dropped="
                                   + (detailsPane.valueRow.selectedValue(detailsSelectTimer.firstWhich) === "")
                                   + " held=" + (want !== "" && got === want)
                                   + " first=" + detailsSelectTimer.firstWhich
@@ -178,7 +178,7 @@ Item {
             }
             // `match=` is the whole claim: what came out of the field is what the model says the pane is showing. The
             // text rides along for the eye.
-            AppBackend.report("details_select match=" + (want !== "" && got === want)
+            Harness.report("details_select match=" + (want !== "" && got === want)
                               + " which=" + detailsSelectTimer.which + " text=" + got)
             driver.complete()
         }
@@ -251,7 +251,7 @@ Item {
             // `caret=` is the half a selection does not say: `Ctrl+C` goes to the field holding the keyboard, so a
             // value picked out without it is not one the reader can take away. `took=` and `on=` are the diagnosis
             // when `grabbed` comes back false — the gesture was refused at its start, or it landed on another line.
-            AppBackend.report("details_sweep reach=" + reach + "/" + tries
+            Harness.report("details_sweep reach=" + reach + "/" + tries
                               + " caret=" + caret
                               + " grabs=" + grabs
                               + " ours=" + ours
@@ -280,7 +280,7 @@ Item {
                 return
             }
             detailsFitTimer.stop()
-            AppBackend.report(
+            Harness.report(
             "details_fit fills=" + detailsPane.valueRow.fillsBlock + " fits=" + (detailsPane.contentOverflow < 1)
             + " row=" + Math.round(detailsPane.valueRow.width) + "/" + Math.round(detailsPane.valueRow.parent.width) + " over=" + Math.round(detailsPane.contentOverflow)
             + " pane=" + Math.round(detailsPane.width)
@@ -301,7 +301,7 @@ Item {
             if (gitCorner.parent === null || gitCorner.width <= 0)
                 return
             cornerTimer.stop()
-            AppBackend.report(
+            Harness.report(
             "git_corner pane=" + (page.wipShown ? "wip" : "details")
             + " shown=" + gitCorner.visible
             + " room=" + Math.round(gitCorner.roomLeft)
@@ -358,7 +358,7 @@ Item {
                 return
             descGrowSettle.stop()
             if (descGrowTimer.refuse !== "") {
-                AppBackend.report("divider_refuse refuses=" + page.refusalShown
+                Harness.report("divider_refuse refuses=" + page.refusalShown
                                   + " line=" + descGrowTimer.pane.descGrips
                                   + " case=" + descGrowTimer.refuse
                                   + " box=" + Math.round(descGrowTimer.pane.descHeight)
@@ -366,7 +366,7 @@ Item {
                 driver.complete()
                 return
             }
-            AppBackend.report(
+            Harness.report(
             "description_grow keeps=" + descGrowTimer.pane.descKeeps
             + " pane=" + descGrowTimer.paneName
             + " grip=" + descGrowTimer.pane.descGrips
@@ -384,7 +384,7 @@ Item {
             if (!page.commandsOpen || !page.commandsShown)
                 return
             splitRefuseTimer.stop()
-            acts.dragDividerPast(AppBackend.autoActArg)
+            acts.dragDividerPast(Harness.autoActArg)
             renderedBarrier.begin()
         }
     }

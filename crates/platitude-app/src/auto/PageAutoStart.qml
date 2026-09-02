@@ -28,13 +28,13 @@ Item {
     Binding {
         target: start.page
         property: "rowPickedElsewhere"
-        value: AppBackend.autoSelect || AppBackend.autoPerf || AppBackend.autoWip
+        value: Harness.autoSelect || Harness.autoPerf || Harness.autoWip
     }
 
     // PG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
     Connections {
         target: start.worktreeModel
-        enabled: AppBackend.autoWip
+        enabled: Harness.autoWip
         function onChanged() {
             if (start.worktreeModel.total > 0 && !start.page.wipShown) {
                 start.graphPane.setCurrentRow(0)
@@ -53,17 +53,17 @@ Item {
         interval: 600
         onTriggered: {
             start.scrolled = true
-            if (AppBackend.scrollTo === "nav-bottom") {
+            if (Harness.scrollTo === "nav-bottom") {
                 start.sidebarPane.autoSections.scrollBranchesToEnd()
                 return
             }
             start.graphPane.view.contentY =
-                start.graphPane.view.clampY(AppBackend.scrollTo === "bottom" ? 1e12 : -1e12)
+                start.graphPane.view.clampY(Harness.scrollTo === "bottom" ? 1e12 : -1e12)
         }
     }
     Connections {
         target: start.graphModel
-        enabled: AppBackend.scrollTo !== "" && !start.scrolled
+        enabled: Harness.scrollTo !== "" && !start.scrolled
         function onStatsChanged() {
             if (start.graphModel.finishCount > 0)
                 scrollToTimer.restart()
@@ -75,7 +75,7 @@ Item {
     property bool selected: false
     Connections {
         target: start.graphModel
-        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
+        enabled: Harness.autoSelect && !Harness.autoPerf
         function onStatsChanged() {
             if (start.selected || start.graphModel.rowTotal === 0)
                 return
@@ -96,7 +96,7 @@ Item {
     }
     Connections {
         target: start.detailsModel
-        enabled: AppBackend.autoSelect && !AppBackend.autoPerf
+        enabled: Harness.autoSelect && !Harness.autoPerf
         function onChanged() {
             if (start.detailsModel.shaHex !== "" && start.detailsModel.fileTotal > 0
                     && start.diffModel.title === "")

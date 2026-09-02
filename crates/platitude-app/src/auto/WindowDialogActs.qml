@@ -33,12 +33,12 @@ Item {
     // The picker completes once its dialog is up, and `visible` is the property that says so: `FolderDialog` is
     // `QtQuick.Dialogs`' own type, not a `Popup`, so the `opened` the dialogs around it answer to is undefined here.
     SampleTimer {
-        running: AppBackend.autoAct === "open-picker"
+        running: Harness.autoAct === "open-picker"
         onTriggered: {
             if (!folderDialog.visible)
                 return
             stop()
-            AppBackend.report("picker folder=" + folderDialog.currentFolder)
+            Harness.report("picker folder=" + folderDialog.currentFolder)
             window.finishAutoAct()
         }
     }
@@ -46,9 +46,9 @@ Item {
     // the platform's own box says afterwards. Not the verb above's — that one reports where its own wait ended.
     Connections {
         target: acts.window
-        enabled: AppBackend.autoAct !== "open-picker"
+        enabled: Harness.autoAct !== "open-picker"
         function onPickerOpened() {
-            AppBackend.report("picker folder=" + acts.folderDialog.currentFolder)
+            Harness.report("picker folder=" + acts.folderDialog.currentFolder)
         }
     }
 
@@ -60,13 +60,13 @@ Item {
     // an argument that is a path cannot be handed to both). Which of the two answers comes back is decided by the
     // folder name alone: a name of its own lands beside the source, the source's own name lands **on** it, and git
     // refuses that one for the destination being taken.
-    readonly property bool cloneAct: AppBackend.autoAct === "clone-dialog"
-                                     || AppBackend.autoAct === "clone-go"
-                                     || AppBackend.autoAct === "clone-refused"
+    readonly property bool cloneAct: Harness.autoAct === "clone-dialog"
+                                     || Harness.autoAct === "clone-go"
+                                     || Harness.autoAct === "clone-refused"
     /// What to fetch from: whatever the verb was given, or the repository already open.
-    readonly property string cloneFrom: AppBackend.autoActArg !== ""
-                                        ? AppBackend.autoActArg
-                                        : AppBackend.autoOpen.split(";")[0]
+    readonly property string cloneFrom: Harness.autoActArg !== ""
+                                        ? Harness.autoActArg
+                                        : Harness.autoOpen.split(";")[0]
     SampleTimer {
         id: cloneTimer
         running: acts.cloneAct
@@ -77,7 +77,7 @@ Item {
         property bool asked: false
         property int tabsBefore: -1
         onTriggered: {
-            const act = AppBackend.autoAct
+            const act = Harness.autoAct
             if (!cloneTimer.asked) {
                 if (!cloneTimer.opened) {
                     if (window.curPage === null || window.curPage.pageTab.state !== "open")
@@ -127,7 +127,7 @@ Item {
     /// **The four the table judges are written first and in one run**: `must_say` matches a run of the line, so a
     /// field none of the verbs judges must not stand between two that they do (verbs.md).
     function reportClone() {
-        AppBackend.report("clone dialog=" + cloneDialog.opened
+        Harness.report("clone dialog=" + cloneDialog.opened
                           + " said=" + (cloneDialog.refusal !== "")
                           + " cloning=" + cloneModel.cloning
                           + " grew=" + (cloneTimer.tabsBefore >= 0
@@ -139,11 +139,11 @@ Item {
 
     // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
     // window, so the run enters where its answer lands — the path it accepted.
-    readonly property bool pickAct: AppBackend.autoAct === "open-not-a-repo"
-                                    || AppBackend.autoAct === "open-bare"
-                                    || AppBackend.autoAct === "open-not-a-repo-retry"
-                                    || AppBackend.autoAct === "open-not-a-repo-cancel"
-                                    || AppBackend.autoAct === "open-dialog-sweep"
+    readonly property bool pickAct: Harness.autoAct === "open-not-a-repo"
+                                    || Harness.autoAct === "open-bare"
+                                    || Harness.autoAct === "open-not-a-repo-retry"
+                                    || Harness.autoAct === "open-not-a-repo-cancel"
+                                    || Harness.autoAct === "open-dialog-sweep"
     property bool pickStarted: false
     SampleTimer {
         running: acts.pickAct
@@ -151,7 +151,7 @@ Item {
             if (acts.pickStarted || !window.visible)
                 return
             acts.pickStarted = true
-            tabsModel.openPickedPath(AppBackend.autoActArg)
+            tabsModel.openPickedPath(Harness.autoActArg)
             pickAnswerTimer.start()
         }
     }
@@ -161,20 +161,20 @@ Item {
         onTriggered: {
             if (!openFailedDialog.opened)
                 return
-            if (AppBackend.autoAct === "open-dialog-sweep") {
+            if (Harness.autoAct === "open-dialog-sweep") {
                 pickAnswerTimer.stop()
                 // The one failure with nothing behind it: a modal window carries no seat for the command log, so the
                 // folder it names and git's own answer are the whole of what a reader can take away from here
                 // (規約 §右のペインの字は掴める). `kind=` is what the sweep had to land on — a dialog raised on `plain`
                 // has no line from git at all, and a run that swept one would be claiming less than it looked.
-                AppBackend.report("open_dialog_sweep "
+                Harness.report("open_dialog_sweep "
                     + openFailedDialog.background.pad.sweepAir(7, "kind=" + openFailedDialog.kind))
                 window.finishAutoAct()
                 return
             }
-            if (AppBackend.autoAct === "open-not-a-repo-retry")
+            if (Harness.autoAct === "open-not-a-repo-retry")
                 openFailedDialog.retry()
-            else if (AppBackend.autoAct === "open-not-a-repo-cancel")
+            else if (Harness.autoAct === "open-not-a-repo-cancel")
                 openFailedDialog.close()
             else {
                 pickAnswerTimer.stop()
@@ -202,15 +202,15 @@ Item {
     // command log the way the `>_` at the foot of that screen does.
     SampleTimer {
         id: failTabActTimer
-        running: AppBackend.autoAct === "open-fail-tab"
-                 || AppBackend.autoAct === "open-fail-tab-bare"
-                 || AppBackend.autoAct === "open-fail-tab-log"
-                 || AppBackend.autoAct === "open-fail-sweep"
+        running: Harness.autoAct === "open-fail-tab"
+                 || Harness.autoAct === "open-fail-tab-bare"
+                 || Harness.autoAct === "open-fail-tab-log"
+                 || Harness.autoAct === "open-fail-sweep"
         onTriggered: {
             if (window.curPage === null || window.curPage.pageTab.state !== "open")
                 return
             failTabActTimer.stop()
-            tabsModel.openRepositoryPath(AppBackend.autoActArg)
+            tabsModel.openRepositoryPath(Harness.autoActArg)
             failTabTimer.start()
         }
     }
@@ -221,7 +221,7 @@ Item {
             if (window.curPage === null || window.curPage.pageTab.state !== "error"
                     || window.curPage.pageTab.errorKind === "")
                 return
-            if (AppBackend.autoAct === "open-fail-tab-log" && window.curPage !== null)
+            if (Harness.autoAct === "open-fail-tab-log" && window.curPage !== null)
                 if (!failTabTimer.commandsRequested) {
                     failTabTimer.commandsRequested = true
                     window.curPage.toggleCommands()
@@ -230,17 +230,17 @@ Item {
                     return
                 }
             failTabTimer.stop()
-            if (AppBackend.autoAct === "open-fail-sweep") {
+            if (Harness.autoAct === "open-fail-sweep") {
                 // The tab's own failure screen, swept instead of photographed. This one *does* carry the log's seat at
                 // its foot, so git's answer is reachable there — but the folder is not, and it is the half a reader
                 // needs to paste back into a shell (規約 §右のペインの字は掴める). `kind=` says which of the three
                 // screens the sweep landed on, since only one of them has a line from git in it at all.
-                AppBackend.report("open_fail_sweep "
+                Harness.report("open_fail_sweep "
                     + window.curPage.openFailedHand.sweepAir(7, "kind=" + window.curPage.pageTab.errorKind))
                 window.finishAutoAct()
                 return
             }
-            AppBackend.report(
+            Harness.report(
                 "open_fail_tab tabs=" + pageRepeater.count
                 + " state=" + (window.curPage !== null ? window.curPage.pageTab.state : "-")
                 + " kind=" + (window.curPage !== null ? window.curPage.pageTab.errorKind : "-")
@@ -252,7 +252,7 @@ Item {
     /// would go on passing with the binding cut), and `tabs=` says the refused folder never became one — which is the
     /// whole of what this verb is about.
     function reportPick() {
-        AppBackend.report("open_failed kind=" + openFailedDialog.kind
+        Harness.report("open_failed kind=" + openFailedDialog.kind
                           + " dialog=" + openFailedDialog.opened
                           + " tabs=" + pageRepeater.count
                           + " active=" + tabsModel.currentIndex
@@ -261,19 +261,19 @@ Item {
     // PG_AUTO_ACT=identity / identity-half: "which half landed" is a pair of booleans, and a dialog that stayed open
     // because the save did not take looks exactly like one nobody has answered yet. Read the two verbs as a pair.
     SampleTimer {
-        running: AppBackend.autoAct === "identity" || AppBackend.autoAct === "identity-half"
+        running: Harness.autoAct === "identity" || Harness.autoAct === "identity-half"
         onTriggered: {
-            const wholeReady = AppBackend.autoAct === "identity"
+            const wholeReady = Harness.autoAct === "identity"
                                && AppBackend.identityState === "missing"
                                && identityDialog.opened
-            const halfReady = AppBackend.autoAct === "identity-half"
+            const halfReady = Harness.autoAct === "identity-half"
                               && AppBackend.identityState === "ready"
                               && AppBackend.identityUnsaved
                               && identityDialog.opened
             if (!wholeReady && !halfReady)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "identity state=" + AppBackend.identityState
                 + " dialog=" + identityDialog.opened
                 + " nameSaved=" + AppBackend.identityNameSaved
@@ -289,7 +289,7 @@ Item {
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
     // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer, not the open dialog.
     SampleTimer {
-        running: AppBackend.autoAct === "identity-tip"
+        running: Harness.autoAct === "identity-tip"
         onTriggered: {
             if (!identityDialog.opened || !AppBackend.identityUnsaved)
                 return
@@ -316,7 +316,7 @@ Item {
             if (!topBar.stateCardOpen)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "identity_tip unsaved=" + AppBackend.identityUnsaved
                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
                 + " tip=" + topBar.stateCardOpen
@@ -342,7 +342,7 @@ Item {
     // `quit-locked` waits the landing out in its own sampler (`AutoActCompletion`).
     SampleTimer {
         id: quitTimer
-        running: AppBackend.autoAct === "quit-waits" || AppBackend.autoAct === "quit-locked"
+        running: Harness.autoAct === "quit-waits" || Harness.autoAct === "quit-locked"
         /// The steps already taken, so nothing re-reads what had to be true before each of them.
         property bool committed: false
         property bool closed: false
@@ -370,11 +370,11 @@ Item {
                 window.close()
                 return
             }
-            if (AppBackend.autoAct === "quit-waits") {
+            if (Harness.autoAct === "quit-waits") {
                 if (!quitWaitDialog.opened)
                     return
                 stop()
-                AppBackend.report("quit_wait dialog=" + quitWaitDialog.opened
+                Harness.report("quit_wait dialog=" + quitWaitDialog.opened
                     + " window=" + window.visible
                     + " busy=" + (tab.busyCount !== 0))
                 window.finishAutoAct()
@@ -396,7 +396,7 @@ Item {
             if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
                 return
             stop()
-            AppBackend.report("quit_lock dialog=" + quitWaitDialog.opened
+            Harness.report("quit_lock dialog=" + quitWaitDialog.opened
                 + " window=" + window.visible
                 + " escape=" + quitWaitDialog.escapes
                 + " vetoes=" + quitWaitDialog.vetoes
@@ -415,14 +415,14 @@ Item {
     // up — a git that would not answer — has no verb, since it needs a PATH without git on it.
     SampleTimer {
         id: gateSweepTimer
-        running: AppBackend.autoAct === "gate-sweep"
+        running: Harness.autoAct === "gate-sweep"
         onTriggered: {
             if (!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === "")
                 return
             stop()
             // `held=` is what the sweep had to land on: an empty gate has air and no fields, and a run that swept one
             // would be reporting on a screen the reader never sees.
-            AppBackend.report("gate_sweep "
+            Harness.report("gate_sweep "
                 + gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
             window.finishAutoAct()
         }

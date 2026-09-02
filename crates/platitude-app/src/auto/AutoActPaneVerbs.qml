@@ -39,7 +39,7 @@ Item {
                 page.setGraphColumns(Number(arg.substring(boxCut + 1)), graphPane.graphColWManual)
             graphPane.startNaming(graphModel.oidAt(boxRow))
             const boxItem = graphPane.view.itemAtIndex(boxRow)
-            AppBackend.report("name_box row=" + boxRow
+            Harness.report("name_box row=" + boxRow
                               + " label_w=" + Math.round(graphPane.labelW)
                               + " box_w=" + (boxItem ? Math.round(boxItem.nameBoxWidth) : -1))
         } else if (act === "name-box-drop") {
@@ -58,7 +58,7 @@ Item {
                     nameItem.takeNamingFocus()
             }
             page.releasePressedAway(null)
-            AppBackend.report("name_drop box=" + (graphPane.view.namingOid !== "")
+            Harness.report("name_drop box=" + (graphPane.view.namingOid !== "")
                               + " row=" + nameRow
                               + " typed=" + nameTyped)
         } else if (act === "graph-tail") {
@@ -86,13 +86,13 @@ Item {
         } else if (act === "graph-min") {
             // Pulled past the floor so the clamp answers (the floor is lane 0's co-author badge kept whole).
             page.setGraphColumns(graphPane.labelWManual, 0)
-            AppBackend.report("graph_min w=" + graphPane.graphColW
+            Harness.report("graph_min w=" + graphPane.graphColW
                               + " min=" + graphPane.graphColWMin)
         } else if (act === "graph-divider") {
             // Read against two repositories: a line withheld on a linear history is only an answer next to a run where
             // it is drawn.
             graphPane.restDividerPointer(true)
-            AppBackend.report("graph_divider shown=" + graphPane.graphDividerShown
+            Harness.report("graph_divider shown=" + graphPane.graphDividerShown
                               + " line=" + graphPane.graphDividerLineShown
                               + " refuses=" + graphPane.graphDividerRefuses
                               + " lanes=" + graphModel.maxLanes
@@ -134,7 +134,7 @@ Item {
             // The verdict leads, and its two halves are neighbours: a graph that never cut and one whose footer failed
             // to draw frame the same way — the end of a history and the end of what was loaded are the same picture
             // without the line.
-            AppBackend.report(
+            Harness.report(
                 "graph_tail truncated=" + graphModel.truncated
                 + " shown=" + tail.visible
                 + " walked=" + graphModel.walkedTotal
@@ -174,7 +174,7 @@ Item {
             if (graphModel.growing || graphModel.walkedTotal === acts.tailWalkedBefore)
                 return
             tailMoreTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "graph_tail_more taken=true"
                 + " waiting=" + acts.tailWaiting
                 + " restarted=" + (graphModel.resetCount !== acts.tailResetsBefore)
@@ -213,7 +213,7 @@ Item {
                 return true
             }
             tailMoreTimer.stop()
-            AppBackend.report("graph_tail_more taken=false")
+            Harness.report("graph_tail_more taken=false")
             driver.complete()
             return false
         }
@@ -231,12 +231,12 @@ Item {
         /// there, so the ask is repeated until the stand-in itself says it arrived (measured — one ask, and the
         /// run waited out its watchdog at the top of the graph).
         property bool answered: false
-        readonly property bool below: AppBackend.autoAct === "graph-head-below"
+        readonly property bool below: Harness.autoAct === "graph-head-below"
         function report() {
             const row = graphModel.headRow
             // The five judged answers first and in one run, because a
             // `must_say` catches neighbours only (`verify/verbs.rs`).
-            AppBackend.report(
+            Harness.report(
                 "graph_head shown=" + graphPane.headPin.visible
                 + " above=" + graphPane.headPin.rowAbove
                 + " onScreen=" + graphPane.view.rowOnScreen(row)
@@ -253,7 +253,7 @@ Item {
             if (graphModel.loading || graphModel.rowTotal === 0
                     || graphModel.headRow < 0 || graphModel.headLabels === "")
                 return
-            const act = AppBackend.autoAct
+            const act = Harness.autoAct
             if (!graphHeadTimer.answered) {
                 // The stand-in has to have come up before anything is asked of it: the two runs below are about what
                 // takes it away again, and a run that never saw it would call an empty band a success.
@@ -306,13 +306,13 @@ Item {
             // `-away` walks it back out again: a bar that comes when the pointer does proves nothing on its own unless
             // it also goes when the pointer goes.
             graphPane.restPointer(true)
-            if (AppBackend.autoAct === "middle-scroll") {
+            if (Harness.autoAct === "middle-scroll") {
                 graphPanTimer.stop()
                 // The middle click, then the pointer drifting sideways off it. The argument says which column the click
                 // landed in, which is the whole question — only the lanes take the sideways drift
                 // (デザイン規約 §グラフを横へ送る).
                 const y = graphPane.height / 2
-                const x = AppBackend.autoActArg === "message"
+                const x = Harness.autoActArg === "message"
                         ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl : graphPane.labelW + Theme.spaceSm
                 graphPane.startAutoScroll(x, y)
                 graphPane.driftPointer(x + graphPane.width, y)
@@ -328,12 +328,12 @@ Item {
             }
             // The rise takes 200ms, so reading on the tick the send landed would report the way there rather than the
             // arrival.
-            if (AppBackend.autoAct === "graph-bar" && graphPane.laneBarInk < 1)
+            if (Harness.autoAct === "graph-bar" && graphPane.laneBarInk < 1)
                 return
-            if (AppBackend.autoAct === "graph-bar-away")
+            if (Harness.autoAct === "graph-bar-away")
                 graphPane.restPointer(false)
             graphPanTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "graph_bar shown=" + graphPane.laneBarShown
                 + " ink=" + Math.round(graphPane.laneBarInk * 100) / 100
                 + " overflow=" + Math.round(graphPane.graphXMax))
@@ -379,13 +379,13 @@ Item {
                 paneBarTimer.wasLit = true
                 // The reader leaves, which is the only thing that puts the slab back down (there is no timer — the
                 // bar answers the reader, not the clock).
-                if (AppBackend.autoAct === "pane-bar-away")
+                if (Harness.autoAct === "pane-bar-away")
                     bar.inArea = false
             }
-            if (AppBackend.autoAct === "pane-bar-away" && !Qt.colorEqual(bar.slabColor, Theme.bgElevated))
+            if (Harness.autoAct === "pane-bar-away" && !Qt.colorEqual(bar.slabColor, Theme.bgElevated))
                 return
             paneBarTimer.stop()
-            AppBackend.report("pane_bar ink=" + bar.slabColor
+            Harness.report("pane_bar ink=" + bar.slabColor
                               + " at=" + Math.round(view.contentY)
                               + " rows=" + view.count)
             driver.complete()
@@ -426,15 +426,15 @@ Item {
                     return
                 textBarTimer.wasLit = true
                 // The reader leaves the box, which is the only thing that puts the ink back down.
-                if (AppBackend.autoAct === "text-bar-away")
+                if (Harness.autoAct === "text-bar-away")
                     detailsPane.holdDescriptionBar(false)
             }
             // All the way down to the idle step (three tenths — 規約 §QML 実装ルール のバーの明るさ), not merely on the
             // way there: the fall takes 400ms, and a tick inside it reports the descent rather than where it lands.
-            if (AppBackend.autoAct === "text-bar-away" && detailsPane.descriptionBarInk > 0.305)
+            if (Harness.autoAct === "text-bar-away" && detailsPane.descriptionBarInk > 0.305)
                 return
             textBarTimer.stop()
-            AppBackend.report("text_bar ink=" + Math.round(detailsPane.descriptionBarInk * 100) / 100
+            Harness.report("text_bar ink=" + Math.round(detailsPane.descriptionBarInk * 100) / 100
                               + " at=" + Math.round(detailsPane.descriptionAt))
             driver.complete()
         }
@@ -456,7 +456,7 @@ Item {
             if (graphPane.autoPanning && graphPane.graphX < graphPane.graphXMax - 0.5)
                 return
             middleScrollTimer.stop()
-            AppBackend.report(
+            Harness.report(
             "middle_scroll lanes=" + graphPane.autoPanning
             + " x=" + Math.round(graphPane.graphX)
             + " max=" + Math.round(graphPane.graphXMax))

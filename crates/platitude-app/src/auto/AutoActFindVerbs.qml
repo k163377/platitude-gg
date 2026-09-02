@@ -76,7 +76,7 @@ Item {
                 graphPane.findPrevious()
             // `width` and `cap` are the two halves of the rule the long queries are here to check: the card may grow,
             // and it may not reach past a subject's first character.
-            AppBackend.report("find open=" + graphPane.findCard.open
+            Harness.report("find open=" + graphPane.findCard.open
                               + " query=" + graphPane.findCard.query
                               + " matches=" + graphPane.findCard.matches
                               + " at=" + graphPane.findCard.atMatch
@@ -145,7 +145,7 @@ Item {
             avatarAssignTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    AppBackend.autoActArg)
+                                    Harness.autoActArg)
             avatarReportTimer.start()
         }
     }
@@ -168,7 +168,7 @@ Item {
             if (!graphPane.findCard.open)
                 return
             findSettled.stop()
-            AppBackend.report(
+            Harness.report(
             "find_settled shift=" + Math.round(graphPane.findShift))
             driver.complete()
         }
@@ -181,7 +181,7 @@ Item {
             if (graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1)
                 return
             findDropSettled.stop()
-            AppBackend.report("find_drop open=" + graphPane.findCard.open
+            Harness.report("find_drop open=" + graphPane.findCard.open
                               + " shown=" + (graphPane.findCard.opacity > 0)
                               + " query=" + graphPane.findCard.query)
             driver.complete()
@@ -196,7 +196,7 @@ Item {
             avatarSeedTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    AppBackend.autoActArg)
+                                    Harness.autoActArg)
             page.settingsDialogRequested()
         }
     }
@@ -208,7 +208,7 @@ Item {
             if (detailsModel.avatarUrl === "" && AppBackend.avatarError === "")
                 return
             avatarReportTimer.stop()
-            AppBackend.report(
+            Harness.report(
             "avatar email=" + detailsModel.authorEmail
             + " details=" + (detailsModel.avatarUrl !== "")
             + " rows=" + graphModel.avatarRowCount()
@@ -236,7 +236,7 @@ Item {
             if (page.commandsShown)
                 return
             commandsShutTimer.stop()
-            AppBackend.report("commands_shut wrong=" + page.commandsWrong
+            Harness.report("commands_shut wrong=" + page.commandsWrong
                               + " open=" + page.commandsShown
                               + " folded=" + page.sidebarCollapsed
                               + " mark=" + page.commandsMarkColor)
@@ -274,8 +274,8 @@ Item {
             // the rows in the tick a press lands in (measured, 1 against 4 commands on the clipboard).
             const rows = page.pageCommands.rowsHeld()
             page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
-            if (AppBackend.autoAct === "commands-select") {
-                AppBackend.report("commands_pick holds=" + (page.pageCommands.selectionText() !== "")
+            if (Harness.autoAct === "commands-select") {
+                Harness.report("commands_pick holds=" + (page.pageCommands.selectionText() !== "")
                                   + " rows=" + rows)
                 renderedBarrier.begin()
                 return
@@ -284,7 +284,7 @@ Item {
             const text = driver.clipboard.lastCopied
             const lines = text === "" ? [] : text.split("\n")
             const said = lines.filter(line => !line.startsWith("\t")).length
-            AppBackend.report("commands_copy perRow=" + (rows > 0 && said === rows)
+            Harness.report("commands_copy perRow=" + (rows > 0 && said === rows)
                               + " rows=" + rows + " said=" + said + " lines=" + lines.length)
             renderedBarrier.begin()
         }
@@ -329,7 +329,7 @@ Item {
             }
             // `ground=` is the run's own honesty: a panel whose log fills it has nowhere to sweep from, and a
             // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
-            AppBackend.report("commands_sweep reach=" + reach + "/" + tries
+            Harness.report("commands_sweep reach=" + reach + "/" + tries
                               + " ground=" + page.commandsHasGround
                               + " rows=" + page.pageCommands.rowsHeld())
             renderedBarrier.begin()

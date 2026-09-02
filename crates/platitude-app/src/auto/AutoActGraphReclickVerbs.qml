@@ -124,7 +124,7 @@ Item {
                     // than at the box. Read off the chip itself (`RefChip.waiting`), because a picture taken a beat
                     // late frames the box instead and would say nothing either way.
                     reclickGraphTimer.stop()
-                    AppBackend.report(
+                    Harness.report(
                     "graph_reclick_mark row=" + reclickGraphTimer.row
                     + " armed=" + acts.reclickGraphArmed
                     + " mark=" + item.chipWaiting
@@ -142,7 +142,7 @@ Item {
                 if (reclickGraphTimer.scrolls && !graphPane.rowOnScreen(reclickGraphTimer.row))
                     return
                 reclickGraphTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "graph_reclick row=" + reclickGraphTimer.row
                 + " armed=" + acts.reclickGraphArmed
                 + " box=" + (graphPane.namingOid !== "")
@@ -210,7 +210,7 @@ Item {
                 if (acts.laneClickArmed && graphPane.namingOid === "")
                     return
                 laneClickTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "graph_reclick_lanes row=" + laneClickTimer.row
                 + " strip=" + graphPane.lanePan.visible
                 + " armed=" + acts.laneClickArmed
@@ -253,7 +253,7 @@ Item {
                         return
                     driver.pressedWrite()
                     reclickListTimer.stop()
-                    AppBackend.report("ref_list_pick row=" + reclickListTimer.row
+                    Harness.report("ref_list_pick row=" + reclickListTimer.row
                                       + " card=" + reclickListTimer.card
                                       + " list=" + refList.opened)
                     // The write barrier is what finishes this one: the move is the whole of it.
@@ -282,7 +282,7 @@ Item {
                 if (acts.reclickListArmed && graphPane.namingOid === "")
                     return
                 reclickListTimer.stop()
-                AppBackend.report(
+                Harness.report(
                 "graph_reclick_list row=" + reclickListTimer.row
                 + " card=" + reclickListTimer.card
                 + " armed=" + acts.reclickListArmed

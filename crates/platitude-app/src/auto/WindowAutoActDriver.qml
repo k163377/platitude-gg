@@ -14,7 +14,7 @@ import platitude.ui
 /// harness reaches into the window.
 ///
 /// The verbs themselves are grouped by the part of the window they answer for and live in the five items at the foot of
-/// this file. Each of those gates itself on `AppBackend.autoAct`, so the grouping is only ever about where a verb is
+/// this file. Each of those gates itself on `Harness.autoAct`, so the grouping is only ever about where a verb is
 /// read: nothing here hands one its turn. The two that stay are the two that cannot — they read the change signals
 /// latched just below, which have to be connected before the verb they belong to starts.
 // An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is never
@@ -77,7 +77,7 @@ Item {
     // this verb's own answer — the panel gone — barring the way to the report.
     SampleTimer {
         id: commandsClearActTimer
-        running: AppBackend.autoAct === "commands-clear"
+        running: Harness.autoAct === "commands-clear"
         property bool clearRequested: false
         property bool was: false
         onTriggered: {
@@ -96,7 +96,7 @@ Item {
             if (window.curPage.commandsWrong || window.curPage.commandsShown)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "commands_clear was=" + commandsClearActTimer.was
                 + " wrong=" + window.curPage.commandsWrong
                 + " open=" + window.curPage.commandsShown
@@ -110,7 +110,7 @@ Item {
     // quiet half.
     SampleTimer {
         id: fetchRecoverActTimer
-        running: AppBackend.autoAct === "fetch-recover"
+        running: Harness.autoAct === "fetch-recover"
         property bool fetchRequested: false
         property bool was: false
         property bool hadLine: false
@@ -132,7 +132,7 @@ Item {
                     || window.curPage.pageTab.fetchFailures !== 0)
                 return
             stop()
-            AppBackend.report(
+            Harness.report(
                 "fetch_recover was=" + fetchRecoverActTimer.was
                 + " hadline=" + fetchRecoverActTimer.hadLine
                 + " wrong=" + window.curPage.commandsWrong

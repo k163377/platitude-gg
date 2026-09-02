@@ -146,7 +146,7 @@ Item {
             moveAskTimer.stop()
             // No chip on this one — git has no single word for moving a branch onto a ref, so the pill answers in the
             // ordinary voice (規約 §git 用語のコード表記). `code=` being empty is part of the claim.
-            AppBackend.report("move_ask hold=" + graphPane.askHold
+            Harness.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
                               + " branch=" + workTree.branch)
             driver.complete()
@@ -160,7 +160,7 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             localUpstreamAskTimer.stop()
-            AppBackend.report("rename_upstream_ask hold=" + graphPane.askHold
+            Harness.report("rename_upstream_ask hold=" + graphPane.askHold
                               + " branch=" + workTree.branch)
             driver.complete()
         }
@@ -176,7 +176,7 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             askSweepTimer.stop()
-            AppBackend.report("ask_sweep "
+            Harness.report("ask_sweep "
                 + graphPane.askCard.pad.sweepAir(7, "words=" + (graphPane.askCard.label !== "")))
             driver.complete()
         }
@@ -195,7 +195,7 @@ Item {
             // (§git が言ったことを読む場所), and a red panel under a press that had a way out on screen is the thing
             // this whole road exists to stop. A shut panel and a panel that was never
             // raised are the same picture, which is why it is said rather than shown.
-            AppBackend.report("switch_landed branch=" + workTree.branch
+            Harness.report("switch_landed branch=" + workTree.branch
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchLandsTimer.stashes
                               + " conflicts=" + workTree.conflictCount
@@ -217,7 +217,7 @@ Item {
             switchTwiceTimer.stop()
             // `writes=` is the same claim counted from the other side: one press, one answer. It is read after the
             // tree has settled, so a second write would have been counted by now.
-            AppBackend.report("switch_twice held=" + switchTwiceTimer.held
+            Harness.report("switch_twice held=" + switchTwiceTimer.held
                               + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
                               + " branch=" + workTree.branch
                               + " log=" + page.commandsOpen)
@@ -234,7 +234,7 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             switchStoppedTimer.stop()
-            AppBackend.report("switch_stopped code=" + graphPane.askCode
+            Harness.report("switch_stopped code=" + graphPane.askCode
                               + " accept=" + graphPane.askCard.accept
                               + " hold=" + graphPane.askHold
                               + " bang=" + graphPane.askAlert
@@ -270,7 +270,7 @@ Item {
                     && stashesModel.total !== switchStoppedLandedTimer.stashes)
                 return
             switchStoppedLandedTimer.stop()
-            AppBackend.report("switch_stopped_landed branch=" + workTree.branch
+            Harness.report("switch_stopped_landed branch=" + workTree.branch
                               + " op=" + workTree.opCommand
                               + " conflicts=" + workTree.conflictCount
                               + " stashes=" + stashesModel.total
@@ -288,7 +288,7 @@ Item {
             switchMarkTimer.stop()
             // `indent=` is the other half: the mark is drawn inside the padding the whole menu carries for it, so a
             // menu that forgot to open that column would draw the `!` over its own edge (`AppMenu.holdIndent`).
-            AppBackend.report("switch_mark offered=" + refSwitchItem.offered
+            Harness.report("switch_mark offered=" + refSwitchItem.offered
                               + " asks=" + refSwitchItem.asks
                               + " want=" + switchMarkTimer.want
                               + " indent=" + (refMenu.holdIndent > 0))
@@ -317,7 +317,7 @@ Item {
             upstreamAskTimer.stop()
             // `there=` is whether this repository actually holds what was answered, which is what decides the pill —
             // and the refused form is the frame and the line, neither of which a full-window picture settles.
-            AppBackend.report("upstream branch=" + upstreamFlow.branch
+            Harness.report("upstream branch=" + upstreamFlow.branch
                               + " remote=" + upstreamFlow.remote
                               + " name=" + upstreamFlow.branchName
                               + " there=" + upstreamFlow.targetIsThere

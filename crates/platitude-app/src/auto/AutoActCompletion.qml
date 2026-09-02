@@ -51,10 +51,10 @@ QtObject {
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
             // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
             // and a run held at the write barrier for one waits out the watchdog in silence.
-            && !(act === "nav-dbl" && AppBackend.autoActArg.startsWith("tag:"))
+            && !(act === "nav-dbl" && Harness.autoActArg.startsWith("tag:"))
             // The bare form opens the menu's hold row and stops there; only the `go` argument carries the
             // hold through to a write, so a bare run held at the write barrier would wait out the watchdog.
-            && !(act === "delete-stash-row" && AppBackend.autoActArg !== "go")
+            && !(act === "delete-stash-row" && Harness.autoActArg !== "go")
     }
 
     function defersCompletion(act) {

@@ -192,7 +192,7 @@ Item {
                     || !driver.cardSettled)
                 return
             graphStepReport.stop()
-            AppBackend.report(
+            Harness.report(
                 "graph_step from=" + graphStepReport.from
                 + " row=" + row
                 + " steps=" + graphStepTimer.steps
@@ -257,7 +257,7 @@ Item {
                     || page.selectedOid !== graphModel.oidAt(row) || !driver.cardSettled)
                 return
             graphHoldReport.stop()
-            AppBackend.report(
+            Harness.report(
                 "graph_hold from=" + graphHoldReport.from
                 + " row=" + row
                 + " steps=" + graphHoldTimer.steps
@@ -352,7 +352,7 @@ Item {
                     || walk.litPath() === "")
                 return
             fileStepReport.stop()
-            AppBackend.report(
+            Harness.report(
                 "file_step pane=" + fileStepTimer.pane
                 + " from=" + fileStepTimer.path
                 + " steps=" + fileStepTimer.steps
@@ -415,7 +415,7 @@ Item {
                 return
             }
             changesFoldTimer.stop()
-            AppBackend.report(
+            Harness.report(
                 "changes_fold path=" + changesFoldTimer.path
                 + " strikes=" + changesFoldTimer.struck
                 + " shut=" + row.isFolded
@@ -465,7 +465,7 @@ Item {
             if (!diffPane.diffSettled())
                 return
             diffStepReport.stop()
-            AppBackend.report(
+            Harness.report(
             "diff_step from=" + diffStepReport.from
             + " rows=" + acts.diffRow()
             + " steps=" + diffStepTimer.steps

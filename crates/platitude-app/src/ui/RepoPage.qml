@@ -1324,7 +1324,7 @@ Item {
         id: harness
         anchors.fill: parent
         part: "PageHarness.qml"
-        wanted: AppBackend.automated
+        wanted: AppBackend.harnessPresent
         seats: ({
             page: page,
             repoTab: repoTab,

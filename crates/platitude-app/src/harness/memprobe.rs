@@ -22,6 +22,14 @@
 //! The process's allocator is chosen here too, because there is only one
 //! `#[global_allocator]` slot and the counter has to sit in front of
 //! whatever fills it.
+//!
+//! **The report half is reached from one place** — the slot on
+//! `harness::singleton::Harness` — and that type is not compiled into a
+//! build without the harness, so nothing there calls any of it. `allow`
+//! rather than `expect`: the test at the foot keeps some of the same names
+//! live whenever tests are compiled, and an expectation that goes
+//! unfulfilled is a warning of its own.
+#![cfg_attr(not(feature = "automation"), allow(dead_code))]
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
