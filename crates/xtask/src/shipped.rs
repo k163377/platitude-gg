@@ -43,7 +43,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
-    let exe = shipped_exe(&root, &path, build)?;
+    let exe = crate::tree::shipped_exe(&root, &path, build)?;
 
     // A directory of its own, so a run here never reads or writes the
     // settings of the person at this machine.
@@ -128,41 +128,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
         started.elapsed().as_secs_f32()
     );
     Ok(())
-}
-
-/// The release binary with no features on it, built unless told not to.
-///
-/// Deliberately not [`crate::tree::app_exe`]: that one asks for the harness,
-/// which is the whole of what this command is checking the absence of.
-fn shipped_exe(
-    root: &std::path::Path,
-    path: &std::ffi::OsStr,
-    build: bool,
-) -> Result<std::path::PathBuf, String> {
-    if build {
-        println!("building (release, no features — the shipped set)…");
-        let status = Command::new("cargo")
-            .args(["build", "--release"])
-            .current_dir(root)
-            .env("PATH", path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
-        if !status.success() {
-            return Err("cargo build --release failed".into());
-        }
-    }
-    let exe = root.join("target").join("release").join(if cfg!(windows) {
-        "platitude-gg.exe"
-    } else {
-        "platitude-gg"
-    });
-    if !exe.is_file() {
-        return Err(format!(
-            "{} not found — build first (or drop --no-build)",
-            exe.display()
-        ));
-    }
-    Ok(exe)
 }
 
 /// Drains a pipe on its own thread, so a chatty child never blocks on a

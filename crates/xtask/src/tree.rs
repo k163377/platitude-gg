@@ -66,6 +66,40 @@ pub(crate) fn app_exe(
             return Err("cargo build --release failed".into());
         }
     }
+    where_it_lands(root)
+}
+
+/// The release binary with **no** features on it: the build a person
+/// installs, and the one nothing here can drive.
+///
+/// Deliberately separate from [`app_exe`]: that one asks for the harness,
+/// which is the whole of what the two callers here are about — `shipped`
+/// checks that the QML still loads without it, and `perf --shipped`
+/// weighs it. They land on the same path, so whichever ran last is what
+/// is on disk: a `--no-build` run is measuring whatever that was, which
+/// is why the evidence names the feature set it asked for
+/// (`perf::Options::features`).
+pub(crate) fn shipped_exe(
+    root: &Path,
+    path: &std::ffi::OsStr,
+    build: bool,
+) -> Result<PathBuf, String> {
+    if build {
+        println!("building (release, no features — the shipped set)…");
+        let status = std::process::Command::new("cargo")
+            .args(["build", "--release"])
+            .current_dir(root)
+            .env("PATH", path)
+            .status()
+            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        if !status.success() {
+            return Err("cargo build --release failed".into());
+        }
+    }
+    where_it_lands(root)
+}
+
+fn where_it_lands(root: &Path) -> Result<PathBuf, String> {
     let exe = root.join("target").join("release").join(if cfg!(windows) {
         "platitude-gg.exe"
     } else {
