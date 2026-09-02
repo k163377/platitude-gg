@@ -158,9 +158,10 @@ const TAIL: &str = "  shipped [--no-build]
       thing worth keeping: the dates and the strings are fixed, so a
       corpus deleted and built again is the same corpus, down to the
       object ids.
-      It lives beside the primary checkout so all six seats measure one
-      corpus. --path puts it somewhere else; --force builds over one
-      that is already there.
+      It lives in .pg-perf-corpus/ beside the primary checkout's .git —
+      ignored, like the shot board — so all six seats measure one corpus
+      and nothing is written outside the project. --path puts it
+      somewhere else; --force builds over one already there.
 
   perf --repo <path> [--label <name>] [--runs <n>] [--breakdown] [--shipped]
       The measurement behind ci/baseline/perf-windows-x64.md, run the

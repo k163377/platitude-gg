@@ -14,10 +14,10 @@
 //! worth keeping is the generator, not its output.
 //!
 //! **Why it is built once.** Every seat measures the same corpus, so it
-//! lives beside the checkouts rather than inside one of them, and a run
-//! that finds it already there does nothing. Delete it and the next
-//! `corpus` builds it again — to the same object ids, because the dates
-//! and the strings are fixed (`shape`).
+//! sits beside the primary checkout's `.git` rather than in any one
+//! tree, and a run that finds it already there does nothing. Delete it
+//! and the next `corpus` builds it again — to the same object ids,
+//! because the dates and the strings are fixed (`shape`).
 
 mod shape;
 mod stream;
@@ -25,12 +25,15 @@ mod stream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// The directory name. One corpus for all six seats, like the shot board
-/// — but *beside* the checkout rather than inside it, which the board
-/// does not have to be: a session in a seat is held to its own tree, so
-/// git run against a path under the primary checkout is refused, and a
-/// corpus nobody can inspect by hand is a corpus nobody can debug.
-const DIR_NAME: &str = "pg-perf-corpus";
+/// The directory name, ignored and beside the primary checkout's `.git`
+/// like the shot board and the chip ledger: one for all six seats, in
+/// the project rather than outside it, and never inside a seat's own
+/// tree (six copies, and one `cargo clean` short of gone).
+///
+/// **A `git clean -xfd` in the primary checkout takes it**, as it takes
+/// the board — it is ignored, which is what an ignored directory means.
+/// Building it again is the whole recovery.
+const DIR_NAME: &str = ".pg-perf-corpus";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut force = false;
@@ -78,15 +81,11 @@ fn clearable(at: &Path) -> Result<(), String> {
     ))
 }
 
-/// Beside the primary checkout, whichever seat is asking.
+/// In the primary checkout, whichever seat is asking.
 ///
 /// `--git-common-dir` answers the *shared* git directory, so six seats
 /// resolve to one corpus rather than building six of it — the same call
-/// the shot board is placed by (`shots::board::board_dir`), one level
-/// further out.
-///
-/// A seat's own `target/` is the wrong place twice over: six copies, and
-/// `cargo clean` takes one away.
+/// the shot board is placed by (`shots::board::board_dir`).
 fn default_path() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
@@ -94,17 +93,14 @@ fn default_path() -> Result<PathBuf, String> {
         &cwd,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )
-    .ok_or("not in a git repository: the corpus lives beside the primary checkout")?;
-    beside(&common).ok_or_else(|| format!("{common} has nowhere beside it to hold the corpus"))
+    .ok_or("not in a git repository: the corpus lives in the primary checkout")?;
+    beside(&common).ok_or_else(|| format!("{common} has no checkout to hold the corpus"))
 }
 
-/// Where the corpus goes, given the shared git directory: one level out
-/// of it and one out of the checkout that holds it.
+/// Where the corpus goes, given the shared git directory: next to it,
+/// which is the root of the checkout that holds it.
 fn beside(common: &str) -> Option<PathBuf> {
-    Path::new(common)
-        .parent()
-        .and_then(Path::parent)
-        .map(|beside| beside.join(DIR_NAME))
+    Path::new(common).parent().map(|root| root.join(DIR_NAME))
 }
 
 /// Builds it somewhere else and moves it into place.
@@ -291,12 +287,12 @@ mod tests {
 
     fn shown(common: &str) -> String {
         beside(common)
-            .expect("a git directory has somewhere beside it")
+            .expect("a git directory sits in a checkout")
             .to_string_lossy()
             .replace('\\', "/")
     }
 
-    /// One corpus beside the primary checkout, whichever seat asks — a
+    /// One corpus in the primary checkout, whichever seat asks — a
     /// seat's own path must not reach the answer, or six seats would
     /// build six of it. `--git-common-dir` is what makes that true: it
     /// answers the shared directory, so every seat is handed the same
@@ -304,11 +300,11 @@ mod tests {
     #[test]
     fn every_seat_is_pointed_at_the_same_corpus() {
         let from_seat = shown("C:/Users/x/IdeaProjects/platitude-gg/.git");
-        assert!(from_seat.ends_with("/pg-perf-corpus"), "{from_seat}");
+        assert_eq!(
+            from_seat,
+            "C:/Users/x/IdeaProjects/platitude-gg/.pg-perf-corpus"
+        );
         assert!(!from_seat.contains("/.claude/worktrees/"), "{from_seat}");
-        // Beside the checkout, not under it: a seat may not run git
-        // against a path inside the primary checkout.
-        assert!(!from_seat.contains("/platitude-gg/"), "{from_seat}");
         assert_eq!(
             shown("/home/x/platitude-gg/.git"),
             from_seat.replace("C:/Users/x/IdeaProjects", "/home/x")
@@ -320,9 +316,9 @@ mod tests {
     /// its own checkout.
     #[test]
     fn force_will_not_delete_something_that_is_not_a_corpus() {
-        assert!(clearable(std::path::Path::new("/tmp/pg-perf-corpus")).is_ok());
+        assert!(clearable(std::path::Path::new("/tmp/.pg-perf-corpus")).is_ok());
         let refused = clearable(std::path::Path::new("/home/x/platitude-gg"))
             .expect_err("a checkout is not a corpus");
-        assert!(refused.contains("pg-perf-corpus"), "{refused}");
+        assert!(refused.contains(".pg-perf-corpus"), "{refused}");
     }
 }
