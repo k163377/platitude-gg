@@ -1,3 +1,24 @@
+//! The whole of what QML sees of `AppBackend`, and **as short as this
+//! file gets without a redesign**.
+//!
+//! Read this before shortening it. The `#[qobject]` block cannot be
+//! divided: QMetaInfo is built per file, so one type is one block is one
+//! file. What is left inside it is the face — `qproperty!` declarations,
+//! slot and signal signatures, and their doc — because **every body that
+//! could be delegated already has been**: the window state and the
+//! layout to `start.rs` and `persist.rs`, the assignments to
+//! `avatars.rs`, the startup and identity reads to `lifecycle.rs`, the
+//! platform calls to `crate::winframe`, and the measurement to
+//! `crate::harness`.
+//!
+//! **The one thing left is not a split, it is a redesign**: `AppBackend`
+//! answers for two subjects — what git and the identity are doing, and
+//! what shape the window opened at — and the second could be a QObject of
+//! its own. That renames twenty slots in every QML file that calls them
+//! (the sixteen `start*` reads and the four `save*` writes that go with
+//! them), so it is a decision about the QML-facing object model and not
+//! something to do for a line count. Ask before starting it.
+
 use super::*;
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
