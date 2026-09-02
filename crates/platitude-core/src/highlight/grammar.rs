@@ -277,7 +277,7 @@ mod tests {
             // it answers `&'static`, which would lend the highlighter
             // itself for `'static` (`tree::line_spans` does the same).
             let events = highlighter
-                .highlight(&lang.config, sample.as_bytes(), None, |name| {
+                .highlight(&lang.config, sample.as_bytes(), None, None, |name| {
                     injection(name)
                 })
                 .expect("a grammar reads its own language");

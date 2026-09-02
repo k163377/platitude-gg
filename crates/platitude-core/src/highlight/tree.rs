@@ -179,7 +179,7 @@ pub(super) fn reads(lang: &Lang, text: &str) -> bool {
 /// the grammar refuses the text outright.
 fn line_spans(lang: &Lang, highlighter: &mut Highlighter, text: &str) -> Option<Vec<Vec<Span>>> {
     let events = highlighter
-        .highlight(&lang.config, text.as_bytes(), None, |name| {
+        .highlight(&lang.config, text.as_bytes(), None, None, |name| {
             grammar::injection(name)
         })
         .ok()?;
