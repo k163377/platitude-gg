@@ -1,5 +1,6 @@
 use super::{
-    Counted, SRC_CEILING, check_ledger, ledger_entries, names, read_baseline, write_baseline,
+    Counted, check_ledger, code_lines, comment_share, ledger_entries, names, read_baseline,
+    write_baseline,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,12 +25,43 @@ fn paths(entries: &[String]) -> Vec<&str> {
     entries.iter().map(String::as_str).collect()
 }
 
-fn counted(path: &str, lines: usize) -> Counted {
+fn counted(path: &str, code: usize) -> Counted {
     Counted {
         path: path.to_string(),
-        lines,
-        ceiling: SRC_CEILING,
+        code,
+        physical: code,
     }
+}
+
+#[test]
+fn counts_a_line_once_it_carries_anything_outside_a_comment() {
+    let source = "\
+        use a::b;\n\
+        \n\
+        // a whole line of comment\n\
+        /// and a doc line\n\
+        fn f() {} // trailing comment\n\
+        /* opened here\n\
+           still comment\n\
+        */ closed(); // and code after the close\n\
+        /* one-liner */\n\
+        let url = \"https://example.test\";\n";
+    // use / fn / the line the block closes on / the URL: four.
+    assert_eq!(code_lines(source), 4);
+}
+
+#[test]
+fn counts_nothing_in_a_file_that_is_all_comment() {
+    assert_eq!(code_lines("//! module doc\n//! more of it\n\n"), 0);
+    assert_eq!(code_lines(""), 0);
+}
+
+#[test]
+fn reports_the_share_a_file_spends_on_comment_and_blank() {
+    assert_eq!(comment_share(100, 68), 32);
+    assert_eq!(comment_share(4, 4), 0);
+    // An empty file divides by nothing.
+    assert_eq!(comment_share(0, 0), 0);
 }
 
 #[test]
@@ -53,7 +85,7 @@ fn reads_no_entry_out_of_prose_that_names_no_file() {
 #[test]
 fn reads_no_file_exemption_out_of_a_bullet_about_one_function() {
     // The fn ceiling keeps its entries in the same section; a file
-    // named there in passing keeps its own ceiling.
+    // named there in passing keeps its own backstop.
     let section = "\n\
          - `parse/diff/parse.rs` の `parse_patch` は上限 100 を超える\n\
          - **`ui/Pane.qml` は割らない** — 理由\n";

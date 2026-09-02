@@ -65,7 +65,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let mut host_steps: Vec<Vec<String>> = vec![
         // First because it is the cheapest thing here that can fail — it
-        // builds nothing and answers in a second or two, and a line ceiling
+        // builds nothing and answers in a second or two, and a length backstop
         // is not worth finding out about after ten minutes of compiling.
         xtask(&["structure"]),
         // Same reasoning, same cost: a naked wait is a hang the suite

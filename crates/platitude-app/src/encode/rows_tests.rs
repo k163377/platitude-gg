@@ -1,5 +1,5 @@
-//! The cases for `rows`, which is at the line ceiling without them
-//! (.claude/rules/structure.md §上限).
+//! The cases for `rows`, beside it rather than in it
+//! (.claude/rules/structure.md §分割).
 
 use platitude_core::highlight::DiffColors;
 

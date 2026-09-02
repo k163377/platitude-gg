@@ -1,13 +1,13 @@
 # Baseline for `cargo xtask structure` — the files that were already past
-# .claude/rules/structure.md's line ceiling when the count went in.
+# .claude/rules/structure.md's length backstop when the count went in.
 #
 # Each line pins one file at the length it had: `cargo xtask structure` fails
 # if it grows past that number, and rewrites the number downwards when the
 # file shrinks, so the list only ever loosens by being split. A file that
-# drops under the ceiling, or is split away entirely, leaves the list on the
+# drops under the backstop, or is split away entirely, leaves the list on the
 # next run. Lowering a number by hand is fine; raising one is the thing this
 # file exists to stop. A file that is deliberately not split belongs in
 # .claude/rules-refs/structure.md 分割しない判断 instead — the ledger there
-# outranks the ceiling and needs no entry here.
+# outranks the backstop and needs no entry here.
 #
-# <physical lines> <path from the workspace root>
+# <code lines> <path from the workspace root>

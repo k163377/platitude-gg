@@ -5,7 +5,7 @@ import platitude.ui
 // Everything a tag's name answers for, behind the tag's own mark: made here, sent, and taken away from either side
 // (デザイン規約 §メニュー の入れ子).
 //
-// Its own file for length alone — `RefRowMenu` had reached the ceiling (structure.md §上限). Every answer these rows
+// Its own file for length alone, split out of `RefRowMenu` (structure.md §分割). Every answer these rows
 // read is decided as the menu opens and handed down from there; nothing here asks the repository anything.
 AppMenu {
     id: tagMenu

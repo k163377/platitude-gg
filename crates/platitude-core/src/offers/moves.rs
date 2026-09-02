@@ -3,8 +3,7 @@
 //! can run at all, and what leaving a stopped operation undoes.
 //!
 //! Beside the menus rather than in with them: the two share nothing but
-//! the repository state they read, and one file of every rule this module
-//! holds outgrew the ceiling (structure.md §上限).
+//! the repository state they read (structure.md §分割).
 
 use crate::integrate::InProgress;
 use crate::opstate::OpState;

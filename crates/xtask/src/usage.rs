@@ -39,20 +39,22 @@ commands:
       never passes for the whole of stage 2 on its own.
 
   structure
-      The per-file line ceilings of .claude/rules/structure.md (src 500,
-      tests 1000, physical lines) over crates/**/*.rs and *.qml — first
-      step of `check`, and a second or two on its own. Three standings:
-      a file the ledger (.claude/rules-refs/structure.md 分割しない判断)
-      gives a written reason not to split has no ceiling at all, and the
-      run asks only that the entry still names a file that is there —
-      the entry goes when the file is split away; a file already over
-      when this went in is pinned by crates/xtask/structure-baseline.txt
-      at the length it had, free to shrink (the pin follows it down) and
-      not to grow; everything else meets the ceiling as written, so a file
-      that crosses it for the first time fails the run that sees it. The
-      other half of that § — fn 100 lines — is clippy's too_many_lines,
-      raised to warn in the workspace lints, and an existing long function
-      carries #[expect(clippy::too_many_lines)] until it is cut up.
+      The per-file length backstop of .claude/rules/structure.md (1000
+      code lines — blank and comment-only lines do not count) over
+      crates/**/*.rs and *.qml, and what the tree spends on comments —
+      first step of `check`, and a second or two on its own. Three
+      standings: a file the ledger (.claude/rules-refs/structure.md
+      分割しない判断) gives a written reason not to split has no backstop
+      at all, and the run asks only that the entry still names a file
+      that is there — the entry goes when the file is split away; a file
+      already over when this went in is pinned by
+      crates/xtask/structure-baseline.txt at the length it had, free to
+      shrink (the pin follows it down) and not to grow; everything else
+      meets the backstop as written, so a file that crosses it for the
+      first time fails the run that sees it. The other half of that § —
+      fn 100 lines — is clippy's too_many_lines, raised to warn in the
+      workspace lints, and an existing long function carries
+      #[expect(clippy::too_many_lines)] until it is cut up.
 
   waits
       Every await in tests/it that resolves through a channel no Patience

@@ -1,10 +1,10 @@
 //! The ref joins behind the sidebar snapshot and the row chips, and the
 //! per-listing lookups they share.
 //!
-//! Split out of `build` when that file crossed its ceiling: the two
-//! halves answer different questions (one moves a working tree around a
-//! stash, this one reads a refs listing) and share nothing but the
-//! module they sat in.
+//! Beside `build` rather than in it: the two halves answer different
+//! questions (one moves a working tree around a stash, this one reads a
+//! refs listing) and share nothing but the module they sat in
+//! (structure.md §分割).
 
 use super::*;
 

@@ -1,6 +1,5 @@
-//! The cases for `selection`. Beside it rather than in it: the module was
-//! over the length it is held to with them inside (structure.md §上限),
-//! and everything here names only what `selection` publishes to `diff`.
+//! The cases for `selection`. Beside it rather than in it (structure.md
+//! §分割): everything here names only what `selection` publishes to `diff`.
 
 use std::sync::Arc;
 
