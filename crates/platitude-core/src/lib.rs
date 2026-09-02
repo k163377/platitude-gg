@@ -58,24 +58,12 @@ pub mod trailers;
 pub mod version;
 pub mod worktrees;
 
-/// A short string that lives inline when it fits, and on the heap when it
-/// does not.
-///
-/// **What it is for.** The resident data of a large repository is mostly
-/// names — one per ref, one per chip — and a `String` puts every one of
-/// them in its own allocation, twenty-odd bytes of payload behind an
-/// allocator header of comparable size. A ref name averages about twenty
-/// characters (measured on the baseline repository) — inside the 24 this
-/// type keeps inline, so hundreds of thousands of allocations fold away.
-///
-/// **It stays out of the consumer's way.** Reading one needs no mention of
-/// the type (`as_str`, `==` against `&str`, `Display`), so the bridge side
-/// never names it and core's API is still swappable — which is what the
-/// pure-Rust-types rule is for (.claude/rules/core.md).
-pub type Name = compact_str::CompactString;
-
+// Declarations and re-exports only. A type or a helper defined here would
+// make this file what every module reads and what names every module,
+// and the gate's dependency graph would read any change as reaching
+// everything (.claude/rules/structure.md §クレート root).
 pub use error::GitError;
-pub use model::{CommitMeta, StrPool};
+pub use model::{CommitMeta, Name, StrPool};
 pub use oid::Oid;
 pub use process::{
     CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput,

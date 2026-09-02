@@ -154,7 +154,8 @@ pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
 /// from `G` to `B`).
 fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
     let dir = repo.work.clone();
-    let out = crate::run_captured(&mut repo.command(&dir, &["cat-file", "commit", "HEAD"]))?;
+    let out =
+        crate::subprocess::run_captured(&mut repo.command(&dir, &["cat-file", "commit", "HEAD"]))?;
     if !out.status.success() {
         return Err("git cat-file commit HEAD failed".to_string());
     }

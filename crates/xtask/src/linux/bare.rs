@@ -24,14 +24,14 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
     // With the harness, like everything else this runner builds
-    // (`crate::HARNESS_FEATURE`): the script below drives the app with
+    // (`crate::tree::HARNESS_FEATURE`): the script below drives the app with
     // `PG_AUTO_ACT`, which a build without it does not answer.
     let build = [
         "cargo",
         "build",
         "--release",
         "--features",
-        crate::HARNESS_FEATURE,
+        crate::tree::HARNESS_FEATURE,
     ]
     .map(String::from);
     in_container(root, &app, &build, false)?;

@@ -5,6 +5,23 @@ use std::sync::Arc;
 
 use crate::oid::Oid;
 
+/// A short string that lives inline when it fits, and on the heap when it
+/// does not.
+///
+/// **What it is for.** The resident data of a large repository is mostly
+/// names — one per ref, one per chip — and a `String` puts every one of
+/// them in its own allocation, twenty-odd bytes of payload behind an
+/// allocator header of comparable size. A ref name averages about twenty
+/// characters (measured on the baseline repository) — inside the 24 this
+/// type keeps inline, so hundreds of thousands of allocations fold away.
+///
+/// **It stays out of the consumer's way.** Reading one needs no mention of
+/// the type (`as_str`, `==` against `&str`, `Display`), so the bridge side
+/// never names it and core's API is still swappable — which is what the
+/// pure-Rust-types rule is for (.claude/rules/core.md). Named as
+/// `crate::Name` everywhere through the root's re-export.
+pub type Name = compact_str::CompactString;
+
 /// Interning pool for strings that repeat heavily (author names).
 ///
 /// Keeps per-commit metadata compact for very large repositories: commits

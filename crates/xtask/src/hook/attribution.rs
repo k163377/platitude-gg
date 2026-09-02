@@ -5,7 +5,7 @@
 use super::commit::{commit_dir, common_git_dir};
 use super::launch::resolve;
 use super::payload::string_field;
-use crate::git_query;
+use crate::subprocess::git_query;
 
 /// The words a note reaches for to say who asked, rather than what the
 /// code must hold to. Japanese in a .rs or .qml file is already against

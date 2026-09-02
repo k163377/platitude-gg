@@ -8,7 +8,7 @@
 //! that reads perfectly well in the build everybody develops in.
 //!
 //! Nothing else here notices. Every xtask that starts the app builds it
-//! with the feature (`crate::HARNESS_FEATURE`), so the broken build is
+//! with the feature (`crate::tree::HARNESS_FEATURE`), so the broken build is
 //! the one no command in this repository runs.
 //!
 //! What counts as naming a type is what QML resolves: an object

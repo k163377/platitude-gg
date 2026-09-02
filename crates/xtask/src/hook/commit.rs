@@ -4,8 +4,8 @@
 use super::MAIN_ESCAPE;
 use super::git::unquote;
 use super::launch::resolve;
-use crate::git_query;
 use crate::seats::worktree_root;
+use crate::subprocess::git_query;
 
 /// The primary checkout commits nothing of its own — implementation,
 /// documents, settings and the shared session rules alike ride worktree

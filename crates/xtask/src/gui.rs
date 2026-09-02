@@ -23,7 +23,7 @@ pub fn kill(args: &[String]) -> Result<(), String> {
     if !args.is_empty() {
         return Err(format!("kill takes no arguments (got {args:?})"));
     }
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let reaped = reap_under(&root)?;
     if reaped.is_empty() {
         println!("no {APP_NAME} process under {} to reap.", root.display());
@@ -46,14 +46,14 @@ pub fn launch(args: &[String]) -> Result<(), String> {
             other => return Err(format!("launch does not take {other:?}")),
         }
     }
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     // A stale run of this tree holds both the exe (against the link) and
     // this tree's own store lock (the app would open on the refusal gate).
     for (pid, exe) in reap_under(&root)? {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
-    let exe = crate::app_exe(&root, &path, build, &[])?;
+    let exe = crate::tree::app_exe(&root, &path, build, &[])?;
     let child = Command::new(&exe)
         .current_dir(&root)
         .env("PATH", &path)
@@ -108,7 +108,7 @@ fn is_under(exe: &str, root: &Path) -> bool {
 fn app_processes() -> Result<Vec<(u32, String)>, String> {
     // PowerShell is the one stock tool that answers with the image path;
     // the filtering stays in Rust where quoting cannot bend it.
-    let output = crate::run_captured(Command::new("powershell").args([
+    let output = crate::subprocess::run_captured(Command::new("powershell").args([
         "-NoProfile",
         "-Command",
         "Get-Process platitude-gg -ErrorAction SilentlyContinue | ForEach-Object { \"$($_.Id)\t$($_.Path)\" }",
@@ -123,7 +123,7 @@ fn app_processes() -> Result<Vec<(u32, String)>, String> {
     }
     // macOS: comm is the full executable path for processes started by
     // path, which every launch of a built binary is.
-    let output = crate::run_captured(Command::new("ps").args(["-axo", "pid=,comm="]))?;
+    let output = crate::subprocess::run_captured(Command::new("ps").args(["-axo", "pid=,comm="]))?;
     let listing = String::from_utf8_lossy(&output.stdout);
     Ok(listing
         .lines()
@@ -173,7 +173,7 @@ fn kill_pid(pid: u32) -> Result<(), String> {
         c.args(["-9", &pid.to_string()]);
         c
     };
-    let output = crate::run_captured(&mut command)?;
+    let output = crate::subprocess::run_captured(&mut command)?;
     if output.status.success() {
         return Ok(());
     }

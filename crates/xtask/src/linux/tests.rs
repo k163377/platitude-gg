@@ -58,7 +58,7 @@ fn mount_paths_are_forward_slashed() {
 
 #[test]
 fn the_qt_version_comes_from_the_workflow() {
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let version = qt_version(&root).expect("QT_VERSION in ci.yml");
     assert!(
         version.split('.').all(|part| part.parse::<u32>().is_ok()),

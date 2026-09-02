@@ -49,7 +49,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         at += 1;
     }
 
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let started = Instant::now();
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();

@@ -28,7 +28,7 @@ use super::{
 pub(super) fn offline(root: &Path) -> Result<(), String> {
     let app = ensure_image(root, "app", false)?;
 
-    // With the harness (`crate::HARNESS_FEATURE`), because the script
+    // With the harness (`crate::tree::HARNESS_FEATURE`), because the script
     // drives the app over the `PG_*` protocol: a build without it answers
     // none of it, stands until the script's timeout kills it, and reports
     // as an exit 124 that says nothing about why.
@@ -39,7 +39,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
         "-p",
         "platitude-app",
         "--features",
-        crate::HARNESS_FEATURE,
+        crate::tree::HARNESS_FEATURE,
     ]
     .map(String::from);
     in_container(root, &app, &build, false)?;
@@ -99,7 +99,7 @@ fn test_binaries(root: &Path, tag: &str) -> Result<Vec<String>, String> {
         "--no-run",
         "--message-format=json",
     ]);
-    let out = crate::run_captured(&mut cmd)?;
+    let out = crate::subprocess::run_captured(&mut cmd)?;
     if !out.status.success() {
         return Err("collecting the test executables failed".into());
     }

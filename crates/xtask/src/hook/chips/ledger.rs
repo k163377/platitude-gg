@@ -34,7 +34,7 @@ fn ledger_path(input: &str) -> Option<PathBuf> {
         return None;
     }
     let cwd = string_field(input, "cwd")?;
-    let common = crate::git_query(
+    let common = crate::subprocess::git_query(
         &cwd,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )?;

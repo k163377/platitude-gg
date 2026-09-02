@@ -4,7 +4,7 @@
 use super::commit::{common_git_dir, primary_commit_denied};
 use super::payload::string_field;
 use super::{MAIN_ESCAPE, REBASE_ESCAPE};
-use crate::git_query;
+use crate::subprocess::git_query;
 
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the
 /// user asks for it in so many words (CLAUDE.md Git 運用) — landing a

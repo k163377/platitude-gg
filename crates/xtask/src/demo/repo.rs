@@ -74,7 +74,7 @@ impl DemoRepo {
     }
 
     pub(super) fn git_at(&mut self, dir: &Path, args: &[&str]) -> Result<String, String> {
-        let out = crate::run_captured(&mut self.command(dir, args))?;
+        let out = crate::subprocess::run_captured(&mut self.command(dir, args))?;
         if !out.status.success() {
             return Err(format!(
                 "git {args:?} failed: {}",
@@ -99,7 +99,7 @@ impl DemoRepo {
     /// out here because xtask depends on std alone.
     pub(super) fn git_expecting_stop(&mut self, args: &[&str]) -> Result<(), String> {
         let dir = self.work.clone();
-        crate::run_captured(&mut self.command(&dir, args)).map(drop)?;
+        crate::subprocess::run_captured(&mut self.command(&dir, args)).map(drop)?;
         let git_dir = self.work.join(".git");
         let stopped = [
             "rebase-merge",

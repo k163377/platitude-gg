@@ -3,8 +3,8 @@
 //! puts a claim back on a seat `land` set free.
 
 use super::payload::string_field;
-use crate::git_query;
 use crate::seats::{self, SEAT_CLAIM, SEATS, worktree_root};
+use crate::subprocess::git_query;
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
 /// starts a cold target/ nobody will reuse (CLAUDE.md ビルド・テスト).
@@ -134,7 +134,7 @@ pub(super) fn lock_seat(cwd: &str, seat_path: &str, session: &str) -> Claim {
         // side. Pin the locale so the deny keeps its teeth.
         .env("LC_ALL", "C")
         .args(["worktree", "lock", "--reason", &reason, seat_path]);
-    let Ok(output) = crate::run_captured(&mut command) else {
+    let Ok(output) = crate::subprocess::run_captured(&mut command) else {
         return Claim::OursOrMoot;
     };
     if output.status.success() {

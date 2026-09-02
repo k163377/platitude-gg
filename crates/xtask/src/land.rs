@@ -9,11 +9,11 @@
 //! picks the safe move; the pre-shell hook still demands PG_ALLOW_MAIN
 //! in front of it, so the transcript records that the user asked.
 
-use crate::git_query;
 use crate::seats::{SEAT_CLAIM, WorktreeBlock, worktree_blocks};
+use crate::subprocess::git_query;
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let here = root.to_string_lossy().replace('\\', "/");
     let branch = match args {
         [] => current_branch(&here)?,
@@ -145,7 +145,7 @@ fn current_branch(here: &str) -> Result<String, String> {
 fn merge_in(primary: &str, branch: &str) -> Result<(), String> {
     let mut command = std::process::Command::new("git");
     command.arg("-C").arg(primary).args(["merge", branch]);
-    let output = crate::run_captured(&mut command)?;
+    let output = crate::subprocess::run_captured(&mut command)?;
     if output.status.success() {
         return Ok(());
     }
@@ -154,7 +154,8 @@ fn merge_in(primary: &str, branch: &str) -> Result<(), String> {
     // run_captured only fails on a spawn error — the abort's own exit
     // code has to be read, or "walked back" is claimed over a primary
     // still standing mid-merge.
-    let walked_back = crate::run_captured(&mut abort).is_ok_and(|out| out.status.success());
+    let walked_back =
+        crate::subprocess::run_captured(&mut abort).is_ok_and(|out| out.status.success());
     Err(format!(
         "the merge into main stopped and was {}:\n{}{}\n\
          resolve it with the user — a conflict on main is not resolved unattended",

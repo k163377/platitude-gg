@@ -62,7 +62,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if !args.is_empty() {
         return Err(format!("seats takes no arguments (got {args:?})"));
     }
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let seats = survey(&root.to_string_lossy())
         .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
     print!("{}", render(&seats));
@@ -75,7 +75,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// the index it refreshed, and that write would stamp the very index
 /// mtimes this survey reports with the survey's own run.
 pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
-    let listing = crate::git_query(cwd, &["worktree", "list", "--porcelain"])?;
+    let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])?;
     let entries = seat_entries(&listing);
     let now = SystemTime::now();
     // One thread per seat: the greeting takes this survey on every session
@@ -107,7 +107,7 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
         lock_reason: entry.tree.reason.clone(),
         ahead: commits_in(dir, "main..HEAD"),
         behind: commits_in(dir, "HEAD..main"),
-        dirty: crate::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
+        dirty: crate::subprocess::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
             .map(|status| status.lines().filter(|line| !line.is_empty()).count()),
         index_age: index_age(dir, now),
     }
@@ -119,7 +119,7 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
 /// sits on .git/worktrees/skillcare — so .git/worktrees/<seat>/index is
 /// a guess that misses (measured).
 fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
-    let index = crate::git_query(
+    let index = crate::subprocess::git_query(
         dir,
         &["rev-parse", "--path-format=absolute", "--git-path", "index"],
     )?;
@@ -129,7 +129,8 @@ fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
 
 /// How many commits `git rev-list --count` sees in `range`, run in `dir`.
 pub(crate) fn commits_in(dir: &str, range: &str) -> Option<u32> {
-    crate::git_query(dir, &["rev-list", "--count", range]).and_then(|count| count.parse().ok())
+    crate::subprocess::git_query(dir, &["rev-list", "--count", range])
+        .and_then(|count| count.parse().ok())
 }
 
 /// One roster seat as `git worktree list --porcelain` shows it: the

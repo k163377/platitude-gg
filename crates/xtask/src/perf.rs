@@ -37,7 +37,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err("memory sampling is not implemented for this OS".into());
     }
     let opts = parse(args)?;
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
@@ -45,7 +45,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if opts.breakdown {
         extra.extend(["--features", "memprobe"]);
     }
-    let exe = crate::app_exe(&root, &path, opts.build, &extra)?;
+    let exe = crate::tree::app_exe(&root, &path, opts.build, &extra)?;
     let output = artifacts::prepare(&root, &exe, &opts)?;
     println!("evidence: {}", output.display());
 

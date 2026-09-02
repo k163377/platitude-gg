@@ -1,7 +1,7 @@
 //! `cargo xtask shipped` — the one run of the build nobody else here makes.
 //!
 //! Every other command builds the app with the verification harness
-//! (`crate::HARNESS_FEATURE`), because every other command drives it. The
+//! (`crate::tree::HARNESS_FEATURE`), because every other command drives it. The
 //! shipped binary is the build without it, and the way it breaks is
 //! particular: a QML file in `platitude.ui` that names a type from
 //! `platitude.auto` resolves perfectly in a harness build and fails to
@@ -41,7 +41,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             other => return Err(format!("shipped does not take {other:?}")),
         }
     }
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     let exe = shipped_exe(&root, &path, build)?;
 
@@ -132,7 +132,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 /// The release binary with no features on it, built unless told not to.
 ///
-/// Deliberately not [`crate::app_exe`]: that one asks for the harness,
+/// Deliberately not [`crate::tree::app_exe`]: that one asks for the harness,
 /// which is the whole of what this command is checking the absence of.
 fn shipped_exe(
     root: &std::path::Path,

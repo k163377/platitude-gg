@@ -23,7 +23,7 @@ const SEP: char = '\t';
 pub(super) fn board_dir() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
-    let common = crate::git_query(
+    let common = crate::subprocess::git_query(
         &cwd,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )

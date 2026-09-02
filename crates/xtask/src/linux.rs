@@ -114,7 +114,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     // The one verb that is about a different machine rather than a
     // different toolchain: it runs in the container even on Linux, because
     // what it asks is whether a stock Ubuntu is enough.

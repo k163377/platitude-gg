@@ -31,7 +31,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
         return Err(format!("unknown option {unknown:?} (waits takes none)"));
     }
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let suite = root
         .join("crates")
         .join("platitude-core")

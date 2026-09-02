@@ -12,7 +12,7 @@ use super::{child, outcome, repos, seed};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
-    let root = crate::workspace_root();
+    let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     let repos = repos::for_run(&opts)?;
 
@@ -37,7 +37,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     // The build's PATH, not the run's: the git shim below goes onto the
     // child's PATH only, so the build never sees it.
-    let exe = crate::app_exe(&root, &path, opts.build, &[])?;
+    let exe = crate::tree::app_exe(&root, &path, opts.build, &[])?;
 
     let shot_dir = match &opts.shot_dir {
         Some(dir) => {
