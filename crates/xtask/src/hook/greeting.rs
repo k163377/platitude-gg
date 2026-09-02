@@ -2,7 +2,9 @@
 //! free letter it should take.
 
 use super::payload::string_field;
-use crate::seats::{self, SEATS, commits_in, lock_reason, lock_seat, worktree_root};
+use crate::seats::{
+    self, Identity, SEATS, Standing, claim_liveness, commits_in, take_seat, worktree_root,
+};
 use crate::subprocess::git_query;
 
 /// SessionStart: sessions opened in the primary checkout get the worktree
@@ -57,28 +59,24 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
 
 /// A session that starts inside an unclaimed seat claims it, so the
 /// `claude --worktree <letter>` road is covered the same way EnterWorktree
-/// is. A seat locked by somebody else gets a warning, not a fight.
+/// is. A seat somebody else holds gets told so, not fought over.
 fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     // The lock names the worktree by its top-level path (git resolves the
     // argument by exact real path); a session started in a subdirectory
     // would otherwise fail the claim silently.
     let root = crate::seats::worktree_root(cwd).unwrap_or_else(|| cwd.to_string());
-    match lock_reason(&root) {
-        None => {
-            // A claim that could not be written is a survey concern, and so
-            // is one lost to a race in the moment since the read above: the
-            // session is already sitting here either way, and the greeting
-            // still says where the seat stands.
-            let _claim = lock_seat(&root, &root, session);
-            None
-        }
-        Some(reason) if !session.is_empty() && reason.contains(session) => None,
-        Some(reason) => Some(format!(
-            "This seat is locked by another session ({reason}). If \
-             `cargo xtask seats` shows it active (fresh index-age, dirty \
-             files), move to a free seat with EnterWorktree; only a claim \
-             whose session is clearly gone is lifted, with `git worktree \
-             unlock` on this seat's path."
+    let me = Identity::current(Some(session));
+    // A claim that could not be written is a survey concern: the session
+    // is already sitting here either way, and the greeting still says
+    // where the seat stands.
+    match take_seat(&root, &root, &me) {
+        Standing::Ours | Standing::Free => None,
+        Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
+            "This seat is held by another claim. The lock says: {reason}. This \
+             session is {}. {} Two sessions in one seat commit on top of one \
+             another, so move to a seat of your own rather than working here.",
+            me.mark(),
+            claim_liveness(&reason),
         )),
     }
 }

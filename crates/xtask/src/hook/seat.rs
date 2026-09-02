@@ -5,8 +5,8 @@
 use super::launch::resolve;
 use super::payload::string_field;
 use crate::seats::{
-    self, Claim, SEATS, Standing, WorktreeBlock, lock_reason, lock_seat, standing, worktree_blocks,
-    worktree_root,
+    self, Identity, SEATS, Standing, WorktreeBlock, claim_liveness, lock_reason, standing,
+    take_seat, unlock_seat, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -45,17 +45,20 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     let Some(path) = target else {
         return Ok(());
     };
-    let session = string_field(input, "session_id").unwrap_or_default();
-    if let Claim::Held(reason) = lock_seat(&cwd, &path, &session) {
+    let me = Identity::current(string_field(input, "session_id").as_deref());
+    if let Standing::Foreign(reason) | Standing::Stale(reason) = take_seat(&cwd, &path, &me) {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
              \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-             \"This seat is already claimed (locked: {}). Seats are first \
-             come, first served and this refusal is the roster answering, \
-             not an error to work around: take a different letter and \
-             enter it the same way. There is nothing to survey first — \
-             the claim is the check (CLAUDE.md ビルド・テスト).\"}}}}",
-            printable(&reason)
+             \"This seat is already claimed. The lock says: {}. This session \
+             is {}. {} Seats are first come, first served and this refusal is \
+             the roster answering, not an error to work around: take a \
+             different letter and enter it the same way. There is nothing to \
+             survey first — the claim is the check (CLAUDE.md \
+             ビルド・テスト).\"}}}}",
+            printable(&reason),
+            printable(&me.mark()),
+            claim_liveness(&reason),
         );
     }
     Ok(())
@@ -198,11 +201,10 @@ pub(super) fn session_end(input: &str) -> Result<(), String> {
     // resolves the argument by exact real path, so a session that ended
     // standing in a subdirectory would fail it silently.
     let root = worktree_root(&cwd).unwrap_or(cwd);
-    if lock_reason(&root).is_some_and(|reason| reason.contains(&session))
-        && git_query(&root, &["worktree", "unlock", &root]).is_none()
-    {
-        // Nobody is left to tell; the stale mark in `cargo xtask seats`
-        // is the fallback.
+    let me = Identity::current(Some(&session));
+    if matches!(standing(lock_reason(&root), &me), Standing::Ours) && !unlock_seat(&root, &root) {
+        // Nobody is left to tell; the claim's dead pid is what the next
+        // session reads it by.
     }
     Ok(())
 }
@@ -219,39 +221,40 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
     if !SEATS.contains(&name.as_str()) {
         return None;
     }
-    let session = string_field(input, "session_id").unwrap_or_default();
-    match standing(lock_reason(&root), &session) {
-        Standing::Ours => None,
-        Standing::Foreign(reason) => Some(collision(&name, &reason)),
-        Standing::Free => match lock_seat(&root, &root, &session) {
-            Claim::Held(reason) => Some(collision(&name, &reason)),
-            // OursOrMoot cannot tell "claimed now" from "git could not
-            // judge" — only a claim that verifiably took, *for this
-            // session*, is announced (a lock that exists but names someone
-            // else means the parse above missed a refusal).
-            Claim::OursOrMoot => lock_reason(&root)
-                .filter(|reason| reason.contains(&session))
-                .map(|_| {
-                    format!(
-                        "Seat {name} stood unclaimed and this edit re-claimed it \
-                     for the session (a landed seat comes unlocked; further \
-                     work claims it back at its first edit — CLAUDE.md \
-                     ビルド・テスト). {}",
-                        announce(&name)
-                    )
-                }),
-        },
+    let me = Identity::current(string_field(input, "session_id").as_deref());
+    let held = matches!(standing(lock_reason(&root), &me), Standing::Ours);
+    match take_seat(&root, &root, &me) {
+        Standing::Ours if held => None,
+        Standing::Ours => Some(format!(
+            "Seat {name} stood unclaimed and this edit re-claimed it for the \
+             session (a landed seat comes unlocked; further work claims it \
+             back at its first edit — CLAUDE.md ビルド・テスト). {}",
+            announce(&name)
+        )),
+        Standing::Foreign(reason) | Standing::Stale(reason) => Some(collision(&name, &reason, &me)),
+        // git could not judge the seat at all; the tool call itself will
+        // surface whatever is actually wrong with it.
+        Standing::Free => None,
     }
 }
 
 /// The warning an edit into somebody else's seat rides out on.
-fn collision(name: &str, reason: &str) -> String {
+///
+/// Both marks go in it, and the verdict on the other one's process with
+/// them. A warning that names only the lock leaves the reader to date it
+/// against their own arrival, and a lock written in the same minute then
+/// reads as their own — which is how the session that shared seat e
+/// talked itself out of eight of these (2026-09-02).
+fn collision(name: &str, reason: &str, me: &Identity) -> String {
     format!(
-        "This edit landed in seat {name}, which another session holds \
-         (locked: {}). Two sessions in one seat trample each other's tree — \
-         move to a free seat (`cargo xtask seats`) and carry over only your \
-         own hunks (CLAUDE.md ビルド・テスト).",
-        printable(reason)
+        "This edit landed in seat {name}, which this session does not hold. \
+         The seat's lock says: {}. This session is {}. {} Two sessions in one \
+         seat trample each other's tree and commit on top of one another — \
+         move to a free seat and carry over only your own hunks (CLAUDE.md \
+         ビルド・テスト).",
+        printable(reason),
+        printable(&me.mark()),
+        claim_liveness(reason),
     )
 }
 
