@@ -29,3 +29,27 @@ pub(crate) fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
             .replace('\\', "/")
     })
 }
+
+/// Whether the process `pid` names still exists. A probe that could not
+/// answer says "alive": every caller asks this to decide whether somebody
+/// else's claim may be broken, and breaking a live one costs more than
+/// leaving a dead one standing.
+#[cfg(windows)]
+pub(crate) fn process_exists(pid: u32) -> bool {
+    // tasklist exits 0 found or not; the filter's answer is the output.
+    std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
+        .unwrap_or(true)
+}
+
+/// The same, where a signal-less kill is the question.
+#[cfg(not(windows))]
+pub(crate) fn process_exists(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(true)
+}

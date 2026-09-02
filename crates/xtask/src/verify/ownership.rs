@@ -80,26 +80,7 @@ fn holder_alive(lock: &Path) -> bool {
     }) else {
         return true;
     };
-    process_exists(pid)
-}
-
-#[cfg(windows)]
-fn process_exists(pid: u32) -> bool {
-    // tasklist exits 0 found or not; the filter's answer is the output.
-    std::process::Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
-        .output()
-        .map(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
-        .unwrap_or(true)
-}
-
-#[cfg(not(windows))]
-fn process_exists(pid: u32) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(true)
+    crate::subprocess::process_exists(pid)
 }
 
 /// Claim a run-owned directory before any repository, shim, config, or PNG
