@@ -27,9 +27,9 @@
 
 開発は debug ビルド。**`--release` は性能計測と起動確認だけ**だが、release でないと QML(exe 埋め込み)が反映されない。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**。**1 日常** = コンテナ無し / **2 反映前** = 軽量 CI = workspace の fmt / clippy / test + `linux clippy`(**ホストの clippy は `cfg(not(windows))` の中を一切コンパイルしないので、そこだけで死ぬ名前は Linux / mac 側でしか赤くならない**)+ `linux test -p platitude-core` + 触った動詞の `linux verify-ui` + `linux bare` / **3 フル** = 完全性 CI = 2 + `linux bare --discover` + 3OS CI + 性能実測(リリース前と、依存や環境を触った時)。**段 2 は `check --verb <触った動詞>…` で一括実行**。
+**確認は 3 段**。**1 日常** = `cargo xtask gate --host-only`(コンテナ無し)/ **2 反映前** = `cargo xtask gate`(差分の依存木から機械が選ぶ。ホストの clippy は `cfg(not(windows))` の中を見ないので linux 側も回る)/ **3 フル** = 完全性 CI = `gate --all` + `linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時)。**gate の緑は commit にスタンプされ、`land` と git hook が要求する**([反映前テストの機械化.md](internal-docs/反映前テストの機械化.md))。
 
-**Done の基準**: 段 2 が全て通ること。UI 配線の Done は **両 OS の `verify-ui` が同じ動詞で PASS し、両方の PNG を目視するまで**(手順・動詞表・Windows の罠は **verify-ui スキル**を必ず呼ぶ)。
+**Done の基準**: `cargo xtask gate` の PASS。UI 配線の Done は **gate が選んだ動詞が両 OS で PASS し、両方の PNG を目視するまで**(手順・動詞表・罠は **verify-ui スキル**を必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動し、即報告してターンを終える。**起動したら監視しない**(背景タスク・生存確認・撃ち直しを後ろに吊らない — ターンが終わらない間ユーザーの次の指示は届かない)。**`launch` をパイプ・コマンド置換に通さない**(窓の寿命だけターンが返らない。hook が deny)。Done の基準は不変で、段 2 はユーザーが検証・反映を指示した時に走らせる。手順は verify-ui スキル §起動 fast path
 - **テストは thread / process の並行実行が既定** — `--test-threads` を下げて通さず、固定 temp path / port / 設定名や process-global 可変状態を共有しない。非同期テストの因果的な待ち方と反復判定は core 規約 §非同期・並行テストの実装方針
@@ -60,8 +60,8 @@
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)
 - force push しない
-- **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む)。worktree ブランチが main より遅れたままは正常(例外は座席のマージ済みブランチの `reset --hard main`)。`hook pre-shell` が deny(`--abort` / `--quit` は除く)— 指示があった時だけ `PG_ALLOW_REBASE=1` を先頭に付ける
-- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格 — 自分の Done ゲートや段 2 の完了待ちを前提条件にしない)。land はどのセッションからでも動き、本体 checkout の HEAD がどこに居ても安全な手を選ぶ(worktree セッションの git は自ツリーに隔離され、手動 `git merge` は本体に届かない。`branch -f` / `update-ref` の手動反映は本体の index を置き去りにする既知の罠)。hook が main を書く git を deny して land へ誘導する
+- **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む)。worktree ブランチが main より遅れたままは正常(例外は座席のマージ済みブランチの `reset --hard main`)。`hook pre-shell` が deny(`--abort` / `--quit` は除く)— 指示があった時だけ `PG_ALLOW_REBASE=1` を先頭に付ける。`land` 内部の rebase は反映指示が根拠
+- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格。land 自身が席で rebase → gate → fast-forward)。land はどのセッションからでも動き、本体 checkout の HEAD がどこに居ても安全な手を選ぶ(worktree セッションの git は自ツリーに隔離され、手動 `git merge` は本体に届かない。`branch -f` / `update-ref` の手動反映は本体の index を置き去りにする既知の罠)。hook が main を書く git を deny して land へ誘導し、git hook がスタンプ無しの commit への main 更新を拒む(`PG_GATE_SKIP=1` はユーザー専用)
 - **本体 checkout への直コミットはしない** — ドキュメントも設定も規約も、**その場でユーザーが main への直接の変更を許可したケース以外は全部席を取って進める**(worktree に積んで反映指示を待つ)。本体 checkout に残るのは読むことだけ
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
