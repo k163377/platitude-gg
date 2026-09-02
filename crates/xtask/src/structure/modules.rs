@@ -16,17 +16,34 @@
 //! (`property TabProbe probe`). A name inside a comment is a reference to
 //! read, and there are many — the harness is where a verb is implemented,
 //! and the product's comments say so.
+//!
+//! **The same boundary has a second half on the Rust side.** What a run
+//! was told to do reaches QML through a singleton the feature registers
+//! (`harness::singleton::Harness`), which is not a `platitude.auto` type
+//! and so is not in the qmldir above. The product may not name it — a
+//! singleton the engine cannot resolve fails the document that reads it,
+//! the same way a missing type does — and may not ask `AppBackend` for
+//! anything that lives on it either, which is what the move was for. Both
+//! names are read out of the singleton's own source, so a property added
+//! there is out of the product's reach on the run that adds it.
 
 use std::path::Path;
 
 /// The product's QML, and the harness module whose names it may not use.
 const PRODUCT: &str = "crates/platitude-app/src/ui";
 const HARNESS_QMLDIR: &str = "crates/platitude-app/src/auto/qmldir";
+/// The QML-facing harness singleton, whose members say what the product
+/// may no longer ask `AppBackend` for.
+const HARNESS_SINGLETON: &str = "crates/platitude-app/src/harness/singleton.rs";
+/// What the product calls it, and what it calls the object it may ask.
+const SINGLETON: &str = "Harness";
+const BACKEND: &str = "AppBackend";
 
 /// One failure per product file that names a harness type, and how many
 /// names were looked for.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let names = harness_types(root)?;
+    let members = singleton_members(root)?;
     let mut failures = Vec::new();
     let product = root.join(PRODUCT);
     let entries = std::fs::read_dir(&product)
@@ -57,9 +74,108 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                     number + 1
                 ));
             }
+            if reads(line, SINGLETON, "") {
+                failures.push(format!(
+                    "{PRODUCT}/{shown}:{} reads the harness singleton — a shipped build registers \
+                     no `{SINGLETON}`, and a document that names one the engine cannot resolve \
+                     does not load. The product asks its own properties and something else writes \
+                     them (.claude/rules/app-ui.md)",
+                    number + 1
+                ));
+            }
+            if let Some(member) = members.iter().find(|member| reads(line, BACKEND, member)) {
+                failures.push(format!(
+                    "{PRODUCT}/{shown}:{} asks `{BACKEND}` for {member}, which is the harness's \
+                     ({HARNESS_SINGLETON}). Nothing the product shows may turn on what a run was \
+                     told to do (.claude/rules/app-ui.md)",
+                    number + 1
+                ));
+            }
         }
     }
-    Ok((failures, names.len()))
+    Ok((failures, names.len() + members.len()))
+}
+
+/// Everything `Harness` puts in front of QML: the `qproperty!` names as
+/// written, and the slots' own names in the camel case
+/// `ConvertToCamelCase` gives them.
+///
+/// Read out of the source rather than listed here, so a knob added to the
+/// harness is out of the product's reach without anybody remembering to
+/// add it twice.
+fn singleton_members(root: &Path) -> Result<Vec<String>, String> {
+    let path = root.join(HARNESS_SINGLETON);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let mut members = Vec::new();
+    for line in text.lines() {
+        let code = line.trim_start();
+        if let Some(rest) = code.strip_prefix("qproperty!(\"")
+            && let Some(name) = rest.split('"').next()
+        {
+            members.push(name.to_string());
+        } else if let Some(rest) = code.strip_prefix("fn ")
+            && let Some(name) = rest.split('(').next()
+        {
+            members.push(camel(name));
+        }
+    }
+    if members.is_empty() {
+        return Err(format!("{HARNESS_SINGLETON} puts nothing in front of QML"));
+    }
+    Ok(members)
+}
+
+/// `open_session_count` → `openSessionCount`, the name Qt registers the
+/// slot under (`#[qobject(ConvertToCamelCase)]`).
+fn camel(snake: &str) -> String {
+    let mut out = String::with_capacity(snake.len());
+    let mut rising = false;
+    for ch in snake.chars() {
+        if ch == '_' {
+            rising = true;
+        } else if rising {
+            out.extend(ch.to_uppercase());
+            rising = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Whether one line of QML reads `<object>.<member>` — or, with an empty
+/// member, reads anything at all off `object`.
+///
+/// Not on a comment line: the product's comments say where a verb is
+/// implemented and what writes a property, and both name these constantly.
+/// **Both ends of the name have to end**: `WindowHarness.qml` — the file a
+/// seat loads by URL — is not `Harness.`, and
+/// `AppBackend.autoFetchMinutes` — the application's own setting — is not
+/// `AppBackend.autoAct`.
+fn reads(line: &str, object: &str, member: &str) -> bool {
+    let code = line.trim_start();
+    if code.starts_with("//") {
+        return false;
+    }
+    let looked_for = if member.is_empty() {
+        format!("{object}.")
+    } else {
+        format!("{object}.{member}")
+    };
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut at = 0;
+    while let Some(found) = code[at..].find(&looked_for) {
+        let start = at + found;
+        let end = start + looked_for.len();
+        let before_ends = code[..start].chars().next_back().is_none_or(|c| !word(c));
+        let after_ends = member.is_empty() || !code[end..].starts_with(word);
+        if before_ends && after_ends {
+            return true;
+        }
+        at = end;
+    }
+    false
 }
 
 /// The type names `platitude.auto` exports, off its own qmldir.
@@ -138,5 +254,52 @@ mod tests {
         assert!(!names_type("    property var tabProbe", "TabProbe"));
         // A call through a seat says nothing about the type.
         assert!(!names_type("    harness.ask().begin()", "WindowHarness"));
+    }
+
+    #[test]
+    fn a_read_off_the_singleton_is_one_and_a_longer_name_is_not() {
+        assert!(reads(
+            "        active: Harness.autoAct !== \"\"",
+            "Harness",
+            ""
+        ));
+        // The seat is the product's own type and shares the first word, and
+        // the file it loads by URL ends in the same eight characters.
+        assert!(!reads("    HarnessSeat {", "Harness", ""));
+        assert!(!reads("        part: \"WindowHarness.qml\"", "Harness", ""));
+        assert!(reads(
+            "        if (AppBackend.autoAct === \"delete-gone\")",
+            "AppBackend",
+            "autoAct"
+        ));
+        // The application's own auto-fetch setting, which merely starts the
+        // same way.
+        assert!(!reads(
+            "        fetchField.text = AppBackend.autoFetchMinutes > 0",
+            "AppBackend",
+            "autoAct"
+        ));
+        assert!(!reads(
+            "    /// written by the harness (`Harness.autoAct`)",
+            "Harness",
+            ""
+        ));
+    }
+
+    #[test]
+    fn a_slot_is_looked_for_under_the_name_qt_registers_it_by() {
+        assert_eq!(camel("open_session_count"), "openSessionCount");
+        assert_eq!(camel("report"), "report");
+    }
+
+    /// The rule the count is for: the tree it runs on passes it.
+    #[test]
+    fn the_product_reaches_for_nothing_a_shipped_build_lacks() {
+        let (failures, names) = check(&crate::tree::workspace_root()).expect("scan the product");
+        assert!(failures.is_empty(), "{failures:#?}");
+        assert!(
+            names > 1,
+            "the harness puts more than one name out of reach"
+        );
     }
 }

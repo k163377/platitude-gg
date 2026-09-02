@@ -16,6 +16,13 @@
 //! `PG_LOG` is the exception, and deliberately: it says how loud to be
 //! rather than who is driving (`settings::NOT_AUTOMATION`), and it is read
 //! before there is a harness to ask.
+//!
+//! **Spelling a variable is not the only way to read one.** The core's
+//! `settings::Env` is a reader over the same set — `Env::system().automated()`
+//! answers "is anything driving this" without a `PG_` literal anywhere — so
+//! a shipped window that happened to have one exported would have gone on
+//! answering yes through it while the count above passed. That reader is
+//! held to the same one module.
 
 use std::path::Path;
 
@@ -28,6 +35,8 @@ const APP: &str = "crates/platitude-app/src";
 const READER: &str = "harness/knobs.rs";
 const ENTRY: &str = "main.rs";
 const LOGGING: &str = "PG_LOG";
+/// The core's own reader over the same variables, held to the same module.
+const READER_TYPE: &str = "settings::Env";
 
 /// One failure per file naming a `PG_*` variable it may not, and how many
 /// files were read for them.
@@ -45,6 +54,15 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
         }
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         for (number, line) in text.lines().enumerate() {
+            if uses_reader(line) {
+                failures.push(format!(
+                    "{APP}/{shown}:{}: uses `{READER_TYPE}` — it reads the same variables without \
+                     spelling one, so the only place in this crate that may hold it is `{READER}`. \
+                     Put the answer on `Knobs` and hand that to whoever needs it \
+                     (.claude/rules/app-ui.md)",
+                    number + 1
+                ));
+            }
             for name in named(line) {
                 if shown == ENTRY && name == LOGGING {
                     continue;
@@ -87,9 +105,31 @@ fn named(line: &str) -> Vec<&str> {
     found
 }
 
+/// Whether one line of Rust reaches for the core's environment reader.
+///
+/// None on a comment line, for the reason [`named`] gives: the crate's
+/// comments point at `Env::automated` where they explain what a knob
+/// means, and a name to read is not a lookup.
+fn uses_reader(line: &str) -> bool {
+    let code = line.trim_start();
+    !code.starts_with("//") && code.contains(READER_TYPE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_core_reader_is_a_lookup_and_a_comment_is_a_reference() {
+        assert!(uses_reader(
+            "        automated: platitude_core::settings::Env::system().automated(),"
+        ));
+        assert!(uses_reader("use platitude_core::settings::Env;"));
+        assert!(!uses_reader(
+            "    /// (`settings::Env::automated` — any knob)"
+        ));
+        assert!(!uses_reader("    let driving = knobs().automated;"));
+    }
 
     #[test]
     fn a_literal_is_a_lookup_and_a_comment_is_a_reference() {
