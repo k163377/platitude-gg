@@ -72,14 +72,21 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     }
 }
 
-/// How long a person waited for a frame with the graph in it, and how
-/// much of that was the walk.
+/// How long a person waited: to a frame with the graph in it, and to the
+/// graph data being whole, which is the number both builds answer.
 fn timings(kept: &[Reading]) {
     let startups: Vec<f64> = kept.iter().filter_map(|r| r.startup_ms).map(f).collect();
     if !startups.is_empty() {
         println!(
             "  startup     : {} ms (to a visible graph frame)",
             spread(&startups)
+        );
+    }
+    let graphs: Vec<f64> = kept.iter().filter_map(|r| r.graph_ms).map(f).collect();
+    if !graphs.is_empty() {
+        println!(
+            "  to a graph  : {} ms (stream finished; the number both builds answer)",
+            spread(&graphs)
         );
     }
     let firsts: Vec<f64> = kept

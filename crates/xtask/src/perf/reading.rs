@@ -29,6 +29,14 @@ pub(super) struct Reading {
     /// everything before it: the runtime, the window, the QML engine and
     /// opening the repository. Those are most of what a person waits for.
     pub(super) startup_ms: Option<u64>,
+    /// Process start to the graph stream saying it finished — a data
+    /// event, one frame short of anything being on screen.
+    ///
+    /// Why it is here beside [`Reading::startup_ms`]: this line is
+    /// ordinary application logging, so it is the one startup number a
+    /// build with no harness in it can also answer. It is what makes the
+    /// two builds comparable at all (`Options::harness`).
+    pub(super) graph_ms: Option<u64>,
     pub(super) first_chunk_ms: Option<u64>,
     pub(super) total_ms: Option<u64>,
     pub(super) fps: Option<f64>,
@@ -70,6 +78,7 @@ pub(super) fn read_app(
     stderr: Option<std::process::ChildStderr>,
     started: Instant,
     mut log: std::fs::File,
+    harness: bool,
 ) -> (mpsc::Receiver<bool>, std::thread::JoinHandle<Reading>) {
     let (done_tx, done_rx) = mpsc::channel();
     let reader = std::thread::spawn(move || {
@@ -82,11 +91,22 @@ pub(super) fn read_app(
                 if found.startup_ms.is_none() && line.contains("perf_graph_frame") {
                     found.startup_ms = Some(started.elapsed().as_millis() as u64);
                 }
+                if found.graph_ms.is_none() && graph_finished(&line) {
+                    found.graph_ms = Some(started.elapsed().as_millis() as u64);
+                }
                 if line.contains("perf_failed") {
                     found.failure = Some(line.clone());
                 }
                 absorb(&line, &mut found);
-                let ended = line.contains("perf_done");
+                // A build with no harness never says `perf_done`, so the
+                // graph having finished streaming is the whole of what
+                // ends it: the last thing it says that this measurement
+                // was waiting for.
+                let ended = if harness {
+                    line.contains("perf_done")
+                } else {
+                    graph_finished(&line)
+                };
                 let completion = match (found.failure.is_some(), ended) {
                     (true, _) => Some(false),
                     (false, true) => Some(true),
@@ -113,6 +133,24 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     let mut gaps = Vec::new();
     if reading.peak_working_set == 0 || reading.peak_private == 0 {
         gaps.push("nonzero process memory samples");
+    }
+    if !opts.harness {
+        // The whole of what a build with no harness can be asked for.
+        if reading.graph_ms.is_none() {
+            gaps.push("a finished graph (no `graph stream finished`)");
+        }
+        if reading.first_chunk_ms.is_none() {
+            gaps.push("the walk (no `first_chunk_ms=`)");
+        }
+        return if gaps.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "the shipped build ended without {} — it reports no `perf_*` line of its own, so \
+                 these ordinary log lines are the whole of the reading",
+                gaps.join(", ")
+            ))
+        };
     }
     if opts.breakdown
         && !reading
@@ -189,9 +227,10 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.join(", ")
     ))
 }
-/// The line the graph stream says when it has finished — ordinary
-/// application logging, not the harness.
-fn graph_finished(line: &str) -> bool {
+/// The line every build says when the graph has finished streaming —
+/// ordinary application logging, not the harness, which is what makes it
+/// the one edge the two builds share (`Reading::graph_ms`).
+pub(super) fn graph_finished(line: &str) -> bool {
     line.contains("graph stream finished") || line.contains("graph replaced in place")
 }
 

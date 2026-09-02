@@ -26,6 +26,11 @@ use super::{Options, SAMPLE_MS, artifacts};
 const AFTER_DONE_MS: u64 = 250;
 
 /// The process this run measures, and everything it is told.
+///
+/// A build with no harness in it is told nothing at all beyond where its
+/// two files are: it answers no `PG_AUTO_*` knob, and the repository it
+/// opens comes out of the `state.toml` written beside them
+/// (`artifacts::state_file`).
 fn command(
     exe: &std::path::Path,
     path: &std::ffi::OsString,
@@ -49,6 +54,9 @@ fn command(
         .env_remove("QT_QPA_PLATFORM")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    if !opts.harness {
+        return cmd;
+    }
     // The app reports completion only after every requested measurement
     // has answered. The parent owns termination so it can take the last
     // process-memory sample and reap exactly the child it started.
@@ -84,7 +92,7 @@ pub(super) fn measure(
 ) -> Result<Reading, String> {
     // A config directory per process, so another perf process or a previous
     // run's restored state cannot decide what this one does.
-    let (config_dir, log, samples) = artifacts::open_run(run_dir, screen)?;
+    let (config_dir, log, samples) = artifacts::open_run(run_dir, opts, screen)?;
     let mut cmd = command(exe, path, root, opts, &config_dir);
     let started = Instant::now();
     let mut child = cmd
@@ -92,7 +100,7 @@ pub(super) fn measure(
         .map_err(|e| format!("failed to start the app: {e}"))?;
     let pid = child.id();
     let stderr = child.stderr.take();
-    let (done_rx, reader) = read_app(stderr, started, log);
+    let (done_rx, reader) = read_app(stderr, started, log, opts.harness);
 
     let deadline = started + Duration::from_millis(opts.watchdog_ms);
     let sampling_end = deadline + Duration::from_millis(opts.settle_ms + AFTER_DONE_MS);

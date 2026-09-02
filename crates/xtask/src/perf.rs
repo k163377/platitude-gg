@@ -66,11 +66,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
-    let mut extra = vec!["-p", "platitude-app"];
-    if opts.breakdown {
-        extra.extend(["--features", "memprobe"]);
-    }
-    let exe = crate::tree::app_exe(&root, &path, opts.build, &extra)?;
+    let exe = if opts.harness {
+        let mut extra = vec!["-p", "platitude-app"];
+        if opts.breakdown {
+            extra.extend(["--features", "memprobe"]);
+        }
+        crate::tree::app_exe(&root, &path, opts.build, &extra)?
+    } else {
+        crate::tree::shipped_exe(&root, &path, opts.build)?
+    };
 
     let corpus = if opts.open {
         let found = corpus::describe(&opts.repo)?;
@@ -285,12 +289,13 @@ fn corpus_line(corpus: Option<&corpus::Corpus>) -> String {
 
 fn say(run: u32, discarded: bool, reading: &Reading) {
     println!(
-        "  run {}{}: ws={:.1}MB private={:.1}MB startup={} walk={} fps={}",
+        "  run {}{}: ws={:.1}MB private={:.1}MB startup={} graph={} walk={} fps={}",
         run,
         if discarded { " (discarded)" } else { "" },
         mb(reading.peak_working_set),
         mb(reading.peak_private),
         reading.startup_ms.map_or("-".into(), |v| v.to_string()),
+        reading.graph_ms.map_or("-".into(), |v| v.to_string()),
         reading.total_ms.map_or("-".into(), |v| v.to_string()),
         reading.fps.map_or("-".into(), |v| format!("{v:.1}")),
     );

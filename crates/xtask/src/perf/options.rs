@@ -39,6 +39,12 @@ pub(super) struct Options {
     /// repository leaves the cost of putting the page up, which is
     /// otherwise indistinguishable from the toolkit's own floor.
     pub(super) open: bool,
+    /// Measure the build that carries the verification harness, which is
+    /// every measurement that needs the app to say anything about itself.
+    /// False measures the shipped build — `cargo build --release` with no
+    /// features — which can be weighed and timed to its first graph but
+    /// cannot be driven or asked (`platitude-app` §features).
+    pub(super) harness: bool,
     /// The OS device name of the screen to put the window on, empty for
     /// the primary. Everything about the frame rate is downstream of this
     /// on a machine whose monitors run at different rates.
@@ -54,15 +60,20 @@ pub(super) struct Options {
 
 impl Options {
     /// The cargo features the measured binary is built with, named so the
-    /// evidence says which build a number was taken on. `perf` and
-    /// `shipped` land on the same path, so a `--no-build` run measures
-    /// whichever of them ran last.
+    /// evidence can say which of the two builds it was taken on.
     pub(super) fn features(&self) -> String {
-        let mut features = vec![crate::tree::HARNESS_FEATURE];
+        let mut features = Vec::new();
+        if self.harness {
+            features.push(crate::tree::HARNESS_FEATURE);
+        }
         if self.breakdown {
             features.push("memprobe");
         }
-        features.join(",")
+        if features.is_empty() {
+            "none (the shipped set)".into()
+        } else {
+            features.join(",")
+        }
     }
 }
 
@@ -85,6 +96,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         trace_frames: false,
         build: true,
         open: true,
+        harness: true,
         screen: String::new(),
         corpus: String::new(),
         limits: Limits::default(),
@@ -138,6 +150,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--breakdown" => opts.breakdown = true,
             "--trace-frames" => opts.trace_frames = true,
             "--no-build" => opts.build = false,
+            "--shipped" => opts.harness = false,
             "--screen" => opts.screen = value()?,
             "--corpus" => opts.corpus = value()?,
             "--allow-noisy" => opts.limits = Limits::OPEN,
@@ -145,11 +158,50 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         }
         i += 1;
     }
+    shipped(&mut opts)?;
     settle(opts)
 }
 
-/// Everything that has to hold whatever the run asked for, and the one
-/// name a run that gave none takes.
+/// What a build with no harness in it can and cannot be asked.
+///
+/// Nothing in a shipped build answers a knob, drives an action or reports
+/// a frame. What is left is a window that opens a tab: its weight, and
+/// how long it took to have a graph in it.
+fn shipped(opts: &mut Options) -> Result<(), String> {
+    if !opts.harness {
+        for (asked, name) in [
+            (opts.selection != "first", "--selection / --no-select"),
+            (!opts.scroll, "--no-scroll"),
+            (!opts.diff, "--no-diff"),
+            (!opts.oid.is_empty(), "--select-oid"),
+            (!opts.file.is_empty(), "--file"),
+            (opts.breakdown, "--breakdown"),
+            (opts.trace_frames, "--trace-frames"),
+        ] {
+            if asked {
+                return Err(format!(
+                    "--shipped cannot take {name}: a build without the harness answers no knob \
+                     and reports no frame, so the only measurement it can give is memory and the \
+                     time to its first graph (platitude-app §features)"
+                ));
+            }
+        }
+        if !opts.open {
+            return Err(
+                "--shipped needs a repository: an empty window has no graph to wait for, \
+                        and the shipped build reports no frame of its own"
+                    .into(),
+            );
+        }
+        opts.selection = "none".into();
+        opts.scroll = false;
+        opts.diff = false;
+    }
+    Ok(())
+}
+
+/// Everything that has to hold whichever build is being measured, and the
+/// one name a run that gave none takes.
 fn settle(mut opts: Options) -> Result<Options, String> {
     if !["none", "first", "head"].contains(&opts.selection.as_str()) {
         return Err("--selection takes none, first, or head".into());
@@ -200,6 +252,33 @@ mod tests {
             options(&["--repo", "C:/r", "--breakdown"]).map(|o| o.features()),
             Ok("automation,memprobe".to_string())
         );
+        assert_eq!(
+            options(&["--repo", "C:/r", "--shipped"]).map(|o| o.features()),
+            Ok("none (the shipped set)".to_string())
+        );
+    }
+
+    #[test]
+    fn a_shipped_run_refuses_the_knobs_it_could_not_answer() {
+        let refused = options(&["--repo", "C:/r", "--shipped", "--no-scroll"]).unwrap_err();
+        assert!(refused.contains("--no-scroll"), "{refused}");
+        assert!(
+            options(&["--repo", "C:/r", "--shipped", "--breakdown"])
+                .unwrap_err()
+                .contains("--breakdown")
+        );
+        assert!(
+            options(&["--shipped", "--no-open"])
+                .unwrap_err()
+                .contains("needs a repository")
+        );
+    }
+
+    #[test]
+    fn a_shipped_run_drives_nothing() {
+        let opts = options(&["--repo", "C:/r", "--shipped"]).expect("a plain shipped run");
+        assert!(!opts.harness && !opts.select && !opts.scroll && !opts.diff);
+        assert_eq!(opts.selection, "none");
     }
 
     #[test]

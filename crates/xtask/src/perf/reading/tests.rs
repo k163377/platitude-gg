@@ -216,3 +216,38 @@ fn requesting_a_frame_trace_rejects_a_partially_preserved_series() {
     );
     assert!(missing(&reading, &opts).is_ok());
 }
+
+/// A shipped build says no `perf_*` line at all, so what it owes is the
+/// two the application logs on its own — and nothing the harness would
+/// have added, which it cannot produce and must not be asked for.
+#[test]
+fn a_shipped_run_owes_the_two_lines_a_build_without_the_harness_can_say() {
+    let opts = options(&["--repo", ".", "--shipped"]);
+    let bare = Reading {
+        peak_working_set: 100,
+        peak_private: 100,
+        ..Reading::default()
+    };
+    let complaint = missing(&bare, &opts).expect_err("a run that said nothing");
+    assert!(complaint.contains("graph stream finished"), "{complaint}");
+    assert!(complaint.contains("first_chunk_ms"), "{complaint}");
+
+    let whole = Reading {
+        graph_ms: Some(1_100),
+        first_chunk_ms: Some(180),
+        ..bare.clone()
+    };
+    assert!(missing(&whole, &opts).is_ok());
+
+    // None of the harness's own evidence is owed, and none of it is
+    // there to owe: no frame, no selection, no completed scenario.
+    let no_memory = Reading {
+        peak_working_set: 0,
+        ..whole
+    };
+    assert!(
+        missing(&no_memory, &opts)
+            .expect_err("a weight is the one thing it is measured for")
+            .contains("memory")
+    );
+}

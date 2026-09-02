@@ -23,6 +23,7 @@ const WINDOW_HEIGHT: i32 = 900;
 
 pub(super) fn open_run(
     directory: &Path,
+    opts: &Options,
     screen: Option<&Screen>,
 ) -> Result<(PathBuf, std::fs::File, std::fs::File), String> {
     let config = directory.join("config");
@@ -32,16 +33,17 @@ pub(super) fn open_run(
         "version = 1\n\n[defaults]\nauto_fetch_minutes = 0\n",
     )
     .map_err(|e| e.to_string())?;
-    std::fs::write(config.join("state.toml"), state_file(screen)).map_err(|e| e.to_string())?;
+    std::fs::write(config.join("state.toml"), state_file(opts, screen))
+        .map_err(|e| e.to_string())?;
     let log = std::fs::File::create(directory.join("app.log")).map_err(|e| e.to_string())?;
     let samples = std::fs::File::create(directory.join("memory.csv")).map_err(|e| e.to_string())?;
     Ok((config, log, samples))
 }
 
-/// The window's place and size: the two things about the window that
-/// decide how many rows a graph builds and how far the scroll bench has
-/// to travel.
-fn state_file(screen: Option<&Screen>) -> String {
+/// The window's place and size, and — for a build with no harness in it —
+/// the repository to open, which is the only way to ask one for a tab
+/// (`platitude-app` §features; there is no command line).
+fn state_file(opts: &Options, screen: Option<&Screen>) -> String {
     let mut text = String::from("version = 1\n\n[window]\n");
     if let Some(screen) = screen {
         // Centred on the chosen screen, which is a function of that
@@ -53,7 +55,33 @@ fn state_file(screen: Option<&Screen>) -> String {
     text.push_str(&format!(
         "width = {WINDOW_WIDTH}\nheight = {WINDOW_HEIGHT}\nmaximized = false\n"
     ));
+    if !opts.harness && opts.open {
+        text.push_str(&format!(
+            "\n[tabs]\nactive = 0\npaths = [{}]\n",
+            toml_string(&opts.repo.display().to_string())
+        ));
+    }
     text
+}
+
+/// A path as a TOML basic string. Not a literal (`'…'`): those cannot
+/// hold a quote of their own at all, and a single quote is a legal
+/// character in a path on every platform this runs on — a repository
+/// under `C:/it's mine/` would otherwise write a `state.toml` that does
+/// not parse, and the run would measure an empty window instead of
+/// saying so.
+fn toml_string(path: &str) -> String {
+    let mut quoted = String::with_capacity(path.len() + 2);
+    quoted.push('"');
+    for ch in path.chars() {
+        match ch {
+            '\\' => quoted.push('/'),
+            '"' => quoted.push_str("\\\""),
+            _ => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 pub(super) fn prepare(
@@ -159,6 +187,11 @@ fn capture(directory: &Path, name: &str, repo: &Path, args: &[&str]) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::{Screen, state_file};
+    use crate::perf::options::parse;
+
+    fn options(words: &[&str]) -> crate::perf::Options {
+        parse(&words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>()).expect("valid options")
+    }
 
     const SCREEN: Screen = Screen {
         name: String::new(),
@@ -172,7 +205,7 @@ mod tests {
 
     #[test]
     fn the_window_is_centred_on_the_screen_it_was_given() {
-        let text = state_file(Some(&SCREEN));
+        let text = state_file(&options(&["--repo", "C:/r"]), Some(&SCREEN));
         // 1920 + (2560-1440)/2, -120 + (1440-900)/2
         assert!(text.contains("x = 2480\n"), "{text}");
         assert!(text.contains("y = 150\n"), "{text}");
@@ -184,8 +217,33 @@ mod tests {
 
     #[test]
     fn without_a_screen_only_the_size_is_pinned() {
-        let text = state_file(None);
+        let text = state_file(&options(&["--repo", "C:/r"]), None);
         assert!(!text.contains("x = "), "{text}");
         assert!(text.contains("width = 1440"), "{text}");
+    }
+
+    /// A build with no harness in it has no other way to be handed a
+    /// repository, and a build with one is told over `PG_AUTO_OPEN`.
+    #[test]
+    fn only_a_harnessless_run_is_given_its_tab_in_the_file() {
+        let driven = state_file(&options(&["--repo", "C:\\r\\kotlin"]), None);
+        assert!(!driven.contains("[tabs]"), "{driven}");
+        let shipped = state_file(&options(&["--repo", "C:\\r\\kotlin", "--shipped"]), None);
+        assert!(
+            shipped.contains("[tabs]\nactive = 0\npaths = [\"C:/r/kotlin\"]\n"),
+            "{shipped}"
+        );
+    }
+
+    /// A quote in a path is legal and a TOML literal string cannot hold
+    /// one, so the file has to be written as a basic string.
+    #[test]
+    fn a_path_with_a_quote_in_it_still_writes_a_file_that_parses() {
+        let text = state_file(
+            &options(&["--repo", "C:\\it's mine\\kotlin", "--shipped"]),
+            None,
+        );
+        assert!(text.contains("paths = [\"C:/it's mine/kotlin\"]"), "{text}");
+        assert_eq!(super::toml_string("a\"b\\c"), "\"a\\\"b/c\"");
     }
 }
