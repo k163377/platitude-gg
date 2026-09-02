@@ -20,9 +20,11 @@ ignore = [
 ]
 
 [licenses]
-# The allow list is this project's license policy, not an inventory of the
-# current tree: an allowance that no crate matches today is the normal state,
-# so an unmatched entry is not a finding.
+# This allow list is where CLAUDE.md's absolute constraint keeps its license
+# set, so editing it edits that constraint and needs a human's approval.
+# The list is the policy, not an inventory of the current tree: an allowance
+# that no crate matches today is the normal state, so an unmatched entry is
+# not a finding.
 unused-allowed-license = "allow"
 allow = [
     "MIT",
