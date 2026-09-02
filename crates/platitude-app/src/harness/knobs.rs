@@ -54,10 +54,10 @@ pub(crate) struct Knobs {
     /// `PG_AUTO_WIP` — open the working-tree view once there is something
     /// uncommitted to show.
     pub wip: bool,
-    /// `PG_PLAIN_CHROME` — take the window shape the two platforms that
-    /// cannot fold the band into the title bar get, neither of which can
-    /// be run here.
-    pub plain_chrome: bool,
+    /// `PG_SYSTEM_TITLE_BAR` — take the window shape the two platforms
+    /// that cannot fold the band into the title bar get, neither of
+    /// which can be run here.
+    pub system_title_bar: bool,
     /// `PG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
     /// screen, and `PG_AUTO_IDENTITY_SAVE` submits it straight away.
     pub identity: String,
@@ -132,7 +132,7 @@ fn read() -> Knobs {
         scroll: on("PG_AUTO_SCROLL"),
         perf: on("PG_AUTO_PERF"),
         wip: on("PG_AUTO_WIP"),
-        plain_chrome: on("PG_PLAIN_CHROME"),
+        system_title_bar: on("PG_SYSTEM_TITLE_BAR"),
         identity: text("PG_AUTO_IDENTITY"),
         identity_save: on("PG_AUTO_IDENTITY_SAVE"),
         scroll_to: text("PG_SCROLL_TO"),
@@ -169,7 +169,7 @@ mod tests {
         assert!(knobs.open.is_empty() && knobs.shot_dir.is_empty());
         assert!(knobs.identity.is_empty() && knobs.scroll_to.is_empty());
         assert!(!knobs.select && !knobs.scroll && !knobs.perf && !knobs.wip);
-        assert!(!knobs.plain_chrome && !knobs.identity_save);
+        assert!(!knobs.system_title_bar && !knobs.identity_save);
         assert!(!knobs.mem_report);
         #[cfg(feature = "automation")]
         {

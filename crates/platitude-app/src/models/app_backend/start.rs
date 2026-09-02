@@ -93,7 +93,7 @@ impl Default for AppBackend {
             identity_name_saved: false,
             identity_email_saved: false,
             identity_unsaved: false,
-            system_title_bar: harness.plain_chrome,
+            system_title_bar: harness.system_title_bar,
             harness_present: cfg!(feature = "automation"),
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
