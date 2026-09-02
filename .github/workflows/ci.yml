@@ -96,10 +96,21 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all --check
+      # --all-features, because the code a feature switches off is code
+      # nothing else here compiles: the verification harness (automation)
+      # and the counting allocator (memprobe) are both off by default. The
+      # arms those two switch out are compiled by the test line below,
+      # which runs on the default set.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace
+      # The shipped build is the one without the harness, and the only one
+      # that can fail to load its QML at all: a type from platitude.auto
+      # named in platitude.ui resolves in every other build here. It runs
+      # offscreen — the command sets QT_QPA_PLATFORM itself, no display.
+      - name: Shipped build loads its QML
+        run: cargo run -p xtask -- shipped
 
   # Everything (unit + real-git integration tests + offscreen app smoke)
   # must pass inside an empty network namespace: the app itself never
@@ -154,9 +165,12 @@ jobs:
           echo "LD_LIBRARY_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
 
       # Build online, run offline.
+      # The harness feature (xtask HARNESS_FEATURE) is the only thing that
+      # reads the PG_* knobs the smoke run drives the app with; a build
+      # without it stands until the timeout kills it.
       - name: Build test binaries and app
         run: |
-          cargo build -p platitude-app
+          cargo build -p platitude-app --features automation
           cargo test --workspace --no-run
       - name: Run tests in an empty network namespace
         run: |

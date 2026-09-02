@@ -24,7 +24,9 @@ done
 # Offscreen smoke: open a locally generated repository, stream it, and let
 # causal completion finish the run. The coreutils timeout is the parent kill
 # guard for a broken automation path; app startup is not bounded by a fixed
-# quit clock.
+# quit clock. PG_SMOKE_BIN must be a build carrying the harness feature —
+# without it the app reads none of the knobs below and the window stands
+# until the timeout kills it.
 if [ -n "${PG_SMOKE_BIN:-}" ]; then
     echo "== offline smoke: ${PG_SMOKE_BIN}"
     smoke_root="$(mktemp -d)"
@@ -39,23 +41,21 @@ if [ -n "${PG_SMOKE_BIN:-}" ]; then
     git -C "${smoke_repo}" add .
     git -C "${smoke_repo}" commit -qm "smoke commit"
 
-    timeout 50s env \
-        -u PG_AUTO_ACT \
-        -u PG_AUTO_ACT_ARG \
-        -u PG_AUTO_IDENTITY \
-        -u PG_AUTO_IDENTITY_SAVE \
-        -u PG_AUTO_OPEN \
-        -u PG_AUTO_PERF \
-        -u PG_AUTO_QUIT_MS \
-        -u PG_AUTO_SCROLL \
-        -u PG_AUTO_SELECT \
-        -u PG_AUTO_WATCHDOG_MS \
-        -u PG_AUTO_WIP \
-        -u PG_FAKE_PR \
-        -u PG_MEM_REPORT \
-        -u PG_PLAIN_CHROME \
-        -u PG_SCROLL_TO \
-        -u PG_SHOT_DIR \
+    # Whatever automation the caller carries is cleared by rule, not by a
+    # hand-kept list: everything under `PG_` except the three names that
+    # say nothing about who is driving (xtask `app_env::clear_automation`,
+    # core `settings::AUTOMATION_PREFIX` / `settings::NOT_AUTOMATION` —
+    # change those and change this). A list would let a knob added to the
+    # app later compose two automation protocols in one run.
+    smoke_env=(env)
+    while IFS= read -r name; do
+        case "${name}" in
+            PG_CONFIG_DIR | PG_LOG | PG_ALLOW_GUI) ;;
+            PG_*) smoke_env+=(-u "${name}") ;;
+        esac
+    done < <(compgen -e)
+
+    timeout 50s "${smoke_env[@]}" \
         QT_QPA_PLATFORM=offscreen \
         PG_CONFIG_DIR="${smoke_config}" \
         PG_AUTO_OPEN="${smoke_repo}" \
