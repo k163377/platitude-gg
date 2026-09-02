@@ -8,6 +8,17 @@
 [graph]
 all-features = true
 
+[advisories]
+ignore = [
+    # bincode is unmaintained, not vulnerable, and the advisory patches no
+    # release, so no upgrade clears it. It is reachable only as syntect's dump
+    # format — `dump-load` is a hard requirement of two-face — and the only
+    # bytes it decodes are the syntax dumps compiled into those crates; nothing
+    # a repository or a user supplies reaches it. Dropping it means dropping
+    # the regex fallback highlighter whole.
+    { id = "RUSTSEC-2025-0141", reason = "unmaintained, not a vulnerability: bincode is syntect's dump format and only ever decodes syntax dumps compiled into syntect and two-face" },
+]
+
 [licenses]
 allow = [
     "MIT",
