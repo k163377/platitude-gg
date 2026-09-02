@@ -81,6 +81,8 @@ pub(crate) struct Ask<'a> {
 const CORE: &str = "crates/platitude-core";
 const APP: &str = "crates/platitude-app";
 const DOCKERFILE: &str = "ci/linux/Dockerfile";
+/// The dependency policy, which nothing in the source graph reads.
+const DENY: &str = "deny.toml";
 /// What every cargo build reads.
 const CARGO: [&str; 3] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"];
 /// What the harness runs read besides the app: the runner and the demo
@@ -355,6 +357,7 @@ fn select(
 ) -> Vec<Step> {
     let sorted = sort(g, reach, whole);
     let mut steps = always_steps();
+    steps.extend(deny_steps(g, changed, whole));
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
@@ -380,6 +383,35 @@ fn always_steps() -> Vec<Step> {
             &["crates"],
         ),
     ]
+}
+
+/// cargo-deny over the resolved graph — the networking and libgit2 bans,
+/// the registries, the license allow list. Nothing in the source graph
+/// reads `deny.toml`, so it is named here on its own; every other way the
+/// closure can move is a manifest, and a manifest already sets `whole`
+/// (`moves_everything`). It goes ahead of every build on its side: a
+/// crate the policy forbids should be said in seconds, not after clippy.
+///
+/// Host only. The policy names no `targets` and takes the graph with
+/// `all-features`, so the set of crates it reads is the same on every OS
+/// and the container would be answering a question already answered.
+fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
+    if !whole && !changed.iter().any(|f| f == DENY) {
+        return Vec::new();
+    }
+    // The lock is the closure, and the manifests carry what the lock does
+    // not: a license field and the features a dependency is taken with.
+    let mut inputs: BTreeSet<String> = ["Cargo.toml", "Cargo.lock", DENY]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    inputs.extend(
+        g.modules
+            .values()
+            .map(|module| format!("crates/{}/Cargo.toml", module.package)),
+    );
+    let inputs: Vec<String> = inputs.into_iter().collect();
+    vec![step("deny", Side::Host, false, xtask(&["deny"]), &inputs)]
 }
 
 /// clippy for every crate the reach enters, on both sides: the host's

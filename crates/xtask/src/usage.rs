@@ -45,9 +45,10 @@ commands:
       `use` path, a re-export, a string naming the file, a QML type
       name, a QML mention of a #[qobject] model — and runs the tests in
       that reach: unit tests by module path, the integration binary by
-      module, clippy per crate entered, shipped when the app's QML or
-      entry point moved, the verify-ui verbs whose census names a
-      reached component (crates/xtask/verb-census.txt, written by the
+      module, clippy per crate entered, cargo-deny when deny.toml or a
+      manifest moved, shipped when the app's QML or entry point moved,
+      the verify-ui verbs whose census names a reached component
+      (crates/xtask/verb-census.txt, written by the
       runs themselves), bare when the app moved. structure, waits and
       fmt run every time, and a build input that changed (Cargo.toml,
       Cargo.lock, the toolchain, the Dockerfile) makes the reach the

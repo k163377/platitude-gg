@@ -168,6 +168,7 @@ impl Sandbox {
         for (path, text) in [
             ("Cargo.toml", "[workspace]\n"),
             ("Cargo.lock", "# lock\n"),
+            ("deny.toml", "[bans]\n"),
             ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
             ("ci/linux/Dockerfile", "FROM ubuntu\n"),
             (
@@ -799,7 +800,38 @@ fn a_build_input_change_owes_everything() {
         "shipped",
         "verify stash --preset basic",
         "bare",
+        "deny",
     ] {
         assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
     }
+}
+
+#[test]
+fn a_policy_change_owes_cargo_deny_and_nothing_else() {
+    let sb = Sandbox::new("deny");
+    sb.write(
+        &sb.seat,
+        "deny.toml",
+        "[bans]\nmultiple-versions = \"allow\"\n",
+    );
+    sb.commit_all(&sb.seat, "chore(deps): a ban", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!text.contains("no step reads these"), "{text}");
+    sb.gate_ok(&sb.seat, &[]);
+    assert_eq!(without_always(&sb.ran()), set(&["deny"]));
+}
+
+/// The policy is read against the closure, not against the sources: a
+/// change to neither leaves the step unselected, however far it reaches.
+#[test]
+fn a_source_change_owes_no_policy_check() {
+    let sb = Sandbox::new("deny-source");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/refs.rs",
+        "pub fn refs() { let _ = 14; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): refs", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(!sb.ran().contains("deny"));
 }
