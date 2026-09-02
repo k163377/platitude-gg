@@ -20,6 +20,10 @@ ignore = [
 ]
 
 [licenses]
+# The allow list is this project's license policy, not an inventory of the
+# current tree: an allowance that no crate matches today is the normal state,
+# so an unmatched entry is not a finding.
+unused-allowed-license = "allow"
 allow = [
     "MIT",
     "Apache-2.0",
