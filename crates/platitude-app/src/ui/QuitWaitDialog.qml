@@ -37,6 +37,11 @@ AppDialog {
         quitWaitDialog.vetoes++
     }
 
+    /// The dialog closes the window itself the moment the queue settles. Written from outside where the wait itself
+    /// is what somebody is looking at — a write landing under a look takes the window down with it, and the wait
+    /// stops being a thing that can be seen at all.
+    property bool selfCloses: true
+
     // The way out is taken away rather than left and refused: `AppDialog` opens Escape (`CloseOnEscape`), and a
     // loading mode that Escape dismisses is a question wearing a ring. Nothing else in the window needs a guard —
     // **a modal popup seals the window's own `Shortcut`s while it stands** (measured, qmltestrunner: F5 and Cancel
@@ -74,12 +79,10 @@ AppDialog {
     // beat while the dialog stands. A beat rather than an event, because the last write can end in a session a
     // closed tab left behind — nothing of it reaches this window's models.
     //
-    // Held from answering during a headless run: the photograph is of the wait itself, and the seeded hook's
-    // write can land while the shot pipeline is still grabbing — the close this would fire takes the window, and
-    // the PNGs, down with it (`finishAutoAct` ends a run, never a window). The gate and the veto stay real; only
-    // the self-close is the run's to forgo.
+    // The self-close can be forgone from outside ([`selfCloses`]): where the wait itself is the thing being looked
+    // at, a write landing mid-look would take the window down with it. The gate and the veto stay real either way.
     SampleTimer {
-        running: quitWaitDialog.opened && AppBackend.autoAct === ""
+        running: quitWaitDialog.opened && quitWaitDialog.selfCloses
         onTriggered: if (AppBackend.readyToQuit()) quitWaitDialog.settled()
     }
 }

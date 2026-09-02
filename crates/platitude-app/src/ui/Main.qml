@@ -227,9 +227,12 @@ ApplicationWindow {
         if (near !== "")
             folderDialog.currentFolder = near
         folderDialog.open()
-        if (AppBackend.autoAct !== "" && AppBackend.autoAct !== "open-picker")
-            AppBackend.report("picker folder=" + folderDialog.currentFolder)
+        root.pickerOpened()
     }
+    /// Automation: the platform's folder chooser was put up, and where it was pointed. An automation-only exposure,
+    /// the same one `GraphPane.view` is (app-ui.md) — the box belongs to the platform, so nothing on this side of it
+    /// says afterwards that it opened.
+    signal pickerOpened()
     // ---- the harness -----------------------------------------------
     // The whole of the window's verification harness, which a shipped build does not carry (`HarnessSeat`): the verbs,
     // the measurements, and the stand-ins a headless shot is taken from. Everything they act on is handed over here —
@@ -249,12 +252,15 @@ ApplicationWindow {
             chrome: chrome,
             mainUi: body,
             gate: gate,
+            windowShape: windowShape,
+            sharedToolTip: sharedToolTip,
             openFailedDialog: openFailedDialog,
+            identityGate: identityGate,
             identityDialog: identityGate.dialog,
-            cloneModel: dialogSeat.cloneModel,
-            cloneDialog: dialogSeat.cloneDialog,
+            // The seat rather than the two screens in it: they are built on being asked for, and asking is the
+            // harness's to do (`WindowDialogSeat.keepBuilt`).
+            dialogSeat: dialogSeat,
             folderDialog: folderDialog,
-            settingsDialog: dialogSeat.settingsDialog,
             quitWaitDialog: quitGate.dialog
         })
     }
@@ -278,30 +284,28 @@ ApplicationWindow {
         id: sharedToolTip
         host: body
         hand: body.hand
-        // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would
-        // have been. A quarter across the target, so the picture says which of the two the seat was read from.
-        handAcross: AppBackend.autoAct !== "" ? 0.25 : -1
     }
 
+    /// Something other than the strip's own memory is opening this window's tabs, so the ones that were left stay
+    /// where they are. Answered on [`startingTabs`], which is the one moment it can be claimed in.
+    property bool tabsClaimed: false
+    /// The strip is ready for its tabs, and nothing has been put in it yet.
+    signal startingTabs()
+
     Component.onCompleted: {
+        // Asked for first, because what it seeds — the shape the window comes up at, the tabs the strip opens with —
+        // is read further down this same handler (`HarnessSeat`).
+        const acts = harness.ask()
         sharedToolTip.dressToolTip()
         chrome.decorateWindow()
         // A window that is only here to say another process has the files does none of the rest.
         if (!AppBackend.alreadyRunning) {
             AppBackend.initialize()
             windowShape.applySavedWindow()
-            if (AppBackend.autoOpen !== "") {
-                // ';'-separated repositories open as tabs in order.
-                const paths = AppBackend.autoOpen.split(";")
-                for (let i = 0; i < paths.length; i++) {
-                    if (paths[i] !== "")
-                        tabsModel.openRepositoryPath(paths[i])
-                }
-            } else {
+            root.startingTabs()
+            if (!root.tabsClaimed)
                 tabsModel.restoreTabs()
-            }
         }
-        const acts = harness.ask()
         if (acts !== null)
             acts.begin()
     }

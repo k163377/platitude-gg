@@ -35,6 +35,7 @@ WindowCensus 1.0 WindowCensus.qml
 WindowDialogActs 1.0 WindowDialogActs.qml
 WindowFrameActs 1.0 WindowFrameActs.qml
 WindowHarness 1.0 WindowHarness.qml
+WindowIdentityActs 1.0 WindowIdentityActs.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowSettingsActs 1.0 WindowSettingsActs.qml
 WindowShotMirrors 1.0 WindowShotMirrors.qml

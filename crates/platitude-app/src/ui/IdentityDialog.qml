@@ -32,25 +32,13 @@ AppDialog {
     onOpened: {
         fields.load()
         fields.focusName()
-        if (AppBackend.autoIdentity !== "")
-            Qt.callLater(identityDialog.applyAutoIdentity)
     }
 
-    // Screenshot hook: PG_AUTO_IDENTITY="<name>|<email>" fills the fields, PG_AUTO_IDENTITY_SAVE=1 submits them, "skip"
-    // answers "Not now" to show the state behind the dialog, and "edit" leaves an identity that is already set as it
-    // is.
-    function applyAutoIdentity() {
-        if (AppBackend.autoIdentity === "skip") {
-            identityDialog.close()
-            return
-        }
-        if (AppBackend.autoIdentity === "edit")
-            return
-        const parts = AppBackend.autoIdentity.split("|")
-        fields.nameText = parts[0]
-        fields.emailText = parts.length > 1 ? parts[1] : ""
-        if (AppBackend.autoIdentitySave)
-            identityDialog.submit()
+    /// The two boxes, written from outside. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md): a run has no keyboard, and what it is filling in is the state a person's typing leaves behind.
+    function fill(name, email) {
+        fields.nameText = name
+        fields.emailText = email
     }
 
     Connections {

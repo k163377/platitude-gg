@@ -41,12 +41,16 @@ Item {
         }
     }
 
+    /// The window comes up at the size it was configured with, whatever the screen says it will hold
+    /// ([`insideScreen`]). Written from outside and false wherever nobody wrote it: what it is for is a machine
+    /// nobody is at, whose offscreen platform reports an 800x800 screen that would cut every window down to fit.
+    property bool keepSavedSize: false
+
     /// A remembered length, kept inside the screen the window comes up on. `Screen.width`, *not*
     /// `Screen.desktopAvailableWidth` — that is the whole virtual desktop (measured on a three-monitor machine: 5760,
-    /// so nothing is ever wider). Automated runs are exempt: the offscreen platform reports an 800x800 screen that
-    /// would cut every screenshot to fit.
+    /// so nothing is ever wider).
     function insideScreen(saved, screen) {
-        return AppBackend.automated ? saved : Math.min(saved, screen)
+        return shape.keepSavedSize ? saved : Math.min(saved, screen)
     }
 
     // The size and place the window was left in. Assigned rather than bound: from here on the window manager and the

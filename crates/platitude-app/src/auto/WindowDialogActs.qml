@@ -42,6 +42,15 @@ Item {
             window.finishAutoAct()
         }
     }
+    // Every *other* verb that happens to put the picker up says where it was pointed, which nothing on this side of
+    // the platform's own box says afterwards. Not the verb above's — that one reports where its own wait ended.
+    Connections {
+        target: acts.window
+        enabled: AppBackend.autoAct !== "open-picker"
+        function onPickerOpened() {
+            AppBackend.report("picker folder=" + acts.folderDialog.currentFolder)
+        }
+    }
 
     // PG_AUTO_ACT=clone-dialog / clone-go / clone-refused: the box that fetches a repository, entered through the ☰'s
     // own row (`TabStrip.clickCloneRow`) so the two signal relays between the row and the window are part of what runs.

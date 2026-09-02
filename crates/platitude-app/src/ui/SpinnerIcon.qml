@@ -1,5 +1,4 @@
 import QtQuick
-import platitude
 import platitude.ui
 
 // The one turning mark the window has: the drawn ring, never Fusion's
@@ -24,12 +23,11 @@ NavIcon {
     // On the render thread, so it keeps turning while the GUI thread
     // drains models.
     //
-    // Held still for the headless runs, where a turning ring photographs
-    // differently every time and no two runs of the same verb produce the
-    // same PNG. Built in rather than left to the caller: this is the
+    // Held still wherever the window has been (`Motion.stilled`) — a turning ring photographs differently every time
+    // and no two runs of the same verb produce the same PNG. Built in rather than left to the caller: this is the
     // fourth ring, and the guard is what the third one forgot.
     RotationAnimator on rotation {
-        running: ring.spinning && AppBackend.shotDir === ""
+        running: ring.spinning && !Motion.stilled
         loops: Animation.Infinite
         from: 0
         to: 360

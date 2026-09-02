@@ -21,8 +21,21 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
-    // Capture the communication ring from a real busy edge. TopBar latches the visual only after RepoTab actually
-    // enters `push`, so a fast child cannot clear it before the image callback runs.
+    // Capture the communication ring from a real busy edge: the tab has to have entered the operation, so a fast
+    // child cannot clear it before the image callback runs. Latched here rather than read back — the edge is often
+    // shorter than a sampler's beat, and a run that missed it would wait out its watchdog on a band that had already
+    // been through what it was there to photograph.
+    Connections {
+        target: acts.topBar.curPage ? acts.topBar.curPage.pageTab : null
+        function onBusyOpChanged() {
+            const op = acts.topBar.curPage.pageTab.busyOp
+            if (AppBackend.autoAct === "force-push-hold" && op === "push")
+                acts.topBar.holdPushBusy = true
+            if (AppBackend.autoAct === "fetch-busy" && op === "fetch")
+                acts.topBar.holdFetchBusy = true
+        }
+    }
+
     SampleTimer {
         running: AppBackend.autoAct === "force-push-hold"
         property bool requested: false
@@ -34,23 +47,24 @@ Item {
                 topBar.completePushHold()
                 return
             }
-            if (!topBar.autoPushBusyLatched)
+            if (!acts.pushBusySeen)
                 return
             stop()
-            topBar.reportPushBusy()
+            AppBackend.report("push_hold mode=" + topBar.pushMode + " busy=" + acts.pushBusySeen)
             window.finishAutoAct()
         }
     }
 
     // The same edge on the button the wait is drawn for: bare, unframed, and the one a timer can start on its own. The
-    // fetch itself is fired by the page's driver; all this waits for is the band's latch.
+    // fetch itself is fired by the page's driver; all this waits for is the edge above.
     SampleTimer {
         running: AppBackend.autoAct === "fetch-busy"
         onTriggered: {
-            if (!topBar.autoFetchBusyLatched)
+            if (!acts.fetchBusySeen)
                 return
             stop()
-            topBar.reportFetchBusy()
+            AppBackend.report("fetch_busy busy=" + acts.fetchBusySeen
+                              + " fails=" + topBar.fetchFails + " framed=" + topBar.fetchFramed)
             window.finishAutoAct()
         }
     }
@@ -81,7 +95,10 @@ Item {
                 return
             }
             stop()
-            topBar.reportFetchTip()
+            AppBackend.report("fetch_tip enabled=" + topBar.fetchLive
+                              + " tip=" + topBar.fetchTipShown
+                              + " remotes=" + (topBar.curPage !== null
+                                               ? topBar.curPage.pageTab.remoteCount : -1))
             window.finishAutoAct()
         }
     }
@@ -106,7 +123,9 @@ Item {
             if (topBar.stashMode !== AppBackend.autoActArg)
                 return
             stop()
-            topBar.reportStashState()
+            AppBackend.report("stash_state mode=" + topBar.stashMode
+                              + " enabled=" + topBar.stashLive
+                              + " tip=" + topBar.stashTipShown)
             window.finishAutoAct()
         }
     }

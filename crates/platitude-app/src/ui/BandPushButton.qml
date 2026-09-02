@@ -10,7 +10,7 @@ ActionButton {
 
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// Automation: the busy visual, latched by the band on the real busy edge (`TopBar.autoPushBusyLatched`).
+    /// The waiting visual, held up by the band past the push that raised it (`TopBar.holdPushBusy`).
     property bool busyLatched: false
     readonly property string mode: pushButton.curPage !== null ? pushButton.curPage.pushState : "closed"
     /// The last go at sending this branch came back refused. No stopped step past it: nothing sends on its own

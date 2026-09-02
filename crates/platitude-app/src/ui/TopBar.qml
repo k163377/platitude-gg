@@ -98,24 +98,28 @@ Rectangle {
     /// is counted without anybody remembering to.
     readonly property real floorWidth: bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
-    /// Automation: run the push button's hold to its end. The busy visual is latched only after the real RepoTab
-    /// reports that push started, which is what makes an intentionally intermediate screenshot causal.
-    property bool autoPushBusyLatched: false
-    /// Automation: the same latch for the button the wait was designed on — the bare one. `framed` rides along in the
-    /// report because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
-    /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
-    property bool autoFetchBusyLatched: false
+    /// Keeps the two actions' waiting visual up past the operation that raised it. Written from outside and false
+    /// wherever nobody wrote it: a fast remote is done before a picture of the wait can be grabbed, and the wait is
+    /// what the pair of buttons was drawn for — the framed one and the bare one
+    /// (デザイン規約 §進行中・長押しの定数).
+    property bool holdPushBusy: false
+    property bool holdFetchBusy: false
     readonly property string pushMode: pushButton.mode
-    /// Automation: what the Stash button read the working tree as, and the edge `stash-state` waits on.
+    /// Automation: what the Stash button read the working tree as, and the edge `stash-state` waits on. The reading
+    /// is a binding over a HEAD and four counts, and a photograph of a dim button carries none of them — every
+    /// refusal frames the same way.
     readonly property string stashMode: stashButton.mode
-    /// PG_AUTO_ACT=stash-state: which answer the button settled on and what the band did with it. The reading is a
-    /// binding over a HEAD and four counts, and a photograph of a dim button carries none of them — every refusal
-    /// frames the same way. `tip=` is the string the button would open, for the reason `fetch-tip` gives below.
-    function reportStashState() {
-        AppBackend.report("stash_state mode=" + stashButton.mode
-                          + " enabled=" + stashButton.enabled
-                          + " tip=" + (stashButton.tip !== ""))
-    }
+    readonly property bool stashLive: stashButton.enabled
+    /// Whether either action has a string to open under a pointer. **The string, not a ToolTip caught open** — a
+    /// pointer cannot be injected, and a disabled control takes hover and opens its attached ToolTip like any other
+    /// one (rules-refs/app-ui.md §hover), so what can be judged is whether there is anything to open.
+    readonly property bool stashTipShown: stashButton.tip !== ""
+    readonly property bool fetchTipShown: fetchButton.tip !== ""
+    /// How the fetch button stands: how many fetches have failed, and whether it is wearing a frame. `framed` is
+    /// read because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
+    /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
+    readonly property int fetchFails: fetchButton.fails
+    readonly property bool fetchFramed: fetchButton.framed
     /// Automation: the Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
     /// so what answers is the band's real wiring and not a second way in written for the run. **Answers whether the
     /// press went in**: the band refuses it while the tab is busy — the fetch a repository does on the way open is one
@@ -128,31 +132,6 @@ Rectangle {
     }
     function completePushHold() {
         pushButton.completeHold()
-    }
-    function reportPushBusy() {
-        AppBackend.report("push_hold mode=" + pushButton.mode + " busy=" + topBar.autoPushBusyLatched)
-    }
-    function reportFetchBusy() {
-        AppBackend.report("fetch_busy busy=" + topBar.autoFetchBusyLatched
-                          + " fails=" + fetchButton.fails + " framed=" + fetchButton.framed)
-    }
-    /// PG_AUTO_ACT=fetch-tip: whether the fetch button has anything to say under a pointer. `tip=` is the string the
-    /// button would open rather than a ToolTip caught open: a pointer cannot be injected, and a disabled control takes
-    /// hover and opens its attached ToolTip like any other one (rules-refs/app-ui.md §hover).
-    function reportFetchTip() {
-        AppBackend.report("fetch_tip enabled=" + fetchButton.enabled
-                          + " tip=" + (fetchButton.tip !== "")
-                          + " remotes=" + (topBar.curPage !== null ? topBar.curPage.pageTab.remoteCount : -1))
-    }
-    Connections {
-        target: topBar.curPage ? topBar.curPage.pageTab : null
-        function onBusyOpChanged() {
-            const op = topBar.curPage.pageTab.busyOp
-            if (AppBackend.autoAct === "force-push-hold" && op === "push")
-                topBar.autoPushBusyLatched = true
-            if (AppBackend.autoAct === "fetch-busy" && op === "fetch")
-                topBar.autoFetchBusyLatched = true
-        }
     }
 
     /// Automation: the strip's own hooks, handed on. What `Main` and `WindowAutoActDriver` hold is the band, so the way
@@ -323,7 +302,7 @@ Rectangle {
         BandFetchButton {
             id: fetchButton
             curPage: topBar.curPage
-            busyLatched: topBar.autoFetchBusyLatched
+            busyLatched: topBar.holdFetchBusy
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
             wordFloor: topBar.actionWordFloor
@@ -344,7 +323,7 @@ Rectangle {
         BandPushButton {
             id: pushButton
             curPage: topBar.curPage
-            busyLatched: topBar.autoPushBusyLatched
+            busyLatched: topBar.holdPushBusy
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
             wordFloor: topBar.actionWordFloor

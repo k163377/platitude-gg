@@ -24,6 +24,11 @@ Item {
     required property var curPage
     required property var tabsModel
 
+    /// Both screens stand ready instead of being built by the door that opens them. Written from outside — whoever
+    /// has to read a screen's properties before it is opened asks for this first, since a null there is nothing to
+    /// read rather than a refusal — and false wherever nobody wrote it, which is every window a person opens.
+    property bool keepBuilt: false
+
     /// The three the window's harness reaches for by name (`WindowAutoActDriver`) — the dialogs are null until
     /// their loaders build them.
     readonly property alias cloneModel: cloneModel
@@ -75,7 +80,7 @@ Item {
     Loader {
         id: cloneLoader
         anchors.fill: parent
-        active: AppBackend.autoAct !== "" || AppBackend.autoIdentity !== ""
+        active: seat.keepBuilt
         sourceComponent: CloneDialog {
             cloning: cloneModel.cloning
             onSubmitted: (url, parentUrl, name) => cloneModel.cloneRepository(url, parentUrl, name)
@@ -99,7 +104,7 @@ Item {
     Loader {
         id: settingsLoader
         anchors.fill: parent
-        active: AppBackend.autoAct !== "" || AppBackend.autoIdentity !== ""
+        active: seat.keepBuilt
         sourceComponent: SettingsDialog {
             curPage: seat.curPage
             tabsModel: seat.tabsModel

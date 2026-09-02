@@ -24,17 +24,71 @@ Item {
     required property var chrome
     required property var mainUi
     required property var gate
+    required property var windowShape
+    required property var sharedToolTip
     required property var openFailedDialog
+    required property var identityGate
     required property var identityDialog
-    required property var cloneModel
-    required property var cloneDialog
+    /// The seat the two biggest screens are built in, rather than the screens: neither exists until somebody asks
+    /// for it, and asking is this file's ([`screensUp`]).
+    required property var dialogSeat
     required property var folderDialog
-    required property var settingsDialog
     required property var quitWaitDialog
 
     /// The tab in front. The one seat that moves under the harness, so the window writes it rather than handing it
     /// over once (`Main.qml`'s `Binding`).
     property var page: null
+
+    /// The screens have been asked for, so the verbs that read them may be built. **Two phases rather than one
+    /// binding**: the order two siblings finish being built in is not something to stand a null check on, and this
+    /// whole part is built inside the window's own completion handler, so both phases are over before the window
+    /// reaches its next line (`HarnessSeat`).
+    property bool screensUp: false
+    readonly property var cloneModel: harness.dialogSeat.cloneModel
+    readonly property var cloneDialog: harness.dialogSeat.cloneDialog
+    readonly property var settingsDialog: harness.dialogSeat.settingsDialog
+
+    Component.onCompleted: {
+        // A verb reads a screen's properties before opening it, and a null there is a dead run rather than a
+        // refusal. Only where a verb or the identity hook is going to want one: holding the two ready costs the bare
+        // window ~8MB of working set (`WindowDialogSeat`).
+        harness.dialogSeat.keepBuilt = AppBackend.autoAct !== "" || AppBackend.autoIdentity !== ""
+        // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
+        harness.windowShape.keepSavedSize = AppBackend.automated
+        // A turning ring photographs differently every time.
+        Motion.stilled = AppBackend.shotDir !== ""
+        harness.screensUp = true
+    }
+
+    // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would have
+    // been. A quarter across the target, so the picture says which of the two the seat was read from.
+    Binding {
+        target: harness.sharedToolTip
+        property: "handAcross"
+        value: AppBackend.autoAct !== "" ? 0.25 : -1
+    }
+    // The photograph is of the wait itself, and a seeded write can land while the shot pipeline is still grabbing —
+    // the close the dialog would fire takes the window, and the PNGs, down with it (`finishAutoAct` ends a run, never
+    // a window).
+    Binding {
+        target: harness.quitWaitDialog
+        property: "selfCloses"
+        value: AppBackend.autoAct === ""
+    }
+    // PG_AUTO_OPEN: ';'-separated repositories open as tabs in order, instead of the ones that were left.
+    Connections {
+        target: harness.window
+        function onStartingTabs() {
+            if (AppBackend.autoOpen === "")
+                return
+            harness.window.tabsClaimed = true
+            const paths = AppBackend.autoOpen.split(";")
+            for (let i = 0; i < paths.length; i++) {
+                if (paths[i] !== "")
+                    harness.tabsModel.openRepositoryPath(paths[i])
+            }
+        }
+    }
 
     /// The window is up: the verbs may start, and the shot clock with them.
     function begin() {
@@ -85,7 +139,7 @@ Item {
     // Built only when a verb was given: a run that is only being measured or photographed carries none of the verbs.
     Loader {
         id: actsLoader
-        active: AppBackend.autoAct !== ""
+        active: harness.screensUp && AppBackend.autoAct !== ""
         sourceComponent: WindowAutoActDriver {
             window: harness.window
             tabsModel: harness.tabsModel
@@ -101,6 +155,16 @@ Item {
             folderDialog: harness.folderDialog
             settingsDialog: harness.settingsDialog
             quitWaitDialog: harness.quitWaitDialog
+        }
+    }
+
+    // The identity hooks are not verbs and run without one (`PG_AUTO_IDENTITY`), so they are built off their own
+    // knob rather than beside the verbs.
+    Loader {
+        active: harness.screensUp && AppBackend.autoIdentity !== ""
+        sourceComponent: WindowIdentityActs {
+            identityGate: harness.identityGate
+            identityDialog: harness.identityDialog
         }
     }
 }

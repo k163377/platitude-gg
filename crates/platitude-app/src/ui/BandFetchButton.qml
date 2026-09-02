@@ -11,7 +11,7 @@ ActionButton {
 
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// Automation: the busy visual, latched by the band on the real busy edge (`TopBar.autoFetchBusyLatched`).
+    /// The waiting visual, held up by the band past the fetch that raised it (`TopBar.holdFetchBusy`).
     property bool busyLatched: false
     /// Fetches that failed in a row, whoever asked for them.
     readonly property int fails: fetchButton.curPage !== null ? fetchButton.curPage.pageTab.fetchFailures : 0

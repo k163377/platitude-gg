@@ -57,18 +57,10 @@ Item {
         }
     }
 
-    // Screenshot hook: PG_AUTO_IDENTITY="edit" opens the settings screen on an identity that is already set, which is
-    // otherwise a menu action. It lands where the menu entry lands, and it fires once — a menu entry is pressed once,
-    // and every later answer git gives about the identity is not a second press.
-    property bool identityEditShown: false
-    Connections {
-        target: AppBackend
-        enabled: AppBackend.autoIdentity === "edit" && !identityGate.identityEditShown
-        function onIdentityChanged() {
-            if (AppBackend.identityState !== "ready")
-                return
-            identityGate.identityEditShown = true
-            identityGate.settingsAtGitRequested()
-        }
+    /// Asks for the settings screen at its git chapter — where an identity that is already set is edited, and
+    /// otherwise a menu action. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md): the gate
+    /// itself never opens it, and the road there belongs to the window.
+    function askSettingsAtGit() {
+        identityGate.settingsAtGitRequested()
     }
 }
