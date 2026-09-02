@@ -11,8 +11,8 @@ import platitude.ui
 // what lets neither screen exist until it is first opened: holding the two ready costs the bare window ~8MB of
 // working set it never uses (measured — the figures are in rules-refs/app-ui.md's dialog-seat line).
 //
-// The harness is the one caller that gets them up front: its verbs read a dialog's properties before opening it
-// (`WindowDialogActs` / `WindowSettingsActs`), and a null there is a dead run, not a refusal.
+// The harness is the one caller that gets them up front ([`keepBuilt`]): its verbs read a dialog's properties before
+// opening it (`WindowDialogActs` / `WindowSettingsActs`), and a null there is a dead run, not a refusal.
 //
 // An `Item` that fills the window, and two Loaders that fill the seat: the dialogs are popups whose sizing reads
 // their parent (`AppDialog.fills`), and a loader left unsized hands them a 0x0 to fill (measured — the screen opens
@@ -29,8 +29,8 @@ Item {
     /// read rather than a refusal — and false wherever nobody wrote it, which is every window a person opens.
     property bool keepBuilt: false
 
-    /// The three the window's harness reaches for by name (`WindowAutoActDriver`) — the dialogs are null until
-    /// their loaders build them.
+    /// The three whoever asked for [`keepBuilt`] then reads — the two dialogs are null until their loaders build
+    /// them, so the asking has to come first.
     readonly property alias cloneModel: cloneModel
     readonly property var cloneDialog: cloneLoader.item
     readonly property var settingsDialog: settingsLoader.item

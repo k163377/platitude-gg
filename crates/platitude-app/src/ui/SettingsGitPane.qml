@@ -228,8 +228,8 @@ ColumnLayout {
                     id: toolField
                     Layout.fillWidth: true
                     placeholder: qsTr("none")
-                    // The popup is opened by the screen's own `opened` edge. Loading stays latched only for the
-                    // automation verb that deliberately photographs it.
+                    // The popup is opened by the screen's own `opened` edge. The turning stays up past the read only
+                    // where somebody asked for that ([`holdToolLoading`]).
                     loading: pane.holdToolLoading || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
                     model: pane.toolChoices
                     onWantedChanged: pane.toolTouched = true

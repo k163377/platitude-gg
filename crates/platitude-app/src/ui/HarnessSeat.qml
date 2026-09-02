@@ -46,8 +46,9 @@ Item {
         const component = Qt.createComponent("qrc:/qt/qml/platitude/auto/" + seat.part,
                                              Component.PreferSynchronous, seat)
         if (component.status !== Component.Ready) {
-            // Only reachable in a build that was told to drive itself and has no harness to drive with, which is
-            // exactly what has to be said out loud: every other run never gets here.
+            // Unreachable, and said out loud rather than swallowed: [`wanted`] and the module this loads from come
+            // from the one Cargo feature, so a build that asks has one to load and a build that has none never
+            // asks. What used to get here was a shipped window with a stray `PG_*` still in its environment.
             console.warn("harness part " + seat.part + " did not load: " + component.errorString())
             return null
         }
