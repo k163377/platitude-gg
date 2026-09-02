@@ -5,11 +5,16 @@ import platitude.ui
 
 // The commit's own hash over its parent's, rows aligned right.
 //
-// **Both rows are controls, and they answer the pointer exactly as they always did**: the whole plate is the button
-// that copies the hash, the whole link is the target that goes to the parent (デザイン規約 §右のペインの字は掴める —
-// 押せる的の判定は狭めない). The digits are drawn in fields so that a selection can be *put* into them, but the fields
-// take no press of their own: whoever presses here is pressing the control, and the selection arrives from the room
-// around the plate instead (`SweepRoom`).
+// **Both rows are a control and a value at once, and one gesture tells them apart**: a press that lets go where it
+// landed is the control's — the whole plate copies the hash, the whole link goes to the parent — and a press that
+// travels is the field's, so the digits are dragged over like any other text in this window (デザイン規約
+// §右のペインの字は掴める). Neither the face nor the target moves: the hand is laid over the control's own whole face,
+// so what is pressable is what it always was.
+//
+// **The hand is what the face answers with, not the field under it.** A `TextEdit` takes the press wherever it is
+// drawn, `selectByMouse: false` and all, and the control above it then never hears a click at all (qmltestrunner
+// `tst_hashplate`) — so the words are given no press of their own (`grabbable: false`) and the hand hands the drag
+// down to them. The room around the plate reaches the same fields from the row's gaps (`SweepRoom`).
 ColumnLayout {
     id: plate
 
@@ -58,8 +63,106 @@ ColumnLayout {
 
     function selectSha() { shaText.selectAll() }
     function selectParent() { parentText.selectAll() }
+    /// Nothing on this plate is holding a selection any more. **Both rows, from either of them**: the plate is one
+    /// thing, and a press on it is where its gestures start (規約 §右のペインの字は掴める — 選択は窓に 1 つ).
+    function dropValues() {
+        shaText.deselect()
+        parentText.deselect()
+    }
     readonly property alias shaSelected: shaText.selected
     readonly property alias parentSelected: parentText.selected
+
+    /// Automation: the two gestures as a hand makes them, entering the same three functions the hands below call — a
+    /// pointer cannot be injected (verify-ui §壊れない動詞の実装). The tap presses and lets go on the middle of the
+    /// control's face; the drag starts at the head of the value and runs off its far end.
+    function tapAt(which) {
+        const hand = plate.handFor(which)
+        const at = plate.controlPoint(which, hand)
+        hand.takeAt(at.x, at.y)
+        hand.releaseNow()
+    }
+    function dragAcross(which) {
+        const hand = plate.handFor(which)
+        const field = plate.fieldFor(which)
+        const near = field.mapToItem(hand, 0, field.height / 2)
+        const far = field.mapToItem(hand, field.width, field.height / 2)
+        hand.takeAt(near.x, near.y)
+        hand.followAt(far.x, far.y)
+        hand.releaseNow()
+    }
+    /// Automation: and that there is a hand at all — a run enters the functions above rather than the pointer, so a
+    /// hand taken out, disabled or shrunk would answer every gesture it was asked and never see a press.
+    function handStands(which) {
+        const hand = plate.handFor(which)
+        const face = which === "parent" ? parentLink : hashCopy
+        return hand.enabled && hand.width === face.width && hand.height === face.height
+    }
+    function handFor(which) {
+        return which === "parent" ? parentHand : hashHand
+    }
+
+    /// The hand a row that is both a control and a value answers with. **The press is the control's until it travels**
+    /// — past that it is a drag, and a drag belongs to the words (デザイン規約 §右のペインの字は掴める). The distance
+    /// is the platform's own (`drag.threshold`), and the selection is anchored where the press landed rather than
+    /// where the threshold was crossed, so it begins under the finger.
+    ///
+    /// **A plain `MouseArea` and not a handler**, for the pair already measured for the row beneath this plate
+    /// (`SweepRoom`): a passive `PointHandler` answers one move of a two-move drag inside the pane's Flickable, and a
+    /// `TapHandler` never taps at all over a selectable field. `preventStealing` is what keeps that Flickable from
+    /// taking the drag away part-way through.
+    component RowHand: MouseArea {
+        id: hand
+
+        /// The words this row draws, and what a press that never travelled does.
+        required property LineText field
+        signal tapped()
+        /// Raised where the press lands, before anything has been decided about it: whoever owns the values clears
+        /// the board, so no gesture runs on top of what the last one left picked out.
+        signal taken()
+
+        /// Where the press landed, and whether it has since travelled far enough to be a drag.
+        property real fromX: 0
+        property real fromY: 0
+        property bool dragging: false
+
+        /// The three the handlers below call, in this hand's own coordinates — and the three a run enters, so a hand
+        /// that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+        function takeAt(x, y) {
+            hand.fromX = x
+            hand.fromY = y
+            hand.dragging = false
+            // **The press lets the last gesture's selection go**, whichever this one turns out to be — the same thing
+            // a press in any other text does, and what keeps a copy from being taken under words still washed by the
+            // drag before it.
+            hand.taken()
+        }
+        function followAt(x, y) {
+            if (!hand.dragging) {
+                if (Math.abs(x - hand.fromX) < hand.drag.threshold
+                        && Math.abs(y - hand.fromY) < hand.drag.threshold)
+                    return
+                hand.dragging = true
+                // The caret comes with the anchor, which is also what takes the selection off whatever field was
+                // holding one — there is one selection in this window (`LineText`).
+                hand.field.anchorFrom(hand, hand.fromX, hand.fromY)
+            }
+            hand.field.extendFrom(hand, x, y)
+        }
+        function releaseNow() {
+            const travelled = hand.dragging
+            hand.dragging = false
+            if (!travelled)
+                hand.tapped()
+        }
+
+        anchors.fill: parent
+        preventStealing: true
+        cursorShape: Qt.PointingHandCursor
+        onPressed: mouse => hand.takeAt(mouse.x, mouse.y)
+        onPositionChanged: mouse => { if (hand.pressed) hand.followAt(mouse.x, mouse.y) }
+        onReleased: hand.releaseNow()
+        onCanceled: hand.dragging = false
+    }
 
     spacing: 0
 
@@ -79,18 +182,19 @@ ColumnLayout {
         topPadding: 0
         bottomPadding: 0
         readonly property bool lit: hovered || visualFocus
+        // The pointer's press is the hand's below, so the face has to be told when it is being pressed — and told to
+        // stop once the press has travelled, because from there the gesture is the words'. The keyboard's own press
+        // rides along: `Space` never travels.
+        down: hashCopy.pressed || (hashHand.containsPress && !hashHand.dragging)
         ToolTip.visible: hovered
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: qsTr("Copy full hash")
+        // The keyboard's way in. The pointer's is the hand below, which is the only one that can tell a click from a
+        // drag.
         onClicked: plate.copyFullNow()
         background: Rectangle {
             radius: Theme.radiusSm
             color: hashCopy.down ? Theme.bgPressed : hashCopy.lit ? Theme.bgHover : "transparent"
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.NoButton
-                cursorShape: Qt.PointingHandCursor
-            }
             // Drawn here rather than as the label's font underline so the rule runs under the icon too — the hash and
             // the icon are one target, so they get one line.
             Rectangle {
@@ -133,6 +237,14 @@ ColumnLayout {
                 }
             }
         }
+        // Declared after the content so it lies over it: the words below take their own press wherever they are drawn,
+        // and this face answers as one target or not at all.
+        RowHand {
+            id: hashHand
+            field: shaText
+            onTaken: plate.dropValues()
+            onTapped: plate.copyFullNow()
+        }
     }
     Item {
         id: parentLink
@@ -140,7 +252,7 @@ ColumnLayout {
         Layout.alignment: Qt.AlignRight
         implicitWidth: parentRow.implicitWidth
         implicitHeight: parentRow.implicitHeight
-        ToolTip.visible: parentHover.containsMouse
+        ToolTip.visible: parentHand.containsMouse
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: qsTr("Go to parent commit")
         RowLayout {
@@ -182,19 +294,22 @@ ColumnLayout {
         }
         // One line under the mark and the hash: they are one target, the way the hash and its copy icon share theirs.
         Rectangle {
-            visible: parentHover.containsMouse
+            visible: parentHand.containsMouse
             color: Theme.textLink
             height: Theme.borderWidth
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
         }
-        MouseArea {
-            id: parentHover
-            anchors.fill: parent
+        // Declared last so it lies over the row: the words below take their own press wherever they are drawn, and
+        // this link answers as one target or not at all. It is also what reports the pointer for the mark and the
+        // rule above — nothing else on this row asks for hover.
+        RowHand {
+            id: parentHand
+            field: parentText
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: plate.goToParentNow()
+            onTaken: plate.dropValues()
+            onTapped: plate.goToParentNow()
         }
     }
 }

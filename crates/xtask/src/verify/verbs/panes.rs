@@ -103,6 +103,25 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "details_sweep reach=9/9 caret=true grabs=true ours=true",
     },
+    // The plate's own gesture, told apart by whether the press
+    // travelled: a click copies the whole hash, a drag picks out the
+    // shown one. No half of that is on screen — the clipboard is not,
+    // and a plate that copied on every press frames exactly like one
+    // that told the two apart, selection and all. `quiet=` is the half
+    // `held=` does not give; `let=` is what the press before the copy
+    // did to the drag before it, without which the plate copies out
+    // from under a wash nobody is making any more; and `hand=` is the
+    // half no gesture gives itself: the run enters the hand's own
+    // functions rather than the pointer, so a hand taken out, disabled
+    // or shrunk would answer every gesture it was asked and never see a
+    // press. Whether Qt hands the press to the plate at all is a
+    // question only a real pointer answers, and it is asked where one
+    // can be made (`qmltest`, tst_hashplate).
+    Verb {
+        name: "details-hand",
+        when: &[],
+        plain: "details_hand acted=true held=true quiet=true let=true hand=true",
+    },
     // The author's name, capped at its own width so the signature's one
     // word stays against it. A ceiling drawn a fraction of a pixel under
     // that width cuts the name, and a cut is what a picture answers

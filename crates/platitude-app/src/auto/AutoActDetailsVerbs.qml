@@ -47,6 +47,11 @@ Item {
             detailsSelectTimer.which = cut > 0 ? rest.substring(0, cut) : rest
             page.activateRow(graphModel.oidAt(cut > 0 ? Number(rest.substring(cut + 1)) : 0))
             detailsSelectTimer.start()
+        } else if (act === "details-hand") {
+            // The plate's own two gestures, on the graph row the argument names (the top one by default — what this
+            // is about is the plate rather than which commit is in it).
+            page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
+            detailsHandTimer.start()
         } else if (act === "details-sweep") {
             const sweepCut = arg.indexOf(":")
             detailsSweepTimer.which = sweepCut > 0 ? arg.substring(0, sweepCut) : arg
@@ -180,6 +185,57 @@ Item {
             // text rides along for the eye.
             Harness.report("details_select match=" + (want !== "" && got === want)
                               + " which=" + detailsSelectTimer.which + " text=" + got)
+            driver.complete()
+        }
+    }
+
+    /// The plate's own gesture: a press that lets go where it landed copies the whole hash, and a press that travels
+    /// leaves the shown one picked out instead (規約 §右のペインの字は掴める). **Four claims, and no picture answers
+    /// any of them** — the clipboard is not on screen, and a plate that copied on both gestures frames exactly like
+    /// one that told them apart.
+    ///
+    /// **The drag goes first.** The tap below puts the hash on the clipboard, and a run that had taken them in the
+    /// other order could not tell a drag that also copied from the copy it had just made.
+    ///
+    /// Whether the press reaches the plate at all is a question only a real pointer answers, and that one is asked
+    /// where a pointer can be made (qmltestrunner `tst_hashplate`): a run enters the hand's own functions, so what it
+    /// proves is the wiring from there to the clipboard.
+    SampleTimer {
+        id: detailsHandTimer
+        /// The row's geometry at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // Both sides have to exist before either gesture means anything, and the row has to have stopped moving:
+            // the pane lays out more than once on its way to a commit (`details-sweep`, the same wait).
+            const row = detailsPane.valueRow
+            if (!driver.cardSettled || !row.valueReady("hash") || row.shownValue("hash") === "")
+                return
+            const geom = row.valueGeom("hash")
+            if (geom !== detailsHandTimer.lastGeom) {
+                detailsHandTimer.lastGeom = geom
+                return
+            }
+            detailsHandTimer.stop()
+            const before = driver.clipboard.lastCopied
+            row.dragHash()
+            const shown = row.shownValue("hash")
+            // `held=` is the drag's whole answer, and `quiet=` is the half it does not give: a plate that copied on
+            // every press would leave the same selection standing.
+            const held = shown !== "" && row.selectedValue("hash") === shown
+            const quiet = driver.clipboard.lastCopied === before
+            row.tapHash()
+            const want = row.fullShown
+            // Read off the pad the copy goes through, which is the far end of the wire from the hand
+            // (`ClipboardHelper.lastCopied` — the clipboard itself will not say).
+            const acted = want !== "" && driver.clipboard.lastCopied === want
+            // And the drag before it has let go: a plate that kept the wash would be copying out from under a
+            // selection nobody is making any more, which is the plate reading as still dragged.
+            const letGo = row.selectedValue("hash") === ""
+            // `hand=` is the half a gesture cannot say for itself: the run enters functions rather than the pointer,
+            // so a hand taken out, disabled or shrunk would answer every one of them and never see a press.
+            Harness.report("details_hand acted=" + acted + " held=" + held + " quiet=" + quiet
+                              + " let=" + letGo
+                              + " hand=" + row.hashHandStands() + " text=" + driver.clipboard.lastCopied)
             driver.complete()
         }
     }

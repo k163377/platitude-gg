@@ -201,6 +201,14 @@ Item {
         return f ? f.mapToItem(item, f.width / 2, f.height / 2) : Qt.point(0, 0)
     }
     function valueGrabs(which) { const f = authorRow.fieldFor(which); return !!f && f.grabs }
+    /// The plate's own gesture, entered where its hand enters it — a run has no pointer to press or drag with
+    /// (`HashPlate`). The tap is what puts the whole hash on the clipboard; the drag is what leaves the shown one
+    /// picked out instead.
+    function tapHash() { hashPlate.tapAt("hash") }
+    function dragHash() { hashPlate.dragAcross("hash") }
+    function hashHandStands() { return hashPlate.handStands("hash") }
+    /// What the plate's own control hands over, which is more than the row is showing.
+    readonly property string fullShown: authorRow.details.shaHex
     /// The sweep as a hand makes it, and what it came away with (`SweepRoom`).
     function sweepAt(which, fx, fy) { return sweepHand.sweepAt(which, fx, fy) }
     function pressOnControl(which) { return sweepHand.pressOnControl(which) }
