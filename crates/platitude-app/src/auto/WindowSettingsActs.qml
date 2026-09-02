@@ -25,24 +25,81 @@ Item {
     readonly property var gitPane: acts.settingsDialog.autoGitPane
     readonly property var repoPane: acts.settingsDialog.autoGitPane.autoRepoPane
 
+    /// Headless has no pointer to put on an avatar row's Remove, and the lit button is what the dim/bright pair is
+    /// photographed by (`SettingsAppPane.pointedAtRow`).
+    Binding {
+        target: acts.appPane
+        property: "pointedAtRow"
+        value: AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
+    }
+
+    /// The real loading edge, kept alive until the picture has been grabbed. Raised off the moment git was asked
+    /// (`SettingsGitPane.toolsAsked`) and off the model's own change, because the read can already be out by the
+    /// first and can start after it; the box is told to hold its indicator up, and the screen closing puts that down.
+    property bool toolLoadingSeen: false
+    function noteToolLoading() {
+        if (AppBackend.autoAct !== "settings-tools-loading" || !acts.window.curPage)
+            return
+        if (!acts.window.curPage.pageTab.mergeToolsLoading)
+            return
+        acts.toolLoadingSeen = true
+        acts.gitPane.holdToolLoading = true
+    }
+    Connections {
+        target: acts.gitPane
+        function onToolsAsked() {
+            acts.noteToolLoading()
+        }
+        // The candidates arrive in two waves and the configured name in a third, so the value has three chances to be
+        // knocked out by something that is not a person — report it at each.
+        function onToolChoicesChanged() {
+            acts.reportTool()
+        }
+        function onMergeToolChanged() {
+            acts.reportTool()
+        }
+    }
+    Connections {
+        target: acts.window.curPage ? acts.window.curPage.pageTab : null
+        function onMergeToolsLoadingChanged() {
+            acts.noteToolLoading()
+        }
+    }
+    function reportTool() {
+        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
+            AppBackend.report("merge_editor " + acts.gitPane.toolTally())
+    }
+    /// Whether every chapter can be got to: they fit, or the bar that sends them is standing. The claim is the
+    /// harness's; the three lengths it is made of are the screen's (`SettingsDialog.chaptersContent`).
+    function reportFit() {
+        AppBackend.report("settings_fit reach="
+                          + (settingsDialog.chaptersContent <= settingsDialog.chaptersView
+                             || settingsDialog.chaptersBarShown)
+                          + " content=" + Math.round(settingsDialog.chaptersContent)
+                          + " view=" + Math.round(settingsDialog.chaptersView)
+                          + " bar=" + settingsDialog.chaptersBarShown)
+    }
+
     // The tools popup has two separately latched output states: a real loading edge and the populated, settled
     // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
-    // the same door the menu entry uses.
+    // the same door the menu entry uses, told on the way in to bring the list down with it.
     SampleTimer {
         running: AppBackend.autoAct === "settings-tools"
                  || AppBackend.autoAct === "settings-tools-loading"
         onTriggered: {
             if (!settingsDialog.opened) {
+                settingsDialog.pressToolOnOpen = true
                 settingsDialog.openAt("git")
                 return
             }
             const ready = AppBackend.autoAct === "settings-tools-loading"
-                        ? acts.gitPane.autoToolsLoadingReady
-                        : acts.gitPane.autoToolsSettledReady
+                        ? (acts.toolLoadingSeen && acts.gitPane.toolListOpen)
+                        : (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length > 0
+                           && acts.gitPane.toolListOpen)
             if (!ready)
                 return
             stop()
-            acts.gitPane.reportTool()
+            acts.reportTool()
             window.finishAutoAct()
         }
     }
@@ -87,8 +144,8 @@ Item {
             if (AppBackend.autoAct === "settings-repo-pick" && !acts.repoPane.autoRepoComboOpen)
                 return
             repoSettingsTimer.stop()
-            acts.repoPane.reportRepo()
-            settingsDialog.reportFit()
+            AppBackend.report("repo_config " + acts.repoPane.repoTally())
+            acts.reportFit()
             window.finishAutoAct()
         }
     }
@@ -131,7 +188,7 @@ Item {
             endingsTimer.stop()
             // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.
             settingsDialog.autoShowChapterFoot()
-            acts.repoPane.reportEndings()
+            AppBackend.report("line_endings " + acts.repoPane.endingsTally())
             window.finishAutoAct()
         }
     }

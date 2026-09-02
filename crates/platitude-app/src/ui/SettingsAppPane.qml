@@ -96,9 +96,6 @@ ColumnLayout {
         fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
         wholeHistoryBox.checked = AppBackend.initialCommits === 0
         commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
-        // Headless has no pointer to put on a row's Remove, and the lit
-        // button is what the dim/bright pair is photographed by.
-        pane.pointedAtRow = AppBackend.autoAct === "avatar-row-lit" ? 0 : -1
         pane.readAuthorChoices()
     }
     /// Opened from an avatar, the first thing left to do is name the

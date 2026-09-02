@@ -128,30 +128,35 @@ ColumnLayout {
         endingsField.pick(at)
         return true
     }
-    function reportEndings() {
-        AppBackend.report("line_endings scope=local state=" + repoEndings.state
-                          + " were=" + pane.endingsWere
-                          + " held=" + repoEndings.held
-                          + " effective=" + repoEndings.effective
-                          // The row the chooser is actually showing. **A photograph cannot check it** — the words are
-                          // sentences of the same length and shape, and one left over from another repository reads
-                          // exactly like the one git named.
-                          + " shown=" + endingsField.words[endingsField.heldRow]
-                          + " busy=" + repoEndings.busy
-                          + " error=" + repoEndings.error)
+    /// The line-ending chapter in one reading. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md) — the values are the model's and the chooser's, and neither is on this pane as a property.
+    ///
+    /// `scope=local` is the whole of the chapter: this screen writes `core.autocrlf` into the repository somebody
+    /// picked and nowhere else (規約 §設定の画面).
+    function endingsTally() {
+        return "scope=local state=" + repoEndings.state
+             + " were=" + pane.endingsWere
+             + " held=" + repoEndings.held
+             + " effective=" + repoEndings.effective
+             // The row the chooser is actually showing. **A photograph cannot check it** — the words are sentences of
+             // the same length and shape, and one left over from another repository reads exactly like the one git
+             // named.
+             + " shown=" + endingsField.words[endingsField.heldRow]
+             + " busy=" + repoEndings.busy
+             + " error=" + repoEndings.error
     }
-    function reportRepo() {
-        AppBackend.report("repo_config rows=" + pane.autoRepoRows
-                          + " state=" + repoConfig.state
-                          // The boxes say what git holds. **A photograph cannot check it** — the boxes belong to
-                          // whichever repository was picked last, and one showing another repository's values, or
-                          // none at all, is a screen offering to write the wrong thing.
-                          + " matches=" + !pane.dirty
-                          + " open=" + pane.autoRepoComboOpen
-                          + " local=" + repoConfig.localName + "|" + repoConfig.localEmail
-                          + " shown=" + identityFields.nameText + "|" + identityFields.emailText
-                          + " effective=" + repoConfig.effectiveName + "|" + repoConfig.effectiveEmail
-                          + " repo=" + chooser.wanted)
+    /// The group in one reading, the same way and for the same reason. The boxes say what git holds: **a photograph
+    /// cannot check it** — they belong to whichever repository was picked last, and ones showing another
+    /// repository's values, or none at all, is a screen offering to write the wrong thing.
+    function repoTally() {
+        return "rows=" + pane.autoRepoRows
+             + " state=" + repoConfig.state
+             + " matches=" + !pane.dirty
+             + " open=" + pane.autoRepoComboOpen
+             + " local=" + repoConfig.localName + "|" + repoConfig.localEmail
+             + " shown=" + identityFields.nameText + "|" + identityFields.emailText
+             + " effective=" + repoConfig.effectiveName + "|" + repoConfig.effectiveEmail
+             + " repo=" + chooser.wanted
     }
 
     Layout.fillWidth: true

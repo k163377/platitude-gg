@@ -42,7 +42,7 @@ ColumnLayout {
         if (pane.showing)
             pane.askTools()
         else
-            pane.autoToolLoadingLatched = false
+            pane.holdToolLoading = false
     }
 
     // ---- the merge editor ------------------------------------------------
@@ -54,14 +54,15 @@ ColumnLayout {
     }
     /// Stops a late answer from overwriting something already typed.
     property bool toolTouched: false
-    // Automation can photograph both phases without racing a wall clock. The loading latch is raised only after the
-    // real model reports an outstanding tool read, then keeps that observed visual state alive until grabToImage has
-    // finished.
-    property bool autoToolLoadingLatched: false
-    readonly property bool autoToolsLoadingReady: pane.autoToolLoadingLatched && toolField.popup.opened
-    readonly property bool autoToolsSettledReady: pane.curPage
-        && !pane.curPage.pageTab.mergeToolsLoading
-        && pane.toolChoices.length > 0 && toolField.popup.opened
+    /// Keeps the box's turning indicator up past the read that raised it. Written from outside and false wherever
+    /// nobody wrote it: the read can be over before a picture of the wait has been grabbed. Put down by the screen
+    /// closing (`onShowingChanged`) rather than by whoever raised it, so that neither of the open edge's two handlers
+    /// nor their order can take away what the other just put there.
+    property bool holdToolLoading: false
+    /// The candidate list is down, and nothing is outstanding on the tool read. What a run waits on, either side of
+    /// the answer: an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property bool toolListOpen: toolField.popup.opened
+    readonly property bool toolsSettled: pane.curPage !== null && !pane.curPage.pageTab.mergeToolsLoading
 
     /// Asks git what it would launch, and what it could launch. The candidate read is `git mergetool --tool-help`,
     /// which is about eight seconds on Windows (規約 §conflict を外部ツールへ渡す) — hence the turning indicator, and
@@ -72,9 +73,12 @@ ColumnLayout {
         // The status refresh only names the configured tool where something is conflicted, so ask for it.
         pane.curPage.pageTab.askMergeTool()
         pane.curPage.pageTab.askMergeTools()
-        if (AppBackend.autoAct === "settings-tools-loading" && pane.curPage.pageTab.mergeToolsLoading)
-            pane.autoToolLoadingLatched = true
+        pane.toolsAsked()
     }
+    /// git has just been asked both questions. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md): whether the read is still out is already on [`toolsSettled`], but *this instant* is not — the
+    /// answer can land before anything that reads the pane runs again.
+    signal toolsAsked()
 
     // The tool is written only where it would change what git answers with. Pressing the field is not choosing
     // anything, and the write for "the same as now" is not free: an empty field asks git to unset a key, which fails
@@ -95,32 +99,24 @@ ColumnLayout {
         toolField.pressField()
     }
 
-    /// Smoke hook. The candidates arrive in two waves and the configured name in a third, so the value has three
-    /// chances to be knocked out by something that is not a person — report it at each.
-    function reportTool() {
-        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
-            AppBackend.report("merge_editor wanted=" + toolField.wanted + " shown=" + toolField.editText
-                              + " configured=" + pane.mergeTool + " settled=" + (pane.curPage
-                                  && !pane.curPage.pageTab.mergeToolsLoading)
-                              + " loading=" + toolField.loading + " open=" + toolField.popup.opened
-                              + " typing=" + toolField.typing
-                              + " choices=" + pane.toolChoices.length)
+    /// The whole of what the box is holding, in one reading: what it would write, what it is showing, what git says
+    /// is configured, whether the read has settled, and where the caret is. **None of it can be read off a picture**
+    /// — the names are short and the box is the same width whatever is in it — and the candidates arrive in two waves
+    /// with the configured name in a third, so the value has three chances to be knocked out by something that is not
+    /// a person. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    function toolTally() {
+        return "wanted=" + toolField.wanted + " shown=" + toolField.editText
+             + " configured=" + pane.mergeTool + " settled=" + pane.toolsSettled
+             + " loading=" + toolField.loading + " open=" + pane.toolListOpen
+             + " typing=" + toolField.typing
+             + " choices=" + pane.toolChoices.length
     }
-    onToolChoicesChanged: pane.reportTool()
     onMergeToolChanged: {
         // `screenOpen`, not `showing`: see the property. A box that stopped following in the other category would be
         // carrying a value git has already moved past, and `applyTool` would write it back on the way out.
         if (pane.screenOpen && !pane.toolTouched) {
             toolField.wanted = pane.mergeTool
             pane.toolTouched = false
-        }
-        pane.reportTool()
-    }
-    Connections {
-        target: pane.curPage ? pane.curPage.pageTab : null
-        function onMergeToolsLoadingChanged() {
-            if (AppBackend.autoAct === "settings-tools-loading" && pane.curPage.pageTab.mergeToolsLoading)
-                pane.autoToolLoadingLatched = true
         }
     }
 
@@ -234,7 +230,7 @@ ColumnLayout {
                     placeholder: qsTr("none")
                     // The popup is opened by the screen's own `opened` edge. Loading stays latched only for the
                     // automation verb that deliberately photographs it.
-                    loading: pane.autoToolLoadingLatched || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
+                    loading: pane.holdToolLoading || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
                     model: pane.toolChoices
                     onWantedChanged: pane.toolTouched = true
                     // A row picked from the list is a finished answer; free text waits for Enter or for the screen to

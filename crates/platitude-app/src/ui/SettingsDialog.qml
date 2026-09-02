@@ -74,22 +74,23 @@ AppDialog {
     readonly property alias autoGitPane: gitPane
 
     /// Sends the chapters to their foot, where the group this run is about stands. The screen is two groups deep and
-    /// the window is not that tall ([`reportFit`]), so a run that photographed the resting position would be
+    /// the window is not that tall ([`chaptersContent`]), so a run that photographed the resting position would be
     /// photographing the group above the one it just wrote into.
     function autoShowChapterFoot() {
         chapters.contentY = Math.max(0, chapterCol.implicitHeight - chapters.height)
     }
-    /// Whether every chapter can be got to: they fit, or the bar that sends them is standing. **A photograph cannot
-    /// say it** — a column cut off at the window's edge is drawn exactly like one that ends there (the blind spot
-    /// `details-fit` exists for), and the one thing that silently breaks it is a content height read off implicit
-    /// sizes that a wrapping label under-reports. The screen's own, because the column is.
-    function reportFit() {
-        AppBackend.report("settings_fit reach="
-                          + (chapterCol.implicitHeight <= chapters.height || chaptersBar.visible)
-                          + " content=" + Math.round(chapterCol.implicitHeight)
-                          + " view=" + Math.round(chapters.height)
-                          + " bar=" + chaptersBar.visible)
-    }
+    /// How tall the chapters are, how much of them the screen has room for, and whether the bar that sends them is
+    /// standing — the three a reader would need to say every chapter can be got to. **A photograph cannot say it** —
+    /// a column cut off at the window's edge is drawn exactly like one that ends there (the blind spot `details-fit`
+    /// exists for), and the one thing that silently breaks it is a content height read off implicit sizes that a
+    /// wrapping label under-reports. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property real chaptersContent: chapterCol.implicitHeight
+    readonly property real chaptersView: chapters.height
+    readonly property bool chaptersBarShown: chaptersBar.visible
+
+    /// The merge editor's list comes down as the screen opens, the way a finger on the field brings it. Written from
+    /// outside before the screen is opened, and false wherever nobody wrote it — a reader opens it themselves.
+    property bool pressToolOnOpen: false
 
     /// The author an avatar's badge was pressed on. The screen opens
     /// already carrying whom it is about, so the only thing left to do is
@@ -116,13 +117,11 @@ AppDialog {
             else
                 appPane.focusFetch()
         }
-        // Through the press rather than the popup: what these two are for
-        // is the state a finger on the field leaves behind, and opening
-        // the screen from here would photograph that just as well with the
-        // wiring cut. Last, because a press also takes the caret — the
-        // focus settled just above is the one a person would be taking it
-        // from.
-        if (AppBackend.autoAct === "settings-tools" || AppBackend.autoAct === "settings-tools-loading")
+        // Through the press rather than the popup: what a run asking for this is after is the state a finger on the
+        // field leaves behind, and opening the list from outside would photograph that just as well with the wiring
+        // cut. Last, because a press also takes the caret — the focus settled just above is the one a person would be
+        // taking it from.
+        if (settingsDialog.pressToolOnOpen)
             gitPane.pressToolField()
     }
     // Escape and the button are the same exit, so both leave the fields
