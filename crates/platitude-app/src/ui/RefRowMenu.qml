@@ -60,7 +60,7 @@ Item {
     /// The commits a rebase onto this row would rewrite. Asked as the menu opens — the answer is a whole git call away,
     /// and it lands in the page's one answer slot (`RepoPage`).
     readonly property string rebaseRange:
-        (refRowMenu.kind === "branch" || refRowMenu.kind === "remote")
+        (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag")
         && refRowMenu.refId !== "" ? refRowMenu.refId + "..HEAD" : ""
     property bool rebasePublished: false
 
@@ -208,8 +208,13 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             text: qsTr("%1 onto it").arg(refRowMenu.workTree.branch)
-            // Deliberately not offered on a tag — that row belongs with the tag's own gestures.
-            offered: (refRowMenu.kind === "branch" || refRowMenu.kind === "remote") && refRowMenu.canIntegrateFrom
+            // The same condition as merge, to the letter: a tag is a fixed point either way, and the one this row
+            // lands on stays where it is — git peels an annotated tag to its commit, and `--update-refs` carries
+            // branches only (measured).
+            offered: (refRowMenu.kind === "branch"
+                      || refRowMenu.kind === "remote"
+                      || refRowMenu.kind === "tag")
+                     && refRowMenu.canIntegrateFrom
             // Said, not asked (要望: rewriting a pushed commit shows a warning). Published = reachable from a
             // remote-tracking ref, only as fresh as the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
