@@ -59,7 +59,8 @@ Rectangle {
     readonly property string stateCardRows: stateGroup.stateCardRows
     readonly property string stateCardSize: stateGroup.stateCardSize
     /// Whether the window is standing on its floor. Handed in, because the floor is the larger of this band's and the
-    /// page's and only `Main` has both. The group gives up its words there whatever else is true.
+    /// page's and only the body that seats both has it (`WindowBody`). The group gives up its words there whatever
+    /// else is true.
     property bool windowAtFloor: false
     /// The width the window may not be laid out under **with the left list open**, whether or not it is open now
     /// (`Main.floorWidth` measured on `RepoPage.openFloorWidth`). The three actions finish giving their words up

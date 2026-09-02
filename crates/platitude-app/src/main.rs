@@ -252,6 +252,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/UpstreamFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamForm.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WaitRing.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WindowBody.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowChrome.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowDialogSeat.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowButton.qml", "qt/qml/platitude");

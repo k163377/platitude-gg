@@ -186,6 +186,7 @@ TreeViewToggle 1.0 TreeViewToggle.qml
 UpstreamFlow 1.0 UpstreamFlow.qml
 UpstreamForm 1.0 UpstreamForm.qml
 WaitRing 1.0 WaitRing.qml
+WindowBody 1.0 WindowBody.qml
 WindowChrome 1.0 WindowChrome.qml
 WindowDialogSeat 1.0 WindowDialogSeat.qml
 WindowButton 1.0 WindowButton.qml

@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
-import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
 import platitude
@@ -36,22 +35,12 @@ ApplicationWindow {
     // opening both move it; Qt grows a window when a floor rises under it, which is the way back from
     // fold → shrink → unfold. `minimumWidth` alone only covers a dragged edge — `QWindow::resize` hands the size
     // straight to the platform without reading the hints — so every size this application sets itself goes through
-    // `holdFloor` below.
-    /// The page the floor is read off. Not `curPage`: with no tab open that is null while the window is showing the
-    /// blank page, which has the same three panes with the same minimums.
-    readonly property var floorPage: root.curPage !== null ? root.curPage : blankPage.item
-    readonly property real floorWidth:
-        Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.floorWidth : 0)
-    /// The same floor with the left list open whether or not it is — the width the band's three actions have finished
-    /// giving their words up at (`TopBar.actionCap`). Folding the list lowers the real floor, and a schedule read off
-    /// that would put the words back as the rail took the list's place (規約 §窓の床).
-    readonly property real openFloorWidth:
-        Math.max(topBar.floorWidth, root.floorPage !== null ? root.floorPage.openFloorWidth : 0)
-    readonly property real floorHeight:
-        // The band, the divider under it, and the line the window's bottom edge is drawn as — the three rows of
-        // `bodyColumn` that are not the page (they carry their own heights; the page's is its own floor).
-        Theme.toolbarHeight + Theme.splitterWidth + Theme.borderWidth
-        + (root.floorPage !== null ? root.floorPage.floorHeight : 0)
+    // `holdFloor` below. The numbers themselves are measured where both halves of the floor are (`WindowBody`); the
+    // names stay on the window, which is where the harness and `WindowShape` read them.
+    readonly property alias floorPage: body.floorPage
+    readonly property alias floorWidth: body.floorWidth
+    readonly property alias openFloorWidth: body.openFloorWidth
+    readonly property alias floorHeight: body.floorHeight
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
     onFloorWidthChanged: windowShape.holdFloor()
@@ -68,11 +57,12 @@ ApplicationWindow {
     }
 
     // What a title bar does, now that this band is one: maximise, minimise, the grab-run's whereabouts and the
-    // window's dressing (`WindowChrome`). Only this file calls them, so the names live on the chrome.
+    // window's dressing (`WindowChrome`). Only this file and the body it seats call them, so the names live on the
+    // chrome.
     WindowChrome {
         id: chrome
         window: root
-        topBar: topBar
+        topBar: body.topBar
     }
     onWidthChanged: chrome.reportCaptionStrip()
 
@@ -147,9 +137,9 @@ ApplicationWindow {
     /// Automation (`PG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of
     /// that (`WindowWaitRing`). The two keep their names here — the harness calls them on the window.
     function holdWaitHand(x, y) {
-        waitRingSeat.holdWaitHand(x, y)
+        body.waitRing.holdWaitHand(x, y)
     }
-    readonly property bool waitRingShown: waitRingSeat.ringShown
+    readonly property bool waitRingShown: body.waitRing.ringShown
 
     // Identity: the dialog and the state that opens it live in the gate below (`IdentityGate`). The way in keeps its
     // name on the window — the harness calls it here (`WindowAutoActDriver`).
@@ -206,7 +196,7 @@ ApplicationWindow {
 
     // The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
     // (`RepoPageStack`).
-    readonly property var curPage: pages.curPage
+    readonly property alias curPage: body.curPage
 
     FolderDialog {
         id: folderDialog
@@ -254,10 +244,10 @@ ApplicationWindow {
         seats: ({
             window: root,
             tabsModel: tabsModel,
-            pageRepeater: pages.seats,
-            topBar: topBar,
+            pageRepeater: body.pageRepeater,
+            topBar: body.topBar,
             chrome: chrome,
-            mainUi: mainUi,
+            mainUi: body,
             gate: gate,
             openFailedDialog: openFailedDialog,
             identityDialog: identityGate.dialog,
@@ -286,8 +276,8 @@ ApplicationWindow {
 
     SharedToolTip {
         id: sharedToolTip
-        host: mainUi
-        hand: hand
+        host: body
+        hand: body.hand
         // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would
         // have been. A quarter across the target, so the picture says which of the two the seat was read from.
         handAcross: AppBackend.autoAct !== "" ? 0.25 : -1
@@ -334,7 +324,7 @@ ApplicationWindow {
     // The window's own edge: a frameless window has no non-client area for the platform to put a line around, so the
     // line the design asks for (規約 §ウィンドウの縁) is drawn in the client. Not while the window fills the screen — a
     // line there would separate the app from nothing. The bottom side is the floor rectangle's at the end of the
-    // column below; windowed, the two coincide and the four sides read as one outline.
+    // body's column; windowed, the two coincide and the four sides read as one outline.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -346,11 +336,10 @@ ApplicationWindow {
     }
 
     // ---- main ------------------------------------------------------------
-    // The window's body, and the whole of what a headless picture is of (`AutoShotDriver.grabApp` grabs this item, so
-    // anything drawn outside it is drawn outside every screenshot). Almost all of it is the column below; what is not
-    // is the one mark that answers the pointer rather than a row of the window.
-    Item {
-        id: mainUi
+    // Everything the window shows, and the floor it stands on (`WindowBody`). What the rows in there reach back for
+    // is handed over here — a module of its own cannot see this one's ids.
+    WindowBody {
+        id: body
         // ApplicationWindow keeps its content item inside the window's safe area, which with the client area expanded
         // starts below the title bar (Windows: y = 31). The chrome reaches back up over that inset with a negative top
         // margin — the content item does not clip, so both painting and input carry. Not by reparenting onto the
@@ -359,100 +348,9 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         visible: AppBackend.gitState === "ok"
-
-        // Where the hand is, for whoever has to open something beside it. Declared here, on the parent of the whole
-        // content, because that is the one place a window-wide handler costs the rows nothing (`PointerWatch`).
-        PointerWatch {
-            id: hand
-        }
-
-        // ---- the wait the hand is given ----------------------------------
-        // The mark that stands beside the pointer while a write replays history (`WindowWaitRing`). Over everything
-        // and belonging to no pane, so its z and its fill are written here rather than carried inside.
-        WindowWaitRing {
-            id: waitRingSeat
-            anchors.fill: parent
-            z: 10001
-            hand: hand
-            page: root.curPage
-        }
-
-        ColumnLayout {
-            id: bodyColumn
-            anchors.fill: parent
-            spacing: 0
-
-            TopBar {
-                id: topBar
-                Layout.fillWidth: true
-                tabsModel: tabsModel
-                curPage: root.curPage
-                captionMerged: root.captionMerged
-                windowMaximized: root.visibility === Window.Maximized
-                // Standing on the floor is the one width with nothing left to share out, and the band's state
-                // group gives up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of
-                // band's and page's.
-                windowAtFloor: root.width <= Math.ceil(root.floorWidth)
-                // …and the width the three actions have to be down to their marks by, which is that floor with the list
-                // open. Read here for the same reason: only this window has both halves of it.
-                windowFloorWidth: root.openFloorWidth
-                onOpenRepositoryRequested: root.openRepositoryPicker()
-                onCloneRepositoryRequested: root.startClone()
-                onIdentityEditRequested: dialogSeat.openSettingsAt("git")
-                onSettingsRequested: dialogSeat.openSettingsAt("app")
-                onMaximizeToggleRequested: chrome.toggleMaximized()
-                onMinimizeRequested: chrome.minimizeWindow()
-                onCloseRequested: root.close()
-                onCaptionStripMoved: chrome.reportCaptionStrip()
-            }
-            // Divider under the tab toolbar — same look as the pane splitters.
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: Theme.splitterWidth
-                color: Theme.borderSubtle
-            }
-
-            // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
-            Loader {
-                id: blankPage
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                active: tabsModel.currentIndex < 0
-                visible: active
-                sourceComponent: Component {
-                    RepoPage {
-                        index: -1
-                        tab_id: -1
-                        onOpenRepositoryPicker: root.openRepositoryPicker()
-                    }
-                }
-            }
-
-            // Repository pages — one row per tab, and a page only for the tab in front (`RepoPageStack`).
-            RepoPageStack {
-                id: pages
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: tabsModel.currentIndex >= 0
-                tabsModel: tabsModel
-                pageBand: topBar
-                focusEpoch: root.focusEpoch
-                onScreen: root.onScreen
-                onOpenRepositoryPicker: root.openRepositoryPicker()
-                onSettingsDialogRequested: dialogSeat.openSettingsAt("app")
-                onGitSettingsRequested: dialogSeat.openSettingsAt("git")
-                // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
-                onAvatarSettingsRequested: (name, email) => dialogSeat.openAvatarSettings(name, email)
-            }
-
-            // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in
-            // borderDefault doing both. Drawn while the window fills the screen too: this side still has the
-            // taskbar under it.
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: Theme.borderWidth
-                color: Theme.borderDefault
-            }
-        }
+        window: root
+        chrome: chrome
+        dialogSeat: dialogSeat
+        tabsModel: tabsModel
     }
 }
