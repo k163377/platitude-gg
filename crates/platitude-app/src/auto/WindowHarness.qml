@@ -36,18 +36,27 @@ Item {
     /// over once (`Main.qml`'s `Binding`).
     property var page: null
 
-    /// The window is up: the verbs may start, and the shot clock with them.
+    /// The window is up: the verbs may start, and the shot clock and the census with them.
     function begin() {
         if (actsLoader.item)
             actsLoader.item.begin()
+        census.begin()
         shotDriver.begin()
     }
     /// One run has one owner of the page-level act (app-ui.md §UI 自動化の因果性).
     function claimPageAct() {
         return shotDriver.claimPageAct()
     }
+    /// The census reports before the shot is asked for: what the run showed is settled by then, and the report line
+    /// has to be out before the process quits on the saved picture.
     function finish() {
+        census.report()
         shotDriver.finish()
+    }
+
+    WindowCensus {
+        id: census
+        window: harness.window
     }
 
     WindowPerfDriver {

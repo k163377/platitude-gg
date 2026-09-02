@@ -30,6 +30,7 @@ TabProbe 1.0 TabProbe.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowBadgeActs 1.0 WindowBadgeActs.qml
 WindowBandActs 1.0 WindowBandActs.qml
+WindowCensus 1.0 WindowCensus.qml
 WindowDialogActs 1.0 WindowDialogActs.qml
 WindowFrameActs 1.0 WindowFrameActs.qml
 WindowHarness 1.0 WindowHarness.qml

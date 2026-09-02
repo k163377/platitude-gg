@@ -386,6 +386,7 @@ fn embed_harness_qml() {
     qtbridge::include_bytes_qml!("auto/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowBadgeActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowBandActs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/WindowCensus.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowDialogActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowFrameActs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowHarness.qml", "qt/qml/platitude");
