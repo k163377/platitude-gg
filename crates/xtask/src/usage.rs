@@ -143,13 +143,18 @@ const TAIL: &str = "  shipped [--no-build]
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
-  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown]
+  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown] [--shipped]
       The measurement behind ci/baseline/perf-windows-x64.md, run the
       same way every time: release build, a real window (offscreen
-      reports neither memory nor fps honestly), the PG_AUTO_* hooks,
-      WorkingSet and private bytes sampled every 100ms for their
-      maximum, and a deadline with a kill guard. The first run is
-      discarded — the record is a warm-cache number.
+      reports neither memory nor fps honestly) on one named screen, the
+      PG_AUTO_* hooks, WorkingSet and private bytes sampled every 100ms
+      for their maximum, and a deadline with a kill guard. The first run
+      is discarded — the record is a warm-cache number.
+      The machine is measured beside the process, and a run it spoiled is
+      taken again rather than published: the session locking, the window
+      going down or moving screens, frames not arriving at the rate the
+      screen could show, and the share of the machine that went to
+      something else. The screen is held awake for the length of a run.
       --breakdown builds with the `memprobe` feature and adds
       PG_MEM_REPORT=1, then prints the largest `mem report` line the run
       produced: live Rust heap, the models and the session parts holding
@@ -178,7 +183,29 @@ const TAIL: &str = "  shipped [--no-build]
                           opened an empty repository leaves the cost of
                           putting the page up, which is otherwise
                           indistinguishable from the toolkit's own floor.
-        --no-build        use the release binary already built
+        --no-build        use the release binary already built. `perf` and
+                          `shipped` build to the same path, so this
+                          measures whichever of the two ran last — the
+                          evidence names the feature set that was asked
+                          for, not the one on disk
+        --shipped         measure `cargo build --release` with no features
+                          — the build a person installs. It answers no
+                          knob and reports no frame, so what it gives is
+                          memory and the time to a finished graph; the
+                          repository comes from the saved session, the way
+                          a person opens one. Refuses the flags it cannot
+                          answer. Run it beside an ordinary run to say
+                          what carrying the harness costs.
+        --screen <name>   OS device name to put the window on (default:
+                          the primary). Every frame number is downstream
+                          of this where monitors differ in refresh rate
+        --corpus <token>  refuse unless the benchmark repository is the
+                          one this token names — `perf` prints the token,
+                          and a fetch changes it while HEAD holds still
+        --retries <n>     how many times a run the machine spoiled is
+                          taken again (default 3)
+        --allow-noisy     publish what a busy, covered or locked machine
+                          produced. The conditions are printed either way
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built
