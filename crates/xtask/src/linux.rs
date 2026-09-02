@@ -383,10 +383,17 @@ fn mount_path(path: &Path) -> String {
 /// directory would put back exactly what worktrees exist to prevent: one
 /// lock, one incremental cache, two sessions.
 fn volume(root: &Path, kind: &str) -> String {
-    let name = root
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| "root".to_string());
+    // The last segment after either separator, rather than
+    // `Path::file_name`: the path being named is a Windows one whenever the
+    // host is Windows, and everywhere else a backslash is an ordinary
+    // character in a name, so `file_name` would answer with the whole path.
+    // Only the host ever calls this, so the difference is invisible in a
+    // run and visible in a test — which is where it was found.
+    let text = root.display().to_string();
+    let name = text
+        .rsplit(['/', '\\'])
+        .find(|segment| !segment.is_empty())
+        .unwrap_or("root");
     let name: String = name
         .chars()
         .map(|c| {
