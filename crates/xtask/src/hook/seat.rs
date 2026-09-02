@@ -2,8 +2,9 @@
 //! claim that keeps two sessions out of one seat, and the re-claim that
 //! puts a claim back on a seat `land` set free.
 
+use super::launch::resolve;
 use super::payload::string_field;
-use crate::seats::{self, SEAT_CLAIM, SEATS, worktree_root};
+use crate::seats::{self, SEAT_CLAIM, SEATS, WorktreeBlock, worktree_blocks, worktree_root};
 use crate::subprocess::git_query;
 
 /// PreToolUse(EnterWorktree): a worktree name outside the seat roster
@@ -34,7 +35,7 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     // Entering by name lands in the seat's existing tree just as surely as
     // entering by path — resolve it, or there is a door around the claim.
     let target = match (path, name) {
-        (Some(path), _) => roster_seat(&path).is_some().then_some(path),
+        (Some(path), _) => named_tree(&cwd, &path).filter(|tree| roster_seat(tree).is_some()),
         (None, Some(name)) => existing_seat_path(&cwd, &name),
         (None, None) => None,
     };
@@ -63,8 +64,13 @@ pub(super) fn post_worktree(input: &str) -> Result<(), String> {
     // The tool input's `path` is the seat the session just settled in;
     // `cwd` is the fallback for an entry by name, where the roster letter
     // is the only thing the payload carries.
-    let where_ = string_field(input, "path").or_else(|| string_field(input, "cwd"));
-    let Some(seat) = where_.as_deref().and_then(roster_seat) else {
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    let entered = string_field(input, "path").and_then(|path| named_tree(&cwd, &path));
+    let Some(seat) = entered
+        .as_deref()
+        .and_then(roster_seat)
+        .or_else(|| roster_seat(&cwd))
+    else {
         return Ok(());
     };
     println!(
@@ -90,6 +96,50 @@ fn announce(seat: &str) -> String {
          that never says which seat it took leaves the user unable to tell which \
          tree a change, a build or a screenshot came from (CLAUDE.md ビルド・テスト)."
     )
+}
+
+/// The worktree a tool's `path` names, resolved the way git resolves it
+/// and answered by the listing rather than by reading the string.
+///
+/// A path is only a seat's if this says so: `.claude/worktrees/e` and its
+/// absolute spelling are one tree, and judging the raw string calls the
+/// first one no seat at all. That is how two sessions came to share seat
+/// e — the entry that spelled it relatively took no claim and met no
+/// refusal, and worked on top of the other's commits for eight minutes
+/// (observed 2026-09-02).
+fn named_tree(cwd: &str, path: &str) -> Option<String> {
+    let listing = git_query(cwd, &["worktree", "list", "--porcelain"])?;
+    tree_named(&worktree_blocks(&listing), cwd, path)
+}
+
+/// The listing half of [`named_tree`], pure so the tests can ask.
+///
+/// Two spellings are tried, because a relative path is written against
+/// wherever the session stands: the session's own directory, and the
+/// primary checkout, which is the listing's first entry and what a
+/// session sitting in one seat writes another seat's path against.
+fn tree_named(trees: &[WorktreeBlock], cwd: &str, path: &str) -> Option<String> {
+    let candidates = [resolve(cwd, path), resolve(&trees.first()?.path, path)];
+    trees
+        .iter()
+        .find(|tree| {
+            candidates
+                .iter()
+                .any(|candidate| same_tree(candidate, &tree.path))
+        })
+        .map(|tree| tree.path.clone())
+}
+
+/// Whether two paths name one tree. Windows spells a path in whatever
+/// case the writer used, so the comparison there is case-blind.
+fn same_tree(left: &str, right: &str) -> bool {
+    let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
+    let (left, right) = (trim(left), trim(right));
+    if cfg!(windows) {
+        left.eq_ignore_ascii_case(&right)
+    } else {
+        left == right
+    }
 }
 
 /// The roster letter `path` points into, if it is a seat's tree at all.
@@ -288,7 +338,53 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 
 #[cfg(test)]
 mod tests {
-    use super::{Standing, printable, roster_seat, standing, worktree_objection};
+    use super::{Standing, printable, roster_seat, standing, tree_named, worktree_objection};
+    use crate::seats::WorktreeBlock;
+
+    const PRIMARY: &str = "C:/x/platitude-gg";
+
+    fn listing() -> Vec<WorktreeBlock> {
+        [PRIMARY, "C:/x/platitude-gg/.claude/worktrees/a"]
+            .into_iter()
+            .chain(["C:/x/platitude-gg/.claude/worktrees/e"])
+            .map(|path| WorktreeBlock {
+                path: path.to_string(),
+                branch: String::new(),
+                locked: false,
+                reason: String::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_seat_spelled_relatively_is_the_same_seat() {
+        let trees = listing();
+        let seat_e = "C:/x/platitude-gg/.claude/worktrees/e".to_string();
+        // The shape that put two sessions in seat e: the entry spelled
+        // the path against the primary checkout, where the session stood.
+        assert_eq!(
+            tree_named(&trees, PRIMARY, ".claude/worktrees/e"),
+            Some(seat_e.clone())
+        );
+        // The same letter written from inside another seat, and the
+        // absolute spelling with the separators Windows hands over.
+        assert_eq!(
+            tree_named(
+                &trees,
+                "C:/x/platitude-gg/.claude/worktrees/a",
+                ".claude/worktrees/e"
+            ),
+            Some(seat_e.clone())
+        );
+        assert_eq!(
+            tree_named(&trees, PRIMARY, "C:\\x\\platitude-gg\\.claude\\worktrees\\e"),
+            Some(seat_e)
+        );
+        // A path that is no tree of this repository stays unjudged, and
+        // the caller has to treat that as "not a seat I may enter".
+        assert_eq!(tree_named(&trees, PRIMARY, ".claude/worktrees/z"), None);
+        assert_eq!(tree_named(&trees, PRIMARY, "crates/xtask"), None);
+    }
 
     #[test]
     fn knows_a_seat_path_from_the_rest() {
@@ -305,6 +401,10 @@ mod tests {
             None
         );
         assert_eq!(roster_seat("C:/x/platitude-gg"), None);
+        // Why nothing may be judged by the raw string a tool was given:
+        // a seat spelled relatively reads as no seat here, so a path
+        // goes through `named_tree` before it reaches this.
+        assert_eq!(roster_seat(".claude/worktrees/e"), None);
     }
 
     #[test]
