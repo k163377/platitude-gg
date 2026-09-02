@@ -121,13 +121,18 @@ const TAIL: &str = "  shipped [--no-build]
         cargo xtask linux test -p platitude-core --test it
         cargo xtask linux verify-ui commit --preset basic
         cargo xtask linux bare
+        cargo xtask linux offline
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
-      `bare` is the one that is not either: it builds the release
-      workspace-wide and starts it on an Ubuntu carrying only what a
-      package would declare, which is the only check that the thing runs
-      somewhere it was not built. Worth a place in a pre-merge sweep, not
-      in a daily one — it answers rarely, and when it does the answer is
-      about what a distribution has to ship.
+      Two are neither, and both stay in the container on Linux too.
+      `bare` builds the release workspace-wide and starts it on an Ubuntu
+      carrying only what a package would declare, which is the only check
+      that the thing runs somewhere it was not built. `offline` is CI's
+      offline-test job run here: it builds the app with the harness and
+      the test binaries, then runs ci/offline-test.sh — the suite plus the
+      offscreen smoke — in a container with no network at all, which is
+      the property CI reaches with `unshare -n`. That script has no other
+      caller until CI first runs, so this is what keeps it from drifting.
+      Both are worth a place in a pre-merge sweep, not in a daily one.
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a docker

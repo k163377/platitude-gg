@@ -49,6 +49,7 @@ use std::process::{Command, Stdio};
 use crate::keepsakes;
 
 mod bare;
+mod offline;
 #[cfg(test)]
 mod tests;
 
@@ -120,6 +121,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if rest.first().is_some_and(|verb| verb == "bare") {
         let discover = rest.iter().any(|word| word == "--discover");
         return bare::bare(&root, discover);
+    }
+    // The other verb that is about a machine rather than a toolchain, and
+    // the other one that stays in the container on Linux: what it asks is
+    // whether the suite passes with no network, which the host has.
+    if rest.first().is_some_and(|verb| verb == "offline") {
+        if let Some(extra) = rest.get(1) {
+            return Err(format!("offline takes no arguments (got {extra:?})"));
+        }
+        return offline::offline(&root);
     }
     let command = command_line(rest);
     if cfg!(target_os = "linux") {
