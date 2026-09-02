@@ -66,7 +66,7 @@
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
-- 性能 4 項目のうち**メモリだけが予算超過**(379.5–387.5MB / 予算 300MB): [実測](ci/baseline/perf-windows-x64.md)。**グラフを流さなくても超過**(行選択と diff までで 340–349MB)で、漏れではなく行を組んだ C++ ヒープが返らない形 — 残件は [P3-確認事項.md](internal-docs/P3-確認事項.md) §app。**計測は画面・GPU アダプタ・corpus を機械が固定し、駄目な run は落として撮り直す**(条件と読み方は実測記録)
+- 性能 4 項目のうち**メモリだけが予算超過**(296–335MB / 予算 300MB。max で超過・min は予算内): [実測](ci/baseline/perf-windows-x64.md)。漏れではなく行を組んだ C++ ヒープが返らない形 — 残件は [P3-確認事項.md](internal-docs/P3-確認事項.md) §app。**計測対象は `cargo xtask corpus` が生成する合成リポジトリ**(生きた clone は fetch で前提が変わるのでやめた)。**この記録は 3 run の仮計測で、内訳・settle・出荷ビルド比は未取得**。**計測は画面・GPU アダプタ・corpus を機械が固定し、駄目な run は落として撮り直す**(条件と読み方、kotlin との形の差は実測記録)
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。本ファイルは未配線だけを持つ — **未配線の操作は無い**(フル interactive rebase のプラン編集モードまで配線済み。磨き残しは [P3-確認事項.md](internal-docs/P3-確認事項.md))
 - 残作業と要判断事項は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - CI(3OS + 完全オフライン job)は記述済み・**push するまで実行しない**。初回検証は配布準備期(P5)。CI も軽量(段 2)/ 完全性(段 3)に分ける([P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5)
