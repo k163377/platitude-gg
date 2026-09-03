@@ -488,6 +488,29 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
 }
 
 #[test]
+fn a_component_worn_as_another_s_root_is_covered_by_the_one_wearing_it() {
+    let sb = Sandbox::new("worn");
+    // `StashPane` is what the seeded census names, and this is one.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Bar.qml",
+        "Item {\n    property int x: 1\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Bar {\n    x: 2\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): a bar under the pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    // Nothing in an item tree ever answers to `Bar` — the run that showed
+    // the pane is the run that showed it.
+    assert!(!text.contains("no verb shows"), "{text}");
+    let ran = sb.ran();
+    assert!(ran.contains("verify stash --preset basic"), "{ran:?}");
+}
+
+#[test]
 fn a_component_no_verb_shows_stops_the_gate_by_name() {
     let sb = Sandbox::new("uncovered");
     sb.write(

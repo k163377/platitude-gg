@@ -136,16 +136,70 @@ pub(crate) fn instantiable(root: &Path, file: &str) -> bool {
     if text.contains("pragma Singleton") {
         return false;
     }
+    // A root nothing here can read is still a component: the one shape
+    // that never stands in a tree is the one this can name.
+    root_type(root, file).unwrap_or_default() != "QtObject"
+}
+
+/// What a component's own object is: the first word of the first line
+/// that opens one — `Item {`, `QtObject {`, `AppCard {`.
+pub(crate) fn root_type(root: &Path, file: &str) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(file)).ok()?;
     let code = super::graph::strip_comments(&text);
-    // The root type is the first word of the first line that opens an
-    // object: `Item {`, `QtObject {`, `AppCard {`.
-    let root_type = code
-        .lines()
+    code.lines()
         .map(str::trim)
         .find(|line| line.ends_with('{') && !line.starts_with("import") && !line.contains(':'))
         .and_then(|line| line.split_whitespace().next())
-        .unwrap_or("");
-    root_type != "QtObject"
+        .map(str::to_string)
+}
+
+/// Who wears whom: the stem of every component that is another one's root
+/// type, against the stems that wear it.
+///
+/// **The census reads the item tree, which answers with the outermost type
+/// only** — an item declared as a `GraphFind` says `GraphFind`, never the
+/// `FindBar` it is one of. So a component used only as somebody's root can
+/// never be named by a run, and the two answers the census is asked for
+/// have to go through the wearer: which verbs show this file, and whether
+/// any of them does. Read off the sources rather than the tree, because
+/// the tree is exactly what cannot say it.
+pub(crate) fn worn_by(root: &Path) -> BTreeMap<String, BTreeSet<String>> {
+    let mut worn: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut files = Vec::new();
+    if collect(
+        root,
+        &root.join("crates/platitude-app/src"),
+        "qml",
+        &mut files,
+    )
+    .is_err()
+    {
+        return worn;
+    }
+    for file in &files {
+        let stem = stem_of(file);
+        let Some(kind) = root_type(root, file) else {
+            continue;
+        };
+        if kind != stem {
+            worn.entry(kind).or_default().insert(stem);
+        }
+    }
+    worn
+}
+
+/// `stem` and everyone wearing it, however many layers deep.
+pub(crate) fn through_wearers(
+    stem: &str,
+    worn: &BTreeMap<String, BTreeSet<String>>,
+    out: &mut BTreeSet<String>,
+) {
+    if !out.insert(stem.to_string()) {
+        return;
+    }
+    for wearer in worn.get(stem).into_iter().flatten() {
+        through_wearers(wearer, worn, out);
+    }
 }
 
 /// The names a run reported: the `census=` line, comma-separated.

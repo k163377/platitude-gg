@@ -157,23 +157,19 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         touched.clone()
     };
     let census = Census::load(dir);
-    let mut steps = select(&g, &census, &reach, &changed, ask, everything.is_some());
+    let worn = census::worn_by(dir);
+    let steps = select(
+        &g,
+        &census,
+        &reach,
+        &changed,
+        ask,
+        everything.is_some(),
+        &worn,
+    );
     let store = Store::open(dir)?;
-    let mut required = Vec::new();
-    for step in steps.drain(..) {
-        if ask.host_only && step.side == Side::Linux {
-            continue;
-        }
-        let (key, cached) = if step.always {
-            (String::new(), false)
-        } else {
-            let key = cache_key(&here, &head, &step);
-            let cached = !ask.fresh && store.step_green(&key);
-            (key, cached)
-        };
-        required.push(Required { step, key, cached });
-    }
-    let uncovered = uncovered(dir, &census, &touched);
+    let required = owed(&here, &head, &store, steps, ask);
+    let uncovered = uncovered(dir, &census, &touched, &worn);
     let unclaimed = changed
         .iter()
         .filter(|file| {
@@ -197,6 +193,26 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         uncovered,
         unclaimed,
     })
+}
+
+/// Each step with the stamp that already answers for it, the other side's
+/// dropped when only this one was asked for. An always-step carries no key:
+/// the seconds it takes are not worth one.
+fn owed(here: &str, head: &str, store: &Store, steps: Vec<Step>, ask: &Ask<'_>) -> Vec<Required> {
+    steps
+        .into_iter()
+        .filter(|step| !(ask.host_only && step.side == Side::Linux))
+        .map(|step| {
+            let (key, cached) = if step.always {
+                (String::new(), false)
+            } else {
+                let key = cache_key(here, head, &step);
+                let cached = !ask.fresh && store.step_green(&key);
+                (key, cached)
+            };
+            Required { step, key, cached }
+        })
+        .collect()
 }
 
 /// A file every build reads: a change to it is a change to everything,
@@ -303,7 +319,12 @@ fn tested_on_linux(package: &str) -> bool {
 /// `whole` runs every package's tests unfiltered — the reach is the
 /// whole tree, and a filter naming every module says the same thing
 /// less plainly.
-fn sort(g: &Graph, reach: &BTreeSet<String>, whole: bool) -> Sorted {
+fn sort(
+    g: &Graph,
+    reach: &BTreeSet<String>,
+    whole: bool,
+    worn: &BTreeMap<String, BTreeSet<String>>,
+) -> Sorted {
     let (_, qml_tests) = qml_dirs();
     let mut sorted = Sorted::default();
     for file in reach {
@@ -312,7 +333,10 @@ fn sort(g: &Graph, reach: &BTreeSet<String>, whole: bool) -> Sorted {
             // it and no verb's census can name it, so it belongs to
             // `qmltest_steps` alone.
             if !under(file, &qml_tests) {
-                sorted.qml.insert(stem_of(file));
+                // Under every name a run could have met it: a component
+                // that is only ever somebody's root type is in the tree
+                // under the wearer's name (`census::worn_by`).
+                census::through_wearers(&stem_of(file), worn, &mut sorted.qml);
             }
             continue;
         }
@@ -371,8 +395,9 @@ fn select(
     changed: &[String],
     ask: &Ask<'_>,
     whole: bool,
+    worn: &BTreeMap<String, BTreeSet<String>>,
 ) -> Vec<Step> {
-    let sorted = sort(g, reach, whole);
+    let sorted = sort(g, reach, whole, worn);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, whole));
     steps.extend(qmltest_steps(reach, whole));
@@ -654,8 +679,13 @@ fn binary_steps(
 }
 
 /// QML components in the reach that stand in the item tree and no verb's
-/// census names.
-fn uncovered(dir: &Path, census: &Census, reach: &BTreeSet<String>) -> Vec<String> {
+/// census names — the wearers counting for the worn (`census::worn_by`).
+fn uncovered(
+    dir: &Path,
+    census: &Census,
+    reach: &BTreeSet<String>,
+    worn: &BTreeMap<String, BTreeSet<String>>,
+) -> Vec<String> {
     let (_, qml_tests) = qml_dirs();
     reach
         .iter()
@@ -664,9 +694,17 @@ fn uncovered(dir: &Path, census: &Census, reach: &BTreeSet<String>) -> Vec<Strin
         // window: `qmltest_steps` is what shows it.
         .filter(|f| !under(f, &qml_tests))
         .filter(|f| census::instantiable(dir, f))
-        .filter(|f| !census.covers(&stem_of(f)))
+        .filter(|f| !shown_as(&stem_of(f), worn).iter().any(|s| census.covers(s)))
         .cloned()
         .collect()
+}
+
+/// The names a run could have met this component under: its own, and
+/// every wearer's — an item declared as the wearer is one of these too.
+fn shown_as(stem: &str, worn: &BTreeMap<String, BTreeSet<String>>) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    census::through_wearers(stem, worn, &mut names);
+    names
 }
 
 /// The cache key: the step's identity and command, and the object id of
