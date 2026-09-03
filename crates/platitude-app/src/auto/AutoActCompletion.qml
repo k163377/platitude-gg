@@ -89,6 +89,12 @@ QtObject {
                 // The write barrier is behind this one: the row it makes is put in the sidebar by the read that
                 // follows the write, and the write answers first.
                 "create-tag",
+                // The three that take the branch back. Their landing is the branch arriving on the commit that was
+                // asked for **and** the working tree the mode left behind, and those two are published together
+                // after the answer (`session::write::run_write` joins them) — so the write barrier stands in front
+                // of the claim, not behind it, and the two owners race. `--hard` is the one that loses: it is
+                // judged on a tree the barrier photographs before the reset wrote over it.
+                "reset-soft", "reset-mixed", "reset-hard",
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
                 // there — so the barrier is behind the wait rather than in front of it.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",

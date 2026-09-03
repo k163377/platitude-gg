@@ -79,17 +79,30 @@ Item {
         } else if (act === "reset-soft" || act === "reset-mixed") {
             // With nothing given, the row under HEAD's: a reset to where the branch already stands moves nothing, and
             // an empty name would reach git as `reset ''`.
-            page.openRowMenu(arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
-                             : driver.autoActOid(arg))
-            page.moveBranchHere(act === "reset-soft" ? "soft" : "mixed")
+            const backTo = acts.resetTarget(arg)
+            page.openRowMenu(backTo)
+            const mode = act === "reset-soft" ? "soft" : "mixed"
+            resetLandedTimer.begin(backTo, mode)
+            page.moveBranchHere(mode)
         } else if (act === "reset-hard" || act === "reset-hard-confirm") {
             // "-confirm" stops with the held row on screen; "reset-hard" runs the hold to its end. The row resolves as
             // reset-soft's.
-            page.openRowMenu(arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
-                             : driver.autoActOid(arg))
+            const wipeTo = acts.resetTarget(arg)
+            page.openRowMenu(wipeTo)
             resetMenu.offer()
-            if (act === "reset-hard")
+            // What the held row is offering to take besides the commits. `tagged=` is the row's own tag read against
+            // the count it is drawn from — **the tag is there exactly when there is something to lose** — so it holds
+            // on a clean fixture as well as a dirty one, and a build that drew the tag off nothing, or dropped it
+            // over a dirty tree, says so. `note=` carries spaces, so it goes last.
+            Harness.report("reset_row tagged="
+                              + ((hardResetItem.note !== "") === (workTree.hardResetTakes > 0))
+                              + " files=" + workTree.hardResetTakes
+                              + " untracked=" + workTree.untrackedCount
+                              + " note=" + hardResetItem.note)
+            if (act === "reset-hard") {
+                resetLandedTimer.begin(wipeTo, "hard")
                 hardResetItem.completeHold()
+            }
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
             // With no row named, the row under HEAD's: most of this menu is about a commit the branch is *not* already
@@ -181,6 +194,14 @@ Item {
         }
         return true
     }
+    /// Which commit the four reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset
+    /// to where the branch already stands moves nothing, so the landing below would never come — and an empty name
+    /// would reach git as `reset ''`.
+    function resetTarget(arg) {
+        return arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+                          : driver.autoActOid(arg)
+    }
+
     // ---- the picture of a replay that is still replaying -----------------
     // What only exists while git is out: the badge counting the steps out of git's own file, the doors the page holds
     // down, and the ring beside the hand. Every other rebase verb photographs a landing.
@@ -294,6 +315,53 @@ Item {
                 tipLandedTimer.answeredOp = tab.writeAnswerOp(i)
                 return
             }
+        }
+    }
+    // Where taking the branch back leaves the reader. Not `tipLandedTimer`: a reset writes no commit, so there is no
+    // answer "at the tip" to arm on — what it does is move the name, and **the name arriving on the commit that was
+    // asked for is the whole claim**. Waited for by identity rather than by a counter: the write answers before the
+    // refs it invalidated are published (`session::write::run_write`), so a run that stopped at the write barrier
+    // photographs the branch where it stood — which is the picture a build that never reset takes too.
+    //
+    // Then the graph holding a row for it, and the pane on the right caught up, the way every landing here waits.
+    //
+    // `files=` is the working tree the mode chose: `--soft` and `--mixed` put the commits' own changes back into it,
+    // `--hard` writes over it — so the one report tells the three modes apart, and a `--hard` that quietly kept the
+    // tree cannot pass as one that cleared it.
+    SampleTimer {
+        id: resetLandedTimer
+        /// The commit the branch was sent back to, and which flag sent it. Both are the run's own words rather than
+        /// anything read back afterwards: what is being checked is that git did what this verb asked.
+        property string target: ""
+        property string mode: ""
+        function begin(oidHex, flag) {
+            resetLandedTimer.target = oidHex
+            resetLandedTimer.mode = flag
+            resetLandedTimer.start()
+        }
+        onTriggered: {
+            // **Both sides of the write's own refresh, and by identity on each.** The status and the refs are
+            // published together (`session::write::run_write` joins the two), so either may arrive first — and a
+            // landing that waits only for the refs reads a working tree from before the reset. That is not a
+            // near-miss: `--hard` is judged on the tree it left, and the run reported the one it was about to write
+            // over (measured — `files=2` on a tree the reset had already cleared).
+            if (repoTab.busyCount !== 0 || branchesModel.headOid !== resetLandedTimer.target
+                    || workTree.headOid !== resetLandedTimer.target)
+                return
+            const row = graphModel.rowOf(resetLandedTimer.target)
+            if (row < 0 || !driver.cardSettled)
+                return
+            resetLandedTimer.stop()
+            // No field here says "it moved": the wait above is that claim, and a build whose reset never landed
+            // never reaches this line at all (it walks into the watchdog). A `moved=true` read back off the same
+            // condition could not be false, and a field that cannot be false is one nobody can judge on.
+            Harness.report(
+                "reset_landed mode=" + resetLandedTimer.mode
+                + " files=" + workTree.hardResetTakes
+                + " untracked=" + workTree.untrackedCount
+                + " head=" + branchesModel.headOid.substring(0, 8)
+                + " row=" + row + " rows=" + graphModel.rowTotal)
+            driver.complete()
         }
     }
     // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit

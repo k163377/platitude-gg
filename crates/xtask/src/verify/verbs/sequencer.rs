@@ -278,4 +278,40 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "op_exit_landed wip=false op= follows=true onscreen=true",
     },
+    // Taking the branch back. **The line's own existence is the claim**:
+    // it is written on the far side of the branch arriving at the commit
+    // the run asked for, and a reset that never reached git leaves the
+    // run in its watchdog with nothing said. The picture cannot stand in
+    // for it — the write answers before the refs it invalidated are
+    // published, so the graph a barrier photographs is the one from
+    // before the reset, which is also what a build that reset nothing
+    // draws.
+    Verb {
+        name: "reset-soft",
+        when: &[],
+        plain: "reset_landed mode=soft",
+    },
+    Verb {
+        name: "reset-mixed",
+        when: &[],
+        plain: "reset_landed mode=mixed",
+    },
+    // And the one mode that answers for the working tree as well: after
+    // `--hard` the tree matches the commit the branch landed on, whatever
+    // it held before, so `files=0` holds on every fixture — a build that
+    // moved the branch and left the tree alone says a number here.
+    Verb {
+        name: "reset-hard",
+        when: &[],
+        plain: "reset_landed mode=hard files=0",
+    },
+    // The row before the hold runs: the tag saying what else `--hard`
+    // takes is read back against the count it is drawn from, so this
+    // holds over a clean fixture (no tag, nothing to lose) as well as a
+    // dirty one.
+    Verb {
+        name: "reset-hard-confirm",
+        when: &[],
+        plain: "reset_row tagged=true",
+    },
 ];
