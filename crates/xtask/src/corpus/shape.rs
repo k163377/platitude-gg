@@ -64,6 +64,65 @@ pub(super) const SIDE_LENGTH: u64 = 8;
 /// branch and a widest row wider than the average.
 pub(super) const FORK_BACK: u64 = 27;
 
+/// How far back each branch forks, at the shares that give the window
+/// the reference repository's spread of lane widths.
+///
+/// **A fixed distance is a comb.** Every branch keeping exactly one
+/// lane open for exactly the same number of rows gives a constant
+/// width — the corpus measured p25 28 / p50 28 / max 29 where the
+/// reference repository is p25 14 / p50 20 / max 34. What a renderer
+/// has to cope with is the *variance*, and only a spread of distances
+/// produces one.
+pub(super) const FORK_BACKS: [(u64, u64); 7] = [
+    (16, 6),
+    (20, 14),
+    (22, 26),
+    (18, 38),
+    (12, 52),
+    (9, 70),
+    (3, 100),
+];
+
+/// How far back branch `n` forks.
+pub(super) fn fork_back(n: u64) -> u64 {
+    let draw = mix(n ^ 0x00F0_4B0C) % 100;
+    let mut seen = 0;
+    for (share, back) in FORK_BACKS {
+        seen += share;
+        if draw < seen {
+            return back;
+        }
+    }
+    FORK_BACK
+}
+
+/// Tags whose commit is inside the graph's 2,000-row window, which is
+/// what decides how many chips it draws.
+///
+/// **Spread over the whole history is not spread over the window.** The
+/// window is the newest 2,000 commits and the trunk contributes only a
+/// few hundred of them, so tags placed evenly along 198,000 commits put
+/// thirty on screen where the reference repository puts 461.
+pub(super) const TAGS_IN_WINDOW: u64 = 520;
+
+/// The most refs the corpus puts on any one commit. The reference
+/// repository's busiest carries 42, which is one `LabelIndex` bucket,
+/// one `encode_labels` string and one row laying out 42 chips.
+pub(super) const REFS_ON_ONE: u64 = 44;
+
+/// Tags carrying a tag object rather than pointing straight at a
+/// commit. The reference repository's are 99.3% annotated, and an
+/// annotated tag costs a peel (`%(*objectname)`) where a lightweight
+/// one resolves in a single read.
+pub(super) const ANNOTATED_SHARE: u64 = 993;
+
+/// How large one pack may grow before `repack` starts another. The
+/// reference repository carries five packs and a multi-pack-index over
+/// them, where a repository fast-import wrote carries one and no index
+/// — and every git process an opening spawns maps all of them before it
+/// resolves anything.
+pub(super) const MAX_PACK_SIZE: &str = "2g";
+
 /// The trunk, once the side branches and the newest commit have taken
 /// their share of [`COMMITS`].
 pub(super) const TRUNK: u64 = COMMITS - SIDE_BRANCHES * SIDE_LENGTH - 1;
@@ -81,32 +140,6 @@ pub(super) const TRUNK: u64 = COMMITS - SIDE_BRANCHES * SIDE_LENGTH - 1;
 pub(super) const NEWEST_FILES: u64 = 75;
 pub(super) const NEWEST_ADDED: u64 = 47;
 pub(super) const NEWEST_REMOVED: u64 = 3;
-
-/// Distinct source paths the history rotates through, and distinct file
-/// bodies. Both powers of two so the tree repeats often enough to pack
-/// small — the history is here for its *count*, and a tree that never
-/// repeated would cost gigabytes to say the same thing.
-pub(super) const PATHS: u64 = 512;
-pub(super) const BODIES: u64 = 64;
-
-/// Source sizes, in bytes, at the shares the reference repository holds
-/// them: half its Kotlin under 565 bytes, nine tenths under 4KB, and
-/// ninety-nine hundredths under 24KB. **Four sizes, not a distribution**
-/// — the percentiles land, nothing between them does, and the tail is
-/// cut at 1.5MB where the reference repository reaches 3.9MB.
-///
-/// **The tail is the point.** A diff of a small file says nothing about
-/// what the grammar path costs; the pane parses the whole source and
-/// spans every line of it, so one large file is where highlighting shows
-/// up in both time and memory (internal-docs/P3-確認事項.md §文法経路の
-/// 巨大ファイル). The corpus carries one so the record can open it
-/// deliberately rather than never meeting one.
-const SIZES: [(u64, usize); 4] = [(33, 565), (25, 4_035), (5, 24_570), (1, 1_500_000)];
-
-/// The body every other one is small beside, and the path it sits at.
-/// Named so the record can open exactly this diff (`perf --file`) and
-/// say what the grammar path costs, beside the ordinary one.
-pub(super) const HUGE_BODY: u64 = BODIES - 1;
 
 /// The first commit's date and the step between commits. Fixed rather
 /// than taken from the clock: a corpus that regenerates to the same
@@ -144,6 +177,13 @@ fn spread(seed: u64, low: u64, each: u64, tail: u64) -> usize {
         0
     };
     (low + a + b + long) as usize
+}
+
+/// One whole word out of the vocabulary. **Whole**, because a cut word
+/// can be a Windows device name and git refuses the entire stream on
+/// one — `context` cut to three characters is `con` (measured).
+pub(super) fn word(seed: u64) -> &'static str {
+    WORDS[(mix(seed) % WORDS.len() as u64) as usize]
 }
 
 const WORDS: [&str; 32] = [
@@ -485,64 +525,214 @@ fn name_of(who: u64) -> String {
     }
 }
 
-/// How many bytes body `n` runs to, from the shares in [`SIZES`].
-pub(super) fn body_bytes(n: u64) -> usize {
-    let mut seen = 0;
-    for (share, bytes) in SIZES {
-        seen += share;
-        if n % BODIES < seen {
-            return bytes;
-        }
+/// Files a commit changes, and how many places in the tree it changes
+/// them in. The reference repository's commits touch 16.90 files across
+/// 4.95 directories; changes scattered over the whole tree would
+/// rewrite one tree object per file and cost the pack what a real
+/// commit does not.
+pub(super) const CHANGED_FILES: u64 = 18;
+pub(super) const CLUSTERS: u64 = 5;
+
+/// How far apart the clusters of one commit may sit, in slots. Slots
+/// are handed out directory by directory, so a short reach keeps a
+/// commit's changes in one subtree — which is what makes its clusters
+/// share parent trees rather than rewriting five deep paths whole.
+pub(super) const CLUSTER_REACH: u64 = 400;
+
+/// Touches of a tracked path that delete it rather than rewriting it.
+/// The reference repository's first-parent history is 35.8% deletes
+/// against 36.3% adds — a corpus of pure modifications gives
+/// `--find-renames` nothing to score and never opens an added file's
+/// diff against `/dev/null`.
+pub(super) const DELETED_SHARE: u64 = 12;
+
+/// One commit in this many renames a path outright: a delete and an add
+/// of the same content, which is what git scores as a rename. The
+/// reference repository carries one in nineteen.
+pub(super) const RENAME_EVERY: u64 = 19;
+
+/// One commit in this many rewrites a megabyte file. The reference
+/// repository's pack is mostly historical revisions of large files —
+/// without them the corpus packs to three quarters of its size however
+/// many small files it churns (measured: 3.52GiB against 4.66).
+///
+/// **And it is most of the import stream.** Every revision is written
+/// whole, because `fast-import` takes no deltas, so one in ten put
+/// forty gigabytes through a single-threaded reader for a pack already
+/// twice the size of the one it stands for.
+pub(super) const HUGE_EVERY: u64 = 30;
+
+/// The build output a working repository accumulates. Ignored, and
+/// therefore not free: `status::read` asks for every untracked path
+/// (`-uall`), so git stats each of these and matches it against the
+/// ignore rules before deciding it has nothing to say. The reference
+/// repository carries about 78,000.
+///
+/// **Beside the sources, not under one directory.** A rule naming a
+/// directory prunes the walk — git stats the directory once and skips
+/// everything beneath it, so 78,000 files under `build/` cost one stat
+/// and the status stays at half the reference repository's (measured:
+/// 0.44s against 1.01s). A pattern is what makes git walk them.
+pub(super) const IGNORED_FILES: u64 = 78_000;
+
+/// What the tracked ignore rules say. Patterns rather than directories,
+/// for the reason above.
+pub(super) const GITIGNORE: &str = "*.class\n*.jar.tmp\n*.stamp\n";
+
+/// Ignore files below the root. **git builds a per-directory exclude
+/// stack**, pushing and popping one of these as it walks, and a
+/// repository with a single root rule never makes it do that: the
+/// reference repository carries sixteen and its status is twice this
+/// one's over the same number of files.
+pub(super) const NESTED_IGNORES: u64 = 16;
+pub(super) const NESTED_GITIGNORE: &str = "*.tmp\n!keep.tmp\n*.local\n";
+
+/// One file's bytes, as of a revision.
+///
+/// **Per revision, not per path.** A body that never changed would make
+/// every later commit that names it a tree change and no blob, and the
+/// object database — five million objects in the reference repository,
+/// mapped by every git process the application spawns — would be a
+/// hundredth of the size.
+/// One file's bytes, into a buffer the caller reuses.
+pub(super) fn content_into(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32, mode: &str) {
+    out.clear();
+    if mode == "120000" {
+        out.extend_from_slice(b"../");
+        out.extend_from_slice(word(slot).as_bytes());
+        out.push(b'/');
+        out.extend_from_slice(word(slot ^ 0x11).as_bytes());
+        push_u64(out, slot);
+        return;
     }
-    SIZES[0].1
+    if super::tree::extension(slot) == PICTURES[0] {
+        image_into(out, slot, want);
+        return;
+    }
+    source(out, slot, want, rev);
 }
+
+fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
+    out.extend_from_slice(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+    out.extend_from_slice(&[0, 0, 0, 13, b'I', b'H', b'D', b'R']);
+    out.extend_from_slice(&[0, 0, 1, 0, 0, 0, 1, 0, 8, 6, 0, 0, 0]);
+    let mut n = 0u64;
+    while out.len() < want {
+        out.extend_from_slice(&mix(slot ^ n).to_le_bytes());
+        n += 1;
+    }
+    if want >= 33 {
+        out.truncate(want);
+    }
+}
+
+#[cfg(test)]
+pub(super) fn content(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {
+    let mut out = Vec::new();
+    content_into(&mut out, slot, want, rev, mode);
+    out
+}
+
+/// Extensions the preview pane reads as an image rather than as text,
+/// which is a different path through `preview::file_preview` and a cap
+/// of its own (`preview::IMAGE_BYTE_CAP`).
+const PICTURES: [&str; 1] = ["png"];
 
 /// One source file's body, in a language the diff pane highlights
 /// through a grammar rather than the lexer fallback, grown to the size
-/// its index calls for.
-pub(super) fn body(n: u64) -> String {
-    let want = body_bytes(n);
-    let mut text = format!("package org.example.p{n}\n\nclass Sample{n} {{\n");
-    let mut line = 0;
-    while text.len() < want {
-        text.push_str(&format!(
-            "    fun {}(): Int = {}\n",
-            words_to(n ^ (line << 8), 12, '_'),
-            mix(n ^ line) % 1000
-        ));
+/// the tree calls for.
+///
+/// **Written into a buffer the caller keeps, and with no allocation of
+/// its own.** This is the innermost loop of the whole build: four
+/// million placements of a few dozen lines each, so a `format!` per
+/// line is hundreds of millions of allocations, and it was most of a
+/// three-quarter-hour build.
+fn source(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32) {
+    if want == 0 {
+        return;
+    }
+    out.reserve(want + 64);
+    out.extend_from_slice(b"package org.example.p");
+    push_u64(out, slot);
+    out.extend_from_slice(b"\n\nclass Sample");
+    push_u64(out, slot);
+    out.extend_from_slice(b" {\n");
+    let mut line = 0u64;
+    while out.len() < want {
+        // The revision rides on one line in `CHURN_STRIDE`, so a later
+        // revision is a delta of its predecessor rather than a rewrite
+        // — which is what makes the pack the shape a real one is.
+        let churn = if line.is_multiple_of(CHURN_STRIDE) {
+            u64::from(rev)
+        } else {
+            0
+        };
+        out.extend_from_slice(b"    fun ");
+        push_words(out, slot ^ (line << 8) ^ (churn << 40), 12, b'_');
+        out.extend_from_slice(b"(): Int = ");
+        push_u64(out, mix(slot ^ line ^ (churn << 20)) % 1000);
+        out.push(b'\n');
         line += 1;
     }
-    text.push_str("}\n");
-    text
+    out.truncate(want);
 }
 
-/// Where a body sits. Deep enough that the pane has a path to elide,
-/// which is what the reference repository's own paths do.
-///
-/// **Whole words between the separators.** Cutting one leaves a segment
-/// the vocabulary never contained, and git refuses a path whose segment
-/// is a Windows device name — `context` cut to ten characters is
-/// `con/text`, and `fast-import` stops on it (measured). The trailing
-/// number keeps the file name out of the same trap.
-pub(super) fn path(n: u64) -> String {
-    let word = |salt: u64| WORDS[(mix(n ^ salt) % WORDS.len() as u64) as usize];
-    format!(
-        "compiler/{}-{}/src/org/jetbrains/kotlin/{}/{}{}.kt",
-        word(0x9001),
-        word(0x9002),
-        word(0x9003),
-        word(0x9004),
-        n
-    )
+/// A number, without the formatting machinery. `itoa` by hand because
+/// `write!` on a `Vec<u8>` goes through `fmt::Arguments` and this is
+/// called a few hundred million times.
+fn push_u64(out: &mut Vec<u8>, mut value: u64) {
+    let mut digits = [0u8; 20];
+    let mut at = digits.len();
+    loop {
+        at -= 1;
+        digits[at] = b'0' + u8::try_from(value % 10).unwrap_or(0);
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    out.extend_from_slice(&digits[at..]);
 }
+
+/// Words joined to about `want` bytes, appended rather than returned.
+fn push_words(out: &mut Vec<u8>, seed: u64, want: usize, joiner: u8) {
+    let began = out.len();
+    let mut n = 0u64;
+    while out.len() - began < want {
+        if n > 0 {
+            out.push(joiner);
+        }
+        out.extend_from_slice(
+            WORDS[(mix(seed ^ (n << 32)) % WORDS.len() as u64) as usize].as_bytes(),
+        );
+        n += 1;
+    }
+    out.truncate(began + want);
+    while out.last() == Some(&joiner) {
+        out.pop();
+    }
+}
+
+/// How often a line carries the revision. Measured on the reference
+/// repository's own megabyte files: its historical revisions pack to
+/// 63,254 bytes each, and this is the first stride at or above that.
+const CHURN_STRIDE: u64 = 16;
 
 /// The same body after the newest commit touched it: [`NEWEST_REMOVED`]
 /// of its lines gone from the middle and [`NEWEST_ADDED`] new ones in
 /// their place. Bounded whatever the file's size, so the diff of the
 /// large source is a large *file* and a small *change* — which is the
 /// shape that makes highlighting, not diffing, the cost.
-pub(super) fn body_edited(n: u64) -> String {
-    let mut lines: Vec<String> = body(n).lines().map(str::to_string).collect();
+pub(super) fn edited(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {
+    let mut whole = Vec::new();
+    content_into(&mut whole, slot, want, rev, mode);
+    let Ok(text) = String::from_utf8(whole.clone()) else {
+        return whole;
+    };
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    if lines.len() < 4 {
+        return whole;
+    }
     // Inside the class body, not over the closing brace: a source the
     // grammar cannot parse is not a measurement of the grammar.
     let at = (lines.len() / 2).max(3).min(lines.len().saturating_sub(1));
@@ -551,20 +741,20 @@ pub(super) fn body_edited(n: u64) -> String {
         .map(|line| {
             format!(
                 "    fun {}(): Int = {}",
-                words_to(n ^ (line << 16) ^ 0xED17, 14, '_'),
-                mix(n ^ line ^ 0xED17) % 1000
+                words_to(slot ^ (line << 16) ^ 0xED17, 14, '_'),
+                mix(slot ^ line ^ 0xED17) % 1000
             )
         })
         .collect();
     lines.splice(at..at + removed, added);
     let mut text = lines.join("\n");
     text.push('\n');
-    text
+    text.into_bytes()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{author, body_edited, committer, message, path, remote_branch, subject, tag};
+    use super::{author, committer, message, remote_branch, subject, tag};
 
     /// The percentile of a sample, taken the way the record's own
     /// numbers are read.
@@ -704,38 +894,45 @@ mod tests {
         assert_eq!(subject(12_345), subject(12_345));
         assert_eq!(tag(9_999), tag(9_999));
         assert_ne!(subject(1), subject(2));
-        assert_ne!(path(1), path(2));
+        assert_ne!(
+            super::content(1, 600, 0, "100644"),
+            super::content(2, 600, 0, "100644")
+        );
     }
 
-    /// The diff the interaction opens has to reach the grammar path, and
-    /// that is chosen by the extension.
+    /// A body is exactly the size the tree drew for it. **`data` counts
+    /// bytes**, and every placement pairs the two — a body that ran over
+    /// or under would be a stream fast-import rejects, a hundred seconds
+    /// after it was written.
     #[test]
-    fn sources_are_a_language_the_diff_pane_highlights() {
-        assert!(path(7).ends_with(".kt"), "{}", path(7));
-        assert!(super::body(7).contains("class Sample7"));
+    fn a_body_is_the_size_the_tree_asked_for() {
+        for want in [0, 1, 17, 565, 4_035, 24_570, 1_048_577] {
+            let body = super::content(11, want, 0, "100644");
+            assert_eq!(body.len(), want, "asked for {want}");
+        }
     }
 
-    /// Half the sources under 565 bytes, nine tenths under 4KB, and one
-    /// large enough that opening its diff is a measurement of the
-    /// grammar path rather than of the pane.
+    /// **A later revision is a delta of the one before it**, not a
+    /// rewrite. A body that never changed would leave the history one
+    /// blob per path however many commits named it, and the object
+    /// database is what every git process maps before it resolves
+    /// anything.
     #[test]
-    fn sources_carry_the_tail_the_reference_repository_has() {
-        let mut sizes: Vec<usize> = (0..super::BODIES).map(|n| super::body(n).len()).collect();
-        sizes.sort_unstable();
+    fn a_revision_differs_from_the_one_before_without_replacing_it() {
+        let first = String::from_utf8(super::content(23, 24_570, 0, "100644")).expect("ascii");
+        let second = String::from_utf8(super::content(23, 24_570, 1, "100644")).expect("ascii");
+        assert_ne!(first, second, "the revision changed nothing");
+        // Lines rather than bytes: a changed line is a different
+        // length, so everything after it sits at a new offset — which
+        // is what a delta encodes and a byte-for-byte comparison does
+        // not see.
+        let was: Vec<&str> = first.lines().collect();
+        let same = second.lines().filter(|line| was.contains(line)).count();
         assert!(
-            sizes[sizes.len() / 2] <= 700,
-            "p50 was {}",
-            sizes[sizes.len() / 2]
+            same * 100 / was.len() > 70,
+            "only {}% of the lines survived the revision",
+            same * 100 / was.len()
         );
-        assert!(
-            sizes[sizes.len() * 9 / 10] <= 4_500,
-            "p90 was {}",
-            sizes[sizes.len() * 9 / 10]
-        );
-        let biggest = sizes[sizes.len() - 1];
-        assert!(biggest > 1_000_000, "the tail was only {biggest}");
-        // And it is reachable by name, so the record can open it.
-        assert!(super::body(super::HUGE_BODY).len() > 1_000_000);
     }
 
     /// The newest commit's change is a few lines whatever the file is,
@@ -743,21 +940,16 @@ mod tests {
     /// megabyte to colour a handful of changed lines.
     #[test]
     fn the_newest_commit_changes_a_few_lines_of_a_large_file() {
-        for body in [3_u64, super::HUGE_BODY] {
-            let before = super::body(body);
-            let after = body_edited(body);
-            let (was, now) = (before.lines().count(), after.lines().count());
+        for want in [24_570_usize, 1_048_577] {
+            let before = String::from_utf8(super::content(5, want, 2, "100644")).expect("ascii");
+            let after = String::from_utf8(super::edited(5, want, 2, "100644")).expect("ascii");
+            let was = before.lines().count();
+            let now = after.lines().count();
             assert_eq!(
                 now as i64 - was as i64,
                 super::NEWEST_ADDED as i64 - super::NEWEST_REMOVED as i64,
-                "body {body} changed by the wrong number of lines"
-            );
-            assert!(after.starts_with(&format!("package org.example.p{body}")));
-            assert!(
-                after.trim_end().ends_with('}'),
-                "body {body} lost its brace"
+                "a file of {want} bytes changed by the wrong number of lines"
             );
         }
-        assert!(body_edited(super::HUGE_BODY).len() > 1_000_000);
     }
 }

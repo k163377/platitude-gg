@@ -25,6 +25,15 @@ toml = "1"
 tokio-util = "0.7"
 tracing = "0.1"
 
+# **The task runner is optimised even in a debug build.** `cargo xtask`
+# runs the dev profile (`.cargo/config.toml`), and xtask is not a
+# library under a debugger — it is the thing a person waits for: the
+# corpus generator alone writes tens of gigabytes through a few hundred
+# million integer draws, which unoptimised is most of an hour. Only the
+# one package, so nothing else pays the compile time.
+[profile.dev.package.xtask]
+opt-level = 3
+
 [workspace.lints.rust]
 unsafe_code = "warn"
 

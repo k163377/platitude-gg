@@ -22,6 +22,7 @@
 mod remotes;
 mod shape;
 mod stream;
+mod tree;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -118,8 +119,80 @@ fn build(at: &Path) -> Result<(), String> {
             .map_err(|e| format!("could not clear {}: {e}", partial.display()))?;
     }
     fill(&partial)?;
-    std::fs::rename(&partial, at)
-        .map_err(|e| format!("could not move the corpus into {}: {e}", at.display()))
+    settle(&partial, at)
+}
+
+/// Moves the finished corpus into place, waiting out whatever is still
+/// holding it.
+///
+/// **A rename can be refused for a while.** The build has just written
+/// a hundred and eighty thousand files, and on Windows the scanner or
+/// the indexer walking them keeps handles open into the tree for
+/// seconds afterwards — long enough that the rename fails with an
+/// access error against a destination that does not exist (measured,
+/// after a ten-minute build). Waiting is the whole fix.
+fn settle(partial: &Path, at: &Path) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + RENAME_CEILING;
+    loop {
+        let Err(refused) = std::fs::rename(partial, at) else {
+            return Ok(());
+        };
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "could not move the corpus into {} after {}s: {refused} — something is holding \
+                 the tree open. It is built and complete at {}; moving it by hand finishes the \
+                 job.",
+                at.display(),
+                RENAME_CEILING.as_secs(),
+                partial.display()
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+}
+
+/// How long the move is given. Generous, because the alternative is
+/// throwing away the build that produced what is being moved.
+const RENAME_CEILING: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// What each phase of the build cost.
+///
+/// **Printed, because an invisible cost is one nobody optimises.** This
+/// build was a three-quarter-hour job for weeks without that being
+/// anybody's measurement — the estimate in the plan was believed
+/// instead. A tool a person waits for says what it is spending.
+struct Clock {
+    began: std::time::Instant,
+    phases: Vec<(&'static str, std::time::Duration)>,
+}
+
+impl Clock {
+    fn start() -> Self {
+        Self {
+            began: std::time::Instant::now(),
+            phases: Vec::new(),
+        }
+    }
+
+    fn mark(&mut self, phase: &'static str) {
+        let now = std::time::Instant::now();
+        self.phases.push((phase, now - self.began));
+        self.began = now;
+    }
+
+    fn say(&self) {
+        let whole: std::time::Duration = self.phases.iter().map(|(_, took)| *took).sum();
+        let each: Vec<String> = self
+            .phases
+            .iter()
+            .map(|(phase, took)| format!("{phase} {:.0}s", took.as_secs_f64()))
+            .collect();
+        println!(
+            "  built in {:.1} min — {}",
+            whole.as_secs_f64() / 60.0,
+            each.join(" | ")
+        );
+    }
 }
 
 fn fill(at: &Path) -> Result<(), String> {
@@ -156,19 +229,62 @@ fn fill(at: &Path) -> Result<(), String> {
     // filter, so only the checkout moves). Measured on this machine
     // before this line existed.
     git(at, &["config", "core.autocrlf", "false"])?;
+    // The reference repository's paths run to 269 characters, and this
+    // one's are no shorter; with the corpus's own prefix in front of
+    // them that is past what the ANSI Windows API takes, so git is told
+    // to use the Unicode one. Without it the checkout fails on the
+    // deepest files and the corpus is a partial one that passes every
+    // other check.
+    git(at, &["config", "core.longpaths", "true"])?;
+    // **The pack is deflated at the cheapest level.** fast-import
+    // compresses every blob as it reads it, single-threaded, and the
+    // stream is tens of gigabytes — at the default level that is most
+    // of the build. The corpus already carries twice the reference
+    // repository's pack, so trading more bytes for less time costs
+    // nothing that is being measured: inflating is what the application
+    // does, and its speed does not depend on the level.
+    git(at, &["config", "pack.compression", "1"])?;
+    // The checkout is a hundred thousand files, which on Windows is
+    // where the wall clock goes rather than in the reading.
+    git(at, &["config", "checkout.workers", "0"])?;
+    // **Nothing may repack this corpus behind the measurement.** `git
+    // fetch` runs `gc --auto` after itself, and against nine million
+    // objects that is four minutes (measured — it was the whole of what
+    // looked like a slow fetch). The application fetches at open and
+    // every minute, so left on, maintenance would land in the middle of
+    // a run and be read as the application being slow. It would also
+    // rewrite the pack the record names.
+    git(at, &["config", "gc.auto", "0"])?;
+    git(at, &["config", "maintenance.auto", "false"])?;
+    git(at, &["config", "fetch.writeCommitGraph", "false"])?;
+    let mut clock = Clock::start();
     let newest = import(at)?;
+    clock.mark("import");
     // fast-import writes refs and nothing else: without this the work
     // tree is the empty one `init` left, and every tracked file reads as
     // deleted — which the application would show as an enormous
     // uncommitted change.
     git(at, &["reset", "--hard", "main"])?;
+    clock.mark("checkout");
     // The chain the reference repository has. Startup reads it, so a
     // corpus without one is measuring a different walk.
     git(at, &["commit-graph", "write", "--reachable", "--split"])?;
     // 50,000 loose refs cost 80MB of slack and slow every walk that
     // reads them; packed they are 6MB (measured).
     git(at, &["pack-refs", "--all"])?;
+    packs(at)?;
+    clock.mark("indexes");
     remotes::configure(at)?;
+    clock.mark("remotes");
+    spill(
+        at,
+        &git(at, &["ls-files"])?
+            .lines()
+            .map(String::from)
+            .collect::<Vec<_>>(),
+    )?;
+    clock.mark("spill");
+    clock.say();
     println!(
         "  the newest commit changes {} files; its first is {}",
         newest.paths.len() + 1,
@@ -192,11 +308,111 @@ fn report(at: &Path) -> Result<(), String> {
         counted,
         token(at, &refs)?
     );
+    worktree(at)?;
     branch_tree(at)?;
+    graph(at)?;
     window(at)?;
     println!(
         "  measure it with: PG_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
         at.display()
+    );
+    Ok(())
+}
+
+/// How the object database is reached, which is not the same axis as
+/// how large it is.
+///
+/// **Every git process maps this before it resolves anything**, and an
+/// opening spawns about fifteen of them. A repository that has been
+/// worked in has several packs and a multi-pack-index over them; one
+/// that fast-import wrote has exactly one pack and no index over it.
+///
+/// **The split is fast-import's own** (`--max-pack-size`), taken while
+/// it is already writing. Asking `repack -a -d` for it afterwards costs
+/// a second pass over every object in the database — measured at over
+/// forty minutes for this one, and it produced a single pack anyway.
+fn packs(at: &Path) -> Result<(), String> {
+    git(at, &["multi-pack-index", "write"])?;
+    Ok(())
+}
+
+/// The build output a working repository accumulates, which is ignored
+/// and is not therefore free.
+///
+/// **`-uall` walks it.** `status::read` asks for every untracked path,
+/// so git stats each of these and matches it against the ignore rules
+/// before deciding it has nothing to report. The reference repository
+/// carries about 78,000 of them and that is a large part of why its
+/// status takes a second where a corpus without them takes half of one.
+fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
+    if tracked.is_empty() {
+        return Ok(());
+    }
+    let stride = tracked.len() as u64 / shape::IGNORED_FILES.max(1) + 1;
+    for n in 0..shape::IGNORED_FILES {
+        let beside = &tracked[((n * stride) as usize) % tracked.len()];
+        let Some((dir, _)) = beside.rsplit_once('/') else {
+            continue;
+        };
+        let file = at.join(dir).join(format!("{}{n}.class", shape::word(n)));
+        std::fs::write(&file, format!("{n}\n"))
+            .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+    }
+    Ok(())
+}
+
+/// What the working tree costs to read, which is most of what startup
+/// is.
+///
+/// `status::read` runs `git status --porcelain=v2 -z --branch -uall` and
+/// pays one `lstat` per tracked file; the index carries one entry each.
+/// The reference repository is 106,581 files, a 19MB index and a
+/// one-second status, and a corpus that is a fraction of that is
+/// measuring a fraction of the startup it claims to.
+fn worktree(at: &Path) -> Result<(), String> {
+    let tracked = git(at, &["ls-files"])?.lines().count();
+    let index = std::fs::metadata(at.join(".git").join("index"))
+        .map(|meta| meta.len())
+        .unwrap_or_default();
+    let began = std::time::Instant::now();
+    git(at, &["status", "--porcelain=v2", "-z", "--branch", "-uall"])?;
+    let status = began.elapsed();
+    let objects = git(at, &["count-objects", "-vH"])?;
+    let read = |key: &str| {
+        objects
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .unwrap_or("?")
+            .trim()
+            .to_string()
+    };
+    let dirs = git(at, &["ls-tree", "-r", "-d", "--name-only", "HEAD"])?
+        .lines()
+        .count();
+    let packs = std::fs::read_dir(at.join(".git").join("objects").join("pack"))
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "pack"))
+                .count()
+        })
+        .unwrap_or_default();
+    let midx = at
+        .join(".git")
+        .join("objects")
+        .join("pack")
+        .join("multi-pack-index")
+        .exists();
+    println!(
+        "  packs {packs}{} — every git process maps these first",
+        if midx { " + a multi-pack-index" } else { "" }
+    );
+    println!(
+        "  worktree {tracked} files in {dirs} dirs | index {}MB | status {:.2}s | {} objects in {}",
+        index / 1_000_000,
+        status.as_secs_f64(),
+        read("in-pack:"),
+        read("size-pack:")
     );
     Ok(())
 }
@@ -234,6 +450,63 @@ fn branch_tree(at: &Path) -> Result<(), String> {
     println!(
         "  remotes {leaves} leaves | {} folder rows | {deepest} deep",
         folders.len()
+    );
+    Ok(())
+}
+
+/// The shape of the graph the window draws: how many refs land on its
+/// rows, and how wide it gets.
+///
+/// **A lane is open from a row with a not-yet-emitted parent until that
+/// parent is emitted**, which is the walk `GraphBuilder` does. The width
+/// is what the row canvas is sized by and what the renderer has to cope
+/// with; a constant width demands nothing of it.
+fn graph(at: &Path) -> Result<(), String> {
+    let rows = git(
+        at,
+        &[
+            "log",
+            "--max-count=2000",
+            "--date-order",
+            "HEAD",
+            "--branches",
+            "--remotes",
+            "--tags",
+            "--format=%H\x1f%P\x1f%D",
+        ],
+    )?;
+    let mut open: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut widths = Vec::new();
+    let (mut chips, mut carrying, mut busiest) = (0, 0, 0);
+    for row in rows.lines().filter(|row| !row.is_empty()) {
+        let mut field = row.split('\x1f');
+        let oid = field.next().unwrap_or_default();
+        let parents = field.next().unwrap_or_default();
+        let refs = field.next().unwrap_or_default();
+        open.remove(oid);
+        for parent in parents.split_whitespace() {
+            open.insert(parent.to_string());
+        }
+        widths.push(open.len());
+        let here = refs
+            .split(',')
+            .filter(|name| !name.trim().is_empty())
+            .count();
+        if here > 0 {
+            carrying += 1;
+            chips += here;
+            busiest = busiest.max(here);
+        }
+    }
+    widths.sort_unstable();
+    let at_percent = |p: usize| widths.get(widths.len() * p / 100).copied().unwrap_or(0);
+    println!(
+        "  graph lanes p25 {} / p50 {} / p75 {} / max {} | {chips} chips on {carrying} rows, \
+         busiest {busiest}",
+        at_percent(25),
+        at_percent(50),
+        at_percent(75),
+        widths.last().copied().unwrap_or(0)
     );
     Ok(())
 }
@@ -362,7 +635,12 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 fn import(at: &Path) -> Result<stream::Newest, String> {
     let mut child = Command::new("git")
         .current_dir(at)
-        .args(["fast-import", "--quiet", "--force"])
+        .args([
+            "fast-import",
+            "--quiet",
+            "--force",
+            &format!("--max-pack-size={}", shape::MAX_PACK_SIZE),
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -407,34 +685,6 @@ fn import(at: &Path) -> Result<stream::Newest, String> {
             }
         )),
     }
-}
-
-/// Runs git with `input` on its standard input and nothing to read
-/// back. What it is for is `update-ref --stdin`: fifty thousand refs in
-/// one process, where fifty thousand processes would cost the build.
-fn git_stdin(at: &Path, args: &[&str], input: &str) -> Result<(), String> {
-    let mut child = Command::new("git")
-        .current_dir(at)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("failed to spawn git {args:?}: {e}"))?;
-    let wrote = write_all(&mut child, input);
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if out.status.success() && wrote.is_ok() {
-        return Ok(());
-    }
-    Err(format!(
-        "git {args:?} failed: {}",
-        if said.is_empty() {
-            wrote.err().unwrap_or_default()
-        } else {
-            said
-        }
-    ))
 }
 
 fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String> {
