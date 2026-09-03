@@ -406,7 +406,7 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
         .huge
         .iter()
         .copied()
-        .max_by_key(|slot| tree.paths[*slot as usize].clone())
+        .max_by_key(|slot| &tree.paths[*slot as usize])
         .unwrap_or(0);
     // **The file the default scenario opens is chosen, not drawn.** It
     // is the first by path, so drawing all of them uniformly opens the
@@ -418,7 +418,7 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
         .filter(|slot| live.tracked[*slot as usize] && *slot != huge)
         .filter(|slot| tree.sizes[*slot as usize] as usize >= shape::OPENED_BYTES)
         .filter(|slot| tree.paths[*slot as usize] < tree.paths[huge as usize])
-        .min_by_key(|slot| tree.paths[*slot as usize].clone());
+        .min_by_key(|slot| &tree.paths[*slot as usize]);
     let mut slots: Vec<u64> = opened.into_iter().collect();
     let above = opened.map(|slot| tree.paths[slot as usize].clone());
     let mut slot = shape::mix(n ^ 0x004E_0E57) % tree::TRACKED;
@@ -452,7 +452,7 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
     {
         let lowest = (0..tree::TRACKED)
             .filter(|slot| live.tracked[*slot as usize] && *slot != huge)
-            .min_by_key(|slot| tree.paths[*slot as usize].clone())
+            .min_by_key(|slot| &tree.paths[*slot as usize])
             .unwrap_or(0);
         slots[0] = lowest;
     }

@@ -652,14 +652,13 @@ pub(super) const GITIGNORE: &str = "*.class\n*.jar.tmp\n*.stamp\n";
 pub(super) const NESTED_IGNORES: u64 = 16;
 pub(super) const NESTED_GITIGNORE: &str = "*.tmp\n!keep.tmp\n*.local\n";
 
-/// One file's bytes, as of a revision.
+/// One file's bytes, as of a revision, into a buffer the caller reuses.
 ///
 /// **Per revision, not per path.** A body that never changed would make
 /// every later commit that names it a tree change and no blob, and the
 /// object database — five million objects in the reference repository,
 /// mapped by every git process the application spawns — would be a
 /// hundredth of the size.
-/// One file's bytes, into a buffer the caller reuses.
 pub(super) fn content_into(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32, mode: &str) {
     out.clear();
     if mode == "120000" {

@@ -144,10 +144,12 @@ const EXT_TAIL: [&str; 12] = [
 ];
 
 /// Strides for the three walks. Each is coprime to the length it walks,
-/// which is what makes the walk a permutation rather than a sample, and
-/// the three differ so that depth, fan-out and size are not correlated
+/// which is what makes the walk a permutation rather than a sample. The
+/// two over directories differ so that depth and fan-out are not paired
 /// by index (identity pairing put the median file fourteen deep where
-/// the reference repository's is eight).
+/// the reference repository's is eight); the size walk is over slots,
+/// a different table, so sharing a value with the depth walk pairs
+/// nothing. **Changing any of them changes the corpus** (`corpus::token`).
 const SIZE_STEP: u64 = 40_009;
 const DEPTH_STEP: u64 = 40_009;
 const FANOUT_STEP: u64 = 30_011;
