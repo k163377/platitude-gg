@@ -418,9 +418,9 @@ pub(super) const REMOTES: [&str; 2] = ["JetBrains", "origin"];
 pub(super) const AHEAD_OF_UPSTREAM: u64 = 1_943;
 
 /// Every ref the corpus carries, which is what the ref tables are sized
-/// by: the tags, the remote-tracking branches, `main`, and the upstream
-/// `main` tracks.
-pub(super) const REFS: u64 = TAGS + REMOTE_BRANCHES + 2;
+/// by: the tags, the remote-tracking branches, `main`, the upstream
+/// `main` tracks, and the `HEAD` each remote is read as pointing at.
+pub(super) const REFS: u64 = TAGS + REMOTE_BRANCHES + 2 + REMOTES.len() as u64;
 
 /// How many segments a remote-tracking branch's name runs to, at the
 /// shares the reference repository holds them.

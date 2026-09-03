@@ -113,13 +113,25 @@ fn beside(common: &str) -> Option<PathBuf> {
 /// leave a directory that every later run reads as "already built", and
 /// the first thing to notice would be a measurement of half a corpus.
 fn build(at: &Path) -> Result<(), String> {
-    let partial = at.with_extension("partial");
+    // Named for this process, so two seats building at once are two
+    // builds rather than one destroyed twice.
+    let partial = at.with_extension(format!("partial-{}", std::process::id()));
     if partial.exists() {
         std::fs::remove_dir_all(&partial)
             .map_err(|e| format!("could not clear {}: {e}", partial.display()))?;
     }
     fill(&partial)?;
-    settle(&partial, at)
+    settle(&partial, at)?;
+    // **After the move, because a remote records where it was told to
+    // look.** Configured before it, every URL would name the scratch
+    // directory the move then takes away — and the proof would pass,
+    // because the proof would be reading the scratch copy too. The
+    // corpus that gets measured is this one.
+    let mut clock = Clock::start();
+    remotes::configure(at)?;
+    clock.mark("remotes");
+    clock.say();
+    Ok(())
 }
 
 /// Moves the finished corpus into place, waiting out whatever is still
@@ -157,10 +169,9 @@ const RENAME_CEILING: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// What each phase of the build cost.
 ///
-/// **Printed, because an invisible cost is one nobody optimises.** This
-/// build was a three-quarter-hour job for weeks without that being
-/// anybody's measurement — the estimate in the plan was believed
-/// instead. A tool a person waits for says what it is spending.
+/// **Printed, because an invisible cost is one nobody optimises.** A
+/// tool a person waits ten minutes for says where the ten minutes
+/// went, or the next person to wonder has to measure it from outside.
 struct Clock {
     began: std::time::Instant,
     phases: Vec<(&'static str, std::time::Duration)>,
@@ -274,8 +285,6 @@ fn fill(at: &Path) -> Result<(), String> {
     git(at, &["pack-refs", "--all"])?;
     packs(at)?;
     clock.mark("indexes");
-    remotes::configure(at)?;
-    clock.mark("remotes");
     spill(
         at,
         &git(at, &["ls-files"])?

@@ -12,7 +12,7 @@ target/
 # that does not ignore it reads as a hundred thousand untracked ones.
 # Delete it and the next `corpus` builds the same one again.
 .pg-perf-corpus/
-.pg-perf-corpus.partial/
+.pg-perf-corpus.partial-*/
 
 # The task-chip ledger (hook chips): one file per session, beside this
 # .git so every seat's sessions write to one directory. Cleared when the

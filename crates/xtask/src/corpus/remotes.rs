@@ -20,8 +20,10 @@
 //! **And nothing here can move.** Each mirror holds exactly the refs the
 //! corpus already tracks for it, derived from those refs, so the
 //! `--prune` the application runs finds every one up to date and writes
-//! nothing. A benchmark repository that drifts under its own
-//! measurement is the disease this whole corpus exists to cure.
+//! nothing — down to the `refs/remotes/<name>/HEAD` a first fetch would
+//! otherwise write for itself. A benchmark repository that drifts under
+//! its own measurement is the disease this whole corpus exists to cure,
+//! which is why `proven` asks rather than assumes.
 
 use std::path::{Path, PathBuf};
 
@@ -41,7 +43,23 @@ pub(super) fn configure(at: &Path) -> Result<(), String> {
         build_mirror(&mirror, at, name, &listing)?;
         git(at, &["remote", "add", name, &shown(&mirror)])?;
     }
-    upstream(at)
+    upstream(at)?;
+    default_heads(at)?;
+    proven(at)
+}
+
+/// The `refs/remotes/<name>/HEAD` a clone carries.
+///
+/// **Written here because otherwise a fetch writes it.** A mirror
+/// advertises a symbolic HEAD, and the first fetch against a remote that
+/// has one records the branch it names. A corpus built without these
+/// would therefore gain two refs the first time the application opened
+/// it — during the measurement, not before it.
+fn default_heads(at: &Path) -> Result<(), String> {
+    for name in shape::REMOTES {
+        git(at, &["remote", "set-head", name, "--auto"])?;
+    }
+    Ok(())
 }
 
 /// A path as git takes it, whichever way this platform spells one.
@@ -58,9 +76,20 @@ fn mirror_path(at: &Path, name: &str) -> PathBuf {
 fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(), String> {
     std::fs::create_dir_all(mirror)
         .map_err(|e| format!("could not make {}: {e}", mirror.display()))?;
+    // `--initial-branch` as well as the hash: a bare repository takes
+    // `init.defaultBranch` from whatever the machine has configured,
+    // and its HEAD is a ref the application's fetch would bring across
+    // — so the corpus would gain a remote-tracking ref on some machines
+    // and not others, which is the one thing it may not do.
     git(
         mirror,
-        &["init", "--bare", "--quiet", "--object-format=sha1"],
+        &[
+            "init",
+            "--bare",
+            "--quiet",
+            "--object-format=sha1",
+            "--initial-branch=main",
+        ],
     )?;
     // The objects are the corpus's. Writing them twice would double the
     // pack that is most of what the corpus weighs, and a mirror holding
@@ -73,9 +102,25 @@ fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(
             alternates.display()
         )
     })?;
+    let refs = carried(name, listing);
     let packed = mirror.join("packed-refs");
-    std::fs::write(&packed, carried(name, listing))
+    std::fs::write(&packed, &refs)
         .map_err(|e| format!("could not write {}: {e}", packed.display()))?;
+    // **HEAD has to name a branch the mirror holds.** `init` points it
+    // at `init.defaultBranch`, which for a mirror built out of somebody
+    // else's branch names is a ref that does not exist — and a remote
+    // whose HEAD dangles is one `remote set-head --auto` cannot answer
+    // for, so the corpus would carry a tracking HEAD for one remote and
+    // not the other.
+    let first = refs
+        .lines()
+        .find_map(|line| line.split_once(" refs/heads/"))
+        .map(|(_, branch)| branch.to_string())
+        .ok_or_else(|| format!("the {name} mirror holds no branch to point HEAD at"))?;
+    git(
+        mirror,
+        &["symbolic-ref", "HEAD", &format!("refs/heads/{first}")],
+    )?;
     Ok(())
 }
 
@@ -100,6 +145,12 @@ fn carried(name: &str, listing: &str) -> String {
             continue;
         };
         if let Some(branch) = refname.strip_prefix(&tracked) {
+            // `HEAD` is the reading of where the remote points, not a
+            // branch the remote has; carrying it back would make the
+            // mirror advertise `refs/heads/HEAD`.
+            if branch == "HEAD" {
+                continue;
+            }
             lines.push(format!("{oid} refs/heads/{branch}"));
         } else if name == shape::REMOTES[0] && refname.starts_with("refs/tags/") {
             lines.push(format!("{oid} {refname}"));
@@ -130,13 +181,14 @@ fn upstream(at: &Path) -> Result<(), String> {
     let oid = oid.trim();
     let tracking = format!("refs/remotes/{remote}/main");
     git(at, &["update-ref", &tracking, oid])?;
-    git(
-        &mirror_path(at, remote),
-        &["update-ref", "refs/heads/main", oid],
-    )?;
+    let mirror = mirror_path(at, remote);
+    git(&mirror, &["update-ref", "refs/heads/main", oid])?;
+    // The mirror has `main` now, and a fork's HEAD names it — which is
+    // the reading `remote set-head --auto` takes.
+    git(&mirror, &["symbolic-ref", "HEAD", "refs/heads/main"])?;
     git(at, &["config", "branch.main.remote", remote])?;
     git(at, &["config", "branch.main.merge", "refs/heads/main"])?;
-    proven(at)
+    Ok(())
 }
 
 /// Proves both properties the corpus rests on, while it is being built.
@@ -207,11 +259,24 @@ fn proven(at: &Path) -> Result<(), String> {
     let fetching = took("fetch");
     let after = git(at, &["show-ref"])?;
     if before != after {
-        return Err(
-            "fetching the corpus moved its refs — the application fetches on its own, so this \
-             corpus would not hold still under a measurement"
-                .to_string(),
-        );
+        // Named, because which ones is the whole diagnosis and the
+        // fact alone points nowhere: a first fetch against a remote
+        // with a symbolic HEAD writes a tracking `HEAD`, a mirror
+        // holding a ref the corpus does not writes that, and the two
+        // read identically from here.
+        let was: std::collections::BTreeSet<&str> = before.lines().collect();
+        let now: std::collections::BTreeSet<&str> = after.lines().collect();
+        let moved: Vec<&str> = now
+            .symmetric_difference(&was)
+            .map(|line| line.split_once(' ').map_or(*line, |(_, name)| name))
+            .collect();
+        return Err(format!(
+            "fetching the corpus moved {} of its refs ({}{}) — the application fetches on its \
+             own, so this corpus would not hold still under a measurement",
+            moved.len(),
+            moved.iter().take(4).copied().collect::<Vec<_>>().join(", "),
+            if moved.len() > 4 { ", ..." } else { "" },
+        ));
     }
     println!(
         "  {} remotes, {answered} tags answered offline ({peeled} peeled), main {} ahead — and \
