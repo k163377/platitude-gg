@@ -28,7 +28,11 @@ QtObject {
     property string menuStashRef: ""
     // Whether a remote already has the menu's commit. Rewriting it is not asked about — nothing here leaves the machine
     // — but デザイン規約 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row carries a tag the way the amend editor does.
-    // The answer lands a frame after the menu opens.
+    //
+    // **Read off the row, in hand as the menu opens** (`GraphModel.publishedAt`). The walk that drew the row already
+    // marked it, so nothing here waits on git: a note arriving a frame later would grow the widest row and take the
+    // card's right edge — and the `▸` on it — out from under the hand that is already reaching for a row
+    // (app-ui.md §メニュー).
     property bool menuPublished: false
     /// What these menus offer, held still for as long as they stand. What each stands for, and the state it asks of
     /// the repository, is core's rule (offers::commit_menu — the doc there carries the measured refusals).
@@ -86,7 +90,7 @@ QtObject {
             menuState.menu.offerStash()
             return
         }
-        menuState.menuPublished = false
+        menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
         menuState.menuHardResetTakes = menuState.workTree.hardResetTakes
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
@@ -94,8 +98,6 @@ QtObject {
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
         menuState.askSwitch(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
-        if (menuState.repoTab.state === "open")
-            menuState.repoTab.checkPublish(oidHex + "^!")
         menuState.menu.offerCommit()
     }
 }

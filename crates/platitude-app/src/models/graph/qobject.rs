@@ -171,6 +171,28 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// Whether a remote already has this commit — what the "this rewrites
+    /// published history" warnings read.
+    ///
+    /// **Asked of the row, not of git.** The walk that drew the row worked
+    /// it out on the way past (`session::published`), so a menu opening on
+    /// the row has its answer in the same frame; a `git rev-list` would
+    /// land after the card was already on screen and move its edge out
+    /// from under the hand (デザイン規約 §メニュー).
+    ///
+    /// False for a commit no row carries. The walk is a window
+    /// (`--max-count`) and this is the answer for what is drawn — which is
+    /// all this is ever asked about, because a menu opens on a row.
+    #[qslot]
+    fn published_at(&self, oid_hex: String) -> bool {
+        self.rows
+            .iter()
+            .position(|r| r.oid_hex == oid_hex)
+            .and_then(|i| self.published.get(i))
+            .copied()
+            .unwrap_or(false)
+    }
+
     /// The lane colour of the row a ref sits on, as an index into the
     /// graph palette; -1 when no row on screen carries that name.
     ///

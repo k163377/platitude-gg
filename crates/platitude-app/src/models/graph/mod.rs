@@ -23,6 +23,17 @@ use item::{GraphRowItem, to_row_item};
 #[derive(Default)]
 pub struct GraphModel {
     rows: Vec<GraphRowItem>,
+    /// Whether a remote already has each row's commit, in `rows` order
+    /// (core `LogRow::published`).
+    ///
+    /// **Beside the rows rather than on them**: `GraphRowItem` is at the
+    /// fifteen fields `#[derive(QModelItem)]` allows, and no delegate
+    /// draws this — it is asked for by oid when a menu opens
+    /// (`publishedAt`), the way the stash selector is. Kept in step at
+    /// the three places the rows themselves change: cleared in
+    /// `reset_unnotified`, extended in `append_chunk`, rebuilt whole in
+    /// `splice`.
+    published: Vec<bool>,
     generation: u64,
     loading: bool,
     /// Chip records to leave undrawn — see the property's own note in
@@ -127,6 +138,7 @@ impl QListModel for GraphModel {
     }
     fn reset_unnotified(&mut self) {
         self.rows.clear();
+        self.published.clear();
     }
 }
 

@@ -149,8 +149,6 @@ Item {
             // One shared answer slot, so only the reply to the range this page asked about is read.
             if (repoTab.publishRange === page.headRange)
                 page.headPublished = repoTab.publishPublished > 0
-            if (commitMenuState.menuOid !== "" && repoTab.publishRange === commitMenuState.menuOid + "^!")
-                commitMenuState.menuPublished = repoTab.publishPublished > 0
             if (page.selectedOid !== "" && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
             if (refRowMenu.rebaseRange !== "" && repoTab.publishRange === refRowMenu.rebaseRange)
