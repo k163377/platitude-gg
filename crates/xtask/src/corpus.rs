@@ -75,7 +75,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
         return against(&other);
     }
-    let at = path.map_or_else(default_path, Ok)?;
+    let at = path.map_or_else(default_path, given_path)?;
     if force && at.exists() {
         clearable(&at)?;
         std::fs::remove_dir_all(&at)
@@ -102,6 +102,21 @@ fn clearable(at: &Path) -> Result<(), String> {
          {DIR_NAME} is that. Remove it by hand if you meant to.",
         at.display()
     ))
+}
+
+/// The `--path` a caller gave, made absolute.
+///
+/// **A relative path is written into the corpus and read from
+/// somewhere else.** The mirrors point at the corpus's objects through
+/// `objects/info/alternates`, which git resolves against the mirror's
+/// own `objects/`, and the remote URLs are resolved against wherever
+/// the git process runs — so a corpus built at `target/corpus` had
+/// mirrors looking for `…/pg-remotes/JetBrains.git/objects/target/corpus/.git/objects`
+/// and failed on the first ref written through them (measured). The
+/// default path is absolute already (`default_path`); this makes a
+/// given one the same.
+fn given_path(path: PathBuf) -> Result<PathBuf, String> {
+    std::path::absolute(&path).map_err(|e| format!("could not resolve {}: {e}", path.display()))
 }
 
 /// In the primary checkout, whichever seat is asking.
@@ -972,7 +987,24 @@ fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
-    use super::{beside, clearable};
+    use super::{beside, clearable, given_path};
+
+    /// A `--path` reaches the mirrors' `alternates` and the remote URLs,
+    /// which git resolves against directories of its own choosing — so
+    /// a relative one has to be made absolute before anything is
+    /// written from it.
+    #[test]
+    fn a_given_path_is_absolute_before_it_is_written_anywhere() {
+        let given = given_path(std::path::PathBuf::from("target/corpus-x"))
+            .expect("the working directory resolves");
+        assert!(given.is_absolute(), "{}", given.display());
+        assert!(given.ends_with("target/corpus-x"), "{}", given.display());
+        let absolute = std::env::current_dir().expect("a working directory");
+        assert_eq!(
+            given_path(absolute.clone()).expect("an absolute path resolves"),
+            absolute
+        );
+    }
 
     fn shown(common: &str) -> String {
         beside(common)
