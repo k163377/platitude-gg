@@ -7,6 +7,7 @@
 mod encode;
 mod harness;
 mod hub;
+mod logsink;
 mod models;
 mod urlpath;
 mod winframe;
@@ -339,6 +340,17 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 /// The trap hides in a terminal, where the colouring is invisible: only
 /// a pipe gets the escapes, so a run that looks clean under a shell
 /// redirect still loses its numbers when xtask spawns it.
+///
+/// **A log line nobody can receive is not a reason to end the process.**
+/// Which is the whole of why the stream is [`logsink`] rather than
+/// `std::io::stderr`: the writer there answers `Ok` however the write
+/// went, so the subscriber never reaches for the `eprintln!` that panics
+/// on a stderr that has just failed.
+///
+/// `log_internal_errors` is off for the same hazard by a second road —
+/// nothing can reach those `eprintln!`s through a writer that does not
+/// fail, and this is what still stands between them and a window if the
+/// writer above is ever put back to a bare stream.
 fn init_tracing() {
     let level = match std::env::var("PG_LOG").as_deref() {
         Ok("error") => tracing::Level::ERROR,
@@ -350,7 +362,8 @@ fn init_tracing() {
     tracing_subscriber::fmt()
         .with_max_level(level)
         .with_ansi(false)
-        .with_writer(std::io::stderr)
+        .with_writer(logsink::sink)
+        .log_internal_errors(false)
         .init();
 }
 
