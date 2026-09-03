@@ -844,13 +844,19 @@ fn graph(at: &Path) -> Result<(), String> {
     )?;
     let mut open: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut widths = Vec::new();
-    let (mut chips, mut carrying, mut busiest) = (0, 0, 0);
+    let (mut chips, mut carrying, mut busiest, mut merges) = (0, 0, 0, 0);
     for row in rows.lines().filter(|row| !row.is_empty()) {
         let mut field = row.split('\x1f');
         let oid = field.next().unwrap_or_default();
         let parents = field.next().unwrap_or_default();
         let refs = field.next().unwrap_or_default();
         open.remove(oid);
+        // A merge is a second parent, and a second edge into the row —
+        // the reference repository's window has none, because its
+        // newest rows are unmerged review branches.
+        if parents.split_whitespace().nth(1).is_some() {
+            merges += 1;
+        }
         for parent in parents.split_whitespace() {
             open.insert(parent.to_string());
         }
@@ -869,7 +875,7 @@ fn graph(at: &Path) -> Result<(), String> {
     let at_percent = |p: usize| widths.get(widths.len() * p / 100).copied().unwrap_or(0);
     println!(
         "  graph lanes p25 {} / p50 {} / p75 {} / max {} | {chips} chips on {carrying} rows, \
-         busiest {busiest}",
+         busiest {busiest} | {merges} merges",
         at_percent(25),
         at_percent(50),
         at_percent(75),
@@ -907,6 +913,11 @@ fn window(at: &Path) -> Result<(), String> {
     let mut credited = 0;
     let mut applied = 0;
     let mut body_bytes = 0;
+    // Distinct names, because a name is a string the rows hold once
+    // each and the details card looks up — a window written by a
+    // hundred people and one written by ten thousand are different
+    // amounts of text however many rows they have.
+    let mut authors = std::collections::BTreeSet::new();
     for row in log.split('\x1e').filter(|row| !row.trim().is_empty()) {
         let mut field = row.trim_start_matches('\n').split('\x1f');
         let (author, committer) = (field.next().unwrap_or_default(), field.next());
@@ -914,6 +925,7 @@ fn window(at: &Path) -> Result<(), String> {
         let credits = field.next().unwrap_or_default();
         let body = field.next().unwrap_or_default();
         rows += 1;
+        authors.insert(author);
         if !author.is_ascii() || !subject.is_ascii() {
             wide += 1;
         }
@@ -926,8 +938,9 @@ fn window(at: &Path) -> Result<(), String> {
         body_bytes += body.trim().len();
     }
     println!(
-        "  window {rows} rows | body {body_bytes}B | {credited} credited | {applied} applied by \
-         another | {wide} needing a fallback font"
+        "  window {rows} rows | {} authors | body {body_bytes}B | {credited} credited | \
+         {applied} applied by another | {wide} needing a fallback font",
+        authors.len()
     );
     Ok(())
 }
