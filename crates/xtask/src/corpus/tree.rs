@@ -44,11 +44,9 @@ pub(super) const SLOTS: u64 = TRACKED + SPARE;
 ///
 /// **It is not a knob on its own.** The walk makes directories until
 /// every file has a home, so what decides how many there are is this
-/// against [`FANOUT`]: the mean fan-out has to come to `SLOTS / DIRS`
-/// or the walk runs past the table and keeps inventing them. At a mean
-/// of 2.4 the corpus came out with 46,849 directories whatever this
-/// said, which is twice the reference repository's and twice the tree
-/// objects to hash on every commit.
+/// against [`FANOUT`]: the mean fan-out has to come to `SLOTS / DIRS`,
+/// or the walk runs past the table and keeps inventing directories
+/// whatever this says.
 const DIRS: u64 = 22_887;
 
 /// Files whose size is in `[lo, 2*lo)`, at the counts the reference

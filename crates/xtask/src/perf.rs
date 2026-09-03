@@ -14,9 +14,12 @@
 //! to sleep and a parallel build all answer with numbers that read
 //! exactly like a slower application, so the run measures them too and
 //! refuses rather than publishes (`perf::sampler::Conditions`). The
-//! benchmark repository is the fourth: it is a live clone, and a `git
-//! fetch` changes the rows, the ref tables and the commit the interaction
-//! opens while `HEAD` holds still (`perf::corpus`).
+//! benchmark repository is the fourth, and it is generated rather than
+//! cloned for that reason (`cargo xtask corpus`): a clone is fetched
+//! behind the measurement's back, and a fetch changes the rows, the ref
+//! tables and the commit the interaction opens while `HEAD` holds
+//! still. `perf::corpus` fingerprints whichever repository it is given
+//! and compares that fingerprint either side of the runs.
 //!
 //! `--breakdown` adds `PG_MEM_REPORT=1` and prints the largest `mem
 //! report` line the run produced, which is what says *where* the bytes
