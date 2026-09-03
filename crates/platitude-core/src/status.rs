@@ -140,6 +140,19 @@ impl Counts {
         }
         counts
     }
+
+    /// How many files a `reset --hard` takes back with it: every tracked
+    /// path the index or the working tree has changed, **counted once**
+    /// however many sides it changed on, plus the unmerged ones.
+    ///
+    /// **Untracked files are not in it.** A hard reset writes the paths
+    /// the index names, and a file git was never told about is not one of
+    /// them (measured). A path *staged* as an addition is — it is in the
+    /// index, so the reset removes it — which is why this counts the
+    /// index side rather than only what differs from HEAD on disk.
+    pub fn hard_reset_takes(&self) -> usize {
+        (self.staged + self.unstaged).saturating_sub(self.partially_staged) + self.conflicted
+    }
 }
 
 /// How many rows of each change kind the working-tree list holds.

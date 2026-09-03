@@ -75,6 +75,34 @@ fn a_conflict_is_one_row_whatever_its_letters_say() {
 }
 
 #[test]
+fn a_hard_reset_takes_every_tracked_file_once_and_leaves_the_untracked() {
+    let bytes = z(&[
+        &format!("# branch.oid {SHA}"),
+        // Changed on both sides: one file, one loss.
+        &format!("1 MM N... 100644 100644 100644 {H1} {H2} both.txt"),
+        &format!("1 .M N... 100644 100644 100644 {H1} {H2} unstaged.txt"),
+        // In the index, so the reset writes over it.
+        &format!("1 A. N... 000000 100644 100644 {H1} {H2} staged-add.txt"),
+        &format!("u UU N... 100644 100644 100644 100644 {H1} {H2} {H2} clash.txt"),
+        // Never told to git, so it survives.
+        "? scratch.txt",
+    ]);
+    let counts = Counts::of(&parse_status(&bytes).unwrap());
+    assert_eq!(counts.staged, 2);
+    assert_eq!(counts.unstaged, 2);
+    assert_eq!(counts.partially_staged, 1);
+    assert_eq!(counts.hard_reset_takes(), 4);
+}
+
+#[test]
+fn a_clean_tree_takes_nothing_and_a_clean_one_with_scratch_files_takes_nothing_either() {
+    let bytes = z(&[&format!("# branch.oid {SHA}"), "? scratch.txt"]);
+    let counts = Counts::of(&parse_status(&bytes).unwrap());
+    assert_eq!(counts.untracked, 1);
+    assert_eq!(counts.hard_reset_takes(), 0);
+}
+
+#[test]
 fn a_clean_tree_has_nothing_to_tally() {
     let bytes = z(&[&format!("# branch.oid {SHA}"), "# branch.head main"]);
     let kinds = Kinds::of(&parse_status(&bytes).unwrap());

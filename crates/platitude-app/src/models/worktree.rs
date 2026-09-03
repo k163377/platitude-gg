@@ -52,6 +52,11 @@ pub struct WorkTreeModel {
     unstaged_count: i32,
     untracked_count: i32,
     conflict_count: i32,
+    /// How many files a `reset --hard` would take with it
+    /// (`status::Counts::hard_reset_takes`). Not the sum of the three
+    /// above: a file changed on both sides is one loss, and the untracked
+    /// ones are left where they are.
+    hard_reset_takes: i32,
     /// Rebase progress; both zero when nothing is stepping. Only a rebase
     /// keeps a count — `op_stepping` is what says whether the operation
     /// steps at all.
@@ -174,6 +179,11 @@ impl WorkTreeModel {
     qproperty!("unstagedCount", Member = unstaged_count, Notify = changed);
     qproperty!("untrackedCount", Member = untracked_count, Notify = changed);
     qproperty!("conflictCount", Member = conflict_count, Notify = changed);
+    qproperty!(
+        "hardResetTakes",
+        Member = hard_reset_takes,
+        Notify = changed
+    );
     qproperty!("opStep", Member = op_step, Notify = changed);
     qproperty!("opSteps", Member = op_steps, Notify = changed);
     qproperty!("opStepping", Member = op_stepping, Notify = changed);
@@ -271,6 +281,7 @@ impl WorkTreeModel {
         self.unstaged_count = counts.unstaged as i32;
         self.untracked_count = counts.untracked as i32;
         self.conflict_count = counts.conflicted as i32;
+        self.hard_reset_takes = counts.hard_reset_takes() as i32;
         self.stash_standing = platitude_core::stash::standing(self.head_oid.is_empty(), &counts)
             .as_str()
             .to_string();

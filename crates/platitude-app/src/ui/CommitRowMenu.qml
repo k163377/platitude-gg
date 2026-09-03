@@ -68,6 +68,9 @@ Item {
     /// going through (offers::ref_menu — the same two answers the sidebar's row reads).
     required property bool canSwitch
     required property bool switchAsks
+    /// How many files `--hard` takes besides the commits — the working tree's own, which that flag writes over
+    /// (`status::Counts::hard_reset_takes`). Zero on a clean tree, and then the row says nothing extra.
+    required property int hardResetTakes
 
     /// Where the working tree goes, when the name this row draws is somewhere to go. The page owns the road, which is
     /// the one a double-click on the row already takes (`RepoPage.switchToRef`).
@@ -289,10 +292,27 @@ Item {
                 onTriggered: rowMenu.resetRequested("mixed")
             }
             // Held, not asked (デザイン規約 §長押し).
+            //
+            // **The row's sentence is about the commits; the tag is about the working tree.** `--hard` writes over
+            // every tracked path the index or the tree has changed, and those changes are not "after" the commit this
+            // menu stands on — nothing else on screen would say they are about to go, and the reflog does not hold
+            // them (規約 §ブランチを過去のコミットへ戻す). Said rather than asked, the way the pushed range is
+            // (デザイン規約 「push 済みの範囲は尋ねずに言う」): the hold is already the consent.
+            //
+            // Untracked files are not in the count — `--hard` leaves them where they are — so a tree dirty with
+            // nothing but scratch files carries no tag at all.
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
                 text: qsTr("Discard everything after it")
+                // **Two words, the way every other note in this menu is** (`already pushed` / `not merged`), and the
+                // word kept is the one doing the distinguishing: what goes besides the commits is the part of the
+                // tree that is *uncommitted*, and `too` is what says it goes as well rather than instead.
+                //
+                // No count. The number is already on screen behind this menu — the uncommitted row's tally is drawn
+                // from the same status — and `%n … file(s)` would put the translator's brackets on the row: nothing
+                // loads a translation here, so `(s)` reaches the reader verbatim (measured).
+                note: rowMenu.hardResetTakes > 0 ? qsTr("uncommitted too") : ""
                 holdMs: Metrics.holdMs
                 onHeld: {
                     resetMenu.close()

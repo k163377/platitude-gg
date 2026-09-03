@@ -43,6 +43,10 @@ QtObject {
     /// (offers::ref_menu).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
+    /// How many files the reset submenu's `--hard` would take with it besides the commits — read once here with every
+    /// other answer, because the tag it feeds sits at the end of a row and widens the card: a count that grew while
+    /// the menu stood would move the card's edge under the hand (app-ui.md §メニュー).
+    property int menuHardResetTakes: 0
 
     /// What the `switch` row reads, asked of the name the menu is aimed at. Empty on a row that draws none, which is
     /// what takes the row off the menu.
@@ -83,6 +87,7 @@ QtObject {
             return
         }
         menuState.menuPublished = false
+        menuState.menuHardResetTakes = menuState.workTree.hardResetTakes
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
         menuState.menuCanEditHistory = offers.includes("edit-history")
