@@ -348,9 +348,9 @@ const ZERO_WIDTH_TAGS: [u64; 2] = [7, 20_101];
 pub(super) fn remote_branch(n: u64) -> String {
     let want = spread(n ^ 0x2C4_A1B, 8, 10, 34);
     let mut name = String::from(if n.is_multiple_of(REMOTE_ORIGIN_EVERY) {
-        "origin"
+        REMOTES[1]
     } else {
-        "JetBrains"
+        REMOTES[0]
     });
     for level in 1..remote_depth(n) {
         name.push('/');
@@ -365,6 +365,22 @@ pub(super) fn remote_branch(n: u64) -> String {
 /// remote. The reference repository has two configured and its second
 /// carries a handful.
 const REMOTE_ORIGIN_EVERY: u64 = 977;
+
+/// The remotes the corpus configures, first one first. Their names are
+/// the reference repository's own, and the first is where the tags and
+/// the upstream live (`corpus::remotes`).
+pub(super) const REMOTES: [&str; 2] = ["JetBrains", "origin"];
+
+/// How far `main` sits ahead of its upstream, as the reference
+/// repository's does. A branch level with its upstream draws no
+/// ahead-behind badge and answers the count with a walk that stops at
+/// once.
+pub(super) const AHEAD_OF_UPSTREAM: u64 = 1_943;
+
+/// Every ref the corpus carries, which is what the ref tables are sized
+/// by: the tags, the remote-tracking branches, `main`, and the upstream
+/// `main` tracks.
+pub(super) const REFS: u64 = TAGS + REMOTE_BRANCHES + 2;
 
 /// How many segments a remote-tracking branch's name runs to, at the
 /// shares the reference repository holds them.

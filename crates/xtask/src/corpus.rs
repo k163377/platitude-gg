@@ -19,6 +19,7 @@
 //! and the next `corpus` builds it again — to the same object ids,
 //! because the dates and the strings are fixed (`shape`).
 
+mod remotes;
 mod shape;
 mod stream;
 
@@ -126,7 +127,7 @@ fn fill(at: &Path) -> Result<(), String> {
         "building the corpus at {} — {} commits, {} refs",
         at.display(),
         shape::COMMITS,
-        shape::TAGS + shape::REMOTE_BRANCHES + 1
+        shape::REFS
     );
     std::fs::create_dir_all(at).map_err(|e| format!("could not make {}: {e}", at.display()))?;
     // The hash algorithm is pinned rather than inherited: `init` would
@@ -167,6 +168,7 @@ fn fill(at: &Path) -> Result<(), String> {
     // 50,000 loose refs cost 80MB of slack and slow every walk that
     // reads them; packed they are 6MB (measured).
     git(at, &["pack-refs", "--all"])?;
+    remotes::configure(at)?;
     println!(
         "  the newest commit changes {} files; its first is {}",
         newest.paths.len() + 1,
@@ -298,7 +300,7 @@ fn window(at: &Path) -> Result<(), String> {
 /// refs, it prints a token. The counts are what say it is stale, and
 /// the answer is always the same one, so it is in the message.
 fn holds_its_shape(commits: &str, refs: usize, at: &Path) -> Result<(), String> {
-    let wanted_refs = (shape::TAGS + shape::REMOTE_BRANCHES + 1) as usize;
+    let wanted_refs = shape::REFS as usize;
     let wanted_commits = shape::COMMITS.to_string();
     if commits == wanted_commits && refs == wanted_refs {
         return Ok(());
@@ -405,6 +407,34 @@ fn import(at: &Path) -> Result<stream::Newest, String> {
             }
         )),
     }
+}
+
+/// Runs git with `input` on its standard input and nothing to read
+/// back. What it is for is `update-ref --stdin`: fifty thousand refs in
+/// one process, where fifty thousand processes would cost the build.
+fn git_stdin(at: &Path, args: &[&str], input: &str) -> Result<(), String> {
+    let mut child = Command::new("git")
+        .current_dir(at)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn git {args:?}: {e}"))?;
+    let wrote = write_all(&mut child, input);
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if out.status.success() && wrote.is_ok() {
+        return Ok(());
+    }
+    Err(format!(
+        "git {args:?} failed: {}",
+        if said.is_empty() {
+            wrote.err().unwrap_or_default()
+        } else {
+            said
+        }
+    ))
 }
 
 fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String> {
