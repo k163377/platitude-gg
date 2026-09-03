@@ -245,6 +245,7 @@ impl Footprint for crate::session::LogRow {
             + self.segments.heap_bytes()
             + self.labels.heap_bytes()
             + self.stash_ref.heap_bytes()
+            + self.parents.heap_bytes()
     }
 }
 

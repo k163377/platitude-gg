@@ -61,6 +61,7 @@ impl RowPrint {
             labels: _,
             published,
             stash_ref,
+            parents,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
         row.hash(&mut h);
@@ -91,6 +92,7 @@ impl RowPrint {
         // this a rebuild would call the new picture the old one and the
         // warnings would stay as they were.
         published.hash(&mut h);
+        parents.hash(&mut h);
         h.finish()
     }
 
@@ -113,6 +115,11 @@ impl RowPrint {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A full id spelled out of one hex digit; the input is always valid.
+    fn oid(digit: char) -> Oid {
+        Oid::from_hex_str(&digit.to_string().repeat(40)).unwrap()
+    }
 
     /// A row that differs anywhere prints differently.
     ///
@@ -156,6 +163,7 @@ mod tests {
             }],
             stash_ref: String::new(),
             published: false,
+            parents: Box::from([oid('b')]),
         };
         let print = RowPrint::of(&base);
 
@@ -179,6 +187,7 @@ mod tests {
             ("segments", Box::new(|r| r.segments[0].dashed = true)),
             ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
             ("published", Box::new(|r| r.published = true)),
+            ("parents", Box::new(|r| r.parents = Box::from([oid('c')]))),
         ];
         for (field, change) in moved {
             let mut row = base.clone();

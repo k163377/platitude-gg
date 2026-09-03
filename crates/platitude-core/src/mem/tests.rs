@@ -58,12 +58,14 @@ fn nested_rows_add_up() {
         labels: Vec::new(),
         stash_ref: String::new(),
         published: false,
+        parents: Box::from([crate::Oid::from_hex_str(&"1".repeat(40)).unwrap()]),
     };
-    assert_eq!(row.heap_bytes(), 70);
+    let nested = 70 + size_of::<crate::Oid>();
+    assert_eq!(row.heap_bytes(), nested);
     let rows = vec![row];
     assert_eq!(
         rows.heap_bytes(),
-        rows.capacity() * size_of::<crate::session::LogRow>() + 70
+        rows.capacity() * size_of::<crate::session::LogRow>() + nested
     );
 }
 

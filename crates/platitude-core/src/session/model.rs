@@ -229,4 +229,14 @@ pub struct LogRow {
     /// answer the moment it opens instead of a `git rev-list` later
     /// (デザイン規約 §メニュー).
     pub published: bool,
+    /// The commit's parents as the walk sifted them — a stash keeps only
+    /// the base it was built on (`rows::sift_batch`). Empty on the WIP
+    /// row, whose edges are drawn leashes rather than parenthood.
+    ///
+    /// **Not drawn: the lanes already are** (`segments`). This is here so
+    /// the rows can be asked about a *range* rather than one commit —
+    /// which is the other half of what the warnings above read, and the
+    /// half no single row's mark can answer
+    /// ([`crate::publish::range_rewrites_published`]).
+    pub parents: Box<[Oid]>,
 }

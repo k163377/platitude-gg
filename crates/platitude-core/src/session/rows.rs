@@ -34,6 +34,8 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
         labels: Vec::new(),
         stash_ref: String::new(),
         published,
+        // The edges this row draws are leashes, not parenthood.
+        parents: Box::default(),
     }
 }
 
@@ -59,6 +61,9 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
         labels: Vec::new(),
         stash_ref: String::new(),
         published,
+        // As above: the dashed edges to HEAD and to each incoming side
+        // are drawn, not walked.
+        parents: Box::default(),
     }
 }
 
@@ -206,5 +211,7 @@ fn make_row(
         labels: Vec::new(),
         stash_ref: String::new(),
         published,
+        // Sifted, so a stash carries the one edge it draws (`sift_batch`).
+        parents: commit.parents.clone(),
     }
 }
