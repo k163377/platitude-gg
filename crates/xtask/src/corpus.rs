@@ -149,29 +149,102 @@ fn beside(common: &str) -> Option<PathBuf> {
 /// leave a directory that every later run reads as "already built", and
 /// the first thing to notice would be a measurement of half a corpus.
 fn build(at: &Path) -> Result<(), String> {
+    sweep(at)?;
     // Named for this process, so two seats building at once are two
     // builds rather than one destroyed twice.
-    let partial = at.with_extension(format!("partial-{}", std::process::id()));
+    let partial = partial_path(at, std::process::id());
     if partial.exists() {
         std::fs::remove_dir_all(&partial)
             .map_err(|e| format!("could not clear {}: {e}", partial.display()))?;
     }
-    fill(&partial)?;
-    settle(&partial, at)?;
+    let mut clock = Clock::start();
+    fill(&partial, &mut clock)?;
+    let ours = settle(&partial, at)?;
+    clock.mark("move");
+    if !ours {
+        clock.say();
+        return Ok(());
+    }
     // **After the move, because a remote records where it was told to
     // look.** Configured before it, every URL would name the scratch
     // directory the move then takes away — and the proof would pass,
     // because the proof would be reading the scratch copy too. The
     // corpus that gets measured is this one.
-    let mut clock = Clock::start();
     remotes::configure(at)?;
     clock.mark("remotes");
     clock.say();
     Ok(())
 }
 
+/// Where a build in progress sits: beside its destination, under the
+/// destination's own name and the process building it.
+fn partial_path(at: &Path, pid: u32) -> PathBuf {
+    let name = at
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    at.with_file_name(format!("{name}.partial-{pid}"))
+}
+
+/// The process a directory beside `at` was being built by, if it is a
+/// partial build of `at` at all.
+fn partial_owner(at: &Path, entry: &Path) -> Option<u32> {
+    let prefix = format!("{}.partial-", at.file_name()?.to_string_lossy());
+    entry
+        .file_name()?
+        .to_str()?
+        .strip_prefix(&prefix)?
+        .parse()
+        .ok()
+}
+
+/// Clears the partial builds nobody is behind any more.
+///
+/// **A build that died leaves seven gigabytes under a name nothing
+/// looks for.** The partial is named for its process so that two builds
+/// cannot destroy each other, but the next build is a different process
+/// and only ever clears its own name — so an interrupted build's tree
+/// would sit beside the corpus, ignored by git and read by no later
+/// run, until somebody wondered where the disk went. Each is asked
+/// about by pid: a process still running is another seat building, and
+/// is left alone.
+fn sweep(at: &Path) -> Result<(), String> {
+    let parent = match at.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return Ok(());
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let Some(pid) = partial_owner(at, &path) else {
+            continue;
+        };
+        if pid == std::process::id() {
+            continue;
+        }
+        if crate::subprocess::process_exists(pid) {
+            println!(
+                "  another build is running at {} (pid {pid}) — leaving it",
+                path.display()
+            );
+            continue;
+        }
+        std::fs::remove_dir_all(&path)
+            .map_err(|e| format!("could not clear {}: {e}", path.display()))?;
+        println!(
+            "  cleared {}, left by a build that did not finish (pid {pid} is gone)",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 /// Moves the finished corpus into place, waiting out whatever is still
-/// holding it.
+/// holding it. Answers whether the corpus at `at` is this build's:
+/// `false` when another build got there first, in which case this one's
+/// tree has been thrown away and theirs is the one to report.
 ///
 /// **A rename can be refused for a while.** The build has just written
 /// a hundred and eighty thousand files, and on Windows the scanner or
@@ -179,12 +252,43 @@ fn build(at: &Path) -> Result<(), String> {
 /// seconds afterwards — long enough that the rename fails with an
 /// access error against a destination that does not exist (measured,
 /// after a ten-minute build). Waiting is the whole fix.
-fn settle(partial: &Path, at: &Path) -> Result<(), String> {
+///
+/// **And it can be refused for good.** Two seats that started building
+/// at once both finish, and the second rename lands on a corpus that is
+/// already there — which would otherwise be retried for two minutes and
+/// then reported as a handle somebody left open. A `.git` at the
+/// destination says which of the two this is; anything else sitting
+/// there is not a corpus and is named at once.
+fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
     let deadline = std::time::Instant::now() + RENAME_CEILING;
     loop {
         let Err(refused) = std::fs::rename(partial, at) else {
-            return Ok(());
+            return Ok(true);
         };
+        if at.join(".git").is_dir() {
+            println!(
+                "  another build finished first at {} — discarding this one",
+                at.display()
+            );
+            // A failure here is not this run's: the next build sweeps
+            // what its process left (`sweep`), and the corpus to report
+            // is already in place.
+            if let Err(e) = std::fs::remove_dir_all(partial) {
+                println!(
+                    "  could not clear {}: {e} — the next build clears it",
+                    partial.display()
+                );
+            }
+            return Ok(false);
+        }
+        if at.exists() {
+            return Err(format!(
+                "{} is in the way and is not a corpus. The build is complete at {}; move it \
+                 there once that is out of the way.",
+                at.display(),
+                partial.display()
+            ));
+        }
         if std::time::Instant::now() >= deadline {
             return Err(format!(
                 "could not move the corpus into {} after {}s: {refused} — something is holding \
@@ -242,7 +346,7 @@ impl Clock {
     }
 }
 
-fn fill(at: &Path) -> Result<(), String> {
+fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     println!(
         "building the corpus at {} — {} commits, {} refs",
         at.display(),
@@ -304,7 +408,6 @@ fn fill(at: &Path) -> Result<(), String> {
     git(at, &["config", "gc.auto", "0"])?;
     git(at, &["config", "maintenance.auto", "false"])?;
     git(at, &["config", "fetch.writeCommitGraph", "false"])?;
-    let mut clock = Clock::start();
     let newest = import(at)?;
     clock.mark("import");
     // fast-import writes refs and nothing else: without this the work
@@ -329,7 +432,6 @@ fn fill(at: &Path) -> Result<(), String> {
             .collect::<Vec<_>>(),
     )?;
     clock.mark("spill");
-    clock.say();
     println!(
         "  the newest commit changes {} files; its first is {}",
         newest.paths.len() + 1,
@@ -987,7 +1089,7 @@ fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
-    use super::{beside, clearable, given_path};
+    use super::{beside, clearable, given_path, partial_owner, partial_path};
 
     /// A `--path` reaches the mirrors' `alternates` and the remote URLs,
     /// which git resolves against directories of its own choosing — so
@@ -1004,6 +1106,33 @@ mod tests {
             given_path(absolute.clone()).expect("an absolute path resolves"),
             absolute
         );
+    }
+
+    /// The name a build writes and the name the sweep reads have to be
+    /// one name, or an abandoned build is never found — and a directory
+    /// that merely sits beside the corpus must never be read as one.
+    #[test]
+    fn a_partial_build_is_found_under_the_name_it_was_given() {
+        let at = std::path::Path::new("/home/x/platitude-gg/.pg-perf-corpus");
+        let partial = partial_path(at, 4242);
+        assert_eq!(partial.parent(), at.parent(), "beside its destination");
+        assert_eq!(
+            partial.file_name().and_then(|name| name.to_str()),
+            Some(".pg-perf-corpus.partial-4242")
+        );
+        assert_eq!(partial_owner(at, &partial), Some(4242));
+        for other in [
+            "/home/x/platitude-gg/.pg-perf-corpus",
+            "/home/x/platitude-gg/.pg-perf-corpus.partial-x",
+            "/home/x/platitude-gg/.pg-perf-corpus-notes",
+            "/home/x/platitude-gg/target",
+        ] {
+            assert_eq!(
+                partial_owner(at, std::path::Path::new(other)),
+                None,
+                "{other}"
+            );
+        }
     }
 
     fn shown(common: &str) -> String {
