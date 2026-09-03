@@ -134,6 +134,13 @@ Menu {
 
     // Fusion measures a menu by its background (a flat 200) and by its list view (which has no implicit width at all),
     // so the rows never get a say. Here the widest row decides.
+    //
+    // **Rounded up, and the rounding is the whole point.** A row's width is measured rather than chosen — a mono chip
+    // and a sentence in the UI family both land on fractions wherever the platform's metrics do — so the widest row
+    // routinely asks for something like 249.27. Rounded to a whole pixel the other way, the menu hands that row 249:
+    // a quarter of a pixel short, which puts its `RowLayout` over budget, and a layout over budget takes the shortfall
+    // out of the one item that can give — the words, which then elide. **The row that set the width is the one row
+    // that must never be the one that elides** (デザイン規約 §メニュー: 幅は最も広い行に合わせる).
     readonly property int widestRow: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
@@ -143,7 +150,7 @@ Menu {
             if (row && row.offered)
                 widest = Math.max(widest, row.implicitWidth)
         }
-        return widest
+        return Math.ceil(widest)
     }
     // ...but never narrower than `menuMinW`. A held row reports itself by filling from the left, and on a row only as
     // wide as its own words there is too little travel to read as progress (デザイン規約 §進行中・長押しの定数).
