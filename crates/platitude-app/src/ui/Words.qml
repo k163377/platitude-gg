@@ -247,4 +247,32 @@ QtObject {
             return ""
         }
     }
+
+    /// **A ref name inside a sentence**, spelled as the markup rich text reads: the name in the colour it wears
+    /// everywhere else it is met, the rest of the line in whatever the line is drawn in (デザイン規約 §ref の種別
+    /// 「現在のブランチは、名前が出る場所すべてで textLink」). One field rather than three, so the line elides, measures and
+    /// is dragged over the way it did before a colour went into it.
+    ///
+    /// **The seat is cut out of the sentence** rather than the name being looked for in the finished line: a branch
+    /// called `it` would otherwise be found in the first word of `into it`. A sentence with no seat in it gets no
+    /// markup at all, and the caller falls back to its plain words.
+    ///
+    /// **Every piece is escaped on the way in.** The sentence is this application's, but the name is not — a branch
+    /// called `<b>` has to read as its name rather than vanish.
+    function nameInSentence(sentence, name, tint) {
+        const seat = sentence.indexOf("%1")
+        if (seat < 0)
+            return ""
+        return Words.inked(sentence.substring(0, seat))
+             + "<font color=\"" + tint + "\">" + Words.inked(name) + "</font>"
+             + Words.inked(sentence.substring(seat + 2))
+    }
+    /// Words as markup reads them. **Rich text folds a run of spaces the way HTML does** (`encode::markup`), so all
+    /// but the last space of a run is pinned — and **only those**: one of the two fields this is drawn in wraps rather
+    /// than cutting (`NoticeLine`), and a sentence pinned at every space has nowhere left to break, so it breaks
+    /// through the middle of a word instead (measured, qmltestrunner `tst_refwords`).
+    function inked(words) {
+        return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    .replace(/ (?= )/g, "&nbsp;")
+    }
 }

@@ -26,6 +26,11 @@ Item {
 
     /// What the field holds, in full — including whatever the cap below is hiding.
     property string text: ""
+    /// The same line spelled as the markup rich text reads, where one word in it wears a colour of its own — a ref
+    /// name inside the sentence (`Words.nameInSentence`). Empty everywhere else, and the field takes `text` instead.
+    /// **`text` stays the plain sentence either way**, since that is what a caller measuring or reading the line back
+    /// is handed. The ruler measures whichever of the two is drawn, or a width would be bid for the tags as well.
+    property string markup: ""
     property color color: Theme.textPrimary
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
@@ -144,7 +149,8 @@ Item {
     Text {
         id: ruler
         visible: false
-        text: cardText.text
+        text: cardText.markup !== "" ? cardText.markup : cardText.text
+        textFormat: cardText.markup !== "" ? Text.RichText : Text.PlainText
         font: field.font
         wrapMode: Text.NoWrap
     }
@@ -152,7 +158,11 @@ Item {
     TextEdit {
         id: field
         width: cardText.width
-        text: cardText.text
+        text: cardText.markup !== "" ? cardText.markup : cardText.text
+        // Pinned, not left to `AutoText`. What these fields carry is git's own words as often as this application's,
+        // and AutoText decides by guessing whether a string looks like markup — a branch called `<b>` would vanish.
+        // The one line that is markup says so because a caller built it and escaped everything that went into it.
+        textFormat: cardText.markup !== "" ? TextEdit.RichText : TextEdit.PlainText
         color: cardText.color
         font.family: cardText.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cardText.pixelSize

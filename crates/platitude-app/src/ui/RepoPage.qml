@@ -650,7 +650,7 @@ Item {
 
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
-                         hold = false, tip = "", form = null, code = "") {
+                         hold = false, tip = "", form = null, code = "", refName = "") {
         // Whoever was dressing the bar lets go first: a question can be raised over one still standing (a ref clicked
         // in the left menu while the first push asks where it goes), and the flow left behind would go on calling
         // itself the one standing — which is what keeps its check timer firing round trips at a remote nobody is
@@ -659,7 +659,7 @@ Item {
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
         page.rowAskRun = run
-        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code)
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName)
     }
     function stopRowAsk() {
         page.rowAskRun = null
@@ -710,8 +710,8 @@ Item {
         remotesModel: remotesModel
         graphPane: graphPane
         // The first push asks where the branch goes, and it asks in the one bar every other question stands in.
-        onAskRequested: (label, run, form, code) =>
-            page.startRowAsk("", label, "", false, "", run, false, "", form, code)
+        onAskRequested: (label, run, form, code, refName) =>
+            page.startRowAsk("", label, "", false, "", run, false, "", form, code, refName)
     }
     /// What the window's toolbar reads off the page it is showing: the button lives up there, and the state machine
     /// behind it down here (`TopBar`).

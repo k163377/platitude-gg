@@ -19,6 +19,10 @@ Item {
     /// repository with nothing in it are two different screens.
     readonly property bool unborn: !emptyState.blank && emptyState.workTree.loaded
                                    && emptyState.workTree.headOid === ""
+    /// The line under the heading, held with the branch's seat still open in it: the name is drawn in the colour it
+    /// wears everywhere else and the sentence in the screen's own, so the two are cut apart at `%1` rather than the
+    /// name being looked for in the finished line (`Words.nameInSentence`, デザイン規約 §ref の種別).
+    readonly property string firstCommitLine: qsTr("The first commit will start %1")
 
     signal openRepositoryRequested()
 
@@ -54,7 +58,8 @@ Item {
         NoticeLine {
             // The branch nothing else in this column can name: there is no HEAD row for the pin to ride, and the
             // sidebar's worktree row is the only other place it is written.
-            text: qsTr("The first commit will start %1").arg(emptyState.workTree.branch)
+            text: emptyState.firstCommitLine.arg(emptyState.workTree.branch)
+            markup: Words.nameInSentence(emptyState.firstCommitLine, emptyState.workTree.branch, Theme.textLink)
             color: Theme.textSecondary
             // Bounded the way the line above it is (規約 §窓の床).
             width: Math.min(implicitWidth, emptyState.width - 2 * Theme.spaceXl)

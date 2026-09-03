@@ -182,8 +182,12 @@ Rectangle {
     /// `form` is what the question needs in order to take an answer at all — a chooser, a name box. Most questions have
     /// none: they are answered by the pill and nothing else. `code` is the git command the question is about, said at
     /// the head of the question and on the pill both, where the act has one word of its own (デザイン規約 §git 用語のコード表記);
-    /// `accept` carries the wording everywhere else.
-    function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "") {
+    /// `accept` carries the wording everywhere else. `refName` is the ref the question names inside its own words, and
+    /// **`label` comes with the name's seat still in it (`%1`) whenever one is handed over**: the name is drawn in its
+    /// own colour, so the sentence has to be cut at the seat rather than the name looked for in the finished line
+    /// (`AskBar.labelSentence`, デザイン規約 §ref の種別).
+    function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "",
+                         refName = "") {
         graphArea.stopNaming()
         // Down before the new one goes in, or the last question's typing comes back under these words (`AskBar.form`).
         askBar.form = null
@@ -191,7 +195,9 @@ Rectangle {
         askBar.answerable = true
         askBar.neutral = false
         askBar.alert = false
-        askBar.label = label
+        askBar.labelSentence = refName === "" ? "" : label
+        askBar.labelRef = refName
+        askBar.label = refName === "" ? label : label.arg(refName)
         askBar.detail = detail
         askBar.accept = accept
         askBar.code = code

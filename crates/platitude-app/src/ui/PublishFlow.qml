@@ -24,7 +24,7 @@ Item {
 
     /// Raise the standing question with this form in it. The page owns the bar — every other question in the window
     /// goes up the same way.
-    signal askRequested(string label, var run, var form, string code)
+    signal askRequested(string label, var run, var form, string code, string refName)
 
     /// The add-remote dialog, which the automation types into.
     readonly property alias dialog: remoteDialog
@@ -292,8 +292,9 @@ Item {
         publishFlow.publishRemote = publishFlow.repoTab.defaultRemote
         publishFlow.publishBranch = publishFlow.workTree.branch
         // `push` goes untranslated — it is the command's spelling, not a word for it.
+        // The name's seat stays open: the bar draws it in the colour it wears everywhere else (デザイン規約 §ref の種別).
         publishFlow.askRequested(
-            qsTr("%1 where?").arg(publishFlow.workTree.branch), publishFlow.answerPublish, publishForm, "push")
+            qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", publishFlow.workTree.branch)
         // After the bar is up, never before: raising it resets the properties the `publishAsking` bindings above own,
         // and a binding whose value has not changed does not push back.
         publishFlow.publishAsking = true

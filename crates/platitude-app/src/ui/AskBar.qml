@@ -17,6 +17,20 @@ Rectangle {
     /// The question. What the bar says, not whether it stands — `open` alone raises and lowers it, so the words are
     /// still here while it goes back up.
     property string label: ""
+    /// **A ref name inside the question's words**, and the sentence with the name's own seat left in it ("%1 where?").
+    /// The name is drawn in the colour it wears everywhere else it is met rather than in the bar's, since the one name
+    /// a question takes is the branch the working tree is on and that name is `textLink` wherever it appears — the
+    /// left pane's row, the chip, the menu row (デザイン規約 §ref の種別「名前が出る場所すべてで textLink」). Both empty for
+    /// a question that names nothing, and `label` carries the whole of it.
+    property string labelSentence: ""
+    property string labelRef: ""
+    /// The colour that name takes instead. **Its own only while the bar has nothing of its own to say**: a question
+    /// wearing a state colour says what it costs across the whole heading (§状態), and a name lit blue in the middle of
+    /// it would read as the one part still answering — the rule the menu rows carry (`AppMenuItem.refColor`).
+    readonly property color labelTint: bar.neutral ? Theme.textLink : bar.tone
+    /// The heading as the markup rich text reads: the sentence in the bar's colour, the name in its own.
+    readonly property string labelWords: bar.labelSentence === ""
+                                         ? "" : Words.nameInSentence(bar.labelSentence, bar.labelRef, bar.labelTint)
     /// What answering costs, in the one line §用語 allows for it.
     property string detail: ""
     /// The words on the pill that answers. Left empty where the act has a command of its own and `code` says it
@@ -180,6 +194,7 @@ Rectangle {
                 // the labels were, since a question is read from its first word.
                 LineText {
                     text: bar.label
+                    markup: bar.labelWords
                     color: bar.tone
                     pixelSize: Theme.fontMd
                     weight: Font.DemiBold

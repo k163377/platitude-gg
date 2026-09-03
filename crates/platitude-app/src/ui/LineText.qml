@@ -19,6 +19,14 @@ Item {
 
     /// The value in full — including whatever the width is hiding.
     property string text: ""
+    /// The same line spelled as the markup rich text reads, where one word in it wears a colour of its own — a ref
+    /// name inside the sentence (`Words.nameInSentence`). Empty everywhere else, and the field takes `text` instead.
+    /// **`text` stays the plain sentence either way**, since that is what a caller measuring or reading the line back
+    /// is handed. The ruler measures whichever of the two is drawn, or a width would be bid for the tags as well.
+    ///
+    /// **Only the tail cut takes markup.** A middle cut spells the head onto the mark's own ground out of `text`, and
+    /// the plain head of a line whose drawn half is coloured would come away in the wrong colour.
+    property string markup: ""
     property color color: Theme.textPrimary
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
@@ -146,7 +154,8 @@ Item {
     Text {
         id: ruler
         visible: false
-        text: line.text
+        text: line.markup !== "" ? line.markup : line.text
+        textFormat: line.markup !== "" ? Text.RichText : Text.PlainText
         font: field.font
         wrapMode: Text.NoWrap
     }
@@ -168,7 +177,11 @@ Item {
         width: line.cutsHead ? Math.max(line.width, Math.ceil(ruler.implicitWidth)) : line.width
         x: line.cutsHead ? line.width - field.width : 0
         height: line.height
-        text: line.text
+        text: line.markup !== "" ? line.markup : line.text
+        // Pinned, not left to `AutoText`. What these fields carry is git's own words as often as this application's,
+        // and AutoText decides by guessing whether a string looks like markup — a branch called `<b>` would vanish.
+        // The one line that is markup says so because a caller built it and escaped everything that went into it.
+        textFormat: line.markup !== "" ? TextEdit.RichText : TextEdit.PlainText
         color: line.color
         font.family: line.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: line.pixelSize
