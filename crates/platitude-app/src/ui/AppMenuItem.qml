@@ -25,6 +25,17 @@ MenuItem {
     /// word (デザイン 規約 §git 用語のコード表記). Never translated: it is the command, not a phrase about it. It sits ahead of
     /// `text`, which carries whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
+    /// **A ref name inside the row's words**, and the sentence with the name's own seat left in it ("into %1"). The
+    /// name is drawn in the colour it wears everywhere else it is met rather than in the row's: these sentences take
+    /// one name and it is always the branch the working tree is on (`merge` into main, `rebase` main onto it, `reset`
+    /// main here), and that name is `textLink` wherever it appears — the left pane's row, the chip, the hover card
+    /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」).
+    ///
+    /// The seat is cut out of the sentence rather than the name being looked for in the finished line: a branch called
+    /// `it` would otherwise be found in the first word of `into it`.
+    property string refSentence: ""
+    property string refName: ""
+    text: menuItem.refSentence !== "" ? menuItem.refSentence.arg(menuItem.refName) : ""
     /// The mark a row wears instead of a chip, and its colour: the `NavIcon` kind of the thing the rows behind this one
     /// act on (デザイン規約 §メニュー の入れ子). Only the rows that open a submenu carry one — a row that runs a command says
     /// which by its chip, and a row that opens a card of them has no command to name.
@@ -140,6 +151,29 @@ MenuItem {
     readonly property color wordColor: !menuItem.enabled || menuItem.blocked ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
                                      : menuItem.holdMs > 0 ? menuItem.holdTone : Theme.textPrimary
+    /// The colour the name inside those words takes instead. **Its own only while the row has nothing of its own to
+    /// say**: a row that cannot be chosen is grey to its last letter (§無効), and one that is held says what it costs
+    /// across the whole line (§長押し) — a name lit blue in either would read as the one part of the row still
+    /// answering.
+    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.holdMs > 0
+                                      ? menuItem.wordColor : Theme.textLink
+    /// Those words as the markup `Text.StyledText` reads: the sentence in the row's colour, the name in its own. One
+    /// label rather than three, so the line elides, measures and hovers the way every other row's does.
+    ///
+    /// **Every piece is escaped on the way in.** The sentence is this app's, but the name is not — a branch called
+    /// `<b>` has to read as its name rather than vanish. Spaces go as `&nbsp;` for the reason a diff line's do
+    /// (`encode::markup`): rich text folds a run of them the way HTML does.
+    readonly property string refWords: {
+        const seat = menuItem.refSentence.indexOf("%1")
+        if (seat < 0)
+            return ""
+        return menuItem.inked(menuItem.refSentence.substring(0, seat))
+             + "<font color=\"" + menuItem.refColor + "\">" + menuItem.inked(menuItem.refName) + "</font>"
+             + menuItem.inked(menuItem.refSentence.substring(seat + 2))
+    }
+    function inked(words) {
+        return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
+    }
 
     // A blocked row's line is what the hover is for, so it comes before the elision's. Nothing else changes: one
     // tooltip, one delay.
@@ -256,15 +290,19 @@ MenuItem {
         Label {
             id: itemLabel
             Layout.fillWidth: true
-            text: menuItem.text
+            // The row's own words, or the same line spelled as markup where one of them is a name in a colour of its
+            // own (`refWords`). What the row *says* is `text` either way — the tooltip and the reader who cannot see
+            // it are handed the sentence, never the markup.
+            text: menuItem.refWords !== "" ? menuItem.refWords : menuItem.text
             // Written out rather than taken as a group, so the one row that changes its weight can (a group assignment
             // and a `font.weight` on the same Label is "already assigned").
             font.family: Theme.uiFamily
             font.pixelSize: menuItem.font.pixelSize
             // Pinned, not left to `AutoText`. Rows carry text nobody here chose — branch names, paths, commit subjects
             // — plus one deliberate placeholder in angle brackets, and AutoText decides by guessing whether a string
-            // looks like markup. A branch called `<b>` should read as its name, not vanish.
-            textFormat: Text.PlainText
+            // looks like markup. A branch called `<b>` should read as its name, not vanish. The one line that is
+            // markup says so because this file wrote it, and escaped everything that went into it.
+            textFormat: menuItem.refWords !== "" ? Text.StyledText : Text.PlainText
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
             // Clear of the arrow the style paints over the row's right edge on a row that opens a submenu (the note,

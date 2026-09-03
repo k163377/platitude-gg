@@ -197,7 +197,8 @@ Item {
         AppMenuItem {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
-            text: qsTr("into %1").arg(refRowMenu.workTree.branch)
+            refSentence: qsTr("into %1")
+            refName: refRowMenu.workTree.branch
             offered: (refRowMenu.kind === "branch"
                       || refRowMenu.kind === "remote"
                       || refRowMenu.kind === "tag")
@@ -207,7 +208,8 @@ Item {
         AppMenuItem {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
-            text: qsTr("%1 onto it").arg(refRowMenu.workTree.branch)
+            refSentence: qsTr("%1 onto it")
+            refName: refRowMenu.workTree.branch
             // The same condition as merge, to the letter: a tag is a fixed point either way, and the one this row
             // lands on stays where it is — git peels an annotated tag to its commit, and `--update-refs` carries
             // branches only (measured).

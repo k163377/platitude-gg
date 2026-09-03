@@ -262,14 +262,16 @@ Item {
         AppMenuItem {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
-            text: qsTr("into %1").arg(rowMenu.branch)
+            refSentence: qsTr("into %1")
+            refName: rowMenu.branch
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.repoTab.merge(rowMenu.integrateRef, false, false, "")
         }
         AppMenuItem {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
-            text: qsTr("%1 onto it").arg(rowMenu.branch)
+            refSentence: qsTr("%1 onto it")
+            refName: rowMenu.branch
             note: rowMenu.published ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.repoTab.rebase(rowMenu.integrateRef, "", true)
@@ -279,7 +281,10 @@ Item {
             heldReason: rowMenu.heldReason
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
-            title: rowMenu.branch !== "" ? qsTr("%1 here").arg(rowMenu.branch) : qsTr("the branch here")
+            titleSentence: qsTr("%1 here")
+            // `canMoveBranch` is false detached and on an unborn HEAD (offers::commit_menu), so the row never comes up
+            // without a branch; the second half is only what the sentence would still read as if it did.
+            titleRef: rowMenu.branch !== "" ? rowMenu.branch : qsTr("the branch")
             applies: rowMenu.canMoveBranch
             AppMenuItem {
                 code: "--soft"

@@ -16,6 +16,12 @@ Menu {
     /// A git term for this menu's own title row, said as a code chip when the menu opens from a row of another menu
     /// (RepoPage's reset submenu). Empty for a title that is all words.
     property string titleCode: ""
+    /// A ref name in that title, and the sentence with the name's own seat left in it — the two an ordinary row takes
+    /// (`AppMenuItem.refSentence`), so a title that says a name is spelled the way the rows under it are. The title
+    /// itself is made from them; a card whose title says no name writes its `title` and leaves these alone.
+    property string titleSentence: ""
+    property string titleRef: ""
+    title: appMenu.titleSentence !== "" ? appMenu.titleSentence.arg(appMenu.titleRef) : ""
 
     /// The mark that row wears instead, for a submenu holding everything one kind of ref answers for: the `NavIcon`
     /// kind and the kind's own colour (デザイン規約 §メニュー の入れ子). A submenu takes one or the other — a title that
@@ -155,6 +161,11 @@ Menu {
     // the code chip, when the submenu asked for one on its title.
     delegate: AppMenuItem {
         code: subMenu && subMenu.titleCode !== undefined ? subMenu.titleCode : ""
+        // The title's own name, so the row draws it the colour every other place draws it. The menu above sets this
+        // row's `text` itself, from the title the two halves already made — the row only needs to know where in it
+        // the name sits.
+        refSentence: subMenu && subMenu.titleSentence !== undefined ? subMenu.titleSentence : ""
+        refName: subMenu && subMenu.titleRef !== undefined ? subMenu.titleRef : ""
         markKind: subMenu && subMenu.titleKind !== undefined ? subMenu.titleKind : ""
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
         // A submenu with nothing to offer takes its own title row with it, the way any other row that cannot be chosen
