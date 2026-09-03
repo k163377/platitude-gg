@@ -10,15 +10,17 @@
 //! (ci/baseline/perf-windows-x64.md §この記録の読み方 2).
 //!
 //! **Why it is not in git.** It is 200,000 commits, 50,000 refs and a
-//! hundred thousand tracked files — six gigabytes, built in ten minutes
-//! from `shape`'s constants. The generator is the thing worth keeping,
-//! not its output.
+//! hundred thousand tracked files — seven and a half gigabytes on disk,
+//! built in six minutes from `shape`'s constants. The generator is the
+//! thing worth keeping, not its output.
 //!
-//! **What the ten minutes is.** Nine and a half million objects through
-//! `git fast-import`, which is single-threaded: the machine sits at a
-//! tenth of its cores for the whole build and no amount of work on this
-//! side moves that. What moves it is asking for fewer objects, which is
-//! a fidelity decision rather than a speed one (`shape`, `tree`).
+//! **What the six minutes is.** Nine and a half million objects through
+//! `git fast-import`, which reads a stream on one thread. The bodies
+//! are two thirds of that thread's work and go through four processes
+//! at once (`BLOB_IMPORTS`); the trees and the commits are one history
+//! and go through one, and that one is most of what is left. What would
+//! move it further is asking for fewer objects, which is a fidelity
+//! decision rather than a speed one (`shape`, `tree`).
 //!
 //! **Why it is built once.** Every seat measures the same corpus, so it
 //! sits beside the primary checkout's `.git` rather than in any one
@@ -408,8 +410,7 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     git(at, &["config", "gc.auto", "0"])?;
     git(at, &["config", "maintenance.auto", "false"])?;
     git(at, &["config", "fetch.writeCommitGraph", "false"])?;
-    let newest = import(at)?;
-    clock.mark("import");
+    let newest = import(at, clock)?;
     // fast-import writes refs and nothing else: without this the work
     // tree is the empty one `init` left, and every tracked file reads as
     // deleted — which the application would show as an enormous
@@ -641,10 +642,12 @@ fn tags(at: &Path) -> Result<(), String> {
 /// worked in has several packs and a multi-pack-index over them; one
 /// that fast-import wrote has exactly one pack and no index over it.
 ///
-/// **The split is fast-import's own** (`--max-pack-size`), taken while
-/// it is already writing. Asking `repack -a -d` for it afterwards costs
-/// a second pass over every object in the database — measured at over
-/// forty minutes for this one, and it produced a single pack anyway.
+/// **The split is the build's own**: one pack per blob pass and one for
+/// the commits and trees ([`BLOB_IMPORTS`]), with `--max-pack-size` as
+/// the ceiling on any one of them. Asking `repack -a -d` for it
+/// afterwards costs a second pass over every object in the database —
+/// measured at over forty minutes for this one, and it produced a
+/// single pack anyway.
 fn packs(at: &Path) -> Result<(), String> {
     git(at, &["multi-pack-index", "write"])?;
     Ok(())
@@ -1023,7 +1026,83 @@ fn git(at: &Path, args: &[&str]) -> Result<String, String> {
 /// without a buffer this is one write syscall per line.
 const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 
-/// Runs `fast-import` with the stream written straight into it.
+/// How many `fast-import` processes the blobs go through at once.
+///
+/// **The blobs are two thirds of the import and the only part of it
+/// that parallelises.** `fast-import` reads its stream on one thread,
+/// and a stream that spells every body out in its commit is 25GB
+/// through that one thread: 596s, where the same commits over 300-byte
+/// bodies took 200s (measured, same machine, same hour — the generator
+/// itself writes the whole stream in 20s,
+/// `stream::tests::time_the_generator_alone`). The bodies hash to the
+/// same ids whichever process reads them, so they go through this many
+/// at once under marks, and the commit stream names the marks
+/// (`stream::Bodies`).
+///
+/// **Four, because each writes a pack.** The reference repository
+/// carries five packs and a multi-pack-index, and every git process the
+/// application spawns maps them before it resolves anything; four blob
+/// packs and the one the commits and trees make is that shape. More
+/// would shave seconds and add a pack each.
+///
+/// **`--depth=0` is not a shortcut.** It skips the delta attempt on
+/// every blob, which is a quarter of a single-process import (446s
+/// against 596s, measured), but also the deltas between versions of the
+/// big directories' trees, and the pack comes out 10.7GiB against 6.5.
+const BLOB_IMPORTS: usize = 4;
+
+/// The import: the blobs through [`BLOB_IMPORTS`] processes at once,
+/// then the commits through one that reads their marks.
+fn import(at: &Path, clock: &mut Clock) -> Result<stream::Newest, String> {
+    let tree = tree::build();
+    let placements =
+        stream::placements(&tree).map_err(|e| format!("could not lay out the history: {e}"))?;
+    // Under `.git`, so the checkout does not carry them; each is a mark
+    // and an id per placement, read once by the commit pass and removed.
+    let marks: Vec<String> = (0..BLOB_IMPORTS)
+        .map(|shard| format!(".git/pg-marks-{shard}"))
+        .collect();
+    std::thread::scope(|scope| {
+        let shards: Vec<_> = marks
+            .iter()
+            .enumerate()
+            .map(|(shard, file)| {
+                let (tree, placements) = (&tree, &placements);
+                scope.spawn(move || {
+                    let export = format!("--export-marks={file}");
+                    fast_import(at, &[export.as_str()], |out| {
+                        stream::blobs(out, tree, placements, shard, BLOB_IMPORTS)
+                    })
+                })
+            })
+            .collect();
+        shards
+            .into_iter()
+            .map(|shard| {
+                shard
+                    .join()
+                    .unwrap_or_else(|_| Err("a blob import thread panicked".to_string()))
+            })
+            .collect::<Result<Vec<()>, String>>()
+    })?;
+    clock.mark("blobs");
+    let imports: Vec<String> = marks
+        .iter()
+        .map(|file| format!("--import-marks={file}"))
+        .collect();
+    let args: Vec<&str> = imports.iter().map(String::as_str).collect();
+    let newest = fast_import(at, &args, |out| {
+        stream::write(out, &tree, &mut stream::Marked::default())
+    })?;
+    for file in &marks {
+        std::fs::remove_file(at.join(file)).map_err(|e| format!("could not remove {file}: {e}"))?;
+    }
+    clock.mark("commits");
+    Ok(newest)
+}
+
+/// Runs one `fast-import` with a stream written straight into it, and
+/// answers what the writer answered.
 ///
 /// **The write is allowed to fail.** A git that rejects the stream exits
 /// while the rest of it is still being written, and the broken pipe that
@@ -1035,7 +1114,11 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 /// error pipe would stop reading the stream, and a writer that never
 /// stops writing would never read the error. Each waiting for the other
 /// is a build that hangs rather than one that says why.
-fn import(at: &Path) -> Result<stream::Newest, String> {
+fn fast_import<T>(
+    at: &Path,
+    args: &[&str],
+    feed: impl FnOnce(&mut dyn Write) -> std::io::Result<T>,
+) -> Result<T, String> {
     let mut child = Command::new("git")
         .current_dir(at)
         .args([
@@ -1044,6 +1127,7 @@ fn import(at: &Path) -> Result<stream::Newest, String> {
             "--force",
             &format!("--max-pack-size={}", shape::MAX_PACK_SIZE),
         ])
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -1062,9 +1146,9 @@ fn import(at: &Path) -> Result<stream::Newest, String> {
     let wrote = match child.stdin.take() {
         Some(pipe) => {
             let mut buffered = std::io::BufWriter::with_capacity(PIPE_BUFFER, pipe);
-            stream::write(&mut buffered).and_then(|newest| {
-                std::io::Write::flush(&mut buffered)?;
-                Ok(newest)
+            feed(&mut buffered).and_then(|answer| {
+                buffered.flush()?;
+                Ok(answer)
             })
         }
         None => Err(std::io::Error::other("fast-import took no standard input")),
@@ -1078,7 +1162,7 @@ fn import(at: &Path) -> Result<stream::Newest, String> {
         Some(Err(_)) | None => String::new(),
     };
     match wrote {
-        Ok(newest) if status.success() => Ok(newest),
+        Ok(answer) if status.success() => Ok(answer),
         wrote => Err(format!(
             "git fast-import failed: {}",
             if said.is_empty() {

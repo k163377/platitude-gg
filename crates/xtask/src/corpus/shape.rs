@@ -162,11 +162,12 @@ pub(super) const REFS_ON_ONE: u64 = 44;
 /// one resolves in a single read.
 pub(super) const ANNOTATED_SHARE: u64 = 993;
 
-/// How large one pack may grow before `repack` starts another. The
-/// reference repository carries five packs and a multi-pack-index over
-/// them, where a repository fast-import wrote carries one and no index
-/// — and every git process an opening spawns maps all of them before it
-/// resolves anything.
+/// How large one pack may grow before `fast-import` starts another.
+/// The packs themselves come from the build's shape — one per blob pass
+/// and one for the commits and trees (`corpus::BLOB_IMPORTS`), five
+/// like the reference repository's, under a multi-pack-index like its —
+/// and this is the ceiling on any one of them. Every git process an
+/// opening spawns maps all of them before it resolves anything.
 pub(super) const MAX_PACK_SIZE: &str = "2g";
 
 /// The trunk, once the side branches and the newest commit have taken
@@ -696,6 +697,33 @@ fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
     }
     out.truncate(want);
 }
+
+/// Whether a slot's bytes change from one revision to the next.
+///
+/// A source carries its revision on its first `fun` line
+/// (`CHURN_STRIDE`), so a file too short to reach past that line's
+/// words is the same bytes at every revision; a picture and a symlink
+/// never carry one. Two placements with the same bytes are one object,
+/// and the blob passes have to know that before git does
+/// (`stream::shard_of`).
+pub(super) fn carries_revision(slot: u64, want: usize, mode: &str) -> bool {
+    mode != "120000"
+        && want >= REVISION_FLOOR
+        && !(super::tree::extension(slot) == PICTURES[0] && want >= PICTURE_FLOOR)
+}
+
+/// A body short enough that its slot's number may be cut off it: the
+/// package line is cut at the size the tree drew, so two slots' bytes
+/// can be one object, and only the bytes themselves say so.
+pub(super) const TINY: usize = 64;
+
+/// The smallest source whose revision is spelled on two lines rather
+/// than one: every sixteenth line carries it, at about thirty-four
+/// bytes a line. One line can repeat across revisions — its words are
+/// drawn from thirty-two and its number from a thousand, and a floor of
+/// one line left 174 objects in two packs (measured) — where two do not
+/// in practice.
+const REVISION_FLOOR: usize = 1_024;
 
 #[cfg(test)]
 pub(super) fn content(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {

@@ -6,21 +6,217 @@
 //! — `reset` inside the import is what makes 50,000 of them free, where
 //! `update-ref --stdin` afterwards costs half a minute (measured).
 //!
-//! **Bodies are inline and per revision.** A prologue of shared blobs
-//! would be a repository of a hundred distinct files however many
-//! commits named them, and the object database is an axis of its own:
-//! the reference repository's five million objects are what every git
-//! process the application spawns maps before it can resolve anything.
-//! So every placement writes its own bytes, and the stream is larger
-//! than the repository it produces by more than an order of magnitude.
+//! **Bodies are per revision.** A body shared by every commit that
+//! names a path would be a repository of a hundred distinct files
+//! however many commits it had, and the object database is an axis of
+//! its own: the reference repository's five million objects are what
+//! every git process the application spawns maps before it can resolve
+//! anything. So every placement has bytes of its own, and the bodies
+//! are tens of gigabytes — larger than the repository they produce by
+//! more than an order of magnitude.
+//!
+//! **And they are the parallel part.** One `fast-import` reads its
+//! stream on one thread, and the bodies are two thirds of what that
+//! thread does; they hash to the same ids whichever process reads them,
+//! so they go through several at once under marks ([`blobs`]) and the
+//! commit stream names the marks ([`Bodies`]). Same objects, same ids,
+//! same token (`corpus::token`) — only the packs are laid out
+//! differently.
 
 use std::io::{self, Write};
 
 use super::{shape, tree};
 
-/// The first commit's mark. Commits are the only marks now: bodies are
-/// written inline, so there are no blob marks to leave room for.
+/// The first commit's mark. Commit marks count up from here to
+/// `COMMITS`; the blob marks start at [`BLOB_MARK_BASE`].
 const BASE_MARK: u64 = 1;
+
+/// The first blob mark. One per placement, counted in stream order, and
+/// far enough above the last commit mark that the two ranges cannot
+/// meet — a mark minted twice is a stream fast-import refuses at the
+/// end, by number.
+const BLOB_MARK_BASE: u64 = 1_000_000;
+const _: () = assert!(BASE_MARK + shape::COMMITS < BLOB_MARK_BASE);
+
+/// One body placed at one path: whose bytes, at which revision, and
+/// under which slot's name.
+///
+/// The name is a slot of its own because a rename writes one slot's
+/// bytes under another's path — the same content under a new name is
+/// what `--find-renames` scores.
+#[derive(Clone, Copy)]
+pub(super) struct Placement {
+    /// The slot whose bytes these are.
+    body: u64,
+    /// Their revision.
+    rev: u32,
+    /// The slot whose path and mode the `M` line carries.
+    at: u64,
+}
+
+impl Placement {
+    /// The bytes, into a buffer the caller keeps: four million
+    /// placements, so this is the difference between one allocation and
+    /// four million.
+    fn bytes(self, tree: &tree::Tree, into: &mut Vec<u8>) {
+        let want = tree.sizes[self.body as usize] as usize;
+        shape::content_into(into, self.body, want, self.rev, tree.mode(self.body));
+    }
+
+    /// The `M` line's mode and path, which are the placed slot's.
+    fn line(self, tree: &tree::Tree) -> (&'static str, &str) {
+        (tree.mode(self.at), &tree.paths[self.at as usize])
+    }
+}
+
+/// How a placement's bytes reach git.
+pub(super) trait Bodies {
+    fn place(
+        &mut self,
+        out: &mut dyn Write,
+        tree: &tree::Tree,
+        placement: Placement,
+    ) -> io::Result<()>;
+}
+
+/// Bytes spelled out in the commit that places them: the whole corpus
+/// as one stream, which is what the tests read and what the generator's
+/// own cost is timed over (`tests::time_the_generator_alone`).
+#[cfg(test)]
+#[derive(Default)]
+pub(super) struct Inline {
+    body: Vec<u8>,
+}
+
+#[cfg(test)]
+impl Bodies for Inline {
+    fn place(
+        &mut self,
+        out: &mut dyn Write,
+        tree: &tree::Tree,
+        placement: Placement,
+    ) -> io::Result<()> {
+        placement.bytes(tree, &mut self.body);
+        let (mode, path) = placement.line(tree);
+        writeln!(out, "M {mode} inline {path}")?;
+        writeln!(out, "data {}", self.body.len())?;
+        out.write_all(&self.body)?;
+        writeln!(out)
+    }
+}
+
+/// A mark per placement, counted in stream order from
+/// [`BLOB_MARK_BASE`]: the commit stream of the parallel build, whose
+/// bytes the blob passes wrote under the same numbers ([`blobs`]).
+#[derive(Default)]
+pub(super) struct Marked {
+    minted: u64,
+}
+
+impl Bodies for Marked {
+    fn place(
+        &mut self,
+        out: &mut dyn Write,
+        tree: &tree::Tree,
+        placement: Placement,
+    ) -> io::Result<()> {
+        let mark = BLOB_MARK_BASE + self.minted;
+        self.minted += 1;
+        let (mode, path) = placement.line(tree);
+        writeln!(out, "M {mode} :{mark} {path}")
+    }
+}
+
+/// The placements themselves, kept rather than written: what the blob
+/// passes are handed, in the order [`Marked`] counts.
+#[derive(Default)]
+struct Recorded {
+    placements: Vec<Placement>,
+}
+
+impl Bodies for Recorded {
+    fn place(&mut self, _: &mut dyn Write, _: &tree::Tree, placement: Placement) -> io::Result<()> {
+        self.placements.push(placement);
+        Ok(())
+    }
+}
+
+/// Every placement of the whole history, in stream order. The history
+/// is deterministic, so this is the same walk the commit stream makes
+/// — with the bodies left out, which is nearly all of its cost.
+pub(super) fn placements(tree: &tree::Tree) -> io::Result<Vec<Placement>> {
+    let mut recorded = Recorded::default();
+    write(&mut io::sink(), tree, &mut recorded)?;
+    Ok(recorded.placements)
+}
+
+/// One shard of the blobs as a stream of its own: the placements
+/// [`shard_of`] hands to `shard`, each under the mark the commit stream
+/// names it by. The bytes are generated here from the placement alone
+/// — nothing passes between the two halves of the build but the
+/// numbers.
+pub(super) fn blobs(
+    out: &mut dyn Write,
+    tree: &tree::Tree,
+    placements: &[Placement],
+    shard: usize,
+    shards: usize,
+) -> io::Result<()> {
+    let mut body = Vec::with_capacity(8 * 1024);
+    let mut scratch = Vec::with_capacity(shape::TINY);
+    for (index, placement) in placements
+        .iter()
+        .enumerate()
+        .filter(|(_, placement)| shard_of(**placement, tree, shards, &mut scratch) == shard)
+    {
+        placement.bytes(tree, &mut body);
+        writeln!(
+            out,
+            "blob\nmark :{}\ndata {}",
+            BLOB_MARK_BASE + index as u64,
+            body.len()
+        )?;
+        out.write_all(&body)?;
+        writeln!(out)?;
+    }
+    Ok(())
+}
+
+/// Which blob pass a placement goes through.
+///
+/// **By what the bytes are, not by where they sit.** Two placements
+/// with the same bytes are one object, and fast-import knows that only
+/// inside one process: a rename places a slot's bytes again under a new
+/// name, a file too small to carry its revision is the same bytes at
+/// every revision (`shape::carries_revision`), and a body too small to
+/// hold its slot's number is the same bytes as another slot's
+/// (`shape::TINY`). So the tiny go by their bytes, the small by slot,
+/// and everything else by slot and revision — which is also what
+/// spreads the eleven huge files' revisions evenly, where by slot alone
+/// one pass could draw half of them. Dealt out by index instead, the
+/// corpus carried 44,722 objects twice (measured); by slot and
+/// revision alone, 167.
+fn shard_of(
+    placement: Placement,
+    tree: &tree::Tree,
+    shards: usize,
+    scratch: &mut Vec<u8>,
+) -> usize {
+    let want = tree.sizes[placement.body as usize] as usize;
+    let identity = if want < shape::TINY {
+        placement.bytes(tree, scratch);
+        scratch
+            .iter()
+            .fold(0xCBF2_9CE4_8422_2325_u64, |hash, byte| {
+                (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01B3)
+            })
+    } else if shape::carries_revision(placement.body, want, tree.mode(placement.body)) {
+        placement.body ^ (u64::from(placement.rev) << 32)
+    } else {
+        placement.body
+    };
+    (shape::mix(identity ^ 0x5AA4_D000) % shards as u64) as usize
+}
 
 /// What the newest commit is, so the caller can say where the
 /// measurement will land without re-deriving it.
@@ -34,24 +230,25 @@ pub(super) struct Newest {
     pub(super) huge: String,
 }
 
-/// The whole corpus as one import stream, written as it is generated,
-/// and what its newest commit holds.
+/// The whole history as one import stream, written as it is generated,
+/// with its bodies handled as `bodies` says, and what its newest commit
+/// holds.
 ///
-/// **It is written rather than returned.** The stream is every revision
-/// of every file spelled out in full — fast-import has no delta input —
-/// so holding it would mean holding tens of gigabytes at once. What git
-/// needs is a pipe, and a pipe is what this fills.
-pub(super) fn write(out: &mut dyn Write) -> io::Result<Newest> {
-    let tree = tree::build();
-    let mut live = History::new(&tree);
-    // One buffer for every file body the build ever writes. Four
-    // million placements, so this is the difference between one
-    // allocation and four million.
-    let mut body = Vec::with_capacity(8 * 1024);
-    base(out, &tree, &mut body)?;
-    churn(out, &tree, &mut live, &mut body)?;
-    side_branches(out, &tree, &live, &mut body)?;
-    let newest = newest_commit(out, &tree, &live)?;
+/// **It is written rather than returned.** With the bodies inline the
+/// stream is every revision of every file spelled out in full —
+/// fast-import has no delta input — so holding it would mean holding
+/// tens of gigabytes at once. What git needs is a pipe, and a pipe is
+/// what this fills.
+pub(super) fn write(
+    out: &mut dyn Write,
+    tree: &tree::Tree,
+    bodies: &mut dyn Bodies,
+) -> io::Result<Newest> {
+    let mut live = History::new(tree);
+    base(out, tree, bodies)?;
+    churn(out, tree, &mut live, bodies)?;
+    side_branches(out, tree, &live, bodies)?;
+    let newest = newest_commit(out, tree, &live)?;
     refs(out)?;
     Ok(newest)
 }
@@ -79,7 +276,7 @@ impl History {
 
 /// The commit that places the whole tree. Everything after it is a
 /// change to what this left.
-fn base(out: &mut dyn Write, tree: &tree::Tree, body: &mut Vec<u8>) -> io::Result<()> {
+fn base(out: &mut dyn Write, tree: &tree::Tree, bodies: &mut dyn Bodies) -> io::Result<()> {
     let message = shape::message(1);
     let (name, mail) = shape::author(1);
     let when = shape::FIRST_COMMIT_AT + shape::STEP_SECS;
@@ -104,38 +301,32 @@ fn base(out: &mut dyn Write, tree: &tree::Tree, body: &mut Vec<u8>) -> io::Resul
         write!(out, "{}", shape::NESTED_GITIGNORE)?;
     }
     for slot in 0..tree::TRACKED {
-        place(out, tree, body, slot, 0)?;
+        place(out, tree, bodies, slot, 0)?;
     }
     writeln!(out)
 }
 
-/// One file placed, with its own bytes.
-///
-/// **The body goes into a buffer that is reused.** This is the build's
-/// innermost loop — four million placements — so a `Vec` allocated per
-/// file, and a `String` per line inside it, is what the wall clock is
-/// made of.
+/// One slot placed under its own name, at a revision.
 fn place(
     out: &mut dyn Write,
     tree: &tree::Tree,
-    body: &mut Vec<u8>,
+    bodies: &mut dyn Bodies,
     slot: u64,
     rev: u32,
 ) -> io::Result<()> {
-    let want = tree.sizes[slot as usize] as usize;
-    shape::content_into(body, slot, want, rev, tree.mode(slot));
-    writeln!(
+    bodies.place(
         out,
-        "M {} inline {}",
-        tree.mode(slot),
-        tree.paths[slot as usize]
-    )?;
-    writeln!(out, "data {}", body.len())?;
-    out.write_all(body)?;
-    writeln!(out)
+        tree,
+        Placement {
+            body: slot,
+            rev,
+            at: slot,
+        },
+    )
 }
 
-/// `M <mode> inline <path>` and the bytes behind it. **`data` counts
+/// `M <mode> inline <path>` and the bytes behind it, for the few bodies
+/// that are not placements — the newest commit's edits. **`data` counts
 /// bytes**, and a count that disagrees with what follows is a stream
 /// fast-import rejects at the point it notices — which is after the
 /// whole of it has been written.
@@ -162,7 +353,7 @@ fn churn(
     out: &mut dyn Write,
     tree: &tree::Tree,
     live: &mut History,
-    body: &mut Vec<u8>,
+    bodies: &mut dyn Bodies,
 ) -> io::Result<()> {
     for n in 2..=shape::TRUNK {
         let mark = BASE_MARK + n - 1;
@@ -180,7 +371,7 @@ fn churn(
         if n > shape::MERGE_EVERY && n.is_multiple_of(shape::MERGE_EVERY) {
             writeln!(out, "merge :{}", BASE_MARK + n - 1 - shape::MERGE_EVERY / 2)?;
         }
-        changes(out, tree, live, n, body)?;
+        changes(out, tree, live, n, bodies)?;
         writeln!(out)?;
     }
     Ok(())
@@ -192,7 +383,7 @@ fn changes(
     tree: &tree::Tree,
     live: &mut History,
     n: u64,
-    body: &mut Vec<u8>,
+    bodies: &mut dyn Bodies,
 ) -> io::Result<()> {
     // **The clusters sit near each other, not across the tree.** A
     // commit rewrites one tree object per directory on the path of
@@ -206,7 +397,7 @@ fn changes(
         let at = (near + shape::mix(n ^ (cluster << 40)) % shape::CLUSTER_REACH) % tree::TRACKED;
         for step in 0..shape::CHANGED_FILES / shape::CLUSTERS {
             let slot = (at + step) % tree::TRACKED;
-            touch(out, tree, live, n ^ (slot << 8), slot, body)?;
+            touch(out, tree, live, n ^ (slot << 8), slot, bodies)?;
         }
     }
     // **A megabyte file rewritten now and then.** The reference
@@ -219,7 +410,7 @@ fn changes(
         let at = *slot as usize;
         if live.tracked[at] {
             live.revs[at] += 1;
-            place(out, tree, body, *slot, live.revs[at])?;
+            place(out, tree, bodies, *slot, live.revs[at])?;
         }
     }
     // One rename now and then, so `--find-renames` has an add and a
@@ -235,9 +426,15 @@ fn changes(
             writeln!(out, "D {}", tree.paths[from as usize])?;
             // The same content under a new name is what `--find-renames`
             // scores; a fresh body would read as one delete and one add.
-            let want = tree.sizes[from as usize] as usize;
-            shape::content_into(body, from, want, live.revs[from as usize], tree.mode(from));
-            inline(out, tree, to, body)?;
+            bodies.place(
+                out,
+                tree,
+                Placement {
+                    body: from,
+                    rev: live.revs[from as usize],
+                    at: to,
+                },
+            )?;
             live.spare.push(from);
         }
     }
@@ -253,14 +450,14 @@ fn touch(
     live: &mut History,
     seed: u64,
     slot: u64,
-    body: &mut Vec<u8>,
+    bodies: &mut dyn Bodies,
 ) -> io::Result<()> {
     let at = slot as usize;
     if !live.tracked[at] {
         live.tracked[at] = true;
         live.revs[at] += 1;
         live.spare.retain(|spare| *spare != slot);
-        return place(out, tree, body, slot, live.revs[at]);
+        return place(out, tree, bodies, slot, live.revs[at]);
     }
     if shape::mix(seed ^ 0x0000_DE1E) % 100 < shape::DELETED_SHARE {
         live.tracked[at] = false;
@@ -278,10 +475,10 @@ fn touch(
         live.spare.push(slot);
         live.tracked[back as usize] = true;
         live.revs[back as usize] += 1;
-        return place(out, tree, body, back, live.revs[back as usize]);
+        return place(out, tree, bodies, back, live.revs[back as usize]);
     }
     live.revs[at] += 1;
-    place(out, tree, body, slot, live.revs[at])
+    place(out, tree, bodies, slot, live.revs[at])
 }
 
 /// The chains the graph's window is mostly made of: short, unmerged,
@@ -295,7 +492,7 @@ fn side_branches(
     out: &mut dyn Write,
     tree: &tree::Tree,
     live: &History,
-    body: &mut Vec<u8>,
+    bodies: &mut dyn Bodies,
 ) -> io::Result<()> {
     let tip = BASE_MARK + shape::TRUNK - 1;
     let trunk_tip = shape::FIRST_COMMIT_AT + shape::TRUNK * shape::STEP_SECS;
@@ -334,7 +531,7 @@ fn side_branches(
                 place(
                     out,
                     tree,
-                    body,
+                    bodies,
                     slot,
                     live.revs[slot as usize] + 1 + step as u32 + file as u32,
                 )?;

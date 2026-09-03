@@ -148,19 +148,20 @@ const TAIL: &str = "  shipped [--no-build]
   corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it
       is. 200,000 commits, 50,000 refs and a hundred thousand tracked
-      files from one fast-import stream — about ten minutes and six
-      gigabytes, once. A run that finds it already there does nothing,
-      and prints what it found: the counts, the token, the working
-      tree, the remotes, the graph the window would draw, the text its
-      rows carry and what its diffs cost.
+      files through fast-import — about six minutes and seven and a
+      half gigabytes, once. A run that finds it already there does
+      nothing, and prints what it found: the counts, the token, the
+      working tree, the remotes, the graph the window would draw, the
+      text its rows carry and what its diffs cost.
       --against takes those same readings of another repository and
       writes nothing to it, which is how the distance table in
       ci/baseline/perf-windows-x64.md is taken: both of its columns
       have to come from one implementation, or they are two
       definitions rather than one comparison.
-      The ten minutes is nine and a half million objects through
-      fast-import, which is single-threaded; the build prints its
-      phases so that stays visible.
+      The six minutes is nine and a half million objects through
+      fast-import, which reads one stream on one thread: the blobs go
+      through four of them at once and the commits through one, and
+      the build prints its phases so that stays visible.
       It is generated rather than cloned because a clone of somebody's
       working repository is fetched behind the measurement's back, and a
       fetch changes the rows the graph draws, the ref tables the memory

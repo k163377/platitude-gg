@@ -24,7 +24,7 @@ PG_ALLOW_GUI=1 cargo xtask perf --repo <上の 1 行が印刷した path> --runs
   `23da9ebd03a156a5937d265abb0a353fc60e7b75`**(`show-ref` 全体の blob id)—
   HEAD `e512482ebce1b16fd3a7908a4000c229896fcf7e`、コミット 200,000、
   refs 50,004 本(タグ 42,800 / リモートブランチ 7,200 / `main` / 追跡 `main` /
-  リモート 2 本の `HEAD`)、追跡ファイル 109,652、pack 4 本 + multi-pack-index、
+  リモート 2 本の `HEAD`)、追跡ファイル 109,652、pack 5 本 + multi-pack-index、
   commit-graph chain あり、作業ツリーは clean。
   **生成器が固定なので、消して作り直しても同じ token が出る**
 - **なぜ clone ではなく生成か**: 人が使っているリポジトリの clone は計測の裏で
@@ -123,7 +123,7 @@ R = 再現、A = 近い(コーパスが重い側)、L = コーパスが軽い。
 | ファイルのバイト数 | p25 210 / p50 565 / p75 1,598 / p90 4,923 / max 4.23MB | p25 213 / p50 588 / p75 1,740 / p90 5,371 / max 7.07MB | R |
 | ツリー総量 / `.git/index` | 302MB / 17MB | 337MB / 26MB | A |
 | `git status -uall`(warm) | 0.75s | 0.59s | A(下の注) |
-| pack / オブジェクト | 5 + midx / 5,803,610 / 4.66GiB | 4 + midx / 9,681,228 / 6.46GiB | A |
+| pack / オブジェクト | 5 + midx / 5,803,610 / 4.66GiB | 5 + midx / 9,681,228 / 6.40GiB | 本数 R・量 A |
 | remotes セクションの行 | 7,823 leaves / 1,295 folder / 8 深 | 7,203 / 1,863 / 8 | R |
 | グラフのレーン幅 | p25 21 / p50 25 / p75 27 / max 33 | p25 21 / p50 29 / p75 32 / max 36 | A |
 | 窓の ref チップ | 705 個 / 531 行(最多 10) | 758 個 / 655 行(最多 45) | A |
