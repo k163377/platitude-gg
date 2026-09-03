@@ -16,7 +16,7 @@
 
 use std::io::Write;
 #[cfg(windows)]
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -28,6 +28,13 @@ use super::SAMPLE_MS;
 /// How many sampled ticks the window is given to be placed before where
 /// it is starts counting against it. One second at [`super::SAMPLE_MS`].
 const SETTLED_TICKS: usize = 10;
+
+/// How many ticks in a row must find nobody able to look at the screen
+/// before the run is refused. Three, so 300ms at [`super::SAMPLE_MS`]:
+/// long enough that a focus change or a consent prompt flashing past
+/// does not cost a retake, and orders of magnitude short of the lock
+/// this is here to catch.
+const BLIND_TICKS: usize = 3;
 
 /// One tick: the process, and the machine it was on.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -43,9 +50,24 @@ pub(super) struct Sample {
     /// is still composited and still presents frames, and the app does
     /// not always take the focus off the shell that started it.
     pub(super) foreground: bool,
-    /// Whether anything at all was in front. This is the one that says
-    /// the session locked: the secure desktop is another desktop, and a
-    /// process on this one can no longer see a foreground window.
+    /// Whether somebody could have been looking at the screen — false
+    /// says the session is locked, and a locked session stops the
+    /// compositor presenting, which stops the frames and freezes the
+    /// animation the scroll bench is driven by.
+    ///
+    /// Read off *who owns the foreground window*, which is the lock
+    /// screen while the machine is locked and something else once it is
+    /// not. Two nearby answers are both wrong, and both were measured:
+    /// `GetForegroundWindow` returns a handle while locked (`LockApp`
+    /// holds the foreground like any window), and `LockApp` is still
+    /// running long after the machine is unlocked, so its mere existence
+    /// says nothing either.
+    ///
+    /// **No foreground window at all is the third case**, and it is the
+    /// secure desktop: a UAC prompt, Ctrl+Alt+Del, the credential
+    /// provider, and the moments either side of a lock. That desktop
+    /// owns the display, so the frames stop there too — which is why
+    /// this reads false rather than falling through to true.
     pub(super) interactive: bool,
     pub(super) minimized: bool,
     pub(super) windowed: bool,
@@ -56,6 +78,16 @@ pub(super) struct Sample {
     pub(super) idle: u64,
     /// The measured process's own processor time, same units.
     pub(super) app: u64,
+    /// Milliseconds since the last input event of any kind — **the ones
+    /// this harness injects included**.
+    ///
+    /// So it does not say whether a person was here. [`Awake`] sends a
+    /// zero-pixel mouse move every `WAKE_SECS` for the whole invocation,
+    /// and that is the same counter the display timer reads, so while
+    /// the wake helper is alive this cannot climb past one interval.
+    /// **A value above that says the wake helper is not running** — the
+    /// one thing it is still good for, and the reason it is kept.
+    pub(super) away_ms: u64,
 }
 
 impl Sample {
@@ -85,8 +117,17 @@ pub(super) struct Conditions {
     pub(super) foreground: usize,
     pub(super) minimized: usize,
     /// Ticks taken while somebody could have been looking at the screen.
-    /// Short of `samples` means the session locked mid-run.
+    /// Short of `samples` means the session locked mid-run, or the
+    /// secure desktop came up.
     pub(super) interactive: usize,
+    /// The longest unbroken stretch of those, which is what the gate
+    /// reads rather than the count: a lock lasts orders of magnitude
+    /// longer than the blink a focus change or a consent prompt leaves,
+    /// and refusing on one tick costs a whole retake plus the wait
+    /// before it. The first of the two is the stretch in progress and
+    /// says nothing once the run is over.
+    pub(super) blind: usize,
+    pub(super) longest_blind: usize,
     /// Every screen the window was seen on, in the order first seen.
     pub(super) displays: Vec<String>,
     /// Whole-machine load over the sampled span, and the share of it that
@@ -96,13 +137,23 @@ pub(super) struct Conditions {
     /// The busiest single tick's foreign load — one parallel build shows
     /// up here long before it moves the average.
     pub(super) peak_foreign_percent: f64,
+    /// The longest this run went with no input event at all, ours
+    /// included ([`Sample::away_ms`]). Evidence rather than a gate, and
+    /// it reads as one number only: above `WAKE_SECS` the wake helper
+    /// stopped, and the display timer is no longer being held off.
+    pub(super) away_ms: u64,
 }
 
 impl Conditions {
     fn absorb(&mut self, sample: &Sample, previous: Option<&Sample>) {
         self.samples += 1;
+        self.away_ms = self.away_ms.max(sample.away_ms);
         if sample.interactive {
             self.interactive += 1;
+            self.blind = 0;
+        } else {
+            self.blind += 1;
+            self.longest_blind = self.longest_blind.max(self.blind);
         }
         if sample.windowed {
             self.windowed += 1;
@@ -157,16 +208,40 @@ impl Conditions {
         (self.windowed > 0).then(|| self.foreground as f64 / self.windowed as f64)
     }
 
+    /// Whether the machine was watched at all. Two ticks is the fewest
+    /// that can answer anything: the processor counters are cumulative,
+    /// so a rate needs a pair.
+    pub(super) fn watched(&self) -> bool {
+        self.samples >= 2
+    }
+
+    /// Why this run says nothing about the machine it ran on.
+    ///
+    /// **Not a host condition — the run's own.** A machine nobody
+    /// sampled has not been shown to have done anything wrong, so
+    /// taking the run again would produce the same nothing; what went
+    /// missing is the sampler, and that travels with the run
+    /// (`measure::Spoiled`). It is also not covered by `--allow-noisy`,
+    /// which opens the gates on evidence rather than manufacturing it.
+    pub(super) fn unwatched(&self) -> Option<String> {
+        (!self.watched()).then(|| {
+            format!(
+                "the host was never sampled — {} tick(s), where a rate needs two",
+                self.samples
+            )
+        })
+    }
+
     /// Why this run is not a reading of the application, or nothing.
     ///
     /// Deliberately not a warning: a run taken while the machine was
     /// doing something else is not a slower application, and publishing
     /// it as one is the whole failure this exists to stop.
     pub(super) fn complaint(&self, limits: &Limits) -> Option<String> {
-        if self.samples < 2 {
-            // Not a host condition but a missing one: a run nothing
-            // watched cannot be said to have been watched.
-            return Some("the host was never sampled".into());
+        if !self.watched() {
+            // Nothing to say about the machine, so nothing is said. What
+            // a run nobody watched is, is [`Self::unwatched`]'s answer.
+            return None;
         }
         if limits.quiet_percent.is_infinite() {
             // Every gate below is open: `--allow-noisy` publishes what a
@@ -180,10 +255,11 @@ impl Conditions {
                 self.minimized, self.windowed
             ));
         }
-        if self.interactive < self.samples {
+        if self.longest_blind >= BLIND_TICKS {
             return Some(format!(
-                "the session was locked for {} of {} sampled ticks — a locked screen stops the \
-                 compositor presenting, and the frames stop with it",
+                "nobody could have been looking at the screen for {} of {} sampled ticks — a \
+                 locked session or the secure desktop stops the compositor presenting, and the \
+                 frames stop with it",
                 self.samples - self.interactive,
                 self.samples
             ));
@@ -407,6 +483,7 @@ fn parse_sample(line: &str) -> Option<Sample> {
         } else {
             display.to_string()
         },
+        away_ms: number("away=").unwrap_or(0),
         foreground: field("fg=") == Some("1"),
         interactive: field("int=") == Some("1"),
         minimized: field("min=") == Some("1"),
@@ -495,6 +572,16 @@ const CONTINUOUS: u32 = 0x8000_0000;
 /// the counters need) throws the cached one away — so asking per tick
 /// would cost two desktop-wide sweeps every 100ms, on the machine whose
 /// business is exactly what the run is trying not to measure.
+///
+/// The window is raised — `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE`, so
+/// it comes to the top without taking anybody's focus — when it first
+/// appears, and again on the slow cadence whenever something else has
+/// the foreground. A covered window is not drawn, and a window that is
+/// not drawn advances no animation, which is the scroll bench never
+/// starting (`measure::SCROLL_CEILING`); raising it once only answers
+/// the things that were already in the way. **`HWND_TOP` does not beat
+/// a topmost window**, so a notification that sets `HWND_TOPMOST` stays
+/// in front however often this fires.
 #[cfg(windows)]
 fn windows_script(pid: u32, seconds: u64) -> String {
     format!(
@@ -507,6 +594,15 @@ public static class PerfHost {{\n\
   [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();\n\
   [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);\n\
   [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsIconic(IntPtr h);\n\
+  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);\n\
+  [StructLayout(LayoutKind.Sequential)] public struct LASTINPUT {{ public uint size; public uint at; }}\n\
+  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetLastInputInfo(ref LASTINPUT info);\n\
+  [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount();\n\
+  public static uint IdleMs() {{\n\
+    var info = new LASTINPUT(); info.size = (uint)Marshal.SizeOf(typeof(LASTINPUT));\n\
+    if (!GetLastInputInfo(ref info)) return 0;\n\
+    return unchecked(GetTickCount() - info.at);\n\
+  }}\n\
   [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint flags);\n\
   [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);\n\
 }}\n\
@@ -514,7 +610,7 @@ public static class PerfHost {{\n\
          [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
          try {{\
          $p=Get-Process -Id {pid} -ErrorAction SilentlyContinue;\
-         $hwnd=[IntPtr]::Zero;$display='-';\
+         $hwnd=[IntPtr]::Zero;$display='-';$ticks=0;$int=1;$lockpids=@();\
          $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
            try {{\
@@ -523,26 +619,36 @@ public static class PerfHost {{\n\
              $hwnd=$p.MainWindowHandle;\
              if($hwnd -ne [IntPtr]::Zero){{\
                $display=[System.Windows.Forms.Screen]::FromHandle($hwnd).DeviceName;\
+               [void][PerfHost]::SetWindowPos($hwnd,[IntPtr]0,0,0,0,0,0x0013);\
              }}\
            }} elseif($p.MainWindowHandle -eq [IntPtr]::Zero) {{\
              $hwnd=[IntPtr]::Zero;$display='-';\
            }} else {{\
              $display=[System.Windows.Forms.Screen]::FromHandle($hwnd).DeviceName;\
            }}\
-           $win=0;$fg=0;$min=0;$int=0;$owner=0;\
+           $win=0;$fg=0;$min=0;$owner=0;\
            $front=[PerfHost]::GetForegroundWindow();\
            if($front -ne [IntPtr]::Zero){{\
-             $int=1;\
              [void][PerfHost]::GetWindowThreadProcessId($front,[ref]$owner);\
              if($owner -eq {pid}){{$fg=1}};\
            }};\
+           if($ticks % 10 -eq 0){{\
+             $lockpids=@((Get-Process LockApp,LogonUI -ErrorAction SilentlyContinue).Id);\
+           }};\
+           $ticks=$ticks+1;\
+           $int=0;\
+           if($front -ne [IntPtr]::Zero -and -not ($lockpids -contains $owner)){{$int=1}};\
            if($hwnd -ne [IntPtr]::Zero){{\
              $win=1;\
              if([PerfHost]::IsIconic($hwnd)){{$min=1}};\
+             if($fg -eq 0 -and $min -eq 0 -and $ticks % 10 -eq 0){{\
+               [void][PerfHost]::SetWindowPos($hwnd,[IntPtr]0,0,0,0,0,0x0013);\
+             }};\
            }};\
            $idle=0;$kernel=0;$user=0;\
            [void][PerfHost]::GetSystemTimes([ref]$idle,[ref]$kernel,[ref]$user);\
-           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$($p.TotalProcessorTime.Ticks)\";\
+           [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
+           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$($p.TotalProcessorTime.Ticks) away=$([PerfHost]::IdleMs())\";\
            }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}\
@@ -554,10 +660,12 @@ public static class PerfHost {{\n\
 /// gave up. Between runs, never during one: what it costs is a second
 /// PowerShell, and the point is to spend it while nothing is being timed.
 ///
-/// This is the answer to a person walking away mid-measurement. The
-/// screen-off case the sampler already prevents; a session somebody
-/// locked by hand, or a build somebody started, is waited out instead of
-/// being published as a slow application.
+/// This is the answer to a person walking away mid-measurement: a
+/// session somebody locked by hand, or a build somebody started, is
+/// waited out instead of being published as a slow application. The
+/// screen is held awake across this wait as across everything else —
+/// [`keep_awake`] is held for the whole invocation, which is what makes
+/// the gap between two runs no darker than a run.
 pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> Result<(), String> {
     if limits.quiet_percent.is_infinite() {
         return Ok(());
@@ -596,6 +704,94 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
     }
 }
 
+/// Keeps the screen awake for as long as it is alive.
+///
+/// **A dark screen is an unmeasurable machine.** Nothing is composited to
+/// a display that is off, so no frames arrive, so the animation the
+/// scroll bench is driven by never advances — the same standstill a
+/// locked session produces. A measurement nobody is sitting at is idle
+/// by definition, so whatever the display timer is set to, it runs out.
+///
+/// **`ES_DISPLAY_REQUIRED` is not enough**, twice over: it holds only
+/// while it is held, so a request that lives for the length of a run
+/// holds nothing over the build and the waits *between* runs — and it
+/// does not wake a screen that is already dark, which is what every run
+/// after the first then starts against. What wakes a dark screen is
+/// input, so this sends some: a mouse move of zero pixels, which moves
+/// no cursor and interrupts nobody's typing.
+///
+/// **It has to die with its parent, and `Drop` is not enough.** A killed
+/// xtask never unwinds — `taskkill`, a stopped task, an abort — and a
+/// loop that only `Drop` stops would then hold the display awake and
+/// inject input for the rest of the machine's uptime, with nothing able
+/// to find it (`xtask kill` reaps `platitude-gg` images, and killing by
+/// image name is denied). So the loop asks whether its parent is still
+/// there on every pass: the leak is bounded by one interval.
+///
+/// **The parent is identified by when it started, not by its number.**
+/// A pid is reused, and a wake loop that only asked whether *something*
+/// holds that number would outlive its parent for as long as whatever
+/// took the number lives.
+pub(super) struct Awake(Option<std::process::Child>);
+
+impl Drop for Awake {
+    fn drop(&mut self) {
+        if let Some(child) = &mut self.0 {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// How long the wake loop sleeps between passes, and so both how stale
+/// its parent check may be and how far `Sample::away_ms` can climb.
+#[cfg(windows)]
+const WAKE_SECS: u64 = 20;
+
+#[cfg(windows)]
+pub(super) fn keep_awake() -> Awake {
+    let script = format!(
+        "$ErrorActionPreference='Stop';\
+         Add-Type -TypeDefinition @'\n\
+using System;\n\
+using System.Runtime.InteropServices;\n\
+public static class PerfWake {{\n\
+  [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint flags);\n\
+  [DllImport(\"user32.dll\")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, IntPtr extra);\n\
+}}\n\
+'@;\
+         try {{\
+         $born=(Get-Process -Id {pid} -ErrorAction SilentlyContinue).StartTime;\
+         while($born -ne $null){{\
+           [void][PerfWake]::SetThreadExecutionState([uint32]{AWAKE});\
+           [PerfWake]::mouse_event(0x0001,0,0,0,[IntPtr]::Zero);\
+           Start-Sleep -Seconds {WAKE_SECS};\
+           $now=(Get-Process -Id {pid} -ErrorAction SilentlyContinue).StartTime;\
+           if($now -ne $born){{break}};\
+         }}\
+         }} finally {{ [void][PerfWake]::SetThreadExecutionState([uint32]{CONTINUOUS}) }}",
+        pid = std::process::id(),
+    );
+    let child = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok();
+    // Said out loud, because the failure it causes names something else
+    // entirely: the screen goes dark mid-invocation and every run after
+    // it dies at `measure::SCROLL_CEILING` blaming a covered window.
+    if child.is_none() {
+        println!("  note: could not start the screen-awake helper — a dark screen will spoil runs");
+    }
+    Awake(child)
+}
+
+#[cfg(not(windows))]
+pub(super) fn keep_awake() -> Awake {
+    Awake(None)
+}
+
 /// The machine with no process attached: whether anybody could be looking
 /// at it, and the whole-machine processor counters.
 ///
@@ -605,8 +801,10 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
 /// on one side and not the other would read as a perfectly idle machine.
 #[derive(Debug, Clone, Copy, Default)]
 struct Host {
-    /// False says the session is locked: the secure desktop is another
-    /// desktop, and a process on this one sees no foreground window.
+    /// False says nobody could be looking at this desktop. The same
+    /// reading as [`Sample::interactive`], taken the same way and
+    /// subject to the same caveats — do not restate them here, one copy
+    /// of this drifting is what there is to avoid.
     interactive: bool,
     kernel: u64,
     user: u64,
@@ -632,12 +830,17 @@ using System;\n\
 using System.Runtime.InteropServices;\n\
 public static class PerfIdle {\n\
   [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();\n\
+  [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);\n\
   [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);\n\
 }\n\
 '@;\
-         $idle=0;$kernel=0;$user=0;\
+         $idle=0;$kernel=0;$user=0;$owner=0;\
          [void][PerfIdle]::GetSystemTimes([ref]$idle,[ref]$kernel,[ref]$user);\
-         $int=0; if([PerfIdle]::GetForegroundWindow() -ne [IntPtr]::Zero){$int=1};\
+         $front=[PerfIdle]::GetForegroundWindow();\
+         [void][PerfIdle]::GetWindowThreadProcessId($front,[ref]$owner);\
+         $lockpids=@((Get-Process LockApp,LogonUI -ErrorAction SilentlyContinue).Id);\
+         $int=0;\
+         if($front -ne [IntPtr]::Zero -and -not ($lockpids -contains $owner)){$int=1};\
          Write-Output \"int=$int k=$kernel u=$user i=$idle\"";
     let out = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
@@ -767,6 +970,7 @@ mod tests {
             display: "\\\\.\\DISPLAY2".into(),
             foreground: fg,
             interactive: true,
+            away_ms: 0,
             minimized: false,
             windowed: true,
             // One tick of a 24-thread machine: 24 cores * 100ms in 100ns units.
@@ -885,9 +1089,42 @@ mod tests {
         let complaint = series
             .conditions
             .complaint(&Limits::default())
-            .expect("three ticks with nothing in front at all");
-        assert!(complaint.contains("locked for 3 of 10"), "{complaint}");
+            .expect("three ticks in a row with nobody able to look");
+        assert!(
+            complaint.contains("for 3 of 10 sampled ticks"),
+            "{complaint}"
+        );
         assert!(series.conditions.complaint(&Limits::OPEN).is_none());
+    }
+
+    /// The secure desktop flashing past — a consent prompt, a focus
+    /// change — is not a lock, and refusing on it costs a retake plus
+    /// the wait before it.
+    #[test]
+    fn a_blink_of_the_secure_desktop_is_not() {
+        let mut series = Series::default();
+        for tick in 1..=10 {
+            let mut tick_sample = sample(100, true, tick, 0, tick * 24_000_000);
+            tick_sample.interactive = tick != 4 && tick != 5;
+            series.absorb(tick_sample);
+        }
+        assert_eq!(series.conditions.longest_blind, 2);
+        assert!(series.conditions.complaint(&Limits::default()).is_none());
+    }
+
+    /// Two short blinks are not one long one: the gate reads the longest
+    /// unbroken stretch, not the total.
+    #[test]
+    fn scattered_blinks_do_not_add_up_to_a_lock() {
+        let mut series = Series::default();
+        for tick in 1..=12 {
+            let mut tick_sample = sample(100, true, tick, 0, tick * 24_000_000);
+            tick_sample.interactive = tick % 5 != 0;
+            series.absorb(tick_sample);
+        }
+        assert_eq!(series.conditions.interactive, 10);
+        assert_eq!(series.conditions.longest_blind, 1);
+        assert!(series.conditions.complaint(&Limits::default()).is_none());
     }
 
     /// A window is mapped where the platform puts it and only then moved
