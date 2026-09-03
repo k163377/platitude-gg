@@ -193,6 +193,8 @@ impl RepoSession {
     ) -> Result<(), ()> {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let mut watch = PassWatch::operation(self);
+        // Before the lock, because reading them can go to git.
+        let tips = self.remote_tips(workdir, cancel).await;
         {
             // Reset graph state for the new stream and announce it under
             // one lock: everything that reads row numbers out of `shared`
@@ -212,6 +214,10 @@ impl RepoSession {
                 return Err(());
             }
             shared.builder = GraphBuilder::new();
+            // Seeded from the refs this graph is being drawn against, so
+            // every row the stream emits already carries the answer the
+            // menus read off it.
+            shared.publish_marks = PublishMarks::new(tips);
             shared.generation = generation;
             shared.applied.clear();
             shared.sent_rows.clear();
@@ -315,14 +321,24 @@ impl RepoSession {
         self.run_pass_step(PassStep::Swapping);
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
+        // Taken before the walk rather than asked per row: the walk runs
+        // across awaits and cannot hold this lock (`published::RemoteTips`).
+        let mut marks = PublishMarks::new(self.remote_tips(workdir, cancel).await);
         let mut rows: Vec<LogRow> = Vec::new();
 
         // See `run_direct_pass`: a fault left here stands in for the walk.
         let result = match self.pass_fault(PassStep::Swapping) {
             Some(error) => Err(error),
             None => {
-                self.collect_log(workdir, options, cancel, &mut builder, &mut rows)
-                    .await
+                self.collect_log(
+                    workdir,
+                    options,
+                    cancel,
+                    &mut builder,
+                    &mut marks,
+                    &mut rows,
+                )
+                .await
             }
         };
         let walked = match result {
@@ -386,6 +402,7 @@ impl RepoSession {
                     .zip(&rows)
                     .all(|(sent, fresh)| *sent == RowPrint::of(fresh));
             shared.builder = builder;
+            shared.publish_marks = marks;
             shared.applied = applied;
             if unchanged {
                 // The UI already shows exactly this: swapping would only

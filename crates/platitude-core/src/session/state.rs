@@ -160,6 +160,12 @@ pub(super) struct Footer {
 #[derive(Default)]
 pub(super) struct Shared {
     pub(super) builder: GraphBuilder,
+    /// Carries "a remote already has this" down the walk the `builder` is
+    /// drawing. Reset with it, and for the same reason: both are the
+    /// state of one pass over one window, and a pass that started over
+    /// must not inherit the last one's frontier
+    /// (`session::published::PublishMarks`).
+    pub(super) publish_marks: PublishMarks,
     /// The graph the consumer is on — the last pass that reached it, in
     /// the row numbers `builder`, `applied` and `sent_rows` speak in.
     /// Not `log_gen`: that counter is bumped before a pass takes this

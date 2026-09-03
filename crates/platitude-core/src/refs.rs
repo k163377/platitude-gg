@@ -274,6 +274,31 @@ pub async fn load(
     Ok(parse_refs(&out.stdout))
 }
 
+/// Just the commits the remote-tracking branches stand on.
+///
+/// A listing of its own rather than a read of [`load`]'s: this is asked by
+/// the graph pass, which runs before the refs read has landed and must not
+/// wait for one — and it is the narrow half, so it stays cheap where the
+/// whole listing is not (`JetBrains/kotlin`: 7,823 remote branches out of
+/// 54,286 refs).
+pub async fn remote_tips(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Vec<Oid>, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "for-each-ref",
+        "--format=%(objectname)",
+        "refs/remotes",
+    ]);
+    let out = executor.run(cmd, cancel).await?;
+    Ok(out
+        .stdout_utf8()
+        .lines()
+        .filter_map(|line| Oid::from_hex_str(line.trim()).ok())
+        .collect())
+}
+
 pub async fn head_state(
     executor: &GitExecutor,
     workdir: &Path,

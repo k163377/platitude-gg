@@ -57,6 +57,7 @@ fn nested_rows_add_up() {
         segments: Vec::new(),
         labels: Vec::new(),
         stash_ref: String::new(),
+        published: false,
     };
     assert_eq!(row.heap_bytes(), 70);
     let rows = vec![row];

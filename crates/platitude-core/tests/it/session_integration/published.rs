@@ -1,0 +1,179 @@
+//! The published mark the graph rows carry, against what git says.
+//!
+//! The mark exists so a menu opening on a row has the answer in the same
+//! frame (`session::published`). What makes it usable is that it agrees
+//! with `git rev-list --not --remotes` — the same question asked the slow
+//! way, and the one [`platitude_core::publish`] asks everywhere else. So
+//! every row here is checked against git rather than against a list
+//! written out by hand.
+
+use crate::support::remote::origin_and_clone;
+use crate::support::session::{CaptureSink, open_unawaited};
+use crate::support::{TestRepo, replay_rows};
+use platitude_core::session::SessionEvent;
+
+/// What `git rev-list --count <oid>^! --not --remotes` says: no commits
+/// outside the remotes means a remote already has this one.
+fn git_says_published(repo: &mut TestRepo, oid: &str) -> bool {
+    repo.git(&[
+        "rev-list",
+        "--count",
+        &format!("{oid}^!"),
+        "--not",
+        "--remotes",
+    ]) == "0"
+}
+
+async fn rows_of(sink: &CaptureSink, want: usize) -> Vec<platitude_core::session::LogRow> {
+    sink.wait_for("the rows", |evs| {
+        let rows = replay_rows(evs);
+        (rows.len() == want).then(|| rows.into_values().collect())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
+    let (_bare, mut work) = origin_and_clone();
+    // `origin/main` stands on "pushed"; the two after it are ours alone.
+    let pushed = work.commit_file_id("b.txt", "two\n", "pushed");
+    work.git(&["push", "origin", "main"]);
+    let local = work.commit_file_id("c.txt", "three\n", "local");
+    let tip = work.commit_file_id("d.txt", "four\n", "local tip");
+
+    let (sink, _session) = open_unawaited(&work);
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
+    })
+    .await;
+    // Root + pushed + local + tip.
+    let rows = rows_of(&sink, 4).await;
+
+    for row in &rows {
+        assert_eq!(
+            row.published,
+            git_says_published(&mut work, &row.oid_hex),
+            "row {} ({}) disagrees with `rev-list --not --remotes`",
+            row.row,
+            row.subject,
+        );
+    }
+
+    // ...and the fixture is the shape the assertion above needs to mean
+    // anything: some rows marked, some not.
+    let marked: Vec<&str> = rows
+        .iter()
+        .filter(|r| r.published)
+        .map(|r| r.subject.as_str())
+        .collect();
+    assert_eq!(marked, vec!["pushed", "root"], "newest first");
+    assert!(
+        rows.iter().any(|r| r.oid_hex == local && !r.published)
+            && rows.iter().any(|r| r.oid_hex == tip && !r.published),
+        "the two commits after the push are ours alone"
+    );
+    assert!(rows.iter().any(|r| r.oid_hex == pushed && r.published));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_repository_with_no_remote_has_nothing_published() {
+    let mut work = TestRepo::init();
+    work.commit_file("a.txt", "one\n", "root");
+    work.commit_file("b.txt", "two\n", "second");
+
+    let (sink, _session) = open_unawaited(&work);
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
+    })
+    .await;
+    let rows = rows_of(&sink, 2).await;
+
+    assert!(
+        rows.iter().all(|r| !r.published),
+        "nothing is published where no remote-tracking branch was read"
+    );
+    for row in &rows {
+        assert!(!git_says_published(&mut work, &row.oid_hex), "git agrees");
+    }
+}
+
+/// A push run outside the application moves `refs/remotes/...` here, and
+/// the poll that notices reads the refs and rebuilds the graph. The marks
+/// have to come back with it — otherwise the warnings would keep saying
+/// what was true before somebody else's terminal.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_push_from_outside_publishes_the_rows_it_reached() {
+    let (_bare, mut work) = origin_and_clone();
+    let mine = work.commit_file_id("b.txt", "two\n", "mine");
+
+    let (sink, session) = open_unawaited(&work);
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
+    })
+    .await;
+    let rows = rows_of(&sink, 2).await;
+    assert!(
+        !rows
+            .iter()
+            .find(|r| r.oid_hex == mine)
+            .expect("mine")
+            .published,
+        "nobody has it yet"
+    );
+
+    // Somebody's terminal, not this session's write queue.
+    work.git(&["push", "origin", "main"]);
+    assert!(git_says_published(&mut work, &mine), "git agrees it is out");
+    session.refresh_refs();
+
+    sink.wait_for("the rebuilt rows", |evs| {
+        let rows = replay_rows(evs);
+        (rows.len() == 2
+            && rows
+                .values()
+                .find(|r| r.oid_hex == mine)
+                .is_some_and(|r| r.published))
+        .then_some(())
+    })
+    .await;
+}
+
+/// A commit no branch is on any more, but a remote-tracking branch still
+/// reaches: the mark has to follow reachability, not the chips.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_commit_behind_the_remote_tip_is_marked_without_carrying_a_chip() {
+    let (_bare, mut work) = origin_and_clone();
+    let middle = work.commit_file_id("b.txt", "two\n", "middle");
+    let head = work.commit_file_id("c.txt", "three\n", "head");
+    work.git(&["push", "origin", "main"]);
+
+    let (sink, _session) = open_unawaited(&work);
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
+    })
+    .await;
+    let rows = rows_of(&sink, 3).await;
+
+    // Only the tip carries `origin/main`; the rows under it are published
+    // because the walk carried the mark down, not because they are named.
+    let middle_row = rows.iter().find(|r| r.oid_hex == middle).expect("middle");
+    assert!(middle_row.published, "reached from the remote tip");
+    assert!(
+        middle_row.labels.is_empty(),
+        "and it carries no chip of its own: {:?}",
+        middle_row.labels
+    );
+    assert!(
+        rows.iter()
+            .find(|r| r.oid_hex == head)
+            .expect("head")
+            .published
+    );
+    for row in &rows {
+        assert_eq!(row.published, git_says_published(&mut work, &row.oid_hex));
+    }
+}

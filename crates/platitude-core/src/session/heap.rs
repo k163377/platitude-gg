@@ -25,6 +25,11 @@ impl RepoSession {
                 shared.builder.heap_bytes(),
                 shared.builder.tracked_oids(),
             ),
+            Part::new(
+                "publish-marks",
+                shared.publish_marks.heap_bytes(),
+                shared.publish_marks.tracked_oids(),
+            ),
         ];
         drop(shared);
 

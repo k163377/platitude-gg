@@ -59,6 +59,7 @@ impl RowPrint {
             width,
             segments,
             labels: _,
+            published,
             stash_ref,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -86,6 +87,10 @@ impl RowPrint {
         }
         segments.len().hash(&mut h);
         stash_ref.hash(&mut h);
+        // A push from a terminal moves nothing else on the row, so without
+        // this a rebuild would call the new picture the old one and the
+        // warnings would stay as they were.
+        published.hash(&mut h);
         h.finish()
     }
 
@@ -150,6 +155,7 @@ mod tests {
                 held_elsewhere: false,
             }],
             stash_ref: String::new(),
+            published: false,
         };
         let print = RowPrint::of(&base);
 
@@ -172,6 +178,7 @@ mod tests {
             ("width", Box::new(|r| r.width = 9)),
             ("segments", Box::new(|r| r.segments[0].dashed = true)),
             ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
+            ("published", Box::new(|r| r.published = true)),
         ];
         for (field, change) in moved {
             let mut row = base.clone();

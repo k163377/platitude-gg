@@ -219,4 +219,14 @@ pub struct LogRow {
     /// Reflog selector (`stash@{n}`) when this row is a stash; empty for
     /// ordinary commits and the WIP row.
     pub stash_ref: String,
+    /// Whether a remote-tracking branch already reaches this commit —
+    /// what every "this rewrites published history" warning reads
+    /// (`session::published`). False on the WIP and stash rows, which no
+    /// remote has.
+    ///
+    /// **On the row rather than asked per question.** The walk that drew
+    /// the row already knows it, so a menu opened on the row has the
+    /// answer the moment it opens instead of a `git rev-list` later
+    /// (デザイン規約 §メニュー).
+    pub published: bool,
 }

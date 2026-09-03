@@ -15,6 +15,8 @@ use super::*;
 pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_unsized();
     let g = builder.push_virtual_root(&zero);
+    // Uncommitted work is on no remote, and there is no commit to ask about.
+    let published = false;
     LogRow {
         row: g.row,
         oid_hex: zero.to_hex(),
@@ -31,12 +33,15 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
         segments: g.segments,
         labels: Vec::new(),
         stash_ref: String::new(),
+        published,
     }
 }
 
 pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
     let g = builder.push_virtual_merging(&zero, head, incoming);
+    // Uncommitted work is on no remote, and there is no commit to ask about.
+    let published = false;
     LogRow {
         row: g.row,
         oid_hex: zero.to_hex(),
@@ -53,6 +58,7 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
         segments: g.segments,
         labels: Vec::new(),
         stash_ref: String::new(),
+        published,
     }
 }
 
@@ -83,10 +89,18 @@ impl StreamItem {
     /// pass, the buffered pass and the chunk emitter all come through
     /// here, and the three of them drawing a stash row differently is the
     /// bug this shape is here to make impossible.
-    pub(super) fn row(&self, pool: &crate::model::StrPool, builder: &mut GraphBuilder) -> LogRow {
-        let mut row = make_row(&self.meta, pool, builder, self.stash_ref.is_some());
+    pub(super) fn row(
+        &self,
+        pool: &crate::model::StrPool,
+        builder: &mut GraphBuilder,
+        marks: &mut PublishMarks,
+    ) -> LogRow {
+        let mut row = make_row(&self.meta, pool, builder, marks, self.stash_ref.is_some());
         if let Some(stash_ref) = &self.stash_ref {
             row.stash_ref = stash_ref.clone();
+            // A stash is off to one side of every branch and no remote
+            // carries it, whatever the commit it was built on.
+            row.published = false;
         }
         row
     }
@@ -160,9 +174,14 @@ fn make_row(
     commit: &CommitMeta,
     pool: &crate::model::StrPool,
     builder: &mut GraphBuilder,
+    marks: &mut PublishMarks,
     dashed_edge: bool,
 ) -> LogRow {
     let g = builder.push_with_edge_style(commit, dashed_edge);
+    // Asked here because this is where the parents are: the mark is
+    // carried down the walk from the rows a remote branch stands on
+    // (`session::published`).
+    let published = marks.mark(commit);
     LogRow {
         row: g.row,
         oid_hex: commit.oid.to_hex(),
@@ -186,5 +205,6 @@ fn make_row(
         segments: g.segments,
         labels: Vec::new(),
         stash_ref: String::new(),
+        published,
     }
 }

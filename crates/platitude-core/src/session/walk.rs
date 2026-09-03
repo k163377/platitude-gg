@@ -115,6 +115,7 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
         builder: &mut GraphBuilder,
+        marks: &mut PublishMarks,
         out: &mut Vec<LogRow>,
     ) -> Result<u32, GitError> {
         // An unborn HEAD has nothing to log (see stream_log).
@@ -165,7 +166,7 @@ impl RepoSession {
                     return;
                 }
                 for item in &sifter.take(&mut pending) {
-                    out.push(item.row(parser.pool(), builder));
+                    out.push(item.row(parser.pool(), builder, marks));
                 }
             })
             .await;
@@ -176,7 +177,7 @@ impl RepoSession {
             .finish()
             .map_err(|e| unreadable_walk(e.to_string()))?;
         for item in &sifter.take(&mut pending) {
-            out.push(item.row(parser.pool(), builder));
+            out.push(item.row(parser.pool(), builder, marks));
         }
         Ok(sifter.walked)
     }
@@ -257,7 +258,8 @@ impl RepoSession {
         let shared = &mut *guard;
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
-            let mut row = item.row(pool, &mut shared.builder);
+            let shared = &mut *shared;
+            let mut row = item.row(pool, &mut shared.builder, &mut shared.publish_marks);
             let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
             if !labels.is_empty() {
                 row.labels = labels.clone();

@@ -15,6 +15,7 @@ mod details;
 mod details_order;
 mod helper_binary;
 mod pass_watch;
+mod published;
 mod query;
 mod rebuild;
 mod standing_op;
