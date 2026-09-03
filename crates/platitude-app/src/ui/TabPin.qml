@@ -124,10 +124,13 @@ Rectangle {
     // The name goes quiet under the mark on the same terms the rows do. One ground rather than the rows' two: this one
     // is always the tab in front, so what is behind its name is its own.
     TabTitleFade {
+        id: pinFade
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: tabPin.metrics.markRoomFull + tabPin.fadeW
+        markX: pinFade.width - tabPin.metrics.markGap - tabPin.metrics.markSeat / 2
+        markR: tabPin.metrics.markSeat / 2
         rampW: tabPin.fadeW
         ground: tabPin.color
         visible: tabPin.nameUnderMark

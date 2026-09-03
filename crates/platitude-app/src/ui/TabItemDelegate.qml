@@ -207,6 +207,10 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: tabItem.metrics.markRoomFull + tabItem.fadeW
+        // The mark's own centre and the disc its wash paints, read off the mark rather than worked out again here —
+        // the two are the same circle or the name comes back on an edge the wash has not got.
+        markX: titleFade.width - tabItem.metrics.markGap - tabItem.metrics.markSeat / 2
+        markR: tabItem.metrics.markSeat / 2
         rampW: tabItem.fadeW
         ground: tabItem.current
             ? Theme.bgSelected

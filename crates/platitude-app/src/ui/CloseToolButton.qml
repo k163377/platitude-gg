@@ -41,17 +41,49 @@ HoverToolButton {
     bottomInset: closeButton.topInset
     leftInset: closeButton.topInset
     rightInset: closeButton.topInset
+    // **Round, and only the paint** (デザイン規約 §当たり判定): the seat above stays the square a hand is aimed at, and
+    // what is drawn inside it is a disc on the mark — the ink is a `✕`, which has no corners for a box to belong to,
+    // and a rounded square around it reads as a button someone drew a frame for.
+    //
+    // Drawn rather than a `Rectangle` with a radius, because the rim is carried out: full strength across the disc,
+    // then down to the dimmed step of itself at the edge (§暗く落とした段). A hard rim on a wash this faint is a ring —
+    // the one line the eye finds first in a band that has no other — and the same softness is what lets the quiet the
+    // name goes into meet it without a seam (`TabTitleFade`).
+    //
     // The armed ground goes under the style's own wash rather than replacing it, so a hand resting on an armed mark
     // still lights it (`HoverToolButton.washColor` is what paints on top).
-    background: Rectangle {
+    background: Item {
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
-        radius: closeButton.washRadius
-        color: closeButton.armed ? Theme.warningDim : "transparent"
-        Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            color: closeButton.washColor
+        InkCanvas {
+            id: washInk
+            anchors.centerIn: parent
+            width: Math.min(parent.width, parent.height)
+            height: washInk.width
+            /// The two coats, in the order they are laid: the ground a refused press leaves standing, and the wash the
+            /// pointer is answered with.
+            readonly property color armedTone: closeButton.armed ? Theme.warningDim : "transparent"
+            readonly property color washTone: closeButton.washColor
+            onWidthChanged: washInk.requestPaint()
+            onArmedToneChanged: washInk.requestPaint()
+            onWashToneChanged: washInk.requestPaint()
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                const r = width / 2
+                for (const tone of [washInk.armedTone, washInk.washTone]) {
+                    if (tone.a === 0)
+                        continue
+                    const coat = ctx.createRadialGradient(r, r, 0, r, r, r)
+                    coat.addColorStop(0, tone)
+                    coat.addColorStop(1 - Metrics.washRimShare, tone)
+                    coat.addColorStop(1, Qt.rgba(tone.r, tone.g, tone.b, tone.a * Metrics.dimFade))
+                    ctx.fillStyle = coat
+                    ctx.beginPath()
+                    ctx.arc(r, r, r, 0, 2 * Math.PI)
+                    ctx.fill()
+                }
+            }
         }
     }
     contentItem: Item {

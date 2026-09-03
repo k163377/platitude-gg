@@ -22,6 +22,10 @@ QtObject {
     // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段). Same 45% the `*Dim` colours already are — measured, not
     // chosen.
     readonly property real dimFade: 0.45
+    // How much of a round wash's radius is its rim — the run over which the paint comes down to `dimFade` of itself
+    // instead of stopping at a line (デザイン規約 §当たり判定). A quarter: less and the disc has an edge again, more and it
+    // stops being a disc.
+    readonly property real washRimShare: 0.25
     readonly property int tipDelayMs: 600
     readonly property int hoverKeepMs: 150
 
