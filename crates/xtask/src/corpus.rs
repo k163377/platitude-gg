@@ -146,6 +146,15 @@ fn fill(at: &Path) -> Result<(), String> {
     // config has none must still be able to build it.
     git(at, &["config", "user.name", "Corpus"])?;
     git(at, &["config", "user.email", "corpus@example.invalid"])?;
+    // **The checkout has to be the same bytes everywhere.** Git for
+    // Windows ships `core.autocrlf=true` in its system config, a fresh
+    // `init` inherits it, and the corpus then checks out CRLF here and
+    // LF on every other machine — a different working tree, a different
+    // `git status` to read, and different bytes in the diff pane, from
+    // object ids that are identical (fast-import writes blobs past the
+    // filter, so only the checkout moves). Measured on this machine
+    // before this line existed.
+    git(at, &["config", "core.autocrlf", "false"])?;
     let newest = import(at)?;
     // fast-import writes refs and nothing else: without this the work
     // tree is the empty one `init` left, and every tracked file reads as
