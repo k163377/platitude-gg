@@ -190,9 +190,64 @@ fn report(at: &Path) -> Result<(), String> {
         counted,
         token(at, &refs)?
     );
+    window(at)?;
     println!(
         "  measure it with: PG_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
         at.display()
+    );
+    Ok(())
+}
+
+/// How many rows the graph's window would draw, and what they carry.
+///
+/// **The window is the measurement.** Everything below rides on all
+/// 2,000 rows at once — the body and the credits `parse::log` asks for,
+/// the fallback font the first non-ASCII glyph loads, the second
+/// identity the details card shows — and every one of them is a
+/// dimension the corpus once had none of. Printed so a person can see
+/// what the corpus carries without opening the application, and so a
+/// generator that quietly stopped carrying one is visible here.
+fn window(at: &Path) -> Result<(), String> {
+    const ROWS: &str = "--max-count=2000";
+    let log = git(
+        at,
+        &[
+            "log",
+            ROWS,
+            "--date-order",
+            "HEAD",
+            "--branches",
+            "--remotes",
+            "--tags",
+            "--format=%aN\x1f%cN\x1f%s\x1f%(trailers:key=Co-authored-by,valueonly)\x1f%b\x1e",
+        ],
+    )?;
+    let mut rows = 0;
+    let mut wide = 0;
+    let mut credited = 0;
+    let mut applied = 0;
+    let mut body_bytes = 0;
+    for row in log.split('\x1e').filter(|row| !row.trim().is_empty()) {
+        let mut field = row.trim_start_matches('\n').split('\x1f');
+        let (author, committer) = (field.next().unwrap_or_default(), field.next());
+        let subject = field.next().unwrap_or_default();
+        let credits = field.next().unwrap_or_default();
+        let body = field.next().unwrap_or_default();
+        rows += 1;
+        if !author.is_ascii() || !subject.is_ascii() {
+            wide += 1;
+        }
+        if !credits.trim().is_empty() {
+            credited += 1;
+        }
+        if committer.is_some_and(|by| by != author) {
+            applied += 1;
+        }
+        body_bytes += body.trim().len();
+    }
+    println!(
+        "  window {rows} rows | body {body_bytes}B | {credited} credited | {applied} applied by \
+         another | {wide} needing a fallback font"
     );
     Ok(())
 }

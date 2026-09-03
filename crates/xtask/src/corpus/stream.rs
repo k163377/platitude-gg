@@ -86,14 +86,16 @@ fn side_branches(out: &mut dyn Write) -> io::Result<()> {
         for step in 0..shape::SIDE_LENGTH {
             let n = branch * shape::SIDE_LENGTH + step;
             let mark = FIRST_COMMIT_MARK + shape::TRUNK + 1 + n;
-            let (who, mail) = shape::author(n ^ 0x5B10);
+            let seed = n ^ 0x5B10;
+            let (who, mail) = shape::author(seed);
+            let (by, by_mail) = shape::committer(seed);
             let when = trunk_tip + (n + 1) * shape::STEP_SECS;
-            let subject = shape::subject(n ^ 0x5B10);
+            let message = shape::message(seed);
             writeln!(out, "commit refs/remotes/{name}")?;
             writeln!(out, "mark :{mark}")?;
             writeln!(out, "author {who} <{mail}> {when} +0000")?;
-            writeln!(out, "committer {who} <{mail}> {when} +0000")?;
-            write!(out, "data {}\n{subject}\n", subject.len())?;
+            writeln!(out, "committer {by} <{by_mail}> {when} +0000")?;
+            write!(out, "data {}\n{message}\n", message.len())?;
             if step == 0 {
                 writeln!(out, "from :{from}")?;
             }
@@ -126,13 +128,14 @@ fn history(out: &mut dyn Write) -> io::Result<Vec<u64>> {
     for n in 1..=shape::TRUNK {
         let mark = FIRST_COMMIT_MARK + n;
         let (name, mail) = shape::author(n);
+        let (by, by_mail) = shape::committer(n);
         let when = shape::FIRST_COMMIT_AT + n * shape::STEP_SECS;
-        let subject = shape::subject(n);
+        let message = shape::message(n);
         writeln!(out, "commit refs/heads/main")?;
         writeln!(out, "mark :{mark}")?;
         writeln!(out, "author {name} <{mail}> {when} +0000")?;
-        writeln!(out, "committer {name} <{mail}> {when} +0000")?;
-        write!(out, "data {}\n{subject}\n", subject.len())?;
+        writeln!(out, "committer {by} <{by_mail}> {when} +0000")?;
+        write!(out, "data {}\n{message}\n", message.len())?;
         // A second parent every so often. `from` is implicit for the
         // first parent: the ref already points at the previous commit.
         if n > shape::MERGE_EVERY && n % shape::MERGE_EVERY == 0 {
@@ -168,13 +171,14 @@ fn newest_commit(out: &mut dyn Write, holds: &[u64]) -> io::Result<Newest> {
     let n = shape::COMMITS;
     let mark = FIRST_COMMIT_MARK + n;
     let (name, mail) = shape::author(n);
+    let (by, by_mail) = shape::committer(n);
     let when = shape::FIRST_COMMIT_AT + n * shape::STEP_SECS;
-    let subject = shape::subject(n);
+    let message = shape::message(n);
     writeln!(out, "commit refs/heads/main")?;
     writeln!(out, "mark :{mark}")?;
     writeln!(out, "author {name} <{mail}> {when} +0000")?;
-    writeln!(out, "committer {name} <{mail}> {when} +0000")?;
-    write!(out, "data {}\n{subject}\n", subject.len())?;
+    writeln!(out, "committer {by} <{by_mail}> {when} +0000")?;
+    write!(out, "data {}\n{message}\n", message.len())?;
     let mut paths = Vec::new();
     for file in 0..shape::NEWEST_FILES {
         // Offset into the path pool by a stride the history's own

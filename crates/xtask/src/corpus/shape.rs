@@ -182,7 +182,125 @@ pub(super) fn subject(n: u64) -> String {
     let kind = ["fix", "feat", "test", "chore", "refactor"][(mix(n) % 5) as usize];
     let head = format!("{kind}: ");
     let body = words_to(n ^ 0x9E37, want.saturating_sub(head.len()), ' ');
-    format!("{head}{body}")
+    format!("{}{head}{body}", opener(n))
+}
+
+/// What a subject opens with, which is nothing on all but a few.
+///
+/// **The emoji is the expensive one.** No Latin UI family carries it, so
+/// the row that holds it hands it to the system's colour font, whose
+/// glyphs are cached as ARGB rather than as 8-bit alpha. The em dash is
+/// the cheap half of the same axis: the family serves it itself.
+fn opener(n: u64) -> &'static str {
+    if mix(n ^ 0x000E_3031).is_multiple_of(EMOJI_EVERY) {
+        return EMOJI[(mix(n ^ 0x000E_3032) % EMOJI.len() as u64) as usize];
+    }
+    if mix(n ^ 0xDA5_117).is_multiple_of(DASH_EVERY) {
+        return "— ";
+    }
+    ""
+}
+
+/// One subject in this many opens with an emoji, and one in this many
+/// with an em dash. The reference repository's window carries three
+/// non-ASCII subjects in two thousand rows, two of them emoji.
+const EMOJI_EVERY: u64 = 1_000;
+const DASH_EVERY: u64 = 1_000;
+const EMOJI: [&str; 2] = ["🍒 ", "🎯 "];
+
+/// The whole commit message: the subject, a body, and the credits.
+///
+/// **The body is not decoration.** `parse::log` asks the graph walk for
+/// `%b` and the `Co-authored-by` trailers on every one of the window's
+/// 2,000 rows, and what comes back is held three times over — in
+/// `CommitMeta`, in `LogRow` inside the sent-row cache, and again in
+/// `RowItem` — before the details pane asks for `%B`. A corpus whose
+/// every message is one line carries none of that and measures none of
+/// it.
+pub(super) fn message(n: u64) -> String {
+    let mut text = subject(n);
+    let want = body_bytes_of(n);
+    if want > 0 {
+        text.push_str("\n\n");
+        text.push_str(&wrapped(n ^ 0xB0D_1E5, want));
+    }
+    let credits = co_authors(n);
+    if credits > 0 {
+        text.push('\n');
+        for credit in 0..credits {
+            let (who, mail) = author(mix(n ^ (0xC0_A0_71 + credit)));
+            text.push_str(&format!("\nCo-authored-by: {who} <{mail}>"));
+        }
+    }
+    text
+}
+
+/// How long a body runs, in bytes, at the shares the reference
+/// repository holds them: 32 in the middle, 1,178 at the 95th, 6,072 at
+/// the longest, and 240 bytes a row on average over the window.
+const BODY_SIZES: [(u64, u64); 6] = [
+    (50, 32),
+    (25, 160),
+    (15, 480),
+    (7, 1_100),
+    (2, 2_200),
+    (1, 6_000),
+];
+
+/// How wide a body's lines run before they wrap. A body is paragraphs,
+/// and six thousand characters on one line is a different layout
+/// problem from ninety short ones.
+const BODY_COLUMNS: usize = 68;
+
+/// Rows in a thousand that credit somebody besides the author. The
+/// reference repository's window carries 172 in two thousand; the rate
+/// is above that because the rows the window holds are not the rows
+/// this is drawn over, and the corpus may not come out lighter (86
+/// measured 151 of 2,000 in the window, which was under).
+const CO_AUTHORED_PER_MILLE: u64 = 105;
+
+fn body_bytes_of(n: u64) -> usize {
+    let draw = mix(n ^ 0xB0D_1E5) % 100;
+    let mut seen = 0;
+    for (share, bytes) in BODY_SIZES {
+        seen += share;
+        if draw < seen {
+            return (bytes / 2 + mix(n ^ 0x1E_46) % bytes) as usize;
+        }
+    }
+    0
+}
+
+fn co_authors(n: u64) -> u64 {
+    if mix(n ^ 0xC0_A0_71) % 1_000 >= CO_AUTHORED_PER_MILLE {
+        return 0;
+    }
+    1 + mix(n ^ 0x71_C0) % 2
+}
+
+/// Words to about `want` bytes, wrapped at [`BODY_COLUMNS`].
+fn wrapped(seed: u64, want: usize) -> String {
+    let mut text = String::with_capacity(want + 16);
+    let mut n = 0u64;
+    let mut column = 0usize;
+    while text.len() < want {
+        let word = WORDS[(mix(seed ^ (n << 32)) % WORDS.len() as u64) as usize];
+        if column > 0 && column + 1 + word.len() > BODY_COLUMNS {
+            text.push('\n');
+            column = 0;
+        } else if column > 0 {
+            text.push(' ');
+            column += 1;
+        }
+        text.push_str(word);
+        column += word.len();
+        n += 1;
+    }
+    text.truncate(want);
+    while text.ends_with(' ') || text.ends_with('\n') {
+        text.pop();
+    }
+    text
 }
 
 /// A name of about `want` characters that no other `n` can answer.
@@ -202,8 +320,20 @@ fn unique_name(seed: u64, want: usize, n: u64) -> String {
 /// at a median of 30 characters counting `refs/tags/`, and a tail well
 /// past that.
 pub(super) fn tag(n: u64) -> String {
-    unique_name(n ^ 0x7A6_5F1, spread(n ^ 0x7A6_5F1, 8, 13, 40), n)
+    let name = unique_name(n ^ 0x7A6_5F1, spread(n ^ 0x7A6_5F1, 8, 13, 40), n);
+    if ZERO_WIDTH_TAGS.contains(&n) {
+        // A character the sidebar renders, sorts and elides, and that a
+        // reader cannot see — the reference repository carries two of
+        // them and a name that looks equal to another is a name that
+        // compares unequal.
+        return name.replacen('-', "-\u{200B}", 1);
+    }
+    name
 }
+
+/// Which tags carry a zero-width space, as two of the reference
+/// repository's do.
+const ZERO_WIDTH_TAGS: [u64; 2] = [7, 20_101];
 
 /// A remote-tracking branch, under the same remote name the reference
 /// repository uses for the bulk of its own.
@@ -212,13 +342,64 @@ pub(super) fn remote_branch(n: u64) -> String {
     format!("JetBrains/rr/{}", unique_name(n ^ 0xABCD, want, n))
 }
 
+/// Author names that are not ASCII, and why they have to exist.
+///
+/// **The graph pane has no gate of the kind the diff pane keeps.**
+/// `encode::has_wide` exists so that setting a wide glyph — and with it
+/// loading a fallback font, tens of megabytes of working set in every
+/// window, repository open or not (`DiffTextMetrics`, measured) —
+/// happens only where a diff carries one. Nothing asks that question
+/// before the graph draws a row's author or subject, so the first
+/// visible row holding a glyph the UI family cannot serve loads the
+/// fallback at startup. A corpus of pure ASCII never loads one and so
+/// never weighs one.
+///
+/// Four scripts, because they land on different fallbacks: Latin-1,
+/// Latin Extended-A, Cyrillic and CJK. The emoji is in [`subject`].
+const ACCENTED: [&str; 12] = [
+    "Zoltán Bakó",
+    "Jürgen Kästner",
+    "Michał Zieliński",
+    "Tomáš Doležal",
+    "Сергей Волков",
+    "Анна Крылова",
+    "梶原 詩織",
+    "林 承恩",
+    "Björn Öhman",
+    "Renée Lévesque",
+    "Ana Muñoz",
+    "Ólafur Þórðarson",
+];
+
 /// An author. The reference repository has 277 of them and their names
-/// run 15 characters in the middle.
+/// run 15 characters in the middle; 12 of these carry a glyph outside
+/// ASCII, which lands on about one window row in twenty-three, against
+/// the reference repository's one in twenty-two.
 pub(super) fn author(n: u64) -> (String, String) {
     let who = n % AUTHORS;
-    let name = words_to(who ^ 0x4155_5448, spread(who, 9, 5, 8), ' ');
-    let mail = format!("{who}@example.com");
-    (name, mail)
+    (name_of(who), format!("{who}@example.com"))
+}
+
+/// Who committed it, which is not who wrote it on [`APPLIED_SHARE`]
+/// rows in a hundred — a patch somebody else applied, which the details
+/// card shows as a second identity beside the author's.
+pub(super) fn committer(n: u64) -> (String, String) {
+    if mix(n ^ 0xC0_11_17) % 100 >= APPLIED_SHARE {
+        return author(n);
+    }
+    let who = mix(n ^ 0x05EC_011D) % AUTHORS;
+    (name_of(who), format!("{who}@example.com"))
+}
+
+/// Rows in a hundred whose committer is not their author. The reference
+/// repository's window carries 945 in 2,000.
+const APPLIED_SHARE: u64 = 47;
+
+fn name_of(who: u64) -> String {
+    match ACCENTED.get(who as usize) {
+        Some(name) => (*name).to_string(),
+        None => words_to(who ^ 0x4155_5448, spread(who, 9, 5, 8), ' '),
+    }
 }
 
 /// How many bytes body `n` runs to, from the shares in [`SIZES`].
@@ -300,7 +481,7 @@ pub(super) fn body_edited(n: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{author, body_edited, path, remote_branch, subject, tag};
+    use super::{author, body_edited, committer, message, path, remote_branch, subject, tag};
 
     /// The percentile of a sample, taken the way the record's own
     /// numbers are read.
@@ -335,6 +516,60 @@ mod tests {
         let mut remotes = lengths(7_000, |n| format!("refs/remotes/{}", remote_branch(n)));
         let p50 = at(&mut remotes, 50);
         assert!((30..=50).contains(&p50), "remote p50 was {p50}");
+    }
+
+    /// **The glyphs that load a fallback font.** The graph pane draws
+    /// every row's author and subject with no gate of the kind the diff
+    /// pane keeps (`encode::has_wide`), so the first visible row with a
+    /// glyph the UI family cannot serve loads the system fallback —
+    /// tens of megabytes of working set, measured. A corpus of pure
+    /// ASCII never loads one, and the reference repository loads two.
+    #[test]
+    fn a_window_of_rows_carries_the_glyphs_that_load_a_fallback() {
+        let names = (0..2_000).filter(|n| !author(*n).0.is_ascii()).count();
+        assert!((60..=140).contains(&names), "{names} author names of 2,000");
+        let subjects = (0..2_000).filter(|n| !subject(*n).is_ascii()).count();
+        assert!((2..=12).contains(&subjects), "{subjects} subjects of 2,000");
+        // One of them outside the basic multilingual plane: that is the
+        // colour font, whose glyphs are cached as ARGB rather than as
+        // 8-bit alpha.
+        let emoji = (0..20_000).any(|n| subject(n).chars().any(|c| c as u32 > 0xFFFF));
+        assert!(
+            emoji,
+            "no subject reaches past the basic multilingual plane"
+        );
+        // And a ref name the eye cannot tell from its neighbour.
+        let invisible = (0..super::TAGS).any(|n| tag(n).contains('\u{200B}'));
+        assert!(invisible, "no tag carries a zero-width space");
+    }
+
+    /// The reference repository's window carries 481,089 bytes of
+    /// message body and 172 rows crediting somebody besides the author.
+    /// `parse::log` asks for both on every row and holds what comes back
+    /// three times over, so a one-line message measures none of it.
+    #[test]
+    fn messages_carry_the_body_and_the_credits_a_window_holds() {
+        let mut bodies = 0;
+        let mut credited = 0;
+        for n in 0..2_000 {
+            let whole = message(n);
+            bodies += whole.len() - subject(n).len();
+            if whole.contains("Co-authored-by: ") {
+                credited += 1;
+            }
+        }
+        // Never lighter than the reference repository, on either count.
+        assert!(bodies >= 481_089, "{bodies} bytes of body over 2,000 rows");
+        assert!(credited >= 172, "{credited} rows credited of 2,000");
+    }
+
+    /// Nearly half the reference repository's rows were applied by
+    /// somebody other than their author, and the details card shows the
+    /// two identities separately.
+    #[test]
+    fn nearly_half_the_rows_were_committed_by_somebody_else() {
+        let applied = (0..2_000).filter(|n| committer(*n) != author(*n)).count();
+        assert!((820..=1_060).contains(&applied), "{applied} of 2,000");
     }
 
     #[test]
