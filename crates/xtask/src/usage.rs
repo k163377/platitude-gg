@@ -145,11 +145,22 @@ const TAIL: &str = "  shipped [--no-build]
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
-  corpus [--force] [--path <dir>]
+  corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it
-      is. 200,000 commits and 50,000 refs from one fast-import stream —
-      about a hundred seconds and 94MB, once. A run that finds it
-      already there does nothing.
+      is. 200,000 commits, 50,000 refs and a hundred thousand tracked
+      files from one fast-import stream — about ten minutes and six
+      gigabytes, once. A run that finds it already there does nothing,
+      and prints what it found: the counts, the token, the working
+      tree, the remotes, the graph the window would draw, the text its
+      rows carry and what its diffs cost.
+      --against takes those same readings of another repository and
+      writes nothing to it, which is how the distance table in
+      ci/baseline/perf-windows-x64.md is taken: both of its columns
+      have to come from one implementation, or they are two
+      definitions rather than one comparison.
+      The ten minutes is nine and a half million objects through
+      fast-import, which is single-threaded; the build prints its
+      phases so that stays visible.
       It is generated rather than cloned because a clone of somebody's
       working repository is fetched behind the measurement's back, and a
       fetch changes the rows the graph draws, the ref tables the memory

@@ -9,9 +9,16 @@
 //! being comparable without anything visibly happening
 //! (ci/baseline/perf-windows-x64.md §この記録の読み方 2).
 //!
-//! **Why it is not in git.** It is 200,000 commits and 50,000 refs. It
-//! is built in under a minute from `shape`'s constants, so the thing
-//! worth keeping is the generator, not its output.
+//! **Why it is not in git.** It is 200,000 commits, 50,000 refs and a
+//! hundred thousand tracked files — six gigabytes, built in ten minutes
+//! from `shape`'s constants. The generator is the thing worth keeping,
+//! not its output.
+//!
+//! **What the ten minutes is.** Nine and a half million objects through
+//! `git fast-import`, which is single-threaded: the machine sits at a
+//! tenth of its cores for the whole build and no amount of work on this
+//! side moves that. What moves it is asking for fewer objects, which is
+//! a fidelity decision rather than a speed one (`shape`, `tree`).
 //!
 //! **Why it is built once.** Every seat measures the same corpus, so it
 //! sits beside the primary checkout's `.git` rather than in any one
@@ -24,6 +31,7 @@ mod shape;
 mod stream;
 mod tree;
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -40,6 +48,7 @@ const DIR_NAME: &str = ".pg-perf-corpus";
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut force = false;
     let mut path = None;
+    let mut reference = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -50,9 +59,21 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--path needs a directory")?,
                 ));
             }
+            "--against" => {
+                i += 1;
+                reference = Some(PathBuf::from(
+                    args.get(i).ok_or("--against needs a repository")?,
+                ));
+            }
             other => return Err(format!("corpus does not take {other:?}")),
         }
         i += 1;
+    }
+    if let Some(other) = reference {
+        if force || path.is_some() {
+            return Err("--against only reads; it takes neither --force nor --path".to_string());
+        }
+        return against(&other);
     }
     let at = path.map_or_else(default_path, Ok)?;
     if force && at.exists() {
@@ -317,14 +338,181 @@ fn report(at: &Path) -> Result<(), String> {
         counted,
         token(at, &refs)?
     );
-    worktree(at)?;
-    branch_tree(at)?;
-    graph(at)?;
-    window(at)?;
+    readings(at)?;
     println!(
         "  measure it with: PG_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
         at.display()
     );
+    Ok(())
+}
+
+/// The same readings, taken of a repository this generator did not
+/// build.
+///
+/// **A distance table is only worth reading if both of its columns came
+/// from here.** Every row of one is a definition — which commits the
+/// window holds, what counts as an open lane, which of them carry a
+/// chip — and two implementations of a definition are two definitions,
+/// which is how a table comes to compare a corpus against a reading of
+/// the reference repository that was never taken the same way.
+///
+/// **It only reads.** The reference repository is somebody's working
+/// clone: nothing here writes to it, down to the status (`worktree`).
+fn against(at: &Path) -> Result<(), String> {
+    let refs = git(at, &["show-ref"])?;
+    let commits = git(at, &["rev-list", "--all", "--count"])?;
+    let counted = refs.lines().filter(|line| !line.is_empty()).count();
+    println!("reference: {}", at.display());
+    println!("  commits {} | refs {counted}", commits.trim());
+    readings(at)
+}
+
+/// What both columns of the distance table are made of.
+fn readings(at: &Path) -> Result<(), String> {
+    tags(at)?;
+    worktree(at)?;
+    branch_tree(at)?;
+    graph(at)?;
+    window(at)?;
+    diffs(at)
+}
+
+/// What the timed diff costs — over the whole window, not at the tip.
+///
+/// **The harness opens the first changed file of the first row**
+/// (`--selection first`, `perf::options`), so one file's size is the
+/// operation-response number. Read at the tip alone it says nothing
+/// about a repository whose tip moves: the reference repository's
+/// newest row changes two files with a 56KB first file, and the same
+/// question asked a week earlier answered seventy-five files and 25KB.
+/// The window's distribution is the part that holds still, and it is
+/// what a generated tip has to sit inside.
+fn diffs(at: &Path) -> Result<(), String> {
+    let raw = git(
+        at,
+        &[
+            "log",
+            "--max-count=2000",
+            "--date-order",
+            "HEAD",
+            "--branches",
+            "--remotes",
+            "--tags",
+            "--format=commit %H",
+            "--raw",
+            "--no-abbrev",
+            "--no-renames",
+        ],
+    )?;
+    let mut counts: Vec<u64> = Vec::new();
+    let mut opened: Vec<&str> = Vec::new();
+    let mut here = 0;
+    let mut first = None;
+    for line in raw.lines() {
+        if line.starts_with("commit ") {
+            if here > 0 {
+                counts.push(here);
+                if let Some(oid) = first {
+                    opened.push(oid);
+                }
+            }
+            here = 0;
+            first = None;
+        } else if let Some(fields) = line.strip_prefix(':') {
+            here += 1;
+            // `:<srcmode> <dstmode> <srcsha> <dstsha> <status>\t<path>`,
+            // and a deletion's destination is all zeroes — there is no
+            // file to open for it.
+            if first.is_none() {
+                first = fields
+                    .split_whitespace()
+                    .nth(3)
+                    .filter(|oid| !oid.bytes().all(|byte| byte == b'0'));
+            }
+        }
+    }
+    if here > 0 {
+        counts.push(here);
+        if let Some(oid) = first {
+            opened.push(oid);
+        }
+    }
+    let mut bytes = sizes(at, &opened)?;
+    counts.sort_unstable();
+    bytes.sort_unstable();
+    let at_percent = |of: &[u64], percent: usize| {
+        of.get(of.len() * percent / 100)
+            .copied()
+            .unwrap_or_default()
+    };
+    println!(
+        "  diffs {} rows | files/commit p50 {} p90 {} max {} | opened file p50 {}B p90 {}B max {}B",
+        counts.len(),
+        at_percent(&counts, 50),
+        at_percent(&counts, 90),
+        counts.last().copied().unwrap_or_default(),
+        at_percent(&bytes, 50),
+        at_percent(&bytes, 90),
+        bytes.last().copied().unwrap_or_default(),
+    );
+    Ok(())
+}
+
+/// How large each of those blobs is, asked once rather than once each:
+/// two thousand `cat-file` processes cost more than the reading is
+/// worth, and `--batch-check` answers them all down one pipe.
+fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
+    if oids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut child = Command::new("git")
+        .current_dir(at)
+        .args(["cat-file", "--batch-check=%(objectsize)"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to run git cat-file: {e}"))?;
+    let asking = child.stdin.take().ok_or("git cat-file took no input")?;
+    let mut asking = std::io::BufWriter::new(asking);
+    for oid in oids {
+        // **One `\n` a line, never the platform's ending.** git takes
+        // the whole line as the name of an object, so a carriage return
+        // makes every one of them `missing`.
+        writeln!(asking, "{oid}").map_err(|e| format!("could not ask about {oid}: {e}"))?;
+    }
+    drop(asking);
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("git cat-file failed: {e}"))?;
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect())
+}
+
+/// What the tags are, and how many remotes there are to read them from.
+///
+/// **An annotated tag is a second object and a second advertisement.**
+/// `ls-remote` gives it a line of its own and a peeled one, which is the
+/// pairing `remote::parse_ls_remote_tags` exists to do and the size
+/// `session::RemoteTagIndex` is built at; a repository whose tags are
+/// lightweight reaches neither, and one with no remote configured never
+/// asks (`session::auto_fetch::known_to_have_no_remote`).
+fn tags(at: &Path) -> Result<(), String> {
+    let kinds = git(at, &["for-each-ref", "--format=%(objecttype)", "refs/tags"])?;
+    let total = kinds.lines().filter(|kind| !kind.is_empty()).count();
+    let annotated = kinds.lines().filter(|kind| *kind == "tag").count();
+    let remotes = git(at, &["remote"])?
+        .lines()
+        .filter(|name| !name.is_empty())
+        .count();
+    let share = if total == 0 {
+        0.0
+    } else {
+        annotated as f64 * 100.0 / total as f64
+    };
+    println!("  tags {total} | {annotated} annotated ({share:.1}%) | {remotes} remotes configured");
     Ok(())
 }
 
@@ -350,9 +538,14 @@ fn packs(at: &Path) -> Result<(), String> {
 ///
 /// **`-uall` walks it.** `status::read` asks for every untracked path,
 /// so git stats each of these and matches it against the ignore rules
-/// before deciding it has nothing to report. The reference repository
-/// carries about 78,000 of them and that is a large part of why its
-/// status takes a second where a corpus without them takes half of one.
+/// before deciding it has nothing to report.
+///
+/// **Deliberately more than the reference repository has.** That clone
+/// carries 278 ignored paths, because nothing has been built in it; a
+/// checkout somebody works in carries the output of every build, and
+/// this is the axis the application pays for on a machine in use. The
+/// corpus is heavier here on purpose; how much of its status this
+/// accounts for has not been measured on its own.
 fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
     if tracked.is_empty() {
         return Ok(());
@@ -375,16 +568,38 @@ fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
 ///
 /// `status::read` runs `git status --porcelain=v2 -z --branch -uall` and
 /// pays one `lstat` per tracked file; the index carries one entry each.
-/// The reference repository is 106,581 files, a 19MB index and a
-/// one-second status, and a corpus that is a fraction of that is
-/// measuring a fraction of the startup it claims to.
+/// The reference repository is 106,581 files and a 17MB index, and a
+/// corpus that is a fraction of that is measuring a fraction of the
+/// startup it claims to.
+///
+/// **The time is a reading of the walk, not of a clone's settings.**
+/// That repository answers in 0.28s with `core.fsmonitor` off and 0.76s
+/// with it on, which is how it is configured — the daemon costs it half
+/// a second rather than saving any. A corpus that copied the setting
+/// would be measuring a daemon's health on the day.
 fn worktree(at: &Path) -> Result<(), String> {
     let tracked = git(at, &["ls-files"])?.lines().count();
     let index = std::fs::metadata(at.join(".git").join("index"))
         .map(|meta| meta.len())
         .unwrap_or_default();
     let began = std::time::Instant::now();
-    git(at, &["status", "--porcelain=v2", "-z", "--branch", "-uall"])?;
+    // **`--no-optional-locks`, because the application never runs a
+    // status without it** (`process::executor::FIXED_ARGS`), and
+    // because this same reading is taken of repositories that are only
+    // being read — a status without it rewrites their index. It is not
+    // a timing device: measured warm on the reference repository, with
+    // and without are both 0.76s.
+    git(
+        at,
+        &[
+            "--no-optional-locks",
+            "status",
+            "--porcelain=v2",
+            "-z",
+            "--branch",
+            "-uall",
+        ],
+    )?;
     let status = began.elapsed();
     let objects = git(at, &["count-objects", "-vH"])?;
     let read = |key: &str| {
@@ -398,6 +613,23 @@ fn worktree(at: &Path) -> Result<(), String> {
     let dirs = git(at, &["ls-tree", "-r", "-d", "--name-only", "HEAD"])?
         .lines()
         .count();
+    // The size histogram, because "a hundred thousand files" is not one
+    // reading: a tree of that many stubs and a tree of that many
+    // sources cost different amounts to check out, to status and to
+    // open, and the record's claim is about the histogram rather than
+    // the count.
+    let mut bytes: Vec<u64> = git(at, &["ls-tree", "-r", "--format=%(objectsize)", "HEAD"])?
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect();
+    bytes.sort_unstable();
+    let at_percent = |percent: usize| {
+        bytes
+            .get(bytes.len() * percent / 100)
+            .copied()
+            .unwrap_or_default()
+    };
+    let total: u64 = bytes.iter().sum();
     let packs = std::fs::read_dir(at.join(".git").join("objects").join("pack"))
         .map(|entries| {
             entries
@@ -422,6 +654,15 @@ fn worktree(at: &Path) -> Result<(), String> {
         status.as_secs_f64(),
         read("in-pack:"),
         read("size-pack:")
+    );
+    println!(
+        "  file bytes p25 {} p50 {} p75 {} p90 {} max {} | {}MB of tree",
+        at_percent(25),
+        at_percent(50),
+        at_percent(75),
+        at_percent(90),
+        bytes.last().copied().unwrap_or_default(),
+        total / 1_000_000,
     );
     Ok(())
 }
@@ -581,18 +822,41 @@ fn window(at: &Path) -> Result<(), String> {
 /// before they did answers every other check — it has a `.git`, it has
 /// refs, it prints a token. The counts are what say it is stale, and
 /// the answer is always the same one, so it is in the message.
+///
+/// **Three counts, not the whole shape.** A generator whose lane
+/// widths or file sizes moved leaves all three standing, and what says
+/// *that* is the token the record carries. These are the ones a
+/// half-finished or superseded build gets wrong on its own.
 fn holds_its_shape(commits: &str, refs: usize, at: &Path) -> Result<(), String> {
     let wanted_refs = shape::REFS as usize;
     let wanted_commits = shape::COMMITS.to_string();
-    if commits == wanted_commits && refs == wanted_refs {
-        return Ok(());
+    let tracked = git(at, &["ls-files"])?.lines().count();
+    let wanted_tracked = tree::TRACKED as usize;
+    let off = |what: &str, is: String, wants: String| {
+        format!(
+            "the corpus at {} has {is} {what} where this generator describes {wants} — it was \
+             built by another version of it, or a build of it did not finish. Rebuild with: \
+             cargo xtask corpus --force",
+            at.display()
+        )
+    };
+    if commits != wanted_commits {
+        return Err(off("commits", commits.to_string(), wanted_commits));
     }
-    Err(format!(
-        "the corpus at {} is {commits} commits and {refs} refs, where this generator describes \
-         {wanted_commits} and {wanted_refs} — it was built by another version of it, or a build \
-         of it did not finish. Rebuild with: cargo xtask corpus --force",
-        at.display()
-    ))
+    if refs != wanted_refs {
+        return Err(off("refs", refs.to_string(), wanted_refs.to_string()));
+    }
+    // The tracked count is the third leg because it is the one the
+    // record's startup number rests on, and the one a half-written
+    // checkout gets wrong while the counts above still answer.
+    if tracked.abs_diff(wanted_tracked) > tree::SPARE as usize {
+        return Err(off(
+            "tracked files",
+            tracked.to_string(),
+            wanted_tracked.to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// The same fingerprint `perf` takes, so the two agree on what this is.
