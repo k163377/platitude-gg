@@ -1,7 +1,7 @@
 //! Where a write that walks the history comes to rest, and what is left
 //! standing when git stops in the middle of one.
 
-use super::Verb;
+use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     // Half of these the picture holds — which row is lit, and whose
@@ -50,6 +50,22 @@ pub(super) const TABLE: &[Verb] = &[
         name: "rebase-stops",
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true",
+    },
+    // The menu before any of that runs, and what its `rebase` row says
+    // about the range. **The picture cannot date the note**: one read
+    // off the rows as the card opens and one arriving a frame later
+    // photograph the same, and only the second moves the card's edge out
+    // from under the hand (規約 §行が読む答えはどこから来るか). Two runs
+    // because one answer is not an answer — `v0.2` sits on `origin/main`
+    // so nothing above it is pushed, and `feature/topic-a` forks below
+    // that tip so the range reaches back over it.
+    Verb {
+        name: "integrate-menu",
+        when: &[(
+            Arg::Is("v0.2:tag"),
+            "integrate_menu ref=v0.2 offered=true pushed=false",
+        )],
+        plain: "integrate_menu ref=feature/topic-a offered=true pushed=true",
     },
     // The same landing reached through a carry, where the stash the
     // rewrite took out of its own way is still standing. Nothing

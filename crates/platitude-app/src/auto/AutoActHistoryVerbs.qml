@@ -25,7 +25,9 @@ Item {
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
+    readonly property var tagsModel: driver.tagsModel
     readonly property var stashesModel: driver.stashesModel
+    readonly property var refRebaseItem: driver.refRebaseItem
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
@@ -145,9 +147,11 @@ Item {
                 if (act === "drop-last-commit")
                     driver.barrierNotice.start()
             }
+        } else if (act === "integrate-menu") {
+            acts.openIntegrateMenu(arg)
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"
-                   || act === "revert-stops" || act === "integrate-menu") {
+                   || act === "revert-stops") {
             // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
             if (act === "revert-commit" || act === "revert-stops") {
                 // The click that opens this menu selects the row too (GraphRowDelegate), so the hook takes both steps a
@@ -194,6 +198,23 @@ Item {
         }
         return true
     }
+    /// The ref menu left standing on what a merge or a rebase would bring in — a branch by bare name, a tag with
+    /// `:tag` after it.
+    ///
+    /// The report is the `rebase` row's note, which the picture holds but cannot date: the note has to be on the row
+    /// as the card is measured, and one arriving a frame later reads the same in a photograph (規約 §メニュー).
+    /// **Both halves are runs of their own** — a `pushed=false` alone passes an implementation that never asks, and a
+    /// `pushed=true` alone passes one that always says so.
+    function openIntegrateMenu(arg) {
+        const onTag = arg.endsWith(":tag")
+        const name = onTag ? arg.substring(0, arg.length - 4) : arg
+        const oid = onTag ? tagsModel.oidOfName(name) : branchesModel.oidOfName(name)
+        page.openRefMenu(onTag ? "tag" : "branch", name, name, oid)
+        Harness.report("integrate_menu ref=" + name
+                          + " offered=" + refRebaseItem.offered
+                          + " pushed=" + (refRebaseItem.note !== ""))
+    }
+
     /// Which commit the four reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset
     /// to where the branch already stands moves nothing, so the landing below would never come — and an empty name
     /// would reach git as `reset ''`.

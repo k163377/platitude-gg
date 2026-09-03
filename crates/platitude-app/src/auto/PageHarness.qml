@@ -93,6 +93,7 @@ Item {
             refUpstreamItem: harness.refRowMenu.upstreamItem
             refStashDropItem: harness.refRowMenu.stashDropItem
             refSwitchItem: harness.refRowMenu.switchItem
+            refRebaseItem: harness.refRowMenu.rebaseItem
             refPushTagItem: harness.refRowMenu.pushTagItem
             refTagDeleteItem: harness.refRowMenu.deleteTagItem
             refTagHereItem: harness.refRowMenu.tagHereItem

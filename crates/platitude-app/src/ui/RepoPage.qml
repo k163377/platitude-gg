@@ -151,8 +151,6 @@ Item {
                 page.headPublished = repoTab.publishPublished > 0
             if (page.selectedOid !== "" && repoTab.publishRange === page.selectedOid + "^!")
                 page.selectedPublished = repoTab.publishPublished > 0
-            if (refRowMenu.rebaseRange !== "" && repoTab.publishRange === refRowMenu.rebaseRange)
-                refRowMenu.rebasePublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
@@ -744,6 +742,7 @@ Item {
         heldReason: page.doorsHeldWhy
         repoTab: repoTab
         workTree: workTree
+        graphModel: graphModel
         branchesModel: branchesModel
         worktreesModel: worktreesModel
         tagsModel: tagsModel

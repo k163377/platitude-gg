@@ -17,6 +17,9 @@ Item {
 
     required property RepoTab repoTab
     required property WorkTreeModel workTree
+    /// Where the `rebase` row's note comes from: the drawn rows carry the walk's own marks, and the range this menu
+    /// would rewrite is a question about them (`rebasePublished`).
+    required property GraphModel graphModel
     /// Handed to the branch card, which reads the remote a branch speaks for and the working copy that may be
     /// holding it out of them (`RefBranchMenu`). `switch` asks the second one here as well — it is the only row on
     /// this level that the answer changes.
@@ -57,11 +60,19 @@ Item {
     property bool canDelete: false
 
     // ---- bringing two lines of history together --------------------
-    /// The commits a rebase onto this row would rewrite. Asked as the menu opens — the answer is a whole git call away,
-    /// and it lands in the page's one answer slot (`RepoPage`).
-    readonly property string rebaseRange:
+    /// Whether the merge / rebase pair is on offer. **One reading for the two rows and for the note one of them
+    /// wears** — three spellings of the same condition is the one that drifts, and the note has to appear exactly
+    /// where the row it hangs on does. A stash is the kind left out: it is not a line of history to bring in.
+    readonly property bool integrateOffered:
         (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag")
-        && refRowMenu.refId !== "" ? refRowMenu.refId + "..HEAD" : ""
+        && refRowMenu.canIntegrateFrom
+    /// Whether a rebase onto this row would rewrite a commit a remote already has — the commits at stake are
+    /// `<ref>..HEAD`, and it is the graph that answers for them (`GraphModel.rebaseRewritesPublished`).
+    ///
+    /// **Read off the rows, in hand as the menu opens.** A range is not one commit, so the row's own mark cannot say
+    /// it — but the drawn rows are the walk's order and carry the walk's marks, which is all the question needs.
+    /// A `git rev-list` would land after the card was on screen and grow this very row, taking the card's right edge
+    /// and the `▸` on it out from under the hand (規約 §行が読む答えはどこから来るか).
     property bool rebasePublished: false
 
     /// Whether the card is on screen, and whether it has finished opening: the folded list asks the first, the chip's
@@ -83,6 +94,7 @@ Item {
     readonly property alias upstreamItem: branchMenu.upstreamItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
+    readonly property alias rebaseItem: refRebaseItem
     /// The two cards the rows above hang behind — a run that photographs one of those rows has to open its card
     /// first (`AppMenu.openSub`).
     readonly property alias branchCard: branchMenu
@@ -118,7 +130,6 @@ Item {
         refRowMenu.kind = kind
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
-        refRowMenu.rebasePublished = false
         // Both cards are their own question, and each works its answers out for itself — the very cards the graph
         // row's menu carries, asked the same way (RefBranchMenu / RefTagMenu).
         branchMenu.offerOn(kind, name, full, oidHex)
@@ -145,8 +156,10 @@ Item {
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canDelete = offers.includes("delete")
-        if (refRowMenu.repoTab.state === "open" && refRowMenu.rebaseRange !== "")
-            refRowMenu.repoTab.checkPublish(refRowMenu.rebaseRange)
+        // Asked only where the row that wears it is offered, and asked of the graph — the answer is already there,
+        // and the card is about to be measured with it (see `rebasePublished`).
+        refRowMenu.rebasePublished =
+            refRowMenu.integrateOffered && refRowMenu.graphModel.rebaseRewritesPublished(oidHex)
         return refMenu.offer()
     }
 
@@ -199,24 +212,19 @@ Item {
             //: Follows the `merge` chip: "merge into main".
             refSentence: qsTr("into %1")
             refName: refRowMenu.workTree.branch
-            offered: (refRowMenu.kind === "branch"
-                      || refRowMenu.kind === "remote"
-                      || refRowMenu.kind === "tag")
-                     && refRowMenu.canIntegrateFrom
+            offered: refRowMenu.integrateOffered
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.refId, false, false, "")
         }
         AppMenuItem {
+            id: refRebaseItem
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
             refName: refRowMenu.workTree.branch
-            // The same condition as merge, to the letter: a tag is a fixed point either way, and the one this row
-            // lands on stays where it is — git peels an annotated tag to its commit, and `--update-refs` carries
+            // A tag is on offer here for the reason it is on merge: it is a fixed point either way, and the one this
+            // row lands on stays where it is — git peels an annotated tag to its commit, and `--update-refs` carries
             // branches only (measured).
-            offered: (refRowMenu.kind === "branch"
-                      || refRowMenu.kind === "remote"
-                      || refRowMenu.kind === "tag")
-                     && refRowMenu.canIntegrateFrom
+            offered: refRowMenu.integrateOffered
             // Said, not asked (要望: rewriting a pushed commit shows a warning). Published = reachable from a
             // remote-tracking ref, only as fresh as the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""

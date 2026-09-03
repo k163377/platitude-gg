@@ -49,6 +49,8 @@ Item {
     property AppMenuItem refUpstreamItem
     property AppMenuItem refStashDropItem
     property AppMenuItem refSwitchItem
+    /// The `rebase` row, read where a verb has to say what its note says about the range (`integrate-menu`).
+    property AppMenuItem refRebaseItem
     property AppMenuItem refPushTagItem
     property AppMenuItem refTagHereItem
     property AppMenuItem refTagDeleteItem

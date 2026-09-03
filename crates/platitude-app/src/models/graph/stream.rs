@@ -98,11 +98,11 @@ impl GraphModel {
         }
         self.mark_incoming(&mut items);
         self.match_count += items.iter().filter(|i| i.matched).count() as i32;
-        self.published.extend(rows.iter().map(|row| row.published));
+        self.extend_marks(rows);
         self.extend_notified(items);
         self.settle_first();
         self.row_total = self.rows.len() as i32;
-        debug_assert_eq!(self.published.len(), self.rows.len());
+        debug_assert_eq!(self.marks.len(), self.rows.len());
     }
 
     fn take_labels(
@@ -145,7 +145,8 @@ impl GraphModel {
         if generation == self.generation {
             self.settle_footer(total as i32, elapsed_ms, walked, truncated);
             self.rows.shrink_to_fit();
-            self.published.shrink_to_fit();
+            self.marks.shrink_to_fit();
+            self.parent_oids.shrink_to_fit();
             tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
         }
     }
@@ -182,9 +183,9 @@ impl GraphModel {
             .max(1);
         // The whole graph, so the marks are the whole graph's too —
         // written before the splice churns `rows` into the same shape.
-        self.published = rows.iter().map(|row| row.published).collect();
+        self.replace_marks(rows);
         self.splice_notified(items);
-        debug_assert_eq!(self.published.len(), self.rows.len());
+        debug_assert_eq!(self.marks.len(), self.rows.len());
         let loaded = self.rows.len() as i32;
         self.settle_footer(loaded, elapsed_ms, walked, truncated);
         // Only a replacement zeroes these: it is one message rather than

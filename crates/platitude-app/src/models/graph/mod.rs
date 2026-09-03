@@ -15,25 +15,21 @@ use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 mod find;
 mod head;
 mod item;
+mod marks;
 mod qobject;
 mod stream;
 
 use item::{GraphRowItem, to_row_item};
+use marks::RowMark;
 
 #[derive(Default)]
 pub struct GraphModel {
     rows: Vec<GraphRowItem>,
-    /// Whether a remote already has each row's commit, in `rows` order
-    /// (core `LogRow::published`).
-    ///
-    /// **Beside the rows rather than on them**: `GraphRowItem` is at the
-    /// fifteen fields `#[derive(QModelItem)]` allows, and no delegate
-    /// draws this — it is asked for by oid when a menu opens
-    /// (`publishedAt`), the way the stash selector is. Kept in step at
-    /// the three places the rows themselves change: cleared in
-    /// `reset_unnotified`, extended in `append_chunk`, rebuilt whole in
-    /// `splice`.
-    published: Vec<bool>,
+    /// What the walk knew about each row and no delegate draws, in `rows`
+    /// order — see `marks.rs` for what is in it and why it rides here.
+    marks: Vec<RowMark>,
+    /// The parent ids the spans in `marks` point into, flattened.
+    parent_oids: Vec<platitude_core::Oid>,
     generation: u64,
     loading: bool,
     /// Chip records to leave undrawn — see the property's own note in
@@ -138,7 +134,7 @@ impl QListModel for GraphModel {
     }
     fn reset_unnotified(&mut self) {
         self.rows.clear();
-        self.published.clear();
+        self.clear_marks();
     }
 }
 

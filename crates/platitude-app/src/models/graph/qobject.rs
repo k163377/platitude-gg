@@ -185,12 +185,33 @@ impl GraphModel {
     /// all this is ever asked about, because a menu opens on a row.
     #[qslot]
     fn published_at(&self, oid_hex: String) -> bool {
-        self.rows
-            .iter()
-            .position(|r| r.oid_hex == oid_hex)
-            .and_then(|i| self.published.get(i))
-            .copied()
-            .unwrap_or(false)
+        let Ok(oid) = platitude_core::Oid::from_hex_str(oid_hex.trim()) else {
+            return false;
+        };
+        self.row_at(&oid).is_some_and(|row| self.published_row(row))
+    }
+
+    /// Whether rebasing HEAD onto this commit would rewrite one a remote
+    /// already has — the `rewrites pushed commits` note the ref menu's
+    /// `rebase` row wears.
+    ///
+    /// **The range asked of the rows, not of git.** `<ref>..HEAD` is a
+    /// set rather than one commit, so no single row's mark answers it
+    /// (`publishedAt` above) — but the rows are the walk's own order and
+    /// carry its marks, which is everything the question needs
+    /// (`publish::range_rewrites_published`). Two `git rev-list` runs
+    /// would land after the card was on screen and grow the widest row,
+    /// taking its right edge out from under the hand
+    /// (デザイン規約 §行が読む答えはどこから来るか).
+    #[qslot]
+    fn rebase_rewrites_published(&self, onto_oid_hex: String) -> bool {
+        let Ok(onto) = platitude_core::Oid::from_hex_str(onto_oid_hex.trim()) else {
+            return false;
+        };
+        let Some(head) = self.head_oid() else {
+            return false;
+        };
+        platitude_core::publish::range_rewrites_published(self.walked_rows(), head, onto)
     }
 
     /// The lane colour of the row a ref sits on, as an index into the
