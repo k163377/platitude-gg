@@ -6,6 +6,13 @@ target/
 # checkout and never in a worktree's own tree.
 .shots/
 
+# The benchmark repository (cargo xtask corpus): generated, never
+# cloned, beside this .git so all six seats measure one corpus. A
+# hundred thousand tracked files and their build output, so a checkout
+# that does not ignore it reads as a hundred thousand untracked ones.
+.pg-perf-corpus/
+.pg-perf-corpus.partial/
+
 # The task-chip ledger (hook chips): one file per session, beside this
 # .git so every seat's sessions write to one directory. Cleared when the
 # session that wrote it ends.
