@@ -20,6 +20,8 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::app_out::collect;
+
 /// How long the window is left standing. The engine reports a failed load
 /// during `load_qml_from_file`, which is before the event loop starts, so
 /// this only has to outlast the runtime, the store and the first paint.
@@ -128,16 +130,4 @@ pub fn run(args: &[String]) -> Result<(), String> {
         started.elapsed().as_secs_f32()
     );
     Ok(())
-}
-
-/// Drains a pipe on its own thread, so a chatty child never blocks on a
-/// full pipe while the parent waits it out.
-fn collect<R: std::io::Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Vec<String>> {
-    use std::io::BufRead;
-    std::thread::spawn(move || {
-        std::io::BufReader::new(reader)
-            .lines()
-            .map_while(Result::ok)
-            .collect()
-    })
 }

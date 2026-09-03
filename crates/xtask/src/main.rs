@@ -5,6 +5,7 @@
 //! script files.
 
 mod app_env;
+mod app_out;
 mod check;
 mod demo;
 mod deny;

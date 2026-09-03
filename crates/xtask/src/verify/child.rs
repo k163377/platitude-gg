@@ -7,7 +7,6 @@
 //! the run open.
 
 use std::ffi::OsString;
-use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -53,8 +52,8 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
-    let stdout = child.stdout.take().map(collect_lines);
-    let stderr = child.stderr.take().map(collect_lines);
+    let stdout = child.stdout.take().map(crate::app_out::collect);
+    let stderr = child.stderr.take().map(crate::app_out::collect);
 
     // Bounded wait with a kill guard — never an unbounded wait or poll.
     let deadline = Duration::from_millis(start.opts.watchdog_ms + GRACE_MS);
@@ -189,17 +188,4 @@ fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<std::fs::File>
         .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
     println!("holding: {}", path.display());
     Ok(Some(file))
-}
-
-/// Drains a pipe on its own thread, so a chatty child never blocks on a
-/// full pipe while the parent waits for it to exit.
-fn collect_lines<R: std::io::Read + Send + 'static>(
-    reader: R,
-) -> std::thread::JoinHandle<Vec<String>> {
-    std::thread::spawn(move || {
-        std::io::BufReader::new(reader)
-            .lines()
-            .map_while(Result::ok)
-            .collect()
-    })
 }

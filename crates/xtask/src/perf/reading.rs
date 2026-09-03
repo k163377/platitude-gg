@@ -4,7 +4,7 @@
 //! so a reading is assembled a line at a time as the run talks, and refused as a
 //! whole if a number this run was asked to take never arrived.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -114,7 +114,7 @@ pub(super) fn read_app(
     let reader = std::thread::spawn(move || {
         let mut found = Reading::default();
         if let Some(pipe) = stderr {
-            for line in BufReader::new(pipe).lines().map_while(Result::ok) {
+            for line in crate::app_out::lines(pipe) {
                 if let Err(error) = writeln!(log, "{} {line}", started.elapsed().as_micros()) {
                     found.failure = Some(format!("could not preserve app log: {error}"));
                 }
