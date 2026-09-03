@@ -190,10 +190,48 @@ fn report(at: &Path) -> Result<(), String> {
         counted,
         token(at, &refs)?
     );
+    branch_tree(at)?;
     window(at)?;
     println!(
         "  measure it with: PG_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
         at.display()
+    );
+    Ok(())
+}
+
+/// How many rows the sidebar's remotes section would build.
+///
+/// `nav::tree::build_tree` makes one `NavItem` per distinct directory
+/// prefix — two heap strings each — and rebuilds all of them on every
+/// arrange, which is every refs snapshot. It does not compact
+/// single-child chains, so the count here is the count of rows.
+fn branch_tree(at: &Path) -> Result<(), String> {
+    let names = git(
+        at,
+        &[
+            "for-each-ref",
+            "--format=%(refname:lstrip=2)",
+            "refs/remotes",
+        ],
+    )?;
+    let mut folders = std::collections::BTreeSet::new();
+    let mut leaves = 0;
+    let mut deepest = 0;
+    for name in names.lines().filter(|name| !name.is_empty()) {
+        leaves += 1;
+        let mut at = 0;
+        let mut depth = 0;
+        while let Some(slash) = name[at..].find('/') {
+            at += slash;
+            folders.insert(name[..at].to_string());
+            at += 1;
+            depth += 1;
+        }
+        deepest = deepest.max(depth);
+    }
+    println!(
+        "  remotes {leaves} leaves | {} folder rows | {deepest} deep",
+        folders.len()
     );
     Ok(())
 }

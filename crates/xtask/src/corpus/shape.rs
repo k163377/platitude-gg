@@ -335,11 +335,78 @@ pub(super) fn tag(n: u64) -> String {
 /// repository's do.
 const ZERO_WIDTH_TAGS: [u64; 2] = [7, 20_101];
 
-/// A remote-tracking branch, under the same remote name the reference
-/// repository uses for the bulk of its own.
+/// A remote-tracking branch, under the same remote names the reference
+/// repository uses.
+///
+/// **The slashes are the sidebar's rows.** `nav::tree::build_tree`
+/// makes one `NavItem` per distinct directory prefix, with two heap
+/// strings each, and rebuilds the whole tree on every arrange — which
+/// is every refs snapshot. It does not compact single-child chains, so
+/// every segment is its own row. A name shaped `remote/rr/leaf` for all
+/// of them gives the section two folder rows; the reference repository
+/// has 1,295 over 7,823 leaves, and runs eight segments deep.
 pub(super) fn remote_branch(n: u64) -> String {
-    let want = spread(n ^ 0x2C4_A1B, 6, 9, 30);
-    format!("JetBrains/rr/{}", unique_name(n ^ 0xABCD, want, n))
+    let want = spread(n ^ 0x2C4_A1B, 8, 10, 34);
+    let mut name = String::from(if n.is_multiple_of(REMOTE_ORIGIN_EVERY) {
+        "origin"
+    } else {
+        "JetBrains"
+    });
+    for level in 1..remote_depth(n) {
+        name.push('/');
+        name.push_str(&folder(n, level));
+    }
+    name.push('/');
+    name.push_str(&unique_name(n ^ 0xABCD, want, n));
+    name
+}
+
+/// One remote-tracking branch in this many belongs to the second
+/// remote. The reference repository has two configured and its second
+/// carries a handful.
+const REMOTE_ORIGIN_EVERY: u64 = 977;
+
+/// How many segments a remote-tracking branch's name runs to, at the
+/// shares the reference repository holds them.
+const REMOTE_DEPTHS: [(u64, u64); 7] = [
+    (612, 1),
+    (2_024, 2),
+    (4_597, 3),
+    (533, 4),
+    (55, 5),
+    (1, 6),
+    (1, 8),
+];
+
+/// How many distinct names an interior segment may take, by level. Small
+/// pools are what make prefixes *repeat*, and a prefix that repeats is
+/// one folder row rather than one per branch.
+const FOLDERS_BY_LEVEL: [u64; 3] = [64, 20, 8];
+
+fn remote_depth(n: u64) -> u64 {
+    let draw = mix(n ^ 0xD3_9711) % 7_823;
+    let mut seen = 0;
+    for (share, depth) in REMOTE_DEPTHS {
+        seen += share;
+        if draw < seen {
+            return depth;
+        }
+    }
+    1
+}
+
+fn folder(n: u64, level: u64) -> String {
+    let pool = FOLDERS_BY_LEVEL[(level as usize - 1).min(FOLDERS_BY_LEVEL.len() - 1)];
+    let which = mix(n ^ (level << 48) ^ 0x00F0_1DE7) % pool;
+    // The counter is in the name because the words are not enough to
+    // tell a pool of forty-eight apart: thirty-two of them cut to seven
+    // characters answer at most thirty-two distinct strings, and a pool
+    // that collapses is a folder row that never appears (measured — 833
+    // rows where the tables describe eighteen hundred).
+    format!(
+        "{}-{which}",
+        words_to(which ^ (level << 32) ^ 0x00F0_1DE7, 7, '-')
+    )
 }
 
 /// Author names that are not ASCII, and why they have to exist.
@@ -513,9 +580,12 @@ mod tests {
         let (p50, p95) = (at(&mut tags, 50), at(&mut tags, 95));
         assert!((26..=36).contains(&p50), "tag p50 was {p50}");
         assert!((50..=64).contains(&p95), "tag p95 was {p95}");
+        // The reference repository's remote names run 52 in the middle
+        // counting `refs/remotes/`, and the ref table is mostly their
+        // bytes — so this may not come out shorter than that.
         let mut remotes = lengths(7_000, |n| format!("refs/remotes/{}", remote_branch(n)));
         let p50 = at(&mut remotes, 50);
-        assert!((30..=50).contains(&p50), "remote p50 was {p50}");
+        assert!((52..=72).contains(&p50), "remote p50 was {p50}");
     }
 
     /// **The glyphs that load a fallback font.** The graph pane draws
@@ -577,6 +647,27 @@ mod tests {
         let mut names = lengths(20_000, |n| author(n).0);
         let p50 = at(&mut names, 50);
         assert!((11..=19).contains(&p50), "author p50 was {p50}");
+    }
+
+    /// **The sidebar's rows are the slashes.** `nav::tree::build_tree`
+    /// makes one `NavItem` per distinct directory prefix, two heap
+    /// strings each, rebuilt on every arrange — and it does not compact
+    /// single-child chains. The reference repository's remotes section
+    /// carries 1,295 folder rows over 7,823 leaves and runs eight deep;
+    /// names all shaped `remote/rr/leaf` would carry two.
+    #[test]
+    fn the_remotes_section_is_a_tree_rather_than_a_list() {
+        let mut folders = std::collections::HashSet::new();
+        let mut deepest = 0;
+        for n in 0..super::REMOTE_BRANCHES {
+            let name = remote_branch(n);
+            deepest = deepest.max(name.matches('/').count());
+            for (at, _) in name.match_indices('/') {
+                folders.insert(name[..at].to_string());
+            }
+        }
+        assert!(folders.len() >= 1_295, "{} folder rows", folders.len());
+        assert!(deepest >= 7, "{deepest} segments at the deepest");
     }
 
     /// A corpus that says it has 50,000 refs has to have 50,000 names.
