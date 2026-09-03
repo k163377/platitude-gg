@@ -196,11 +196,11 @@ fn changes(
 ) -> io::Result<()> {
     // **The clusters sit near each other, not across the tree.** A
     // commit rewrites one tree object per directory on the path of
-    // every file it touches, so five clusters in five distant subtrees
-    // rewrite five deep paths whole: the corpus wrote 43.5 trees a
-    // commit where the reference repository writes 16.9. Neighbouring
-    // slots are neighbouring directories, so they share their parents
-    // and the parents are written once.
+    // every file it touches, so clusters in distant subtrees rewrite
+    // that many deep paths whole; the reference repository rewrites
+    // 16.9 trees a commit for its 16.9 files, which is what changes
+    // sharing a subtree look like. Neighbouring slots are neighbouring
+    // directories, so their parents are written once.
     let near = shape::mix(n ^ 0x00C1_57E0) % tree::TRACKED;
     for cluster in 0..shape::CLUSTERS {
         let at = (near + shape::mix(n ^ (cluster << 40)) % shape::CLUSTER_REACH) % tree::TRACKED;
@@ -327,18 +327,51 @@ fn side_branches(
             if step == 0 {
                 writeln!(out, "from :{from}")?;
             }
-            let slot = shape::mix(seed) % tree::TRACKED;
-            place(
-                out,
-                tree,
-                body,
-                slot,
-                live.revs[slot as usize] + 1 + step as u32,
-            )?;
+            for file in 0..shape::side_files(n) {
+                let Some(slot) = edited_slot(tree, live, seed ^ (file << 24)) else {
+                    continue;
+                };
+                place(
+                    out,
+                    tree,
+                    body,
+                    slot,
+                    live.revs[slot as usize] + 1 + step as u32 + file as u32,
+                )?;
+            }
             writeln!(out)?;
         }
     }
     Ok(())
+}
+
+/// Which file a commit off the trunk touches.
+///
+/// **What people edit is not what a tree is mostly made of.** The
+/// reference repository's median tracked file is 565 bytes and the
+/// median file its window opens is 10,366 — the files under active work
+/// are not the ones a tree is filled with. Drawn uniformly the window
+/// opens six hundred bytes a row, and every diff in it costs a
+/// sixteenth of what the same click costs against the real repository.
+/// The largest of [`shape::EDIT_DRAWS`] draws lands in the same decile
+/// without a second index over the tree.
+///
+/// **A slot a rename has carried away is not a file any more**, and
+/// naming it here would add one back on a branch the trunk does not
+/// have. The scan past it is bounded rather than a search: nearly every
+/// slot is tracked, and a tree with none left has nothing to say.
+fn edited_slot(tree: &tree::Tree, live: &History, seed: u64) -> Option<u64> {
+    let mut edited: Option<u64> = None;
+    for draw in 0..shape::EDIT_DRAWS {
+        let drawn = shape::mix(seed ^ (draw << 48)) % tree::TRACKED;
+        let slot = (0..tree::TRACKED)
+            .map(|step| (drawn + step) % tree::TRACKED)
+            .find(|slot| live.tracked[*slot as usize])?;
+        if edited.is_none_or(|had| tree.sizes[slot as usize] > tree.sizes[had as usize]) {
+            edited = Some(slot);
+        }
+    }
+    edited
 }
 
 /// The commit the interaction measurement opens: many files, so the
@@ -375,17 +408,47 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
         .copied()
         .max_by_key(|slot| tree.paths[*slot as usize].clone())
         .unwrap_or(0);
-    let mut slots = Vec::new();
+    // **The file the default scenario opens is chosen, not drawn.** It
+    // is the first by path, so drawing all of them uniformly opens the
+    // median file of the tree — six hundred bytes, where the reference
+    // repository's window opens ten thousand (`shape::OPENED_BYTES`).
+    // This is the lowest-sorting file large enough to be one somebody
+    // works in, and everything else in the commit is held above it.
+    let opened = (0..tree::TRACKED)
+        .filter(|slot| live.tracked[*slot as usize] && *slot != huge)
+        .filter(|slot| tree.sizes[*slot as usize] as usize >= shape::OPENED_BYTES)
+        .filter(|slot| tree.paths[*slot as usize] < tree.paths[huge as usize])
+        .min_by_key(|slot| tree.paths[*slot as usize].clone());
+    let mut slots: Vec<u64> = opened.into_iter().collect();
+    let above = opened.map(|slot| tree.paths[slot as usize].clone());
     let mut slot = shape::mix(n ^ 0x004E_0E57) % tree::TRACKED;
-    while (slots.len() as u64) < shape::NEWEST_FILES {
+    let mut looked = 0;
+    while (slots.len() as u64) < shape::NEWEST_FILES && looked < tree::TRACKED {
+        looked += 1;
         slot = (slot + tree::TRACKED / shape::NEWEST_FILES + 1) % tree::TRACKED;
-        if live.tracked[slot as usize] && slot != huge && !slots.contains(&slot) {
+        if above
+            .as_ref()
+            .is_some_and(|first| tree.paths[slot as usize] <= *first)
+        {
+            continue;
+        }
+        // Big enough to take the edit. **`shape::edited` leaves a file
+        // of fewer than four lines exactly as it found it**, and a path
+        // the commit names but does not change is a path the details
+        // pane will not list — the record would say 76 files and git
+        // would say fewer.
+        if live.tracked[slot as usize]
+            && slot != huge
+            && tree.sizes[slot as usize] as usize >= shape::EDITABLE_FLOOR
+            && !slots.contains(&slot)
+        {
             slots.push(slot);
         }
     }
-    if slots
-        .iter()
-        .all(|slot| tree.paths[*slot as usize] > tree.paths[huge as usize])
+    if opened.is_none()
+        && slots
+            .iter()
+            .all(|slot| tree.paths[*slot as usize] > tree.paths[huge as usize])
     {
         let lowest = (0..tree::TRACKED)
             .filter(|slot| live.tracked[*slot as usize] && *slot != huge)

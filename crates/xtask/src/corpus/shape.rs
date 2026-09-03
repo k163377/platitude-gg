@@ -44,6 +44,52 @@ pub(super) const MERGE_EVERY: u64 = 1_429;
 pub(super) const SIDE_BRANCHES: u64 = 232;
 pub(super) const SIDE_LENGTH: u64 = 8;
 
+/// How many files a commit off the trunk changes, as (share in a
+/// thousand, files).
+///
+/// **The window is nine parts side branch.** Its two thousand rows are
+/// the newest by date and the trunk contributes a few hundred of them,
+/// so what a row in the window changes is what a side branch changes —
+/// and one file each makes every details pane in the measurement a list
+/// of one. The reference repository's window answers three files at the
+/// median, twenty at the ninth decile and 1,340 at its worst
+/// (`cargo xtask corpus --against`), which is what these shares are.
+pub(super) const SIDE_FILES: [(u64, u64); 11] = [
+    (300, 1),
+    (120, 2),
+    (100, 3),
+    (120, 5),
+    (100, 8),
+    (80, 13),
+    (80, 20),
+    (50, 40),
+    (30, 90),
+    (15, 300),
+    (5, 1_200),
+];
+
+/// How many candidates a commit weighs before it picks a file to edit,
+/// keeping the largest.
+///
+/// **Set by where it lands, not by taste.** The reference repository's
+/// window opens a 10,366-byte file at the median against a 565-byte
+/// median tracked file; the corpus's tree carries the same size
+/// histogram, so the only question is which decile of it the commits
+/// reach for. Held by `stream::tests`.
+pub(super) const EDIT_DRAWS: u64 = 12;
+
+/// How many files the `n`th side-branch commit changes.
+pub(super) fn side_files(n: u64) -> u64 {
+    let mut at = mix(n ^ 0x51DE_F11E) % 1_000;
+    for (share, files) in SIDE_FILES {
+        if at < share {
+            return files;
+        }
+        at -= share;
+    }
+    1
+}
+
 /// How many branches back each one forks from.
 ///
 /// **This, not the number of branches, is what the graph's width is.** A
@@ -69,10 +115,10 @@ pub(super) const FORK_BACK: u64 = 27;
 ///
 /// **A fixed distance is a comb.** Every branch keeping exactly one
 /// lane open for exactly the same number of rows gives a constant
-/// width — the corpus measured p25 28 / p50 28 / max 29 where the
-/// reference repository is p25 14 / p50 20 / max 34. What a renderer
-/// has to cope with is the *variance*, and only a spread of distances
-/// produces one.
+/// width, and a constant demands nothing of a renderer. The reference
+/// repository's window, walked by the same lane count `corpus::graph`
+/// applies to both, is p25 21 / p50 25 / p75 27 / max 33; what a
+/// spread of distances buys is that shape rather than a single number.
 pub(super) const FORK_BACKS: [(u64, u64); 7] = [
     (16, 6),
     (20, 14),
@@ -140,6 +186,24 @@ pub(super) const TRUNK: u64 = COMMITS - SIDE_BRANCHES * SIDE_LENGTH - 1;
 pub(super) const NEWEST_FILES: u64 = 75;
 pub(super) const NEWEST_ADDED: u64 = 47;
 pub(super) const NEWEST_REMOVED: u64 = 3;
+
+/// The smallest file [`edited`] will change. Below four lines it has
+/// nowhere to splice and hands the file back as it found it, and a path
+/// the newest commit names but does not change is one the details pane
+/// never lists.
+pub(super) const EDITABLE_FLOOR: usize = 256;
+
+/// The smallest file the default scenario is allowed to open.
+///
+/// **What people edit is not what a tree is mostly made of.** The
+/// reference repository's median tracked file is 565 bytes and the
+/// median file its window opens is 10,366; drawn uniformly from the
+/// tree, the commit the measurement selects opens three kilobytes, and
+/// the operation-response number is then a reading of a file nobody
+/// edits. This sits between that repository's median opened file and
+/// its ninth decile (60,895), and beside the 25KB its own tip carried
+/// when this was first measured.
+pub(super) const OPENED_BYTES: usize = 24_576;
 
 /// The first commit's date and the step between commits. Fixed rather
 /// than taken from the clock: a corpus that regenerates to the same
@@ -557,9 +621,10 @@ pub(super) const RENAME_EVERY: u64 = 19;
 /// many small files it churns (measured: 3.52GiB against 4.66).
 ///
 /// **And it is most of the import stream.** Every revision is written
-/// whole, because `fast-import` takes no deltas, so one in ten put
-/// forty gigabytes through a single-threaded reader for a pack already
-/// twice the size of the one it stands for.
+/// whole, because `fast-import` takes no deltas, so each of these puts
+/// a megabyte or more through a single-threaded reader. The rate is
+/// what holds the pack above the reference repository's without the
+/// stream growing past what a ten-minute build can carry.
 pub(super) const HUGE_EVERY: u64 = 30;
 
 /// The build output a working repository accumulates. Ignored, and
@@ -605,12 +670,21 @@ pub(super) fn content_into(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32, 
         push_u64(out, slot);
         return;
     }
-    if super::tree::extension(slot) == PICTURES[0] {
+    if super::tree::extension(slot) == PICTURES[0] && want >= PICTURE_FLOOR {
         image_into(out, slot, want);
         return;
     }
     source(out, slot, want, rev);
 }
+
+/// Enough of a PNG that the preview pane reads it as one: the eight
+/// signature bytes and an IHDR, then noise to the size the table drew.
+///
+/// **Only where the table drew room for one.** A file smaller than the
+/// header cannot be a picture, and a body that came out longer than it
+/// was asked for is a file of the wrong size — the caller sends the
+/// small ones down the source path instead.
+const PICTURE_FLOOR: usize = 29;
 
 fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
     out.extend_from_slice(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -621,9 +695,7 @@ fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
         out.extend_from_slice(&mix(slot ^ n).to_le_bytes());
         n += 1;
     }
-    if want >= 33 {
-        out.truncate(want);
-    }
+    out.truncate(want);
 }
 
 #[cfg(test)]
@@ -645,8 +717,7 @@ const PICTURES: [&str; 1] = ["png"];
 /// **Written into a buffer the caller keeps, and with no allocation of
 /// its own.** This is the innermost loop of the whole build: four
 /// million placements of a few dozen lines each, so a `format!` per
-/// line is hundreds of millions of allocations, and it was most of a
-/// three-quarter-hour build.
+/// line is hundreds of millions of allocations.
 fn source(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32) {
     if want == 0 {
         return;
@@ -846,6 +917,33 @@ mod tests {
     fn nearly_half_the_rows_were_committed_by_somebody_else() {
         let applied = (0..2_000).filter(|n| committer(*n) != author(*n)).count();
         assert!((820..=1_060).contains(&applied), "{applied} of 2,000");
+    }
+
+    /// The window is nine parts side branch, so what a side-branch
+    /// commit changes is what the details pane in the measurement gets
+    /// handed. The reference repository's window answers three files at
+    /// the median and twenty at the ninth decile.
+    #[test]
+    fn a_side_branch_commit_changes_what_the_reference_repository_does() {
+        let mut files: Vec<u64> = (0..super::SIDE_BRANCHES * super::SIDE_LENGTH)
+            .map(super::side_files)
+            .collect();
+        files.sort_unstable();
+        let percentile = |at: usize| files[files.len() * at / 100];
+        assert!((2..=4).contains(&percentile(50)), "p50 {}", percentile(50));
+        assert!(
+            (13..=40).contains(&percentile(90)),
+            "p90 {}",
+            percentile(90)
+        );
+        // The tail is the point of the table: a commit that touches a
+        // whole subtree is what makes the pane build a list rather than
+        // a line.
+        assert!(
+            files[files.len() - 1] >= 300,
+            "max {}",
+            files[files.len() - 1]
+        );
     }
 
     #[test]

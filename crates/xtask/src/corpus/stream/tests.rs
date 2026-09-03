@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use super::{BASE_MARK, History, base, changes, newest_commit, refs};
+use super::{BASE_MARK, History, base, changes, newest_commit, refs, side_branches};
 use crate::corpus::{shape, tree};
 
 /// A sink that counts the lines the tests ask about and holds none of
@@ -139,6 +139,128 @@ fn the_first_file_of_the_newest_commit_is_an_ordinary_one() {
         .min()
         .expect("the newest commit changes files");
     assert_ne!(first, &newest.huge);
+}
+
+/// Every mark a commit or a ref reaches for was minted, and no mark is
+/// minted twice.
+///
+/// **Nothing else holds this.** A `from` or a `merge` naming a mark the
+/// stream never wrote is a stream fast-import rejects — at the end,
+/// after ten minutes, naming a number rather than the arithmetic behind
+/// it. The counting sink cannot answer this, so this one reads the
+/// marks themselves out of the parts that mint and use them.
+#[test]
+fn every_mark_reached_for_was_minted_exactly_once() {
+    let tree = tree::build();
+    let mut live = History::new(&tree);
+    let mut body = Vec::new();
+    let mut marks = Marks::default();
+    base(&mut marks, &tree, &mut body).expect("a sink never refuses a write");
+    for n in 2..2_000 {
+        changes(&mut marks, &tree, &mut live, n, &mut body).expect("a sink never refuses");
+    }
+    side_branches(&mut marks, &tree, &live, &mut body).expect("a sink never refuses");
+    newest_commit(&mut marks, &tree, &live).expect("a sink never refuses");
+    refs(&mut marks).expect("a sink never refuses");
+    assert!(marks.minted.contains(&BASE_MARK), "no base mark");
+    assert_eq!(
+        marks.minted.len(),
+        marks.minted_count,
+        "a mark was minted twice"
+    );
+    // The side branches and the refs reach back into the trunk, and
+    // this test only wrote its head — so what it can hold is that every
+    // reach lands inside the range the whole stream mints.
+    let last = BASE_MARK + shape::TRUNK + shape::SIDE_BRANCHES * shape::SIDE_LENGTH;
+    for reached in &marks.reached {
+        assert!(
+            (BASE_MARK..=last).contains(reached),
+            "a stream that mints :{BASE_MARK}..:{last} reaches for :{reached}"
+        );
+    }
+    assert!(!marks.reached.is_empty(), "nothing reached for a mark");
+}
+
+/// What the marks test collects: the ones written and the ones asked
+/// for.
+#[derive(Default)]
+struct Marks {
+    minted: std::collections::BTreeSet<u64>,
+    minted_count: usize,
+    reached: Vec<u64>,
+    partial: Vec<u8>,
+}
+
+impl Marks {
+    fn line(&mut self, line: &str) {
+        for (prefix, into) in [("mark :", true), ("from :", false), ("merge :", false)] {
+            let Some(rest) = line.strip_prefix(prefix) else {
+                continue;
+            };
+            let Ok(mark) = rest.trim().parse::<u64>() else {
+                continue;
+            };
+            if into {
+                self.minted.insert(mark);
+                self.minted_count += 1;
+            } else {
+                self.reached.push(mark);
+            }
+        }
+    }
+}
+
+impl Write for Marks {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        for byte in buf {
+            if *byte == b'\n' {
+                let line = std::mem::take(&mut self.partial);
+                if let Ok(line) = std::str::from_utf8(&line) {
+                    self.line(line);
+                }
+            } else if self.partial.len() < 64 {
+                self.partial.push(*byte);
+            }
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// **The window is what gets clicked, and the window is side branches.**
+/// A row whose diff opens the tree's median file measures a sixteenth
+/// of what the same click costs against the reference repository, whose
+/// window opens 10,366 bytes at the median and 60,895 at the ninth
+/// decile. Held here rather than found in a ten-minute build.
+#[test]
+fn a_side_branch_edits_the_kind_of_file_people_work_in() {
+    let tree = tree::build();
+    let live = History::new(&tree);
+    let mut sizes: Vec<u32> = Vec::new();
+    for n in 0..shape::SIDE_BRANCHES * shape::SIDE_LENGTH {
+        let seed = n ^ 0x5B10;
+        for file in 0..shape::side_files(n) {
+            if let Some(slot) = super::edited_slot(&tree, &live, seed ^ (file << 24)) {
+                sizes.push(tree.sizes[slot as usize]);
+            }
+        }
+    }
+    sizes.sort_unstable();
+    let percentile = |at: usize| sizes[sizes.len() * at / 100];
+    assert!(
+        (6_000..=20_000).contains(&percentile(50)),
+        "p50 {} over {} edits",
+        percentile(50),
+        sizes.len()
+    );
+    assert!(
+        (30_000..=200_000).contains(&percentile(90)),
+        "p90 {}",
+        percentile(90)
+    );
 }
 
 /// One ref per name, and every one of them hanging off a mark the
