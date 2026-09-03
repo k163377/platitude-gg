@@ -198,7 +198,7 @@ pub(super) fn measure(
     // is not a reading — and a run refused for the state of the machine
     // is exactly the one whose numbers a later reader wants to see.
     let _ = std::fs::write(run_dir.join("reading.txt"), format!("{reading:#?}"));
-    verdict(reading, opts, ended)
+    verdict(reading, opts, ended, screen.map(|s| s.name.as_str()))
 }
 
 /// How the wait ended: exactly one of these, because the loop leaves
@@ -224,7 +224,12 @@ enum Ended {
 /// deadline — reported as an application that stopped answering unless
 /// the machine is asked about first. Anything the host spoiled is worth
 /// taking again; nothing else is (`Spoiled`).
-fn verdict(reading: Reading, opts: &Options, ended: Ended) -> Result<Reading, Spoiled> {
+fn verdict(
+    reading: Reading,
+    opts: &Options,
+    ended: Ended,
+    pinned: Option<&str>,
+) -> Result<Reading, Spoiled> {
     let covered = matches!(ended, Ended::Covered);
     let ending = match ended {
         Ended::WaitFailed(said) => Some(said),
@@ -237,7 +242,7 @@ fn verdict(reading: Reading, opts: &Options, ended: Ended) -> Result<Reading, Sp
     };
     let host = reading
         .conditions
-        .complaint(&opts.limits)
+        .complaint(&opts.limits, pinned)
         .or_else(|| covered.then(|| stood_still(&reading.conditions)));
     let failed = reading
         .failure
@@ -335,7 +340,7 @@ mod tests {
             },
             ..Reading::default()
         };
-        let spoiled = verdict(reading, &defaults(), Ended::Covered)
+        let spoiled = verdict(reading, &defaults(), Ended::Covered, None)
             .expect_err("a covered window is not a reading");
         assert!(matches!(spoiled, Spoiled::Host(_)), "{spoiled:?}");
         let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
@@ -352,7 +357,7 @@ mod tests {
             conditions: quiet(),
             ..Reading::default()
         };
-        let spoiled = verdict(reading, &defaults(), Ended::Covered)
+        let spoiled = verdict(reading, &defaults(), Ended::Covered, None)
             .expect_err("a bench that produced nothing is not a reading");
         let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
         assert!(!said.contains("was covered"), "{said}");
@@ -368,7 +373,7 @@ mod tests {
             conditions: quiet(),
             ..Reading::default()
         };
-        let spoiled = verdict(reading, &defaults(), Ended::Done(true))
+        let spoiled = verdict(reading, &defaults(), Ended::Done(true), None)
             .expect_err("a reading with no numbers in it");
         assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
     }
@@ -395,7 +400,7 @@ mod tests {
             super::super::reading::absorb(line, &mut reading);
         }
         let opts = options(&["--repo", ".", "--no-select", "--no-scroll"]);
-        verdict(reading, &opts, Ended::Done(true)).expect("a reading with its numbers in it");
+        verdict(reading, &opts, Ended::Done(true), None).expect("a reading with its numbers in it");
     }
 
     /// An application that left before saying anything is its own
@@ -415,7 +420,7 @@ mod tests {
                 ..Reading::default()
             };
             let spoiled =
-                verdict(reading, &defaults(), ending).expect_err("an app that said nothing");
+                verdict(reading, &defaults(), ending, None).expect_err("an app that said nothing");
             let (Spoiled::Host(text) | Spoiled::Run(text)) = &spoiled;
             assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
             assert!(text.contains(said), "{text}");
@@ -426,7 +431,7 @@ mod tests {
     /// it again would produce the same nothing. It is the run's own.
     #[test]
     fn a_run_the_sampler_never_watched_is_the_runs_own() {
-        let spoiled = verdict(Reading::default(), &defaults(), Ended::Done(true))
+        let spoiled = verdict(Reading::default(), &defaults(), Ended::Done(true), None)
             .expect_err("nothing sampled and nothing reported");
         assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
         let (Spoiled::Host(text) | Spoiled::Run(text)) = &spoiled;
@@ -456,7 +461,7 @@ mod tests {
             },
             ..Reading::default()
         };
-        let spoiled = verdict(reading, &defaults(), Ended::TimedOut)
+        let spoiled = verdict(reading, &defaults(), Ended::TimedOut, None)
             .expect_err("a minimised window is not a reading");
         let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
         assert!(said.starts_with("the window was minimised"), "{said}");

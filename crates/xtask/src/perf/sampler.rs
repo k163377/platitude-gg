@@ -138,9 +138,11 @@ pub(super) struct Conditions {
     /// up here long before it moves the average.
     pub(super) peak_foreign_percent: f64,
     /// The longest this run went with no input event at all, ours
-    /// included ([`Sample::away_ms`]). Evidence rather than a gate, and
-    /// it reads as one number only: above `WAKE_SECS` the wake helper
-    /// stopped, and the display timer is no longer being held off.
+    /// included ([`Sample::away_ms`]). It reads as one thing only:
+    /// above `WAKE_SECS` the wake helper stopped, and the display timer
+    /// is no longer being held off — which is a gate, because a dark
+    /// screen otherwise shows up only in the scroll bench's frame count
+    /// and a run measured without one publishes its numbers.
     pub(super) away_ms: u64,
 }
 
@@ -237,7 +239,7 @@ impl Conditions {
     /// Deliberately not a warning: a run taken while the machine was
     /// doing something else is not a slower application, and publishing
     /// it as one is the whole failure this exists to stop.
-    pub(super) fn complaint(&self, limits: &Limits) -> Option<String> {
+    pub(super) fn complaint(&self, limits: &Limits, pinned: Option<&str>) -> Option<String> {
         if !self.watched() {
             // Nothing to say about the machine, so nothing is said. What
             // a run nobody watched is, is [`Self::unwatched`]'s answer.
@@ -264,10 +266,38 @@ impl Conditions {
                 self.samples
             ));
         }
+        if self.away_ms > WAKE_SECS * 2_000 {
+            return Some(format!(
+                "no input of any kind reached the machine for {:.0}s — the wake helper injects one \
+                 every {WAKE_SECS}s, so it has stopped and nothing is holding the display timer \
+                 off. A run whose screen went dark is not a reading of the application, and only \
+                 the scroll bench would notice on its own",
+                self.away_ms as f64 / 1_000.0
+            ));
+        }
         if self.displays.len() > 1 {
             return Some(format!(
                 "the window moved between screens ({}) — one run must stay on one screen, whose \
                  refresh rate the frames are read against",
+                self.displays.join(", ")
+            ));
+        }
+        // **Pinning a window asks; it does not decide.** The place is
+        // written into the run's own settings and Qt honours it, but a
+        // screen that was unplugged, asleep or renamed between the
+        // enumeration and the launch leaves the window wherever the
+        // platform put it — and the report divides the frame rate by
+        // the refresh of the screen that was *asked* for. On this
+        // machine that is 180Hz against 100Hz, so the same application
+        // reads as 98% or as 176% of its screen.
+        let landed_elsewhere = pinned
+            .zip(self.displays.first())
+            .is_some_and(|(pinned, landed)| landed.as_str() != pinned);
+        if landed_elsewhere {
+            return Some(format!(
+                "the window was pinned to {} but came up on {} — the frame rate is read as a \
+                 share of the pinned screen's refresh, and two screens do not run at one rate",
+                pinned.unwrap_or("?"),
                 self.displays.join(", ")
             ));
         }
@@ -744,8 +774,8 @@ impl Drop for Awake {
 }
 
 /// How long the wake loop sleeps between passes, and so both how stale
-/// its parent check may be and how far `Sample::away_ms` can climb.
-#[cfg(windows)]
+/// its parent check may be and how far `Sample::away_ms` can climb
+/// before [`Conditions::complaint`] reads it as the helper having died.
 const WAKE_SECS: u64 = 20;
 
 #[cfg(windows)]
@@ -961,7 +991,7 @@ fn linux_sample_once(pid: u32) -> Sample {
 
 #[cfg(test)]
 mod tests {
-    use super::{Conditions, Limits, Sample, Series, parse_host, parse_sample};
+    use super::{Conditions, Limits, Sample, Series, WAKE_SECS, parse_host, parse_sample};
 
     fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
         Sample {
@@ -1036,7 +1066,12 @@ mod tests {
         series.absorb(sample(100, true, 1, 0, 24_000_000));
         series.absorb(sample(100, true, 2, 0, 48_000_000));
         assert!(series.conditions.busy_percent.abs() < 0.001);
-        assert!(series.conditions.complaint(&Limits::default()).is_none());
+        assert!(
+            series
+                .conditions
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
     }
 
     #[test]
@@ -1047,7 +1082,12 @@ mod tests {
         series.absorb(sample(100, true, 2, 12_000_000, 36_000_000));
         assert!((series.conditions.busy_percent - 50.0).abs() < 0.001);
         assert!(series.conditions.foreign_percent.abs() < 0.001);
-        assert!(series.conditions.complaint(&Limits::default()).is_none());
+        assert!(
+            series
+                .conditions
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
     }
 
     #[test]
@@ -1057,10 +1097,10 @@ mod tests {
         series.absorb(sample(100, true, 2, 0, 36_000_000));
         let complaint = series
             .conditions
-            .complaint(&Limits::default())
+            .complaint(&Limits::default(), None)
             .expect("half the machine went elsewhere");
         assert!(complaint.contains("50.0%"), "{complaint}");
-        assert!(series.conditions.complaint(&Limits::OPEN).is_none());
+        assert!(series.conditions.complaint(&Limits::OPEN, None).is_none());
     }
 
     /// Losing the front is recorded and does not spoil the run: a window
@@ -1073,7 +1113,12 @@ mod tests {
         for tick in 1..=10 {
             series.absorb(sample(100, tick > 3, tick, 0, tick * 24_000_000));
         }
-        assert!(series.conditions.complaint(&Limits::default()).is_none());
+        assert!(
+            series
+                .conditions
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
         assert_eq!(series.conditions.foreground_share(), Some(0.7));
     }
 
@@ -1088,13 +1133,13 @@ mod tests {
         }
         let complaint = series
             .conditions
-            .complaint(&Limits::default())
+            .complaint(&Limits::default(), None)
             .expect("three ticks in a row with nobody able to look");
         assert!(
             complaint.contains("for 3 of 10 sampled ticks"),
             "{complaint}"
         );
-        assert!(series.conditions.complaint(&Limits::OPEN).is_none());
+        assert!(series.conditions.complaint(&Limits::OPEN, None).is_none());
     }
 
     /// The secure desktop flashing past — a consent prompt, a focus
@@ -1109,7 +1154,12 @@ mod tests {
             series.absorb(tick_sample);
         }
         assert_eq!(series.conditions.longest_blind, 2);
-        assert!(series.conditions.complaint(&Limits::default()).is_none());
+        assert!(
+            series
+                .conditions
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
     }
 
     /// Two short blinks are not one long one: the gate reads the longest
@@ -1124,7 +1174,12 @@ mod tests {
         }
         assert_eq!(series.conditions.interactive, 10);
         assert_eq!(series.conditions.longest_blind, 1);
-        assert!(series.conditions.complaint(&Limits::default()).is_none());
+        assert!(
+            series
+                .conditions
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
     }
 
     /// A window is mapped where the platform puts it and only then moved
@@ -1142,13 +1197,13 @@ mod tests {
         for _ in 0..12 {
             settling.absorb(&arrived, None);
         }
-        assert!(settling.complaint(&Limits::default()).is_none());
+        assert!(settling.complaint(&Limits::default(), None).is_none());
         assert_eq!(settling.displays, ["\\\\.\\DISPLAY2"]);
 
         let mut wandered = settling.clone();
         wandered.absorb(&elsewhere, None);
         let complaint = wandered
-            .complaint(&Limits::default())
+            .complaint(&Limits::default(), None)
             .expect("a second screen once the window was placed");
         assert!(complaint.contains("moved between screens"), "{complaint}");
     }
@@ -1162,8 +1217,63 @@ mod tests {
         conditions.absorb(&down, None);
         assert!(
             conditions
-                .complaint(&Limits::default())
+                .complaint(&Limits::default(), None)
                 .is_some_and(|c| c.contains("minimised"))
+        );
+    }
+
+    /// The wake helper is the only thing holding the display timer off,
+    /// and a dark screen shows up on its own in nothing but the scroll
+    /// bench's frame count — so a run taken without one would publish
+    /// the numbers of a screen nobody could see.
+    #[test]
+    fn a_wake_helper_that_stopped_is_refused() {
+        let alive = |away_ms| {
+            let mut conditions = Conditions::default();
+            for tick in 1..=10 {
+                let mut tick_sample = sample(100, true, tick, 0, tick * 24_000_000);
+                tick_sample.away_ms = away_ms;
+                conditions.absorb(&tick_sample, None);
+            }
+            conditions
+        };
+        // One interval and a bit is what a running helper leaves behind.
+        assert!(
+            alive(WAKE_SECS * 1_000 + 500)
+                .complaint(&Limits::default(), None)
+                .is_none()
+        );
+        let stopped = alive(WAKE_SECS * 3_000);
+        let complaint = stopped
+            .complaint(&Limits::default(), None)
+            .expect("nothing has injected an input for three intervals");
+        assert!(complaint.contains("wake helper"), "{complaint}");
+        assert!(stopped.complaint(&Limits::OPEN, None).is_none());
+    }
+
+    /// Pinning a window asks; it does not decide. The report divides the
+    /// frame rate by the refresh of the screen that was asked for, and
+    /// on this machine the screens are 180Hz and 100Hz.
+    #[test]
+    fn a_window_that_came_up_on_another_screen_is_refused() {
+        let mut conditions = Conditions::default();
+        // Past the settling window, or the window has not been seen on
+        // any screen yet and there is nothing to compare.
+        for tick in 1..=14 {
+            conditions.absorb(&sample(100, true, tick, 0, tick * 24_000_000), None);
+        }
+        assert_eq!(conditions.displays, ["\\\\.\\DISPLAY2"]);
+        assert!(
+            conditions
+                .complaint(&Limits::default(), Some("\\\\.\\DISPLAY2"))
+                .is_none()
+        );
+        let complaint = conditions
+            .complaint(&Limits::default(), Some("\\\\.\\DISPLAY1"))
+            .expect("the window is on DISPLAY2 and the frames would be read against DISPLAY1");
+        assert!(
+            complaint.contains("pinned to \\\\.\\DISPLAY1"),
+            "{complaint}"
         );
     }
 }
