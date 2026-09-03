@@ -146,8 +146,7 @@ fn fill(at: &Path) -> Result<(), String> {
     // config has none must still be able to build it.
     git(at, &["config", "user.name", "Corpus"])?;
     git(at, &["config", "user.email", "corpus@example.invalid"])?;
-    let (text, newest) = stream::build();
-    git_stdin(at, &["fast-import", "--quiet", "--force"], &text)?;
+    let newest = import(at)?;
     // fast-import writes refs and nothing else: without this the work
     // tree is the empty one `init` left, and every tracked file reads as
     // deleted — which the application would show as an enormous
@@ -239,36 +238,71 @@ fn git(at: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-/// The import stream is tens of megabytes, so it goes down a pipe while
-/// git reads it rather than through a file nobody would clean up.
+/// How much of the stream is held before it is handed to git. The
+/// stream is written a line at a time and is tens of gigabytes, so
+/// without a buffer this is one write syscall per line.
+const PIPE_BUFFER: usize = 4 * 1024 * 1024;
+
+/// Runs `fast-import` with the stream written straight into it.
 ///
 /// **The write is allowed to fail.** A git that rejects the stream exits
 /// while the rest of it is still being written, and the broken pipe that
 /// follows says nothing about why — so it is kept and only reported if
 /// git itself turns out to have had nothing to say.
-fn git_stdin(at: &Path, args: &[&str], input: &str) -> Result<(), String> {
+///
+/// **Its standard error is drained by a thread**, because both pipes are
+/// live at once for as long as the stream takes: a git that filled its
+/// error pipe would stop reading the stream, and a writer that never
+/// stops writing would never read the error. Each waiting for the other
+/// is a build that hangs rather than one that says why.
+fn import(at: &Path) -> Result<stream::Newest, String> {
     let mut child = Command::new("git")
         .current_dir(at)
-        .args(args)
+        .args(["fast-import", "--quiet", "--force"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("failed to spawn git {args:?}: {e}"))?;
-    let wrote = write_all(&mut child, input);
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if !out.status.success() || wrote.is_err() {
-        return Err(format!(
-            "git {args:?} failed: {}",
+        .map_err(|e| format!("failed to spawn git fast-import: {e}"))?;
+    let drain = child.stderr.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut said = String::new();
+            match std::io::Read::read_to_string(&mut pipe, &mut said) {
+                // A pipe that broke mid-message still carries the part
+                // of it that arrived, which is the part worth printing.
+                Ok(_) | Err(_) => said,
+            }
+        })
+    });
+    let wrote = match child.stdin.take() {
+        Some(pipe) => {
+            let mut buffered = std::io::BufWriter::with_capacity(PIPE_BUFFER, pipe);
+            stream::write(&mut buffered).and_then(|newest| {
+                std::io::Write::flush(&mut buffered)?;
+                Ok(newest)
+            })
+        }
+        None => Err(std::io::Error::other("fast-import took no standard input")),
+    };
+    // The pipe closes with the writer above, which is what tells
+    // fast-import the stream is over; waiting before that would wait
+    // forever.
+    let status = child.wait().map_err(|e| e.to_string())?;
+    let said = match drain.map(std::thread::JoinHandle::join) {
+        Some(Ok(said)) => said.trim().to_string(),
+        Some(Err(_)) | None => String::new(),
+    };
+    match wrote {
+        Ok(newest) if status.success() => Ok(newest),
+        wrote => Err(format!(
+            "git fast-import failed: {}",
             if said.is_empty() {
-                wrote.err().unwrap_or_default()
+                wrote.err().map(|e| e.to_string()).unwrap_or_default()
             } else {
                 said
             }
-        ));
+        )),
     }
-    Ok(())
 }
 
 fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String> {

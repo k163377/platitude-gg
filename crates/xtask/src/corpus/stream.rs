@@ -6,6 +6,8 @@
 //! — `reset` inside the import is what makes 50,000 of them free, where
 //! `update-ref --stdin` afterwards costs half a minute (measured).
 
+use std::io::{self, Write};
+
 use super::shape;
 
 /// Marks 1..=BODIES are the file bodies as the history leaves them, and
@@ -26,31 +28,36 @@ pub(super) struct Newest {
     pub(super) huge: String,
 }
 
-/// The whole corpus as one import stream, and what its newest commit
-/// holds.
-pub(super) fn build() -> (String, Newest) {
-    // Sized from the measured 4.6MB per 20,000 commits, so the string is
-    // grown once rather than a hundred times.
-    let mut stream = String::with_capacity(64 * 1024 * 1024);
+/// The whole corpus as one import stream, written as it is generated,
+/// and what its newest commit holds.
+///
+/// **It is written rather than returned.** The stream is every revision
+/// of every file spelled out in full — fast-import has no delta input —
+/// so it is larger than the repository it produces by more than an
+/// order of magnitude, and holding it would mean holding all of that at
+/// once. What git needs is a pipe, and a pipe is what this fills.
+pub(super) fn write(out: &mut dyn Write) -> io::Result<Newest> {
     for body in 0..shape::BODIES {
         let text = shape::body(body);
-        stream.push_str(&format!(
+        write!(
+            out,
             "blob\nmark :{}\ndata {}\n{text}\n",
             body + 1,
             text.len()
-        ));
+        )?;
         let edited = shape::body_edited(body);
-        stream.push_str(&format!(
+        write!(
+            out,
             "blob\nmark :{}\ndata {}\n{edited}\n",
             EDITED_MARK + body + 1,
             edited.len()
-        ));
+        )?;
     }
-    let holds = history(&mut stream);
-    side_branches(&mut stream);
-    let newest = newest_commit(&mut stream, &holds);
-    refs(&mut stream);
-    (stream, newest)
+    let holds = history(out)?;
+    side_branches(out)?;
+    let newest = newest_commit(out, &holds)?;
+    refs(out)?;
+    Ok(newest)
 }
 
 /// The chains the graph's window is mostly made of: short, unmerged, each
@@ -59,7 +66,7 @@ pub(super) fn build() -> (String, Newest) {
 ///
 /// The commit command names the ref, so these need no `reset` of their
 /// own — the branch and its tip arrive together.
-fn side_branches(stream: &mut String) {
+fn side_branches(out: &mut dyn Write) -> io::Result<()> {
     let trunk_tip = shape::FIRST_COMMIT_AT + shape::TRUNK * shape::STEP_SECS;
     for branch in 0..shape::SIDE_BRANCHES {
         let name = shape::remote_branch(branch);
@@ -82,22 +89,24 @@ fn side_branches(stream: &mut String) {
             let (who, mail) = shape::author(n ^ 0x5B10);
             let when = trunk_tip + (n + 1) * shape::STEP_SECS;
             let subject = shape::subject(n ^ 0x5B10);
-            stream.push_str(&format!("commit refs/remotes/{name}\n"));
-            stream.push_str(&format!("mark :{mark}\n"));
-            stream.push_str(&format!("author {who} <{mail}> {when} +0000\n"));
-            stream.push_str(&format!("committer {who} <{mail}> {when} +0000\n"));
-            stream.push_str(&format!("data {}\n{subject}\n", subject.len()));
+            writeln!(out, "commit refs/remotes/{name}")?;
+            writeln!(out, "mark :{mark}")?;
+            writeln!(out, "author {who} <{mail}> {when} +0000")?;
+            writeln!(out, "committer {who} <{mail}> {when} +0000")?;
+            write!(out, "data {}\n{subject}\n", subject.len())?;
             if step == 0 {
-                stream.push_str(&format!("from :{from}\n"));
+                writeln!(out, "from :{from}")?;
             }
             let at = n % shape::PATHS;
-            stream.push_str(&format!(
+            write!(
+                out,
                 "M 100644 :{} {}\n\n",
                 1 + n % (shape::BODIES - 1),
                 shape::path(at)
-            ));
+            )?;
         }
     }
+    Ok(())
 }
 
 /// The long line of development every ref hangs off. Almost linear, as
@@ -108,7 +117,7 @@ fn side_branches(stream: &mut String) {
 /// commit has to edit *that* body — a commit that put an unrelated body
 /// at a path would diff as a whole file rewritten, and the shape being
 /// built is a few lines changed in a file of whatever size.
-fn history(stream: &mut String) -> Vec<u64> {
+fn history(out: &mut dyn Write) -> io::Result<Vec<u64>> {
     // Bodies, not paths. Every slot is written before the newest commit
     // reads it — the trunk is hundreds of times longer than `PATHS` —
     // but a body number is what belongs here, and a path number left in
@@ -119,18 +128,19 @@ fn history(stream: &mut String) -> Vec<u64> {
         let (name, mail) = shape::author(n);
         let when = shape::FIRST_COMMIT_AT + n * shape::STEP_SECS;
         let subject = shape::subject(n);
-        stream.push_str("commit refs/heads/main\n");
-        stream.push_str(&format!("mark :{mark}\n"));
-        stream.push_str(&format!("author {name} <{mail}> {when} +0000\n"));
-        stream.push_str(&format!("committer {name} <{mail}> {when} +0000\n"));
-        stream.push_str(&format!("data {}\n{subject}\n", subject.len()));
+        writeln!(out, "commit refs/heads/main")?;
+        writeln!(out, "mark :{mark}")?;
+        writeln!(out, "author {name} <{mail}> {when} +0000")?;
+        writeln!(out, "committer {name} <{mail}> {when} +0000")?;
+        write!(out, "data {}\n{subject}\n", subject.len())?;
         // A second parent every so often. `from` is implicit for the
         // first parent: the ref already points at the previous commit.
         if n > shape::MERGE_EVERY && n % shape::MERGE_EVERY == 0 {
-            stream.push_str(&format!(
-                "merge :{}\n",
+            writeln!(
+                out,
+                "merge :{}",
                 FIRST_COMMIT_MARK + n - shape::MERGE_EVERY / 2
-            ));
+            )?;
         }
         let at = n % shape::PATHS;
         // The one large source keeps its body: the newest commit's edit
@@ -142,9 +152,9 @@ fn history(stream: &mut String) -> Vec<u64> {
             (at + n / shape::PATHS) % (shape::BODIES - 1)
         };
         holds[at as usize] = body;
-        stream.push_str(&format!("M 100644 :{} {}\n\n", body + 1, shape::path(at)));
+        write!(out, "M 100644 :{} {}\n\n", body + 1, shape::path(at))?;
     }
-    holds
+    Ok(holds)
 }
 
 /// The commit the interaction measurement opens: many files, so the
@@ -154,17 +164,17 @@ fn history(stream: &mut String) -> Vec<u64> {
 /// Its ordinary files come first by path so that the default scenario —
 /// which opens the first changed file — measures the common case, and
 /// the large one is opened by name when that is the question being asked.
-fn newest_commit(stream: &mut String, holds: &[u64]) -> Newest {
+fn newest_commit(out: &mut dyn Write, holds: &[u64]) -> io::Result<Newest> {
     let n = shape::COMMITS;
     let mark = FIRST_COMMIT_MARK + n;
     let (name, mail) = shape::author(n);
     let when = shape::FIRST_COMMIT_AT + n * shape::STEP_SECS;
     let subject = shape::subject(n);
-    stream.push_str("commit refs/heads/main\n");
-    stream.push_str(&format!("mark :{mark}\n"));
-    stream.push_str(&format!("author {name} <{mail}> {when} +0000\n"));
-    stream.push_str(&format!("committer {name} <{mail}> {when} +0000\n"));
-    stream.push_str(&format!("data {}\n{subject}\n", subject.len()));
+    writeln!(out, "commit refs/heads/main")?;
+    writeln!(out, "mark :{mark}")?;
+    writeln!(out, "author {name} <{mail}> {when} +0000")?;
+    writeln!(out, "committer {name} <{mail}> {when} +0000")?;
+    write!(out, "data {}\n{subject}\n", subject.len())?;
     let mut paths = Vec::new();
     for file in 0..shape::NEWEST_FILES {
         // Offset into the path pool by a stride the history's own
@@ -174,47 +184,58 @@ fn newest_commit(stream: &mut String, holds: &[u64]) -> Newest {
         // the history left there.
         let at = (file * 7 + 3) % shape::PATHS;
         let path = shape::path(at);
-        stream.push_str(&format!(
-            "M 100644 :{} {path}\n",
+        writeln!(
+            out,
+            "M 100644 :{} {path}",
             EDITED_MARK + holds[at as usize] + 1
-        ));
+        )?;
         paths.push(path);
     }
     let huge = shape::path(shape::PATHS - 1);
-    stream.push_str(&format!(
+    write!(
+        out,
         "M 100644 :{} {huge}\n\n",
         EDITED_MARK + shape::HUGE_BODY + 1
-    ));
+    )?;
     paths.sort();
-    Newest { paths, huge }
+    Ok(Newest { paths, huge })
 }
 
 /// The refs. Tags and remote-tracking branches spread across the whole
 /// history rather than bunched at its tip: what the ref tables cost is
 /// their names, and what the graph draws is where they land.
-fn refs(stream: &mut String) {
+fn refs(out: &mut dyn Write) -> io::Result<()> {
     for n in 0..shape::TAGS {
         let at = FIRST_COMMIT_MARK + 1 + (n * shape::TRUNK / shape::TAGS);
-        stream.push_str(&format!(
-            "reset refs/tags/{}\nfrom :{at}\n\n",
-            shape::tag(n)
-        ));
+        write!(out, "reset refs/tags/{}\nfrom :{at}\n\n", shape::tag(n))?;
     }
     // The first `SIDE_BRANCHES` of them already exist: their commits
     // named them, which is what put their tips in the graph's window.
     for n in shape::SIDE_BRANCHES..shape::REMOTE_BRANCHES {
         let at = FIRST_COMMIT_MARK + 1 + (n * shape::TRUNK / shape::REMOTE_BRANCHES);
-        stream.push_str(&format!(
+        write!(
+            out,
             "reset refs/remotes/{}\nfrom :{at}\n\n",
             shape::remote_branch(n)
-        ));
+        )?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{FIRST_COMMIT_MARK, build};
+    use super::{FIRST_COMMIT_MARK, Newest, write};
     use crate::corpus::shape;
+
+    /// The whole stream in memory, which only a test can afford.
+    fn build() -> (String, Newest) {
+        let mut buffer = Vec::new();
+        let newest = write(&mut buffer).expect("a vector never refuses a write");
+        (
+            String::from_utf8(buffer).expect("the stream is generated as UTF-8"),
+            newest,
+        )
+    }
 
     /// The stream is what git will be handed, so the things that must be
     /// true of it are counted here rather than after a two-minute
