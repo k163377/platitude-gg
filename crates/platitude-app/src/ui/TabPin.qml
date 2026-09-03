@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
-import QtQuick.Layouts
 import platitude.ui
 
 // The tab in front never leaves the strip: while its own row is scrolled off the run, this stand-in rides the edge the
@@ -22,6 +21,8 @@ Rectangle {
     required property var metrics
     property real titleCap: 0
     property real titleEaseW: 0
+    property real markRoom: 0
+    property real fadeW: 0
     /// The tab in front, as the strip's list built it (`TabStrip.frontTab`). Everything drawn here is read off that
     /// item — where it sits, how wide it came out, what it is called, what it stands on — so the stand-in cannot say
     /// anything the tab is not saying. Null while no tab is open, and null again for the frame between a tab closing
@@ -59,6 +60,10 @@ Rectangle {
     /// (`TabMetrics.titleEase`). Read off the label's own hint, which is the name at its natural width.
     readonly property real titleEase:
         tabPin.metrics.titleEase(pinTitle.implicitWidth, tabPin.titleCap, tabPin.titleEaseW)
+    /// Where that air is set down, and whether the name still runs on under the mark once it has been spent — both as
+    /// the rows settle them (`TabItemDelegate`).
+    readonly property real easeRight: tabPin.metrics.easeRight(tabPin.titleEase, tabPin.markRoom)
+    readonly property bool nameUnderMark: tabPin.markRoom + tabPin.easeRight < tabPin.metrics.markRoomFull
 
     /// The tab this stands for, closed. The whole of it is the target, the way the whole of a tab is
     /// (デザイン規約 §タブの所作「閉じる的はタブ全体」).
@@ -103,6 +108,30 @@ Rectangle {
                 tabPin.activated()
         }
     }
+    // The tab's own face, at the tab's own margins (`TabItemDelegate` carries what each part of it is for).
+    Label {
+        id: pinTitle
+        anchors.fill: parent
+        anchors.leftMargin: tabPin.metrics.tabPadL + tabPin.titleEase - tabPin.easeRight
+        anchors.rightMargin: tabPin.markRoom + tabPin.easeRight
+        text: tabPin.frontTab ? tabPin.frontTab.title : ""
+        elide: Text.ElideRight
+        font.letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
+        verticalAlignment: Text.AlignVCenter
+        font.weight: Font.DemiBold
+        color: Theme.textPrimary
+    }
+    // The name goes quiet under the mark on the same terms the rows do. One ground rather than the rows' two: this one
+    // is always the tab in front, so what is behind its name is its own.
+    TabTitleFade {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: tabPin.metrics.markRoomFull + tabPin.fadeW
+        rampW: tabPin.fadeW
+        ground: tabPin.color
+        visible: tabPin.nameUnderMark
+    }
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
@@ -110,32 +139,19 @@ Rectangle {
         height: 2 * Theme.borderWidth
         color: Theme.accent
     }
-    // The tab's own row, at the tab's own margins (`TabItemDelegate` carries what each of the three is for).
-    RowLayout {
-        anchors.fill: parent
-        anchors.leftMargin: Theme.spaceXs + tabPin.titleEase / 2
+    // The tab in front always has its mark out (デザイン規約 §タブの所作), and the room it stands in is part of what that
+    // tab costs — a stand-in drawn without it would be the same width with a hole at the end of it.
+    CloseToolButton {
+        id: pinMark
+        anchors.right: parent.right
         anchors.rightMargin: tabPin.metrics.markGap
-        spacing: tabPin.metrics.markGap + tabPin.titleEase / 2
-        Label {
-            id: pinTitle
-            text: tabPin.frontTab ? tabPin.frontTab.title : ""
-            elide: Text.ElideRight
-            Layout.maximumWidth: tabPin.titleCap
-            font.letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
-            Layout.fillHeight: true
-            verticalAlignment: Text.AlignVCenter
-            font.weight: Font.DemiBold
-            color: Theme.textPrimary
-        }
-        // The tab in front always has its mark out (デザイン規約 §タブの所作), and the seat it stands in is part of what
-        // that tab costs — a stand-in drawn without it would be the same width with a hole at the end of it.
-        CloseToolButton {
-            id: pinMark
-            Layout.alignment: Qt.AlignVCenter
-            implicitWidth: tabPin.metrics.markSeat
-            topInset: (Theme.iconLg - tabPin.metrics.markSeat) / 2
-            bottomInset: pinMark.topInset
-            onClicked: tabPin.closeFront()
-        }
+        anchors.verticalCenter: parent.verticalCenter
+        implicitWidth: tabPin.metrics.markSeat
+        topInset: (Theme.iconLg - tabPin.metrics.markSeat) / 2
+        bottomInset: pinMark.topInset
+        // Nothing sideways, for the reason the rows' mark carries.
+        leftInset: 0
+        rightInset: 0
+        onClicked: tabPin.closeFront()
     }
 }

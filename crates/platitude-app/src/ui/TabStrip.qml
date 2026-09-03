@@ -11,6 +11,10 @@ Item {
     id: tabStrip
 
     required property var tabsModel
+    /// The ground the band paints behind this strip, which the band itself is the one to say (`TopBar`). A tab that is
+    /// not in front paints nothing of its own, so this is what a name has behind it — and what it goes quiet into
+    /// under its mark (`TabItemDelegate.titleFade`).
+    required property color bandColor
     /// Whether the band this strip sits in is the window's title bar. When it is, the strip keeps a run of band clear
     /// to take hold of (`tabs.grabRun`).
     property bool captionMerged: false
@@ -50,16 +54,20 @@ Item {
     /// The longest and shortest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
     readonly property int tabTitleMaxW: tabMetrics.titleMaxW
     readonly property int tabTitleMinW: tabMetrics.titleMinW
-    /// The length a name stops being eased at, pushed rather than bound (`TabMetrics.titleEaseW`).
+    /// The length a name stops being eased at, and the run a name goes quiet over where the mark stands on it — both
+    /// pushed rather than bound (`TabMetrics.titleEaseW` / `fadeW`).
     property real tabTitleEaseW: 0
-    /// What every tab's name is capped at right now — the strip's answer to how much room it was given
-    /// (`settleTitleCap`).
+    property real tabTitleFadeW: 0
+    /// What every tab's name is capped at right now, and the room every tab keeps for its mark — the strip's two
+    /// answers to how much run it was given, in the order it gives them up (`settleTitleCap`).
     property real tabTitleCap: tabStrip.tabTitleMaxW
+    property real tabMarkRoom: tabMetrics.markRoomFull
     /// What the strip would take with nothing cut (`settleTitleCap`), and the least it is ever laid out at. Two tabs,
     /// not one (規約 §ウィンドウの縁).
     property real tabsWantWidth: 0
     readonly property int tabStripFloorW:
-        menuButton.width + plusButton.width + tabs.grabRun + 2 * (tabMetrics.tabFixedW + tabStrip.tabTitleMinW)
+        menuButton.width + plusButton.width + tabs.grabRun
+        + 2 * (tabMetrics.tabPadL + tabMetrics.markRoomMin + tabStrip.tabTitleMinW)
 
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
@@ -197,10 +205,12 @@ Item {
     /// strip carries for a headless run is the list it was laying out anyway.
     readonly property alias tabsView: tabs
 
-    /// Hands the run out among the tab names, the longest giving way last (デザイン規約 §ウィンドウの縁); below `tabTitleMinW`
-    /// the strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of items, and a
-    /// binding cannot see one of those arrive. Whole pixels throughout — a strip sized off fractional widths comes out
-    /// a pixel over the run it was told to fit in, which is a strip that scrolls when nothing is out of room.
+    /// Hands the run out in the order the band gives things up (デザイン規約 §ウィンドウの縁): the room the marks stand in
+    /// first — all of it, off every tab at once — and only then the names, the longest giving way last; below
+    /// `tabTitleMinW` the strip scrolls instead. Settled by hand rather than bound: the widths are read off a list of
+    /// items, and a binding cannot see one of those arrive. Whole pixels throughout — a strip sized off fractional
+    /// widths comes out a pixel over the run it was told to fit in, which is a strip that scrolls when nothing is out
+    /// of room.
     function settleTitleCap() {
         let nat = []
         for (let i = 0; i < titleMeasure.count; i++) {
@@ -213,16 +223,31 @@ Item {
         // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
         // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
         tabStrip.tabTitleEaseW = tabMetrics.titleEaseW()
+        tabStrip.tabTitleFadeW = tabMetrics.fadeW()
         const eased = nat.reduce(
             (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
-        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + eased
-            + nat.reduce((sum, w) => sum + w, 0) + nat.length * tabMetrics.tabFixedW
+        const names = nat.reduce((sum, w) => sum + w, 0)
+        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + eased + names
+            + nat.length * (tabMetrics.tabPadL + tabMetrics.markRoomFull)
         if (nat.length === 0) {
+            tabStrip.tabMarkRoom = tabMetrics.markRoomFull
+            tabStrip.tabTitleCap = tabStrip.tabTitleMaxW
+            return
+        }
+        // The room the marks stand in is what a crowded strip takes back first, and **every tab gives up the same
+        // amount of it** (デザイン規約 §ウィンドウの縁): taking it from the tabs that are short of run would stand the
+        // marks at a different distance from each tab's edge, which is a row of marks nobody lined up.
+        const room = Math.floor(
+            (Math.floor(tabs.runAvail) - eased - names - nat.length * tabMetrics.tabPadL) / nat.length)
+        tabStrip.tabMarkRoom = Math.max(tabMetrics.markRoomMin, Math.min(tabMetrics.markRoomFull, room))
+        // No name is cut while that room still has something left to give.
+        if (room > tabMetrics.markRoomMin) {
             tabStrip.tabTitleCap = tabStrip.tabTitleMaxW
             return
         }
         nat.sort((a, b) => a - b)
-        let left = Math.floor(tabs.runAvail) - nat.length * tabMetrics.tabFixedW - eased
+        let left = Math.floor(tabs.runAvail) - eased
+            - nat.length * (tabMetrics.tabPadL + tabMetrics.markRoomMin)
         let cap = tabStrip.tabTitleMaxW
         for (let i = 0; i < nat.length; i++) {
             const share = Math.floor(left / (nat.length - i))
@@ -319,6 +344,11 @@ Item {
             metrics: tabMetrics
             titleCap: tabStrip.tabTitleCap
             titleEaseW: tabStrip.tabTitleEaseW
+            markRoom: tabStrip.tabMarkRoom
+            fadeW: tabStrip.tabTitleFadeW
+            // What a tab that paints no ground of its own is read against, and so what its name goes quiet into
+            // where the mark stands over it (`TabItemDelegate.titleFade`).
+            bandColor: tabStrip.bandColor
             stripHeight: tabs.height
             held: tabCarry.heldId === tabItem.tab_id
             heldX: tabCarry.heldX
@@ -355,6 +385,8 @@ Item {
         frontTab: tabStrip.frontTab
         titleCap: tabStrip.tabTitleCap
         titleEaseW: tabStrip.tabTitleEaseW
+        markRoom: tabStrip.tabMarkRoom
+        fadeW: tabStrip.tabTitleFadeW
         runX: tabs.x
         runWidth: tabs.width
         runOffset: tabs.contentX
@@ -373,7 +405,8 @@ Item {
     //
     // The mark is a step below its seat. The band's own marks are its two ends — the ☰ and the window buttons, each a
     // `railWidth` cell its full height (§ウィンドウの縁) — and this is not one of those: it follows the last tab, so what
-    // it is level with is the `✕` standing in the tabs beside it, which is the ink the typed `+` carried anyway.
+    // it is level with is the `✕` standing in the tabs beside it, which is the ink the typed `+` carried anyway. Read
+    // off that mark's own seat rather than off the token it happens to be, so the two cannot come out a step apart.
     //
     // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
     // in the band's depth — a bare `iconLg` box has to be aimed at. The one part of that depth the scene never sees is
@@ -389,8 +422,8 @@ Item {
         id: plusButton
         x: tabs.x + tabs.width
         height: tabStrip.height
-        padding: (Theme.iconXl - Theme.iconSm) / 2
-        topPadding: Math.round((plusButton.height - Theme.iconSm) / 2)
+        padding: (Theme.iconXl - tabMetrics.markSeat) / 2
+        topPadding: Math.round((plusButton.height - tabMetrics.markSeat) / 2)
         bottomPadding: plusButton.topPadding
         topInset: Math.round((plusButton.height - Theme.iconXl) / 2)
         bottomInset: plusButton.topInset

@@ -333,7 +333,8 @@ Item {
     }
 
     // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip that narrowed the wrong tabs comes out looking
-    // like one that got it right. `widths=` is the answer.
+    // like one that got it right. `widths=` is the answer, and `room=` says which of the two things the strip gives up
+    // it is living on (the mark's room first, the names after).
     SampleTimer {
         id: tabWidthActTimer
         running: Harness.autoAct === "tab-widths"
@@ -345,6 +346,7 @@ Item {
                 "tab_widths tabs=" + topBar.bandTabCount
                 + " run=" + Math.round(topBar.bandTabRun)
                 + " cap=" + Math.round(topBar.tabTitleCap)
+                + " room=" + Math.round(topBar.tabMarkRoom)
                 + " floor=" + topBar.tabTitleMinW
                 + " ease=" + Math.round(topBar.tabTitleEaseW)
                 + " max=" + topBar.tabTitleMaxW

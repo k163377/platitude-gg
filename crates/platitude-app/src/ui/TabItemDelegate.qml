@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
-import QtQuick.Layouts
 import platitude.ui
 
 // One tab in the strip: the repository's name, the mark that closes it, and the two washes that say which tab is in
@@ -15,10 +14,16 @@ Rectangle {
     required property string repo_path
     /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
     required property var tabsModel
-    /// What every name in the strip is capped at right now, and the length a name stops being eased at — both settled
-    /// in the same pass, off the same run (`TabStrip.settleTitleCap`).
+    /// What every name in the strip is capped at right now, the length a name stops being eased at, the room every tab
+    /// keeps for its mark, and the run a name goes quiet over where the mark stands on it — all settled in the same
+    /// pass, off the same run (`TabStrip.settleTitleCap`).
     property real titleCap: 0
     property real titleEaseW: 0
+    property real markRoom: 0
+    property real fadeW: 0
+    /// The ground the band paints behind this tab (`TabStrip.bandColor`) — what the name goes quiet into on every tab
+    /// but the one in front, which paints its own.
+    required property color bandColor
     /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
     /// name is eased. One object rather than a copy of each number, so the strip and the tab cannot disagree.
     required property var metrics
@@ -26,6 +31,10 @@ Rectangle {
     /// own hint, which is the name at its natural width — the cap is a maximum on the item and does not move it.
     readonly property real titleEase:
         tabItem.metrics.titleEase(tabTitle.implicitWidth, tabItem.titleCap, tabItem.titleEaseW)
+    /// How much of that air is set down on the mark's side (`TabMetrics.easeRight`), and — once it has all been spent —
+    /// whether the name still runs on under the mark. The second is what the fade is for and nothing else asks it.
+    readonly property real easeRight: tabItem.metrics.easeRight(tabItem.titleEase, tabItem.markRoom)
+    readonly property bool nameUnderMark: tabItem.markRoom + tabItem.easeRight < tabItem.metrics.markRoomFull
     /// The strip's height, which every tab is drawn at.
     property real stripHeight: 0
     readonly property bool current: tabItem.tabsModel.currentIndex === tabItem.index
@@ -65,11 +74,11 @@ Rectangle {
     /// nothing standing there (`TabStrip.middleClickTab` carries the same note).
     signal frontChanged(bool front)
 
-    // The name, the two margins, and the half of the easing that falls outside the row (`tabContent` carries the other
-    // half in its spacing). Exact fit: anything the layout cannot hand out lands on the right margin, where nobody
-    // wrote it down. Rounded up so this and `settleTitleCap` agree on what the tab costs, or the strip scrolls by the
-    // fractions they disagree about.
-    width: Math.ceil(tabContent.implicitWidth) + tabItem.metrics.tabPadW + tabItem.titleEase / 2
+    // The name at whatever it is capped to, the step it is set at on the near side, the room the mark stands in on the
+    // far one, and the easing a short name is given. Rounded up so this and `settleTitleCap` agree on what the tab
+    // costs, or the strip scrolls by the fractions they disagree about.
+    width: Math.ceil(Math.min(tabTitle.implicitWidth, tabItem.titleCap))
+        + tabItem.metrics.tabPadL + tabItem.markRoom + tabItem.titleEase
     height: tabItem.stripHeight
     // Over the tabs it is being carried past: between one neighbour's half and the next one's, the tab in hand covers
     // the tab it has not displaced yet.
@@ -162,6 +171,53 @@ Rectangle {
         color: Theme.bgHover
         visible: tabItem.pointed && !tabItem.current
     }
+    // The name, set a step in from the near edge and stopping where the room kept for the mark begins. A tab is a
+    // dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」; by design = the `spaceSm`
+    // step it had was read as too much air on both sides of the name).
+    //
+    // A short name's easing goes on either side of the **name** rather than at the tab's two edges: the mark keeps its
+    // own step off the far edge whatever the name does, so what opens up is the room the name is set in (by design —
+    // the seat every short name was padded out to made a row of equal blanks). The cap the whole strip shares is not
+    // written here: the tab's own width is already measured off it, and this fills what that leaves.
+    Label {
+        id: tabTitle
+        anchors.fill: parent
+        anchors.leftMargin: tabItem.metrics.tabPadL + tabItem.titleEase - tabItem.easeRight
+        anchors.rightMargin: tabItem.markRoom + tabItem.easeRight
+        text: tabItem.title
+        elide: Text.ElideRight
+        // The other half of the easing: a short name is set with its letters a little apart, so the air it is
+        // given belongs to the word rather than standing beside it. Off the letter count, never off the width —
+        // the width is what the air is computed from (`TabMetrics.titleTracking`).
+        font.letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
+        verticalAlignment: Text.AlignVCenter
+        font.weight: tabItem.current ? Font.DemiBold : Font.Normal
+        color: Theme.textPrimary
+    }
+    // What the name does where the mark has come to stand over it (デザイン規約 §タブの所作). The strip gives the mark's
+    // room up before it cuts a single name, so past that point the name runs on underneath — and this is what says so.
+    // Drawn in the tab's own ground, the wash it wears under the hand folded in, since that is what is behind the name
+    // at this end of a tab.
+    //
+    // Declared after the name and before the underline, which are the two things it must sit between: the line is the
+    // tab's own edge and goes over everything, and the mark below is what all of this is about.
+    TabTitleFade {
+        id: titleFade
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: tabItem.metrics.markRoomFull + tabItem.fadeW
+        rampW: tabItem.fadeW
+        ground: tabItem.current
+            ? Theme.bgSelected
+            : (tabItem.pointed ? Qt.tint(tabItem.bandColor, Theme.bgHover) : tabItem.bandColor)
+        // As strongly as the mark itself stands: what quietens the name is the mark being over it, so the two arrive
+        // and leave together. Read off the mark rather than asked of the same condition twice.
+        opacity: closeMark.opacity
+        // Nothing to quieten while this name still stops a whole step short of its mark — which a short one goes on
+        // doing after the strip has taken the room back, by spending its eased air on that side (`easeRight`).
+        visible: tabItem.nameUnderMark
+    }
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
@@ -170,58 +226,39 @@ Rectangle {
         color: Theme.accent
         visible: tabItem.current
     }
-    RowLayout {
-        id: tabContent
-        anchors.fill: parent
-        // A tab is a dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」;
-        // by design = the `spaceSm` step it had was read as too much air on both sides of the name).
-        //
-        // The mark's two sides are seated off its ink rather than off its box (`TabStrip.markGap`), so all three gaps
-        // in a tab are the one step: the name from the near edge, the mark from the name, the far edge from the mark.
-        // A spacing of nothing is what the wider step could afford — there the box's own air was already the whole gap
-        // — and it is what left the mark sitting nearer both its neighbours than the name sat to the tab's edge.
-        //
-        // A short name's easing goes on either side of the **name** rather than at the tab's two edges: the mark keeps
-        // its own step off the far edge whatever the name does, so what opens up is the room the name is set in
-        // (by design — the seat every short name was padded out to made a row of equal blanks).
-        anchors.leftMargin: Theme.spaceXs + tabItem.titleEase / 2
+    // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed rather than dropped: an item the
+    // layout has stopped seeing takes its width with it, and the tab would change size under the hand that came to
+    // close it.
+    //
+    // Stood against the tab's far edge rather than placed after the name: the room in front of it is the first thing a
+    // crowded strip takes back (`TabStrip.settleTitleCap`), and a mark that moved with it would sit at a different
+    // distance from every tab's edge. Its two sides are seated off its ink rather than off its box
+    // (`TabMetrics.markGap`), so all three gaps in a tab are the one step: the name from the near edge, the ink from
+    // the tab's far one, and — where the fade above ends — the name from the ink.
+    CloseToolButton {
+        id: closeMark
+        anchors.right: parent.right
         anchors.rightMargin: tabItem.metrics.markGap
-        spacing: tabItem.metrics.markGap + tabItem.titleEase / 2
-        Label {
-            id: tabTitle
-            text: tabItem.title
-            elide: Text.ElideRight
-            // The cap the whole strip shares; capping the hint is what narrows the tab.
-            Layout.maximumWidth: tabItem.titleCap
-            // The other half of the easing: a short name is set with its letters a little apart, so the air it is
-            // given belongs to the word rather than standing beside it. Off the letter count, never off the width —
-            // the width is what the air is computed from (`TabMetrics.titleTracking`).
-            font.letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
-            Layout.fillHeight: true
-            verticalAlignment: Text.AlignVCenter
-            font.weight: tabItem.current ? Font.DemiBold : Font.Normal
-            color: Theme.textPrimary
-        }
-        // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed rather than dropped: an item the
-        // layout has stopped seeing takes its width with it, and the tab would change size under the hand that came to
-        // close it.
-        CloseToolButton {
-            id: closeMark
-            Layout.alignment: Qt.AlignVCenter
-            // Narrower than the `iconLg` seat this mark stands in everywhere else (デザイン規約 §寸法). A seat is air the
-            // layout cannot see past: the `iconLg` one carried `(iconLg − iconSm) / 2` on each side, so the name and
-            // the tab's own edge were held further out than the margins beside them said, and at this step no margin
-            // could take it back without pushing the seat over the tab beside it. Cut to the mark's own box, the air
-            // left over is small enough for `markGap` to spend the rest and land the ink a whole step from both.
-            //
-            // Only the width comes in. The seat stays `iconLg` tall so a hand coming down the strip still lands on the
-            // mark, and the wash is inset back to a box on the ink — only the target grows
-            // (§当たり判定; after `TabStrip`'s `+`).
-            implicitWidth: tabItem.metrics.markSeat
-            topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
-            bottomInset: closeMark.topInset
-            opacity: tabItem.current || tabItem.pointed ? 1 : 0
-            onClicked: tabItem.tabsModel.closeTab(tabItem.tab_id)
-        }
+        anchors.verticalCenter: parent.verticalCenter
+        // Held to the mark's own box (デザイン規約 §寸法). A seat is air the layout cannot see past: the `iconLg` one
+        // every other closing mark stands in carries `(iconLg − markSeat) / 2` on each side, which at this step is
+        // wider than the step itself — the seat would hang over the tab beside it and eat its hover. Cut to the box,
+        // the air left over is small enough for `markGap` to spend the rest and land the ink a whole step from the
+        // tab's edge.
+        //
+        // Only the width comes in. The seat stays `iconLg` tall so a hand coming down the strip still lands on the
+        // mark, and the wash is inset back to a box on the ink — only the target grows
+        // (§当たり判定; after `TabStrip`'s `+`).
+        implicitWidth: tabItem.metrics.markSeat
+        topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
+        bottomInset: closeMark.topInset
+        // Sideways there is nothing to inset: this seat is already the mark's own box. Written out because the shared
+        // one carries `leftInset: topInset` for the callers whose seat is **larger** than the wash — left bound, the
+        // depth taken off the top and bottom here would come off the sides as well and leave a wash narrower than the
+        // ink it is meant to sit behind.
+        leftInset: 0
+        rightInset: 0
+        opacity: tabItem.current || tabItem.pointed ? 1 : 0
+        onClicked: tabItem.tabsModel.closeTab(tabItem.tab_id)
     }
 }

@@ -10,8 +10,9 @@ QtObject {
     id: tabMetrics
 
     /// The seat the closing mark stands in — held to its ink rather than to the `iconLg` box it gets everywhere else
-    /// (デザイン規約 §寸法; `TabItemDelegate` carries the reasoning).
-    readonly property int markSeat: Theme.iconSm
+    /// (デザイン規約 §寸法; `TabItemDelegate` carries the reasoning). A step above the `iconSm` the window's other
+    /// closing marks take: a tab's `✕` is aimed at rather than read (§寸法「タブの `✕` だけは 1 段上」).
+    readonly property int markSeat: Theme.iconMd
     /// The air that seat still holds around the ink, asked of the mark rather than written down as a token beside it:
     /// `close` is two diagonals set well inside their box, so the `spaceXs` it was once called was a pixel and a half
     /// out. The per-kind knowledge is `NavIcon`'s and stays there — `inkRight` is arithmetic on
@@ -25,10 +26,14 @@ QtObject {
     /// What the tab spends either side of that ink to make each gap its own step, so the `✕` stands as far from the
     /// name and from the tab's far edge as the name stands from the near one (デザイン規約 §余白).
     readonly property real markGap: Theme.spaceXs - tabMetrics.markAir
-    /// The two margins, and what a tab costs before its name has a single letter in it — those, the gap before the
-    /// mark, and the mark.
-    readonly property real tabPadW: Theme.spaceXs + tabMetrics.markGap
-    readonly property real tabFixedW: tabMetrics.tabPadW + tabMetrics.markGap + tabMetrics.markSeat
+    /// The step the name is set at on the near side. Never given up: it is the one the far side comes down to
+    /// (デザイン規約 §ウィンドウの縁).
+    readonly property real tabPadL: Theme.spaceXs
+    /// The room the far side keeps for the mark when the strip has it to give — the seat, and the same step either
+    /// side of the ink. **The first thing a crowded strip takes back**, down to `markRoomMin`, before a single name is
+    /// cut (同§). Under that room the name runs on under the mark, and what says so is the fade below.
+    readonly property real markRoomFull: 2 * tabMetrics.markGap + tabMetrics.markSeat
+    readonly property real markRoomMin: tabMetrics.tabPadL
 
     /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
     readonly property int titleMaxW: 180
@@ -59,6 +64,14 @@ QtObject {
         return Math.round(Math.max(0, Math.min(easeW, cap) - naturalW) * tabMetrics.titleEaseShare)
     }
 
+    /// Which side of the name that air is set down on. Half and half while the mark keeps its whole room; as the strip
+    /// takes that room back the air moves to the **mark's** side first, and only what is left over stays on the near
+    /// one. A short name has room to spare in its own tab, so it should not be the one that ends up under the mark —
+    /// what the strip is short of is run for all of them, which the tab has already given up in its width.
+    function easeRight(ease, markRoom) {
+        return Math.max(ease / 2, Math.min(ease, tabMetrics.markRoomFull - markRoom))
+    }
+
     /// How far apart a short name's letters are set, at its shortest. Part of the same easing and for the same reason:
     /// a two-letter name in a tab wider than itself reads as a word pushed into a corner, and opening the letters lets
     /// the extra air belong to the name instead of standing beside it. Scaled by how far short the name is **in
@@ -68,6 +81,16 @@ QtObject {
         if (chars >= tabMetrics.titleEaseChars)
             return 0
         return Theme.tracking * (tabMetrics.titleEaseChars - chars) / tabMetrics.titleEaseChars
+    }
+
+    /// How far a name goes quiet before it reaches the mark standing over it — **in letters, not pixels**, the measure
+    /// the floor and the easing above are already counted in (デザイン規約 レイアウト初期値). The same count as the floor
+    /// keeps: the fade never eats more of a name than the shortest one is allowed to be.
+    ///
+    /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
+    readonly property int fadeChars: 3
+    function fadeW() {
+        return Math.ceil(tabMetrics.fadeChars * tabMetrics.titleFont.advanceWidth("n"))
     }
 
     /// The font the strip draws its names in, for the floors above to be measured in.

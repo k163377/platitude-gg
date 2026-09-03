@@ -242,6 +242,10 @@ Rectangle {
     readonly property int tabTitleMinW: tabStrip.tabTitleMinW
     readonly property real tabTitleEaseW: tabStrip.tabTitleEaseW
     readonly property int tabTitleMaxW: tabStrip.tabTitleMaxW
+    /// The room every tab is keeping for its mark, which is what the strip gives up first — the two ends it is settled
+    /// between are the strip's own (`TabMetrics.markRoomFull` / `markRoomMin`). A picture of a strip that has given it
+    /// all up reads the same as one that has not had to.
+    readonly property real tabMarkRoom: tabStrip.tabMarkRoom
 
     implicitHeight: Theme.toolbarHeight
     color: Theme.bgElevated
@@ -257,6 +261,9 @@ Rectangle {
         TabStrip {
             id: tabStrip
             tabsModel: topBar.tabsModel
+            // The band's own ground, said by the band: a tab that is not in front paints none of its own, so this is
+            // what its name is read against — and what the name goes quiet into under its mark.
+            bandColor: topBar.color
             captionMerged: topBar.captionMerged
             curPage: topBar.curPage
             Layout.fillWidth: true
