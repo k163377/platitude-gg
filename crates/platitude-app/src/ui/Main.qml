@@ -117,8 +117,22 @@ ApplicationWindow {
     }
 
     // Window focus is a refresh trigger (refs/status/stash only).
+    //
+    // **The window arriving is not the window coming back.** The repository behind it is being read for the first
+    // time at that very moment (`RepoSession::open` → `refresh_quick`), so counting that first activation asks the
+    // same question twice: the read slot books the page's copy behind the opening's own and runs it the instant the
+    // first lands (`session::ReadSlot`). What that second pass costs is a whole `git status --porcelain=v2 -uall` —
+    // every tracked and ignored file lstat'd again — for an answer nothing could have changed since.
     property int focusEpoch: 0
-    onActiveChanged: if (active) focusEpoch++
+    /// Whether the window has been away. Read off the losing of focus rather than the first taking of it: that way a
+    /// window that is already active before this handler exists still counts its first real return.
+    property bool everAway: false
+    onActiveChanged: {
+        if (!root.active)
+            root.everAway = true
+        else if (root.everAway)
+            root.focusEpoch++
+    }
 
     // Being on screen — not being focused — drives the periodic re-read: a window that only catches up when clicked
     // hides exactly what it is kept open to show.
