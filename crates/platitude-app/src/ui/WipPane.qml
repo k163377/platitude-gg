@@ -285,10 +285,23 @@ ColumnLayout {
         wipPane.anchorRow = row
         return true
     }
+    /// Where in the pane's numbering a key sits; -1 for a row no bucket is showing.
+    ///
+    /// **Each bucket is asked once**, rather than every row being asked for its key: this runs on every click, and a
+    /// tree with thousands of changed files would otherwise cross the bridge once per row to find the one that was
+    /// just pressed. A `<bucket>:<path>` shows in exactly one run — untracked files are shown among the unstaged, and
+    /// a file changed on both sides has a different bucket in each — so the first bucket that owns it is the answer
+    /// (`FileRowWalk` asks the same question the same way).
     function rowIndexOf(key) {
-        for (let i = 0; i < wipPane.rowCount(); i++)
-            if (wipPane.keyAt(i) === key)
-                return i
+        const named = wipPane.rowOfKey(key)
+        const standing = wipPane.bucketPanes
+        let before = 0
+        for (let i = 0; i < standing.length; i++) {
+            const at = standing[i].model.rowOfFileIn(named.bucket, named.fullName)
+            if (at >= 0)
+                return before + at
+            before += standing[i].rows
+        }
         return -1
     }
     /// Every file row between two places in the pane's numbering, ends included — the rows a Shift-click reaches.
