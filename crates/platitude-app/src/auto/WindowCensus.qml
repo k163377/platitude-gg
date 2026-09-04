@@ -137,6 +137,12 @@ Item {
     /// census adds such a run's names to the line rather than writing the line with them (`gate::census`), which is
     /// what keeps a checked-in file from moving under a machine's timing.
     ///
+    /// **Every read the page is still waiting on is named here, the selected commit's included.** A predicate that
+    /// stopped at the working tree, the refs and the graph called a run settled while the changed-file list was on its
+    /// way, and the verbs that finish on something else of their own then wrote and unwrote one another's
+    /// `FileRowDelegate` from run to run (measured: `ref-list 1 --preset tags` lost it in 2 runs of 8 taken at once,
+    /// and in none of 10 taken one after another — the window opens under load, which is exactly where the gate runs).
+    ///
     /// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was
     /// never given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing
     /// is coming, so the run photographed the whole of what its verb shows and may write its line. Answering no for
@@ -150,7 +156,7 @@ Item {
             return true
         // An accepted path is only the beginning: the rows arrive with the reads behind it.
         return state === "open" && page.pageWt.loaded
-            && page.pageRefsLoaded && page.pageGraph.finishCount > 0
+            && page.pageRefsLoaded && page.pageGraph.finishCount > 0 && page.pageDetailsSettled
     }
 
     /// The run is finishing: the walk, then the report lines.

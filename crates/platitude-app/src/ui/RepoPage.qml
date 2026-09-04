@@ -1788,6 +1788,13 @@ Item {
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
     /// what the band's fetch button is allowed to be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded
+    /// Whether the right pane is still waiting on the selected commit's own read — the last of the page's reads, and
+    /// the one the changed-file list is laid out from. **The graph's pass and the refs are both in before it is even
+    /// asked for**: they are what decide the row this page opens on, and the request goes out from that landing
+    /// (`trySelectDefault`). **Settled, not loaded**: a page showing the working tree is waiting for no such answer,
+    /// and neither is a repository with no commit to select, so both answer yes holding no details at all.
+    readonly property bool pageDetailsSettled: page.wipShown || page.selectedOid === ""
+                                               || !detailsModel.loading
     /// The window's own band, handed back in by `Main`. The Stash button stands there rather than on this page
     /// (デザイン規約 §変更を退避する), and this page's verbs press the real one through here — a verb that called what the
     /// button calls would be answering for a second way in rather than for the band's wiring. An automation-only
