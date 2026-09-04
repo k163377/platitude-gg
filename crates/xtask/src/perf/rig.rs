@@ -160,8 +160,11 @@ impl Claim {
     /// litter its dead pid gives away (`seats::standing`), whichever
     /// terminal meets it next.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
+        // The session mark carries the pid too: a claim's reason is read
+        // back as `<session> pid <pid>`, and an empty session leaves the
+        // pid unparsed (`seats::standing`).
         let me = Identity {
-            session: String::new(),
+            session: format!("perf-{}", std::process::id()),
             pid: Some(std::process::id()),
         };
         if !exists {

@@ -148,11 +148,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some(name) => name.clone(),
         None => stage_for(rest).to_string(),
     };
-    let tag = ensure_image(&root, &stage, rebuild)?;
-    // The container's work is this machine's work, announced here (its
-    // own xtask is under the announcement); a verb run where it stands
-    // announces itself.
+    // The container's work is this machine's work — the image built as
+    // much as the command run in it — announced here (its own xtask is
+    // under the announcement); a verb run where it stands announces
+    // itself.
     let _busy = crate::still::busy(&root, "linux")?;
+    let tag = ensure_image(&root, &stage, rebuild)?;
     in_container(&root, &tag, &command, shell)
 }
 

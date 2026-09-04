@@ -846,8 +846,8 @@ public static class PerfHost {{\n\
            if([PerfHost]::AssignProcessToJobObject($job,$p.Handle)){{$jobok=1}}\
            else{{Write-Output \"note: the process did not join the job object (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())) - its children are not counted\"}};\
            foreach($th in $p.Threads){{ if([PerfHost]::Resume([uint32]$th.Id) -lt 0){{Write-Output \"note: thread $($th.Id) could not be resumed\"}} }};\
-         }};\
-         Write-Output 'resumed';\
+           Write-Output 'resumed';\
+         }} else {{ Write-Output \"note: no process $target to watch - it ended before the sampler looked\" }};\
          $hwnd=[IntPtr]::Zero;$display='-';$ticks=0;$int=1;$lockpids=@();\
          $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\

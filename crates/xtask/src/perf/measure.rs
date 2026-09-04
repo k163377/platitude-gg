@@ -75,13 +75,13 @@ impl Spoiled {
 
     /// How many attempts a run spoiled this way is worth. The machine,
     /// `--retries` — it will not have spoiled the next one. A covered
-    /// window, one: what covers it either passes or stays, and a stayer
-    /// is not worth two more ceilings of saying so. The application, none:
-    /// it will stop answering again.
+    /// window, one of those: what covers it either passes or stays, and a
+    /// stayer is not worth two more ceilings of saying so. The
+    /// application, none: it will stop answering again.
     pub(super) fn budget(&self, retries: u32) -> u32 {
         match self {
             Self::Host(_) => retries,
-            Self::Covered(_) => 1,
+            Self::Covered(_) => retries.min(1),
             Self::Run(_) => 0,
         }
     }

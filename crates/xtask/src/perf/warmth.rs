@@ -99,10 +99,7 @@ pub(super) fn warm(root: &Path, wanted: &Warmed) -> Option<Duration> {
 /// discarded run, and says so.
 pub(super) fn note(root: &Path, warmed: &Warmed) {
     let path = note_path(root);
-    let stamped = Warmed {
-        at: now_secs(),
-        ..Warmed::now(&warmed.exe, &warmed.corpus, &warmed.repo, &warmed.scenario)
-    };
+    let stamped = Warmed::now(&warmed.exe, &warmed.corpus, &warmed.repo, &warmed.scenario);
     let written = path
         .parent()
         .map_or(Ok(()), std::fs::create_dir_all)

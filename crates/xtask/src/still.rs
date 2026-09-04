@@ -18,10 +18,10 @@
 //! cargo step of `check` and `gate` through `check::run_step`, so a verb
 //! that builds is announced without naming itself — `perf`'s own build
 //! included. The verbs that are heavy without compiling say so
-//! themselves (`verify-ui`, the `linux` container, the corpus). The
-//! pre-shell hook holds a bare `cargo build` a session types while a
-//! hold stands, because that one runs outside any verb that could wait
-//! (hook/still.rs).
+//! themselves (`verify-ui`, the `linux` container and its image, the
+//! corpus). The pre-shell hook holds a bare `cargo build` a session
+//! types while a hold stands, because that one runs outside any verb
+//! that could wait (hook/still.rs).
 //!
 //! **Liveness is a file lock, not a pid.** The hold and each
 //! announcement are a note beside the repository's own `.git` — which
@@ -40,10 +40,12 @@
 //! are under it for the same reason, and because they are not this
 //! machine's.
 //!
-//! **What ended when** is left as one more note ([`BUILT`]): the last
-//! announcement to end stamps its process and the time, which is how a
-//! measurement knows whether a build ran between two invocations
-//! (`perf::warmth`).
+//! **What ended when** is left as one more note per process
+//! ([`BUILT`]): an announcement that ends stamps the time under its pid,
+//! which is how a measurement knows whether another process's build ran
+//! between two invocations (`perf::warmth`) — its own is what made the
+//! exe it measures, and a stamp per process is what keeps its own from
+//! covering somebody else's.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -67,7 +69,9 @@ const HOLD: &str = "pg-still";
 /// a lock beside each.
 const BUSY: &str = "pg-busy";
 
-/// The stamp the last announcement to end leaves: its process and when.
+/// The stamps, beside `.git`: one per process, the time its last
+/// announcement ended. Swept of anything older than a day as they are
+/// read — a pid is a name a machine hands out again.
 const BUILT: &str = "pg-built";
 
 /// The extension of the lock file beside a note.
@@ -104,8 +108,14 @@ const POLL: Duration = if cfg!(test) {
 /// met that instant is not a hold that met a measurement.
 const HOLD_TRIES: u32 = 5;
 
+/// How long a stamp is kept: longer than any warm window it could answer
+/// (`perf::warmth`), shorter than a pid's turn to come round again.
+const STAMP_FOR: u64 = 24 * 60 * 60;
+
 /// A note and its lock, held for as long as the note stands. Dropping it
-/// removes the note; the lock goes with the handle.
+/// removes the note and the lock file; the lock itself goes with the
+/// handle, and a file removed while a probe holds it open goes when the
+/// probe lets go.
 #[derive(Debug)]
 struct Held {
     note: PathBuf,
@@ -114,15 +124,8 @@ struct Held {
 
 impl Drop for Held {
     fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_file(&self.note)
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            println!(
-                "  note: could not take the note at {} down ({error}) — the next verb clears \
-                 it, its lock is gone",
-                self.note.display()
-            );
-        }
+        clear(&self.note);
+        clear(&lock_of(&self.note));
     }
 }
 
@@ -134,10 +137,10 @@ pub(crate) struct Hold {
     _held: Option<Held>,
 }
 
-/// A build announced, withdrawn when dropped — and stamped as the last to
-/// end ([`BUILT`]). Empty for the reasons a [`Hold`] is, and for a build
-/// this thread already announced: the verb's announcement covers the
-/// compile inside it.
+/// A build announced, withdrawn when dropped — and stamped as ended
+/// ([`BUILT`]). Empty for the reasons a [`Hold`] is, and for a build this
+/// thread already announced: the verb's announcement covers the compile
+/// inside it.
 #[derive(Debug)]
 pub(crate) struct Busy {
     _announced: Option<Announced>,
@@ -151,8 +154,12 @@ struct Announced {
 
 impl Drop for Announced {
     fn drop(&mut self) {
-        let stamp = format!("pid {}\nat {}\n", std::process::id(), now_secs());
-        if let Err(error) = std::fs::write(&self.stamp, stamp) {
+        let written = self
+            .stamp
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&self.stamp, format!("at {}\n", now_secs())));
+        if let Err(error) = written {
             println!(
                 "  note: could not stamp the build's end at {} ({error})",
                 self.stamp.display()
@@ -212,19 +219,36 @@ pub(crate) fn step(command: &mut Command) {
 /// process's own ends do not count: a measurement's own build is what
 /// made the exe it measures.
 pub(crate) fn build_ended_since(tree: &Path, secs: u64) -> bool {
-    let Some(common) = common_dir(tree) else {
+    common_dir(tree).is_some_and(|common| stamps_ended_since(&common.join(BUILT), secs))
+}
+
+/// The stamps under `stamps` read for another process's end after
+/// `secs`, sweeping the ones a day old on the way.
+fn stamps_ended_since(stamps: &Path, secs: u64) -> bool {
+    let Ok(entries) = std::fs::read_dir(stamps) else {
         return false;
     };
-    let Ok(text) = std::fs::read_to_string(common.join(BUILT)) else {
-        return false;
-    };
-    let pid: u32 = field(&text, "pid ")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    let at: u64 = field(&text, "at ")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    pid != std::process::id() && at > secs
+    let now = now_secs();
+    let mut ended = false;
+    for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+        let pid: u32 = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.parse().ok())
+            .unwrap_or(0);
+        let at: u64 = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| field(&text, "at ")?.parse().ok())
+            .unwrap_or(0);
+        if at + STAMP_FOR < now {
+            clear(&path);
+            continue;
+        }
+        if pid != std::process::id() && at > secs {
+            ended = true;
+        }
+    }
+    ended
 }
 
 /// The hold standing over the repository `cwd` is in, as a line for the
@@ -379,7 +403,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
         if held(&hold)?.is_none() {
             return Ok(Announced {
                 _held: mine,
-                stamp: common.join(BUILT),
+                stamp: common.join(BUILT).join(std::process::id().to_string()),
             });
         }
         drop(mine);
@@ -447,19 +471,39 @@ fn held(note: &Path) -> Result<Option<Note>, String> {
     }
 }
 
-/// The builds under way, litter cleared as it is met.
+/// The builds under way, litter cleared as it is met — a note nobody
+/// holds, and a lock file whose note is gone.
 fn live_notes(busy: &Path) -> Vec<Note> {
     let Ok(entries) = std::fs::read_dir(busy) else {
         return Vec::new();
     };
-    let mut live: Vec<Note> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_none())
-        .filter_map(|path| held(&path).ok().flatten())
-        .collect();
+    let mut live = Vec::new();
+    for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+        if path.extension().is_some() {
+            if !path.with_extension("").exists() {
+                clear(&path);
+            }
+            continue;
+        }
+        if let Ok(Some(note)) = held(&path) {
+            live.push(note);
+        }
+    }
     live.sort_by_key(|note| (note.pid, note.since));
     live
+}
+
+/// Removes a file that may already be gone, and says so when it would
+/// not go for any other reason.
+fn clear(path: &Path) {
+    if let Err(error) = std::fs::remove_file(path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        println!(
+            "  note: could not clear {} ({error}) — the next verb tries again",
+            path.display()
+        );
+    }
 }
 
 fn open_lock(path: &Path) -> Result<File, String> {
@@ -541,7 +585,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    use super::{BUILT, BUSY, HOLD, Note, busy_in, hold_in, lock_of};
+    use super::{
+        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, lock_of, stamps_ended_since,
+    };
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
@@ -567,16 +613,21 @@ mod tests {
         }
     }
 
-    /// The announcements standing in `dir`: the notes, not their locks.
-    fn announcements(dir: &std::path::Path) -> usize {
+    /// The files standing under the announcements: notes, and lock files.
+    fn standing(dir: &std::path::Path) -> (usize, usize) {
         std::fs::read_dir(dir.join(BUSY))
             .map(|entries| {
                 entries
                     .filter_map(Result::ok)
-                    .filter(|entry| entry.path().extension().is_none())
-                    .count()
+                    .fold((0, 0), |(notes, locks), entry| {
+                        if entry.path().extension().is_some() {
+                            (notes, locks + 1)
+                        } else {
+                            (notes + 1, locks)
+                        }
+                    })
             })
-            .unwrap_or(0)
+            .unwrap_or((0, 0))
     }
 
     #[test]
@@ -595,8 +646,10 @@ mod tests {
             .expect("the hold, once the build is gone");
         assert!(!dir.join(HOLD).exists(), "a hold is lifted with its guard");
         assert!(
-            dir.join(BUILT).exists(),
-            "the build that ended stamped its end"
+            dir.join(BUILT)
+                .join(std::process::id().to_string())
+                .exists(),
+            "the build that ended stamped its end under its pid"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -616,16 +669,17 @@ mod tests {
             .expect("the build's thread")
             .expect("the build, once the hold lifted");
         assert_eq!(
-            announcements(&dir),
-            0,
-            "an announcement is withdrawn with its guard"
+            standing(&dir),
+            (0, 0),
+            "an announcement is withdrawn with its guard, lock file included"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A killed xtask never unwinds, so a note can be left behind — but
     /// its lock is released with its process, and a note nobody holds the
-    /// lock beside is cleared by whoever meets it.
+    /// lock beside is cleared by whoever meets it, as is a lock file whose
+    /// note is gone.
     #[test]
     fn a_note_nobody_holds_the_lock_beside_is_litter() {
         let dir = common("litter");
@@ -640,8 +694,10 @@ mod tests {
         drop(build);
         std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
         std::fs::write(dir.join(BUSY).join("1-0"), dead.text()).expect("a dead announcement");
+        std::fs::write(dir.join(BUSY).join("1-9.lock"), "").expect("an orphaned lock file");
         let _hold = hold_in(&dir, "perf", &|| {}).expect("a dead build is not waited for");
         assert!(!dir.join(BUSY).join("1-0").exists());
+        assert!(!dir.join(BUSY).join("1-9.lock").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -664,11 +720,40 @@ mod tests {
         let outer = busy_in(&dir, "verify-ui", &|| {}).expect("the verb's announcement");
         let inner = busy_in(&dir, "cargo build", &|| {}).expect("the compile inside it");
         assert!(inner._announced.is_none(), "nothing of its own");
-        assert_eq!(announcements(&dir), 1);
+        assert_eq!(standing(&dir).0, 1);
         drop(inner);
-        assert_eq!(announcements(&dir), 1, "the inner drop withdraws nothing");
+        assert_eq!(standing(&dir).0, 1, "the inner drop withdraws nothing");
         drop(outer);
-        assert_eq!(announcements(&dir), 0);
+        assert_eq!(standing(&dir), (0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Only another process's build ended since `secs` is a build that
+    /// cooled the cache; this process's own made the exe being measured,
+    /// and a stamp a day old is a pid that may be somebody else's by now.
+    #[test]
+    fn only_another_processes_build_counts_as_ended_since() {
+        let dir = common("stamps");
+        let stamps = dir.join(BUILT);
+        std::fs::create_dir_all(&stamps).expect("the stamp directory");
+        let now = crate::note::now_secs();
+        let write = |pid: u32, at: u64| {
+            std::fs::write(stamps.join(pid.to_string()), format!("at {at}\n")).expect("a stamp");
+        };
+        write(std::process::id(), now);
+        assert!(
+            !stamps_ended_since(&stamps, now - 60),
+            "this process's own build is not another's"
+        );
+        write(1, now - 30);
+        assert!(stamps_ended_since(&stamps, now - 60));
+        assert!(!stamps_ended_since(&stamps, now));
+        write(2, now - STAMP_FOR - 1);
+        assert!(
+            !stamps_ended_since(&stamps, now),
+            "a stamp a day old is swept, not read"
+        );
+        assert!(!stamps.join("2").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
