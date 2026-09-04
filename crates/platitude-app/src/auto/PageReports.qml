@@ -7,10 +7,10 @@ import platitude.ui
 /// What the page's own wiring says it did, written out as report lines.
 ///
 /// Each of these is an **edge**, not a state: the question bar carries no name to read the branch back off, the row
-/// that is being stood in for looks the same as one nothing was asked about, the held delete is offered on whichever
-/// card happens to be standing, and git's answer to a write is one message wide. None of them can be recovered by
-/// reading the page a moment later, so the page says so with a signal apiece and the line is written from here —
-/// where the whole of it can be left out of a build.
+/// that is being stood in for looks the same as one nothing was asked about, and git's answer to a write is one
+/// message wide. None of them can be recovered by reading the page a moment later, so the page says so with a
+/// signal apiece and the line is written from here — where the whole of it can be left out of a build. The held
+/// delete is the exception: git's refusal is an answer on the tab, read here the way the card reads it.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given: the same guard every one of these
 /// lines carried when the page still wrote them itself.
@@ -27,6 +27,14 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var diffRowMenu: driver.diffRowMenu
+    /// The branch whose plain delete git has just refused — the answer the standing card turns its row on
+    /// (`RefBranchMenu`), cleared as the next plain delete is asked, so each refusal is its own edge here.
+    readonly property string refusedDelete: reports.repoTab.branchDeleteRefused
+
+    onRefusedDeleteChanged: {
+        if (reports.refusedDelete !== "")
+            Harness.report("force_delete_offered branch=" + reports.refusedDelete)
+    }
 
     Connections {
         target: reports.page
@@ -39,9 +47,6 @@ Item {
         }
         function onGoneShown(kind, id) {
             Harness.report("gone_shown kind=" + kind + " id=" + id)
-        }
-        function onForceDeleteOffered(branch) {
-            Harness.report("force_delete_offered branch=" + branch)
         }
         // What the write was about is still on the tab when this goes out — the page clears its own standing
         // questions, not the tab's report of the answer.

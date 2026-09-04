@@ -26,9 +26,19 @@ AppMenu {
     readonly property alias refId: state.refId
     readonly property alias refName: state.refName
 
-    /// The branch git has just refused to delete, while the menu that asked is still standing. The page writes it
-    /// through `noteRefused`.
+    /// The branch git has just refused to delete, while the card that asked is still standing — so the delete row
+    /// turns into the held `-D` where the hand already is (デザイン規約 §左メニューの所作). Written by the card itself
+    /// off git's answer (`refusedDelete`), and cleared as the card next opens.
     property string forceDeleteBranch: ""
+    /// git's answer to the plain delete this card stayed up for, read off the tab by the card's own name — the same
+    /// place the early check's answer already comes from (`RepoTab.branchDeleteRefused` / `branchDeleteLanded`), and
+    /// standing there until the next delete is asked, so a fetch answering in the same drain cannot take it down
+    /// before this card has seen it. **The card answers for itself**: refused, its row turns into the held `-D`;
+    /// taken, there is nothing left to catch and the card goes, and the menu it hangs off with it (`dismiss()` is
+    /// Qt's, and walks every level down). Whichever of the two entrances raised this card, it is the one standing,
+    /// so nothing above it has to know which one asked (app-ui.md §メニューを閉じるのは自分).
+    readonly property string refusedDelete: branchCard.repoTab.branchDeleteRefused
+    readonly property string landedDelete: branchCard.repoTab.branchDeleteLanded
 
     /// What the page answers for: the delete git may still refuse opens a question there, and the row taken off the
     /// list ahead of git's answer is the page's list (デザイン規約 §消す操作は先に画面から消す).
@@ -39,8 +49,6 @@ AppMenu {
     /// speaks for goes with it: that is where the question opens, and it is read here while the row still answers to
     /// its own name.
     signal upstreamRequested(string branch, string counterpart)
-    /// The card above, which a press here has to take down along with this one.
-    signal closeRequested()
 
     /// The automation's handles into these rows, passed on by whichever menu carries the card (app-ui.md).
     readonly property alias deleteItem: refDeleteItem
@@ -115,16 +123,18 @@ AppMenu {
             branchCard.repoTab.checkBranchDelete(full)
     }
 
-    /// git refused the plain delete while this card still stands, so the row turns into the held forced one where the
-    /// hand already is (デザイン規約 §左メニューの所作).
-    function noteRefused(branch) {
-        branchCard.forceDeleteBranch = branch
+    /// Whether an answer that names a branch is about the one this card stands on.
+    function answersHere(name) {
+        return name !== "" && state.kind === "branch" && name === state.refId
     }
 
-    /// Both cards go at once: this one, and the one it hangs off.
-    function dismiss() {
-        branchCard.close()
-        branchCard.closeRequested()
+    onRefusedDeleteChanged: {
+        if (branchCard.answersHere(branchCard.refusedDelete))
+            branchCard.forceDeleteBranch = branchCard.refusedDelete
+    }
+    onLandedDeleteChanged: {
+        if (branchCard.answersHere(branchCard.landedDelete))
+            branchCard.dismiss()
     }
 
     /// The remote reading gone without touching the local branch. The configured names say where the cut is (a

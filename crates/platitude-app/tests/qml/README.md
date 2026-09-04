@@ -19,3 +19,7 @@ cargo xtask linux qmltest
 `tst_ink.qml`: 親が非表示の場合、初回描画前の非表示化→再表示、実際のpaint完了後の
 再表示を検証する。前2ケースは修正前に `Ink.owed = 1`(期待0)で失敗する。
 固定sleepは使わない。
+
+`tst_menudismiss.qml`: 入れ子のカードから呼んだ Qt の `Menu.dismiss()` が上のメニューまで
+全段畳むこと、親を閉じれば開いているカードも落ちることを固定する。製品のカードはこの
+1 発だけで畳み、上へ `closeRequested` を返さない(app-ui.md §メニューを閉じるのは自分)。

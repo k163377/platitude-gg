@@ -165,11 +165,8 @@ Item {
         return refMenu.offer()
     }
 
-    /// A write that landed has nothing left for the menu to catch.
-    function close() {
-        refMenu.close()
-    }
-
+    // Nothing here closes the menu from outside: a row that runs something takes it down with `dismiss()`, and the
+    // branch card standing for a delete's answer goes by itself when that answer lands (`RefBranchMenu`).
     AppMenu {
         id: refMenu
         heldReason: refRowMenu.heldReason
@@ -241,7 +238,7 @@ Item {
             holdMs: Metrics.holdMs
             holdTone: Theme.danger
             onHeld: {
-                refMenu.close()
+                refMenu.dismiss()
                 refRowMenu.dropStashRequested(refRowMenu.refId)
             }
         }
@@ -258,7 +255,6 @@ Item {
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
             onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
             onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
-            onCloseRequested: refMenu.close()
         }
         AppMenuSeparator {}
         // Everything a tag's name answers for, behind its own mark — the very card the graph row's menu carries
@@ -272,7 +268,6 @@ Item {
             canBranchHere: refRowMenu.canBranchHere
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
-            onCloseRequested: refMenu.close()
         }
     }
 }

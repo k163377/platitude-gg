@@ -872,14 +872,18 @@ Item {
     /// same one `GraphPane.view` is (app-ui.md).
     signal renameRemoteAsked(string from, string to)
 
-    /// A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than guessed at
-    /// beforehand (デザイン規約 §左メニューの所作). A tag and a stash have no such refusal in git, so they are asked about up front.
-    /// A branch on a remote never arrives here (`deleteRemoteNow`).
-    property string pendingDeleteBranch: ""
     /// Refusals this page already has an answer for. The question bar explains them, so the command log stays where it
     /// was rather than raising itself over the same news (デザイン規約 §git が言ったことを読む場所). Counted rather than flagged
     /// because the refusal and the write result arrive on separate paths, in no fixed order.
     property int expectedRefusals: 0
+    /// The plain delete's landing, read the way the card reads it (`RefBranchMenu`): the refusal armed above is not
+    /// coming, so the credit goes back. An edge rather than a check on the answer in hand — a fetch answering in the
+    /// same drain leaves the group saying fetch, and the landing would never be seen.
+    readonly property string deleteLanded: repoTab.branchDeleteLanded
+    onDeleteLandedChanged: {
+        if (page.deleteLanded !== "")
+            page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
+    }
     /// The same, for the failures a report has already answered — armed by the report when the row it is about has
     /// not reached the log yet (`absorbWriteResult`), spent by that row's own arrival.
     property int answeredFailures: 0
@@ -991,7 +995,9 @@ Item {
         // that can be clicked twice — the second click is the same request again.
         if (repoTab.busyCount > 0)
             return
-        page.pendingDeleteBranch = id
+        // A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than
+        // guessed at beforehand (デザイン規約 §左メニューの所作). Which branch the answer is about is the tab's to keep,
+        // and the card that asked reads it there (`RefBranchMenu`).
         page.expectedRefusals++
         page.showGone("branch", id)
         repoTab.deleteBranch(id, false)
@@ -1003,20 +1009,6 @@ Item {
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
     }
-    /// git refused the plain delete: the answer lands on the menu row that asked, turning it into a held one (デザイン規約
-    /// §左メニューの所作). A refusal does not mean the commits stop being reachable: git measures the branch against its
-    /// upstream when it has one, so a branch merged into HEAD but not yet pushed is refused while nothing at all would
-    /// be lost (measured).
-    function noteForceDelete(name) {
-        // Whichever card asked — the ref menu's or the graph row's — is the one the answer belongs on. They are the
-        // same component, and only one of them is ever standing.
-        refRowMenu.branchCard.noteRefused(name)
-        commitRowMenu.branchCard.noteRefused(name)
-        page.forceDeleteOffered(name)
-    }
-    /// Automation: the held row above was offered, and for which branch. An automation-only exposure, the same one
-    /// `GraphPane.view` is (app-ui.md) — which of the two cards carries it is not something the page decides.
-    signal forceDeleteOffered(string branch)
 
     // ---- context menu on a working-tree file row --------------------
     function openFileMenu(bucket, path) {
@@ -1464,17 +1456,19 @@ Item {
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
-                page.pendingDeleteBranch = ""
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
                 page.writeReported()
                 return
             }
-            // The one refusal this page has a second move for: a branch delete git would not do on its own.
-            if (repoTab.writeBranchOp && page.pendingDeleteBranch !== "") {
-                const refused = page.pendingDeleteBranch
-                page.pendingDeleteBranch = ""
-                page.noteForceDelete(refused)
+            // The one refusal this page has a second move for — a branch delete git would not do on its own — is
+            // answered where it was asked: the card that stayed up for it reads its own name off the tab and turns
+            // its row into the held `-D` (`RefBranchMenu`). A refusal does not mean the commits stop being
+            // reachable: git measures the branch against its upstream when it has one, so a branch merged into HEAD
+            // but not yet pushed is refused while nothing at all would be lost (measured). Nothing to raise here —
+            // the row is the answer. **This answer's, by its seq**: the name stands until the next delete is
+            // asked, and a refusal of something else that comes later must still raise the log.
+            if (repoTab.branchDeleteRefused !== "" && repoTab.branchDeleteSeq === repoTab.writeSeq) {
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
                 return
@@ -1489,16 +1483,9 @@ Item {
             page.pendingRenameTo = ""
             return
         }
-        // Landed: no refusal is coming for it after all, so the menu left standing to catch one has nothing left to
-        // say. **Both entrances, the way the refusal answers both** (`noteForceDelete`): the delete row belongs to one
-        // card raised from either the left pane or a graph row, and the page cannot tell which one asked. Only one of
-        // them is ever standing, so closing the other costs nothing.
-        if (page.pendingDeleteBranch !== "") {
-            page.pendingDeleteBranch = ""
-            page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
-            refRowMenu.close()
-            commitRowMenu.close()
-        }
+        // A plain delete that landed is not answered here: the card that stayed up for it goes by itself, and the
+        // credit armed for its refusal goes back off the same edge (`deleteLanded`).
+        //
         // The name went in, so the box that was holding it has done its job and comes down (デザイン規約 §答えの要らない報せ:
         // a rename keeps its box until git answers).
         //

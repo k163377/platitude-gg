@@ -120,15 +120,9 @@ Item {
 
     anchors.fill: parent
 
-    /// A write that landed has nothing left for the menu to catch — the same door `RefRowMenu` opens, because the
-    /// branch card standing behind either of them is the one card (`RefBranchMenu`). Both menus are named: only one
-    /// of them is ever up, and a `close()` that answered for one of the two would be a name for half the component.
-    /// The cards go with them (Qt takes an open submenu down with the menu it hangs off — qmltestrunner 実測).
-    function close() {
-        commitMenu.close()
-        stashMenu.close()
-    }
-
+    // Nothing here closes either menu from outside: a row that runs something takes its own menu down with
+    // `dismiss()`, and the branch card standing for a delete's answer goes by itself when that answer lands
+    // (`RefBranchMenu`) — so this component never has to name the two menus to close whichever one is up.
     function offerStash() {
         stashMenu.offer()
     }
@@ -166,7 +160,7 @@ Item {
             offered: rowMenu.stashCanWrite
             holdMs: Metrics.holdMs
             onHeld: {
-                stashMenu.close()
+                stashMenu.dismiss()
                 rowMenu.dropStashRequested(rowMenu.stashRef)
             }
         }
@@ -250,7 +244,7 @@ Item {
             holdMs: rowMenu.repoTab.headReachedElsewhere ? 0 : Metrics.holdMs
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
-                commitMenu.close()
+                commitMenu.dismiss()
                 rowMenu.dropRequested(rowMenu.oid)
             }
         }
@@ -329,8 +323,8 @@ Item {
                 note: rowMenu.hardResetTakes > 0 ? qsTr("uncommitted too") : ""
                 holdMs: Metrics.holdMs
                 onHeld: {
-                    resetMenu.close()
-                    commitMenu.close()
+                    // Qt's `dismiss()`: this card and the menu it hangs off go together.
+                    resetMenu.dismiss()
                     rowMenu.resetRequested("hard")
                 }
             }
@@ -350,7 +344,6 @@ Item {
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
             onDeleting: (kind, id) => rowMenu.deleting(kind, id)
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
-            onCloseRequested: commitMenu.close()
         }
         AppMenuSeparator {}
         // **The very card the tag's own chip opens** (RefTagMenu): the mark left on this commit, and — where the row
@@ -366,7 +359,6 @@ Item {
             canBranchHere: rowMenu.canBranchHere
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
             onDeleting: (kind, id) => rowMenu.deleting(kind, id)
-            onCloseRequested: commitMenu.close()
         }
     }
 }

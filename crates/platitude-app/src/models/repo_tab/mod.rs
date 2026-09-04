@@ -95,6 +95,26 @@ pub struct RepoTab {
     /// open over another row by now.
     branch_delete_asked: String,
     branch_delete_merged: bool,
+    /// The plain `branch --delete` out for git's answer — the one press
+    /// that leaves its menu standing, because git may refuse it and the
+    /// refusal has to land on the row that asked (`AppMenuItem.staysOpen`).
+    /// Only the plain form: `-D` and `Delete both` stand for nothing. Set
+    /// by the slot, spent by the branch answer that follows.
+    branch_delete_out: String,
+    /// How git answered it: the branch whose plain delete git took, and
+    /// the one it turned down. The card that stayed up reads its own name
+    /// here and either goes or turns its row into `-D` (`RefBranchMenu`)
+    /// — whichever menu raised it, so nothing above the card has to know
+    /// which one is standing. **Kept until the next plain delete is
+    /// asked**, like the check's answer above and unlike the write group
+    /// below: a fetch answering in the same drain would rewrite a group
+    /// property before the card had seen it, and the card would be left
+    /// standing. `branch_delete_seq` is the `write_seq` the answer was
+    /// counted at, for a reader that has to know the answer in hand is
+    /// this one (`RepoPage`).
+    branch_delete_landed: String,
+    branch_delete_refused: String,
+    branch_delete_seq: i32,
     /// Last answer to `checkPublish`: how much of a range a remote has.
     publish_range: String,
     publish_total: i32,

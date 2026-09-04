@@ -55,6 +55,24 @@ impl RepoTab {
         Member = branch_delete_merged,
         Notify = changed
     );
+    // git's answer to the plain delete a card stayed up for, by name: the
+    // card reads its own and goes or turns its row (`RefBranchMenu`). The
+    // seq says which write's answer it is (`RepoPage`).
+    qproperty!(
+        "branchDeleteLanded",
+        Member = branch_delete_landed,
+        Notify = changed
+    );
+    qproperty!(
+        "branchDeleteRefused",
+        Member = branch_delete_refused,
+        Notify = changed
+    );
+    qproperty!(
+        "branchDeleteSeq",
+        Member = branch_delete_seq,
+        Notify = changed
+    );
     qproperty!("publishRange", Member = publish_range, Notify = changed);
     qproperty!("publishTotal", Member = publish_total, Notify = changed);
     qproperty!(
@@ -565,10 +583,12 @@ impl RepoTab {
         self.with_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
     }
 
-    /// Deletes a local branch. Without `force`, git refuses an unmerged one.
+    /// Deletes a local branch. Without `force`, git refuses an unmerged one
+    /// — and that answer is the menu's to catch, so the plain form is
+    /// written down first (`branch_delete`).
     #[qslot]
     fn delete_branch(&mut self, name: String, force: bool) {
-        self.with_session(|s| s.delete_branch(name.clone(), force));
+        self.branch_delete(name, force)
     }
 
     #[qslot]

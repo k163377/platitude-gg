@@ -31,8 +31,6 @@ AppMenu {
     signal tagHereRequested(string oidHex)
     /// The row taken off the list ahead of git's answer (デザイン規約 §消す操作は先に画面から消す).
     signal deleting(string kind, string id)
-    /// The card above, which a press here has to take down along with this one.
-    signal closeRequested()
 
     /// The automation's handles into these rows, passed on through `RefRowMenu` (app-ui.md).
     readonly property alias tagHereItem: refTagHereItem
@@ -94,11 +92,8 @@ AppMenu {
         state.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
     }
 
-    /// Both cards go at once: this one, and the one it hangs off.
-    function dismiss() {
-        tagMenu.close()
-        tagMenu.closeRequested()
-    }
+    // The rows that run something take the whole menu down with `dismiss()` — Qt's own, which walks up from this
+    // card through the menu it hangs off (app-ui.md §メニューを閉じるのは自分).
 
     titleKind: "tag"
     titleTint: Theme.refTag

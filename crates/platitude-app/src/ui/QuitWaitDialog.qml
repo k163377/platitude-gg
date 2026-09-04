@@ -18,8 +18,8 @@ import platitude.ui
 AppDialog {
     id: quitWaitDialog
 
-    /// Nothing git was asked to write is left running: the close this dialog stood for can go through
-    /// (`WindowQuitGate` closes the window on it).
+    /// Nothing git was asked to write is left running. The dialog has already taken itself down — what it stood for
+    /// is over — and the close it stood for can go through (`WindowQuitGate` closes the window on it).
     signal settled()
 
     /// Escape would take this down. **Read off `closePolicy` itself** rather than written beside it, so the verb
@@ -83,6 +83,11 @@ AppDialog {
     // at, a write landing mid-look would take the window down with it. The gate and the veto stay real either way.
     SampleTimer {
         running: quitWaitDialog.opened && quitWaitDialog.selfCloses
-        onTriggered: if (AppBackend.readyToQuit()) quitWaitDialog.settled()
+        onTriggered: {
+            if (!AppBackend.readyToQuit())
+                return
+            quitWaitDialog.close()
+            quitWaitDialog.settled()
+        }
     }
 }

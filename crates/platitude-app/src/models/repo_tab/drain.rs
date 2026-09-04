@@ -244,6 +244,7 @@ impl RepoTab {
         // Rewritten by every answer, like the rest of the group: a report
         // nobody took down would otherwise come back up under the next
         // write.
+        let reported = report.is_some();
         let (kind, remote, name, reason) = match report {
             Some(report) => (
                 match report.kind {
@@ -301,6 +302,28 @@ impl RepoTab {
         self.write_branch_op = op == "branch";
         self.write_pushed = op == "push";
         self.write_seq += 1;
+        // The plain branch delete's own answer, for the card that stayed
+        // up to catch it, by the name it asked with. **Not part of the
+        // group above**: it stands until the next plain delete is asked
+        // (`branch_delete`), because a fetch answering in the same drain
+        // would rewrite a group property before the card had seen it and
+        // leave the card standing — the very thing it reads this for. The
+        // seq says which answer it was, for a reader that needs the answer
+        // in hand to be this one (`RepoPage`). A refusal that comes with a
+        // report is the report's to say (the page's notice bar) and turns
+        // no row; anything else git would not do is the `-D` question the
+        // card asks by turning its row.
+        if op == "branch" && !self.branch_delete_out.is_empty() {
+            let asked = std::mem::take(&mut self.branch_delete_out);
+            let (took, turned_down) = match (landed, reported) {
+                (true, _) => (asked, String::new()),
+                (false, false) => (String::new(), asked),
+                (false, true) => (String::new(), String::new()),
+            };
+            self.branch_delete_landed = took;
+            self.branch_delete_refused = turned_down;
+            self.branch_delete_seq = self.write_seq;
+        }
         // …and kept beside the group as well, because the group holds
         // only one answer and a drain can bring several. A reader waiting
         // for its own write looks for it here (`write_answers`); the

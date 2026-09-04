@@ -4,8 +4,8 @@ import platitude.ui
 
 // The close that arrived while git was still writing, and the wait that makes good on it. A part of its own so the
 // whole of the quit wait is read in one place (and `Main` keeps its size): the window's `onClosing` asks the gate,
-// the gate stands the dialog up instead of accepting, and the dialog closes the window itself when the queue
-// settles (`QuitWaitDialog`).
+// the gate stands the dialog up instead of accepting, the dialog takes itself down when the queue settles
+// (`QuitWaitDialog`), and the gate closes the window on its word.
 //
 // The user gives this the window's whole face (`anchors.fill`): the dialog's sizing reads its parent, and an
 // unsized seat hands it a 0x0 to fill — the words came out bare in the top-left corner (the trap
@@ -46,9 +46,6 @@ Item {
 
     QuitWaitDialog {
         id: waitDialog
-        onSettled: {
-            waitDialog.close()
-            gate.window.close()
-        }
+        onSettled: gate.window.close()
     }
 }

@@ -35,9 +35,6 @@ Item {
         remoteRowMenu.remote = name
         return menu.offer()
     }
-    function close() {
-        menu.close()
-    }
 
     AppMenu {
         id: menu

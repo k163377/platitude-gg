@@ -405,3 +405,92 @@ fn a_drain_with_no_write_answer_publishes_none() {
     }]);
     assert!(tab.write_answers.is_empty());
 }
+
+// The plain branch delete leaves its menu standing for git's answer, and
+// the card reads that answer by its own name off the tab (`RefBranchMenu`):
+// taken, the card goes; turned down, its row turns into `-D`.
+#[test]
+fn a_plain_delete_git_took_names_the_branch_for_the_card_to_go_on() {
+    let mut tab = RepoTab::default();
+    tab.arm_branch_delete("feature", false);
+    tab.settle_write("branch".into(), String::new(), None);
+    assert_eq!(tab.branch_delete_landed, "feature");
+    assert_eq!(tab.branch_delete_refused, "");
+}
+
+#[test]
+fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
+    let mut tab = RepoTab::default();
+    tab.arm_branch_delete("feature", false);
+    tab.settle_write(
+        "branch".into(),
+        "error: the branch 'feature' is not fully merged".into(),
+        None,
+    );
+    assert_eq!(tab.branch_delete_refused, "feature");
+    assert_eq!(tab.branch_delete_landed, "");
+}
+
+// The forced form is already the answer to a refusal, and nothing stays
+// up for it.
+#[test]
+fn the_forced_delete_stands_for_nothing() {
+    let mut tab = RepoTab::default();
+    tab.arm_branch_delete("feature", true);
+    tab.settle_write("branch".into(), String::new(), None);
+    assert_eq!(tab.branch_delete_landed, "");
+    assert_eq!(tab.branch_delete_refused, "");
+}
+
+// A branch answer nobody stayed up for — a create, a rename, `Delete both`
+// — names no card, whichever way it went.
+#[test]
+fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
+    let mut tab = RepoTab::default();
+    tab.settle_write("branch".into(), String::new(), None);
+    assert_eq!(tab.branch_delete_landed, "");
+    tab.settle_write("branch".into(), "error: not fully merged".into(), None);
+    assert_eq!(tab.branch_delete_refused, "");
+}
+
+// Not part of the write group: the answer stands through whatever answers
+// after it — a fetch in the same drain would otherwise take it down before
+// the card had seen it — and goes as the next plain delete is asked. The
+// seq is how a reader tells the answer in hand from one standing over.
+#[test]
+fn the_delete_answer_stands_until_the_next_plain_delete_is_asked() {
+    let mut tab = RepoTab::default();
+    tab.arm_branch_delete("feature", false);
+    tab.settle_write("branch".into(), String::new(), None);
+    assert_eq!(tab.branch_delete_seq, tab.write_seq);
+    tab.settle_write("fetch".into(), String::new(), None);
+    tab.settle_write("branch".into(), String::new(), None);
+    assert_eq!(tab.branch_delete_landed, "feature", "the answer stands");
+    assert_ne!(
+        tab.branch_delete_seq, tab.write_seq,
+        "and says it is not the answer in hand"
+    );
+    tab.arm_branch_delete("other", false);
+    assert_eq!(tab.branch_delete_landed, "");
+    assert_eq!(tab.branch_delete_seq, 0);
+}
+
+// A refusal that comes with a report is the report's to say: the page's
+// notice bar carries it, and no row turns.
+#[test]
+fn a_refusal_with_a_report_turns_no_row() {
+    let mut tab = RepoTab::default();
+    tab.arm_branch_delete("feature", false);
+    tab.settle_write(
+        "branch".into(),
+        "remote: refused".into(),
+        Some(platitude_core::WriteReport::on_remote(
+            ReportKind::RemoteDelete,
+            "origin",
+            "feature",
+            "refused".into(),
+        )),
+    );
+    assert_eq!(tab.branch_delete_refused, "");
+    assert_eq!(tab.branch_delete_landed, "");
+}
