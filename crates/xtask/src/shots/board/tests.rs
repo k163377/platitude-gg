@@ -1,6 +1,28 @@
 //! `board`'s own tests, in a file of their own (structure.md §分割).
 
-use super::{Run, Shot, load_runs, one_line, parse_run, slug, write_run};
+use super::{Run, Shot, load_runs, not_a_seat, one_line, parse_run, slug, write_run};
+
+/// The board's door. A picture may only be taken in a roster seat,
+/// because the only thing that ever takes one off the board again is
+/// that seat's work ending (`sweep`) — and the refusal has to hand back
+/// the one command that fixes it, since a session reading it is a
+/// session that was about to show somebody a screenshot.
+#[test]
+fn a_picture_is_taken_in_a_seat_or_not_at_all() {
+    assert!(not_a_seat("a").is_none());
+    assert!(not_a_seat("f").is_none());
+    for nowhere in ["main", "?", "spike-tree"] {
+        let refusal = not_a_seat(nowhere).unwrap_or_else(|| panic!("{nowhere} is not a seat"));
+        assert!(
+            refusal.contains("cargo xtask seat"),
+            "a refusal has to say what to do instead: {refusal}"
+        );
+    }
+    assert!(
+        not_a_seat("spike-tree").is_some_and(|refusal| refusal.contains("spike-tree")),
+        "and name the tree it is refusing, so the reader knows where they are"
+    );
+}
 
 #[test]
 fn a_run_survives_the_round_trip() {

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{Run, Shot, sweep};
-use crate::seats::worktree_root;
+use crate::seats::{SEATS, worktree_root};
 
 /// Field separator inside a run file. Tabs and newlines are stripped
 /// from every value written, so the format has no escape rules to get
@@ -64,6 +64,34 @@ pub(super) fn seat_here() -> String {
     root.rsplit('/').next().unwrap_or("?").to_string()
 }
 
+/// Why a picture taken here may not go on the board, in words for
+/// whoever tried — and None from a roster seat, which is everywhere it
+/// may.
+///
+/// A run leaves the board when its seat's work does: the branch lands,
+/// or the letter is handed to a fresh stretch of work (`sweep`). Both
+/// are things that happen to a *roster letter*, so a run taken anywhere
+/// else would stand for good with nothing left that could ever call it
+/// finished. Rather than collect those, the board declines to take
+/// them: asking for a picture is asking for a seat (CLAUDE.md
+/// ビルド・テスト).
+fn not_a_seat(seat: &str) -> Option<String> {
+    if SEATS.contains(&seat) {
+        return None;
+    }
+    let here = match seat {
+        "main" => "this is the primary checkout".to_string(),
+        "?" => "this working directory cannot be read".to_string(),
+        tree => format!("this is the worktree '{tree}', which the roster does not name"),
+    };
+    Some(format!(
+        "the board takes pictures from a seat a-f, and {here}. Nothing would ever take \
+         such a run off the board again — a run leaves when its seat's work does — so \
+         the picture is taken in a seat: `cargo xtask seat` hands one over, and the \
+         build the picture comes from belongs there too (CLAUDE.md ビルド・テスト)."
+    ))
+}
+
 /// Puts one run on the board and rebuilds the page, answering where the
 /// page is. An empty label is refused here rather than at the command
 /// line, so the rule holds for `verify-ui`'s own calls too.
@@ -109,6 +137,10 @@ fn record_with(
     if pngs.is_empty() {
         return Err("a run needs at least one png".to_string());
     }
+    let seat = seat_here();
+    if let Some(refusal) = not_a_seat(&seat) {
+        return Err(refusal);
+    }
     let board = board_dir()?;
     let img = board.join("img");
     let runs = board.join("runs");
@@ -120,7 +152,6 @@ fn record_with(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| format!("the clock is before the epoch: {e}"))?
         .as_millis();
-    let seat = seat_here();
     let stem = format!("{at}-{seat}-{}", slug(&label));
     let mut run = Run {
         label,

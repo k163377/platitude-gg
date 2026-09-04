@@ -10,7 +10,10 @@ cargo xtask shots <command>
   add --label \"<what these pictures show>\" [--verb <v>] <png>...
       Put pictures on the board under a name, and rebuild the page. The
       seat is not asked for: it is read from the working directory, so a
-      run always says which tree took it. --label is required — several
+      run always says which tree took it — and it has to be a seat a-f,
+      because a run leaves the board when its seat's work does and
+      nothing outside the roster has such a moment (`cargo xtask seat`
+      hands one over). --label is required — several
       pictures under no name leave nobody able to say which file was
       which change.
 
