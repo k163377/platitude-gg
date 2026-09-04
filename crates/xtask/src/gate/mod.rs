@@ -33,7 +33,7 @@ use std::path::Path;
 use plan::{Plan, Required, Side};
 use stamp::{CommitStamp, Store};
 
-pub(crate) use census::{names_in, record};
+pub(crate) use census::{names_in, page_settled_in, record};
 pub(crate) use hooks::{SESSION, SKIP, install};
 
 pub fn run(args: &[String]) -> Result<(), String> {

@@ -20,6 +20,10 @@ import platitude
 /// a turn (measured: `commit-menu --preset tags` dropped `FileRowDelegate` in one run of ten). `AutoShotDriver`
 /// says when the scene the picture came out of is the settled one, and the walk goes from there.
 ///
+/// **The picture is still only as far along as the verb waited, though**, and a verb whose subject is the window is
+/// finished while the repository is being read. So the walk says which of the two scenes it was standing in
+/// (`pageSettled`), and the recorder writes the line or adds to it accordingly.
+///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
 /// the runner drops them. Popups stand under the window's overlay, which is a child of the root item, so one walk from
@@ -123,11 +127,39 @@ Item {
             visit(loaded, shown, false)
     }
 
-    /// The run is finishing: the walk, then the report line.
+    /// Whether the page this run photographed had stopped arriving — asked of the picture, where the page verbs ask
+    /// the same thing of the act (`AutoActDriver`).
+    ///
+    /// **A run that answers no is a witness to what it showed and to nothing it did not.** A verb whose subject is the
+    /// window finishes on that subject, which is laid out while the repository is still being read, so its lists hold
+    /// whatever had arrived — measured, `band --system-title-bar` photographed a page whose status had not landed in
+    /// 13 runs of 20 and lost `FileRowDelegate` from 6 of those, while all 18 runs that answered yes held it. So the
+    /// census adds such a run's names to the line rather than writing the line with them (`gate::census`), which is
+    /// what keeps a checked-in file from moving under a machine's timing.
+    ///
+    /// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was
+    /// never given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing
+    /// is coming, so the run photographed the whole of what its verb shows and may write its line. Answering no for
+    /// those would leave their lines able to grow and never to lose a name.
+    function pageSettled() {
+        const page = census.window ? census.window.curPage : null
+        if (!page)
+            return true
+        const state = page.pageTab.state
+        if (state === "" || state === "error")
+            return true
+        // An accepted path is only the beginning: the rows arrive with the reads behind it.
+        return state === "open" && page.pageWt.loaded
+            && page.pageRefsLoaded && page.pageGraph.finishCount > 0
+    }
+
+    /// The run is finishing: the walk, then the report lines.
     function report() {
         if (Harness.autoAct === "")
             return
         walk()
+        // Said first, and on a line of its own: everything after `census=` is a name.
+        Harness.report("census page=" + (census.pageSettled() ? "settled" : "arriving"))
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
     }
 }
