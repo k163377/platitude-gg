@@ -236,11 +236,13 @@ impl SessionSink for BridgeSink {
                 display,
                 full,
                 at_ms,
+                asked,
             } => self.feeds.commands.push(CommandMsg::Started {
                 id,
                 display,
                 full,
                 at_ms,
+                asked,
             }),
             SessionEvent::CommandFinished {
                 id,

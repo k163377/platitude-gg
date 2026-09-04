@@ -535,3 +535,76 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     drop(events);
     session.close();
 }
+
+/// A fetch nobody asked for stays out of the command log while it lands,
+/// and leaves its row when git says no.
+///
+/// The panel that the first failure of a run raises has to hold the
+/// command that raised it (デザイン規約 §git が言ったことを読む場所). With the
+/// row missing, what a reader finds when the panel comes up is whatever
+/// they last did — which is how a push came to be blamed for a fetch that
+/// could not reach its remote (reported).
+///
+/// **Both halves in one test**: a log that keeps every unasked fetch
+/// passes the second assertion on its own, and one that keeps none passes
+/// the first.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unasked_fetch_leaves_a_row_only_when_git_says_no() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let (sink, session) = opened(&clone).await;
+    // An hour, so both fetches below are the hand-stepped tick's doing.
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(stepped(&hourly, "the tick that reaches the remote").await);
+    assert_eq!(
+        auto_fetch_done(&sink, 1).await,
+        None,
+        "the file:// remote fetched cleanly"
+    );
+    assert_eq!(
+        sink.count(|e| matches!(e, SessionEvent::CommandStarted { .. })),
+        0,
+        "a fetch that landed is nobody's doing, and leaves no row"
+    );
+
+    // The same fetch, with the remote no longer where it was.
+    let gone = format!("{}-gone", origin.file_url());
+    clone.git(&["remote", "set-url", "origin", &gone]);
+    assert!(stepped(&hourly, "the tick that cannot reach it").await);
+    assert!(
+        auto_fetch_done(&sink, 2).await.is_some(),
+        "the fetch could not reach the remote"
+    );
+    let (id, asked) = sink
+        .wait_for("the row of the fetch git turned down", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::CommandStarted {
+                    id, display, asked, ..
+                } if display.contains(" fetch ") => Some((*id, *asked)),
+                _ => None,
+            })
+        })
+        .await;
+    assert!(
+        !asked,
+        "the row is the record of a git that said no, not the reader's doing"
+    );
+    let end = sink
+        .wait_for("its end", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::CommandFinished { id: got, end, .. } if *got == id => Some(*end),
+                _ => None,
+            })
+        })
+        .await;
+    assert_ne!(
+        end,
+        platitude_core::CommandEnd::Exited(0),
+        "the row carries what the fetch actually did"
+    );
+    session.close();
+}

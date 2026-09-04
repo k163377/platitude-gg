@@ -4,6 +4,7 @@ use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
 use crate::support::info;
 use crate::support::integrate::{apply, helper};
+use platitude_core::process::Kept;
 use platitude_core::sequencer;
 
 /// Dropping one commit out of the middle leaves everything after it in
@@ -82,7 +83,7 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     repo.commit_file("b.txt", "two\n", "the second");
 
     let ends = Arc::new(Ends::default());
-    let (executor, cancel) = observed_env(ends.clone(), true);
+    let (executor, cancel) = observed_env(ends.clone(), Kept::Asked);
     let plan = sequencer::plan_edit(
         &executor,
         &repo.path,

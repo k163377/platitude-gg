@@ -56,13 +56,22 @@ pub struct CommandItem {
     sel: String,
 }
 
+/// A row's invocation: the id its end arrives under, and whether the
+/// reader is the one who asked for it. A fetch nobody asked for reaches
+/// the log only when git said no, and its row says so without raising
+/// anything (デザイン規約 §git が言ったことを読む場所).
+struct Invocation {
+    id: u64,
+    asked: bool,
+}
+
 #[derive(Default)]
 pub struct CommandsModel {
     rows: Vec<CommandItem>,
-    /// Invocation ids, one per row: what a `Finished` message finds its
-    /// row by. Kept beside the rows rather than in them — QML has no use
-    /// for it.
-    ids: Vec<u64>,
+    /// One per row: what a `Finished` message finds its row by, and
+    /// whose doing the row is. Kept beside the rows rather than in them —
+    /// QML has no use for either.
+    ids: Vec<Invocation>,
     /// Whether a command is in flight right now.
     running: bool,
     /// Whether the last command that ended failed. Cleared by the next
@@ -287,6 +296,7 @@ impl CommandsModel {
                     display,
                     full,
                     at_ms,
+                    asked,
                 } => {
                     let mut gone = 0;
                     while self.rows.len() >= KEEP {
@@ -299,7 +309,7 @@ impl CommandsModel {
                     if gone > 0 {
                         self.shift_selection(gone);
                     }
-                    self.ids.push(id);
+                    self.ids.push(Invocation { id, asked });
                     let args = display
                         .split_once(' ')
                         .map(|(_, rest)| rest.to_string())
@@ -325,7 +335,7 @@ impl CommandsModel {
                 } => {
                     // Newest first: the command that just ended is nearly
                     // always the last row.
-                    let Some(index) = self.ids.iter().rposition(|got| *got == id) else {
+                    let Some(index) = self.ids.iter().rposition(|got| got.id == id) else {
                         continue;
                     };
                     let Some(row) = self.rows.get(index).cloned() else {
@@ -359,8 +369,16 @@ impl CommandsModel {
                     // "Still running" is about the whole list, not this
                     // row: a fetch can outlive the write that started it.
                     self.running = self.rows.iter().any(|r| r.state == "running");
-                    self.failed = !ok;
                     touched = true;
+                    // A command nobody asked for leaves its row and
+                    // nothing else. The mark and the panel answer for
+                    // what the reader did, and the one thing an unasked
+                    // fetch is entitled to — the first failure of a run —
+                    // is the tab's to raise, once (`fetch_settled`).
+                    if !self.ids[index].asked {
+                        continue;
+                    }
+                    self.failed = !ok;
                     if !ok {
                         self.failure();
                     }

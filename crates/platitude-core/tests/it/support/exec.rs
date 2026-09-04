@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
+use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
 struct IsolatedGit {
@@ -80,10 +80,10 @@ pub fn env() -> (GitExecutor, CancellationToken) {
 /// asked at all — `records()` runs against this flag.
 pub fn observed_env(
     observer: Arc<dyn CommandObserver>,
-    user: bool,
+    kept: Kept,
 ) -> (GitExecutor, CancellationToken) {
     (
-        isolated().observed(observer, user),
+        isolated().observed(observer, kept),
         CancellationToken::new(),
     )
 }
@@ -108,10 +108,10 @@ impl Log {
 }
 
 impl CommandObserver for Log {
-    fn records(&self, _user: bool) -> bool {
+    fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
+    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
         let mut rows = self.0.lock().unwrap();
         rows.push((display.to_string(), None));
         rows.len() as u64 - 1
@@ -128,7 +128,7 @@ impl CommandObserver for Log {
 /// a test of the command log wants.
 pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
-    let (exec, cancel) = observed_env(log.clone(), true);
+    let (exec, cancel) = observed_env(log.clone(), Kept::Asked);
     (exec, log, cancel)
 }
 
@@ -156,7 +156,7 @@ pub fn isolated_global(global_config: &Path) -> GitExecutor {
 /// [`isolated_global`] watched by a fresh [`Log`], on the user handle.
 pub fn logged_global(global_config: &Path) -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
-    let exec = isolated_global(global_config).observed(log.clone(), true);
+    let exec = isolated_global(global_config).observed(log.clone(), Kept::Asked);
     (exec, log, CancellationToken::new())
 }
 
@@ -177,10 +177,10 @@ pub fn assert_answered(reads: &[CommandEnd], what: &str) {
 pub struct Ends(pub Mutex<Vec<CommandEnd>>);
 
 impl CommandObserver for Ends {
-    fn records(&self, _user: bool) -> bool {
+    fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+    fn started(&self, _display: &str, _full: &str, _kept: Kept) -> u64 {
         0
     }
     fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
@@ -210,10 +210,10 @@ impl Said {
 }
 
 impl CommandObserver for Said {
-    fn records(&self, _user: bool) -> bool {
+    fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, _display: &str, _full: &str, _user: bool) -> u64 {
+    fn started(&self, _display: &str, _full: &str, _kept: Kept) -> u64 {
         0
     }
     fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {

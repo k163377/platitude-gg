@@ -110,11 +110,11 @@ struct Recorder {
 }
 
 impl CommandObserver for Recorder {
-    fn records(&self, _user: bool) -> bool {
+    fn records(&self, _kept: Kept) -> bool {
         true
     }
 
-    fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
+    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
         let mut seen = self.seen.lock().unwrap();
         let id = seen.len() as u64;
         seen.push((id, display.to_string(), CommandEnd::Failed, String::new()));
@@ -133,8 +133,10 @@ impl CommandObserver for Recorder {
 #[tokio::test]
 async fn the_observer_hears_about_a_command_that_never_started() {
     let recorder = Arc::new(Recorder::default());
-    let executor = GitExecutor::with_program("pg-no-such-program")
-        .observed(Arc::clone(&recorder) as Arc<dyn CommandObserver>, true);
+    let executor = GitExecutor::with_program("pg-no-such-program").observed(
+        Arc::clone(&recorder) as Arc<dyn CommandObserver>,
+        Kept::Asked,
+    );
     let output = executor
         .run_unchecked(GitCommand::new().arg("status"), &CancellationToken::new())
         .await;

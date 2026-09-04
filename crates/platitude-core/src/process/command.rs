@@ -46,6 +46,24 @@ pub enum CommandEnd {
     Failed,
 }
 
+/// What the command log keeps of one handle's invocations.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Kept {
+    /// Every one of them, as a row, from the spawn: the commands the
+    /// reader asked for.
+    Asked,
+    /// The reads a session makes on its own — kept only while background
+    /// reads are switched on, since a poll tick runs five commands and
+    /// would bury what somebody actually did.
+    #[default]
+    Unasked,
+    /// The same, except that a git which said no leaves its row anyway:
+    /// the fetches nobody asked for. The panel the first of them raises
+    /// has to hold the command that raised it, and one that lands every
+    /// interval would bury the log all the same.
+    UnaskedUnlessItFails,
+}
+
 /// Watches every git invocation, for the command log.
 ///
 /// Called from tokio worker threads, on the hot path of every command:
@@ -54,13 +72,13 @@ pub trait CommandObserver: Send + Sync + 'static {
     /// Whether this handle's invocations are being kept at all. Asked
     /// before the strings are built, so the reads a repository page makes
     /// on a timer cost nothing while nobody is recording them.
-    fn records(&self, user: bool) -> bool;
+    fn records(&self, kept: Kept) -> bool;
 
     /// A command is about to be spawned; the returned id is what its end
     /// is reported under. `display` is the log line, `full` the same
     /// command with the fixed configuration and environment spelled out,
     /// so it can be pasted into a terminal and do the same thing.
-    fn started(&self, display: &str, full: &str, user: bool) -> u64;
+    fn started(&self, display: &str, full: &str, kept: Kept) -> u64;
 
     fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
 }

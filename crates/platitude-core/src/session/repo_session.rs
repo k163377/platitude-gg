@@ -10,6 +10,12 @@ pub struct RepoSession {
     /// The queue's handle: everything run through it is something the
     /// user asked for, and is always recorded.
     pub(super) exec_user: GitExecutor,
+    /// The reaches for the network nobody asked for — the interval's
+    /// fetch and the one an opening fires. Off the log while they land,
+    /// and a row when git says no: the panel that a fetch failure raises
+    /// has to hold the command that raised it
+    /// (デザイン規約 §git が言ったことを読む場所).
+    pub(super) exec_unasked_fetch: GitExecutor,
     pub(super) commands: Arc<CommandFeed>,
     pub(super) runtime: tokio::runtime::Handle,
     pub(super) sink: Arc<dyn SessionSink>,

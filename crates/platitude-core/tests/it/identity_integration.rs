@@ -16,7 +16,7 @@ use crate::support::exec::{env, isolated_global, observed_env};
 use crate::support::{TestRepo, info};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
-use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor};
+use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
 /// Records what was spawned, so a test can count processes rather than
@@ -31,11 +31,11 @@ impl Spawns {
 }
 
 impl CommandObserver for Spawns {
-    fn records(&self, _user: bool) -> bool {
+    fn records(&self, _kept: Kept) -> bool {
         true
     }
 
-    fn started(&self, display: &str, _full: &str, _user: bool) -> u64 {
+    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
         let mut seen = self.0.lock().unwrap();
         seen.push(display.to_string());
         seen.len() as u64
@@ -48,7 +48,7 @@ fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
     let spawns = Arc::new(Spawns::default());
     // `false`: these are the reads a session makes on its own, and what the
     // test counts is that they are spawned, not that they reach the log.
-    let (exec, cancel) = observed_env(spawns.clone(), false);
+    let (exec, cancel) = observed_env(spawns.clone(), Kept::Unasked);
     (exec, spawns, cancel)
 }
 

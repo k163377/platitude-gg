@@ -10,7 +10,9 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use super::child::{ChildOutcome, run_child};
-use super::command::{CommandEnd, CommandObserver, GitCommand, GitOutput, TimeBudget, shell_quote};
+use super::command::{
+    CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
+};
 use crate::error::GitError;
 
 #[cfg(test)]
@@ -74,11 +76,11 @@ pub struct GitExecutor {
     /// process-global environment; command-level values override these.
     env: Arc<Vec<(OsString, OsString)>>,
     observer: Option<Arc<dyn CommandObserver>>,
-    /// Whether invocations made through this handle are ones the user
-    /// asked for, as opposed to background reads. Carried here rather
-    /// than on the command so the callers stay unaware of it: the
-    /// session hands out a different handle for each.
-    user: bool,
+    /// What the command log makes of the invocations run through this
+    /// handle. Carried here rather than on the command so the callers
+    /// stay unaware of it: the session hands out a different handle for
+    /// each answer.
+    kept: Kept,
     /// What [`TimeBudget::Stock`] resolves to. `None` lifts the stock
     /// budget entirely — the test harness's setting, where wall time is
     /// load-dependent and must not decide correctness
@@ -93,7 +95,7 @@ impl std::fmt::Debug for GitExecutor {
             .field("program", &self.program)
             .field("env_overrides", &self.env.len())
             .field("observed", &self.observer.is_some())
-            .field("user", &self.user)
+            .field("kept", &self.kept)
             .finish()
     }
 }
@@ -120,7 +122,7 @@ impl GitExecutor {
             program: Arc::new(program),
             env: Arc::new(Vec::new()),
             observer: None,
-            user: false,
+            kept: Kept::Unasked,
             stock_timeout: Some(DEFAULT_TIMEOUT),
         }
     }
@@ -167,13 +169,13 @@ impl GitExecutor {
     }
 
     /// Returns a handle that reports its invocations to `observer`.
-    /// `user` marks the commands the user asked for.
-    pub fn observed(&self, observer: Arc<dyn CommandObserver>, user: bool) -> Self {
+    /// `kept` is what the log makes of them.
+    pub fn observed(&self, observer: Arc<dyn CommandObserver>, kept: Kept) -> Self {
         Self {
             program: Arc::clone(&self.program),
             env: Arc::clone(&self.env),
             observer: Some(observer),
-            user,
+            kept,
             stock_timeout: self.stock_timeout,
         }
     }
@@ -302,9 +304,9 @@ impl GitExecutor {
         tracing::debug!(command = %described, "spawning git");
         let started = Instant::now();
         let watch = match self.observer.as_ref() {
-            Some(o) if o.records(self.user) => Some((
+            Some(o) if o.records(self.kept) => Some((
                 o,
-                o.started(&described, &self.describe_full(cmd), self.user),
+                o.started(&described, &self.describe_full(cmd), self.kept),
             )),
             _ => None,
         };

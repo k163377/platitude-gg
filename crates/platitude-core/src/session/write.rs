@@ -184,11 +184,13 @@ impl RepoSession {
         // with the session, a local one runs unbudgeted — on a token
         // nothing cancels — to completion, even through a close. The
         // fetches nobody asked for travel this queue too — the interval's
-        // and the one an opening fires — and stay on the background
-        // handle, out of the command log unless background reads are on,
-        // so neither can make an offline laptop raise the panel.
+        // and the one an opening fires — on a handle of their own: one
+        // that lands leaves no row, and one git said no to leaves its own
+        // (`Kept::UnaskedUnlessItFails`). Neither raises the panel by
+        // being a row — nobody asked for it — so an offline laptop still
+        // gets the one telling its first failure is entitled to.
         let (exec, cancel) = if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP {
-            (self.executor.clone(), self.root_cancel.clone())
+            (self.exec_unasked_fetch.clone(), self.root_cancel.clone())
         } else if remote_paced {
             (self.exec_user.clone(), self.root_cancel.clone())
         } else {

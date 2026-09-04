@@ -48,8 +48,9 @@ impl RepoSession {
         let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
         let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
         let session = Arc::new(Self {
-            executor: executor.observed(Arc::clone(&observer), false),
-            exec_user: executor.observed(observer, true),
+            executor: executor.observed(Arc::clone(&observer), Kept::Unasked),
+            exec_user: executor.observed(Arc::clone(&observer), Kept::Asked),
+            exec_unasked_fetch: executor.observed(observer, Kept::UnaskedUnlessItFails),
             commands,
             runtime: runtime.clone(),
             sink,

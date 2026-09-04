@@ -355,7 +355,9 @@ pub enum SessionEvent {
         report: Option<crate::report::WriteReport>,
     },
     /// A git subprocess was spawned (command log). Only what the user
-    /// asked for, unless background reads were switched on.
+    /// asked for, unless background reads were switched on — plus the
+    /// fetches nobody asked for that git said no to, which arrive when
+    /// they end rather than when they start (`process::Kept`).
     CommandStarted {
         id: u64,
         /// The command as a log line shows it.
@@ -365,6 +367,11 @@ pub enum SessionEvent {
         full: String,
         /// Wall clock at the spawn, milliseconds since the epoch.
         at_ms: i64,
+        /// Whether the reader is the one who asked for it. A row that
+        /// nobody asked for is the record that git said no and nothing
+        /// more: it raises no panel and reddens no mark
+        /// (デザイン規約 §git が言ったことを読む場所).
+        asked: bool,
     },
     /// The command with this id ended.
     CommandFinished {

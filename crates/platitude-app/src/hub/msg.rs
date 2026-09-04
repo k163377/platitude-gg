@@ -224,6 +224,11 @@ pub enum CommandMsg {
         display: String,
         full: String,
         at_ms: i64,
+        /// Whether the reader asked for it. A fetch nobody asked for
+        /// arrives here only when git said no, and its row is the record
+        /// of that and nothing else: it neither reddens the mark nor
+        /// raises the panel (デザイン規約 §git が言ったことを読む場所).
+        asked: bool,
     },
     Finished {
         id: u64,

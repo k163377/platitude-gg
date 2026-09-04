@@ -39,7 +39,7 @@ use crate::parse::diff::FilePatch;
 use crate::parse::log::{LOG_FORMAT_ARG, LogParser};
 use crate::patch::HunkSelect;
 use crate::preview::{self, FilePreview};
-use crate::process::{CommandEnd, GitCommand, GitExecutor};
+use crate::process::{CommandEnd, GitCommand, GitExecutor, Kept};
 use crate::publish;
 use crate::reachable;
 use crate::rebase_plan;

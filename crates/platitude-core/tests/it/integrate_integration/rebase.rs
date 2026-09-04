@@ -6,6 +6,7 @@ use crate::support::info;
 use crate::support::integrate::{current_op, helper};
 use platitude_core::conflict::{self, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
+use platitude_core::process::Kept;
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 use platitude_core::{opstate, status};
 
@@ -389,7 +390,7 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     // caller: the command log is where they are read, and this is the
     // observer that stands in for it (デザイン規約 §git が言ったことを読む場所).
     let said = std::sync::Arc::new(crate::support::Said::default());
-    let (exec, cancel) = crate::support::exec::observed_env(said.clone(), true);
+    let (exec, cancel) = crate::support::exec::observed_env(said.clone(), Kept::Asked);
 
     let steps = vec![
         RebaseStep::pick(doomed.clone(), "adds X"),

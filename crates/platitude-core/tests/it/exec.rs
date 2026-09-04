@@ -7,6 +7,7 @@
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
 use crate::support::wait::bounded;
+use platitude_core::process::Kept;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
 
@@ -187,7 +188,7 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     let c2 = repo_dir.commit_file_id("a.txt", "2\n", "two");
 
     let ends = Arc::new(Ends::default());
-    let (executor, cancel) = observed_env(ends.clone(), true);
+    let (executor, cancel) = observed_env(ends.clone(), Kept::Asked);
     let ancestor = |a: String, b: String| {
         GitCommand::new()
             .cwd(&repo_dir.path)

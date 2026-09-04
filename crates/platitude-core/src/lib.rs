@@ -66,7 +66,7 @@ pub use error::GitError;
 pub use model::{CommitMeta, Name, StrPool};
 pub use oid::Oid;
 pub use process::{
-    CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput,
+    CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput, Kept,
 };
 pub use repo::{ObjectFormat, RepoInfo};
 pub use report::{ReportKind, WriteReport};

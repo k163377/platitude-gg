@@ -12,5 +12,5 @@ mod child;
 mod command;
 mod executor;
 
-pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, literal_pathspec};
+pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, literal_pathspec};
 pub use executor::{DEFAULT_TIMEOUT, GitExecutor};
