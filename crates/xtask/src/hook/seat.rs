@@ -249,9 +249,10 @@ fn printable(text: &str) -> String {
 }
 
 /// SessionEnd: a seat claimed by this session is handed back, and the
-/// pictures this session put on the shot board go with it. A lock
-/// somebody else wrote stays — ending inside a seat that was never ours
-/// is the collision case, not a reason to free it.
+/// pictures this session put on the shot board are marked for the board
+/// to let go of a day from now. A lock somebody else wrote stays —
+/// ending inside a seat that was never ours is the collision case, not a
+/// reason to free it.
 pub(super) fn session_end(input: &str) -> Result<(), String> {
     let session = string_field(input, "session_id").unwrap_or_default();
     if session.is_empty() {
@@ -260,6 +261,8 @@ pub(super) fn session_end(input: &str) -> Result<(), String> {
     // The board first, and by session rather than by seat: a session in
     // the primary checkout holds no seat to release and still leaves
     // pictures behind, and a seat outlives whoever sat in it (shots).
+    // This event fires over a sleep too, so it only marks the runs —
+    // what the mark means is shots/sweep.rs's to say.
     if let Err(_unheard) = crate::shots::session_ended(&session) {
         // Nobody is left to tell — the session is over. What stayed on
         // the board is what `cargo xtask shots prune` is for.

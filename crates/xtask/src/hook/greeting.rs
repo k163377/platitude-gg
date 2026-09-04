@@ -13,6 +13,23 @@ use crate::subprocess::git_query;
 /// context for this event.
 pub(super) fn session_start(input: &str) -> Result<(), String> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
+    let session = string_field(input, "session_id").unwrap_or_default();
+    // A session that starts is a session that is not over, whatever its
+    // last SessionEnd said — the machine sleeps with the conversation
+    // open and hands it one on the way down. Said out loud when there
+    // are pictures, so a session that comes back to work knows they are
+    // there to be read rather than taken again (shots/sweep.rs).
+    match crate::shots::session_seen(&session) {
+        Ok(back) if back > 0 => println!(
+            "The {back} run(s) this session put on the shot board are still there — \
+             nothing has to be taken again, and the window reading the board is one \
+             F5 from showing them."
+        ),
+        // No pictures, or a board that would not be written: either way
+        // the greeting is what this event is for, and the runs stand
+        // until their mark runs out (shots/sweep.rs).
+        Ok(_) | Err(_) => {}
+    }
     // The hook that holds main to the gate's stamp goes in on every
     // session start, so no clone and no seat is ever without it. A
     // failure is said, not fatal: the greeting still has to be given.
@@ -56,7 +73,6 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         Some(root) => {
             let name = root.rsplit('/').next().unwrap_or_default();
             if SEATS.contains(&name) {
-                let session = string_field(input, "session_id").unwrap_or_default();
                 if let Some(note) = claim_at_start(&cwd, &session) {
                     println!("{note}");
                 }

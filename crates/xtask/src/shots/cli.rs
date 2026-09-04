@@ -33,7 +33,9 @@ cargo xtask shots <command>
 
       Most runs need none of this: a retake replaces the picture it was
       taken to replace, a landed seat's runs go with `land`, and a
-      session's own runs go when it ends (shots/sweep.rs).
+      session's own runs go a day after it ends — unless the session is
+      heard from again first, which is what a sleep looks like from here
+      (shots/sweep.rs).
 
   open [--again]
       Put the board in front of the reader, in one window and only one:
@@ -47,7 +49,8 @@ cargo xtask shots <command>
       only way past: nothing here can see a closed window
       (shots/window.rs).
 
-  list        One line per run: when, seat, count, label.
+  list        One line per run: when, seat, count, label, and — for a
+              run whose session has ended — how long ago that was.
   path        Where the page is.
 ";
 
@@ -60,7 +63,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             let runs = board::load_runs(&board::board_dir()?.join("runs"));
             for run in &runs {
                 println!(
-                    "{}  seat {}  {} shot(s)  {}{}",
+                    "{}  seat {}  {} shot(s)  {}{}{}",
                     stamp(run.at),
                     run.seat,
                     run.shots.len(),
@@ -69,7 +72,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                         String::new()
                     } else {
                         format!("  [{}]", run.verb)
-                    }
+                    },
+                    leaving(run.ended),
                 );
             }
             println!("{} run(s) on the board", runs.len());
@@ -213,6 +217,23 @@ fn prune(args: &[String]) -> Result<(), String> {
         label.map_or(String::new(), |label| format!(" named \"{label}\"")),
     );
     Ok(())
+}
+
+/// What a listing says about a run whose session has ended: how long ago
+/// that was, since what the reader wants out of it is how much of the
+/// day the run has left (`sweep::FAREWELL`). Nothing at all for a run
+/// nobody has marked, which is most of them.
+fn leaving(ended: u128) -> String {
+    if ended == 0 {
+        return String::new();
+    }
+    match board::now_ms() {
+        Some(now) => format!(
+            "  (its session ended {})",
+            window::words(now.saturating_sub(ended))
+        ),
+        None => "  (its session has ended)".to_string(),
+    }
 }
 
 /// Milliseconds since the epoch as `YYYY-MM-DD HH:MMZ`.

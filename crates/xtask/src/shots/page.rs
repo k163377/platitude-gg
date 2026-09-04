@@ -271,6 +271,7 @@ mod tests {
             seat: seat.to_string(),
             session: String::new(),
             at: 1_700_000_000_000,
+            ended: 0,
             side_by_side: false,
             shots: vec![Shot {
                 file: "img/x.png".to_string(),

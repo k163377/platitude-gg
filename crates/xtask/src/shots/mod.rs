@@ -30,7 +30,7 @@ mod window;
 
 pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;
-pub(crate) use sweep::{seat_freed, session_ended};
+pub(crate) use sweep::{seat_freed, session_ended, session_seen};
 
 /// One `add`: the pictures taken for one thing, under the name that says
 /// what to look at in them.
@@ -53,6 +53,15 @@ pub(crate) struct Run {
     /// Milliseconds since the epoch. The page formats it — it has a
     /// calendar, and xtask depends on std alone (CLAUDE.md 技術スタック).
     pub(crate) at: u128,
+    /// When the session that took these pictures was last seen to end,
+    /// and 0 while it is somebody's.
+    ///
+    /// A session ending is not the same thing as a session being over:
+    /// the machine sleeps, the app hands the conversation a SessionEnd,
+    /// and the same session comes back at the next wake to go on
+    /// working. So the end only writes this mark, and what a mark means
+    /// is "on its way out unless somebody speaks for it" (`sweep`).
+    pub(crate) ended: u128,
     /// Whether the pictures are read *abreast* — one view holding them
     /// all in a row under one zoom — rather than one at a time.
     ///

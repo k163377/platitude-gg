@@ -1,6 +1,6 @@
 //! `board`'s own tests, in a file of their own (structure.md §分割).
 
-use super::{Run, Shot, load_runs, one_line, parse_run, slug, write_run};
+use super::{Run, Shot, load_runs, one_line, parse_run, place, slug, write_run};
 
 #[test]
 fn a_run_survives_the_round_trip() {
@@ -53,6 +53,49 @@ fn a_run_from_before_sessions_belongs_to_none() {
     assert!(run.session.is_empty());
 }
 
+/// The mark a session's end leaves is read back a day later to decide
+/// whether the pictures go, by a command that has only the file to go
+/// on — so it has to survive the file, and a run nobody has marked has
+/// to come back out unmarked.
+#[test]
+fn a_session_s_end_is_written_where_the_next_command_reads_it() {
+    let runs = std::env::temp_dir().join(format!("pg-shots-mark-{}", std::process::id()));
+    std::fs::create_dir_all(&runs).expect("a runs directory to write into");
+    let mut run = Run {
+        label: "the chip's badge".to_string(),
+        verb: String::new(),
+        seat: "a".to_string(),
+        session: "s-1".to_string(),
+        at: 1_700_000_000_000,
+        ended: 0,
+        side_by_side: false,
+        shots: vec![Shot {
+            file: "img/x.png".to_string(),
+            from: "app.png".to_string(),
+            caption: String::new(),
+            width: 1,
+            height: 1,
+        }],
+    };
+    let path = runs.join("run.tsv");
+    place(&path, &run).expect("the run is written");
+    let text = std::fs::read_to_string(&path).expect("and read back");
+    assert!(
+        !text.contains("ended"),
+        "a run whose session is still somebody's carries no mark: {text}"
+    );
+    assert_eq!(parse_run(&text).expect("a whole run parses").ended, 0);
+
+    run.ended = 1_800_000_000_000;
+    place(&path, &run).expect("the mark is written over it");
+    let text = std::fs::read_to_string(&path).expect("and read back");
+    assert_eq!(
+        parse_run(&text).expect("a whole run parses").ended,
+        1_800_000_000_000
+    );
+    std::fs::remove_dir_all(&runs).expect("the temporary board goes");
+}
+
 /// A file missing what a run *is* is skipped, not guessed at.
 #[test]
 fn a_run_without_a_picture_is_not_a_run() {
@@ -88,6 +131,7 @@ fn runs_come_back_in_the_order_they_went_up() {
         seat: "a".to_string(),
         session: String::new(),
         at,
+        ended: 0,
         side_by_side: false,
         shots: vec![Shot {
             file: "img/x.png".to_string(),
