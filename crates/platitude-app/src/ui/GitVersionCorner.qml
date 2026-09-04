@@ -13,6 +13,13 @@ RowLayout {
     /// What the pane under it is leaving bare. Only one pane is on screen at a time and each measures its own file
     /// list, so which of them is answering is the page's to say.
     required property real roomLeft
+    /// Whether whoever hangs this corner is offering the seat at all — the run button takes the pane's foot while a
+    /// plan stands (規約 §コミットメッセージの 2 つの枠「ペインの底は空かない」).
+    ///
+    /// **It comes in as a property rather than as a `visible` on the instance**: a `visible` written there replaces
+    /// this one outright, and the room test goes with it — the version was drawn across the commit button of a pane
+    /// that lends no corner at all (observed).
+    property bool offered: true
     /// Its own box and nothing more — no extra air above: a list's rows are already spaced by their own height.
     readonly property real roomNeeded: gitCorner.implicitHeight + Theme.spaceXs
 
@@ -20,7 +27,8 @@ RowLayout {
     // Out of the way as soon as the list reaches this corner. Hidden outright rather than held at
     // zero opacity: a Label keeps its implicit height while `visible: false`, so the answer never eats what it read
     // (qmltestrunner, measured).
-    visible: AppBackend.gitVersion !== "" && gitCorner.roomLeft >= gitCorner.roomNeeded
+    visible: gitCorner.offered && AppBackend.gitVersion !== ""
+             && gitCorner.roomLeft >= gitCorner.roomNeeded
 
     Label {
         text: qsTr("git %1").arg(AppBackend.gitVersion)

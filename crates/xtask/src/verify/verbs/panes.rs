@@ -192,6 +192,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "description_grow keeps=true",
     },
+    // Whether the corner text gives the pane's foot back. **The working
+    // tree's foot is never lent at all** — a commit button is pinned to
+    // it — so `shown=false room=0` is the whole of that pane's answer,
+    // whatever list is above it; the give-and-take that can go either
+    // way is the details pane's, and which way it goes there is the
+    // preset's business rather than the argument's, so only the pane is
+    // claimed for a row.
+    //
+    // Judged on `shown=`, the label's own visibility. `room=` is what
+    // was asked, and a run that claimed only that would be green with
+    // the answer overwritten — which is exactly how this shipped: an
+    // instance wrote its own `visible` over the corner's, and every
+    // WIP pane carried the version across its commit button until a
+    // picture was looked at.
+    Verb {
+        name: "corner",
+        when: &[
+            (Arg::Is(""), "git_corner pane=wip shown=false room=0"),
+            (Arg::Is("wip"), "git_corner pane=wip shown=false room=0"),
+        ],
+        plain: "git_corner pane=details",
+    },
     // The two bars a panel carries, each judged as a pair, because each
     // says its state in brightness alone: a few pixels of ink at the
     // edge of a 1440px frame, one step apart. A screenshot cannot

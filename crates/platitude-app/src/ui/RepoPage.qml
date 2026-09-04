@@ -2585,8 +2585,9 @@ Item {
                     GitVersionCorner {
                         id: gitCorner
                         // The run button takes the pane's foot while a plan stands, and the foot it takes is this
-                        // corner's seat (§コミットメッセージの 2 つの枠「ペインの底は空かない」).
-                        visible: !page.planActive
+                        // corner's seat (§コミットメッセージの 2 つの枠「ペインの底は空かない」). Said through the
+                        // corner's own property — a `visible` here replaces the one it draws itself by.
+                        offered: !page.planActive
                         // Only one of the two panes is on screen at a time, and each measures its own file list.
                         roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
                         anchors.right: parent.right
