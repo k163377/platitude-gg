@@ -154,6 +154,14 @@ struct Announced {
 
 impl Drop for Announced {
     fn drop(&mut self) {
+        // A plain file where the stamps' directory goes is a stamp of
+        // every process at once, which nothing reads: cleared, so the
+        // directory can stand there.
+        if let Some(stamps) = self.stamp.parent()
+            && stamps.is_file()
+        {
+            clear(stamps);
+        }
         let written = self
             .stamp
             .parent()
@@ -754,6 +762,22 @@ mod tests {
             "a stamp a day old is swept, not read"
         );
         assert!(!stamps.join("2").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A plain file standing where the stamps' directory goes is cleared
+    /// by the first announcement that ends, and the stamp lands under it.
+    #[test]
+    fn a_file_where_the_stamps_directory_goes_is_cleared() {
+        let dir = common("stamp-file");
+        std::fs::write(dir.join(BUILT), "pid 1\nat 0\n").expect("a file in the directory's place");
+        drop(busy_in(&dir, "gate", &|| {}).expect("a build announced"));
+        assert!(
+            dir.join(BUILT)
+                .join(std::process::id().to_string())
+                .is_file(),
+            "the stamp is under the directory"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
