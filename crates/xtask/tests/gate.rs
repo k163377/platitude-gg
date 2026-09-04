@@ -13,12 +13,58 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 const EXE: &str = env!("CARGO_BIN_EXE_xtask");
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The three steps every gate runs regardless of the diff.
 const ALWAYS: [&str; 3] = ["structure", "waits", "fmt"];
+
+/// How long a run puts up with its own image being called busy. A ceiling
+/// for detecting failure, never for deciding it: the window belongs to
+/// another process's scheduling, and a fixed second of retries is a wall
+/// clock verdict a loaded machine can outlast.
+const BUSY_CEILING: Duration = Duration::from_secs(120);
+
+/// Runs a command, retrying while the kernel answers that somebody still
+/// holds its image open for writing (`ETXTBSY`).
+///
+/// A test publishing a runner into a seat's build slot has that file open
+/// for writing, and `i_writecount` is counted per open file description:
+/// a neighbour test forking git or xtask mid-copy hands its child a
+/// reference to the same one. `CLOEXEC` closes it, but not before the
+/// child's `execve`, and until then the file cannot be executed at all.
+/// The copying thread never sees its own window — `spawn` returns once
+/// the child's `execve` closes the error pipe — but with a thread per
+/// core the suite is forking constantly and every neighbour sees it.
+///
+/// Hence a retry on the error rather than a wait for the window: every
+/// attempt is the real run, and the first answer that is not "busy" is
+/// the answer — a busy one at the end of the budget included, which
+/// reaches the caller as the failure it is. (`run_published_helper` in
+/// platitude-core's suite carries the same loop over the todo helper.)
+fn output_past_a_busy_image(
+    command: &mut Command,
+    on_busy: impl FnOnce(),
+) -> std::io::Result<std::process::Output> {
+    let deadline = Instant::now() + BUSY_CEILING;
+    let mut on_busy = Some(on_busy);
+    loop {
+        let answer = command.output();
+        let busy = matches!(
+            &answer,
+            Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy
+        );
+        if !busy || Instant::now() >= deadline {
+            return answer;
+        }
+        if let Some(notify) = on_busy.take() {
+            notify();
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
 
 struct Sandbox {
     root: PathBuf,
@@ -99,7 +145,7 @@ impl Sandbox {
         for (key, value) in extra {
             command.env(key, value);
         }
-        let output = command.output().expect("spawn xtask");
+        let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
         let text = format!(
             "{}{}",
             String::from_utf8_lossy(&output.stdout),
@@ -129,7 +175,7 @@ impl Sandbox {
             .arg(&self.repo)
             .current_dir(&self.repo);
         self.env(&mut command);
-        let output = command.output().expect("spawn xtask");
+        let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
         let text = format!(
             "{}{}",
             String::from_utf8_lossy(&output.stdout),
@@ -843,6 +889,54 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
         "an earlier landing's image was left in the slot's directory:\n{text}"
     );
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
+}
+
+/// The other half of that: a runner published into a slot by `fs::copy`
+/// is exactly the image a neighbour's fork can be holding open, and what
+/// this suite has to survive is the refusal, not the fork — a window too
+/// short to catch on purpose. Held open here on purpose instead: one
+/// attempt is refused outright, and the run that keeps asking gets its
+/// answer as soon as the handle goes.
+///
+/// Linux rather than every unix, because POSIX only says `execve` *may*
+/// refuse a file open for writing — this asserts that it does, which is
+/// a promise Linux makes and the container is the machine that keeps it.
+#[test]
+#[cfg(target_os = "linux")]
+fn a_runner_held_open_for_writing_is_run_once_the_handle_goes() {
+    // A sandbox for the temp root it takes away again: nothing here gates.
+    let sb = Sandbox::new("busy");
+    let slot = sb.root.join("slot");
+    std::fs::create_dir_all(&slot).expect("the build slot");
+    let running = slot.join("xtask");
+    std::fs::copy(EXE, &running).expect("the runner in the slot");
+
+    // Opened, not truncated: the file stays the runner throughout.
+    let handle = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&running)
+        .expect("hold the published runner open for writing");
+    let refused = Command::new(&running)
+        .output()
+        .expect_err("a file open for writing is not executable on linux");
+    assert_eq!(refused.kind(), std::io::ErrorKind::ExecutableFileBusy);
+
+    let (busy, saw_busy) = std::sync::mpsc::channel();
+    let runner = std::thread::spawn(move || {
+        // No command: the runner prints its usage and touches nothing.
+        let mut command = Command::new(&running);
+        output_past_a_busy_image(&mut command, move || busy.send(()).expect("report ETXTBSY"))
+    });
+    saw_busy.recv().expect("the first execution was refused");
+    drop(handle);
+    let out = runner
+        .join()
+        .expect("the runner")
+        .expect("run the published runner");
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("cargo xtask <command>"),
+        "the published file is not the runner: {out:?}"
+    );
 }
 
 #[test]
