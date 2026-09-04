@@ -99,6 +99,62 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     assert!(snapshot.locals[0].upstream_drifted);
 }
 
+/// The graph's cloud follows the fold: it is on the chip exactly while the
+/// remote it is about is folded into that chip (デザイン規約 §ref の種別).
+/// Drifted, the remote keeps a row of its own and neither row wears one —
+/// the two rows are the whole of the signal. The sidebar answers the wider
+/// question and keeps its badge either way.
+#[test]
+fn the_graph_cloud_on_a_branch_follows_the_fold() {
+    let tracking = |remote: &str, commit: Oid| RefEntry {
+        name: crate::Name::from(format!("refs/remotes/{remote}/main")),
+        short: crate::Name::from(format!("{remote}/main")),
+        kind: RefKind::RemoteBranch,
+        target: commit,
+        peeled: None,
+        upstream: None,
+        is_head: false,
+        created_unix: 0,
+    };
+    let mut main = branch("main", oid(1));
+    main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
+    let remote_tags = index_of("origin", Vec::new());
+    let held = held_by_nobody();
+
+    let agreed = vec![main.clone(), tracking("origin", oid(1))];
+    let joins = RefJoins::new(&agreed, &held);
+    let map = build_label_map(&agreed, &head_at(oid(1)), &remote_tags, &joins);
+    let folded = map.labels_of(&oid(1), true);
+    assert_eq!(folded.len(), 1, "one chip between the two: {folded:?}");
+    assert!(folded[0].has_remote, "the cloud stands for what it folded");
+
+    let apart = vec![main.clone(), tracking("origin", oid(2))];
+    let joins = RefJoins::new(&apart, &held);
+    let map = build_label_map(&apart, &head_at(oid(1)), &remote_tags, &joins);
+    let ours = map.labels_of(&oid(1), true);
+    assert!(!ours[0].has_remote, "the remote is not on this row");
+    let theirs = map.labels_of(&oid(2), true);
+    assert_eq!(theirs[0].text, "origin/main", "the unfolded remote's chip");
+    assert!(!theirs[0].has_remote);
+    let snapshot = build_snapshot(&apart, &head_at(oid(1)), &remote_tags, &joins);
+    assert!(
+        snapshot.locals[0].has_remote,
+        "the sidebar answers the wider question: the name is out there"
+    );
+
+    // No upstream and two same-named remotes: the badge cannot say which
+    // one it is about, which is not the same as its having drifted from
+    // one. Nothing folds, and the chip keeps the cloud it had.
+    let mut loose = branch("main", oid(1));
+    loose.upstream = None;
+    let ambiguous = vec![loose, tracking("origin", oid(1)), tracking("fork", oid(2))];
+    let joins = RefJoins::new(&ambiguous, &held);
+    let map = build_label_map(&ambiguous, &head_at(oid(1)), &remote_tags, &joins);
+    let chips = map.labels_of(&oid(1), true);
+    assert_eq!(chips.len(), 2, "nothing folded: {chips:?}");
+    assert!(chips[0].has_remote, "the name is out there, on some remote");
+}
+
 /// A branch another working copy has out is marked on **both** halves of
 /// the join — the sidebar row and the graph chip read one bit between
 /// them, and a chip that offered a move the row refused would be two
@@ -193,15 +249,25 @@ fn a_drifted_tag_stands_on_both_rows() {
     let nobody = held_by_nobody();
     let joins = RefJoins::new(&refs, &nobody);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
-    assert!(map.labels_of(&oid(1), true)[0].here);
+    let ours = map.labels_of(&oid(1), true);
+    assert!(ours[0].here);
+    assert!(
+        !ours[0].has_remote,
+        "the two rows are the drift; a cloud here would answer for the wrong one"
+    );
     let theirs = map.labels_of(&oid(2), true);
     assert!(!theirs.is_empty(), "the remote's reading");
     assert!(!theirs[0].here);
     assert_eq!(theirs[0].remote, "origin");
+    assert!(!theirs[0].has_remote, "and the far half goes bare with it");
 
     let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
     assert_eq!(snapshot.tags.len(), 1);
     assert!(snapshot.tags[0].here);
+    assert!(
+        snapshot.tags[0].has_remote,
+        "the sidebar answers the wider question: the name is out there"
+    );
 }
 
 /// With the tags out of the graph, the chips lose them too — on the rows

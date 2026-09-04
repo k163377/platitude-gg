@@ -74,6 +74,14 @@ impl<'a> RefJoins<'a> {
 /// the row it is really on, so the same name stands on two rows — the whole
 /// of that signal, since a fetch never resolves the disagreement (measured:
 /// `--prune` leaves the local tag silently) and it has to keep showing.
+///
+/// **Drift takes the cloud off both rows** (デザイン規約 §ref の種別). On
+/// the graph the badge is about the row it is standing on: it says the
+/// remote's copy of this name is here. Where the two sides disagree the
+/// remote's copy is on another row — which the two rows already say — so
+/// the badge would be answering the wrong row. The sidebar keeps the wider
+/// reading (does this name exist out there at all), because a list of
+/// names has no second row to say it with (`build_snapshot`).
 pub(super) fn build_label_map(
     refs: &[RefEntry],
     head: &HeadState,
@@ -91,8 +99,8 @@ pub(super) fn build_label_map(
             RefKind::Tag => LabelKind::Tag,
         };
         let has_remote = match r.kind {
-            RefKind::LocalBranch => joins.remotes.has_counterpart(r),
-            RefKind::Tag => remote_tags.carries(&r.short),
+            RefKind::LocalBranch => joins.remotes.has_counterpart(r) && !joins.remotes.drifted(r),
+            RefKind::Tag => remote_tags.agrees_at(&r.short, r.commit_oid()),
             RefKind::RemoteBranch => false,
         };
         pairs.push((
@@ -119,7 +127,12 @@ pub(super) fn build_label_map(
                 RefLabel {
                     text: name.into(),
                     kind: LabelKind::Tag,
-                    has_remote: true,
+                    // The badge is the only thing that can say "remote"
+                    // about a name this repository does not hold — a tag
+                    // has no `origin/` namespace to say it in the name.
+                    // Where the name *is* held here, this row is the far
+                    // half of a drift, and both halves go bare.
+                    has_remote: local.is_none(),
                     is_head: false,
                     here: false,
                     remote: reading

@@ -610,9 +610,13 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
         }
         assert_eq!(mine.kind, LabelKind::Tag);
         assert_eq!(theirs.kind, LabelKind::Tag);
+        // And the two rows are the whole of it: on the graph the cloud
+        // says the remote's copy is on *this* row, so where the two sides
+        // disagree neither row wears one. The sidebar keeps the wider
+        // reading, which is asserted where the snapshot is read.
         assert!(
-            mine.has_remote && theirs.has_remote,
-            "the remote has the name on both readings"
+            !mine.has_remote && !theirs.has_remote,
+            "a badge here would answer for the row the other one is on"
         );
         // Which of the two is which cannot be read off the name — they
         // are the same name — so the reading that came from over there

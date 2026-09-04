@@ -195,6 +195,22 @@ impl<'a> RemoteBranches<'a> {
         upstream_exists || self.by_branch_name.contains_key(local.short.as_str())
     }
 
+    /// Whether the remote this branch speaks for stands on another commit.
+    ///
+    /// The other half of [`Self::folded_into_local`]'s condition, asked of
+    /// one branch: a drifted remote is not folded away, so it keeps a chip
+    /// of its own on the row it is really on — and a cloud badge here
+    /// would say the remote is on this row while the graph is showing it
+    /// on another (デザイン規約 §ref の種別).
+    ///
+    /// An ambiguity is not a drift: with no upstream and two same-named
+    /// remotes there is no single branch the badge is about, so there is
+    /// nothing for it to have drifted from.
+    pub fn drifted(&self, local: &RefEntry) -> bool {
+        self.spoken_for(local)
+            .is_some_and(|remote| remote.commit_oid() != local.commit_oid())
+    }
+
     /// Remote branches a local branch on the **same commit** already
     /// speaks for. Listing one again in the row's chip says twice what the
     /// badge says once, so the row folds it away (デザイン規約 §グラフ行のダブルクリック).

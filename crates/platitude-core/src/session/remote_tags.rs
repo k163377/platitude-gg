@@ -109,11 +109,36 @@ impl RemoteTagIndex {
         })
     }
 
-    /// Whether any remote carries this name — the cloud badge's question.
+    /// Whether any remote carries this name at all.
     pub(crate) fn carries(&self, name: &str) -> bool {
         self.entries
             .binary_search_by(|e| e.name.as_str().cmp(name))
             .is_ok()
+    }
+
+    /// Whether the graph's cloud belongs on this repository's copy of the
+    /// name: some remote carries it, and every remote that does has it on
+    /// the commit it is on here (デザイン規約 §ref の種別). A drift stands
+    /// the name on two rows, and neither of them wears the badge.
+    ///
+    /// **One search, not [`Self::carries`] and a drift question asked
+    /// separately.** This is answered for every tag on every refs read,
+    /// and `JetBrains/kotlin` brings 45,901 of them (`RefJoins`) — a second
+    /// walk of the same run costs the whole of that again for an answer
+    /// this one already has.
+    pub(crate) fn agrees_at(&self, name: &str, here: Oid) -> bool {
+        let start = self.entries.partition_point(|e| e.name.as_str() < name);
+        let mut carried = false;
+        for entry in self.entries[start..]
+            .iter()
+            .take_while(|e| e.name.as_str() == name)
+        {
+            if entry.commit != here {
+                return false;
+            }
+            carried = true;
+        }
+        carried
     }
 
     /// The names in order, each with every reading of it. One name is one
