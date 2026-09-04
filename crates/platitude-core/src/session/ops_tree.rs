@@ -136,9 +136,7 @@ impl RepoSession {
             "commit",
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                commit::commit(&exec, &repo, &message, options, &cancel)
-                    .await
-                    .map(drop)
+                commit::commit(&exec, &repo, &message, options, &cancel).await
             },
         );
     }

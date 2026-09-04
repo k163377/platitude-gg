@@ -259,9 +259,7 @@ impl RepoSession {
                         amend: true,
                         ..Default::default()
                     };
-                    return commit::commit(&exec, &repo, &message, options, &cancel)
-                        .await
-                        .map(drop);
+                    return commit::commit(&exec, &repo, &message, options, &cancel).await;
                 }
                 let plan = sequencer::plan_edit(
                     &exec,

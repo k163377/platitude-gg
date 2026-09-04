@@ -19,8 +19,9 @@ async fn commits_staged_content_with_a_multiline_message() {
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
 
+    let before = repo.git(&["rev-parse", "HEAD"]);
     let message = "subject line\n\nbody with \"quotes\" and 日本語\n#not-a-comment\n";
-    let oid = commit::commit(
+    commit::commit(
         &exec,
         &repo_info,
         message,
@@ -30,13 +31,48 @@ async fn commits_staged_content_with_a_multiline_message() {
     .await
     .expect("commit");
 
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), oid.to_hex());
+    assert_ne!(repo.git(&["rev-parse", "HEAD"]), before, "HEAD moved");
     let stored = repo.git(&["log", "-1", "--format=%B"]);
     assert_eq!(stored, message.trim_end());
     assert_eq!(
         repo.git(&["show", "--name-only", "--format=", "HEAD"]),
         "a.txt"
     );
+}
+
+/// A commit is one git command, and that command's exit code is the whole
+/// answer. Reading HEAD back would put a second command behind the reply
+/// which can fail on its own — an unreadable object, a lock another git
+/// holds — and the write queue would then report a commit that landed as
+/// one that did not, with the editor still holding the message.
+#[tokio::test]
+async fn a_commit_asks_git_once_and_reads_nothing_back() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.write_file("a.txt", "content\n");
+    repo.git(&["add", "--", "a.txt"]);
+    let (exec, log, cancel) = crate::support::exec::logged();
+    let repo_info = info(&repo).await;
+
+    commit::commit(
+        &exec,
+        &repo_info,
+        "one command",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect("commit");
+
+    let ran: Vec<String> = log
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(display, _)| display.clone())
+        .collect();
+    assert_eq!(ran.len(), 1, "one command and no read back: {ran:?}");
+    assert!(ran[0].contains("commit"), "{ran:?}");
 }
 
 #[tokio::test]
@@ -48,7 +84,7 @@ async fn amend_replaces_the_head_commit() {
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
 
-    let amended = commit::commit(
+    commit::commit(
         &exec,
         &repo_info,
         "reworded subject",
@@ -61,7 +97,11 @@ async fn amend_replaces_the_head_commit() {
     .await
     .expect("amend");
 
-    assert_ne!(amended.to_hex(), first, "amend rewrites the commit");
+    assert_ne!(
+        repo.git(&["rev-parse", "HEAD"]),
+        first,
+        "amend rewrites the commit"
+    );
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded subject");
     let files = repo.git(&["show", "--name-only", "--format=", "HEAD"]);
     assert!(files.contains("a.txt") && files.contains("b.txt"));

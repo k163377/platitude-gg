@@ -62,17 +62,24 @@ pub fn split_message(message: &str) -> (String, String) {
     )
 }
 
-/// Commits the staged content and returns the resulting commit id.
+/// Commits the staged content.
 ///
 /// An empty `message` is only valid together with [`CommitOptions::amend`],
 /// where it means "keep the existing message" (`--no-edit`).
+///
+/// **Nothing is read back.** git either wrote the commit or it did not,
+/// and the answer is the exit code already in hand; a second command
+/// asking where HEAD landed can fail on its own, and this end would then
+/// have to report a commit that did not happen over one that did. What
+/// moved is read where every other mover of HEAD is read — the pass that
+/// follows the write.
 pub async fn commit(
     executor: &GitExecutor,
     repo: &RepoInfo,
     message: &str,
     options: CommitOptions,
     cancel: &CancellationToken,
-) -> Result<Oid, GitError> {
+) -> Result<(), GitError> {
     let mut cmd = GitCommand::new().cwd(&repo.workdir).arg("commit");
     if options.amend {
         cmd = cmd.arg("--amend");
@@ -112,7 +119,7 @@ pub async fn commit(
     if out.code != 0 {
         return Err(refused(command, &out));
     }
-    head_oid(executor, &repo.workdir, cancel).await
+    Ok(())
 }
 
 /// A commit that was not made, as something to report rather than a
