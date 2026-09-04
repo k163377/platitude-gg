@@ -61,6 +61,44 @@ fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
     )
 }
 
+/// The row carries whether the reading it speaks for is standing where
+/// the branch is. A pair that has drifted is two rows on the graph rather
+/// than one folded chip, and the menu's rows that reach the remote read
+/// this to say why instead of running (デザイン規約 §左メニューの所作
+/// の削除の表).
+#[test]
+fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
+    let tracking = |commit: Oid| RefEntry {
+        name: crate::Name::from("refs/remotes/origin/main"),
+        short: crate::Name::from("origin/main"),
+        kind: RefKind::RemoteBranch,
+        target: commit,
+        peeled: None,
+        upstream: None,
+        is_head: false,
+        created_unix: 0,
+    };
+    let mut main = branch("main", oid(1));
+    main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
+    let remote_tags = index_of("origin", Vec::new());
+    let held = held_by_nobody();
+
+    let agreed = vec![main.clone(), tracking(oid(1))];
+    let joins = RefJoins::new(&agreed, &held);
+    let snapshot = build_snapshot(&agreed, &head_at(oid(1)), &remote_tags, &joins);
+    assert_eq!(snapshot.locals[0].upstream, "origin/main");
+    assert!(!snapshot.locals[0].upstream_drifted);
+
+    let apart = vec![main, tracking(oid(2))];
+    let joins = RefJoins::new(&apart, &held);
+    let snapshot = build_snapshot(&apart, &head_at(oid(1)), &remote_tags, &joins);
+    assert_eq!(
+        snapshot.locals[0].upstream, "origin/main",
+        "the reading it speaks for is the same one wherever it stands"
+    );
+    assert!(snapshot.locals[0].upstream_drifted);
+}
+
 /// A branch another working copy has out is marked on **both** halves of
 /// the join — the sidebar row and the graph chip read one bit between
 /// them, and a chip that offered a move the row refused would be two

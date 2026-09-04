@@ -100,6 +100,7 @@ pub(super) enum Role {
     HasRemote,
     OnlyRemote,
     Upstream,
+    UpstreamDrifted,
     HasPr,
     EolMark,
     Depth,
@@ -111,9 +112,10 @@ impl Role {
     /// the order `NavItem` declares its fields in, one for one (the test
     /// at the foot of this file holds them together).
     ///
-    /// **`Upstream` is not among them.** A `QModelItem` holds fifteen
-    /// fields at most and no delegate asks for that one. It is still
-    /// answered — `upstream_of` reads it straight out of `field`.
+    /// **The two upstream roles are not among them.** A `QModelItem`
+    /// holds fifteen fields at most and no delegate asks for either. They
+    /// are still answered — `upstream_of` and `upstream_drifted` read
+    /// them straight out of `field`.
     pub(super) const ALL: [Self; 15] = [
         Self::Name,
         Self::Full,
@@ -154,6 +156,7 @@ impl Role {
             Self::HasRemote => "has_remote",
             Self::OnlyRemote => "only_remote",
             Self::Upstream => "upstream",
+            Self::UpstreamDrifted => "upstream_drifted",
             Self::HasPr => "has_pr",
             Self::EolMark => "eol_mark",
             Self::Depth => "depth",

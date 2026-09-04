@@ -25,6 +25,7 @@ impl NavSectionModel {
                     Role::HasRemote => Value::Flag(item.has_remote),
                     Role::OnlyRemote => Value::Flag(item.only_remote),
                     Role::Upstream => Value::Said(""),
+                    Role::UpstreamDrifted => Value::Flag(false),
                     Role::HasPr => Value::Flag(item.has_pr),
                     Role::EolMark => Value::Flag(item.eol_mark),
                     Role::Depth => Value::Number(item.depth),
@@ -71,6 +72,10 @@ impl NavSectionModel {
             Role::Upstream => Value::Said(match of {
                 Entry::Local(branch) | Entry::Remote(branch) => &branch.upstream,
                 _ => "",
+            }),
+            Role::UpstreamDrifted => Value::Flag(match of {
+                Entry::Local(branch) | Entry::Remote(branch) => branch.upstream_drifted,
+                _ => false,
             }),
             Role::HasPr => Value::Flag(match of {
                 Entry::Local(branch) => crate::encode::pr_set().contains(branch.short.as_str()),

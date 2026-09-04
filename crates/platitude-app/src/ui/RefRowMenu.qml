@@ -150,7 +150,9 @@ Item {
             refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
-            held, "", refRowMenu.repoTab.defaultRemote, "").split(" ")
+            // No reading to have drifted: the rows that reach a remote are the branch card's, and it asks for itself
+            // (`RefBranchMenu`).
+            held, "", false, refRowMenu.repoTab.defaultRemote, "").split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")

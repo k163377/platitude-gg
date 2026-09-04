@@ -84,7 +84,10 @@ AppMenu {
             tagMenu.heldReason !== "" ? 0 : tagMenu.repoTab.busyCount,
             tagMenu.workTree.branch, tagMenu.workTree.detached,
             tagMenu.workTree.opText, tagMenu.workTree.conflictCount,
-            "", "", state.pushRemote, tagMenu.tagsModel.tagSides(full)).split(" ")
+            // The reading over there standing on another commit is what takes the two rows that reach it out — the
+            // same answer that shapes the push row above, read the other way (デザイン規約 §左メニューの所作 の削除の表).
+            "", "", state.tagDriftOid !== "",
+            state.pushRemote, tagMenu.tagsModel.tagSides(full)).split(" ")
         state.canPushTag = offers.includes("push-tag")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemoteTag = offers.includes("delete-remote-tag")
@@ -165,7 +168,13 @@ AppMenu {
         code: "push --delete"
         text: state.refId
         growsForText: false
-        offered: state.kind === "tag" && state.canDeleteRemoteTag
+        // The drifted reading keeps its seat and greys: there **is** a name over there, and this row is the only place
+        // that can say where it is standing (デザイン規約 §左メニューの所作 の削除の表). A side that does not exist at
+        // all still takes no seat — that is the assembled rule this card otherwise follows.
+        offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.tagDriftOid !== "")
+        // Drift is the only thing that can leave this row standing and unpressable: everything else that takes the
+        // offer away takes the seat with it.
+        blockedReason: state.canDeleteRemoteTag ? "" : Words.remoteOnAnotherCommit
         holdMs: Metrics.holdMs
         // Reaching past this machine is warning, not danger — what goes is a name over there, and whatever it marked
         // stays wherever it is (デザイン規約 §状態).
@@ -184,7 +193,8 @@ AppMenu {
     AppMenuItem {
         id: refBothTagDeleteItem
         text: qsTr("Delete both")
-        offered: state.kind === "tag" && state.canDeleteTagEverywhere
+        offered: state.kind === "tag" && (state.canDeleteTagEverywhere || state.tagDriftOid !== "")
+        blockedReason: state.canDeleteTagEverywhere ? "" : Words.remoteOnAnotherCommit
         holdMs: Metrics.holdMs
         // The local half of a tag throws nothing away that the commit is not still holding — git keeps the object and
         // only the name goes — so this pair never reaches the danger the branch's `-D` does.

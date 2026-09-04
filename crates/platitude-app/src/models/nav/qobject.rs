@@ -215,6 +215,21 @@ impl NavSectionModel {
         self.told(Role::Name, &name, Role::Upstream)
     }
 
+    /// Whether that reading stands on another commit
+    /// (`session::BranchItem::upstream_drifted`). False for a branch that
+    /// speaks for none, and for every section but the branches — nothing
+    /// has drifted where there is no pair.
+    ///
+    /// **What takes the delete rows that reach the remote out of the
+    /// table** (デザイン規約 §左メニューの所作 の削除の表): the drifted
+    /// reading has a row of its own where it does stand, and that is
+    /// where it is deleted from.
+    #[qslot]
+    fn upstream_drifted(&self, name: String) -> bool {
+        self.told_flag(Role::Name, &name, Role::UpstreamDrifted)
+            .unwrap_or(false)
+    }
+
     /// Which sides the tag with this name stands on — `here` / `remote` /
     /// `both`, empty when this section holds no such row
     /// (`platitude_core::offers::TagSides`).

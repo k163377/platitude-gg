@@ -31,6 +31,7 @@ pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
         has_remote: true,
         is_head: false,
         upstream: "".into(),
+        upstream_drifted: false,
         held_elsewhere: false,
     }
 }
@@ -43,6 +44,7 @@ pub(super) fn local(short: &str, is_head: bool) -> platitude_core::session::Bran
         has_remote: false,
         is_head,
         upstream: "".into(),
+        upstream_drifted: false,
         held_elsewhere: false,
     }
 }

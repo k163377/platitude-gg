@@ -69,7 +69,9 @@ QtObject {
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
             menuState.workTree.branch, menuState.workTree.detached,
             menuState.workTree.opText, menuState.workTree.conflictCount,
-            held, "", menuState.repoTab.defaultRemote, "").split(" ")
+            // No reading to have drifted: what this level reads is where a move lands, and the rows that reach a
+            // remote are the card's (`RefBranchMenu`).
+            held, "", false, menuState.repoTab.defaultRemote, "").split(" ")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
     }

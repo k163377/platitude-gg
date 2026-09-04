@@ -255,19 +255,22 @@ pub(super) fn build_snapshot(
     };
     for r in refs {
         match r.kind {
-            RefKind::LocalBranch => snapshot.locals.push(BranchItem {
-                short: r.short.clone(),
-                full: r.name.clone(),
-                oid: r.commit_oid(),
-                has_remote: joins.remotes.has_counterpart(r),
-                is_head: r.is_head,
-                upstream: joins
-                    .remotes
-                    .spoken_for(r)
-                    .map(|u| u.short.clone())
-                    .unwrap_or_default(),
-                held_elsewhere: joins.held_elsewhere(r),
-            }),
+            RefKind::LocalBranch => {
+                // The one lookup answers both halves: which reading this
+                // branch speaks for, and whether it is standing where the
+                // branch is — the same co-location the chips fold on.
+                let spoken = joins.remotes.spoken_for(r);
+                snapshot.locals.push(BranchItem {
+                    short: r.short.clone(),
+                    full: r.name.clone(),
+                    oid: r.commit_oid(),
+                    has_remote: joins.remotes.has_counterpart(r),
+                    is_head: r.is_head,
+                    upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
+                    upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
+                    held_elsewhere: joins.held_elsewhere(r),
+                });
+            }
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
                 full: r.name.clone(),
@@ -275,6 +278,9 @@ pub(super) fn build_snapshot(
                 has_remote: true,
                 is_head: false,
                 upstream: crate::Name::default(),
+                // The setting is the local branch's, so this side has
+                // none to have drifted from.
+                upstream_drifted: false,
                 // A remote-tracking ref is nobody's checkout. Whether the
                 // local branch a `switch` here would land on is held is
                 // the menu's question, asked of the worktree list by the

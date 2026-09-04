@@ -58,6 +58,8 @@ AppMenu {
         property string refName: ""
         property string refOid: ""
         property string remoteCounterpart: ""
+        /// That reading is standing on another commit, so the two rows that reach it say why instead of running.
+        property bool remoteDrifted: false
         property string heldByWorktree: ""
         property bool canDelete: false
         property bool canDeleteRemote: false
@@ -73,6 +75,7 @@ AppMenu {
         state.refOid = oidHex
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
+            state.remoteDrifted = false
             state.heldByWorktree = ""
             state.canDelete = false
             state.canDeleteRemote = false
@@ -85,6 +88,10 @@ AppMenu {
             ? branchCard.worktreesModel.worktreeHolding(full)
             : branchCard.worktreesModel.worktreeHolding(branchCard.repoTab.localNameFor(full))
         state.remoteCounterpart = kind === "branch" ? branchCard.branchesModel.upstreamOf(full) : ""
+        // And whether that reading is standing where this branch is. **Drifted, the two rows that reach it are out**
+        // — what a delete over there would take away is not what this row stands on, and the reading has a row of its
+        // own where it does stand (デザイン規約 §左メニューの所作 の削除の表).
+        state.remoteDrifted = kind === "branch" && branchCard.branchesModel.upstreamDrifted(full)
         // The lookups above are the models'; what the rows may offer on them is core's rule, with the measured
         // refusals it encodes — the current branch keeps its delete table and says why (offers::ref_menu).
         const offers = GitFacts.refMenuOffers(
@@ -95,7 +102,7 @@ AppMenu {
             branchCard.heldReason !== "" ? 0 : branchCard.repoTab.busyCount,
             branchCard.workTree.branch, branchCard.workTree.detached,
             branchCard.workTree.opText, branchCard.workTree.conflictCount,
-            state.heldByWorktree, state.remoteCounterpart,
+            state.heldByWorktree, state.remoteCounterpart, state.remoteDrifted,
             branchCard.repoTab.defaultRemote, "").split(" ")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
@@ -223,9 +230,12 @@ AppMenu {
         text: state.remoteCounterpart
         growsForText: false
         // In the table only while the branch has a remote reading at all: a row for a target that does not exist keeps
-        // no seat. Grey is for "not now" — busy — not for "no such thing".
+        // no seat. Grey is for "there is one, but not to press now" — busy, or standing on another commit — not for
+        // "no such thing" (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
-        blockedReason: state.canDeleteRemote ? "" : branchCard.deleteBlockedWhileBusy
+        blockedReason: state.canDeleteRemote ? ""
+                     : state.remoteDrifted ? Words.remoteOnAnotherCommit
+                     : branchCard.deleteBlockedWhileBusy
         holdMs: Metrics.holdMs
         holdTone: Theme.warning
         onHeld: {
@@ -240,9 +250,12 @@ AppMenu {
         text: qsTr("Delete both")
         note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
+        // The local half's refusal names the row first — it is the half that runs first — and the drifted reading is
+        // read after it.
         blockedReason: state.canDelete && state.canDeleteRemote ? ""
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
+                     : state.remoteDrifted ? Words.remoteOnAnotherCommit
                      : branchCard.deleteBlockedWhileBusy
         holdMs: Metrics.holdMs
         // The colour of the half that decides: reaching past this machine is warning, but once the local half runs as

@@ -47,6 +47,13 @@ pub struct BranchItem {
     /// wherever the two stand — the one its badge is about, and the one a
     /// rename offers to carry over. Empty when it speaks for none.
     pub upstream: crate::Name,
+    /// That reading stands on **another commit**. The pair is then two
+    /// rows on the graph rather than one folded chip
+    /// ([`crate::refs::RemoteBranches::folded_into_local`]), and the
+    /// menu's rows that reach the remote say why instead of running
+    /// (デザイン規約 §左メニューの所作 の削除の表). False where there is
+    /// no reading to have drifted.
+    pub upstream_drifted: bool,
     /// Another working copy has this branch checked out, so git refuses
     /// both `switch` and `branch --delete` for it (measured) —
     /// whether or not that copy is **locked**, which stops a different

@@ -107,20 +107,26 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "tag-menu",
         when: &[
+            // The drifted run answers for both halves of one reading:
+            // the push row takes its second form, and the two rows that
+            // would reach the name over there stand greyed rather than
+            // going (デザイン規約 §左メニューの所作 の削除の表). They sit
+            // together in the line because one run has to assert them
+            // together.
             (
                 Arg::Ends(":drift"),
-                "push=true code=push --force held=true lease=",
+                "blocked=remote,both tag_here=true push=true code=push --force held=true lease=",
             ),
             (
                 Arg::Starts("v0.9-theirs"),
-                "sides=remote local_del=false remote_del=true both_del=false",
+                "sides=remote local_del=false remote_del=true both_del=false blocked=none",
             ),
             (
                 Arg::Ends(":remote"),
-                "sides=both local_del=true remote_del=true both_del=true",
+                "sides=both local_del=true remote_del=true both_del=true blocked=none",
             ),
         ],
-        plain: "sides=here local_del=true remote_del=false both_del=false",
+        plain: "sides=here local_del=true remote_del=false both_del=false blocked=none",
     },
     // The far side keeping a branch. **The picture cannot judge this**:
     // a bar saying nothing frames exactly like a bar saying the right

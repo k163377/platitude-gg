@@ -113,7 +113,8 @@ pub struct RefMenuOffers {
     /// `worktree move`, a different question.
     pub delete: bool,
     /// The branch's remote reading, deleted without touching the local
-    /// one — still possible in both of the refused cases above.
+    /// one — still possible in both of the refused cases above, and out
+    /// where the two have drifted ([`Self::remote_drifted`]).
     pub delete_remote: bool,
     /// The tag sent to the remote this repository pushes to. Only a tag:
     /// a branch goes out through the toolbar, which is where the counts
@@ -201,8 +202,12 @@ impl RefMenuOffers {
 /// counts; `held_by_worktree` is the path of the other working copy
 /// holding the branch this row lands on, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch also
-/// carries, empty where it has none; `default_remote` is where this
-/// repository's pushes go, empty where it has no remote at all;
+/// carries, empty where it has none; `remote_drifted` says that reading
+/// stands on another commit — an upstream left behind
+/// ([`crate::session::BranchItem::upstream_drifted`]) or a remote's copy
+/// of a tag ([`crate::session::RefsSnapshot::tag_drifts`]), and false
+/// where there is no reading to have drifted; `default_remote` is where
+/// this repository's pushes go, empty where it has no remote at all;
 /// `tag_sides` says which sides a tag row's name stands on
 /// ([`TagSides::from_word`] — ignored for every other kind). Per-row
 /// kind choices (a tag's row keeping rebase for the tag's own gestures)
@@ -220,6 +225,7 @@ pub fn ref_menu(
     conflict_count: i32,
     held_by_worktree: &str,
     remote_counterpart: &str,
+    remote_drifted: bool,
     default_remote: &str,
     tag_sides: &str,
 ) -> RefMenuOffers {
@@ -254,10 +260,18 @@ pub fn ref_menu(
             // A tag only a remote has leaves `tag --delete` nothing to
             // name; the row below it is the one that reaches it.
             && tag_here,
-        delete_remote: !busy && !remote_counterpart.is_empty(),
+        delete_remote: !busy && !remote_counterpart.is_empty() && !remote_drifted,
+        // Sending is not reaching for what is over there: the tag being
+        // pushed is the one on this row, and a remote holding the name
+        // elsewhere is what turns that row into the leased overwrite
+        // rather than what takes it away (デザイン規約 §相手の履歴を置き換える).
         push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty() && tag_here,
-        delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote,
-        delete_tag_everywhere: !busy && !default_remote.is_empty() && tag_on_remote && tag_here,
+        delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote && !remote_drifted,
+        delete_tag_everywhere: !busy
+            && !default_remote.is_empty()
+            && tag_on_remote
+            && tag_here
+            && !remote_drifted,
         set_upstream: kind == RefKind::Branch && !busy && !default_remote.is_empty(),
         on_current_branch,
     }

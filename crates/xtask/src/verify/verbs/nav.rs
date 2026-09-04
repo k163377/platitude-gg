@@ -60,6 +60,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "gone_row tag=v0.3-local row=-1 total=2 chips=true",
     },
+    // The delete table's greyed rows, each saying why it is out. **The
+    // picture cannot answer this**: a tooltip is words, and a row that
+    // greyed for the wrong reason frames exactly like one that greyed
+    // for the right one. The two runs are a pair — the local row is out
+    // because of where the working tree is standing, the remote row
+    // because the two names are standing on different commits
+    // (デザイン規約 §左メニューの所作 の削除の表), and either alone
+    // would pass an implementation that gave both rows one reason.
+    //
+    // The local row's own line is not in here: it is git's refusal
+    // written out with an em dash, and a non-ASCII `must_say` never
+    // matches on Windows (verify-ui §Windows での実行・デバッグの罠).
+    Verb {
+        name: "delete-blocked-tip",
+        when: &[(
+            Arg::Ends(":remote"),
+            "delete_blocked code=push --delete tip=true \
+             reason=The remote is on another commit",
+        )],
+        plain: "delete_blocked code=branch --delete tip=true",
+    },
     // The fourth: an elided row whose hover says the whole name.
     // One verb serves both panes (the argument picks one), so the
     // wanted line names neither — `tree=` echoes which view the

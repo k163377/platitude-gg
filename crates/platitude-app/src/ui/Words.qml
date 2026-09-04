@@ -43,6 +43,12 @@ QtObject {
     /// settles it. Short enough that the tip stands inside the menu it explains rather than wider than it.
     readonly property string otherCommandRunning: qsTr("Wait for the running command")
 
+    /// Why the delete rows that reach a remote are out on a name whose two sides have drifted — the branch card's
+    /// pair and the tag card's say it with one voice (デザイン規約 §左メニューの所作 の削除の表). **The state, not the
+    /// way out**: what the reader would do about it is delete the reading from the row where it does stand, and that
+    /// row is on the screen already — a line that sent them there would be longer than the menu it explains.
+    readonly property string remoteOnAnotherCommit: qsTr("The remote is on another commit")
+
     /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
     readonly property string badgeConflicts: qsTr("CONFLICTS")

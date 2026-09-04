@@ -168,8 +168,9 @@ impl GitFacts {
     /// (`platitude_core::offers::ref_menu`), as the packed words
     /// `RefRowMenu.offerOn` splits back apart — asked once as the menu
     /// opens, so the answers freeze while it stands (app-ui.md §メニュー).
-    /// The lookups behind `held_by_worktree` / `remote_counterpart` stay
-    /// the models'; this only weighs what they answered.
+    /// The lookups behind `held_by_worktree` / `remote_counterpart` /
+    /// `remote_drifted` stay the models'; this only weighs what they
+    /// answered.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn ref_menu_offers(
@@ -185,6 +186,7 @@ impl GitFacts {
         conflict_count: i32,
         held_by_worktree: String,
         remote_counterpart: String,
+        remote_drifted: bool,
         default_remote: String,
         tag_sides: String,
     ) -> String {
@@ -203,6 +205,7 @@ impl GitFacts {
             conflict_count,
             &held_by_worktree,
             &remote_counterpart,
+            remote_drifted,
             &default_remote,
             &tag_sides,
         )

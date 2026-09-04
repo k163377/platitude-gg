@@ -136,10 +136,17 @@ Item {
             // the real hover writes to. The argument names the branch, because the delete row is out for more than one
             // reason: without one it is the branch you are standing on, with one it is a branch another working copy
             // has checked out (the flags say which, and the current branch is the only chip that carries them).
-            const blockedOn = arg === "" ? workTree.branch : arg
+            //
+            // `<branch>:remote` aims at the row that reaches the remote reading instead. That one is out for a
+            // reason of its own — the two names standing on different commits — and the local row above it can be
+            // pressable at the same time (デザイン規約 §左メニューの所作 の削除の表).
+            const wantsRemote = arg.endsWith(":remote")
+            const named = wantsRemote ? arg.slice(0, -7) : arg
+            const blockedOn = named === "" ? workTree.branch : named
             page.openRefMenu("branch", blockedOn, blockedOn, branchesModel.oidOfName(blockedOn))
             refMenu.openSub(refBranchCard)
-            refDeleteItem.tipForced = true
+            acts.blockedTipRow = wantsRemote ? refBranchCard.deleteRemoteItem : refDeleteItem
+            acts.blockedTipRow.tipForced = true
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here.
@@ -221,13 +228,13 @@ Item {
     SampleTimer {
         id: blockedTipTimer
         onTriggered: {
-            if (!refDeleteItem.ToolTip.visible)
+            if (acts.blockedTipRow === null || !acts.blockedTipRow.ToolTip.visible)
                 return
             blockedTipTimer.stop()
             Harness.report(
-            "delete_blocked code=" + refDeleteItem.code
-            + " tip=" + refDeleteItem.ToolTip.visible
-            + " reason=" + refDeleteItem.blockedReason)
+            "delete_blocked code=" + acts.blockedTipRow.code
+            + " tip=" + acts.blockedTipRow.ToolTip.visible
+            + " reason=" + acts.blockedTipRow.blockedReason)
             driver.complete()
         }
     }
@@ -267,6 +274,8 @@ Item {
     /// The commit the run asked for the tag on, so the report can say the tag landed on that one rather than on
     /// wherever HEAD happened to be.
     property string createTagOid: ""
+    /// Which row of the delete table `delete-blocked-tip` is holding a tooltip open on.
+    property var blockedTipRow: null
 
     // The tag menu's push row, which is the one row in this application whose whole shape — chip, hold, colour — is
     // decided by what a remote was last heard to carry (`RefRowMenu`). Two states to photograph and they are told
@@ -314,16 +323,27 @@ Item {
             // Every row this verb is about is one card in (デザイン規約 §メニュー の入れ子), so the run opens it: the
             // report reads the rows either way, but a picture of the outer card proves nothing about them.
             refMenu.openSub(refTagCard)
-            // Every row this menu grew, in one line. The delete rows are told apart by nothing but which of them is
-            // drawn, and a card missing one frames exactly like a card that never offered it.
+            // Every row this menu grew, in one line. The delete rows are told apart by which of them is drawn and
+            // which of them can be pressed — a card missing one frames exactly like a card that never offered it,
+            // and a row greyed for the drifted reading frames exactly like one that is simply out (デザイン規約
+            // §左メニューの所作 の削除の表).
             // **The order is the judging order.** `must_say` matches a run of this line, so what one run has to
             // assert together has to sit together: the sides and the four rows they decide first, the push row's
             // own shape after them (`verify/verbs/remote.rs`).
+            // A row with no seat has no state to read: `blockedReason` is a binding and answers whether or not the
+            // row is drawn, so the offer is asked first.
+            const outRows = [refRemoteTagDeleteItem.offered && refRemoteTagDeleteItem.blocked ? "remote" : "",
+                             refTagBothDeleteItem.offered && refTagBothDeleteItem.blocked ? "both" : ""]
+                            .filter(w => w !== "")
             Harness.report("tag_menu tag=" + tagMenuTimer.tag
                               + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
                               + " local_del=" + refTagDeleteItem.offered
                               + " remote_del=" + refRemoteTagDeleteItem.offered
                               + " both_del=" + refTagBothDeleteItem.offered
+                              // Which of the two that reach the remote are standing but out. A word rather than a
+                              // flag apiece: `none` is a claim of its own, and a run asserting it cannot be matched
+                              // by the line that names them.
+                              + " blocked=" + (outRows.length === 0 ? "none" : outRows.join(","))
                               + " tag_here=" + refTagHereItem.offered
                               + " push=" + refPushTagItem.offered
                               + " code=" + refPushTagItem.code
