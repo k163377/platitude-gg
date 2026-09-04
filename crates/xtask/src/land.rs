@@ -119,7 +119,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
 }
 
 /// What a landing leaves in a build slot it stepped out of and could not
-/// take away — its own image, still running (Windows).
+/// take away — its own image, on a system that holds the last link to a
+/// running one.
 const INFLIGHT: &str = "xtask-inflight-";
 
 /// Frees the cargo build slot this process occupies, when the slot is one
@@ -133,8 +134,12 @@ const INFLIGHT: &str = "xtask-inflight-";
 /// build stops at `failed to remove file … (os error 5)` — a running
 /// image cannot be replaced — and the landing dies before its first step.
 /// Renaming one is allowed on both systems, so this process moves out of
-/// the name and runs on from the copy beside it: Unix takes that copy at
-/// once, Windows on the next landing's sweep. Silent when this binary is
+/// the name and runs on from the copy beside it — which usually goes at
+/// once, Windows included: cargo's slot is a hard link to the binary in
+/// `deps/`, and a link the loader is running can be unlinked while the
+/// other link stands. What is left standing where it cannot (a slot cargo
+/// copied rather than linked) waits for the next landing's sweep. Silent
+/// when this binary is
 /// in nobody's way; a move that fails says so rather than leaving the
 /// cargo error it was meant to explain to arrive unannounced.
 fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
