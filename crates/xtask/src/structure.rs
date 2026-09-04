@@ -23,17 +23,20 @@
 //! * **neither** — the backstop applies as written, so a file that crosses
 //!   it for the first time fails on the run that first sees it.
 //!
-//! Two other things about how the tree is divided are counted here,
+//! Three other things about how the tree is divided are counted here,
 //! because they are the same shape of question and the same second of
 //! work: the product's QML may not name a type from the verification
-//! harness's module ([`modules`]), and the app's Rust may not look a
-//! `PG_*` variable up outside the one module that owns them ([`env`]).
+//! harness's module ([`modules`]), the app's Rust may not look a `PG_*`
+//! variable up outside the one module that owns them ([`env`]), and
+//! nothing in the product's QML closes a popup that is not its own to
+//! close ([`popups`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`, which
 //! already knows where functions begin and end.
 
 mod env;
 mod modules;
+mod popups;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -108,9 +111,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     failures.extend(over);
     let (crossed, harness_types) = modules::check(&root)?;
     let (looked_up, app_files) = env::check(&root)?;
+    let (closed_for, product_files) = popups::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
+    let closing_for_others = closed_for.len();
     failures.extend(crossed);
     failures.extend(looked_up);
+    failures.extend(closed_for);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -122,7 +128,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "structure: {} files counted, {code} code lines in {physical} physical \
              ({}% comment and blank), {} on the ledger, {pinned} pinned by the baseline, \
              {harness_types} harness types out of the product's reach, \
-             {app_files} app files off the environment — PASS",
+             {app_files} app files off the environment, \
+             {product_files} product files closing nothing but their own — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -132,6 +139,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Err(format!(
             "{boundary_broken} file(s) reaching for something a shipped build does not \
              carry (.claude/rules/app-ui.md)"
+        ))
+    } else if closing_for_others == failures.len() {
+        Err(format!(
+            "{closing_for_others} line(s) closing a popup that is not theirs to close \
+             (.claude/rules/app-ui.md §メニューを閉じるのは自分)"
         ))
     } else {
         Err(format!(
