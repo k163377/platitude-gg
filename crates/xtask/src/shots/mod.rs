@@ -30,7 +30,7 @@ mod window;
 
 pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;
-pub(crate) use sweep::{seat_freed, session_ended, session_seen};
+pub(crate) use sweep::{seat_freed, seat_reused};
 
 /// One `add`: the pictures taken for one thing, under the name that says
 /// what to look at in them.
@@ -42,26 +42,14 @@ pub(crate) struct Run {
     /// The verify-ui verb behind them, when there was one.
     pub(crate) verb: String,
     /// The tree that took them: a roster letter a-f, or `main` for the
-    /// primary checkout.
+    /// primary checkout. The whole of who a run belongs to — the session
+    /// that took it is nobody's business here, because a seat outlives
+    /// the sessions that pass through it and a run stands for the work,
+    /// not for the conversation it was taken in (`sweep`).
     pub(crate) seat: String,
-    /// The session that took them, empty when nobody was named. It is
-    /// what a session's own runs are found by when it ends (`sweep`):
-    /// the seat cannot answer for that, because a seat outlives every
-    /// session that passes through it and the next one is already
-    /// sitting there.
-    pub(crate) session: String,
     /// Milliseconds since the epoch. The page formats it — it has a
     /// calendar, and xtask depends on std alone (CLAUDE.md 技術スタック).
     pub(crate) at: u128,
-    /// When the session that took these pictures was last seen to end,
-    /// and 0 while it is somebody's.
-    ///
-    /// A session ending is not the same thing as a session being over:
-    /// the machine sleeps, the app hands the conversation a SessionEnd,
-    /// and the same session comes back at the next wake to go on
-    /// working. So the end only writes this mark, and what a mark means
-    /// is "on its way out unless somebody speaks for it" (`sweep`).
-    pub(crate) ended: u128,
     /// Whether the pictures are read *abreast* — one view holding them
     /// all in a row under one zoom — rather than one at a time.
     ///

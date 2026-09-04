@@ -35,16 +35,6 @@ pub(super) fn board_dir() -> Result<PathBuf, String> {
     Ok(root.join(".shots"))
 }
 
-/// Milliseconds since the epoch, or None when the clock is before it.
-/// The board dates everything in these: a run, the mark a session's end
-/// leaves on one, and the window that stands over them all.
-pub(super) fn now_ms() -> Option<u128> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|since| since.as_millis())
-}
-
 /// A board path as it is written out. `git_query` answers with forward
 /// slashes and `Path::join` adds the platform's, so a path built from
 /// both reads half one way and half the other; one convention is the
@@ -72,21 +62,6 @@ pub(super) fn seat_here() -> String {
     // outside the roster is worth naming truthfully rather than filing
     // under one of the six it is not.
     root.rsplit('/').next().unwrap_or("?").to_string()
-}
-
-/// The session this process was run by, empty when nothing said.
-///
-/// Claude Code puts the session id in the environment of everything it
-/// runs and in the payload of every hook, so a run taken by a session
-/// and the SessionEnd that ends it agree on one string without either
-/// being told (CLAUDE.md ビルド・テスト: the seat is a session's, for as
-/// long as the session lasts). Nothing here depends on it being there —
-/// a run taken by hand in a terminal carries no session, and the sweeps
-/// that go by session leave it alone.
-pub(super) fn session_here() -> String {
-    std::env::var("CLAUDE_CODE_SESSION_ID")
-        .map(|id| one_line(&id))
-        .unwrap_or_default()
 }
 
 /// Puts one run on the board and rebuilds the page, answering where the
@@ -141,16 +116,17 @@ fn record_with(
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("could not make {}: {e}", dir.display()))?;
     }
-    let at = now_ms().ok_or("the clock is before the epoch")?;
+    let at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("the clock is before the epoch: {e}"))?
+        .as_millis();
     let seat = seat_here();
     let stem = format!("{at}-{seat}-{}", slug(&label));
     let mut run = Run {
         label,
         verb: one_line(verb),
         seat,
-        session: session_here(),
         at,
-        ended: 0,
         side_by_side,
         shots: Vec::new(),
     };
@@ -221,34 +197,21 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
 }
 
 /// Writes the run beside its neighbours under a name of its own.
-fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
-    place(&runs.join(format!("{stem}.tsv")), run)
-}
-
-/// One run into one file, whether it is new or is being written back
-/// over the file it was read out of (`sweep`'s mark).
 ///
 /// Seats add to the board concurrently, so there is no shared file to
 /// read-modify-write: each run is its own file, written to a temporary
 /// name and renamed into place, which keeps a reader from ever seeing
 /// half of one.
-pub(super) fn place(path: &Path, run: &Run) -> Result<(), String> {
+fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
     let mut text = String::new();
     for (key, value) in [
         ("label", run.label.as_str()),
         ("verb", run.verb.as_str()),
         ("seat", run.seat.as_str()),
-        ("session", run.session.as_str()),
     ] {
         text.push_str(&format!("{key}{SEP}{value}\n"));
     }
     text.push_str(&format!("at{SEP}{}\n", run.at));
-    // Written only while it stands, so a run nobody has marked is the
-    // same bytes it always was, and the mark is a line that comes and
-    // goes rather than a field with two readings.
-    if run.ended > 0 {
-        text.push_str(&format!("ended{SEP}{}\n", run.ended));
-    }
     if run.side_by_side {
         text.push_str(&format!("abreast{SEP}1\n"));
     }
@@ -260,22 +223,22 @@ pub(super) fn place(path: &Path, run: &Run) -> Result<(), String> {
             shot.file, shot.from, shot.width, shot.height, shot.caption
         ));
     }
-    let staging = path.with_extension("tsv.part");
+    let final_path = runs.join(format!("{stem}.tsv"));
+    let staging = runs.join(format!("{stem}.tsv.part"));
     std::fs::write(&staging, text)
         .map_err(|e| format!("could not write {}: {e}", staging.display()))?;
-    std::fs::rename(&staging, path).map_err(|e| format!("could not place {}: {e}", path.display()))
+    std::fs::rename(&staging, &final_path)
+        .map_err(|e| format!("could not place {}: {e}", final_path.display()))
 }
 
-/// The inverse of `place`. None when the file is missing what a run
+/// The inverse of `write_run`. None when the file is missing what a run
 /// is: a name, a time, and a picture.
 pub(super) fn parse_run(text: &str) -> Option<Run> {
     let mut run = Run {
         label: String::new(),
         verb: String::new(),
         seat: String::new(),
-        session: String::new(),
         at: 0,
-        ended: 0,
         side_by_side: false,
         shots: Vec::new(),
     };
@@ -285,14 +248,7 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
             Some("label") => run.label = parts.next().unwrap_or_default().to_string(),
             Some("verb") => run.verb = parts.next().unwrap_or_default().to_string(),
             Some("seat") => run.seat = parts.next().unwrap_or_default().to_string(),
-            // Runs written before the board knew about sessions carry no
-            // such line, and read back as belonging to no session — which
-            // is what they are: nothing that ends can claim them.
-            Some("session") => run.session = parts.next().unwrap_or_default().to_string(),
             Some("at") => run.at = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0),
-            // Absent from every run whose session is still somebody's,
-            // which is what an unmarked run means here.
-            Some("ended") => run.ended = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0),
             Some("abreast") => run.side_by_side = parts.next() == Some("1"),
             Some("shot") => {
                 let file = parts.next()?.to_string();

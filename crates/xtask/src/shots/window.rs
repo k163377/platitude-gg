@@ -22,8 +22,9 @@
 //! certain it had opened only one.
 
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::board::{now_ms, seat_here, shown};
+use super::board::{seat_here, shown};
 
 /// Where the board remembers the window it handed out.
 ///
@@ -113,7 +114,7 @@ pub(super) fn how_to_see_it(board: &Path) -> String {
 
 /// Writes down the window that was just handed out.
 fn remember(board: &Path) -> Result<(), String> {
-    let at = now_ms().ok_or("the clock is before the epoch")?;
+    let at = now().ok_or("the clock is before the epoch")?;
     let text = format!("at\t{at}\nseat\t{}\n", seat_here());
     let path = marker(board);
     std::fs::write(&path, text).map_err(|e| format!("could not write {}: {e}", shown(&path)))
@@ -141,6 +142,14 @@ fn read_standing(text: &str) -> Option<Standing> {
     (at > 0).then_some(Standing { at, seat })
 }
 
+/// Milliseconds since the epoch, or None when the clock is before it.
+fn now() -> Option<u128> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|since| since.as_millis())
+}
+
 /// How old the standing window is, in words.
 ///
 /// The one thing this command cannot see is a window that was closed, so
@@ -148,7 +157,7 @@ fn read_standing(text: &str) -> Option<Standing> {
 /// line that gets `--again` typed, where a bare timestamp is one more
 /// number to work out.
 fn ago(at: u128) -> String {
-    let Some(now) = now_ms() else {
+    let Some(now) = now() else {
         return "at a time this clock cannot read".to_string();
     };
     words(now.saturating_sub(at))
@@ -156,7 +165,7 @@ fn ago(at: u128) -> String {
 
 /// A span of milliseconds as the coarsest true thing that can be said
 /// about it.
-pub(super) fn words(since: u128) -> String {
+fn words(since: u128) -> String {
     let minutes = since / 60_000;
     let plural = |n: u128, unit: &str| format!("{n} {unit}{} ago", if n == 1 { "" } else { "s" });
     match minutes {

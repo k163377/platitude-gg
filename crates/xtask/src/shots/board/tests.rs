@@ -1,15 +1,14 @@
 //! `board`'s own tests, in a file of their own (structure.md §分割).
 
-use super::{Run, Shot, load_runs, one_line, parse_run, place, slug, write_run};
+use super::{Run, Shot, load_runs, one_line, parse_run, slug, write_run};
 
 #[test]
 fn a_run_survives_the_round_trip() {
-    let text = "label\tthe chip's badge\nverb\trow-card\nseat\ta\nsession\ts-1\n\
+    let text = "label\tthe chip's badge\nverb\trow-card\nseat\ta\n\
                 at\t1700000000000\nshot\timg/x.png\tapp.png\t1440\t900\n";
     let run = parse_run(text).expect("a whole run parses");
     assert_eq!(run.label, "the chip's badge");
     assert_eq!(run.seat, "a");
-    assert_eq!(run.session, "s-1");
     assert_eq!(run.at, 1_700_000_000_000);
     assert_eq!(run.shots.len(), 1);
     assert_eq!(run.shots[0].width, 1440);
@@ -42,58 +41,17 @@ fn a_run_from_before_pairs_is_read_one_at_a_time() {
     assert!(run.shots[0].caption.is_empty());
 }
 
-/// A run written before the board carried sessions is still a run —
-/// one that belongs to no session, which is the reading that keeps a
-/// session's sweep off it.
+/// A run written while the board stamped the session that took it is
+/// still a run: the line is read past. Who took a picture never decided
+/// when it leaves — the seat's work does (`sweep`) — and a board full of
+/// yesterday's runs must not be a board that stops parsing.
 #[test]
-fn a_run_from_before_sessions_belongs_to_none() {
-    let text = "label\tthe chip's badge\nseat\ta\nat\t1700000000000\n\
+fn a_run_stamped_with_a_session_is_read_past_it() {
+    let text = "label\tthe chip's badge\nseat\ta\nsession\ts-1\nat\t1700000000000\n\
                 shot\timg/x.png\tapp.png\t1440\t900\n";
     let run = parse_run(text).expect("a whole run parses");
-    assert!(run.session.is_empty());
-}
-
-/// The mark a session's end leaves is read back a day later to decide
-/// whether the pictures go, by a command that has only the file to go
-/// on — so it has to survive the file, and a run nobody has marked has
-/// to come back out unmarked.
-#[test]
-fn a_session_s_end_is_written_where_the_next_command_reads_it() {
-    let runs = std::env::temp_dir().join(format!("pg-shots-mark-{}", std::process::id()));
-    std::fs::create_dir_all(&runs).expect("a runs directory to write into");
-    let mut run = Run {
-        label: "the chip's badge".to_string(),
-        verb: String::new(),
-        seat: "a".to_string(),
-        session: "s-1".to_string(),
-        at: 1_700_000_000_000,
-        ended: 0,
-        side_by_side: false,
-        shots: vec![Shot {
-            file: "img/x.png".to_string(),
-            from: "app.png".to_string(),
-            caption: String::new(),
-            width: 1,
-            height: 1,
-        }],
-    };
-    let path = runs.join("run.tsv");
-    place(&path, &run).expect("the run is written");
-    let text = std::fs::read_to_string(&path).expect("and read back");
-    assert!(
-        !text.contains("ended"),
-        "a run whose session is still somebody's carries no mark: {text}"
-    );
-    assert_eq!(parse_run(&text).expect("a whole run parses").ended, 0);
-
-    run.ended = 1_800_000_000_000;
-    place(&path, &run).expect("the mark is written over it");
-    let text = std::fs::read_to_string(&path).expect("and read back");
-    assert_eq!(
-        parse_run(&text).expect("a whole run parses").ended,
-        1_800_000_000_000
-    );
-    std::fs::remove_dir_all(&runs).expect("the temporary board goes");
+    assert_eq!(run.seat, "a");
+    assert_eq!(run.shots.len(), 1);
 }
 
 /// A file missing what a run *is* is skipped, not guessed at.
@@ -129,9 +87,7 @@ fn runs_come_back_in_the_order_they_went_up() {
         label: "x".to_string(),
         verb: String::new(),
         seat: "a".to_string(),
-        session: String::new(),
         at,
-        ended: 0,
         side_by_side: false,
         shots: vec![Shot {
             file: "img/x.png".to_string(),

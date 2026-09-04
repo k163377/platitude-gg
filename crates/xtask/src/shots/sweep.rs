@@ -11,20 +11,18 @@
 //! * **A picture retaken replaces the one before it** — one seat's runs
 //!   under one label collapse to the newest. The attempts that were
 //!   tried and undone leave with the attempts.
-//! * **A seat whose branch landed lets its pictures go** (`land`) — the
-//!   work is on main and the evidence has been read.
-//! * **A session that ends marks its own runs**, in whatever tree it
-//!   sat, and they leave a day later unless the session is heard from
-//!   again. By session, never by seat: a seat outlives the sessions that
-//!   pass through it, and the next one is already sitting there.
+//! * **A seat's pictures leave when its work does** — when the branch
+//!   lands on main (`land`), and when the seat is handed to a fresh
+//!   stretch of work having landed nothing (`seats::start_at_main`).
+//!   Those two are the whole of it: a run stands for exactly as long as
+//!   the work it was taken for.
 //!
-//! The mark in that last rule is the whole of it: a session ending is
-//! not a session being over. The machine sleeps, every open
-//! conversation is handed a SessionEnd, and on the next wake the same
-//! sessions carry on working — so an end that deleted would take the
-//! board out from under a reader who was told to press F5 on it. Only
-//! the ending is visible here, so it writes a mark, and what expires is
-//! the mark (`FAREWELL`).
+//! **A session ending is not one of them.** The machine sleeps and every
+//! open conversation is handed a SessionEnd, then goes on working at the
+//! next wake — so a board that swept there would empty itself under a
+//! reader who had just been told to press F5 on it. The seat outlives
+//! its sessions anyway: which one took the picture says nothing about
+//! whether the work it argues for is finished.
 //!
 //! What no rule reaches — a run taken by hand outside a session, or an
 //! approach abandoned under a name nobody retakes — is what `prune` is
@@ -35,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::Run;
-use super::board::{board_dir, load_runs, now_ms, parse_run, place, shown};
+use super::board::{board_dir, load_runs, parse_run, shown};
 use super::page;
 
 /// How long a picture is nobody's business but its own run's.
@@ -46,19 +44,6 @@ use super::page;
 /// out from under it. Ten minutes is far past the milliseconds that
 /// window actually is, and nothing is lost by waiting.
 const GRACE: Duration = Duration::from_secs(10 * 60);
-
-/// How long a marked run stands before the board lets it go.
-///
-/// It has to outlast the gap a mark can be written across while the
-/// session it belongs to is only asleep — the machine goes down for the
-/// night with the conversation open, and the SessionEnd that fires there
-/// is answered by the SessionStart of the same session in the morning.
-/// A day covers a night with room to spare, and it is short enough that
-/// a session that really is over has its pictures off the board before
-/// the next day's work goes up. Nothing expires while the machine is
-/// asleep either way: this is read when a command touches the board, and
-/// a session that comes back speaks for its runs first (`session_seen`).
-const FAREWELL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Which runs a sweep reaches.
 pub(super) struct Scope {
@@ -130,94 +115,26 @@ pub(super) fn prune(scope: &Scope) -> Result<(usize, PathBuf), String> {
     Ok((gone, rebuild(&board)?))
 }
 
-/// A landed seat's pictures go with it (CLAUDE.md ビルド・テスト,
-/// 席を外す): the seat's branch is on main, so the pictures that argued
-/// for it are nobody's evidence any more. Answers how many went.
+/// A seat's pictures go when its work does (CLAUDE.md ビルド・テスト,
+/// 席を外す): the branch is on main, so the pictures that argued for it
+/// are nobody's evidence any more. Answers how many went.
 pub(crate) fn seat_freed(seat: &str) -> Result<(usize, PathBuf), String> {
     prune(&Scope::seats(vec![seat.to_string()]))
 }
 
-/// A session that has ended marks its own runs, wherever it shot them:
-/// they stand a day longer (`FAREWELL`), and go on standing for as long
-/// as the session is heard from again. A session that took no picture —
-/// or never reached a board at all — has nothing to answer for, so this
-/// is quiet about both.
+/// The same, for a seat starting a stretch of work rather than ending
+/// one (`seats::start_at_main`): whatever is still on the board from
+/// this letter belongs to work that is over — landed, or given up on —
+/// and the run that argued for it has nobody left to argue to.
 ///
-/// The mark is written rather than acted on because this event fires
-/// over a sleep as readily as over a goodbye, and the two are told apart
-/// only by what happens next.
-pub(crate) fn session_ended(session: &str) -> Result<usize, String> {
-    let Some(now) = now_ms() else {
-        return Ok(0);
-    };
-    let (marked, board) = mark(session, now)?;
-    // The page carries no mark, so this rebuild is for the collecting it
-    // does on the way past — and that is worth doing whether or not this
-    // session had pictures of its own: a session ending is the moment a
-    // mark left standing since yesterday is finally acted on.
-    if let Some(board) = board {
-        rebuild(&board)?;
+/// Quiet in every failure, and quiet about how many went: a board that
+/// is not there yet, or will not be written, must not stop a seat being
+/// handed out.
+pub(crate) fn seat_reused(seat: &str) {
+    if let Err(_unheard) = seat_freed(seat) {
+        // The seat is the answer being given; the board is a note beside
+        // it. `cargo xtask shots prune --seat <letter>` is the way back.
     }
-    Ok(marked)
-}
-
-/// A sign of life from a session — its start, and every prompt after
-/// that. Whatever mark its end left comes off: the pictures are being
-/// worked with, whether the end was a sleep the machine came back from
-/// or a resume of the same conversation.
-///
-/// Nothing is rebuilt here: the page never showed the mark, and this
-/// runs at every prompt, where a line of housekeeping would be a line in
-/// somebody's prompt.
-pub(crate) fn session_seen(session: &str) -> Result<usize, String> {
-    mark(session, 0).map(|(unmarked, _)| unmarked)
-}
-
-/// Writes `ended` onto every run of one session that does not carry it
-/// already. Answers how many runs were marked — or unmarked, for an
-/// `ended` of 0 — and the board they are on, for a caller that has a
-/// reason to rebuild it.
-fn mark(session: &str, ended: u128) -> Result<(usize, Option<PathBuf>), String> {
-    if session.is_empty() {
-        return Ok((0, None));
-    }
-    let Ok(board) = board_dir() else {
-        return Ok((0, None));
-    };
-    if !board.join("runs").is_dir() {
-        return Ok((0, None));
-    }
-    let marked = mark_in(&board, session, ended)?;
-    Ok((marked, Some(board)))
-}
-
-/// The same, on a board somebody has already found — which is what the
-/// rule can be asserted against, the board a session actually writes to
-/// being wherever this process happens to be standing.
-fn mark_in(board: &Path, session: &str, ended: u128) -> Result<usize, String> {
-    let mut marked = 0;
-    for path in run_files(&board.join("runs")) {
-        let Some(mut run) = read_run(&path) else {
-            continue;
-        };
-        if !taken_by(&run, session) || (run.ended == 0) == (ended == 0) {
-            continue;
-        }
-        run.ended = ended;
-        place(&path, &run)?;
-        marked += 1;
-    }
-    Ok(marked)
-}
-
-/// Whether a run is one that session may speak for.
-///
-/// A run nobody stamped belongs to no session — a picture taken by hand
-/// in a terminal carries none — so an id that is empty on either side
-/// matches nothing: two blanks meeting would put every hand-taken
-/// picture on the board on some session's clock.
-fn taken_by(run: &Run, session: &str) -> bool {
-    !session.is_empty() && run.session == session
 }
 
 /// The run just written, against what the board already held: the same
@@ -267,10 +184,6 @@ fn replaced(old: &Run, fresh: &Run) -> bool {
 /// that changes the board ends here, so what the page shows and what the
 /// directory holds never disagree for longer than one command.
 pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
-    let expired = collect_expired(board);
-    if expired > 0 {
-        println!("board: {expired} run(s) went — their sessions ended a day ago");
-    }
     let collected = collect_orphans(board);
     if collected > 0 {
         println!("board: collected {collected} picture(s) no run points at");
@@ -279,47 +192,6 @@ pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
     std::fs::write(&page, page::render(&load_runs(&board.join("runs"))))
         .map_err(|e| format!("could not write {}: {e}", shown(&page)))?;
     Ok(page)
-}
-
-/// The runs whose mark has run out, off the board. Answers how many
-/// went.
-///
-/// This is where a session's end is finally acted on, a day after the
-/// event and only for a session that never came back (`FAREWELL`). It
-/// runs on the way past every rebuild rather than on a clock of its own:
-/// nothing runs while the machine is asleep, and the first command to
-/// touch the board afterwards is early enough — the session that woke up
-/// with it will have spoken for its own runs before then
-/// (`session_seen`).
-///
-/// A run that will not delete is counted out rather than raised, for the
-/// same reason `collect_orphans` does it: this is housekeeping on the
-/// way to the command somebody actually asked for.
-fn collect_expired(board: &Path) -> usize {
-    let Some(now) = now_ms() else {
-        return 0;
-    };
-    let mut gone = 0;
-    for path in run_files(&board.join("runs")) {
-        let Some(run) = read_run(&path) else {
-            continue;
-        };
-        if !expired(&run, now) {
-            continue;
-        }
-        if take(board, &run, &path).is_ok() {
-            gone += 1;
-        }
-    }
-    gone
-}
-
-/// Whether a run's mark has run out, `now` being the clock in
-/// milliseconds. A run nobody marked never expires, and neither does one
-/// marked in the future — a clock that disagrees with the mark is no
-/// reason to delete a picture.
-fn expired(run: &Run, now: u128) -> bool {
-    run.ended > 0 && now.saturating_sub(run.ended) >= FAREWELL.as_millis()
 }
 
 /// The pictures nothing points at any more, off the disk. Answers how

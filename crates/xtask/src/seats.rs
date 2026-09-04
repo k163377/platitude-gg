@@ -380,6 +380,10 @@ fn claim_existing(
 /// where a stretch of work begins (CLAUDE.md ビルド・テスト). Safe only
 /// because the caller proved the seat merged and clean behind its lock.
 fn start_at_main(path: &str, seat: &str) -> String {
+    // Whatever this letter still has on the shot board belongs to the
+    // work that just ended here, and a stretch of work beginning is the
+    // one moment the board can be sure of that (shots/sweep.rs).
+    crate::shots::seat_reused(seat);
     let branch = format!("worktree-{seat}");
     let on_branch = crate::subprocess::git_query(path, &["rev-parse", "--abbrev-ref", "HEAD"])
         .is_some_and(|head| head == branch);
@@ -421,6 +425,10 @@ fn create_seat(primary: &str, seat: &'static str, me: &Identity) -> Option<Assig
             "main",
         ],
     )?;
+    // A letter whose tree was removed can still have pictures standing
+    // under its name, and the work they argued for went with the tree
+    // (shots/sweep.rs).
+    crate::shots::seat_reused(seat);
     Some(Assigned {
         seat,
         path,

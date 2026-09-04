@@ -46,7 +46,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
-        "prompt-submit" => prompt_submit(&input),
+        "prompt-submit" => review::prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
         other => Err(format!("unknown hook event: {other:?}")),
@@ -69,21 +69,6 @@ fn stop(input: &str) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-/// UserPromptSubmit: a prompt is the plainest sign a session is alive,
-/// and it is the answer to a SessionEnd that fired over a sleep — the
-/// runs that end marked are somebody's again (shots/sweep.rs). Silent
-/// either way: what this handler prints becomes part of the prompt, and
-/// the review guard is what has something to say there.
-fn prompt_submit(input: &str) -> Result<(), String> {
-    if let Err(_unheard) =
-        crate::shots::session_seen(&payload::string_field(input, "session_id").unwrap_or_default())
-    {
-        // A board that could not be written is not a reason to hold up
-        // the prompt: the runs stand until their mark runs out anyway.
-    }
-    review::prompt_submit(input)
 }
 
 /// SessionEnd: everything a session leaves behind for itself alone —
