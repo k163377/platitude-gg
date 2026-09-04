@@ -101,14 +101,45 @@ Rectangle {
     }
     // Every press in this pane, whatever it was for: the hand is here now, so the arrows are (規約 §diff のファイル一覧). A
     // `PointHandler` because it is the one handler specified to take only passive grabs — the buttons, the bars and the
-    // rows' own marks all keep working underneath (`Main.qml`'s window watcher is one for the same reason). On the pane
-    // rather than an overlay: a handler laid over the rows takes their hover away.
-    PointHandler {
-        acceptedButtons: Qt.AllButtons
-        onActiveChanged: {
-            if (active)
-                diffPane.handArrived()
+    // rows' own marks all keep working underneath (`Main.qml`'s window watcher is one for the same reason).
+    //
+    // **On a sheet in front of everything, not on the pane itself** (規約 §画面全体の入力観測). Press delivery stops at the
+    // first item that accepts, and a handler beneath that item never hears the press — so on the pane this heard
+    // nothing at all: the list is a `Flickable` and takes every press on the rows, and the hand that picks the text
+    // takes the rest. The keyboard came by wheel and by nothing else, which left `Ctrl+C` over a selection going
+    // wherever the reader had pressed last (measured, qmltestrunner: with the handler under the hand, a press-and-drag
+    // over the rows left `activeFocus=false` and the copy key unanswered; over it, both stand).
+    //
+    // The rows keep their hover under it, unlike the sheet the pane's `HoverHandler` may not go on: a bare `Item`
+    // answers no pointer at all, so nothing below it loses one (measured the same way — the pane's own handler and a
+    // row's both still stand).
+    Item {
+        id: pressDoor
+        anchors.fill: parent
+        z: 100
+        PointHandler {
+            acceptedButtons: Qt.AllButtons
+            onActiveChanged: {
+                if (active)
+                    diffPane.handArrived()
+            }
         }
+    }
+    /// Automation: whether that sheet is still in front of everything this pane draws. A run cannot inject a press
+    /// (verify-ui), so this is the half of "a selection you can take away" a headless drag can be asked for — where
+    /// the door stands, read off the pane's own children rather than off the line that places it.
+    ///
+    /// **Strictly above, and a tie reads as false.** `childAt` cannot answer this: it walks the children in the order
+    /// they were declared and never looks at `z` at all (measured, qmltestrunner — the last-declared sibling comes
+    /// back from a point the front-most one covers). A sheet level with something else is one more declaration away
+    /// from being behind it, and that is not a state to go green on.
+    function doorOnTop() {
+        const kids = diffPane.children
+        for (let i = 0; i < kids.length; i++) {
+            if (kids[i] !== pressDoor && kids[i].visible && kids[i].z >= pressDoor.z)
+                return false
+        }
+        return true
     }
     /// Names the row the pointer is over, or nothing where it is over none of them. A heading is named as itself (line
     /// -1), which is what lights its whole hunk.

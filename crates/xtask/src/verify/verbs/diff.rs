@@ -173,10 +173,17 @@ pub(super) const TABLE: &[Verb] = &[
     // camera can be asked for here — the wash on a removed line is the
     // failure this feature has, and it is a coloured rectangle a few
     // pixels tall inside a pane of them.
+    //
+    // `door=` stands in front of both because a selection nobody holds
+    // the keyboard for is not one `Ctrl+C` can take away, and no run can
+    // press a key to find out (verify-ui). It reads where the pane
+    // watches presses from: on the pane itself that sheet heard nothing
+    // — the list and the hand over it take every press there — and the
+    // diff's keyboard arrived by wheel alone.
     Verb {
         name: "diff-select",
         when: &[],
-        plain: "diff_pick new=true removed=1",
+        plain: "diff_pick door=true new=true removed=1",
     },
     // The plain copy, and the whole of what it claims: the old line
     // stayed out of it. Read back off the pad the copy goes through,

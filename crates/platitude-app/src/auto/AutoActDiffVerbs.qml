@@ -106,7 +106,10 @@ Item {
         const removedRow = diffPane.firstRemovedRow()
         const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
         diffPane.pickText(1, 0, lastRow, driver.pastLineEnd)
-        Harness.report("diff_pick " + diffPane.pickTally()
+        // `door=` is the half a headless drag cannot make for itself: a run enters the hand's own functions and never
+        // delivers a press, so what brings the keyboard — the sheet the pane watches presses from — is asked where it
+        // stands instead. A selection nothing holds the keyboard for is not one `Ctrl+C` can take away.
+        Harness.report("diff_pick door=" + diffPane.doorOnTop() + " " + diffPane.pickTally()
                           + " removedRow=" + removedRow + " to=" + lastRow)
         if (act === "diff-select")
             return
