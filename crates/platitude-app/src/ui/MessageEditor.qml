@@ -223,12 +223,19 @@ ColumnLayout {
         radius: Theme.radiusMd
         border.color: Theme.borderDefault
         border.width: Theme.borderWidth
+        // The band the inset below leaves between this frame and the words. Declared first, so it is under the view
+        // and reaches only a press the text did not take (`SweepBand`).
+        SweepBand {
+            anchors.fill: parent
+            field: summaryArea
+        }
         ScrollView {
             id: summaryView
             anchors.fill: parent
             anchors.margins: Theme.spaceXs
-            // Both boxes are inset by the one value and lay their own bar out — see `DescriptionBox` for why either is
-            // so.
+            // Both boxes are inset by the one value, lay their own bar out, and refuse the sideways one — see
+            // `DescriptionBox` for why each is so.
+            ScrollBar.horizontal: null
             ScrollBar.vertical: AutoScrollBar {
                 view: summaryView.contentItem
                 x: summaryView.width - width

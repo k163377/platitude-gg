@@ -228,6 +228,13 @@ Rectangle {
     border.color: Theme.borderSubtle
     border.width: Theme.borderWidth
 
+    // The band the inset below leaves between this frame and the words. Declared first, so it is under both the view
+    // and the grip and reaches only a press neither of them took (`SweepBand`).
+    SweepBand {
+        anchors.fill: parent
+        field: area
+    }
+
     ScrollView {
         id: textView
         anchors.fill: parent
@@ -236,6 +243,13 @@ Rectangle {
         // right**: taken to the frame's own line the text reads as stuck to it, which is the answer the graph's right
         // edge already gives (by design — デザイン規約 §余白).
         anchors.margins: Theme.spaceXs
+        // **No sideways bar at all.** The words wrap, so there is never anything to send that way — but the style
+        // hands every `ScrollView` one regardless, and an `AsNeeded` bar with `size` at 1 is laid out and left
+        // *visible*: a 10px strip across the foot of the viewport that takes every press landing on it. On a
+        // one-line summary that is the whole lower half of the box, answering nothing (qmltestrunner measured,
+        // `tst_messageband`: `ScrollBar[0,9 312x10] orient=1 policy=0 size=1.00` under a click that focused nothing).
+        // The vertical one is `AutoScrollBar`, which is drawn only where it has somewhere to go.
+        ScrollBar.horizontal: null
         // A bar handed to a `ScrollView` arrives half-wired: `size` and `position` track the text, but **no geometry
         // comes with it** — it is laid out at `x 0 y 0` at its own implicit 10x10, which draws a dot in the box's top
         // corner (qmltestrunner measured, ; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So

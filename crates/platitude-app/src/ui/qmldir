@@ -53,6 +53,7 @@ DetailsPane 1.0 DetailsPane.qml
 LineText 1.0 LineText.qml
 SweepRoom 1.0 SweepRoom.qml
 SweepPad 1.0 SweepPad.qml
+SweepBand 1.0 SweepBand.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
 CutName 1.0 CutName.qml
