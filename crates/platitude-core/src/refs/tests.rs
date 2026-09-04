@@ -148,7 +148,13 @@ fn remote_state_comes_from_the_upstream_and_nowhere_else() {
             None,
         ),
     ];
-    let with_remote = branches_with_remote(&refs);
+    let remotes = RemoteBranches::index(&refs);
+    let with_remote: HashSet<&str> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| remotes.has_counterpart(r))
+        .map(|r| r.name.as_str())
+        .collect();
     assert!(with_remote.contains("refs/heads/main"));
     assert!(!with_remote.contains("refs/heads/dead"), "[gone] upstream");
     assert!(
@@ -179,7 +185,7 @@ fn folds_the_upstream_sharing_the_commit() {
             None,
         ),
     ];
-    let folded = remotes_folded_into_local(&refs);
+    let folded = RemoteBranches::index(&refs).folded_into_local(&refs);
     assert!(folded.contains("refs/remotes/origin/main"));
 }
 
@@ -203,7 +209,9 @@ fn keeps_an_upstream_left_behind_on_another_commit() {
         ),
     ];
     assert!(
-        remotes_folded_into_local(&refs).is_empty(),
+        RemoteBranches::index(&refs)
+            .folded_into_local(&refs)
+            .is_empty(),
         "a drifted upstream is another row's chip"
     );
 }
@@ -230,7 +238,7 @@ fn keeps_a_second_remote_that_is_not_the_upstream() {
             None,
         ),
     ];
-    let folded = remotes_folded_into_local(&refs);
+    let folded = RemoteBranches::index(&refs).folded_into_local(&refs);
     assert!(folded.contains("refs/remotes/origin/main"));
     assert!(!folded.contains("refs/remotes/fork/main"), "not the badge");
 }
@@ -255,7 +263,9 @@ fn folds_nothing_without_an_upstream() {
         ),
     ];
     assert!(
-        remotes_folded_into_local(&alone).is_empty(),
+        RemoteBranches::index(&alone)
+            .folded_into_local(&alone)
+            .is_empty(),
         "one same-named remote is still not this branch's"
     );
 
@@ -275,7 +285,9 @@ fn folds_nothing_without_an_upstream() {
         ),
     ];
     assert!(
-        remotes_folded_into_local(&several).is_empty(),
+        RemoteBranches::index(&several)
+            .folded_into_local(&several)
+            .is_empty(),
         "and neither of two is"
     );
 }

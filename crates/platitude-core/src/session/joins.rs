@@ -67,7 +67,7 @@ impl<'a> RefJoins<'a> {
 ///
 /// A branch and the remote it is about get one chip between them: the
 /// cloud badge already says the remote is here, so the remote's own label
-/// is dropped (see [`refs::remotes_folded_into_local`]).
+/// is dropped (see [`refs::RemoteBranches::folded_into_local`]).
 ///
 /// Tags fold on the same terms, but only when both sides point at the same
 /// commit. One that points elsewhere over there gets a label of its own on

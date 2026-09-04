@@ -4,6 +4,8 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
 
+use std::collections::HashSet;
+
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::Oid;
@@ -98,7 +100,13 @@ async fn lists_branches_tags_and_remotes() {
         "",
         "git names no upstream for it"
     );
-    let with_remote = refs::branches_with_remote(&refs);
+    let remotes = refs::RemoteBranches::index(&refs);
+    let with_remote: HashSet<&str> = refs
+        .iter()
+        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| remotes.has_counterpart(r))
+        .map(|r| r.name.as_str())
+        .collect();
     assert!(with_remote.contains("refs/heads/main"));
     assert!(!with_remote.contains("refs/heads/feature/x"));
     assert!(!with_remote.contains("refs/heads/local-only"));

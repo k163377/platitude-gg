@@ -38,7 +38,8 @@ pub struct RefEntry {
     /// Peeled commit for annotated tags.
     pub peeled: Option<Oid>,
     /// Configured upstream refname (`refs/remotes/origin/main`), if any.
-    /// May point at a deleted remote branch; see [`branches_with_remote`].
+    /// May point at a deleted remote branch; see
+    /// [`RemoteBranches::has_counterpart`].
     pub upstream: Option<crate::Name>,
     /// True for the branch HEAD is on (never true when detached).
     pub is_head: bool,
@@ -197,27 +198,6 @@ impl<'a> RemoteBranches<'a> {
             .map(|remote| remote.name.as_str())
             .collect()
     }
-}
-
-/// Local branches that verifiably have a remote counterpart right now
-/// ([`RemoteBranches::has_counterpart`]), by full refname.
-pub fn branches_with_remote(refs: &[RefEntry]) -> HashSet<crate::Name> {
-    let remotes = RemoteBranches::index(refs);
-    refs.iter()
-        .filter(|r| r.kind == RefKind::LocalBranch)
-        .filter(|r| remotes.has_counterpart(r))
-        .map(|r| r.name.clone())
-        .collect()
-}
-
-/// Remote branches folded into a local branch's chip
-/// ([`RemoteBranches::folded_into_local`]), by full refname.
-pub fn remotes_folded_into_local(refs: &[RefEntry]) -> HashSet<String> {
-    RemoteBranches::index(refs)
-        .folded_into_local(refs)
-        .into_iter()
-        .map(str::to_string)
-        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
