@@ -42,21 +42,38 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     create_named(preset, at, "repo")
 }
 
-/// Builds `preset` with the work tree called `name` rather than `repo` —
-/// a tab is titled after its work-tree folder (`models::tab_name`).
-pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
-    let root = match at {
-        Some(dir) => dir,
+/// Where the repository gets built: what `--at` named, resolved against
+/// the directory the command was typed in, or a fresh one under the
+/// system temp.
+///
+/// **A relative `--at` is written into the repository and read back by a
+/// git process of git's own choosing.** `origin`'s URL comes out of this
+/// path (`repo::file_url`), so `--at target/probe` makes
+/// `file:///target/probe/origin.git` — a POSIX absolute path, which
+/// git.exe rewrites into its own install directory
+/// (`C:/Program Files/Git/target/probe/origin.git`) and the first push
+/// fails against (measured). The default path is absolute already; this
+/// makes a given one the same.
+fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
+    match at {
+        Some(dir) => std::path::absolute(&dir)
+            .map_err(|e| format!("could not resolve {}: {e}", dir.display())),
         None => {
             let nanos = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| e.to_string())?
                 .as_nanos();
-            std::env::temp_dir()
+            Ok(std::env::temp_dir()
                 .join("pg-demo")
-                .join(format!("{preset}-{nanos}"))
+                .join(format!("{preset}-{nanos}")))
         }
-    };
+    }
+}
+
+/// Builds `preset` with the work tree called `name` rather than `repo` —
+/// a tab is titled after its work-tree folder (`models::tab_name`).
+pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
+    let root = root_for(preset, at)?;
     let mut repo = DemoRepo::init(&root, name)?;
     match preset {
         "basic" => basic(&mut repo)?,
@@ -120,4 +137,25 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         other => return Err(format!("unknown preset: {other}")),
     }
     Ok(repo.work)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_for;
+
+    /// A relative `--at` reaches `origin`'s URL, which git resolves
+    /// against a directory of its own choosing — so it has to be made
+    /// absolute before anything is written from it.
+    #[test]
+    fn a_given_at_is_absolute_before_any_url_is_written_from_it() {
+        let root = root_for("basic", Some(std::path::PathBuf::from("target/probe")))
+            .expect("the working directory resolves");
+        assert!(root.is_absolute(), "{}", root.display());
+        assert!(root.ends_with("target/probe"), "{}", root.display());
+        let absolute = std::env::current_dir().expect("a working directory");
+        assert_eq!(
+            root_for("basic", Some(absolute.clone())).expect("an absolute path resolves"),
+            absolute
+        );
+    }
 }
