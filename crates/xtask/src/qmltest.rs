@@ -40,7 +40,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
         return Err(format!("unknown option {unknown:?} (qmltest takes none)"));
     }
-    let (root, _busy) = crate::still::announced("qmltest")?;
+    let root = crate::tree::workspace_root();
     let tests = tests_in(&root)?;
     if tests.is_empty() {
         return Err(format!("no tst_*.qml under {TESTS}"));

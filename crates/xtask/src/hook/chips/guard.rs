@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use super::Chip;
 use super::ledger::{load, store};
-use crate::hook::payload::{bool_field, string_field};
+use crate::hook::payload::{bool_field, deny, printable, string_field};
 
 /// The directories a path is recognized by when it names no file at all:
 /// `crates/platitude-app/src/ui` is a claim, `Windows / macOS` is not.
@@ -306,32 +306,12 @@ impl Chip {
     }
 }
 
-fn deny(reason: &str) {
-    println!(
-        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{}\"}}}}",
-        printable(reason)
-    );
-}
-
 const UNNUMBERED: &str = "A task chip's title must lead with its priority: '1. …', \
      1 being the most important chip live right now. The number is the whole order \
      of the list, and a chip stacked without one is read wherever it happens to \
      land. Stack it again as '<n>. <title>', and if it outranks chips already live, \
      renumber those first — spawn each one again under its new number, then dismiss \
      its old task_id.";
-
-/// A string sanitized for the hand-built JSON it rides in: everything
-/// that could end the string or the payload early is dropped.
-fn printable(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '"' | '\\' => '\'',
-            '\n' | '\r' | '\t' => ' ',
-            other => other,
-        })
-        .collect()
-}
 
 #[cfg(test)]
 mod tests {

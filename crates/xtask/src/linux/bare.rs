@@ -176,6 +176,8 @@ fn run_on_bare(
     Command::new("docker")
         .arg("run")
         .arg("--rm")
+        .arg("--env")
+        .arg(format!("{}=1", crate::still::UNDER))
         .arg("--volume")
         .arg(format!("{}:/built:ro", volume(root, "target")))
         .arg("--volume")

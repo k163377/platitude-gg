@@ -16,6 +16,7 @@ mod hook;
 mod keepsakes;
 mod land;
 mod linux;
+mod note;
 mod perf;
 mod qmltest;
 mod qt;

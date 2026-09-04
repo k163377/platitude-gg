@@ -2,9 +2,10 @@
 //! holds now, so a note saying who asked for the code and when is held at
 //! the commit that would add it (CLAUDE.md Rust 規約).
 
-use super::commit::{commit_dir, common_git_dir};
+use super::commit::commit_dir;
 use super::launch::resolve;
 use super::payload::string_field;
+use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
 /// The words a note reaches for to say who asked, rather than what the

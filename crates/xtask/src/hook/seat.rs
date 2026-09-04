@@ -3,10 +3,10 @@
 //! puts a claim back on a seat `land` set free.
 
 use super::launch::resolve;
-use super::payload::string_field;
+use super::payload::{deny, printable, string_field};
 use crate::seats::{
     self, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
-    lock_reason, standing, take_seat, unlock_seat, worktree_blocks, worktree_root,
+    lock_reason, same_tree, standing, take_seat, unlock_seat, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -68,14 +68,6 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-/// The one shape of an outright refusal, printed.
-fn deny(reason: &str) {
-    println!(
-        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{reason}\"}}}}"
-    );
 }
 
 /// Why nobody enters or edits the rig: it is the measurement's, and it
@@ -240,18 +232,6 @@ fn tree_named(trees: &[WorktreeBlock], cwd: &str, path: &str) -> Option<String> 
         .map(|tree| tree.path.clone())
 }
 
-/// Whether two paths name one tree. Windows spells a path in whatever
-/// case the writer used, so the comparison there is case-blind.
-fn same_tree(left: &str, right: &str) -> bool {
-    let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
-    let (left, right) = (trim(left), trim(right));
-    if cfg!(windows) {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
-    }
-}
-
 /// The roster letter `path` points into, if it is a seat's tree at all.
 fn roster_seat(path: &str) -> Option<&'static str> {
     let root = worktree_root(path)?;
@@ -267,18 +247,6 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
         .into_iter()
         .find(|entry| entry.seat == name)
         .map(|entry| entry.tree.path)
-}
-
-/// A string sanitized for splicing into the hook's hand-built JSON:
-/// everything that could end the string or the payload early is dropped.
-fn printable(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '"' | '\\' => '\'',
-            '\n' | '\r' | '\t' => ' ',
-            other => other,
-        })
-        .collect()
 }
 
 /// SessionEnd: a seat claimed by this session is handed back. A lock
@@ -513,9 +481,10 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 #[cfg(test)]
 mod tests {
     use super::{
-        Entry, Landing, entry_verdict, printable, roster_seat, tree_named, under,
-        worktree_objection, write_verdict,
+        Entry, Landing, entry_verdict, roster_seat, tree_named, under, worktree_objection,
+        write_verdict,
     };
+    use crate::hook::payload::printable;
     use crate::seats::{Identity, Standing, WorktreeBlock};
 
     const PRIMARY: &str = "C:/x/platitude-gg";

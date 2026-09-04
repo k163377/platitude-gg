@@ -1,9 +1,10 @@
 //! The git a shell line may not run unasked: landing a branch on main,
 //! and rewriting the branch under the session.
 
-use super::commit::{common_git_dir, primary_commit_denied};
+use super::commit::primary_commit_denied;
 use super::payload::string_field;
 use super::{MAIN_ESCAPE, REBASE_ESCAPE};
+use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the

@@ -42,6 +42,28 @@ pub(super) fn bool_field(input: &str, key: &str) -> Option<bool> {
     after_colon.starts_with("false").then_some(false)
 }
 
+/// The one shape of an outright refusal, printed: a PreToolUse hook's
+/// deny, with the reason made safe for the hand-built JSON it rides in.
+pub(super) fn deny(reason: &str) {
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{}\"}}}}",
+        printable(reason)
+    );
+}
+
+/// A string sanitized for splicing into the hook's hand-built JSON:
+/// everything that could end the string or the payload early is dropped.
+pub(super) fn printable(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '"' | '\\' => '\'',
+            '\n' | '\r' | '\t' => ' ',
+            other => other,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{bool_field, string_field};

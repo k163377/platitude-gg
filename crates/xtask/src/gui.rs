@@ -46,9 +46,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
             other => return Err(format!("launch does not take {other:?}")),
         }
     }
-    // A window put up over a measurement's covers it, and the run is
-    // refused (`still`).
-    let (root, _busy) = crate::still::announced("launch")?;
+    let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     // A stale run of this tree holds both the exe (against the link) and
     // this tree's own store lock (the app would open on the refusal gate).

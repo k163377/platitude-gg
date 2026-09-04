@@ -30,6 +30,17 @@ pub(crate) fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
     })
 }
 
+/// The repository `dir` belongs to, shared by all of its worktrees, so
+/// that a merge run from a worktree is recognised as the same repository
+/// as the session that runs it, and a hold taken beside it is seen from
+/// every seat.
+pub(crate) fn common_git_dir(dir: &str) -> Option<String> {
+    git_query(
+        dir,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+}
+
 /// Whether the process `pid` names still exists. A probe that could not
 /// answer says "alive": every caller asks this to decide whether somebody
 /// else's claim may be broken, and breaking a live one costs more than

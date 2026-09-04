@@ -5,7 +5,7 @@ use super::MAIN_ESCAPE;
 use super::git::unquote;
 use super::launch::resolve;
 use crate::seats::worktree_root;
-use crate::subprocess::git_query;
+use crate::subprocess::common_git_dir;
 
 /// The primary checkout commits nothing of its own — implementation,
 /// documents, settings and the shared session rules alike ride worktree
@@ -85,16 +85,6 @@ pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> 
         }
     }
     None
-}
-
-/// The repository `dir` belongs to, shared by all of its worktrees, so that
-/// a merge run from a worktree is recognised as the same repository as the
-/// session that runs it.
-pub(super) fn common_git_dir(dir: &str) -> Option<String> {
-    git_query(
-        dir,
-        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-    )
 }
 
 #[cfg(test)]

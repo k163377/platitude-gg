@@ -55,6 +55,9 @@ pub(crate) fn app_exe(
                 .map(|pair| pair[1]),
         );
         println!("building (release, {})…", features.join(" + "));
+        // Announced for as long as it compiles: a build waits for a
+        // measurement to end, and a measurement waits for it (`still`).
+        let _busy = crate::still::busy(root, "cargo build --release")?;
         let status = std::process::Command::new("cargo")
             .args(["build", "--release", "--features", HARNESS_FEATURE])
             .args(extra)
@@ -86,6 +89,7 @@ pub(crate) fn shipped_exe(
 ) -> Result<PathBuf, String> {
     if build {
         println!("building (release, no features — the shipped set)…");
+        let _busy = crate::still::busy(root, "cargo build --release")?;
         let status = std::process::Command::new("cargo")
             .args(["build", "--release"])
             .current_dir(root)
@@ -99,12 +103,17 @@ pub(crate) fn shipped_exe(
     where_it_lands(root)
 }
 
-fn where_it_lands(root: &Path) -> Result<PathBuf, String> {
-    let exe = root.join("target").join("release").join(if cfg!(windows) {
+/// The app's file name on this platform.
+pub(crate) fn exe_name() -> &'static str {
+    if cfg!(windows) {
         "platitude-gg.exe"
     } else {
         "platitude-gg"
-    });
+    }
+}
+
+fn where_it_lands(root: &Path) -> Result<PathBuf, String> {
+    let exe = root.join("target").join("release").join(exe_name());
     if !exe.is_file() {
         return Err(format!(
             "{} not found — build first (or drop --no-build)",

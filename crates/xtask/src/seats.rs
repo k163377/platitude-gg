@@ -301,16 +301,8 @@ pub fn take(args: &[String]) -> Result<(), String> {
 /// back is a tree that is ready to be worked in: claimed, empty, and at
 /// main's tip.
 pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
-    let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])
-        .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
-    // The listing's first entry is the primary checkout, which is where a
-    // seat is created and the tree every seat path is written against.
-    let primary = worktree_blocks(&listing)
-        .first()
-        .ok_or("git worktree list named no tree at all")?
-        .path
-        .clone();
-    let entries = seat_entries(&listing);
+    let (primary, trees) = primary_checkout(cwd)?;
+    let entries = seat_entries_of(trees);
     if let Some(held) = held_seat(&entries, me) {
         return Ok(held);
     }
@@ -586,7 +578,11 @@ pub(crate) fn worktree_blocks(listing: &str) -> Vec<WorktreeBlock> {
 
 /// Every roster seat the listing shows, in listing order.
 pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
-    worktree_blocks(listing)
+    seat_entries_of(worktree_blocks(listing))
+}
+
+fn seat_entries_of(trees: Vec<WorktreeBlock>) -> Vec<SeatEntry> {
+    trees
         .into_iter()
         .filter_map(|block| {
             let seat = worktree_root(&block.path).and_then(|root| {
@@ -629,6 +625,39 @@ pub(crate) fn rig_path(primary: &str) -> String {
 /// Whether `path` is the rig's tree or something inside it.
 pub(crate) fn in_rig(path: &str) -> bool {
     worktree_root(path).is_some_and(|root| root.rsplit('/').next() == Some(RIG))
+}
+
+/// Whether two paths name one tree. Windows spells a path in whatever
+/// case the writer used, so the comparison there is case-blind.
+pub(crate) fn same_tree(left: &str, right: &str) -> bool {
+    let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
+    let (left, right) = (trim(left), trim(right));
+    if cfg!(windows) {
+        left.eq_ignore_ascii_case(&right)
+    } else {
+        left == right
+    }
+}
+
+/// A path as the listing spells it: slashes forward, for `git -C` and
+/// for comparing against what git said.
+pub(crate) fn slashed(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+/// The primary checkout — the listing's first entry, where seats are
+/// created and the tree every seat path is written against — and the
+/// listing it came from.
+pub(crate) fn primary_checkout(cwd: &str) -> Result<(String, Vec<WorktreeBlock>), String> {
+    let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])
+        .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
+    let trees = worktree_blocks(&listing);
+    let primary = trees
+        .first()
+        .ok_or("git worktree list named no tree at all")?
+        .path
+        .clone();
+    Ok((primary, trees))
 }
 
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.
@@ -851,6 +880,14 @@ mod tests {
             super::rig_path("C:/x/platitude-gg")
         );
         assert!(seat_entries(&listing).is_empty());
+    }
+
+    #[test]
+    fn one_tree_spelled_two_ways_is_one_tree() {
+        assert!(super::same_tree("C:/x/rig/", "C:\\x\\rig"));
+        assert_eq!(super::same_tree("C:/x/RIG", "C:/x/rig"), cfg!(windows));
+        assert!(!super::same_tree("C:/x/rig", "C:/x/rigging"));
+        assert_eq!(super::slashed(std::path::Path::new("C:\\x\\y")), "C:/x/y");
     }
 
     #[test]

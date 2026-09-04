@@ -109,7 +109,7 @@ fn launch_segments(command: &str) -> Vec<&str> {
 
 /// `command` cut where one command in the line ends and the next begins, so
 /// that a pipe belonging to a neighbour is not read as the launch's own.
-fn shell_segments(command: &str) -> Vec<&str> {
+pub(super) fn shell_segments(command: &str) -> Vec<&str> {
     command
         .split(['\n', ';'])
         .flat_map(|part| part.split("&&"))

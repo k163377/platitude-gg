@@ -258,14 +258,17 @@ const TAIL: &str = "  shipped [--no-build]
   still
       Whether a measurement is holding the machine still, and which
       builds are under way. `perf` holds the machine for the length of
-      its runs; gate, check, linux, verify-ui, launch, corpus, shipped
-      and qmltest wait for a hold to lift before they begin, and a hold
-      waits for the builds already under way — a build beside a
-      measurement is counted as load that was not the application, and
-      the run is refused and taken again. A bare `cargo build` or `cargo
-      test` typed while a hold stands is refused by the pre-shell hook,
-      because it runs outside any verb that could wait. Both are files
-      beside .git, cleared by whoever meets one whose process is gone.
+      its runs; every app build here (`tree::app_exe`), every cargo step
+      of check and gate, the linux container, verify-ui and a corpus
+      being made announce themselves and wait for a hold to lift before
+      they begin, and a hold waits for the builds already announced — a
+      build beside a measurement is counted as load that was not the
+      application, and the run is refused and taken again. A cargo a
+      session types while a hold stands is refused by the pre-shell hook
+      unless it is the task runner or compiles nothing, because it runs
+      outside any verb that could wait. Both are notes beside .git with a
+      lock file each, held open by the process: a lock nobody holds is a
+      note whoever meets it clears, whatever became of the process.
 
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built

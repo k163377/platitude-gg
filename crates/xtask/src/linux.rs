@@ -80,7 +80,6 @@ const BUILD_VERBS: [&str; 7] = ["build", "check", "test", "clippy", "bench", "ru
 const QT_FREE: [&str; 2] = ["platitude-core", "xtask"];
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let (_, _busy) = crate::still::announced("linux")?;
     let mut rebuild = false;
     let mut shell = false;
     let mut forced_stage: Option<String> = None;
@@ -150,6 +149,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         None => stage_for(rest).to_string(),
     };
     let tag = ensure_image(&root, &stage, rebuild)?;
+    // The container's work is this machine's work, announced here (its
+    // own xtask is under the announcement); a verb run where it stands
+    // announces itself.
+    let _busy = crate::still::busy(&root, "linux")?;
     in_container(&root, &tag, &command, shell)
 }
 
@@ -348,7 +351,9 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         // which machine ran it, and the container is never that machine
         // (`verify::options::census_line`).
         .arg("--env")
-        .arg(format!("{IN_CONTAINER}=1"));
+        .arg(format!("{IN_CONTAINER}=1"))
+        .arg("--env")
+        .arg(format!("{}=1", crate::still::UNDER));
 
     let mut command = command.to_vec();
     let keepsake = keepsakes::bridge(&mut command, OUT_MOUNT)?;

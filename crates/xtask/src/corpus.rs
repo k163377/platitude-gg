@@ -48,7 +48,6 @@ use std::process::{Command, Stdio};
 const DIR_NAME: &str = ".pg-perf-corpus";
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let (_, _busy) = crate::still::announced("corpus")?;
     let mut force = false;
     let mut path = None;
     let mut reference = None;
@@ -85,6 +84,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .map_err(|e| format!("could not clear {}: {e}", at.display()))?;
     }
     if !at.join(".git").is_dir() {
+        // Minutes of fast-import on every core: announced like a build
+        // (`still`), and only on this path — a corpus already there is
+        // read, not made.
+        let _busy = crate::still::busy(&crate::tree::workspace_root(), "corpus")?;
         build(&at)?;
     }
     report(&at)
