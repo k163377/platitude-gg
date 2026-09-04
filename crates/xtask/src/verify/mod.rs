@@ -17,5 +17,6 @@ mod seed;
 mod shim;
 mod verbs;
 
+pub(crate) use options::suite_words;
 pub use run::run;
 pub use shim::git_shim;

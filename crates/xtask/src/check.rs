@@ -129,11 +129,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for (i, verb) in verbs.iter().enumerate() {
         // A --verb value is a whole verify-ui argument line — some verbs
         // only mean anything with their preset or argument beside them
-        // ("co-authors 4 --preset co-authors").
-        let verb_words: Vec<&str> = verb.split_whitespace().collect();
+        // ("co-authors 4 --preset co-authors") — and it comes back with
+        // `--no-board`, because a suite's pictures are not the ones
+        // anybody asked to look at (`verify::suite_words`).
         // The first host run builds the release; the rest reuse it.
         let mut host = xtask(&["verify-ui"]);
-        host.extend(verb_words.iter().map(|w| (*w).to_string()));
+        host.extend(crate::verify::suite_words(verb));
         if i > 0 {
             host.push("--no-build".to_string());
         }
@@ -142,7 +143,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // check across the host boundary is measurably slow, and paying
         // it once per verb bought nothing.
         let mut linux = xtask(&["linux", "verify-ui"]);
-        linux.extend(verb_words.iter().map(|w| (*w).to_string()));
+        linux.extend(crate::verify::suite_words(verb));
         if i > 0 {
             linux.push("--no-build".to_string());
         }

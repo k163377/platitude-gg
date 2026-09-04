@@ -638,9 +638,8 @@ fn binary_steps(
     // stamps, because the stamp names a commit and the tree that passed is
     // no longer the one it holds (`gate::execute`).
     for line in &lines {
-        let verb_words: Vec<&str> = line.split_whitespace().collect();
         let mut host = xtask(&["verify-ui"]);
-        host.extend(words(&verb_words));
+        host.extend(crate::verify::suite_words(line));
         let mut host_step = step(
             &format!("verify {line}"),
             Side::Host,
@@ -651,7 +650,7 @@ fn binary_steps(
         host_step.builds_app = true;
         steps.push(host_step);
         let mut linux = xtask(&["linux", "verify-ui"]);
-        linux.extend(words(&verb_words));
+        linux.extend(crate::verify::suite_words(line));
         let mut linux_inputs = verb_inputs.clone();
         linux_inputs.push(DOCKERFILE.to_string());
         let mut linux_step = step(

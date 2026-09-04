@@ -356,8 +356,8 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg("--env")
         .arg(format!("{}=1", crate::still::UNDER));
 
-    let mut command = command.to_vec();
-    let keepsake = keepsakes::bridge(&mut command, OUT_MOUNT)?;
+    let mut inside = command.to_vec();
+    let keepsake = keepsakes::bridge(&mut inside, OUT_MOUNT)?;
     if let Some(out) = &keepsake {
         cmd.arg("--volume")
             .arg(format!("{}:{OUT_MOUNT}", mount_path(out)));
@@ -367,13 +367,15 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     if shell {
         cmd.arg("bash");
     } else {
-        cmd.args(&command);
+        cmd.args(&inside);
     }
     let status = cmd
         .status()
         .map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
-        keepsakes::onto_the_board(keepsake.as_deref(), &command);
+        // The line as typed, not the one `bridge` wrote: that one says
+        // `--no-board` whether or not the caller did.
+        keepsakes::onto_the_board(keepsake.as_deref(), command);
         return Ok(());
     }
     Err(match status.code() {

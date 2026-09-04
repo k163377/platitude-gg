@@ -32,16 +32,33 @@ pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<Pa
 /// Marked `— linux` because Done is both OSes photographed for the same
 /// verb (CLAUDE.md ビルド・テスト): a board holding two pictures that do
 /// not say which side each came from cannot show that.
+///
+/// **The command has to be the one that was typed**, not the one `bridge`
+/// handed the container — see [`boarding`].
 pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
     let Some(out) = out else {
         return;
     };
+    if !boarding(command) {
+        return;
+    }
     let (label, verb) = naming(command);
     match crate::shots::record_dir(out, &label, &verb) {
         Ok(page) => println!("board: {}", crate::shots::shown(&page)),
         // The board is not what a container run is judging.
         Err(message) => println!("board: not updated ({message})"),
     }
+}
+
+/// Whether the run's pictures are filed on the board once it is over.
+///
+/// **Only the line as it was typed can answer**: [`bridge`] says
+/// `--no-board` into the line it hands the container regardless, because
+/// /work is read-only in there. A suite's runs are typed with it
+/// (`verify::suite_words`) — their pictures still travel out to a
+/// directory a person can open, and nothing is filed.
+fn boarding(command: &[String]) -> bool {
+    !command.iter().any(|word| word == "--no-board")
 }
 
 /// What to call the run on the board, out of the command line it was.
@@ -88,7 +105,7 @@ pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{keepsakes, naming};
+    use super::{boarding, bridge, keepsakes, naming};
 
     fn words(line: &str) -> Vec<String> {
         line.split_whitespace().map(String::from).collect()
@@ -118,6 +135,24 @@ mod tests {
                 "row-card".to_string()
             )
         );
+    }
+
+    /// The board is answered by the line as typed. `bridge` writes
+    /// `--no-board` into every line it sends in, so a caller that asked
+    /// the mutated line would file nothing at all.
+    #[test]
+    fn what_the_container_was_told_cannot_answer_for_the_board() {
+        let typed = words("cargo xtask verify-ui commit");
+        assert!(boarding(&typed));
+        let mut sent = typed.clone();
+        let out = bridge(&mut sent, "/out")
+            .expect("a bridged run")
+            .expect("a directory to bring the pictures back to");
+        assert!(!boarding(&sent), "bridge says it whether the caller did");
+        std::fs::remove_dir_all(&out).expect("the directory bridge just made");
+
+        let suite = crate::verify::suite_words("commit");
+        assert!(!boarding(&suite), "a suite's run stays off the board");
     }
 
     #[test]

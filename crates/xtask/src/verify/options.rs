@@ -39,8 +39,10 @@ pub(super) struct Options {
     /// verb and its argument, which is a poor name but a true one — the
     /// board would rather hold a weakly named run than lose the run.
     pub(super) label: String,
-    /// Keep this run off the board. For a sweep measuring flakiness,
-    /// where ten identical pictures bury what somebody wanted to look at.
+    /// Keep this run off the board. For every run nobody asked to look
+    /// at — a sweep measuring flakiness, where ten identical pictures
+    /// bury what somebody wanted to see, and the runs a suite drives
+    /// (`verify::suite_words`), which are a picture per verb per side.
     pub(super) no_board: bool,
     /// Do not record what the run showed in the verb census. For the runs
     /// that are not about what the line shows — a verb repeated to measure
@@ -92,6 +94,22 @@ impl Options {
         }
         Some(words.join(" "))
     }
+}
+
+/// The words after `verify-ui` when a suite drives the run instead of a
+/// person: the line as typed, and `--no-board`.
+///
+/// A gate takes a picture per selected verb on each side, so the runs
+/// somebody asked to look at drown in runs nobody asked for — and `land`
+/// sweeps the seat's runs off the board the moment it is done, so what a
+/// landing gate files is thrown away unread. The flag rides *in* the line
+/// rather than beside it because the container's pictures are filed from
+/// the host once the run is over, and `keepsakes` reads the same line to
+/// know not to.
+pub(crate) fn suite_words(line: &str) -> Vec<String> {
+    let mut words: Vec<String> = line.split_whitespace().map(String::from).collect();
+    words.push("--no-board".to_string());
+    words
 }
 
 /// A path off the command line, pinned to where it was typed.
@@ -197,7 +215,31 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    use super::{parse, suite_words};
+
+    /// A verb line carries its own preset and argument, and the flag goes
+    /// last, where the `--no-build` the runner adds can follow it — and
+    /// `parse` takes it there, which is what makes the pair one file.
+    #[test]
+    fn a_suite_run_stays_off_the_board() {
+        let words = suite_words("co-authors 4 --preset co-authors");
+        assert_eq!(
+            words,
+            ["co-authors", "4", "--preset", "co-authors", "--no-board"].map(String::from)
+        );
+        let opts = parse(&words).expect("the line a suite hands verify-ui");
+        assert!(opts.no_board);
+        assert_eq!(opts.verb, "co-authors");
+        assert_eq!(opts.arg, "4");
+        assert_eq!(opts.preset, ["co-authors"]);
+        // And the census cannot tell the two apart: the flag says where
+        // the pictures go, not what the run was. Compared rather than
+        // spelled out, because the answer is None wherever this runs in
+        // the container — which is where the gate's Linux side runs it.
+        let typed = parse(&words[..words.len() - 1]).expect("the same line, boarded");
+        assert!(!typed.no_board);
+        assert_eq!(opts.census_line(), typed.census_line());
+    }
 
     /// The app is started in a directory of its own, so a path that stayed
     /// as it was typed would name one place to xtask and another to the
