@@ -128,8 +128,9 @@ pub enum RemoteTagRefreshOutcome {
     /// Another remote-tag read already owns the single-flight slot, and
     /// this request was dropped rather than booked behind it.
     ///
-    /// `ReadSlot` books a repeat because its second caller knows something
-    /// the read in flight does not — a write that landed after it started.
+    /// A [`super::ReadFlight`] runs a repeat because its second caller can
+    /// know something the read in flight does not — a write that landed
+    /// after it started.
     /// Nothing here does: no local operation moves what a remote carries
     /// under `refs/tags/` (a push is branches only), and the two places
     /// that ask (an opening, and installing the interval) ask the same
@@ -172,8 +173,8 @@ impl RemoteTagRefreshTask {
 }
 
 impl RepoSession {
-    /// Waits until the refs and status readers already in flight have
-    /// returned their single-flight slots.
+    /// Waits until the refs and status readers already in flight have left
+    /// their single flight.
     ///
     /// A snapshot event is delivered from inside the reader, before it can
     /// request the graph refresh that answer implies. Coordinating code uses
@@ -255,7 +256,7 @@ impl RepoSession {
     /// (`rebase-merge/msgnum`, read by [`crate::integrate::rebase_standing`]),
     /// so the tick that runs under one has an answer to publish. The
     /// snapshot reads coalesce with the write's own refresh
-    /// ([`super::ReadSlot`]), and a tick that cannot keep up with the
+    /// ([`super::ReadFlight`]), and a tick that cannot keep up with the
     /// replay simply lands later — the picture is allowed to fall behind,
     /// but not to stop.
     pub fn refresh_poll(self: &Arc<Self>) {
@@ -294,7 +295,7 @@ impl RepoSession {
             // Both reads can call for a rebuild, but the graph is one
             // picture: an external commit moves a ref *and* cleans the
             // tree, and walking twice would throw one pass away.
-            let (refs_moved, wip_flipped) = tokio::join!(s.publish_refs(true), s.publish_status());
+            let (refs_moved, wip_flipped) = tokio::join!(s.read_refs(), s.read_status());
             let outcome = if refs_moved || wip_flipped {
                 let Some(workdir) = s.workdir() else {
                     drop(permit);

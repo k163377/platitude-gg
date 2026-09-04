@@ -159,11 +159,11 @@ pub struct RepoSession {
     /// previous one is still reading is dropped rather than queued.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
     /// One in flight per snapshot, for the reads a repository can be asked
-    /// for from more than one place at once (see [`ReadSlot`]).
-    pub(super) refs_read: ReadSlot,
-    pub(super) status_read: ReadSlot,
-    pub(super) stash_read: ReadSlot,
-    pub(super) worktrees_read: ReadSlot,
+    /// for from more than one place at once (see [`ReadFlight`]).
+    pub(super) refs_read: ReadFlight,
+    pub(super) status_read: ReadFlight,
+    pub(super) stash_read: ReadFlight,
+    pub(super) worktrees_read: ReadFlight,
     /// Submission end of the write queue (see the module docs).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push. Persisted as the settings key

@@ -191,10 +191,11 @@ impl CaptureSink {
     }
 
     /// Closes the opening baseline: both opening snapshots have landed
-    /// *and* their readers have handed the read slot back. The snapshot
-    /// events are sent from inside the readers, so the events alone leave
-    /// the slot occupied and a count taken then still sees opening work
-    /// (`wait_for_snapshot_reads` is the slot boundary).
+    /// *and* their readers have left the single flight. The snapshot
+    /// events are sent from inside the readers, which then ask for the
+    /// rebuild those answers imply, so the events alone leave the flight
+    /// occupied and a count taken then still sees opening work
+    /// (`wait_for_snapshot_reads` is the boundary).
     pub async fn opening_settled(&self, session: &Arc<RepoSession>) {
         self.opening_snapshots().await;
         crate::support::wait::bounded(

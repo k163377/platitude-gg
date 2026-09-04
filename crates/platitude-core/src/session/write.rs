@@ -260,18 +260,18 @@ impl RepoSession {
         // to spend.
         let tree_only = after == AfterWrite::Tree;
         let (wip_flipped, refs_moved) = match after {
-            AfterWrite::Tree => (self.publish_status().await, false),
+            AfterWrite::Tree => (self.read_status().await, false),
             AfterWrite::Refs => {
-                let refs_moved = self.publish_refs(false).await;
+                let refs_moved = self.read_refs().await;
                 let wip_flipped = if refs_moved {
-                    self.publish_status().await
+                    self.read_status().await
                 } else {
                     false
                 };
                 (wip_flipped, refs_moved)
             }
             AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
-                tokio::join!(self.publish_status(), self.publish_refs(false))
+                tokio::join!(self.read_status(), self.read_refs())
             }
         };
         if rebuild_graph || wip_flipped || refs_moved {

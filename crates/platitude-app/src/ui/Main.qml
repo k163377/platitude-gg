@@ -120,8 +120,8 @@ ApplicationWindow {
     //
     // **The window arriving is not the window coming back.** The repository behind it is being read for the first
     // time at that very moment (`RepoSession::open` → `refresh_quick`), so counting that first activation asks the
-    // same question twice: the read slot books the page's copy behind the opening's own and runs it the instant the
-    // first lands (`session::ReadSlot`). What that second pass costs is a whole `git status --porcelain=v2 -uall` —
+    // same question twice: the single flight runs the page's copy behind the opening's own the instant the first
+    // lands (`session::ReadFlight`). What that second pass costs is a whole `git status --porcelain=v2 -uall` —
     // every tracked and ignored file lstat'd again — for an answer nothing could have changed since.
     property int focusEpoch: 0
     /// Whether the window has been away. Read off the losing of focus rather than the first taking of it: that way a

@@ -70,6 +70,92 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
     session.close();
 }
 
+fn is_status_spawn(event: &SessionEvent) -> bool {
+    matches!(event, SessionEvent::CommandStarted { display, .. } if display.starts_with("git status"))
+}
+
+/// The most `git status` processes the session ever had running at once,
+/// read off the command log in the order it was written.
+fn status_reads_at_once(sink: &CaptureSink) -> usize {
+    let mut running = std::collections::HashSet::new();
+    let mut most = 0;
+    for event in sink.events.lock().unwrap().iter() {
+        match event {
+            SessionEvent::CommandStarted { id, .. } if is_status_spawn(event) => {
+                running.insert(*id);
+                most = most.max(running.len());
+            }
+            SessionEvent::CommandFinished { id, .. } => {
+                running.remove(id);
+            }
+            _ => {}
+        }
+    }
+    most
+}
+
+/// The places that ask for a status read do not know about each other:
+/// the periodic tick, a write settling its own working tree, and the
+/// window asking again. Two of them reading at once is the whole of a
+/// `status --porcelain=v2 -uall` — every tracked and ignored file
+/// lstat'd — run twice for one answer, with the gate on the publish
+/// throwing the older one away after both have already been paid for.
+// `worker_threads = 2` is the test's own premise: the hook below parks a
+// worker at the spawn it fires on, and the rest of the session has to
+// keep running on another (`CaptureSink::hook_once`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (sink, session) = opened(&repo).await;
+    // The opening's own reads have to be done before recording starts, or
+    // the hook below fires on one of them instead.
+    sink.opened_graph(&session, 1).await;
+    session.set_recording(Recording::WithBackground);
+
+    // Park a read where its process is about to be spawned, which is
+    // where a reader stands while it owns the flight. Everything below is
+    // asked from inside that window.
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(is_status_spawn, move || {
+        held.recv().expect("the test releases the parked read");
+    });
+    let spawned = sink.count(is_status_spawn);
+    session.refresh_status();
+    sink.wait_for("the parked read reached its process", move |evs| {
+        (evs.iter().filter(|e| is_status_spawn(e)).count() > spawned).then_some(())
+    })
+    .await;
+
+    // The two ways in that used to read straight past it.
+    session.refresh_poll();
+    repo.write_file("f.txt", "dirty\n");
+    session.stage_paths(vec!["f.txt".to_string()]);
+    // git's own answer to the write, which it gives before the reads that
+    // settle behind it: the burst is out before the parked read is let go.
+    write_result(&sink, "stage").await;
+    release.send(()).expect("let the parked read finish");
+
+    sink.wait_for("a status read that sees the staged file", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if status.is_dirty()))
+            .then_some(())
+    })
+    .await;
+    crate::support::wait::bounded(
+        "the readers left the flight",
+        session.wait_for_snapshot_reads(),
+    )
+    .await;
+    assert_eq!(
+        status_reads_at_once(&sink),
+        1,
+        "two status reads overlapped: {:?}",
+        commands_of(&sink)
+    );
+    session.close();
+}
+
 fn commands_of(sink: &CaptureSink) -> Vec<String> {
     sink.events
         .lock()

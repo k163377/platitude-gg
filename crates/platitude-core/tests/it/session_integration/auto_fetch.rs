@@ -479,10 +479,10 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     clone.git(&["remote", "add", "origin", &origin.file_url()]);
 
     let (sink, session) = opened(&clone).await;
-    // The slot boundary, not just the events: a status read is published
-    // from inside its reader, which may then go round again on a repeat
-    // booked behind it — and that second publication would land in the
-    // window counted below.
+    // The flight boundary, not just the events: a status read is published
+    // from inside its reader, and a caller waiting behind it runs a pass of
+    // its own — that second publication would land in the window counted
+    // below.
     sink.opening_settled(&session).await;
     // An hour, so both fetches below are the hand-stepped ticks' doing and
     // nothing else's.

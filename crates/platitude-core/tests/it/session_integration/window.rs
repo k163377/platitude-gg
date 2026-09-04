@@ -189,10 +189,11 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
     // The catch-up also patched the delivered-rows record: the next
     // rebuild finds the picture it would draw already on screen, instead
     // of seeing a phantom difference and swapping an identical graph.
-    // The slot boundary first: the refs reader asks for a rebuild of its
-    // own right after the diff, and the tracked one below must supersede
+    // The flight boundary first: the refs reader asks for a rebuild of its
+    // own right after the diff — from inside its pass, so that this
+    // boundary covers the ask — and the tracked one below must supersede
     // it, not be superseded by it.
-    crate::support::wait::bounded("the refs read slot", session.wait_for_snapshot_reads()).await;
+    crate::support::wait::bounded("the refs read flight", session.wait_for_snapshot_reads()).await;
     let outcome = crate::support::wait::bounded(
         "the rebuild after the catch-up",
         session.refresh_log_tracked().outcome(),
