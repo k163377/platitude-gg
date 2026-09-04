@@ -455,39 +455,84 @@ impl Sampler {
 /// The sampler with its script compiled and its job object made, waiting
 /// to be told which process to watch.
 ///
-/// Armed *before* the app starts, for two reasons. The compile is not
-/// then in the timed window — a sampler started beside the app used to
-/// spend the app's first half second compiling C# on the machine the
-/// startup number was being taken on. And the process joins the job
-/// object within milliseconds of existing, before it can have spawned
-/// the git whose time the job is there to count; a child that started
-/// before the join is not in the job.
+/// Armed *before* the app starts, so the compile is not in the timed
+/// window: a sampler started beside the app would spend the app's first
+/// half second compiling C# on the machine the startup number is being
+/// taken on. The process it is then told about is started suspended
+/// ([`CREATE_SUSPENDED`]) and joins the job object before its first
+/// instruction, so no child of it can exist outside the job.
 pub(super) struct Armed {
     csv: std::fs::File,
+    /// How long the sampler keeps watching past being told its process.
+    window: std::time::Duration,
     #[cfg(windows)]
     child: std::process::Child,
     #[cfg(windows)]
-    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    lines: Lines,
 }
 
-/// Arms the sampler for a run of at most `window`, the time the script
-/// will keep watching past being told its process.
+/// The script's output, read a line at a time.
+#[cfg(windows)]
+type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
+
+/// The process creation flag that starts a process with its primary
+/// thread suspended: a pid with nothing executed yet, which the sampler
+/// resumes once the process is in its job object.
+#[cfg(windows)]
+pub(super) const CREATE_SUSPENDED: u32 = 0x0000_0004;
+
+/// How long the script is given to compile and say `ready`, and later to
+/// join and resume the process and say `resumed`: seconds against a
+/// compile measured in hundreds of milliseconds. A script that says
+/// nothing in that time is a sampler that will never sample, and a wait
+/// on it with no ceiling would hold the machine's every build behind a
+/// measurement that never starts.
+#[cfg(windows)]
+const SCRIPT_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Arms the sampler for a run of at most `window`.
 pub(super) fn arm(window: std::time::Duration, csv: std::fs::File) -> Result<Armed, String> {
     #[cfg(windows)]
     {
         let (child, lines) = windows_arm(window.as_secs() + 5)?;
-        Ok(Armed { csv, child, lines })
+        Ok(Armed {
+            csv,
+            window,
+            child,
+            lines,
+        })
     }
     #[cfg(not(windows))]
     {
-        let _ = window;
-        Ok(Armed { csv })
+        Ok(Armed { csv, window })
     }
 }
 
 impl Armed {
-    /// Samples `pid` until it is reaped or `deadline` passes.
-    pub(super) fn watch(self, pid: u32, started: Instant, deadline: Instant) -> Sampler {
+    /// Names `pid` to the sampler and samples it until it is reaped or
+    /// the window passes. Answers the sampler and the instant the process
+    /// was running — on Windows the moment the script resumed it, once it
+    /// was in the job object.
+    pub(super) fn watch(self, pid: u32) -> Result<(Sampler, Instant), String> {
+        #[cfg(windows)]
+        let (child, lines) = {
+            let mut child = self.child;
+            {
+                let mut stdin = child.stdin.take().ok_or("memory sampler stdin missing")?;
+                writeln!(stdin, "{pid}")
+                    .and_then(|()| stdin.flush())
+                    .map_err(|e| format!("could not name the process to the sampler: {e}"))?;
+            }
+            match await_line(self.lines, "resumed") {
+                Ok(lines) => (child, lines),
+                Err(said) => {
+                    end(&mut child, "the sampler");
+                    return Err(format!("the sampler did not resume the process: {said}"));
+                }
+            }
+        };
+        let started = Instant::now();
+        let deadline = started + self.window;
         let series = Arc::new(Mutex::new(Series::default()));
         let shared = Arc::clone(&series);
         let handle = std::thread::spawn(move || {
@@ -531,8 +576,8 @@ impl Armed {
             };
             #[cfg(windows)]
             {
-                let _ = deadline;
-                windows_watch(self.child, self.lines, pid, &mut record)
+                let _ = (pid, deadline);
+                windows_watch(child, lines, &mut record)
             }
             #[cfg(target_os = "linux")]
             {
@@ -544,7 +589,56 @@ impl Armed {
                 Err("memory sampling is not implemented for this OS".into())
             }
         });
-        Sampler { series, handle }
+        Ok((Sampler { series, handle }, started))
+    }
+}
+
+/// Reads the script's lines until `wanted`, within [`SCRIPT_CEILING`],
+/// and hands the rest back. A `note:` on the way is said out loud — the
+/// one thing the script says that is not a sample: the job object could
+/// not take the process, so its children go uncounted and the peak gate
+/// sees them as somebody else's. The read blocks, so it runs on a thread
+/// of its own and the ceiling is kept here; a script that never answers
+/// leaves that thread on the pipe until the script is ended.
+#[cfg(windows)]
+fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        loop {
+            let answer = match lines.next() {
+                Some(Ok(line)) if line.trim() == wanted => Ok(lines),
+                Some(Ok(line)) => {
+                    if let Some(note) = line.strip_prefix("note: ") {
+                        println!("  sampler: {note}");
+                    }
+                    continue;
+                }
+                Some(Err(error)) => Err(format!("the memory sampler's output failed: {error}")),
+                None => Err(format!(
+                    "the memory sampler ended before it said `{wanted}`"
+                )),
+            };
+            // A receiver that gave up on the ceiling is gone; nothing
+            // else is left to tell.
+            let _ = tx.send(answer);
+            return;
+        }
+    });
+    match rx.recv_timeout(SCRIPT_CEILING) {
+        Ok(answer) => answer,
+        Err(_) => Err(format!(
+            "the memory sampler did not say `{wanted}` within {}s",
+            SCRIPT_CEILING.as_secs()
+        )),
+    }
+}
+
+/// Ends a script that will not be read any further, and says so when it
+/// would not end.
+#[cfg(windows)]
+fn end(child: &mut std::process::Child, what: &str) {
+    if let Err(error) = child.kill() {
+        println!("  note: could not end {what}: {error}");
     }
 }
 
@@ -573,7 +667,7 @@ fn parse_sample(line: &str) -> Option<Sample> {
         user: number("u=").unwrap_or(0),
         idle: number("i=").unwrap_or(0),
         app: number("app=").unwrap_or(0),
-        own: number("own=").or_else(|| number("app=")).unwrap_or(0),
+        own: number("own=").unwrap_or(0),
         job: field("job=") == Some("1"),
     })
 }
@@ -583,15 +677,7 @@ fn parse_sample(line: &str) -> Option<Sample> {
 /// before that is PowerShell complaining, and a script that ends before
 /// saying it is a sampler that will never sample.
 #[cfg(windows)]
-fn windows_arm(
-    seconds: u64,
-) -> Result<
-    (
-        std::process::Child,
-        std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
-    ),
-    String,
-> {
+fn windows_arm(seconds: u64) -> Result<(std::process::Child, Lines), String> {
     use std::io::BufRead;
     let script = windows_script(seconds);
     let mut child = Command::new("powershell")
@@ -601,38 +687,24 @@ fn windows_arm(
         .spawn()
         .map_err(|e| e.to_string())?;
     let stdout = child.stdout.take().ok_or("memory sampler stdout missing")?;
-    let mut lines = std::io::BufReader::new(stdout).lines();
-    loop {
-        match lines.next() {
-            Some(Ok(line)) if line.trim() == "ready" => return Ok((child, lines)),
-            Some(Ok(_)) => {}
-            Some(Err(error)) => {
-                let _ = child.kill();
-                return Err(format!("the memory sampler did not arm: {error}"));
-            }
-            None => {
-                let _ = child.kill();
-                return Err("the memory sampler ended before it was armed".into());
-            }
+    let lines = std::io::BufReader::new(stdout).lines();
+    match await_line(lines, "ready") {
+        Ok(lines) => Ok((child, lines)),
+        Err(said) => {
+            end(&mut child, "the sampler");
+            Err(format!("the memory sampler did not arm: {said}"))
         }
     }
 }
 
-/// Names the process to the armed script and reads its samples until it
-/// stops — the process reaped, or the script's own deadline passed.
+/// Reads the armed script's samples until it stops — the process reaped,
+/// or the script's own deadline passed.
 #[cfg(windows)]
 fn windows_watch(
     mut child: std::process::Child,
-    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
-    pid: u32,
+    lines: Lines,
     record: &mut dyn FnMut(Sample) -> Result<(), String>,
 ) -> Result<(), String> {
-    {
-        let mut stdin = child.stdin.take().ok_or("memory sampler stdin missing")?;
-        writeln!(stdin, "{pid}")
-            .and_then(|()| stdin.flush())
-            .map_err(|e| format!("could not name the process to the sampler: {e}"))?;
-    }
     let mut error = None;
     for line in lines {
         let line = match line {
@@ -642,9 +714,6 @@ fn windows_watch(
                 break;
             }
         };
-        // The one thing the script says that is not a sample: the job
-        // object could not take the process, so its children go uncounted
-        // and the peak gate reads as it did before.
         if let Some(note) = line.strip_prefix("note: ") {
             println!("  sampler: {note}");
             continue;
@@ -696,16 +765,17 @@ const CONTINUOUS: u32 = 0x8000_0000;
 /// * **Says what the rest of the machine did.** `GetSystemTimes` beside
 ///   the process's own processor time separates a slow application from a
 ///   busy machine.
-/// * **Counts the process's children as its own.** The process is put in
-///   a job object the moment its pid arrives, and the job's accounting —
-///   which keeps the time of children that have already exited — is what
-///   `app=` reports. The app answers a repository by running git, and
-///   counted as somebody else's that git tripped the peak gate on every
-///   run of the corpus. A process the job will not take (`note:`) is
-///   counted alone, as before.
+/// * **Counts the process's children as its own.** The process arrives
+///   suspended, is put in a job object, and is resumed only then; the
+///   job's accounting — which keeps the time of children that have
+///   already exited — is what `app=` reports. The app answers a
+///   repository by running git, and git counted as somebody else's trips
+///   the peak gate on every run of the corpus. A process the job will not
+///   take (`note:`) is resumed all the same and counted alone.
 ///
 /// Two phases, on one pipe each way: the script compiles, makes the job
-/// and says `ready`; the pid comes down stdin; the samples go up stdout.
+/// and says `ready`; the pid comes down stdin; `resumed` and then the
+/// samples go up stdout.
 ///
 /// The window handle is resolved once and held: `Process.MainWindowHandle`
 /// enumerates every top-level window on the desktop, and `Refresh()` (which
@@ -754,10 +824,19 @@ public static class PerfHost {{\n\
     if (!QueryInformationJobObject(job, 1, ref info, Marshal.SizeOf(typeof(JOBACCT)), IntPtr.Zero)) return -1;\n\
     return info.TotalUserTime + info.TotalKernelTime;\n\
   }}\n\
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr OpenThread(uint access, bool inherit, uint tid);\n\
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern int ResumeThread(IntPtr thread);\n\
+  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool CloseHandle(IntPtr handle);\n\
+  public static int Resume(uint tid) {{\n\
+    var thread = OpenThread(2, false, tid);\n\
+    if (thread == IntPtr.Zero) return -1;\n\
+    var was = ResumeThread(thread);\n\
+    CloseHandle(thread);\n\
+    return was;\n\
+  }}\n\
 }}\n\
 '@;\
-         $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);\
-         Write-Output 'ready';\
+         $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);Write-Output 'ready';\
          $target=[int][Console]::In.ReadLine();\
          [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
          try {{\
@@ -766,7 +845,9 @@ public static class PerfHost {{\n\
          if($p -ne $null){{\
            if([PerfHost]::AssignProcessToJobObject($job,$p.Handle)){{$jobok=1}}\
            else{{Write-Output \"note: the process did not join the job object (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())) - its children are not counted\"}};\
+           foreach($th in $p.Threads){{ if([PerfHost]::Resume([uint32]$th.Id) -lt 0){{Write-Output \"note: thread $($th.Id) could not be resumed\"}} }};\
          }};\
+         Write-Output 'resumed';\
          $hwnd=[IntPtr]::Zero;$display='-';$ticks=0;$int=1;$lockpids=@();\
          $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\

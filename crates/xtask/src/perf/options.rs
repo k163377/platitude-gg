@@ -78,6 +78,17 @@ impl Options {
             features.join(",")
         }
     }
+
+    /// The same set as a file name: `automation`, `automation+memprobe`,
+    /// `shipped` — what the rig's shelf is keyed by (`perf::rig`).
+    pub(super) fn feature_slug(&self) -> String {
+        let features = self.features();
+        if features.starts_with("none") {
+            "shipped".into()
+        } else {
+            features.replace(',', "+")
+        }
+    }
 }
 
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
@@ -223,6 +234,11 @@ fn settle(mut opts: Options) -> Result<Options, String> {
     if !opts.file.is_empty() && !opts.diff {
         return Err("--file conflicts with --no-diff".into());
     }
+    // A day is longer than any run; past it the sampler's window
+    // arithmetic in `measure` would overflow.
+    if opts.watchdog_ms.saturating_add(opts.settle_ms) > 86_400_000 {
+        return Err("--watchdog-ms and --settle-ms together must stay under a day".into());
+    }
     if opts.runs == 0 || opts.watchdog_ms == 0 {
         return Err("--runs and --watchdog-ms must be positive".into());
     }
@@ -249,6 +265,16 @@ mod tests {
 
     #[test]
     fn the_measured_build_names_itself() {
+        let slug = |words: &[&str]| options(words).map(|o| o.feature_slug());
+        assert_eq!(slug(&["--repo", "C:/r"]), Ok("automation".to_string()));
+        assert_eq!(
+            slug(&["--repo", "C:/r", "--breakdown"]),
+            Ok("automation+memprobe".to_string())
+        );
+        assert_eq!(
+            slug(&["--repo", "C:/r", "--shipped"]),
+            Ok("shipped".to_string())
+        );
         assert_eq!(
             options(&["--repo", "C:/r"]).map(|o| o.features()),
             Ok("automation".to_string())
@@ -277,6 +303,18 @@ mod tests {
                 .unwrap_err()
                 .contains("needs a repository")
         );
+    }
+
+    /// A window the sampler's arithmetic could not hold is refused where
+    /// every other bad option is, not found out after the release build.
+    #[test]
+    fn a_run_longer_than_a_day_is_refused() {
+        assert!(
+            options(&["--repo", "C:/r", "--settle-ms", "18446744073709551000"])
+                .unwrap_err()
+                .contains("under a day")
+        );
+        assert!(options(&["--repo", "C:/r", "--settle-ms", "8000"]).is_ok());
     }
 
     #[test]

@@ -143,24 +143,33 @@ pub(super) fn prepare(
         .map_err(|e| e.to_string())?;
     std::fs::write(directory.join("display-chosen.txt"), modes).map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;
-    capture(
-        &directory,
-        "source-head.txt",
-        source,
-        &["rev-parse", "HEAD"],
-    )?;
-    capture(
-        &directory,
-        "source-status.txt",
-        source,
-        &["status", "--short"],
-    )?;
-    capture(
-        &directory,
-        "source.patch",
-        source,
-        &["diff", "HEAD", "--", "crates"],
-    )?;
+    // The commit the exe is of, from the build rather than from the tree:
+    // a shelf hit switches the rig nowhere, so its HEAD may be some other
+    // measurement's commit by now.
+    std::fs::write(
+        directory.join("source-head.txt"),
+        format!("{}\n", built.commit),
+    )
+    .map_err(|e| e.to_string())?;
+    if opts.at.is_empty() {
+        capture(
+            &directory,
+            "source-status.txt",
+            source,
+            &["status", "--short"],
+        )?;
+        capture(
+            &directory,
+            "source.patch",
+            source,
+            &["diff", "HEAD", "--", "crates"],
+        )?;
+    } else {
+        // A rig build is of a clean tree at that commit (`rig::switch`):
+        // nothing beyond the commit to record.
+        std::fs::write(directory.join("source-status.txt"), "").map_err(|e| e.to_string())?;
+        std::fs::write(directory.join("source.patch"), "").map_err(|e| e.to_string())?;
+    }
     let output = Command::new("git")
         .current_dir(root)
         .arg("hash-object")

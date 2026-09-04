@@ -82,7 +82,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // that darkens it (`sampler::keep_awake`).
     let _awake = sampler::keep_awake();
 
-    let built = build(&root, &path, &opts)?;
+    // The build, announced as one: it waits for a measurement holding
+    // the machine, a measurement waits for it, and the compiles inside it
+    // — this tree's or the rig's — are under this announcement (`still`).
+    let built = {
+        let _building = crate::still::busy(&root, "cargo xtask perf (building)")?;
+        build(&root, &path, &opts)?
+    };
     println!(
         "measured: {} of {}",
         built.short(),
@@ -128,12 +134,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("screen: {} at {}Hz", screen.name, screen.hz);
     }
 
-    let (first, warmed) = first_run(&root, &exe_hash, corpus.as_ref(), &opts);
     // After the build and before the runs: the build can share the
-    // machine, the runs cannot (`still`). Every `cargo xtask` verb that
-    // builds waits for this to lift, and this waits for the ones already
-    // under way.
+    // machine, the runs cannot (`still`). Every build here waits for this
+    // to lift, and this waits for the ones already under way.
     let _still = crate::still::hold(&root, "cargo xtask perf")?;
+    // Decided under the hold, after whatever the hold waited out: a
+    // build that ran meanwhile is what would have made the cache cold.
+    let warmed = warmth::Warmed::now(
+        &exe_hash,
+        corpus.as_ref().map_or("-", |corpus| corpus.token.as_str()),
+        &crate::seats::slashed(&opts.repo),
+        &scenario(&opts),
+    );
+    let first = first_run(&root, &warmed, &opts);
     let bench = Bench {
         output: &output,
         exe: &built.exe,
@@ -177,26 +190,11 @@ fn build(
     opts: &Options,
 ) -> Result<rig::Built, String> {
     if !opts.at.is_empty() {
-        return rig::build_at(
-            root,
-            &opts.at,
-            path,
-            opts.build,
-            opts.harness,
-            opts.breakdown,
-        );
+        return rig::build_at(root, &opts.at, path, opts);
     }
-    let exe = if opts.harness {
-        let mut extra = vec!["-p", "platitude-app"];
-        if opts.breakdown {
-            extra.extend(["--features", "memprobe"]);
-        }
-        crate::tree::app_exe(root, path, opts.build, &extra)?
-    } else {
-        crate::tree::shipped_exe(root, path, opts.build)?
-    };
-    let here = root.to_string_lossy().replace('\\', "/");
-    let commit = crate::subprocess::git_query(&here, &["rev-parse", "HEAD"]).unwrap_or_default();
+    let exe = build_in(root, path, opts.build, opts)?;
+    let commit = crate::subprocess::git_query(&crate::seats::slashed(root), &["rev-parse", "HEAD"])
+        .unwrap_or_default();
     Ok(rig::Built {
         exe,
         commit,
@@ -204,42 +202,57 @@ fn build(
     })
 }
 
-/// Which run the kept ones start at, and what this invocation warms.
-/// The first run is discarded to pay for a cold cache — unless an
-/// invocation minutes ago warmed this exe and corpus, in which case
-/// every run is kept (`warmth`).
-fn first_run(
-    root: &std::path::Path,
-    exe_hash: &str,
-    corpus: Option<&corpus::Corpus>,
+/// The app built in `tree` with the feature set the options name — the
+/// one place the harness, memprobe and shipped choice is spelled for a
+/// build, so the shelf and the manifest name what was built
+/// (`Options::features`).
+fn build_in(
+    tree: &std::path::Path,
+    path: &std::ffi::OsStr,
+    build: bool,
     opts: &Options,
-) -> (u32, warmth::Warmed) {
-    let warmed = warmth::Warmed::now(
-        exe_hash,
-        corpus.map_or("-", |corpus| corpus.token.as_str()),
-        &opts.repo.display().to_string(),
-    );
-    let first = match warmth::warm(root, &warmed) {
-        Some(age) => {
-            println!(
-                "repo: {} | runs: {} (none discarded — an invocation {}s ago warmed this exe and \
-                 corpus)",
-                opts.repo.display(),
-                opts.runs,
+) -> Result<std::path::PathBuf, String> {
+    if !opts.harness {
+        return crate::tree::shipped_exe(tree, path, build);
+    }
+    let mut extra = vec!["-p", "platitude-app"];
+    if opts.breakdown {
+        extra.extend(["--features", "memprobe"]);
+    }
+    crate::tree::app_exe(tree, path, build, &extra)
+}
+
+/// The scenario the runs drive, as the warm note keys it: what a stage
+/// that drove less would have left cold (`warmth`).
+fn scenario(opts: &Options) -> String {
+    format!(
+        "{}/{}/{}/{}/{}/{}",
+        opts.selection, opts.diff, opts.scroll, opts.open, opts.oid, opts.file
+    )
+}
+
+/// Which run the kept ones start at. The first run is discarded to pay
+/// for a cold cache — unless an invocation minutes ago warmed exactly
+/// this and nothing built since, in which case every run is kept
+/// (`warmth`).
+fn first_run(root: &std::path::Path, warmed: &warmth::Warmed, opts: &Options) -> u32 {
+    let (first, why) = match warmth::warm(root, warmed) {
+        Some(age) => (
+            1,
+            format!(
+                "none discarded — an invocation {}s ago warmed this exe, corpus and scenario, \
+                 and no build ended since",
                 age.as_secs()
-            );
-            1
-        }
-        None => {
-            println!(
-                "repo: {} | runs: {} (the first is discarded — cold cache)",
-                opts.repo.display(),
-                opts.runs
-            );
-            0
-        }
+            ),
+        ),
+        None => (0, "the first is discarded — cold cache".to_string()),
     };
-    (first, warmed)
+    println!(
+        "repo: {} | runs: {} ({why})",
+        opts.repo.display(),
+        opts.runs
+    );
+    first
 }
 
 /// Everything one run needs, held once so a run is `take(n)`.
@@ -274,7 +287,8 @@ impl Bench<'_> {
         )
     }
 
-    /// One run, taken again for as long as the machine keeps spoiling it.
+    /// One run, taken again for as long as its cause's budget allows
+    /// (`measure::Spoiled::budget`).
     ///
     /// A run spoiled by the host is not a slow application and must not
     /// be published as one; it is also not a failure of the application,
@@ -284,7 +298,7 @@ impl Bench<'_> {
     /// end in a measurement instead of in a wasted afternoon.
     fn take(&self, run: u32, retries: &mut u32) -> Result<Reading, String> {
         let mut attempt = 0;
-        let mut covered = 0;
+        let mut spent = [0u32; measure::Spoiled::CAUSES];
         loop {
             sampler::wait_for_quiet(&self.opts.limits, QUIET_CEILING)?;
             let run_dir = self.output.join(if attempt == 0 {
@@ -305,47 +319,32 @@ impl Bench<'_> {
             std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
                 .map_err(|e| e.to_string())?;
             display::capture(&run_dir, "after")?;
-            let complaint = match result {
-                // Only the host is worth another attempt. An application
-                // that stopped answering will stop answering again, and
-                // retrying it three more times only delays the report.
-                Err(measure::Spoiled::Run(said)) => return Err(said),
-                Err(measure::Spoiled::Host(said)) => said,
-                // A window covered once may have been covered by
-                // something passing; covered twice, by something that
-                // stays — and two more attempts would cost a ceiling
-                // each to say so again.
-                Err(measure::Spoiled::Covered(said)) => {
-                    covered += 1;
-                    if covered > 1 {
-                        return Err(format!(
-                            "run {run} was not a reading of the application: {said}. The bench \
-                             stood still on two attempts, so whatever covers the window stays — \
-                             clear it and measure again."
-                        ));
-                    }
-                    said
-                }
+            let spoiled = match result {
                 // The host conditions were read inside `measure`, which
                 // is what an `Ok` means — what is left to ask is the one
-                // question only the frames answer.
-                Ok(reading) => {
-                    let Some(complaint) = self.frames_delivered(&reading) else {
-                        return Ok(reading);
-                    };
-                    complaint
-                }
+                // question only the frames answer, and too few frames is
+                // the machine's doing as much as a lock is.
+                Ok(reading) => match self.frames_delivered(&reading) {
+                    None => return Ok(reading),
+                    Some(complaint) => measure::Spoiled::Host(complaint),
+                },
+                Err(spoiled) => spoiled,
             };
             attempt += 1;
-            *retries += 1;
-            if attempt > self.opts.retries {
+            let taken = &mut spent[spoiled.cause()];
+            *taken += 1;
+            if *taken > spoiled.budget(self.opts.retries) {
                 return Err(format!(
-                    "run {run} was not a reading of the application after {attempt} attempts: \
-                     {complaint}. Measure it on a machine nobody else is using, or pass \
-                     --allow-noisy to publish what a busy one produced."
+                    "run {run} was not a reading of the application after {} attempt(s) spoiled \
+                     by {}: {}. {}",
+                    *taken,
+                    spoiled.named(),
+                    spoiled.said(),
+                    spoiled.advice()
                 ));
             }
-            println!("  run {run}: {complaint} — taking it again");
+            *retries += 1;
+            println!("  run {run}: {} — taking it again", spoiled.said());
         }
     }
 }

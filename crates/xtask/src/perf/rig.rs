@@ -15,10 +15,13 @@
 //! record — builds nothing.
 //!
 //! **The rig is claimed while it is switched and built**, the way a seat
-//! is claimed (`seats::take_seat`), so two sessions cannot check two
-//! commits out into one tree at once. The claim is released once the exe
-//! is on the shelf: the measurement runs off the copy and needs the tree
-//! for nothing.
+//! is claimed (`seats::take_seat`), so two invocations cannot check two
+//! commits out into one tree at once — and claimed by the measuring
+//! process, not by the session it runs in: a second `perf --at` from the
+//! same session is refused too, and a claim whose process is gone is
+//! cleared by the next one, from any terminal. The claim is released
+//! once the exe is on the shelf: the measurement runs off the copy and
+//! needs the tree for nothing.
 //!
 //! **A dirty rig refuses.** Nothing here resets a tree — an edit in the
 //! rig is somebody's, however wrong it was to make it there — so the
@@ -29,9 +32,11 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::seats::{
-    Identity, Standing, claim_liveness, rig_path, take_seat, unlock_seat, worktree_blocks,
+    Identity, Standing, primary_checkout, rig_path, same_tree, slashed, take_seat, unlock_seat,
 };
 use crate::subprocess::git_query;
+
+use super::Options;
 
 /// How many builds the shelf keeps. Every entry is one exe of some sixty
 /// megabytes; an A/B needs two, a record's tables three (the harness, the
@@ -62,18 +67,19 @@ impl Built {
 /// The build of `rev`, off the rig's shelf or freshly made there.
 ///
 /// `caller` is the tree the command runs in: the rev is resolved there,
-/// which is what lets a seat name its own branch. `build` false takes the
-/// shelf or nothing — a `--no-build` that would have to build is refused
-/// rather than quietly done.
+/// which is what lets a seat name its own branch. `opts.build` false takes
+/// the shelf or nothing — a `--no-build` that would have to build is
+/// refused rather than quietly done.
+///
+/// Called under the measurement's own announcement (`perf::run`), so no
+/// measurement holds the machine while this switches, reaps and builds.
 pub(super) fn build_at(
     caller: &Path,
     rev: &str,
     path: &std::ffi::OsStr,
-    build: bool,
-    harness: bool,
-    breakdown: bool,
+    opts: &Options,
 ) -> Result<Built, String> {
-    let here = forward(caller);
+    let here = slashed(caller);
     let commit = git_query(
         &here,
         &[
@@ -85,23 +91,10 @@ pub(super) fn build_at(
         ],
     )
     .ok_or_else(|| format!("--at {rev}: nothing here names a commit by that"))?;
-    let listing = git_query(&here, &["worktree", "list", "--porcelain"])
-        .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
-    let trees = worktree_blocks(&listing);
-    let primary = trees
-        .first()
-        .ok_or("git worktree list named no tree at all")?
-        .path
-        .clone();
+    let (primary, trees) = primary_checkout(&here)?;
     let rig = rig_path(&primary);
-    let set = feature_set(harness, breakdown);
-    let exe = shelf(Path::new(&rig), &commit, set).join(exe_name());
-    // A run of the rig's exe left standing holds the file against the
-    // copy below and would open on the store's refusal gate; a seat's
-    // `kill` reaps its own tree and never this one.
-    for (pid, stale) in crate::gui::reap_under(Path::new(&rig))? {
-        println!("rig: reaped a stale run first: {pid} ({stale})");
-    }
+    let set = opts.feature_slug();
+    let exe = shelf(Path::new(&rig), &commit, &set).join(crate::tree::exe_name());
     if exe.is_file() {
         println!(
             "rig: {} ({set}) is on the shelf — nothing to build",
@@ -113,7 +106,7 @@ pub(super) fn build_at(
             tree: PathBuf::from(rig),
         });
     }
-    if !build {
+    if !opts.build {
         return Err(format!(
             "the rig has no build of {} with {set} on its shelf, and --no-build asked for none \
              — drop --no-build",
@@ -122,17 +115,17 @@ pub(super) fn build_at(
     }
     let exists = trees.iter().any(|tree| same_tree(&tree.path, &rig));
     let _claim = Claim::take(&primary, &rig, &commit, exists)?;
+    // A run of the rig's exe left standing holds the shelf file against
+    // the copy below and the rig's store against the build; a seat's
+    // `kill` reaps its own tree and never this one. No measurement is
+    // running off the shelf right now — this whole build is announced,
+    // and a measurement's hold is what an announcement waits for.
+    for (pid, stale) in crate::gui::reap_under(Path::new(&rig))? {
+        println!("rig: reaped a stale run first: {pid} ({stale})");
+    }
     switch(&rig, &commit)?;
     println!("rig: building {} ({set}) in {rig}", short(&commit));
-    let fresh = if harness {
-        let mut extra = vec!["-p", "platitude-app"];
-        if breakdown {
-            extra.extend(["--features", "memprobe"]);
-        }
-        crate::tree::app_exe(Path::new(&rig), path, true, &extra)?
-    } else {
-        crate::tree::shipped_exe(Path::new(&rig), path, true)?
-    };
+    let fresh = super::build_in(Path::new(&rig), path, true, opts)?;
     shelve(&fresh, &exe)?;
     let shelf = Path::new(&rig).join("target").join(SHELF);
     for gone in stale_builds(&shelf, KEEP) {
@@ -160,9 +153,17 @@ struct Claim {
 impl Claim {
     /// Locked in the same step that creates it when the rig is new, as a
     /// seat is (`seats::create_seat`): no moment between the tree
-    /// existing and being claimed for a second session to arrive in.
+    /// existing and being claimed for a second invocation to arrive in.
+    ///
+    /// The claim names this process, never the session: a session runs
+    /// one measurement at a time, and a claim left by a killed one is
+    /// litter its dead pid gives away (`seats::standing`), whichever
+    /// terminal meets it next.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
-        let me = Identity::current(None);
+        let me = Identity {
+            session: String::new(),
+            pid: Some(std::process::id()),
+        };
         if !exists {
             git_query(
                 primary,
@@ -190,10 +191,9 @@ impl Claim {
                 rig: rig.to_string(),
             }),
             Standing::Foreign(reason) | Standing::Stale(reason) => Err(format!(
-                "the rig is claimed — another measurement is switching or building it. The lock \
-                 says: {reason}. {} Wait for it, or if that session is gone, `git worktree \
-                 unlock {rig}` by hand.",
-                claim_liveness(&reason)
+                "the rig is claimed — another `perf --at` is switching or building it right now \
+                 (the lock says: {reason}). Wait for it; a claim whose process is gone clears \
+                 itself on the next try."
             )),
             Standing::Free => Err(format!("the rig at {rig} would not take a claim")),
         }
@@ -202,7 +202,12 @@ impl Claim {
 
 impl Drop for Claim {
     fn drop(&mut self) {
-        unlock_seat(&self.primary, &self.rig);
+        if !unlock_seat(&self.primary, &self.rig) {
+            println!(
+                "rig: the claim on {} did not release — `git worktree unlock {}` by hand",
+                self.rig, self.rig
+            );
+        }
     }
 }
 
@@ -227,26 +232,38 @@ fn switch(rig: &str, commit: &str) -> Result<(), String> {
         .ok_or_else(|| format!("could not put the rig on {}", short(commit)))
 }
 
-/// One exe onto the shelf, under its commit and feature set.
+/// One exe onto the shelf, under its commit and feature set: copied
+/// beside its place and renamed into it, so a copy that was interrupted
+/// never stands where a finished build would be read; and stamped with
+/// the time it was shelved, because a Windows copy carries the source's
+/// own time and the shelf is swept by that.
 fn shelve(fresh: &Path, exe: &Path) -> Result<(), String> {
     let dir = exe.parent().ok_or("the shelf has no directory")?;
     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
-    std::fs::copy(fresh, exe).map_err(|e| {
+    let staged = exe.with_extension("staged");
+    std::fs::copy(fresh, &staged).map_err(|e| {
         format!(
             "could not shelve {} as {}: {e}",
             fresh.display(),
-            exe.display()
+            staged.display()
         )
     })?;
+    std::fs::File::options()
+        .write(true)
+        .open(&staged)
+        .and_then(|file| file.set_modified(SystemTime::now()))
+        .map_err(|e| format!("could not stamp {}: {e}", staged.display()))?;
+    std::fs::rename(&staged, exe)
+        .map_err(|e| format!("could not put {} on the shelf: {e}", exe.display()))?;
     println!("rig: shelved {}", exe.display());
     Ok(())
 }
 
 /// The shelf entries past the newest `keep`, oldest first by when their
-/// exe was shelved — the exe's own time, because a directory's is not
-/// something std can set on Windows, and an entry with no exe in it is
-/// older than any that has one. A shelf that cannot be read has nothing
-/// to take off.
+/// exe was shelved — the exe's own time, set as it was shelved, because
+/// a directory's is not something std can set on Windows; an entry with
+/// no exe in it is older than any that has one. A shelf that cannot be
+/// read has nothing to take off.
 fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(shelf) else {
         return Vec::new();
@@ -255,7 +272,7 @@ fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_dir())
         .map(|entry| {
-            let shelved = std::fs::metadata(entry.path().join(exe_name()))
+            let shelved = std::fs::metadata(entry.path().join(crate::tree::exe_name()))
                 .and_then(|meta| meta.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
             (shelved, entry.path())
@@ -276,49 +293,15 @@ fn shelf(rig: &Path, commit: &str, set: &str) -> PathBuf {
         .join(format!("{}-{set}", short(commit)))
 }
 
-/// The feature set as the shelf names it, one word per build the record
-/// distinguishes (`perf::Options::features`).
-fn feature_set(harness: bool, breakdown: bool) -> &'static str {
-    match (harness, breakdown) {
-        (true, true) => "automation+memprobe",
-        (true, false) => "automation",
-        (false, _) => "shipped",
-    }
-}
-
-fn exe_name() -> &'static str {
-    if cfg!(windows) {
-        "platitude-gg.exe"
-    } else {
-        "platitude-gg"
-    }
-}
-
 fn short(commit: &str) -> &str {
     commit.get(..12).unwrap_or(commit)
-}
-
-fn forward(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-/// Whether two paths name one tree. Windows spells a path in whatever
-/// case the writer used, so the comparison there is case-blind.
-fn same_tree(left: &str, right: &str) -> bool {
-    let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
-    let (left, right) = (trim(left), trim(right));
-    if cfg!(windows) {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use super::{feature_set, same_tree, shelf, short, stale_builds};
+    use super::{shelf, short, stale_builds};
 
     /// One shelf name per build the record tells apart, so the harness
     /// build and the shipped one of a commit never answer for each other.
@@ -327,11 +310,9 @@ mod tests {
         let rig = Path::new("C:/x/platitude-gg/.claude/worktrees/rig");
         let commit = "3443a122abcdef0123456789abcdef0123456789";
         assert_eq!(
-            shelf(rig, commit, feature_set(true, false)),
+            shelf(rig, commit, "automation"),
             rig.join("target/shelf/3443a122abcd-automation")
         );
-        assert_eq!(feature_set(true, true), "automation+memprobe");
-        assert_eq!(feature_set(false, true), "shipped");
         assert_eq!(short("abc"), "abc");
     }
 
@@ -343,7 +324,7 @@ mod tests {
             let build = dir.join(name);
             std::fs::create_dir_all(&build).expect("a shelf entry");
             let shelved = std::time::SystemTime::now() - std::time::Duration::from_secs(age);
-            std::fs::File::create(build.join(super::exe_name()))
+            std::fs::File::create(build.join(crate::tree::exe_name()))
                 .and_then(|file| file.set_modified(shelved))
                 .expect("a shelved exe");
         }
@@ -357,12 +338,5 @@ mod tests {
         assert!(stale_builds(&dir, 10).is_empty());
         assert!(stale_builds(&dir.join("nowhere"), 1).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn one_tree_spelled_two_ways_is_one_tree() {
-        assert!(same_tree("C:/x/rig/", "C:\\x\\rig"));
-        assert_eq!(same_tree("C:/x/RIG", "C:/x/rig"), cfg!(windows));
-        assert!(!same_tree("C:/x/rig", "C:/x/rigging"));
     }
 }

@@ -60,6 +60,59 @@ impl From<String> for Spoiled {
     }
 }
 
+impl Spoiled {
+    /// How many causes there are, for a count per cause.
+    pub(super) const CAUSES: usize = 3;
+
+    /// Which cause this is, as an index into a count per cause.
+    pub(super) fn cause(&self) -> usize {
+        match self {
+            Self::Host(_) => 0,
+            Self::Covered(_) => 1,
+            Self::Run(_) => 2,
+        }
+    }
+
+    /// How many attempts a run spoiled this way is worth. The machine,
+    /// `--retries` — it will not have spoiled the next one. A covered
+    /// window, one: what covers it either passes or stays, and a stayer
+    /// is not worth two more ceilings of saying so. The application, none:
+    /// it will stop answering again.
+    pub(super) fn budget(&self, retries: u32) -> u32 {
+        match self {
+            Self::Host(_) => retries,
+            Self::Covered(_) => 1,
+            Self::Run(_) => 0,
+        }
+    }
+
+    pub(super) fn named(&self) -> &'static str {
+        match self {
+            Self::Host(_) => "the machine",
+            Self::Covered(_) => "a covered window",
+            Self::Run(_) => "the application",
+        }
+    }
+
+    pub(super) fn said(&self) -> &str {
+        match self {
+            Self::Host(said) | Self::Covered(said) | Self::Run(said) => said,
+        }
+    }
+
+    /// What to do about it, once the budget is spent.
+    pub(super) fn advice(&self) -> &'static str {
+        match self {
+            Self::Host(_) => {
+                "Measure it on a machine nobody else is using, or pass --allow-noisy to publish \
+                 what a busy one produced."
+            }
+            Self::Covered(_) => "Whatever covers the window stays — clear it and measure again.",
+            Self::Run(_) => "",
+        }
+    }
+}
+
 /// The process this run measures, and everything it is told.
 ///
 /// A build with no harness in it is told nothing at all beyond where its
@@ -130,18 +183,34 @@ pub(super) fn measure(
     let (config_dir, log, samples) = artifacts::open_run(run_dir, opts, screen)?;
     let mut cmd = command(exe, path, root, opts, &config_dir);
     // Armed before the clock starts: the sampler's compile stays out of
-    // the timed window, and the app joins the job object the moment it
-    // has a pid — before the git it spawns on opening (`sampler::Armed`).
+    // the timed window (`sampler::Armed`). The sum cannot overflow —
+    // `options::settle` holds the two under a day.
     let window = Duration::from_millis(opts.watchdog_ms + opts.settle_ms + AFTER_DONE_MS);
     let armed = sampler::arm(window, samples)?;
-    let started = Instant::now();
+    // Started with nothing executed yet: the sampler puts the process in
+    // its job object and only then lets it run, so the first git the app
+    // spawns is inside the job with everything after it. The clock starts
+    // when the sampler says the process is running.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(sampler::CREATE_SUSPENDED);
+    }
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
-    let pid = child.id();
+    let (sampler, started) = match armed.watch(child.id()) {
+        Ok(watching) => watching,
+        Err(said) => {
+            // Never resumed, so never running: ended here rather than
+            // left suspended for the outer kill guard.
+            if let Err(error) = child.kill() {
+                println!("  note: could not end the app that never ran: {error}");
+            }
+            return Err(Spoiled::Run(said));
+        }
+    };
     let deadline = started + Duration::from_millis(opts.watchdog_ms);
-    let sampling_end = deadline + Duration::from_millis(opts.settle_ms + AFTER_DONE_MS);
-    let sampler = armed.watch(pid, started, sampling_end);
     let stderr = child.stderr.take();
     let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
     // `perf_done`, not elapsed time, is the success edge. The deadline is
@@ -268,11 +337,15 @@ fn verdict(
         Some(failed) => format!("{said} — and so {failed}"),
         None => said,
     };
-    match (host, stood, failed.is_some()) {
-        (Some(host), _, _) => Err(Spoiled::Host(and_so(host))),
-        (None, Some(stood), _) => Err(Spoiled::Covered(and_so(stood))),
-        (None, None, true) => Err(Spoiled::Run(failed.unwrap_or_default())),
-        (None, None, false) => Ok(reading),
+    if let Some(host) = host {
+        return Err(Spoiled::Host(and_so(host)));
+    }
+    if let Some(stood) = stood {
+        return Err(Spoiled::Covered(and_so(stood)));
+    }
+    match failed {
+        Some(failed) => Err(Spoiled::Run(failed)),
+        None => Ok(reading),
     }
 }
 

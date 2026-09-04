@@ -27,11 +27,6 @@ fn a_sampler_line_parses_into_a_tick() {
     let parsed = parse_sample(line).expect("a whole line parses");
     assert!(parsed.job, "the children were counted");
     assert_eq!(parsed.own, 4);
-    // A line from before the job object counted the children names no
-    // `own`, and the process's time is then all there is of it.
-    let alone = parse_sample("ws=1 pv=1 display=- win=0 fg=0 int=1 min=0 app=10").unwrap();
-    assert!(!alone.job);
-    assert_eq!((alone.app, alone.own), (10, 10));
     assert_eq!(parsed.working_set, 123);
     assert_eq!(parsed.private, 456);
     assert_eq!(parsed.display, "\\\\.\\DISPLAY1");
@@ -293,28 +288,33 @@ fn a_window_that_came_up_on_another_screen_is_refused() {
     );
 }
 
-/// The job object counts the children: a process that does its work
-/// in a child shows more time in `app` than in `own`. The child is
-/// started a second in, so the join has certainly happened first.
+/// The job object counts the children: a process that does its work in
+/// a child shows more time in `app` than in `own`. The process is
+/// started suspended, as the app is, and does its work the moment the
+/// sampler resumes it — which is after the join, or the child's time
+/// would be its own.
 #[cfg(windows)]
 #[test]
 fn the_children_of_the_watched_process_are_counted_as_its_own() {
-    use std::time::{Duration, Instant};
+    use std::os::windows::process::CommandExt;
+    use std::time::Duration;
     let csv = std::env::temp_dir().join(format!("pg-sampler-{}.csv", std::process::id()));
     let file = std::fs::File::create(&csv).expect("a csv to write");
     let armed = super::arm(Duration::from_secs(30), file).expect("an armed sampler");
     let mut child = std::process::Command::new("cmd")
         .args([
             "/C",
-            "ping -n 2 127.0.0.1 >nul & powershell -NoProfile -Command \"$s=0; 1..300000 | \
-             ForEach-Object { $s += $_ }\" & ping -n 2 127.0.0.1 >nul",
+            "powershell -NoProfile -Command \"$s=0; 1..300000 | ForEach-Object { $s += $_ }\" & \
+             ping -n 2 127.0.0.1 >nul",
         ])
+        .creation_flags(super::CREATE_SUSPENDED)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .expect("a process with a child");
-    let started = Instant::now();
-    let sampler = armed.watch(child.id(), started, started + Duration::from_secs(30));
+    let (sampler, _started) = armed
+        .watch(child.id())
+        .expect("the sampler joined and resumed the process");
     child.wait().expect("the process ends on its own");
     let series = sampler.finish().expect("the sampler ran to the end");
     let last = series.last.expect("at least one sample");
