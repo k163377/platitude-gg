@@ -5,8 +5,8 @@
 use super::launch::resolve;
 use super::payload::string_field;
 use crate::seats::{
-    self, Identity, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, lock_reason,
-    standing, take_seat, unlock_seat, worktree_blocks, worktree_root,
+    self, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
+    lock_reason, standing, take_seat, unlock_seat, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -23,6 +23,12 @@ use crate::subprocess::git_query;
 pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     let name = string_field(input, "name");
     let path = string_field(input, "path");
+    // The rig is entered by nobody, and a name for it must not make it
+    // either: EnterWorktree creates the tree a name does not find.
+    if name.as_deref() == Some(RIG) {
+        deny(&rig_reason());
+        return Ok(());
+    }
     if let Some(objection) = worktree_objection(name.as_deref(), path.as_deref()) {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
@@ -47,6 +53,7 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     };
     let me = Identity::current(string_field(input, "session_id").as_deref());
     let entry = match target.as_deref() {
+        Some(tree) if in_rig(tree) => Entry::Rig,
         Some(tree) if roster_seat(tree).is_some() => {
             Entry::Seat(standing(lock_reason(tree), &me), tree.to_string())
         }
@@ -63,10 +70,33 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The one shape of an outright refusal, printed.
+fn deny(reason: &str) {
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{reason}\"}}}}"
+    );
+}
+
+/// Why nobody enters or edits the rig: it is the measurement's, and it
+/// moves under whoever is in it.
+fn rig_reason() -> String {
+    format!(
+        "This is the measurement rig (.claude/worktrees/{RIG}): `cargo xtask perf --at <rev>` \
+         switches it between commits and builds there under a claim of its own, and nobody \
+         sits in it — a session inside would be working in a tree that moves under it, and \
+         an edit there stops every measurement until somebody cleans it up by hand. Work in \
+         a seat (`cargo xtask seat`) and measure the branch from there with `cargo xtask perf \
+         --at <branch>`."
+    )
+}
+
 /// Where an EnterWorktree call would land, once its path is resolved.
 enum Entry {
     /// A roster seat, where its claim stands, and the seat's own tree.
     Seat(Standing, String),
+    /// The measurement rig, which nobody enters (`seats::RIG`).
+    Rig,
     /// A worktree of this repository outside the roster a-f.
     OffRoster,
     /// Nothing this hook could resolve to a tree of this repository.
@@ -77,6 +107,9 @@ enum Entry {
 /// path: only a seat whose claim is already this session's is entered.
 /// Pure so the rule the whole roster hangs on can be asserted.
 fn entry_verdict(entry: &Entry, me: &Identity) -> Option<(&'static str, String)> {
+    if let Entry::Rig = entry {
+        return Some(("deny", rig_reason()));
+    }
     // A tree of this repository that is not a seat is somebody's
     // unfinished branch, and going back to finish one is a real errand —
     // the roster has no seat to answer it with, so the user does.
@@ -285,8 +318,14 @@ pub(super) fn session_end(input: &str) -> Result<(), String> {
 pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, String)> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
     let me = Identity::current(string_field(input, "session_id").as_deref());
-    let landing = match worktree_root(path).and_then(|root| Some((roster_seat(&root)?, root))) {
-        Some((name, root)) => Landing::Seat(name, standing(lock_reason(&root), &me), root),
+    let landing = match worktree_root(path) {
+        Some(root) if in_rig(&root) => Landing::Rig,
+        Some(root) => match roster_seat(&root) {
+            Some(name) => Landing::Seat(name, standing(lock_reason(&root), &me), root),
+            // A worktree outside the roster is somebody's unfinished
+            // branch, and the write door has nothing to say about it.
+            None => Landing::Outside,
+        },
         // Everything outside this repository is somebody else's business:
         // a memory file, a scratchpad, a sibling project.
         None if in_primary_checkout(&cwd, path) => Landing::Primary,
@@ -299,6 +338,8 @@ pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, 
 enum Landing {
     /// A roster seat, where its claim stands, and the seat's own tree.
     Seat(&'static str, Standing, String),
+    /// The measurement rig, which nobody edits (`seats::RIG`).
+    Rig,
     /// The primary checkout of this repository.
     Primary,
     /// Anywhere else at all.
@@ -313,6 +354,9 @@ fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, Stri
         // repository, are nobody's business here. An unclaimed seat is
         // let through too: the post-write re-claim takes it back.
         Landing::Outside | Landing::Seat(_, Standing::Ours | Standing::Free, _) => None,
+        // The rig is built and measured, never edited: an edit there is
+        // what stops every measurement until somebody cleans it up.
+        Landing::Rig => Some(("deny", rig_reason())),
         // A seat somebody else is in: refused outright, because the cost
         // of being wrong is the other session's afternoon. The post-write
         // note used to say this only after the file had been written.
@@ -568,6 +612,10 @@ mod tests {
         // The spelling that resolved to nothing is the spelling that
         // walked two sessions into seat e.
         assert_eq!(decision(&Entry::Unresolved), Some("deny"));
+        // The rig is the measurement's, and it moves under whoever is in it.
+        let (decision, reason) = entry_verdict(&Entry::Rig, &me()).expect("the rig is refused");
+        assert_eq!(decision, "deny");
+        assert!(reason.contains("perf --at"), "{reason}");
     }
 
     #[test]
@@ -597,6 +645,11 @@ mod tests {
             decision(&Landing::Outside),
             None,
             "a memory file, a scratchpad, a sibling project"
+        );
+        assert_eq!(
+            decision(&Landing::Rig),
+            Some("deny"),
+            "the rig is built and measured, never edited"
         );
     }
 
@@ -641,6 +694,8 @@ mod tests {
             roster_seat("C:/x/platitude-gg/.claude/worktrees/tooltip"),
             None
         );
+        // The rig sits beside the seats and is none of them.
+        assert_eq!(roster_seat("C:/x/platitude-gg/.claude/worktrees/rig"), None);
         assert_eq!(roster_seat("C:/x/platitude-gg"), None);
         // Why nothing may be judged by the raw string a tool was given:
         // a seat spelled relatively reads as no seat here, so a path

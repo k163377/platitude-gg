@@ -58,7 +58,7 @@ impl Identity {
     }
 
     /// What this session writes into a lock's reason.
-    fn reason(&self) -> String {
+    pub(crate) fn reason(&self) -> String {
         match self.pid {
             Some(pid) => format!("{SEAT_CLAIM} {} pid {pid}", self.session),
             None => format!("{SEAT_CLAIM} {}", self.session),
@@ -610,6 +610,27 @@ pub(crate) fn worktree_root(cwd: &str) -> Option<String> {
     Some(cwd[..end].to_string())
 }
 
+/// The measurement rig: the one tree under the roster's directory that is
+/// no seat. `cargo xtask perf --at <rev>` puts the commit it was asked for
+/// on the rig, builds it there and measures that build, so the seat that
+/// asked keeps its own target/ and its uncommitted work, and the build
+/// being measured is a commit anybody can name again (`perf::rig`).
+/// Nobody sits in it and nothing is edited there: the entry and write
+/// hooks refuse it, and a dirty rig refuses every measurement until it
+/// is cleaned by hand (hook/seat.rs).
+pub(crate) const RIG: &str = "rig";
+
+/// Where the rig stands, written against the primary checkout the way
+/// every seat path is.
+pub(crate) fn rig_path(primary: &str) -> String {
+    format!("{}{WORKTREES}{RIG}", primary.trim_end_matches('/'))
+}
+
+/// Whether `path` is the rig's tree or something inside it.
+pub(crate) fn in_rig(path: &str) -> bool {
+    worktree_root(path).is_some_and(|root| root.rsplit('/').next() == Some(RIG))
+}
+
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.
 const GUIDE: &str = "reading: dirty>0 or ahead>0 = in use; dirty=0 and ahead=0 = free, and \
     `cargo xtask seat` is what takes one — it claims the seat and puts it at main's tip \
@@ -804,6 +825,32 @@ mod tests {
             standing(Some("claude-seat s2".into()), &me("", None)),
             Standing::Foreign(_)
         ));
+    }
+
+    /// The rig is the one tree under the roster's directory the roster
+    /// never hands out, and a name that merely starts with its is not it.
+    #[test]
+    fn knows_the_rig_from_the_seats() {
+        assert!(super::in_rig("C:/x/platitude-gg/.claude/worktrees/rig"));
+        assert!(super::in_rig(
+            "C:\\x\\platitude-gg\\.claude\\worktrees\\rig\\crates\\xtask"
+        ));
+        assert!(!super::in_rig(
+            "C:/x/platitude-gg/.claude/worktrees/rigging"
+        ));
+        assert!(!super::in_rig("C:/x/platitude-gg/.claude/worktrees/a"));
+        assert!(!super::in_rig("C:/x/platitude-gg"));
+        assert_eq!(
+            super::rig_path("C:/x/platitude-gg/"),
+            "C:/x/platitude-gg/.claude/worktrees/rig"
+        );
+        assert!(!super::SEATS.contains(&super::RIG));
+        let listing = format!(
+            "worktree C:/x/platitude-gg\nHEAD 1111\nbranch refs/heads/main\n\n\
+             worktree {}\nHEAD 2222\ndetached\n",
+            super::rig_path("C:/x/platitude-gg")
+        );
+        assert!(seat_entries(&listing).is_empty());
     }
 
     #[test]

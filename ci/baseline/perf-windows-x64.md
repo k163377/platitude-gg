@@ -16,10 +16,13 @@
 
 ```
 cargo xtask corpus
-PG_ALLOW_GUI=1 cargo xtask perf --repo <上の 1 行が印刷した path> --runs 5 --allow-noisy
+PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印刷した path> --runs 5 --allow-noisy
 ```
 
-段ごとの表は 2 行目にフラグを足しただけで、**撃ち方は各節が持つ**。
+段ごとの表は 2 行目にフラグを足しただけで、**撃ち方は各節が持つ**。`--at` は計測台 rig
+(roster 外の worktree)に名指しの commit を建てて測る — 席の編集は測られず、同じ commit の
+2 度目はビルド無し(rules-refs/app-ui.md「計測は計測台(rig)で撃つ」)。この記録の commit を
+撃ち直すなら `--at 3443a122`。
 
 - 対象: **`cargo xtask corpus` が生成する合成リポジトリ**。**corpus token
   `23da9ebd03a156a5937d265abb0a353fc60e7b75`**(`show-ref` 全体の blob id)—

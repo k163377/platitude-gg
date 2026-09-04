@@ -84,14 +84,20 @@ fn toml_string(path: &str) -> String {
     quoted
 }
 
+/// The evidence directory, reserved and written with everything that
+/// decides what the runs are of. `root` is the tree the command runs in,
+/// where the evidence lands; what was measured is `built`, which is the
+/// rig's tree under `--at` and this one otherwise.
 pub(super) fn prepare(
     root: &Path,
-    exe: &Path,
+    built: &super::rig::Built,
     opts: &Options,
     screen: Option<&Screen>,
     corpus: &str,
     modes: &str,
 ) -> Result<PathBuf, String> {
+    let exe = built.exe.as_path();
+    let source = built.tree.as_path();
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -109,10 +115,22 @@ pub(super) fn prepare(
     let mut manifest =
         std::fs::File::create(directory.join("manifest.txt")).map_err(|e| e.to_string())?;
     writeln!(manifest,
-        "protocol=4\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nruns={}\n",
+        "protocol=5\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nruns={}\n",
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.features(),
         opts.repo.display(), opts.selection, opts.oid, opts.file, opts.diff, opts.scroll,
         opts.open, opts.settle_ms, opts.breakdown, opts.runs).map_err(|e| e.to_string())?;
+    // Which source the exe is of: the tree it was built in and the commit
+    // that tree stood on. Under `--at` the tree is the rig and the commit
+    // is exactly the one asked for; otherwise source.patch below says
+    // what the tree held beyond its commit.
+    writeln!(
+        manifest,
+        "tree={}\ncommit={}\nat={}\n",
+        source.display(),
+        built.commit,
+        if opts.at.is_empty() { "-" } else { &opts.at }
+    )
+    .map_err(|e| e.to_string())?;
     writeln!(
         manifest,
         "screen={}\nscreen_hz={}\nwindow={WINDOW_WIDTH}x{WINDOW_HEIGHT}\ncorpus={corpus}\n",
@@ -124,17 +142,22 @@ pub(super) fn prepare(
         .map_err(|e| e.to_string())?;
     std::fs::write(directory.join("display-chosen.txt"), modes).map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;
-    capture(&directory, "source-head.txt", root, &["rev-parse", "HEAD"])?;
+    capture(
+        &directory,
+        "source-head.txt",
+        source,
+        &["rev-parse", "HEAD"],
+    )?;
     capture(
         &directory,
         "source-status.txt",
-        root,
+        source,
         &["status", "--short"],
     )?;
     capture(
         &directory,
         "source.patch",
-        root,
+        source,
         &["diff", "HEAD", "--", "crates"],
     )?;
     let output = Command::new("git")

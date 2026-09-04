@@ -53,6 +53,9 @@ pub(super) struct Options {
     /// is there. A benchmark repository that was fetched is a different
     /// benchmark (`perf::corpus`).
     pub(super) corpus: String,
+    /// The commit to measure, built on the rig rather than in this tree
+    /// (`perf::rig`); empty measures this tree's own build, edits and all.
+    pub(super) at: String,
     /// How quiet the machine has to be. Opened by `--allow-noisy`, which
     /// publishes the numbers a busy machine produced.
     pub(super) limits: Limits,
@@ -99,6 +102,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         harness: true,
         screen: String::new(),
         corpus: String::new(),
+        at: String::new(),
         limits: Limits::default(),
     };
     let mut i = 0;
@@ -153,6 +157,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--shipped" => opts.harness = false,
             "--screen" => opts.screen = value()?,
             "--corpus" => opts.corpus = value()?,
+            "--at" => opts.at = value()?,
             "--allow-noisy" => opts.limits = Limits::OPEN,
             other => return Err(format!("unknown option: {other}")),
         }
@@ -279,6 +284,22 @@ mod tests {
         let opts = options(&["--repo", "C:/r", "--shipped"]).expect("a plain shipped run");
         assert!(!opts.harness && !opts.select && !opts.scroll && !opts.diff);
         assert_eq!(opts.selection, "none");
+    }
+
+    /// `--at` names a commit for the rig to build; without it the
+    /// measurement is of this tree, whatever it holds.
+    #[test]
+    fn a_commit_to_measure_is_named_by_at() {
+        assert_eq!(options(&["--repo", "C:/r"]).unwrap().at, "");
+        assert_eq!(
+            options(&["--repo", "C:/r", "--at", "main"]).unwrap().at,
+            "main"
+        );
+        assert!(
+            options(&["--repo", "C:/r", "--at"])
+                .unwrap_err()
+                .contains("needs a value")
+        );
     }
 
     #[test]

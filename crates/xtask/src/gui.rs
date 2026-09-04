@@ -91,7 +91,7 @@ const APP_NAME: &str = "platitude-gg";
 /// Kills every app process whose executable sits under `root`, and
 /// answers who they were. Enumeration is per-OS; the path judgement is
 /// one place, here.
-fn reap_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
+pub(crate) fn reap_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
     let mine: Vec<(u32, String)> = app_processes()?
         .into_iter()
         .filter(|(_, exe)| is_under(exe, root))

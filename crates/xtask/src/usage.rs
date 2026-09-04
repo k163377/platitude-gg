@@ -175,7 +175,7 @@ const TAIL: &str = "  shipped [--no-build]
       and nothing is written outside the project. --path puts it
       somewhere else; --force builds over one already there.
 
-  perf --repo <path> [--label <name>] [--runs <n>] [--breakdown] [--shipped]
+  perf --repo <path> [--at <rev>] [--label <name>] [--runs <n>] [--breakdown] [--shipped]
       The measurement behind ci/baseline/perf-windows-x64.md, run the
       same way every time: release build, a real window (offscreen
       reports neither memory nor fps honestly) on one named screen, the
@@ -194,7 +194,18 @@ const TAIL: &str = "  shipped [--no-build]
       produced: live Rust heap, the models and the session parts holding
       it, and what none of them account for. Process memory minus Rust
       live bytes is not a measurement of Qt's live heap.
+      --at <rev> measures the rig's build of that commit instead of this
+      tree's own: the commit is checked out in .claude/worktrees/rig —
+      the one worktree there that is no seat, entered and edited by
+      nobody — built there with the feature set asked for, and the exe
+      is shelved under the rig's target/ by commit and feature set, so
+      measuring the same commit again (the other side of an A/B, the
+      next stage table of a record) builds nothing. The seat that asked
+      keeps its target/ and its uncommitted edits, and those edits are
+      not what is measured: the commit is. Evidence still lands under
+      this tree's target/perf, and the manifest names the commit.
       options:
+        --at <rev>        the commit to measure, built on the rig (above)
         --runs <n>        kept runs after the discarded first (default 3)
         --watchdog-ms <n> outer hang ceiling (default 300000)
         --settle-ms <n>   hold the app idle this long after it reports,

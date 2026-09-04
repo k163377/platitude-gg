@@ -20,6 +20,8 @@ pub(super) fn mb(bytes: u64) -> f64 {
 pub(super) struct Context<'a> {
     pub(super) screen: Option<&'a Screen>,
     pub(super) corpus: Option<&'a Corpus>,
+    /// What was measured: the commit, and the tree it was built in.
+    pub(super) built: &'a super::rig::Built,
     pub(super) retries: u32,
 }
 
@@ -42,6 +44,11 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     let private: Vec<f64> = kept.iter().map(|r| mb(r.peak_private)).collect();
     println!("\n== {} ==", opts.label);
     println!("  build       : {}", opts.features());
+    println!(
+        "  commit      : {} built in {}",
+        context.built.short(),
+        context.built.tree.display()
+    );
     if let Some(corpus) = context.corpus {
         println!("  corpus      : {corpus}");
     }

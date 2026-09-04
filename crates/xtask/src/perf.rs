@@ -31,6 +31,11 @@
 //! time to a finished graph and nothing else, because every `perf_*` line
 //! belongs to the harness the shipped build leaves out; run it beside the
 //! ordinary one to say what carrying the harness costs.
+//!
+//! `--at <rev>` measures the rig's build of that commit rather than this
+//! tree's own ([`rig`]): the seat keeps its target/ and its edits, the
+//! number is of a commit anybody can name again, and the other side of
+//! an A/B builds nothing the second time.
 
 mod artifacts;
 mod corpus;
@@ -39,6 +44,7 @@ mod measure;
 mod options;
 mod reading;
 mod report;
+mod rig;
 mod sampler;
 
 use std::time::Duration;
@@ -75,15 +81,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // that darkens it (`sampler::keep_awake`).
     let _awake = sampler::keep_awake();
 
-    let exe = if opts.harness {
-        let mut extra = vec!["-p", "platitude-app"];
-        if opts.breakdown {
-            extra.extend(["--features", "memprobe"]);
+    let built = build(&root, &path, &opts)?;
+    println!(
+        "measured: {} of {}",
+        built.short(),
+        if opts.at.is_empty() {
+            "this tree, edits included"
+        } else {
+            "the rig"
         }
-        crate::tree::app_exe(&root, &path, opts.build, &extra)?
-    } else {
-        crate::tree::shipped_exe(&root, &path, opts.build)?
-    };
+    );
 
     let corpus = if opts.open {
         let found = corpus::describe(&opts.repo)?;
@@ -106,7 +113,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let output = artifacts::prepare(
         &root,
-        &exe,
+        &built,
         &opts,
         screen.as_ref(),
         &corpus_line(corpus.as_ref()),
@@ -127,9 +134,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     );
     let bench = Bench {
         output: &output,
-        exe: &exe,
+        exe: &built.exe,
         path: &path,
-        root: &root,
+        root: &built.tree,
         opts: &opts,
         screen: screen.as_ref(),
     };
@@ -151,10 +158,47 @@ pub fn run(args: &[String]) -> Result<(), String> {
         &report::Context {
             screen: screen.as_ref(),
             corpus: corpus.as_ref(),
+            built: &built,
             retries,
         },
     );
     Ok(())
+}
+
+/// The exe this invocation measures: the rig's build of the commit
+/// `--at` named, or this tree's own build — of whatever the tree holds,
+/// edits included, which is what the evidence's `source.patch` is for.
+fn build(
+    root: &std::path::Path,
+    path: &std::ffi::OsStr,
+    opts: &Options,
+) -> Result<rig::Built, String> {
+    if !opts.at.is_empty() {
+        return rig::build_at(
+            root,
+            &opts.at,
+            path,
+            opts.build,
+            opts.harness,
+            opts.breakdown,
+        );
+    }
+    let exe = if opts.harness {
+        let mut extra = vec!["-p", "platitude-app"];
+        if opts.breakdown {
+            extra.extend(["--features", "memprobe"]);
+        }
+        crate::tree::app_exe(root, path, opts.build, &extra)?
+    } else {
+        crate::tree::shipped_exe(root, path, opts.build)?
+    };
+    let here = root.to_string_lossy().replace('\\', "/");
+    let commit = crate::subprocess::git_query(&here, &["rev-parse", "HEAD"]).unwrap_or_default();
+    Ok(rig::Built {
+        exe,
+        commit,
+        tree: root.to_path_buf(),
+    })
 }
 
 /// Everything one run needs, held once so a run is `take(n)`.
