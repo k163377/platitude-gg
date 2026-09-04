@@ -102,8 +102,10 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
 /// The graph's cloud follows the fold: it is on the chip exactly while the
 /// remote it is about is folded into that chip (デザイン規約 §ref の種別).
 /// Drifted, the remote keeps a row of its own and neither row wears one —
-/// the two rows are the whole of the signal. The sidebar answers the wider
-/// question and keeps its badge either way.
+/// the two rows are the whole of the signal. The sidebar keeps the wider
+/// reading of the drift: the branch does have a remote, wherever it is.
+/// What neither of them reads is a name — an upstream is the only thing
+/// that makes a remote branch this branch's.
 #[test]
 fn the_graph_cloud_on_a_branch_follows_the_fold() {
     let tracking = |remote: &str, commit: Oid| RefEntry {
@@ -142,17 +144,25 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
         "the sidebar answers the wider question: the name is out there"
     );
 
-    // No upstream and two same-named remotes: the badge cannot say which
-    // one it is about, which is not the same as its having drifted from
-    // one. Nothing folds, and the chip keeps the cloud it had.
+    // No upstream: a remote of the same name, on the very same commit, is
+    // still a different branch. Nothing folds, nothing is badged, and the
+    // remote says who it is with a chip of its own.
     let mut loose = branch("main", oid(1));
     loose.upstream = None;
-    let ambiguous = vec![loose, tracking("origin", oid(1)), tracking("fork", oid(2))];
-    let joins = RefJoins::new(&ambiguous, &held);
-    let map = build_label_map(&ambiguous, &head_at(oid(1)), &remote_tags, &joins);
+    let untracked = vec![loose, tracking("origin", oid(1))];
+    let joins = RefJoins::new(&untracked, &held);
+    let map = build_label_map(&untracked, &head_at(oid(1)), &remote_tags, &joins);
     let chips = map.labels_of(&oid(1), true);
-    assert_eq!(chips.len(), 2, "nothing folded: {chips:?}");
-    assert!(chips[0].has_remote, "the name is out there, on some remote");
+    assert_eq!(chips.len(), 2, "two branches, two chips: {chips:?}");
+    assert!(
+        chips.iter().all(|c| !c.has_remote),
+        "no upstream, so nothing here has a remote: {chips:?}"
+    );
+    let snapshot = build_snapshot(&untracked, &head_at(oid(1)), &remote_tags, &joins);
+    assert!(
+        !snapshot.locals[0].has_remote,
+        "and the sidebar says the same — git reports no tracking branch either"
+    );
 }
 
 /// A branch another working copy has out is marked on **both** halves of

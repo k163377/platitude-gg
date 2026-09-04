@@ -99,7 +99,7 @@ pub(super) fn build_label_map(
             RefKind::Tag => LabelKind::Tag,
         };
         let has_remote = match r.kind {
-            RefKind::LocalBranch => joins.remotes.has_counterpart(r) && !joins.remotes.drifted(r),
+            RefKind::LocalBranch => joins.remotes.folded_counterpart(r).is_some(),
             RefKind::Tag => remote_tags.agrees_at(&r.short, r.commit_oid()),
             RefKind::RemoteBranch => false,
         };
@@ -277,7 +277,7 @@ pub(super) fn build_snapshot(
                     short: r.short.clone(),
                     full: r.name.clone(),
                     oid: r.commit_oid(),
-                    has_remote: joins.remotes.has_counterpart(r),
+                    has_remote: spoken.is_some(),
                     is_head: r.is_head,
                     upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),

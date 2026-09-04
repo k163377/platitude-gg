@@ -79,11 +79,28 @@ async fn lists_branches_tags_and_remotes() {
         "origin/HEAD symref must be hidden"
     );
 
-    // Remote-state: main via upstream, feature/x via name match,
-    // local-only stays local (was deleted on origin).
+    // Remote-state comes from the upstream and nowhere else: main has one,
+    // feature/x was pushed without one and so has a same-named branch on
+    // origin that is not its own, and local-only was deleted on origin.
+    //
+    // **git is asked the same question here rather than quoted**, because
+    // agreeing with it is the whole reason a matching name is not enough
+    // (`RemoteBranches::spoken_for`): it reads `branch.<name>.merge` and
+    // has no answer for feature/x, though `origin/feature/x` is right
+    // there in the listing above.
+    find(RefKind::RemoteBranch, "origin/feature/x");
+    assert_eq!(
+        repo.git(&[
+            "for-each-ref",
+            "--format=%(upstream)",
+            "refs/heads/feature/x"
+        ]),
+        "",
+        "git names no upstream for it"
+    );
     let with_remote = refs::branches_with_remote(&refs);
     assert!(with_remote.contains("refs/heads/main"));
-    assert!(with_remote.contains("refs/heads/feature/x"));
+    assert!(!with_remote.contains("refs/heads/feature/x"));
     assert!(!with_remote.contains("refs/heads/local-only"));
 }
 

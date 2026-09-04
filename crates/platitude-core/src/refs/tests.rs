@@ -106,8 +106,11 @@ fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefE
     }
 }
 
+/// The upstream is the whole of the question. A remote branch of the same
+/// name is a different branch — git reads `branch.<name>.merge` and says
+/// nothing about a matching name, and so does this.
 #[test]
-fn remote_state_via_upstream_or_name_match() {
+fn remote_state_comes_from_the_upstream_and_nowhere_else() {
     let refs = vec![
         // upstream configured and alive
         entry(
@@ -123,7 +126,7 @@ fn remote_state_via_upstream_or_name_match() {
             "dead",
             Some("refs/remotes/origin/dead"),
         ),
-        // no upstream, but origin has a same-named branch
+        // no upstream, though origin does have a same-named branch
         entry(
             RefKind::LocalBranch,
             "refs/heads/feature/x",
@@ -148,7 +151,10 @@ fn remote_state_via_upstream_or_name_match() {
     let with_remote = branches_with_remote(&refs);
     assert!(with_remote.contains("refs/heads/main"));
     assert!(!with_remote.contains("refs/heads/dead"), "[gone] upstream");
-    assert!(with_remote.contains("refs/heads/feature/x"));
+    assert!(
+        !with_remote.contains("refs/heads/feature/x"),
+        "origin/feature/x is a branch of the same name, not this branch's"
+    );
     assert!(!with_remote.contains("refs/heads/local"));
 }
 
@@ -229,9 +235,12 @@ fn keeps_a_second_remote_that_is_not_the_upstream() {
     assert!(!folded.contains("refs/remotes/fork/main"), "not the badge");
 }
 
+/// A branch with no upstream folds nothing, however many remotes carry
+/// its name: a same-named remote branch is a different branch, and it
+/// keeps the chip that says so.
 #[test]
-fn folds_the_only_same_named_remote_without_an_upstream() {
-    let refs = vec![
+fn folds_nothing_without_an_upstream() {
+    let alone = vec![
         entry(
             RefKind::LocalBranch,
             "refs/heads/feature/x",
@@ -245,12 +254,12 @@ fn folds_the_only_same_named_remote_without_an_upstream() {
             None,
         ),
     ];
-    assert!(remotes_folded_into_local(&refs).contains("refs/remotes/origin/feature/x"));
-}
+    assert!(
+        remotes_folded_into_local(&alone).is_empty(),
+        "one same-named remote is still not this branch's"
+    );
 
-#[test]
-fn folds_neither_same_named_remote_when_no_upstream_picks_one() {
-    let refs = vec![
+    let several = vec![
         entry(RefKind::LocalBranch, "refs/heads/main", "main", None),
         entry(
             RefKind::RemoteBranch,
@@ -266,8 +275,8 @@ fn folds_neither_same_named_remote_when_no_upstream_picks_one() {
         ),
     ];
     assert!(
-        remotes_folded_into_local(&refs).is_empty(),
-        "no single branch the badge is about"
+        remotes_folded_into_local(&several).is_empty(),
+        "and neither of two is"
     );
 }
 

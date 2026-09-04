@@ -129,105 +129,73 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     }))
 }
 
-/// The remote branches, looked up the two ways a local branch asks after
-/// them: by the refname an upstream names, and by the name left once the
-/// remote component is stripped.
+/// The remote branches, by the refname an upstream names.
 ///
-/// Built once per listing because both questions are asked per local
-/// branch, and answering either by scanning the listing makes the pair a
+/// Built once per listing because the question is asked once per local
+/// branch, and answering it by scanning the listing makes the two a
 /// product — on a repository carrying thousands of remote branches
 /// (`JetBrains/kotlin`: 7,831) that is the whole cost of the join.
 pub struct RemoteBranches<'a> {
     by_refname: HashMap<&'a str, &'a RefEntry>,
-    /// `None` where more than one remote carries the name: then there is
-    /// no single branch a badge could be about.
-    by_branch_name: HashMap<&'a str, Option<&'a RefEntry>>,
 }
 
 impl<'a> RemoteBranches<'a> {
     pub fn index(refs: &'a [RefEntry]) -> Self {
-        let mut by_refname = HashMap::new();
-        let mut by_branch_name: HashMap<&str, Option<&RefEntry>> = HashMap::new();
-        for r in refs.iter().filter(|r| r.kind == RefKind::RemoteBranch) {
-            by_refname.insert(r.name.as_str(), r);
-            if let Some((_, rest)) = r.short.split_once('/') {
-                by_branch_name
-                    .entry(rest)
-                    .and_modify(|slot| *slot = None)
-                    .or_insert(Some(r));
-            }
-        }
-        Self {
-            by_refname,
-            by_branch_name,
-        }
+        let by_refname = refs
+            .iter()
+            .filter(|r| r.kind == RefKind::RemoteBranch)
+            .map(|r| (r.name.as_str(), r))
+            .collect();
+        Self { by_refname }
     }
 
     /// The remote branch a local one speaks for, wherever the two stand:
-    /// its configured upstream, or, with none configured, the only
-    /// same-named remote.
+    /// **its configured upstream, and nothing else**.
     ///
-    /// Ambiguity answers nothing: with no upstream and two same-named
-    /// remotes there is no single branch meant, and this says so.
+    /// A remote branch that happens to carry the same name is a different
+    /// branch (デザイン規約 §ref の種別). git answers this question the
+    /// same way and declines to guess when it has no answer — `status`,
+    /// `branch -vv` and `pull` all read `branch.<name>.merge` and report
+    /// nothing from a matching name — so inferring one here would be this
+    /// application saying something about a repository that git does not
+    /// (CLAUDE.md 絶対制約). Setting the upstream is a row on the branch's
+    /// own menu, which is where a reader who wants the two joined says so.
     pub fn spoken_for(&self, local: &RefEntry) -> Option<&'a RefEntry> {
-        match local.upstream.as_deref() {
-            Some(up) => self.by_refname.get(up).copied(),
-            None => self
-                .by_branch_name
-                .get(local.short.as_str())
-                .copied()
-                .flatten(),
-        }
+        let up = local.upstream.as_deref()?;
+        self.by_refname.get(up).copied()
     }
 
     /// Whether this local branch verifiably has a remote counterpart
-    /// **right now**: either the configured upstream still exists, or some
-    /// remote has a same-named branch. Everything else is "local only".
-    ///
-    /// Wider than [`Self::spoken_for`]: two same-named remotes are an
-    /// ambiguity about *which* one the badge is about, not about whether
-    /// the branch is out there.
+    /// **right now**: the configured upstream still exists. Everything
+    /// else is "local only" — a branch whose upstream has been pruned
+    /// away included.
     pub fn has_counterpart(&self, local: &RefEntry) -> bool {
-        let upstream_exists = local
-            .upstream
-            .as_deref()
-            .is_some_and(|u| self.by_refname.contains_key(u));
-        upstream_exists || self.by_branch_name.contains_key(local.short.as_str())
+        self.spoken_for(local).is_some()
     }
 
-    /// Whether the remote this branch speaks for stands on another commit.
+    /// The remote this branch speaks for **when it is standing on the same
+    /// commit**: the one the row folds into its chip, and the one the
+    /// graph's cloud is about.
     ///
-    /// The other half of [`Self::folded_into_local`]'s condition, asked of
-    /// one branch: a drifted remote is not folded away, so it keeps a chip
-    /// of its own on the row it is really on — and a cloud badge here
-    /// would say the remote is on this row while the graph is showing it
-    /// on another (デザイン規約 §ref の種別).
-    ///
-    /// An ambiguity is not a drift: with no upstream and two same-named
-    /// remotes there is no single branch the badge is about, so there is
-    /// nothing for it to have drifted from.
-    pub fn drifted(&self, local: &RefEntry) -> bool {
+    /// One answer for the two, so a chip cannot fold a remote away without
+    /// saying that it did, and cannot claim a remote is on the row when
+    /// the graph is drawing it on another (デザイン規約 §ref の種別).
+    /// Drifted, the remote keeps a row of its own and neither row wears
+    /// the badge — folding never hides a divergence.
+    pub fn folded_counterpart(&self, local: &RefEntry) -> Option<&'a RefEntry> {
         self.spoken_for(local)
-            .is_some_and(|remote| remote.commit_oid() != local.commit_oid())
+            .filter(|remote| remote.commit_oid() == local.commit_oid())
     }
 
     /// Remote branches a local branch on the **same commit** already
     /// speaks for. Listing one again in the row's chip says twice what the
     /// badge says once, so the row folds it away (デザイン規約 §グラフ行のダブルクリック).
-    ///
-    /// Co-location is half the condition: a branch that has drifted from
-    /// its upstream leaves the remote on a row of its own, and that row
-    /// keeps its chip — folding never hides a divergence.
     pub fn folded_into_local(&self, refs: &'a [RefEntry]) -> HashSet<&'a str> {
-        let mut folded = HashSet::new();
-        for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
-            if let Some(remote) = self.spoken_for(local)
-                && remote.commit_oid() == local.commit_oid()
-            {
-                folded.insert(remote.name.as_str());
-            }
-        }
-        folded
+        refs.iter()
+            .filter(|r| r.kind == RefKind::LocalBranch)
+            .filter_map(|local| self.folded_counterpart(local))
+            .map(|remote| remote.name.as_str())
+            .collect()
     }
 }
 
