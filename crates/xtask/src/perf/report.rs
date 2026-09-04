@@ -211,8 +211,16 @@ fn host(kept: &[Reading]) {
     if busy.iter().all(|v| *v == 0.0) && foreign.iter().all(|v| *v == 0.0) {
         return;
     }
+    // What "not this process" excludes: the git the app runs is its own
+    // where the job object counted it, and somebody else's where it
+    // could not (`sampler::Sample::job`).
+    let children = if kept.iter().all(|r| r.conditions.children_counted) {
+        " or its children"
+    } else {
+        ""
+    };
     println!(
-        "  machine     : {}% busy, {}% not this process (worst tick {}%)",
+        "  machine     : {}% busy, {}% not this process{children} (worst tick {}%)",
         spread(&busy),
         spread(&foreign),
         spread(&peak)

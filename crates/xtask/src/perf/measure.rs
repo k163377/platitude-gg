@@ -16,8 +16,7 @@ use std::time::{Duration, Instant};
 
 use super::display::Screen;
 use super::reading::{Reading, missing, read_app};
-use super::sampler::sample_memory;
-use super::{Options, SAMPLE_MS, artifacts};
+use super::{Options, SAMPLE_MS, artifacts, sampler};
 
 /// How long the app is left alone after `perf_done` even when the run
 /// asked for no settling: enough for at least one more sample, so the
@@ -130,17 +129,21 @@ pub(super) fn measure(
     // run's restored state cannot decide what this one does.
     let (config_dir, log, samples) = artifacts::open_run(run_dir, opts, screen)?;
     let mut cmd = command(exe, path, root, opts, &config_dir);
+    // Armed before the clock starts: the sampler's compile stays out of
+    // the timed window, and the app joins the job object the moment it
+    // has a pid — before the git it spawns on opening (`sampler::Armed`).
+    let window = Duration::from_millis(opts.watchdog_ms + opts.settle_ms + AFTER_DONE_MS);
+    let armed = sampler::arm(window, samples)?;
     let started = Instant::now();
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
     let pid = child.id();
-    let stderr = child.stderr.take();
-    let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
-
     let deadline = started + Duration::from_millis(opts.watchdog_ms);
     let sampling_end = deadline + Duration::from_millis(opts.settle_ms + AFTER_DONE_MS);
-    let sampler = sample_memory(pid, sampling_end, started, samples);
+    let sampler = armed.watch(pid, started, sampling_end);
+    let stderr = child.stderr.take();
+    let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
     // `perf_done`, not elapsed time, is the success edge. The deadline is
     // only an outer diagnostic guard for an app that stopped answering.
     // **`--allow-noisy` opens this one too.** The ceiling is a rate in

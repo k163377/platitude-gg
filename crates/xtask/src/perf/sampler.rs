@@ -76,8 +76,19 @@ pub(super) struct Sample {
     pub(super) kernel: u64,
     pub(super) user: u64,
     pub(super) idle: u64,
-    /// The measured process's own processor time, same units.
+    /// The measured process's processor time, same units — with its
+    /// children's, where a job object took them ([`Sample::job`]). The
+    /// app answers a repository by running git, and a `git status` over
+    /// a hundred thousand files is eleven cores wide for a fifth of a
+    /// second: counted as somebody else's, it tripped the peak gate on
+    /// every run (ci/baseline/perf-windows-x64.md §計測条件).
     pub(super) app: u64,
+    /// The process's own time alone, so the evidence can say how much of
+    /// `app` was its children.
+    pub(super) own: u64,
+    /// Whether `app` counts the children: false where the process could
+    /// not be put in the job object, and `app` is `own`.
+    pub(super) job: bool,
     /// Milliseconds since the last input event of any kind — **the ones
     /// this harness injects included**.
     ///
@@ -144,12 +155,17 @@ pub(super) struct Conditions {
     /// screen otherwise shows up only in the scroll bench's frame count
     /// and a run measured without one publishes its numbers.
     pub(super) away_ms: u64,
+    /// Whether the process's children were counted as its own
+    /// ([`Sample::job`]), which decides what "not this process" means
+    /// in the report.
+    pub(super) children_counted: bool,
 }
 
 impl Conditions {
     fn absorb(&mut self, sample: &Sample, previous: Option<&Sample>) {
         self.samples += 1;
         self.away_ms = self.away_ms.max(sample.away_ms);
+        self.children_counted |= sample.job;
         if sample.interactive {
             self.interactive += 1;
             self.blind = 0;
@@ -436,65 +452,100 @@ impl Sampler {
     }
 }
 
-/// Samples until the measured process is reaped or the outer watchdog ends.
-pub(super) fn sample_memory(
-    pid: u32,
-    deadline: Instant,
-    started: Instant,
-    mut csv: std::fs::File,
-) -> Sampler {
-    let series = Arc::new(Mutex::new(Series::default()));
-    let shared = Arc::clone(&series);
-    let handle = std::thread::spawn(move || {
-        writeln!(
-            csv,
-            "parent_elapsed_us,working_set_bytes,private_bytes,display_name,windowed,foreground,\
-             interactive,minimized,kernel_100ns,user_100ns,idle_100ns,process_100ns"
-        )
-        .map_err(|e| e.to_string())?;
-        let mut record = |sample: Sample| -> Result<(), String> {
+/// The sampler with its script compiled and its job object made, waiting
+/// to be told which process to watch.
+///
+/// Armed *before* the app starts, for two reasons. The compile is not
+/// then in the timed window — a sampler started beside the app used to
+/// spend the app's first half second compiling C# on the machine the
+/// startup number was being taken on. And the process joins the job
+/// object within milliseconds of existing, before it can have spawned
+/// the git whose time the job is there to count; a child that started
+/// before the join is not in the job.
+pub(super) struct Armed {
+    csv: std::fs::File,
+    #[cfg(windows)]
+    child: std::process::Child,
+    #[cfg(windows)]
+    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+}
+
+/// Arms the sampler for a run of at most `window`, the time the script
+/// will keep watching past being told its process.
+pub(super) fn arm(window: std::time::Duration, csv: std::fs::File) -> Result<Armed, String> {
+    #[cfg(windows)]
+    {
+        let (child, lines) = windows_arm(window.as_secs() + 5)?;
+        Ok(Armed { csv, child, lines })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Ok(Armed { csv })
+    }
+}
+
+impl Armed {
+    /// Samples `pid` until it is reaped or `deadline` passes.
+    pub(super) fn watch(self, pid: u32, started: Instant, deadline: Instant) -> Sampler {
+        let series = Arc::new(Mutex::new(Series::default()));
+        let shared = Arc::clone(&series);
+        let handle = std::thread::spawn(move || {
+            let mut csv = self.csv;
             writeln!(
                 csv,
-                "{},{},{},{},{},{},{},{},{},{},{},{}",
-                started.elapsed().as_micros(),
-                sample.working_set,
-                sample.private,
-                if sample.display.is_empty() {
-                    "-"
-                } else {
-                    &sample.display
-                },
-                u8::from(sample.windowed),
-                u8::from(sample.foreground),
-                u8::from(sample.interactive),
-                u8::from(sample.minimized),
-                sample.kernel,
-                sample.user,
-                sample.idle,
-                sample.app,
+                "parent_elapsed_us,working_set_bytes,private_bytes,display_name,windowed,\
+                 foreground,interactive,minimized,kernel_100ns,user_100ns,idle_100ns,\
+                 process_100ns,own_100ns,children_counted"
             )
             .map_err(|e| e.to_string())?;
-            shared
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .absorb(sample);
-            Ok(())
-        };
-        #[cfg(windows)]
-        {
-            windows_sampler(pid, deadline, &mut record)
-        }
-        #[cfg(target_os = "linux")]
-        {
-            linux_sampler(pid, deadline, &mut record)
-        }
-        #[cfg(not(any(windows, target_os = "linux")))]
-        {
-            let _ = (pid, deadline);
-            Err("memory sampling is not implemented for this OS".into())
-        }
-    });
-    Sampler { series, handle }
+            let mut record = |sample: Sample| -> Result<(), String> {
+                writeln!(
+                    csv,
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    started.elapsed().as_micros(),
+                    sample.working_set,
+                    sample.private,
+                    if sample.display.is_empty() {
+                        "-"
+                    } else {
+                        &sample.display
+                    },
+                    u8::from(sample.windowed),
+                    u8::from(sample.foreground),
+                    u8::from(sample.interactive),
+                    u8::from(sample.minimized),
+                    sample.kernel,
+                    sample.user,
+                    sample.idle,
+                    sample.app,
+                    sample.own,
+                    u8::from(sample.job),
+                )
+                .map_err(|e| e.to_string())?;
+                shared
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .absorb(sample);
+                Ok(())
+            };
+            #[cfg(windows)]
+            {
+                let _ = deadline;
+                windows_watch(self.child, self.lines, pid, &mut record)
+            }
+            #[cfg(target_os = "linux")]
+            {
+                linux_sampler(pid, deadline, &mut record)
+            }
+            #[cfg(not(any(windows, target_os = "linux")))]
+            {
+                let _ = (pid, deadline);
+                Err("memory sampling is not implemented for this OS".into())
+            }
+        });
+        Sampler { series, handle }
+    }
 }
 
 /// Reads one line of the sampler's own `key=value` output. Only the
@@ -522,26 +573,68 @@ fn parse_sample(line: &str) -> Option<Sample> {
         user: number("u=").unwrap_or(0),
         idle: number("i=").unwrap_or(0),
         app: number("app=").unwrap_or(0),
+        own: number("own=").or_else(|| number("app=")).unwrap_or(0),
+        job: field("job=") == Some("1"),
     })
 }
 
+/// The script, compiled and holding a job object, up to the `ready` it
+/// prints once it is waiting for a process to watch. Anything it prints
+/// before that is PowerShell complaining, and a script that ends before
+/// saying it is a sampler that will never sample.
 #[cfg(windows)]
-fn windows_sampler(
-    pid: u32,
-    deadline: Instant,
-    record: &mut dyn FnMut(Sample) -> Result<(), String>,
-) -> Result<(), String> {
-    use std::io::{BufRead, BufReader};
-    let seconds = deadline.saturating_duration_since(Instant::now()).as_secs() + 5;
-    let script = windows_script(pid, seconds);
+fn windows_arm(
+    seconds: u64,
+) -> Result<
+    (
+        std::process::Child,
+        std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    ),
+    String,
+> {
+    use std::io::BufRead;
+    let script = windows_script(seconds);
     let mut child = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .stdout(std::process::Stdio::piped())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
     let stdout = child.stdout.take().ok_or("memory sampler stdout missing")?;
+    let mut lines = std::io::BufReader::new(stdout).lines();
+    loop {
+        match lines.next() {
+            Some(Ok(line)) if line.trim() == "ready" => return Ok((child, lines)),
+            Some(Ok(_)) => {}
+            Some(Err(error)) => {
+                let _ = child.kill();
+                return Err(format!("the memory sampler did not arm: {error}"));
+            }
+            None => {
+                let _ = child.kill();
+                return Err("the memory sampler ended before it was armed".into());
+            }
+        }
+    }
+}
+
+/// Names the process to the armed script and reads its samples until it
+/// stops — the process reaped, or the script's own deadline passed.
+#[cfg(windows)]
+fn windows_watch(
+    mut child: std::process::Child,
+    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    pid: u32,
+    record: &mut dyn FnMut(Sample) -> Result<(), String>,
+) -> Result<(), String> {
+    {
+        let mut stdin = child.stdin.take().ok_or("memory sampler stdin missing")?;
+        writeln!(stdin, "{pid}")
+            .and_then(|()| stdin.flush())
+            .map_err(|e| format!("could not name the process to the sampler: {e}"))?;
+    }
     let mut error = None;
-    for line in BufReader::new(stdout).lines() {
+    for line in lines {
         let line = match line {
             Ok(line) => line,
             Err(e) => {
@@ -549,6 +642,13 @@ fn windows_sampler(
                 break;
             }
         };
+        // The one thing the script says that is not a sample: the job
+        // object could not take the process, so its children go uncounted
+        // and the peak gate reads as it did before.
+        if let Some(note) = line.strip_prefix("note: ") {
+            println!("  sampler: {note}");
+            continue;
+        }
         let Some(sample) = parse_sample(&line) else {
             continue;
         };
@@ -596,6 +696,16 @@ const CONTINUOUS: u32 = 0x8000_0000;
 /// * **Says what the rest of the machine did.** `GetSystemTimes` beside
 ///   the process's own processor time separates a slow application from a
 ///   busy machine.
+/// * **Counts the process's children as its own.** The process is put in
+///   a job object the moment its pid arrives, and the job's accounting —
+///   which keeps the time of children that have already exited — is what
+///   `app=` reports. The app answers a repository by running git, and
+///   counted as somebody else's that git tripped the peak gate on every
+///   run of the corpus. A process the job will not take (`note:`) is
+///   counted alone, as before.
+///
+/// Two phases, on one pipe each way: the script compiles, makes the job
+/// and says `ready`; the pid comes down stdin; the samples go up stdout.
 ///
 /// The window handle is resolved once and held: `Process.MainWindowHandle`
 /// enumerates every top-level window on the desktop, and `Refresh()` (which
@@ -613,7 +723,7 @@ const CONTINUOUS: u32 = 0x8000_0000;
 /// a topmost window**, so a notification that sets `HWND_TOPMOST` stays
 /// in front however often this fires.
 #[cfg(windows)]
-fn windows_script(pid: u32, seconds: u64) -> String {
+fn windows_script(seconds: u64) -> String {
     format!(
         "$ErrorActionPreference='Stop';\
          Add-Type -AssemblyName System.Windows.Forms;\
@@ -635,11 +745,28 @@ public static class PerfHost {{\n\
   }}\n\
   [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint flags);\n\
   [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);\n\
+  [StructLayout(LayoutKind.Sequential)] public struct JOBACCT {{ public long TotalUserTime; public long TotalKernelTime; public long ThisPeriodTotalUserTime; public long ThisPeriodTotalKernelTime; public uint TotalPageFaultCount; public uint TotalProcesses; public uint ActiveProcesses; public uint TotalTerminatedProcesses; }}\n\
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr CreateJobObject(IntPtr attrs, string name);\n\
+  [DllImport(\"kernel32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);\n\
+  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool QueryInformationJobObject(IntPtr job, int cls, ref JOBACCT info, int size, IntPtr ret);\n\
+  public static long JobTime(IntPtr job) {{\n\
+    var info = new JOBACCT();\n\
+    if (!QueryInformationJobObject(job, 1, ref info, Marshal.SizeOf(typeof(JOBACCT)), IntPtr.Zero)) return -1;\n\
+    return info.TotalUserTime + info.TotalKernelTime;\n\
+  }}\n\
 }}\n\
 '@;\
+         $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);\
+         Write-Output 'ready';\
+         $target=[int][Console]::In.ReadLine();\
          [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
          try {{\
-         $p=Get-Process -Id {pid} -ErrorAction SilentlyContinue;\
+         $p=Get-Process -Id $target -ErrorAction SilentlyContinue;\
+         $jobok=0;\
+         if($p -ne $null){{\
+           if([PerfHost]::AssignProcessToJobObject($job,$p.Handle)){{$jobok=1}}\
+           else{{Write-Output \"note: the process did not join the job object (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())) - its children are not counted\"}};\
+         }};\
          $hwnd=[IntPtr]::Zero;$display='-';$ticks=0;$int=1;$lockpids=@();\
          $end=(Get-Date).AddSeconds({seconds});\
          while($p -ne $null -and -not $p.HasExited -and (Get-Date) -lt $end){{\
@@ -660,7 +787,7 @@ public static class PerfHost {{\n\
            $front=[PerfHost]::GetForegroundWindow();\
            if($front -ne [IntPtr]::Zero){{\
              [void][PerfHost]::GetWindowThreadProcessId($front,[ref]$owner);\
-             if($owner -eq {pid}){{$fg=1}};\
+             if($owner -eq $target){{$fg=1}};\
            }};\
            if($ticks % 10 -eq 0){{\
              $lockpids=@((Get-Process LockApp,LogonUI -ErrorAction SilentlyContinue).Id);\
@@ -678,7 +805,9 @@ public static class PerfHost {{\n\
            $idle=0;$kernel=0;$user=0;\
            [void][PerfHost]::GetSystemTimes([ref]$idle,[ref]$kernel,[ref]$user);\
            [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
-           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$($p.TotalProcessorTime.Ticks) away=$([PerfHost]::IdleMs())\";\
+           $own=$p.TotalProcessorTime.Ticks;$app=$own;\
+           if($jobok -eq 1){{$t=[PerfHost]::JobTime($job);if($t -ge 0){{$app=$t}}}};\
+           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs())\";\
            }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}\
@@ -985,6 +1114,7 @@ fn linux_sample_once(pid: u32) -> Sample {
                 .unwrap_or(0)
         };
         sample.app = field(11) + field(12);
+        sample.own = sample.app;
     }
     sample
 }
@@ -1008,14 +1138,23 @@ mod tests {
             user: 0,
             idle,
             app,
+            own: app,
+            job: false,
         }
     }
 
     #[test]
     fn a_sampler_line_parses_into_a_tick() {
-        let line =
-            "ws=123 pv=456 display=\\\\.\\DISPLAY1 win=1 fg=1 int=1 min=0 k=7 u=8 i=9 app=10";
+        let line = "ws=123 pv=456 display=\\\\.\\DISPLAY1 win=1 fg=1 int=1 min=0 k=7 u=8 i=9 \
+                    app=10 own=4 job=1";
         let parsed = parse_sample(line).expect("a whole line parses");
+        assert!(parsed.job, "the children were counted");
+        assert_eq!(parsed.own, 4);
+        // A line from before the job object counted the children names no
+        // `own`, and the process's time is then all there is of it.
+        let alone = parse_sample("ws=1 pv=1 display=- win=0 fg=0 int=1 min=0 app=10").unwrap();
+        assert!(!alone.job);
+        assert_eq!((alone.app, alone.own), (10, 10));
         assert_eq!(parsed.working_set, 123);
         assert_eq!(parsed.private, 456);
         assert_eq!(parsed.display, "\\\\.\\DISPLAY1");
@@ -1274,6 +1413,44 @@ mod tests {
         assert!(
             complaint.contains("pinned to \\\\.\\DISPLAY1"),
             "{complaint}"
+        );
+    }
+
+    /// The job object counts the children: a process that does its work
+    /// in a child shows more time in `app` than in `own`. The child is
+    /// started a second in, so the join has certainly happened first.
+    #[cfg(windows)]
+    #[test]
+    fn the_children_of_the_watched_process_are_counted_as_its_own() {
+        use std::time::{Duration, Instant};
+        let csv = std::env::temp_dir().join(format!("pg-sampler-{}.csv", std::process::id()));
+        let file = std::fs::File::create(&csv).expect("a csv to write");
+        let armed = super::arm(Duration::from_secs(30), file).expect("an armed sampler");
+        let mut child = std::process::Command::new("cmd")
+            .args([
+                "/C",
+                "ping -n 2 127.0.0.1 >nul & powershell -NoProfile -Command \"$s=0; 1..300000 | \
+                 ForEach-Object { $s += $_ }\" & ping -n 2 127.0.0.1 >nul",
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("a process with a child");
+        let started = Instant::now();
+        let sampler = armed.watch(child.id(), started, started + Duration::from_secs(30));
+        child.wait().expect("the process ends on its own");
+        let series = sampler.finish().expect("the sampler ran to the end");
+        let last = series.last.expect("at least one sample");
+        let _ = std::fs::remove_file(csv);
+        assert!(
+            series.conditions.children_counted,
+            "the process joined the job object"
+        );
+        assert!(
+            last.app > last.own,
+            "the child's time is counted as the process's: app={} own={}",
+            last.app,
+            last.own
         );
     }
 }

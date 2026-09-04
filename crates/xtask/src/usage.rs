@@ -188,7 +188,8 @@ const TAIL: &str = "  shipped [--no-build]
       taken again rather than published: the session locking, the window
       going down or moving screens, frames not arriving at the rate the
       screen could show, and the share of the machine that went to
-      something else. The screen is kept awake for the whole invocation,
+      something else — the git the app runs counted as the app's own,
+      through a job object. The screen is kept awake for the whole invocation,
       builds and waits included, because a screen that went dark between
       two runs is as unmeasurable as one that went dark during one.
       --breakdown builds with the `memprobe` feature and adds
