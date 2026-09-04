@@ -28,6 +28,11 @@ Item {
     property string bucket: ""
     property string path: ""
     property bool canWrite: false
+    /// Whether git could stash at all. **Not a question about this row**: one unmerged path anywhere in the tree and
+    /// git refuses the whole command, named paths or not (measured — `error: could not write index`, and nothing is
+    /// set aside), and a repository with no commit yet has nowhere to put one. The band's button reads the same word
+    /// for the same reason (`BandStashButton`, `platitude_core::stash::standing`).
+    property bool canStash: false
     /// How many files the rows here would touch, counted the way the writes count them.
     property int count: 0
     /// What the discard row would do, worked out once as the menu opens.
@@ -53,6 +58,7 @@ Item {
         fileRowMenu.bucket = bucket
         fileRowMenu.path = path
         fileRowMenu.canWrite = fileRowMenu.repoTab.busyCount === 0
+        fileRowMenu.canStash = fileRowMenu.canWrite && fileRowMenu.workTree.stashStanding === "ready"
         fileRowMenu.plan = fileRowMenu.planDiscard()
         // Not `chosenCount` — that counts chosen keys, so a folder in the choice would put a file on the tag that no
         // command is going to reach.
@@ -171,8 +177,7 @@ Item {
         AppMenuItem {
             code: "stash"
             note: fileRowMenu.count > 1 ? qsTr("%n files", "", fileRowMenu.count) : ""
-            // git will not stash a tree with unresolved conflicts in it.
-            offered: fileRowMenu.bucket !== "conflicts" && fileRowMenu.canWrite
+            offered: fileRowMenu.canStash
             onTriggered: {
                 const rows = fileRowMenu.wipPane.chosenRows()
                 const paths = []
