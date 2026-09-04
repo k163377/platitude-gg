@@ -49,7 +49,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         at += 1;
     }
 
-    let root = crate::tree::workspace_root();
+    let (root, _busy) = crate::still::announced("check")?;
     let started = Instant::now();
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
@@ -261,6 +261,10 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
     let mut child = Command::new(&step[0])
         .args(&step[1..])
         .current_dir(root)
+        // Under this verb's own announcement: a step that waited on a
+        // measurement's hold would wait for the measurement that is
+        // waiting for this verb (`still`).
+        .env(crate::still::UNDER, "1")
         .stdin(Stdio::null())
         .stdout(Stdio::from(out))
         .stderr(Stdio::from(err))

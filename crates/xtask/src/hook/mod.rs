@@ -16,6 +16,7 @@ mod launch;
 mod payload;
 mod review;
 mod seat;
+mod still;
 mod write;
 
 /// What a command carries to say an explicit instruction asked for main to
@@ -84,6 +85,9 @@ fn session_end(input: &str) -> Result<(), String> {
 /// guards run in order and the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
     if git::pre_git(input)? {
+        return Ok(());
+    }
+    if still::pre_shell(input)? {
         return Ok(());
     }
     if attribution::pre_comment(input)? {

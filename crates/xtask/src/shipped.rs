@@ -43,7 +43,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             other => return Err(format!("shipped does not take {other:?}")),
         }
     }
-    let root = crate::tree::workspace_root();
+    let (root, _busy) = crate::still::announced("shipped")?;
     let path = crate::qt::path_with_qt()?;
     let exe = crate::tree::shipped_exe(&root, &path, build)?;
 

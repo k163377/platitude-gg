@@ -132,6 +132,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         opts.repo.display(),
         opts.runs
     );
+    // After the build and before the runs: the build can share the
+    // machine, the runs cannot (`still`). Every `cargo xtask` verb that
+    // builds waits for this to lift, and this waits for the ones already
+    // under way.
+    let _still = crate::still::hold(&root, "cargo xtask perf")?;
     let bench = Bench {
         output: &output,
         exe: &built.exe,

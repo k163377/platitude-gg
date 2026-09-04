@@ -129,6 +129,9 @@ fn gate(args: &[String]) -> Result<(), String> {
     if opts.dry_run {
         return Ok(());
     }
+    // Announced beside .git, once any measurement holding the machine
+    // still has ended (`still`).
+    let _busy = crate::still::busy(&opts.dir, "gate")?;
     execute(&plan)
 }
 
@@ -145,6 +148,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
         },
     )?;
     print!("{}", plan::describe(&plan));
+    let _busy = crate::still::busy(seat, "gate")?;
     execute(&plan)
 }
 

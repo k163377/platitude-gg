@@ -80,6 +80,7 @@ const BUILD_VERBS: [&str; 7] = ["build", "check", "test", "clippy", "bench", "ru
 const QT_FREE: [&str; 2] = ["platitude-core", "xtask"];
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    let (_, _busy) = crate::still::announced("linux")?;
     let mut rebuild = false;
     let mut shell = false;
     let mut forced_stage: Option<String> = None;

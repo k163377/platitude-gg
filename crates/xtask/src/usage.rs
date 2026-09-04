@@ -252,6 +252,18 @@ const TAIL: &str = "  shipped [--no-build]
         --allow-noisy     publish what a busy, covered or locked machine
                           produced. The conditions are printed either way
 
+  still
+      Whether a measurement is holding the machine still, and which
+      builds are under way. `perf` holds the machine for the length of
+      its runs; gate, check, linux, verify-ui, launch, corpus, shipped
+      and qmltest wait for a hold to lift before they begin, and a hold
+      waits for the builds already under way — a build beside a
+      measurement is counted as load that was not the application, and
+      the run is refused and taken again. A bare `cargo build` or `cargo
+      test` typed while a hold stands is refused by the pre-shell hook,
+      because it runs outside any verb that could wait. Both are files
+      beside .git, cleared by whoever meets one whose process is gone.
+
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built
       from ci/linux/Dockerfile. On Linux it skips the container and runs

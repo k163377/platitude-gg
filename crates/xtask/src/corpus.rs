@@ -48,6 +48,7 @@ use std::process::{Command, Stdio};
 const DIR_NAME: &str = ".pg-perf-corpus";
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    let (_, _busy) = crate::still::announced("corpus")?;
     let mut force = false;
     let mut path = None;
     let mut reference = None;

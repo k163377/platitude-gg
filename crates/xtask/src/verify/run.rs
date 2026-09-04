@@ -12,7 +12,7 @@ use super::{child, outcome, repos, seed};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
-    let root = crate::tree::workspace_root();
+    let (root, _busy) = crate::still::announced("verify-ui")?;
     let path = crate::qt::path_with_qt()?;
     let repos = repos::for_run(&opts)?;
 
