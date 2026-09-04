@@ -12,16 +12,29 @@ pub(super) const TABLE: &[Verb] = &[
     // other half of every one of them — the stand-in is wanted
     // exactly while its row is not in sight, so a run where both are
     // true (or neither) has the rule backwards.
+    // The top edge carries two more that no picture holds: the
+    // selection stays on the stand-in when the row it stands for is
+    // scrolled off, and the stand-in keeps the sliver the list holds
+    // above its own first row. `room=4` is `headerHeight` less
+    // `graphRowHeight` — a token moving under it is a thing to look at
+    // rather than a number to follow.
     Verb {
         name: "graph-head",
         when: &[],
-        plain: "shown=true above=true onScreen=false",
+        plain: "shown=true above=true onScreen=false lit=false landed=true picked=true room=4",
     },
     Verb {
         name: "graph-head-below",
         when: &[],
-        plain: "shown=true above=false onScreen=false",
+        plain: "shown=true above=false onScreen=false lit=false landed=false picked=false room=0",
     },
+    // The pointer's ground, which only a stand-in that is not already
+    // carrying the selection has anywhere to show — a selected row does
+    // not brighten under the pointer, and neither does its stand-in. So
+    // this one belongs on the preset whose HEAD is not the row the page
+    // opened on, and its `above=true` is what says the run scrolled for
+    // the top edge there rather than taking the bottom one it started
+    // with.
     Verb {
         name: "graph-head-lit",
         when: &[],

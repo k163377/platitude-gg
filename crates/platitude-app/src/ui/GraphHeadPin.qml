@@ -57,6 +57,11 @@ Rectangle {
     /// A HEAD outside the loaded window has no row to lead to, and one whose chips have not arrived yet has no name to
     /// show — neither is a stand-in worth drawing (`models::graph::head`).
     readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels !== ""
+    /// The list's selection is on the row this stands in for — the same question a row asks of itself
+    /// (`GraphRowDelegate.selected`), asked from out here because the stand-in is not one of the list's delegates.
+    /// **The grounds below read this rather than each other's `visible`**: Qt's `visible` is the effective one, so a
+    /// band that asked its neighbour would be answering "is the stand-in drawn at all" in the same breath.
+    readonly property bool selected: pin.view.currentIndex === pin.headRow
     /// The chips the stand-in draws, less the ones the window has already said are gone — the same answer the rows
     /// themselves give (`encode::labels_shown`). HEAD's own branch is never one of them (git refuses to delete the
     /// branch it is on), but another branch standing on the same commit can be.
@@ -67,8 +72,9 @@ Rectangle {
 
     // ---- the three bands ---------------------------------------------------------------------------------------------
     //
-    // The row, then the half where the graph goes out, then the half where the rows come back. Everything below hangs
-    // off these four numbers, and each of them flips with the edge this rides.
+    // The row, then the half where the graph goes out, then the half where the rows come back — and, at the top edge
+    // only, the list's own sliver above the row. Everything below hangs off these numbers, and each of them flips with
+    // the edge this rides.
 
     /// How far past the row the ground stays whole. **The graph has to be gone before the rows start coming back**
     /// — without this the two overlap and neither reads, and what is left below the
@@ -84,18 +90,27 @@ Rectangle {
     /// a shorter distance, which is the one thing a gradient is here to avoid. A row is the floor: less, and the commit
     /// it lands on is cut across.
     readonly property real fadeRoom: Theme.graphRowHeight * 5 / 4
-    readonly property real rowY: pin.rowAbove ? 0 : pin.hold + pin.fadeRoom
+    /// The sliver the list keeps above its own first row, kept above this one as well while it rides that edge
+    /// (`GraphList.topMargin`). **The stand-in stands where the row it stands for stands**: without it the stand-in
+    /// begins at the pane's own top and its foot lands a few pixels above the bands either side of the graph, which
+    /// is the one line that margin is there to meet — so the row appears to step up the moment it is scrolled off.
+    /// Nothing of the kind belongs at the other edge: the run-out down there says the history is cut, and has no band
+    /// to line up with.
+    readonly property real topRoom: pin.rowAbove ? pin.view.topMargin : 0
+    readonly property real rowY: pin.rowAbove ? pin.topRoom : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
     /// Where the lane leaves the node — **a hairline past its edge, not the row's**. The row's
     /// own cell is cut here and the going-out takes over, so the last full-strength pixel of graph is the
     /// one against the face rather than one at the bottom of a row that is mostly air.
     readonly property real nodeOutY: pin.rowMidY
         + (pin.rowAbove ? 1 : -1) * (Metrics.nodeIcon / 2 + Theme.borderWidth)
+    /// How much of this the ground holds whole: the sliver above, the row, and the hold past it.
+    readonly property real groundRoom: pin.topRoom + Theme.graphRowHeight + pin.hold
     /// And where it has gone: the far edge of the hold, so the ground is still whole when the last of the graph goes.
-    readonly property real outTo: pin.rowAbove ? Theme.graphRowHeight + pin.hold : pin.fadeRoom
+    readonly property real outTo: pin.rowAbove ? pin.groundRoom : pin.fadeRoom
 
     visible: pin.wanted && (pin.rowAbove || pin.rowBelow)
-    height: Theme.graphRowHeight + pin.hold + pin.fadeRoom
+    height: pin.groundRoom + pin.fadeRoom
     x: pin.view.x
     // The list's own width, so every column in here lands where a row's lands — the message included. `barRoom` is
     // taken off the press area alone (`pinMouse`).
@@ -110,7 +125,8 @@ Rectangle {
     //
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
     // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after
-    // that.
+    // that. **The sliver this keeps above itself at the top edge is inside it** (`topRoom`): a ground that began at the
+    // row would let whatever is scrolling past show in the strip the list leaves empty when it is at rest.
     // **The ground is laid inside the list; everything else stands over it out here.** Two things have to hold at once
     // and only this seat holds both. It has to cover the whole width — a row's message runs on under the bar now
     // (規約 §余白), so a band that stopped short of the bar would leave the tail of whatever is scrolling past showing
@@ -128,11 +144,11 @@ Rectangle {
         Rectangle {
             y: pin.rowAbove ? 0 : pin.fadeRoom
             width: parent.width
-            height: Theme.graphRowHeight + pin.hold
+            height: pin.groundRoom
             color: Theme.bgSurface
         }
         Rectangle {
-            y: pin.rowAbove ? Theme.graphRowHeight + pin.hold : 0
+            y: pin.rowAbove ? pin.groundRoom : 0
             width: parent.width
             height: pin.fadeRoom
             gradient: Gradient {
@@ -140,20 +156,37 @@ Rectangle {
                 GradientStop { position: 1; color: pin.rowAbove ? "transparent" : Theme.bgSurface }
             }
         }
-        // Only over the row: what is under it is a way out of this band, not part of the target.
+        // The two grounds a row draws, in the row's own order and with the row's own one winning
+        // (`GraphRowDelegate`): the commit that was clicked keeps saying so while it is off screen — losing the
+        // selection at the edge is losing the one thing the reader put there — and the pointer says nothing on top of
+        // that, because a selected row does not brighten under it either.
+        //
+        // **Only over the row, and over the sliver it keeps above itself** — what is under it is a way out of this
+        // band, not part of the target, while the sliver is the row's own (`topRoom`): a band that stopped at the
+        // row's top edge would leave a dark strip between it and the bands either side of the graph, which is what
+        // the first row's own bleed is there to close.
+        Rectangle {
+            id: pinPicked
+            y: pin.rowY - pin.topRoom
+            width: parent.width
+            height: Theme.graphRowHeight + pin.topRoom
+            color: Theme.bgSelected
+            visible: pin.selected
+        }
         Rectangle {
             id: pinHover
-            y: pin.rowY
+            y: pinPicked.y
             width: parent.width
-            height: Theme.graphRowHeight
+            height: pinPicked.height
             color: Theme.bgHover
-            visible: pinMouse.containsMouse || pin.pointed
+            visible: (pinMouse.containsMouse || pin.pointed) && !pin.selected
         }
     }
 
-    /// The hover ground as drawn, for the headless run: reading the two conditions back would pass a stand-in whose
+    /// The two grounds as drawn, for the headless run: reading their conditions back would pass a stand-in whose
     /// ground is not wired to them (verify-ui).
     readonly property alias lit: pinHover.visible
+    readonly property alias picked: pinPicked.visible
 
     // The chip column, laid out as a row's is (`GraphRowChips`): the chip against the column's right edge, its names
     // cut to the column, and level with the row.
@@ -290,11 +323,13 @@ Rectangle {
     // middle button is left alone on purpose — it starts the pane's autoscroll from here as it does from a row).
     MouseArea {
         id: pinMouse
-        y: pin.rowY
+        // The ground's own box, sliver and all (`pinPicked`): a strip that lights under the pointer and takes no press
+        // is a target that moves as the reader arrives at it.
+        y: pin.rowY - pin.topRoom
         // **The one thing that gives the bar room.** A press taken over the trough answered it with a jump to HEAD
         // (`barRoom`); the ink around it does not have to move for that.
         width: parent.width - pin.barRoom
-        height: Theme.graphRowHeight
+        height: Theme.graphRowHeight + pin.topRoom
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: mouse => {

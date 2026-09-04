@@ -234,14 +234,23 @@ Item {
         readonly property bool below: Harness.autoAct === "graph-head-below"
         function report() {
             const row = graphModel.headRow
-            // The five judged answers first and in one run, because a
-            // `must_say` catches neighbours only (`verify/verbs.rs`).
+            // The judged answers first and in one run, because a
+            // `must_say` catches neighbours only (`verify/verbs.rs`) —
+            // and in the order the longest of them reads, so the runs
+            // that judge fewer stop short of the rest.
             Harness.report(
                 "graph_head shown=" + graphPane.headPin.visible
                 + " above=" + graphPane.headPin.rowAbove
                 + " onScreen=" + graphPane.view.rowOnScreen(row)
                 + " lit=" + graphPane.headPin.lit
                 + " landed=" + (graphPane.view.currentIndex === row)
+                // Whether the stand-in is carrying the selection, read off the ground itself: `landed=` beside it is
+                // the same condition asked of the list, so the two together are the wiring between them.
+                + " picked=" + graphPane.headPin.picked
+                // And how much of the list's own top sliver it keeps above itself. Four pixels of empty ground on a
+                // ground of the same colour: a picture answers it only against the bands either side of the graph,
+                // and only if the reader knows to look there.
+                + " room=" + Math.round(graphPane.headPin.topRoom)
                 + " row=" + row
                 + " at=" + graphPane.view.currentIndex
                 // What it leaves the list's own scroll bar. A picture cannot answer it — the band is drawn over the
@@ -255,9 +264,12 @@ Item {
                 return
             const act = Harness.autoAct
             if (!graphHeadTimer.answered) {
-                // The stand-in has to have come up before anything is asked of it: the two runs below are about what
-                // takes it away again, and a run that never saw it would call an empty band a success.
-                if (!graphPane.headPin.visible) {
+                // The stand-in has to have come up **on the edge this run is about** before anything is asked of it:
+                // the two runs below are about what takes it away again, and a run that never saw it would call an
+                // empty band a success. The edge is part of that — a preset whose HEAD starts off the bottom hands
+                // the other runs a stand-in nobody scrolled for, and `-lit` needs one that is not carrying the
+                // selection, which is a preset where HEAD is not the row the page opened on (`GraphHeadPin`).
+                if (!graphPane.headPin.visible || graphPane.headPin.rowAbove === graphHeadTimer.below) {
                     if (graphHeadTimer.below)
                         graphPane.view.positionViewAtBeginning()
                     else
