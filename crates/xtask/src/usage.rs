@@ -181,7 +181,9 @@ const TAIL: &str = "  shipped [--no-build]
       reports neither memory nor fps honestly) on one named screen, the
       PG_AUTO_* hooks, WorkingSet and private bytes sampled every 100ms
       for their maximum, and a deadline with a kill guard. The first run
-      is discarded — the record is a warm-cache number.
+      is discarded — the record is a warm-cache number — unless an
+      invocation minutes ago warmed the same exe and corpus, which the
+      last one leaves a note of under target/perf.
       The machine is measured beside the process, and a run it spoiled is
       taken again rather than published: the session locking, the window
       going down or moving screens, frames not arriving at the rate the

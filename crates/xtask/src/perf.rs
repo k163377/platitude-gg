@@ -46,6 +46,7 @@ mod reading;
 mod report;
 mod rig;
 mod sampler;
+mod warmth;
 
 use std::time::Duration;
 
@@ -111,7 +112,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
         Err(complaint) => return Err(complaint),
     };
-    let output = artifacts::prepare(
+    let (output, exe_hash) = artifacts::prepare(
         &root,
         &built,
         &opts,
@@ -127,11 +128,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("screen: {} at {}Hz", screen.name, screen.hz);
     }
 
-    println!(
-        "repo: {} | runs: {} (the first is discarded — cold cache)",
-        opts.repo.display(),
-        opts.runs
-    );
+    let (first, warmed) = first_run(&root, &exe_hash, corpus.as_ref(), &opts);
     // After the build and before the runs: the build can share the
     // machine, the runs cannot (`still`). Every `cargo xtask` verb that
     // builds waits for this to lift, and this waits for the ones already
@@ -147,7 +144,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let mut kept: Vec<Reading> = Vec::new();
     let mut retries = 0;
-    for run in 0..=opts.runs {
+    for run in first..=opts.runs {
         let discarded = run == 0;
         let reading = bench.take(run, &mut retries)?;
         say(run, discarded, &reading);
@@ -157,6 +154,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     one_graphics_stack(&kept)?;
     unmoved_corpus(&opts, corpus.as_ref())?;
+    warmth::note(&root, &warmed);
     report(
         &opts,
         &kept,
@@ -206,6 +204,44 @@ fn build(
     })
 }
 
+/// Which run the kept ones start at, and what this invocation warms.
+/// The first run is discarded to pay for a cold cache — unless an
+/// invocation minutes ago warmed this exe and corpus, in which case
+/// every run is kept (`warmth`).
+fn first_run(
+    root: &std::path::Path,
+    exe_hash: &str,
+    corpus: Option<&corpus::Corpus>,
+    opts: &Options,
+) -> (u32, warmth::Warmed) {
+    let warmed = warmth::Warmed::now(
+        exe_hash,
+        corpus.map_or("-", |corpus| corpus.token.as_str()),
+        &opts.repo.display().to_string(),
+    );
+    let first = match warmth::warm(root, &warmed) {
+        Some(age) => {
+            println!(
+                "repo: {} | runs: {} (none discarded — an invocation {}s ago warmed this exe and \
+                 corpus)",
+                opts.repo.display(),
+                opts.runs,
+                age.as_secs()
+            );
+            1
+        }
+        None => {
+            println!(
+                "repo: {} | runs: {} (the first is discarded — cold cache)",
+                opts.repo.display(),
+                opts.runs
+            );
+            0
+        }
+    };
+    (first, warmed)
+}
+
 /// Everything one run needs, held once so a run is `take(n)`.
 struct Bench<'a> {
     output: &'a std::path::Path,
@@ -248,6 +284,7 @@ impl Bench<'_> {
     /// end in a measurement instead of in a wasted afternoon.
     fn take(&self, run: u32, retries: &mut u32) -> Result<Reading, String> {
         let mut attempt = 0;
+        let mut covered = 0;
         loop {
             sampler::wait_for_quiet(&self.opts.limits, QUIET_CEILING)?;
             let run_dir = self.output.join(if attempt == 0 {
@@ -274,6 +311,21 @@ impl Bench<'_> {
                 // retrying it three more times only delays the report.
                 Err(measure::Spoiled::Run(said)) => return Err(said),
                 Err(measure::Spoiled::Host(said)) => said,
+                // A window covered once may have been covered by
+                // something passing; covered twice, by something that
+                // stays — and two more attempts would cost a ceiling
+                // each to say so again.
+                Err(measure::Spoiled::Covered(said)) => {
+                    covered += 1;
+                    if covered > 1 {
+                        return Err(format!(
+                            "run {run} was not a reading of the application: {said}. The bench \
+                             stood still on two attempts, so whatever covers the window stays — \
+                             clear it and measure again."
+                        ));
+                    }
+                    said
+                }
                 // The host conditions were read inside `measure`, which
                 // is what an `Ok` means — what is left to ask is the one
                 // question only the frames answer.

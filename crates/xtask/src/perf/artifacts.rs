@@ -85,9 +85,10 @@ fn toml_string(path: &str) -> String {
 }
 
 /// The evidence directory, reserved and written with everything that
-/// decides what the runs are of. `root` is the tree the command runs in,
-/// where the evidence lands; what was measured is `built`, which is the
-/// rig's tree under `--at` and this one otherwise.
+/// decides what the runs are of, and the measured exe's blob id. `root`
+/// is the tree the command runs in, where the evidence lands; what was
+/// measured is `built`, which is the rig's tree under `--at` and this one
+/// otherwise.
 pub(super) fn prepare(
     root: &Path,
     built: &super::rig::Built,
@@ -95,7 +96,7 @@ pub(super) fn prepare(
     screen: Option<&Screen>,
     corpus: &str,
     modes: &str,
-) -> Result<PathBuf, String> {
+) -> Result<(PathBuf, String), String> {
     let exe = built.exe.as_path();
     let source = built.tree.as_path();
     let stamp = SystemTime::now()
@@ -169,6 +170,7 @@ pub(super) fn prepare(
     if !output.status.success() {
         return Err("could not fingerprint the measured executable".into());
     }
+    let exe_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
     std::fs::write(directory.join("exe-git-blob-hash.txt"), output.stdout)
         .map_err(|e| e.to_string())?;
     if opts.open {
@@ -186,7 +188,7 @@ pub(super) fn prepare(
             &["status", "--porcelain=v2", "--untracked-files=no"],
         )?;
     }
-    Ok(directory)
+    Ok((directory, exe_hash))
 }
 
 fn capture(directory: &Path, name: &str, repo: &Path, args: &[&str]) -> Result<(), String> {

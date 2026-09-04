@@ -28,8 +28,11 @@ const AFTER_DONE_MS: u64 = 250;
 /// How long the scroll bench is given past the twelve seconds it asks
 /// for. Past this it is not slow, it is not running: the window it draws
 /// into is covered, and the animation that advances it stopped with the
-/// frames.
-const SCROLL_CEILING: Duration = Duration::from_secs(45);
+/// frames. Thirty seconds, against the twenty-four a bench at half the
+/// screen's rate takes — the least the frame gate publishes, so a run
+/// slower than that is refused by the frame gate anyway, and every
+/// second past it only makes a covered window cost more.
+const SCROLL_CEILING: Duration = Duration::from_secs(30);
 
 /// Why a run produced no reading, and whether taking it again could
 /// help. The difference matters: a machine that spoiled a run will not
@@ -37,7 +40,15 @@ const SCROLL_CEILING: Duration = Duration::from_secs(45);
 /// will stop answering again.
 #[derive(Debug)]
 pub(super) enum Spoiled {
+    /// The machine: a lock, a minimised window, a screen change, a busy
+    /// machine. Worth taking again for as long as `--retries` allows.
     Host(String),
+    /// A bench that stood still with nothing else wrong with the
+    /// machine: the window was covered, or the screen was off. Worth one
+    /// more attempt — what covers a window either passes or stays, and a
+    /// stayer is not worth two more ceilings of saying so
+    /// (`perf::Bench::take`).
+    Covered(String),
     Run(String),
 }
 
@@ -240,21 +251,25 @@ fn verdict(
         Ended::Exited => Some("the app exited before reporting perf_done".into()),
         Ended::Done(_) | Ended::Covered => None,
     };
-    let host = reading
-        .conditions
-        .complaint(&opts.limits, pinned)
-        .or_else(|| covered.then(|| stood_still(&reading.conditions)));
+    let host = reading.conditions.complaint(&opts.limits, pinned);
+    // A bench that stood still on a machine with nothing else to say
+    // about itself: its own kind, because it is retried its own way.
+    let stood = (host.is_none() && covered).then(|| stood_still(&reading.conditions));
     let failed = reading
         .failure
         .clone()
         .or_else(|| reading.conditions.unwatched())
         .or(ending)
         .or_else(|| missing(&reading, opts).err());
-    match (host, failed) {
-        (Some(host), Some(failed)) => Err(Spoiled::Host(format!("{host} — and so {failed}"))),
-        (Some(host), None) => Err(Spoiled::Host(host)),
-        (None, Some(failed)) => Err(Spoiled::Run(failed)),
-        (None, None) => Ok(reading),
+    let and_so = |said: String| match &failed {
+        Some(failed) => format!("{said} — and so {failed}"),
+        None => said,
+    };
+    match (host, stood, failed.is_some()) {
+        (Some(host), _, _) => Err(Spoiled::Host(and_so(host))),
+        (None, Some(stood), _) => Err(Spoiled::Covered(and_so(stood))),
+        (None, None, true) => Err(Spoiled::Run(failed.unwrap_or_default())),
+        (None, None, false) => Ok(reading),
     }
 }
 
@@ -342,8 +357,8 @@ mod tests {
         };
         let spoiled = verdict(reading, &defaults(), Ended::Covered, None)
             .expect_err("a covered window is not a reading");
-        assert!(matches!(spoiled, Spoiled::Host(_)), "{spoiled:?}");
-        let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
+        assert!(matches!(spoiled, Spoiled::Covered(_)), "{spoiled:?}");
+        let (Spoiled::Host(said) | Spoiled::Run(said) | Spoiled::Covered(said)) = spoiled;
         assert!(said.contains("covered"), "{said}");
     }
 
@@ -359,7 +374,7 @@ mod tests {
         };
         let spoiled = verdict(reading, &defaults(), Ended::Covered, None)
             .expect_err("a bench that produced nothing is not a reading");
-        let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
+        let (Spoiled::Host(said) | Spoiled::Run(said) | Spoiled::Covered(said)) = spoiled;
         assert!(!said.contains("was covered"), "{said}");
         assert!(said.contains("in front the whole time"), "{said}");
     }
@@ -421,7 +436,7 @@ mod tests {
             };
             let spoiled =
                 verdict(reading, &defaults(), ending, None).expect_err("an app that said nothing");
-            let (Spoiled::Host(text) | Spoiled::Run(text)) = &spoiled;
+            let (Spoiled::Host(text) | Spoiled::Run(text) | Spoiled::Covered(text)) = &spoiled;
             assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
             assert!(text.contains(said), "{text}");
         }
@@ -434,7 +449,7 @@ mod tests {
         let spoiled = verdict(Reading::default(), &defaults(), Ended::Done(true), None)
             .expect_err("nothing sampled and nothing reported");
         assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
-        let (Spoiled::Host(text) | Spoiled::Run(text)) = &spoiled;
+        let (Spoiled::Host(text) | Spoiled::Run(text) | Spoiled::Covered(text)) = &spoiled;
         assert!(text.contains("never sampled"), "{text}");
     }
 
@@ -463,7 +478,7 @@ mod tests {
         };
         let spoiled = verdict(reading, &defaults(), Ended::TimedOut, None)
             .expect_err("a minimised window is not a reading");
-        let (Spoiled::Host(said) | Spoiled::Run(said)) = spoiled;
+        let (Spoiled::Host(said) | Spoiled::Run(said) | Spoiled::Covered(said)) = spoiled;
         assert!(said.starts_with("the window was minimised"), "{said}");
         assert!(said.contains("did not report perf_done"), "{said}");
     }
