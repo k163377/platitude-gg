@@ -137,7 +137,7 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.write(
             OPEN_FETCH_OP,
-            AfterWrite::Graph,
+            AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 let _permit = permit;
                 s.fetch_and_read_tags(&exec, &repo.workdir, None, timeout, &cancel)
@@ -350,7 +350,7 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.write(
             AUTO_FETCH_OP,
-            AfterWrite::Graph,
+            AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 let _permit = permit;
                 s.fetch_and_read_tags(&exec, &repo.workdir, None, timeout, &cancel)

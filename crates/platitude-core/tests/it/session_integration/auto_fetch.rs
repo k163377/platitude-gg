@@ -459,3 +459,79 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     );
     session.close();
 }
+
+/// A fetch writes `refs/remotes/*` and `FETCH_HEAD` and gets no nearer
+/// the index or the working tree, so the refresh behind it reads the refs
+/// first and asks for a status only where they moved. A tick that brings
+/// nothing down — which on a quiet repository is nearly every one — spends
+/// no `git status` at all, and that is the longest read in the app.
+///
+/// Counted between the writes' starts rather than after the second one:
+/// `WriteFinished` is sent before the refreshes it triggers, so it is no
+/// boundary for them. The queue is serial and does not advance until a
+/// request's refreshes have landed, so the start of the write behind one
+/// is what closes its window.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fetch_that_brings_nothing_down_reads_no_status() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut clone = TestRepo::init();
+    clone.git(&["remote", "add", "origin", &origin.file_url()]);
+
+    let (sink, session) = opened(&clone).await;
+    // The slot boundary, not just the events: a status read is published
+    // from inside its reader, which may then go round again on a repeat
+    // booked behind it — and that second publication would land in the
+    // window counted below.
+    sink.opening_settled(&session).await;
+    // An hour, so both fetches below are the hand-stepped ticks' doing and
+    // nothing else's.
+    session.set_auto_fetch(Some(Duration::from_secs(3600)));
+    let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
+
+    // The first tick has `origin/main` to bring down: its refs move, so
+    // the status behind them is read.
+    assert!(stepped(&hourly, "the first tick").await);
+    assert_eq!(auto_fetch_done(&sink, 1).await, None);
+    // The second finds the remote exactly where the first left it.
+    assert!(stepped(&hourly, "the second tick").await);
+    assert_eq!(auto_fetch_done(&sink, 2).await, None);
+
+    // The write that closes the second tick's window.
+    session.fetch(None);
+    assert_eq!(write_result(&sink, "fetch").await, None);
+
+    let events = sink.events.lock().unwrap();
+    let ticked: Vec<usize> = events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| {
+            matches!(e, SessionEvent::WriteStarted { op }
+                if *op == platitude_core::session::AUTO_FETCH_OP)
+        })
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(ticked.len(), 2, "two automatic fetches ran: {events:?}");
+    let asked = events
+        .iter()
+        .position(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == "fetch"))
+        .expect("the fetch asked for by hand started");
+    let statuses = |from: usize, to: usize| {
+        events[from..to]
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
+            .count()
+    };
+    assert_eq!(
+        statuses(ticked[0], ticked[1]),
+        1,
+        "the tick that brought a ref down read the status behind it: {events:?}"
+    );
+    assert_eq!(
+        statuses(ticked[1], asked),
+        0,
+        "the tick that brought nothing down read no status: {events:?}"
+    );
+    drop(events);
+    session.close();
+}

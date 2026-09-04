@@ -229,6 +229,34 @@ pub enum AfterWrite {
     /// instead — and staging is done with the graph off screen, where
     /// there is nothing for a poll to keep current.
     Tree,
+    /// Refs and nothing else: a fetch moves `refs/remotes/*` and writes
+    /// `FETCH_HEAD`, and leaves the index and the working tree exactly
+    /// where they were.
+    ///
+    /// So this one reads the refs first and the status only where they
+    /// moved. Nothing else a status reports can have changed under such a
+    /// write — the file lists, the standing operation, the merge tool,
+    /// the line-ending marks — and the one thing that can, porcelain v2's
+    /// `# branch.ab`, moves only when the upstream's remote-tracking ref
+    /// does, which is the question the refs read already answers
+    /// (`joins::refs_key`).
+    ///
+    /// The saving is per tick, on the longest read in the app: automatic
+    /// fetching runs by the minute, almost every tick brings nothing
+    /// down, and one `git status -uall` walks every tracked and every
+    /// ignored path there is (measured on the 200,000-commit synthetic
+    /// corpus — 109,652 tracked, 78,000 ignored: 2.9s wall, 2.3 CPU
+    /// seconds spread over the preload-index threads).
+    ///
+    /// **Only for a write that reaches neither the index, the working
+    /// tree, nor the configuration.** The status event carries the push
+    /// marks and the merge tool beside the files, and those are `git
+    /// config` reads that `refs_key` does not answer for: a write that
+    /// edited config without moving a ref would have its mark go unread
+    /// until the next poll. A commit, a merge, a rebase, a switch move
+    /// history and the tree together, and read them together
+    /// ([`AfterWrite::Graph`]).
+    Refs,
     /// Working tree / index / stash only.
     Snapshots,
     /// History or refs moved, so the graph has to be rebuilt too.

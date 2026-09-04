@@ -205,7 +205,7 @@ impl RepoSession {
                     error: None,
                     report: None,
                 });
-                after == AfterWrite::Graph
+                matches!(after, AfterWrite::Graph | AfterWrite::Refs)
             }
             // Only the network lane can land here — a local write's token
             // is nobody's to cancel — and it means the session is closing.
@@ -251,11 +251,28 @@ impl RepoSession {
         // A write that only moved the index reads the tree alone: the refs
         // are where they were, and asking again is the longest read in the
         // app on a repository with refs in it (`AfterWrite::Tree`).
+        //
+        // A write that could not reach the index or the tree reads them the
+        // other way round, in series: the refs first, and the tree only
+        // where they moved, because that move is the only thing a status
+        // could report differently afterwards (`AfterWrite::Refs`). The
+        // series is the point — a join would run the read it is trying not
+        // to spend.
         let tree_only = after == AfterWrite::Tree;
-        let (wip_flipped, refs_moved) = if tree_only {
-            (self.publish_status().await, false)
-        } else {
-            tokio::join!(self.publish_status(), self.publish_refs(false))
+        let (wip_flipped, refs_moved) = match after {
+            AfterWrite::Tree => (self.publish_status().await, false),
+            AfterWrite::Refs => {
+                let refs_moved = self.publish_refs(false).await;
+                let wip_flipped = if refs_moved {
+                    self.publish_status().await
+                } else {
+                    false
+                };
+                (wip_flipped, refs_moved)
+            }
+            AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
+                tokio::join!(self.publish_status(), self.publish_refs(false))
+            }
         };
         if rebuild_graph || wip_flipped || refs_moved {
             // Off-screen rebuild: the pane keeps showing the old graph

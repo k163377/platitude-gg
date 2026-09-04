@@ -5,12 +5,20 @@ use super::*;
 
 impl RepoSession {
     /// `git fetch --prune`; `None` fetches every remote.
+    ///
+    /// Refreshed as a refs-only write, the same as the two nobody asks
+    /// for: a fetch writes `refs/remotes/*` and `FETCH_HEAD` and gets no
+    /// nearer the working tree than that ([`AfterWrite::Refs`]).
+    ///
+    /// **What the press gives up**: with nothing brought down it no
+    /// longer doubles as a status poll, so a tree made dirty outside this
+    /// window lands on the following tick rather than on the button.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
             "fetch",
-            AfterWrite::Graph,
+            AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 s.fetch_and_read_tags(&exec, &repo.workdir, remote.as_deref(), timeout, &cancel)
                     .await
