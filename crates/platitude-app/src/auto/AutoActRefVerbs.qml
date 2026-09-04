@@ -111,6 +111,16 @@ Item {
             page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
             refMenu.openSub(refBranchCard)
             refusedRowTimer.start()
+        } else if (act === "delete-branch-chip") {
+            // The same delete, asked from the graph row's entrance — the very card the sidebar's row opens
+            // (`RefBranchMenu`). **The subject is the card going.** The row is left standing for a refusal
+            // (`AppMenuItem.staysOpen`), so a delete git takes has to take the card down behind it, and a card that
+            // closed frames exactly like one that was never opened — only the report can say which.
+            page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
+            commitMenu.openSub(commitBranchCard)
+            // The row's own press: a stays-open row is picked rather than triggered (`AppMenuItem.picked`).
+            commitDeleteItem.picked()
+            chipDeleteTimer.start()
         } else if (act === "chip-menu") {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — there is no second menu on
             // the other side of the chip column any more (デザイン規約 §グラフ行の右クリック). Only the kind letter
@@ -391,6 +401,23 @@ Item {
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)
                                        + " note=" + refDeleteItem.note)
+            driver.complete()
+        }
+    }
+    // The delete git took, asked from the graph row. Judged rather than photographed: the menu that stayed up for a
+    // refusal has to go once none is coming, and a closed card is the same picture as a card nobody opened. `code=`
+    // is what tells a landing from a refusal — a turned-down delete leaves the row wearing `branch -D`.
+    SampleTimer {
+        id: chipDeleteTimer
+        onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+                return
+            chipDeleteTimer.stop()
+            Harness.report("chip_delete branch=" + Harness.autoActArg
+                              + " row=" + branchesModel.rowOfName(Harness.autoActArg)
+                              + " code=" + commitDeleteItem.code
+                              + " menu=" + commitMenu.opened
+                              + " card=" + commitBranchCard.opened)
             driver.complete()
         }
     }

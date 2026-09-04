@@ -1490,11 +1490,14 @@ Item {
             return
         }
         // Landed: no refusal is coming for it after all, so the menu left standing to catch one has nothing left to
-        // say.
+        // say. **Both entrances, the way the refusal answers both** (`noteForceDelete`): the delete row belongs to one
+        // card raised from either the left pane or a graph row, and the page cannot tell which one asked. Only one of
+        // them is ever standing, so closing the other costs nothing.
         if (page.pendingDeleteBranch !== "") {
             page.pendingDeleteBranch = ""
             page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
             refRowMenu.close()
+            commitRowMenu.close()
         }
         // The name went in, so the box that was holding it has done its job and comes down (デザイン規約 §答えの要らない報せ:
         // a rename keeps its box until git answers).

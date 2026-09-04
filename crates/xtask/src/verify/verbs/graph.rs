@@ -80,6 +80,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=2",
     },
+    // The delete that card offers, run to git's answer from this
+    // entrance. **Nothing here is a picture**: the row is left standing
+    // for a refusal (`AppMenuItem.staysOpen`), so what is judged is the
+    // card going once none is coming — and a card that closed frames
+    // exactly like one that was never opened. `code=` is the other half,
+    // since a refused delete would leave the menu up for a reason of its
+    // own: on a landing the row is still wearing `branch --delete`,
+    // where a refusal turns it into `branch -D`.
+    Verb {
+        name: "delete-branch-chip",
+        when: &[],
+        plain: "chip_delete branch=base row=-1 code=branch --delete menu=false card=false",
+    },
     // The card that must *not* come out. A picture cannot carry an
     // absence on its own — an empty overlay would frame the same as a
     // run whose hover request never arrived — so the menu is judged

@@ -120,6 +120,15 @@ Item {
 
     anchors.fill: parent
 
+    /// A write that landed has nothing left for the menu to catch — the same door `RefRowMenu` opens, because the
+    /// branch card standing behind either of them is the one card (`RefBranchMenu`). Both menus are named: only one
+    /// of them is ever up, and a `close()` that answered for one of the two would be a name for half the component.
+    /// The cards go with them (Qt takes an open submenu down with the menu it hangs off — qmltestrunner 実測).
+    function close() {
+        commitMenu.close()
+        stashMenu.close()
+    }
+
     function offerStash() {
         stashMenu.offer()
     }

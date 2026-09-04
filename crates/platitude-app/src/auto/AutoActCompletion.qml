@@ -31,6 +31,7 @@ QtObject {
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
+                "delete-branch-chip",
                 "set-upstream-go",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
@@ -100,7 +101,7 @@ QtObject {
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
-                "delete-branch-refused", "remote-refused", "chip-menu", "chip-menu-current",
+                "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
                 // The bar is what these wait for, and it comes down after the write's own answer.
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
                 "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
