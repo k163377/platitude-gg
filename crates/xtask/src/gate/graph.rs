@@ -6,7 +6,8 @@
 //! child-module path that resolves into b's module (through `pub use`
 //! re-exports), a string literal naming b's path, an insta snapshot b of
 //! a's tests, a QML type name that is b's file, a QML mention of a
-//! `#[qobject]` type b defines. A `mod x;` declaration is *not* an edge:
+//! `#[qobject]` type b defines, a `CARGO_BIN_EXE_<name>` naming the
+//! binary b is the root of. A `mod x;` declaration is *not* an edge:
 //! declaring a module is not reading it, and the declaring file — a crate
 //! root or a mod.rs — is the hub every other file would reach through.
 //! For the same reason a crate root defines nothing anybody names
@@ -35,8 +36,9 @@ use std::path::Path;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Module {
-    /// `platitude_core`, `platitude_app`, `xtask`, or `platitude_core::it`
-    /// for the integration binary, which is a crate of its own.
+    /// `platitude_core`, `platitude_app`, `xtask`, or — for the binaries
+    /// that are each a crate of their own — `platitude_core::it`,
+    /// `platitude_core::pg_todo_editor`.
     pub krate: String,
     /// Module path from the crate root, empty at the root.
     pub path: Vec<String>,
@@ -59,6 +61,9 @@ pub(crate) struct Graph {
     index: BTreeMap<(String, Vec<String>), String>,
     /// crate ident -> root file, for the crates another crate can name.
     crate_roots: BTreeMap<String, String>,
+    /// (package, bin name) -> the bin's root file. Nothing `use`s a
+    /// binary, so this is what a `CARGO_BIN_EXE_<name>` resolves through.
+    binaries: BTreeMap<(String, String), String>,
     /// file -> the child modules it declares, which its own code names bare.
     children: BTreeMap<String, BTreeSet<String>>,
     /// file -> exported name -> the path it re-exports.
@@ -216,9 +221,25 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
         // An integration binary's strings are its fixtures — a sandbox
         // laid out like this tree names this tree's files without
         // reading one of them.
+        let bodies = string_bodies(raw);
         if g.modules.get(file).is_some_and(|m| m.test_binary.is_none()) {
-            for target in literal_paths(root, file, raw) {
+            for target in literal_paths(root, file, &bodies) {
                 g.edge(file, &target);
+            }
+        }
+        // Nothing `use`s a binary: a test shoots the built one, and cargo
+        // hands that one over by name, within the package only.
+        let package = g
+            .modules
+            .get(file)
+            .map(|m| m.package.clone())
+            .unwrap_or_default();
+        for name in bin_exe_names(&bodies) {
+            match g.binaries.get(&(package.clone(), name.clone())).cloned() {
+                Some(bin) => g.edge(file, &bin),
+                None => g
+                    .unresolved
+                    .push((file.clone(), format!("{BIN_EXE}{name}"))),
             }
         }
     }
@@ -297,36 +318,61 @@ fn bare_roots(g: &Graph, file: &str, code: &str) -> BTreeMap<String, Vec<String>
     bare
 }
 
-/// The crate roots of one package, each walked into the module index:
-/// the lib, the bin, the `it` binary, and every other file directly
-/// under tests/ (crates/xtask/tests/gate.rs), which is an integration
-/// binary — a crate — of its own.
-fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
-    let ident = package.replace('-', "_");
-    // The root files, spelled in pieces: a whole path in a string here
-    // would be read as this file reading every crate root.
-    let lib = dir.join("src").join("lib.rs");
-    if lib.is_file() {
-        g.crate_roots.insert(ident.clone(), rel(root, &lib));
-    }
-    let mut roots = vec![
-        (dir.join("src").join("lib.rs"), ident.clone(), None),
-        (dir.join("src").join("main.rs"), ident.clone(), None),
-        (
-            dir.join("tests").join("it").join("main.rs"),
-            format!("{ident}::it"),
-            Some("it".to_string()),
-        ),
-    ];
-    let mut binaries: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("tests"))
+/// Every `.rs` directly under `dir`, sorted, and none when there is no
+/// such directory.
+fn rust_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == "rs"))
         .collect();
-    binaries.sort();
-    for file in binaries {
+    files.sort();
+    files
+}
+
+/// The crate roots of one package, each walked into the module index:
+/// the lib, the bins (`src/main.rs` and each `src/bin/*.rs`, a crate
+/// apiece), the `it` binary, and every other file directly under tests/
+/// (crates/xtask/tests/gate.rs), which is an integration binary — a
+/// crate — of its own. The bins are indexed by the name cargo builds
+/// them under, which is how a test naming `CARGO_BIN_EXE_<name>` finds
+/// the file it shoots.
+fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
+    let ident = package.replace('-', "_");
+    // The root files, spelled in pieces: a whole path in a string here
+    // would be read as this file reading every crate root.
+    let src = dir.join("src");
+    let lib = src.join("lib.rs");
+    if lib.is_file() {
+        g.crate_roots.insert(ident.clone(), rel(root, &lib));
+    }
+    let main = src.join("main.rs");
+    if main.is_file() {
+        g.binaries
+            .insert((package.to_string(), package.to_string()), rel(root, &main));
+    }
+    let mut roots = vec![
+        (lib, ident.clone(), None),
+        (main, ident.clone(), None),
+        (
+            dir.join("tests").join("it").join("main.rs"),
+            format!("{ident}::it"),
+            Some("it".to_string()),
+        ),
+    ];
+    for file in rust_files_in(&src.join("bin")) {
+        let name = stem_of(&file.display().to_string());
+        g.binaries
+            .insert((package.to_string(), name.clone()), rel(root, &file));
+        // Under the package, as the test binaries are: a bin named after
+        // its own package would otherwise take the lib's ident and its
+        // place in the index, and every `platitude_core::…` in the tree
+        // would resolve into the bin.
+        roots.push((file, format!("{ident}::{}", name.replace('-', "_")), None));
+    }
+    for file in rust_files_in(&dir.join("tests")) {
         let stem = stem_of(&file.display().to_string());
         roots.push((file, format!("{ident}::{stem}"), Some(stem)));
     }
@@ -923,18 +969,18 @@ fn self_relative(g: &Graph, path: &[String]) -> Vec<String> {
     }
 }
 
-/// String literals in `text` that name a file or directory of the
-/// workspace, resolved against the file's own directory, its crate, and
-/// the workspace root. A literal has to look like a path (a slash or a
-/// dot) — `"crates"` alone would otherwise pull in the world.
-fn literal_paths(root: &Path, file: &str, text: &str) -> Vec<String> {
+/// The string literals among `bodies` that name a file or directory of
+/// the workspace, resolved against the file's own directory, its crate,
+/// and the workspace root. A literal has to look like a path (a slash or
+/// a dot) — `"crates"` alone would otherwise pull in the world.
+fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let file_dir = Path::new(file).parent().unwrap_or(Path::new(""));
     let crate_dir: std::path::PathBuf = Path::new(file).iter().take(2).collect();
     let Ok(real_root) = root.canonicalize() else {
         return out;
     };
-    for literal in string_bodies(text) {
+    for literal in bodies {
         let literal = literal.as_str();
         if literal.len() < 3
             || literal.len() > 200
@@ -968,6 +1014,24 @@ fn literal_paths(root: &Path, file: &str, text: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// The environment variable cargo sets per bin of a package, holding the
+/// path of the built executable. Spelled once, as a prefix, so the name
+/// that follows it is what the reading tells apart.
+const BIN_EXE: &str = "CARGO_BIN_EXE_";
+
+/// The bins these string literals shoot: the `<name>` of every
+/// `CARGO_BIN_EXE_<name>` among them, however the file reads the
+/// variable (`env!`, `option_env!`, `std::env::var`). The prefix bare,
+/// as this file spells it, names no bin and is dropped.
+fn bin_exe_names(bodies: &[String]) -> Vec<String> {
+    bodies
+        .iter()
+        .filter_map(|body| body.strip_prefix(BIN_EXE))
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 /// The bodies of the string literals in `text`, read with the same
@@ -1169,8 +1233,8 @@ pub(crate) fn collect(
 #[cfg(test)]
 mod tests {
     use super::{
-        build, defines_tests, mod_declaration, paths_in, reexports_in, string_bodies,
-        strip_comments,
+        bin_exe_names, build, defines_tests, mod_declaration, paths_in, reexports_in,
+        string_bodies, strip_comments,
     };
     use std::collections::BTreeMap;
 
@@ -1300,6 +1364,52 @@ mod tests {
         assert_eq!(named["Executor"], vec!["process", "Executor"]);
         assert_eq!(named["Outcome"], vec!["process", "outcome", "Outcome"]);
         assert_eq!(globs, vec![vec!["walk".to_string()]]);
+    }
+
+    #[test]
+    fn a_bin_is_named_by_the_variable_cargo_sets_for_it() {
+        // Spelled in pieces so this file names no binary of its own.
+        let var = concat!("CARGO_BIN_EXE", "_pg-todo-editor");
+        let code = format!(
+            "const EXE: &str = env!(\"{var}\");\nlet late = option_env!(\"{var}\");\n\
+             // env!(\"{var}\") in a comment shoots nothing\n\
+             let plain = \"not/a/bin\";\nlet bare = \"CARGO_BIN_EXE_\";\n"
+        );
+        assert_eq!(
+            bin_exe_names(&string_bodies(&code)),
+            vec!["pg-todo-editor", "pg-todo-editor"],
+            "the comment is not one of them"
+        );
+    }
+
+    /// A test that shoots a binary reads that binary. Nothing `use`s a
+    /// bin, so `CARGO_BIN_EXE_<name>` is the only place the dependency
+    /// is written down: without the edge, a change to the binary — or to
+    /// anything only the binary reads — selects none of the tests that
+    /// run it.
+    #[test]
+    fn a_test_that_shoots_a_binary_reads_the_binary() {
+        let root = crate::tree::workspace_root();
+        let g = build(&root).expect("the graph of this tree");
+        // Spelled in pieces: whole paths here would be read as this very
+        // file reading each of them.
+        let pairs = [
+            ("xtask/tests", "gate.rs", "xtask/src", "main.rs"),
+            (
+                "platitude-core/tests/it/support",
+                "integrate.rs",
+                "platitude-core/src/bin",
+                "pg-todo-editor.rs",
+            ),
+        ];
+        for (test_dir, test_name, bin_dir, bin_name) in pairs {
+            let test = format!("crates/{test_dir}/{test_name}");
+            let bin = format!("crates/{bin_dir}/{bin_name}");
+            assert!(
+                g.deps.get(&test).is_some_and(|reads| reads.contains(&bin)),
+                "{test} shoots {bin} and the graph does not know it"
+            );
+        }
     }
 
     /// The whole tree, as it stands: every path resolves, and the crate
