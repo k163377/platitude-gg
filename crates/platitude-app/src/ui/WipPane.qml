@@ -154,34 +154,59 @@ ColumnLayout {
     function isChosen(bucket, path) {
         return wipPane.chosenKeys[bucket + ":" + path] === true
     }
-    /// Rows in the order they stand, so a caller can act on what was chosen. The buckets are separate lists and one
-    /// choice: a Ctrl-click reaches from one into the next, so every walk over the rows walks the lot of them.
+    /// The chosen files in the order they stand, as `{ bucket, fullName }` — what a caller acts on. The buckets are
+    /// separate lists and one choice: a Ctrl-click reaches from one into the next, so every walk over the rows walks
+    /// the lot of them.
+    ///
+    /// **Asked of the models, not of the delegates.** A view builds delegates for the rows it is showing and no
+    /// others, so a walk over them answers for the viewport instead of the list — a discard or a stash would take
+    /// whatever part of the choice happened to be on screen and drop the rest without saying so
+    /// (`NavSectionModel::file_key`).
     function chosenRows() {
         const out = []
         for (let i = 0; i < wipPane.rowCount(); i++) {
-            const row = wipPane.rowAt(i)
-            if (row && !row.folder && wipPane.isChosen(row.bucket, row.fullName))
-                out.push(row)
+            const key = wipPane.keyAt(i)
+            if (key !== "" && wipPane.chosenKeys[key] === true)
+                out.push(wipPane.rowOfKey(key))
         }
         return out
     }
-    /// Rows across every standing bucket, and the one at a place in them — the numbering the choice is anchored and
-    /// reached by, and the one a headless run names a row with.
+    /// One key taken apart. The bucket never holds a colon, so the first one is the divide.
+    function rowOfKey(key) {
+        const cut = key.indexOf(":")
+        return { bucket: key.substring(0, cut), fullName: key.substring(cut + 1) }
+    }
+    /// Rows across every standing bucket, and the file row at a place in them keyed `<bucket>:<path>` — the numbering
+    /// the choice is anchored and reached by. Empty where that row is a folder, which nothing choosable is.
+    ///
+    /// **Counted off the models**, so the numbering is the whole list's whatever the views have built.
     function rowCount() {
         const standing = wipPane.bucketPanes
         let out = 0
         for (let i = 0; i < standing.length; i++)
-            out += standing[i].list.count
+            out += standing[i].rows
         return out
     }
+    function keyAt(index) {
+        const standing = wipPane.bucketPanes
+        let at = index
+        for (let i = 0; i < standing.length; i++) {
+            if (at < standing[i].rows)
+                return standing[i].model.fileKeyAt(at)
+            at -= standing[i].rows
+        }
+        return ""
+    }
+    /// The delegate at a place in the rows, for the two things a delegate is the only answer to: the automation's
+    /// clicks, and placing a card against the row it belongs to. Null for a row the view has not built — every walk
+    /// over the choice itself goes through [`keyAt`] instead.
     function rowAt(index) {
         const standing = wipPane.bucketPanes
         let at = index
         for (let i = 0; i < standing.length; i++) {
-            const list = standing[i].list
-            if (at < list.count)
-                return list.itemAtIndex(at)
-            at -= list.count
+            if (at < standing[i].rows)
+                return standing[i].list.itemAtIndex(at)
+            at -= standing[i].rows
         }
         return null
     }
@@ -261,13 +286,14 @@ ColumnLayout {
         return true
     }
     function rowIndexOf(key) {
-        for (let i = 0; i < wipPane.rowCount(); i++) {
-            const row = wipPane.rowAt(i)
-            if (row && !row.folder && row.bucket + ":" + row.fullName === key)
+        for (let i = 0; i < wipPane.rowCount(); i++)
+            if (wipPane.keyAt(i) === key)
                 return i
-        }
         return -1
     }
+    /// Every file row between two places in the pane's numbering, ends included — the rows a Shift-click reaches.
+    /// **The ones scrolled past are in it too**: the anchor and the click are on screen by definition, and what lies
+    /// between them usually is not.
     function chooseRange(from, to) {
         if (from < 0 || to < 0)
             return
@@ -275,9 +301,9 @@ ColumnLayout {
         const hi = Math.max(from, to)
         const next = ({})
         for (let i = lo; i <= hi; i++) {
-            const row = wipPane.rowAt(i)
-            if (row && !row.folder)
-                next[row.bucket + ":" + row.fullName] = true
+            const key = wipPane.keyAt(i)
+            if (key !== "")
+                next[key] = true
         }
         wipPane.chosenKeys = next
         wipPane.chosenCount = Object.keys(next).length

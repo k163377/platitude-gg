@@ -95,3 +95,24 @@ fn the_arrows_step_over_a_folder_row() {
         format!("1{FIELD_SEP}unstaged{FIELD_SEP}src/b.txt")
     );
 }
+/// The key a choice holds a row by, answered for every row on screen and
+/// not only for the ones a view has built a delegate for. A folder row
+/// answers nothing — a folder is not a file to choose — and so does a
+/// number past the end.
+///
+/// **A row carries its own bucket.** An untracked file is shown under the
+/// unstaged heading, so its key reads `untracked:` while the list's run is
+/// `unstaged`; a pane composing the key out of the run it asked would name
+/// a row no write can find.
+#[test]
+fn every_file_row_answers_the_key_a_choice_holds_it_by() {
+    let mut model = worktree("unstaged", Source::files(pending()));
+    model.tree_view = true;
+    model.arrange();
+
+    assert!(flags(&model, 0, Role::Folder));
+    assert_eq!(model.file_key(0), "", "a folder is nothing to choose");
+    assert_eq!(model.file_key(1), "unstaged:src/b.txt");
+    assert_eq!(model.file_key(2), "untracked:c.txt");
+    assert_eq!(model.file_key(3), "", "past the end");
+}

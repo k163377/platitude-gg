@@ -33,14 +33,40 @@ impl NavSectionModel {
             .iter()
             .find(under)
             .or_else(|| rows[..at].iter().rev().find(under))
-            .map(|row| {
-                format!(
-                    "{}:{}",
-                    self.field(*row, Role::Bucket).as_str(),
-                    self.field(*row, Role::Full).as_str()
-                )
-            })
+            .map(|row| self.keyed(*row))
             .unwrap_or_default()
+    }
+
+    /// The file row on screen at `at`, keyed the way the pane holds its
+    /// choice — `<bucket>:<path>`. Empty for a folder row, and empty past
+    /// the end.
+    ///
+    /// **What lets a choice reach a row nobody has scrolled to.** A view
+    /// builds a delegate for the rows it is showing and no others, so a
+    /// walk over the delegates answers for the viewport rather than for
+    /// the list: a Shift-reach across a long bucket, or the rows a discard
+    /// is about to take, would come back cut down to what happens to be on
+    /// screen — silently, since the rows it skipped look no different from
+    /// rows nobody chose. Every row is answerable here (`data` computes by
+    /// value), so the pane asks the model instead.
+    pub(super) fn file_key(&self, at: usize) -> String {
+        self.row_at(at)
+            .filter(|row| !self.field(*row, Role::Folder).flag())
+            .map(|row| self.keyed(row))
+            .unwrap_or_default()
+    }
+
+    /// One row as `<bucket>:<path>` — the one spelling of the key a pane
+    /// holds a working-tree row by, so the pane's own composing of it and
+    /// the answers here cannot drift apart. The bucket never holds a
+    /// colon, so the first one is the divide; the path may hold as many
+    /// as it likes.
+    fn keyed(&self, row: Row) -> String {
+        format!(
+            "{}:{}",
+            self.field(row, Role::Bucket).as_str(),
+            self.field(row, Role::Full).as_str()
+        )
     }
 
     /// The file row `way` steps from `path` in `bucket`, as

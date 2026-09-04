@@ -312,6 +312,18 @@ impl NavSectionModel {
         self.shows(row, Role::Full)
     }
 
+    /// The file row at `row` keyed the way the WIP pane holds its choice
+    /// — `<bucket>:<path>`, empty for a folder row and past the end.
+    ///
+    /// This is how the choice reaches rows the view has built no delegate
+    /// for ([`NavSectionModel::file_key`]).
+    #[qslot]
+    fn file_key_at(&self, row: i32) -> String {
+        usize::try_from(row)
+            .map(|at| self.file_key(at))
+            .unwrap_or_default()
+    }
+
     /// The other way round: what the row git knows by this name shows.
     /// A stash is the section where the two differ — git is told
     /// `stash@{0}` and the row shows the entry's message — and this is
