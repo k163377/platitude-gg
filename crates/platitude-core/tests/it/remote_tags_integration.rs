@@ -257,10 +257,19 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
 /// The refs snapshot published after the fetch landed. Opening
 /// publishes one too, and that one predates any answer from the
 /// remote — waiting for it instead would test the empty index.
+///
+/// **A fetch that failed ends the wait rather than starting a silence.**
+/// Nothing else here publishes the snapshot this is about, so a broken
+/// environment would otherwise spend the whole patience budget and come
+/// back as a timeout that names the wait instead of the failure inside it.
 async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
     sink.wait_for("RefsLoaded after the fetch", |evs| {
-        let done = evs.iter().position(|e| {
-            matches!(e, SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" && error.is_none())
+        let done = evs.iter().position(|e| match e {
+            SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" => {
+                assert!(error.is_none(), "the fetch failed: {error:?}");
+                true
+            }
+            _ => false,
         })?;
         evs[done..].iter().find_map(|e| match e {
             SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),

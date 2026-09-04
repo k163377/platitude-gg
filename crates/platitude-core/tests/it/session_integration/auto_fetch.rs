@@ -195,9 +195,19 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
         "the refusal is reported as it stands"
     );
 
+    // A fetch that failed ends the wait rather than starting a silence:
+    // one catch-up is queued per refusal, so a broken environment leaves
+    // nothing else coming and the whole patience budget would be spent on
+    // a timeout naming the wait instead of the failure inside it.
     sink.wait_for("the fetch that answers it", |evs| {
         evs.iter()
-            .any(|e| matches!(e, SessionEvent::WriteFinished { op, error: None, .. } if *op == "fetch"))
+            .any(|e| match e {
+                SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" => {
+                    assert!(error.is_none(), "the catch-up fetch failed: {error:?}");
+                    true
+                }
+                _ => false,
+            })
             .then_some(())
     })
     .await;
