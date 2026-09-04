@@ -117,7 +117,13 @@ impl Sandbox {
     /// `cargo xtask land --branch <b>` run from the primary; answers
     /// (success, output).
     fn land(&self, branch: &str) -> (bool, String) {
-        let mut command = Command::new(EXE);
+        self.land_from(Path::new(EXE), branch)
+    }
+
+    /// The same landing run from a given binary — a copy in a tree's own
+    /// build slot, for the landing that has to write that slot.
+    fn land_from(&self, exe: &Path, branch: &str) -> (bool, String) {
+        let mut command = Command::new(exe);
         command
             .args(["land", branch, "--dir"])
             .arg(&self.repo)
@@ -173,6 +179,10 @@ impl Sandbox {
         for (path, text) in [
             ("Cargo.toml", "[workspace]\n"),
             ("Cargo.lock", "# lock\n"),
+            // As the workspace ignores it: a landing steps out of the
+            // build slot under here, and what it leaves there is nobody's
+            // uncommitted change.
+            (".gitignore", "/target\n"),
             ("deny.toml", "[bans]\n"),
             ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
             ("ci/linux/Dockerfile", "FROM ubuntu\n"),
@@ -783,6 +793,56 @@ fn land_rebases_then_gates_then_fast_forwards() {
     assert!(ran.contains("test platitude-core 1"), "{ran:?}");
     let (ok, text) = sb.land("worktree-a");
     assert!(ok && text.contains("nothing to land"), "{text}");
+}
+
+/// A landing runs cargo in the trees it has just moved — the gate's
+/// steps build the seat's task runner after the rebase — and `cargo
+/// xtask land` is itself the binary in that slot. Windows cannot replace
+/// a running image, so the slot is freed before the first step: the name
+/// is empty afterwards, and what an earlier landing could not delete
+/// (its own image, still running) is swept on the way past.
+#[test]
+fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
+    let sb = Sandbox::new("slot");
+    // Main moves under the seat, so the rebase brings sources the task
+    // runner in the slot no longer matches.
+    sb.write(
+        &sb.repo,
+        "crates/xtask/src/qmltest.rs",
+        "pub fn run() { let _ = 15; }\n",
+    );
+    sb.commit_all(
+        &sb.repo,
+        "feat(xtask): main moved",
+        &[("PG_GATE_SKIP", "1")],
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/refs.rs",
+        "pub fn refs() { let _ = 16; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
+
+    let slot = sb.seat.join("target").join("debug");
+    std::fs::create_dir_all(&slot).expect("the build slot");
+    let suffix = std::env::consts::EXE_SUFFIX;
+    let running = slot.join(format!("xtask{suffix}"));
+    std::fs::copy(EXE, &running).expect("the runner in the slot");
+    let left_behind = slot.join(format!("xtask-inflight-424242{suffix}"));
+    std::fs::write(&left_behind, b"an earlier landing's image").expect("what Windows leaves");
+
+    let (ok, text) = sb.land_from(&running, "worktree-a");
+    assert!(ok && text.contains("landed worktree-a"), "{text}");
+    assert!(text.contains("stepped out of"), "{text}");
+    assert!(
+        !running.exists(),
+        "the slot the gate's cargo has to write is still taken:\n{text}"
+    );
+    assert!(
+        !left_behind.exists(),
+        "an earlier landing's image was left in the slot's directory:\n{text}"
+    );
+    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
 }
 
 #[test]

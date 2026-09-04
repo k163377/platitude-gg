@@ -91,6 +91,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
             seat.path
         ));
     }
+    if let Some(word) = step_out_of_the_build_slot(&[&seat.path, &primary.path]) {
+        println!("{word}");
+    }
     // The hook that holds main to the stamp, in place before main moves.
     println!("{}", crate::gate::install(&root)?);
     if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
@@ -113,6 +116,101 @@ pub fn run(args: &[String]) -> Result<(), String> {
     release_claim(&here, &trees, &branch);
     clear_the_board(&listing, &branch);
     Ok(())
+}
+
+/// What a landing leaves in a build slot it stepped out of and could not
+/// take away — its own image, still running (Windows).
+const INFLIGHT: &str = "xtask-inflight-";
+
+/// Frees the cargo build slot this process occupies, when the slot is one
+/// of `trees`'.
+///
+/// Everything past here runs cargo in a tree this landing moves: the
+/// gate's steps build the seat's task runner (`cargo run -p xtask`) over
+/// the sources the rebase brought in, and the hook's verdict builds the
+/// primary's over the ones the fast-forward checked out. `cargo xtask
+/// land` is itself `<tree>/target/<profile>/xtask`, so on Windows that
+/// build stops at `failed to remove file … (os error 5)` — a running
+/// image cannot be replaced — and the landing dies before its first step.
+/// Renaming one is allowed on both systems, so this process moves out of
+/// the name and runs on from the copy beside it: Unix takes that copy at
+/// once, Windows on the next landing's sweep. Silent when this binary is
+/// in nobody's way; a move that fails says so rather than leaving the
+/// cargo error it was meant to explain to arrive unannounced.
+fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let mine = build_slot_tree(&exe)?;
+    if !trees.iter().any(|tree| same_tree(tree, &mine)) {
+        return None;
+    }
+    let dir = exe.parent()?;
+    sweep(dir);
+    let mut aside = dir.join(format!("{INFLIGHT}{}", std::process::id()));
+    if let Some(extension) = exe.extension() {
+        aside.set_extension(extension);
+    }
+    if let Err(why) = std::fs::rename(&exe, &aside) {
+        return Some(format!(
+            "note: this task runner is still standing in {} ({why}) — a step that has to rebuild \
+             it there will stop at the running image.",
+            exe.display()
+        ));
+    }
+    let _ = std::fs::remove_file(&aside);
+    Some(format!(
+        "stepped out of {} — the landing rebuilds the task runner there, and a running image \
+         cannot be replaced.",
+        exe.display()
+    ))
+}
+
+/// Takes away what earlier landings left in the slot's directory —
+/// whichever of them the system will part with now.
+fn sweep(dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(INFLIGHT) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// The checkout whose build slot `exe` is, when it is one:
+/// `<tree>/target/<profile>/xtask[.exe]` is what cargo writes and runs.
+/// The tree is what tells the binary a step is about to rebuild from
+/// another tree's, which this landing never touches.
+fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
+    if exe.file_stem()? != "xtask" {
+        return None;
+    }
+    let target = exe.parent()?.parent()?;
+    if target.file_name()? != "target" {
+        return None;
+    }
+    Some(target.parent()?.to_string_lossy().replace('\\', "/"))
+}
+
+/// Whether two paths name one tree. The filesystem answers it, because
+/// the two are spelled by different mouths: git writes forward slashes
+/// and the long name, while a process is handed the spelling it was
+/// started with — an 8.3 short name, a junction, either case. A path the
+/// filesystem cannot resolve falls back to its text.
+fn same_tree(one: &str, other: &str) -> bool {
+    match (std::fs::canonicalize(one), std::fs::canonicalize(other)) {
+        (Ok(one), Ok(other)) => one == other,
+        _ => tidy(one) == tidy(other),
+    }
+}
+
+fn tidy(path: &str) -> String {
+    let path = path.replace('\\', "/").trim_end_matches('/').to_string();
+    if cfg!(windows) {
+        path.to_lowercase()
+    } else {
+        path
+    }
 }
 
 /// `git rebase main` in the seat, non-interactively. A rebase that stops
@@ -272,8 +370,57 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::landed_claim;
+    use super::{build_slot_tree, landed_claim, same_tree};
     use crate::seats::worktree_blocks;
+
+    /// A tree root spelled the way the running system spells one.
+    fn tree() -> &'static str {
+        if cfg!(windows) {
+            "C:/x/seat"
+        } else {
+            "/x/seat"
+        }
+    }
+
+    fn binary(stem: &str) -> String {
+        format!("{stem}{}", std::env::consts::EXE_SUFFIX)
+    }
+
+    #[test]
+    fn the_build_slot_is_the_task_runner_under_a_tree_s_target() {
+        let root = std::path::Path::new(tree());
+        let slot = root.join("target").join("debug").join(binary("xtask"));
+        assert_eq!(build_slot_tree(&slot).as_deref(), Some(tree()));
+        let release = root.join("target").join("release").join(binary("xtask"));
+        assert_eq!(build_slot_tree(&release).as_deref(), Some(tree()));
+        assert_eq!(
+            build_slot_tree(
+                &root
+                    .join("target")
+                    .join("debug")
+                    .join(binary("platitude-gg"))
+            ),
+            None,
+            "the app shares the directory and is nobody's task runner"
+        );
+        assert_eq!(
+            build_slot_tree(&root.join("tools").join(binary("xtask"))),
+            None,
+            "a copy outside target/ is not what cargo writes"
+        );
+    }
+
+    #[test]
+    fn one_tree_is_one_tree_however_it_is_spelled() {
+        assert!(same_tree("C:/x/seat", "C:\\x\\seat"));
+        assert!(same_tree("C:/x/seat/", "C:/x/seat"));
+        assert!(!same_tree("C:/x/seat", "C:/x/seat-b"));
+        assert_eq!(
+            same_tree("C:/X/Seat", "C:/x/seat"),
+            cfg!(windows),
+            "the case is Windows' to ignore and nobody else's"
+        );
+    }
 
     #[test]
     fn releases_only_a_landed_tree_held_by_a_session_claim() {
