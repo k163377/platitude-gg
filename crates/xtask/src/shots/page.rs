@@ -25,6 +25,10 @@
 //! the shrink the bar owns up to, and `1` is one key away where a pixel
 //! has to be read.
 //!
+//! The rail is narrow for the same reason. It carries a label, a date
+//! and a couple of thumbs abreast, and every pixel it holds past those
+//! is one the fitted row beside it does not get.
+//!
 //! The seat filter shows the whole roster whatever the board holds, the
 //! seats with nothing on it disabled. Built from the seats that happen to
 //! have runs, the row would reorder itself every time a seat's last run
@@ -50,7 +54,7 @@ const STYLE: &str = r#"
  html,body{margin:0;height:100%;background:#0b1020;color:#c8d3f0;overflow:hidden;
   font:13px/1.5 "Segoe UI",system-ui,sans-serif}
  #wrap{display:flex;height:100%}
- #side{width:286px;flex:none;overflow-y:auto;background:#0e1428;border-right:1px solid #24305a}
+ #side{width:230px;flex:none;overflow-y:auto;background:#0e1428;border-right:1px solid #24305a}
  #head{position:sticky;top:0;background:#0e1428;padding:9px 12px 7px;border-bottom:1px solid #1a2445}
  #head h2{margin:0 0 6px;font-size:11px;letter-spacing:.08em;color:#6f7fae;
   text-transform:uppercase;font-weight:600}
