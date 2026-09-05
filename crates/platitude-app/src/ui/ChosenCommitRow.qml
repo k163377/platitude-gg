@@ -11,9 +11,10 @@ import platitude.ui
 // a rest opens. What is written here in full was measured to take the pane over — a 2,000 byte summary filled the list
 // on its own and left the others below the fold.
 //
-// **The row draws no choice of its own and takes no press.** Commits are picked in the graph and this list is what was
-// picked, so there is nothing here to select, unselect or aim a menu at. Its words are fields all the same — dragged
-// over and taken away like the rest of the pane (規約 §右のペインの字は掴める).
+// **The row draws no choice of its own, and the only press it takes is a held one.** Commits are picked in the graph
+// and this list is what was picked, so there is nothing here to select or aim a menu at — but the list of what is held
+// is where a reader looks to drop one, so Ctrl takes a commit back out from here as it does there. Its words are
+// fields all the same — dragged over and taken away like the rest of the pane (規約 §右のペインの字は掴める).
 Item {
     id: commitRow
 
@@ -42,6 +43,21 @@ Item {
 
     signal hoverRequested(var row, bool inside)
     signal copyRequested(string text)
+    /// A held press takes this commit back out of the choice — the same modifier that put it in, in the list that
+    /// shows what is in it (デザイン規約 §複数のコミットを選ぶ).
+    signal dropRequested(string oidHex)
+    /// Whether a press is the row's own at all: **only a held one is**. A press without the modifier is refused, and
+    /// a refused press goes on down to the words and the hand under them — which is what keeps a plain drag over this
+    /// list a drag over the text (規約 §右のペインの字は掴める).
+    function takesPress(modifiers) {
+        return (modifiers & Qt.ControlModifier) !== 0
+    }
+    /// The click that follows a press the row took. Asked the same question the press was, so an entry made here
+    /// cannot skip it. Both are named so a run presses where a hand does (verify-ui §壊れない動詞の実装).
+    function leftClick(modifiers) {
+        if (commitRow.takesPress(modifiers))
+            commitRow.dropRequested(commitRow.oid_hex)
+    }
 
     width: ListView.view ? ListView.view.width : 0
     height: Theme.rowHeight
@@ -111,6 +127,24 @@ Item {
             text: commitRow.subject
         }
     }
+
+    // Over everything the row draws, and **it refuses all but a held press**: a refused press is not this area's, so
+    // it goes on down to the words and the hand under them exactly as if this were not here. Declared last so the one
+    // press it does take is taken before the words can select on it.
+    //
+    // Never hover — an area that asked for it would take the pointer from the fields below and from the row's own
+    // handler (app-ui.md §HoverHandler は下の hover を殺す), and it draws no cursor of its own for the same reason.
+    MouseArea {
+        id: dropHand
+        anchors.fill: parent
+        hoverEnabled: false
+        onPressed: mouse => { mouse.accepted = commitRow.takesPress(mouse.modifiers) }
+        onClicked: mouse => commitRow.leftClick(mouse.modifiers)
+    }
+    /// Automation only: that there is a hand at all, since a run enters `leftClick` rather than the pointer — an area
+    /// taken out, disabled or shrunk would answer every press it was asked and never see one (verify-ui).
+    readonly property bool dropStands: dropHand.enabled && dropHand.width === commitRow.width
+                                       && dropHand.height === commitRow.height
 
     // Passive, and on the row's own root: a handler here leaves the fields under it their presses, and hover reaches
     // this row's children rather than being eaten by a layer over them (app-ui.md).

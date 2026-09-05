@@ -2171,6 +2171,15 @@ Item {
         page.chosenAnchorRow = atRow
         page.settleChoice(next)
     }
+    /// The same Ctrl click, made in the list of what is held rather than in the graph (`ChosenCommitRow`). It takes a
+    /// commit out and never puts one in — everything in that list is in the choice already.
+    ///
+    /// **The anchor stays where the graph left it**: it is a row of the graph, and this press was not on one. A Shift
+    /// click after this one measures from the last row a hand actually landed on, which is what it would measure from
+    /// if the drop had been made in the graph.
+    function dropFromChoice(oidHex) {
+        page.chooseAlso(oidHex, page.chosenAnchorRow)
+    }
     /// Every commit row between two places, ends included — what a Shift click reaches. **The ones scrolled past are
     /// in it too**: the anchor and the click are on screen by definition, and what lies between them usually is not.
     ///
@@ -2882,6 +2891,7 @@ Item {
                         chosenRecords: page.chosenRecords
                         rowCardOid: rowHost.rowCardOid
                         onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
+                        onCommitDropRequested: oidHex => page.dropFromChoice(oidHex)
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it

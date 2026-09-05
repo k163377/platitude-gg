@@ -280,6 +280,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "led=false movable=true naming=false",
     },
+    // A commit taken back out from the list of what is held. Two presses
+    // on one row and only the second is the row's: `takes=false kept=3`
+    // is the plain one, which the words underneath have to keep — a
+    // choice that came back smaller after it would mean this hand had
+    // taken the drag away from the text. `hand=true` is the half a press
+    // cannot say for itself, since the run enters the row's own function
+    // rather than the pointer: an area taken out, disabled or shrunk
+    // would answer every press it was asked and never see one.
+    Verb {
+        name: "graph-choose-drop",
+        when: &[],
+        plain: "takes=false kept=3 dropped=true hand=true chosen=2 lit=2",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame

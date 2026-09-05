@@ -22,6 +22,9 @@ ColumnLayout {
     /// A row of the commit list has been rested on, or left. **The page answers it**: the card is a popup of the
     /// page's, and one card is what keeps the two lists from opening two (デザイン規約 §複数のコミットを選ぶ).
     signal rowHoverRequested(var row, bool inside)
+    /// A held press landed on one of the listed commits: it leaves the choice. **The page answers it** — the choice is
+    /// the page's, and this list is a picture of it (デザイン規約 §複数のコミットを選ぶ).
+    signal commitDropRequested(string oidHex)
     /// The place the two lists divide while a choice is up: the pane, less the band each of them stands under.
     readonly property real listRoom: Math.max(0, detailsPane.height - 2 * Theme.headerHeight)
     /// Whether the pane is showing a choice rather than one commit. **Read off the model, not off the records** — the
@@ -360,8 +363,8 @@ ColumnLayout {
         onApplyRequested: selector => detailsPane.applyStashRequested(selector)
         onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
-    // The commits a choice holds. **No highlight and nothing to press**: they are picked in the graph, and a second
-    // place the choice appeared to live is a second place it could disagree with itself.
+    // The commits a choice holds. **No highlight, and the only press is the one that drops a commit**: they are picked
+    // in the graph, and a second place the choice appeared to be made is a second place it could disagree with itself.
     AppListView {
         id: chosenList
         visible: detailsPane.choosing
@@ -389,6 +392,7 @@ ColumnLayout {
             cardOid: detailsPane.rowCardOid
             onHoverRequested: (row, inside) => detailsPane.rowHoverRequested(row, inside)
             onCopyRequested: text => detailsPane.copyRequested(text)
+            onDropRequested: oidHex => detailsPane.commitDropRequested(oidHex)
         }
     }
     /// Automation only: a row of the commit list, handed to a run whole (verify-ui).

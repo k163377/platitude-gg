@@ -121,6 +121,16 @@ Item {
             chooseTimer.after = "diff"
             chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
             chooseTimer.start()
+        } else if (act === "graph-choose-drop") {
+            // A commit taken back out from the list that shows what is held — the same Ctrl the graph takes one out
+            // with (デザイン規約 §複数のコミットを選ぶ). The argument is the rows, as `graph-choose` takes them.
+            const kept = arg === "" ? [] : arg.split(":").map(Number)
+            chooseTimer.sweeps = false
+            chooseTimer.rows = kept.length >= 2 ? kept : [1, 3, 5]
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.after = "drop"
+            chooseTimer.start()
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
             // The two things a row of that list is for, once the choice is standing: saying the whole of what the
             // commit says, and letting a reader drag the words away (デザイン規約 §複数のコミットを選ぶ). The choice is
@@ -191,8 +201,10 @@ Item {
         property int step: 0
         /// The commit the plain press landed on, so the report can say what is read stayed on it while the choice grew.
         property string readOid: ""
-        /// What to do once the choice is standing: `card` rests on a row of the list the pane put up, `sweep` drags
-        /// a value out of one, `""` stops at the choice.
+        /// What to do once the choice is standing, all of it handed to `chosenRowTimer`: `said` rests on a row of the
+        /// list the pane put up, `sweep` drags a value out of one, `drop` takes a commit back out of the choice from
+        /// there, `diff` opens a file of the merged list, `dbl` tries the gesture a choice must not turn into. `""`
+        /// stops at the choice itself.
         property string after: ""
         /// The file `graph-choose-diff` opens out of the merged list.
         property string diffPath: ""
@@ -262,12 +274,51 @@ Item {
             driver.complete()
         }
     }
-    // What the rows of the choice's own list answer: the card a rest opens over one, and the drag a reader takes its
-    // words away with. Both go in at the row itself — the card through the one property the rest timer writes, the
-    // drag through the hand under the row (`SweepRoom.sweepAt`, which enters from every corner of the gap beside the
-    // value, since a reach that works from one place in it is the fault this kind of row ships with).
+    // Everything that goes on from a standing choice (`chooseTimer.after`): the card a rest opens over one of the
+    // listed commits, the drag a reader takes its words away with, the press that drops one, the file the merged list
+    // opens, and the gesture the graph's rows have to turn down. Each goes in at the thing that answers it — the row's
+    // own functions, the pad under its words, the page's diff opener — rather than at a copy of what they decide.
     SampleTimer {
         id: chosenRowTimer
+        /// How far the drop has got: the plain press, the held one, then the wait for the pane to answer for what is
+        /// left. Latched, because both presses are made once and the sampler goes on firing around them.
+        property int dropStep: 0
+        /// The commit the presses land on, and what the row said about a press without the modifier.
+        property string dropOid: ""
+        property bool dropTakes: true
+        /// How many commits were held after the plain press — the half of the claim that says the words below still
+        /// have their press.
+        property int dropKept: -1
+        /// **Two presses on one row of the list, and only the second is the row's.** The first is plain, and a choice
+        /// that came back one commit smaller after it would mean the words underneath had lost their press to this
+        /// hand. Both go in at the row's own functions, where the two are told apart.
+        function dropOne(row) {
+            if (chosenRowTimer.dropStep === 0) {
+                chosenRowTimer.dropOid = row.oid_hex
+                chosenRowTimer.dropTakes = row.takesPress(Qt.NoModifier)
+                row.leftClick(Qt.NoModifier)
+                chosenRowTimer.dropStep = 1
+                return
+            }
+            if (chosenRowTimer.dropStep === 1) {
+                chosenRowTimer.dropKept = page.chosenCount
+                row.leftClick(Qt.ControlModifier)
+                chosenRowTimer.dropStep = 2
+                return
+            }
+            // The choice is one smaller and the pane has answered for what is left — `selectionLoaded` rather than
+            // `!loading`, the same readiness the presses themselves waited on (規約 §UI 自動化の因果性).
+            if (page.chosenCount !== chooseTimer.wanted() - 1 || !detailsModel.selectionLoaded)
+                return
+            chosenRowTimer.stop()
+            Harness.report("chosen_drop takes=" + chosenRowTimer.dropTakes
+                              + " kept=" + chosenRowTimer.dropKept
+                              + " dropped=" + (page.chosenOids[chosenRowTimer.dropOid] !== true)
+                              + " hand=" + row.dropStands
+                              + " chosen=" + page.chosenCount
+                              + " lit=" + chooseTimer.litRows())
+            driver.complete()
+        }
         onTriggered: {
             if (chooseTimer.after === "dbl") {
                 // The pair as the area delivers it: two clicks, then the double the second one is also reported as.
@@ -309,6 +360,10 @@ Item {
             // A row the list has not built or laid out yet is not a row anybody is reading.
             if (!row || !row.rowReady())
                 return
+            if (chooseTimer.after === "drop") {
+                chosenRowTimer.dropOne(row)
+                return
+            }
             if (chooseTimer.after === "said") {
                 // The card the row's own rest opens, entered where that rest would (hover cannot be injected).
                 if (!rowCard.opened) {
