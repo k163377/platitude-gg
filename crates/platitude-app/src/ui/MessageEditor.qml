@@ -247,7 +247,7 @@ ColumnLayout {
             anchors.margins: Theme.spaceXs
             // Both boxes are inset by the one value, lay their own bar out, and refuse the sideways one — see
             // `DescriptionBox` for why each is so.
-            ScrollBar.horizontal: null
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical: AutoScrollBar {
                 view: summaryView.contentItem
                 x: summaryView.width - width

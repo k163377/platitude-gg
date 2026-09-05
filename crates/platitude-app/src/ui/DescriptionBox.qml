@@ -249,7 +249,12 @@ Rectangle {
         // one-line summary that is the whole lower half of the box, answering nothing (qmltestrunner measured,
         // `tst_messageband`: `ScrollBar[0,9 312x10] orient=1 policy=0 size=1.00` under a click that focused nothing).
         // The vertical one is `AutoScrollBar`, which is drawn only where it has somewhere to go.
-        ScrollBar.horizontal: null
+        //
+        // **Turned off, not taken away.** Handed `null`, the style's own upright bar is left reading
+        // `control.ScrollBar.horizontal.active` off nothing — one `TypeError` per box on every start (Fusion
+        // `ScrollView.qml:22`). `AlwaysOff` is answered with `visible: false`, and an invisible bar takes no
+        // press, which is all this line was ever for (`tst_messageband`).
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         // A bar handed to a `ScrollView` arrives half-wired: `size` and `position` track the text, but **no geometry
         // comes with it** — it is laid out at `x 0 y 0` at its own implicit 10x10, which draws a dot in the box's top
         // corner (qmltestrunner measured, ; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So

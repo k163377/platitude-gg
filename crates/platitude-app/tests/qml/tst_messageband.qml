@@ -37,7 +37,7 @@ Item {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceXs
-                ScrollBar.horizontal: null
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 TextArea {
                     id: words
                     wrapMode: TextArea.Wrap
@@ -85,6 +85,17 @@ Item {
             editor.setMessage("alpha beta gamma delta", "body of the message")
             waitForRendering(editor)
             return editor
+        }
+
+        /// **The sideways bar is refused by policy, never by `null`** (`DescriptionBox`) — what `null` leaves behind
+        /// is a `TypeError` per box on every start, which no screenshot and no press can see, so it is caught here
+        /// rather than by the sweeps below.
+        function test_a_refused_sideways_bar_says_nothing() {
+            failOnWarning(/Cannot read property 'active' of null/)
+            makePair()
+            const frame = createTemporaryObject(box, root)
+            verify(frame !== null)
+            waitForRendering(frame)
         }
 
         /// **The whole of the summary frame drops a caret in the summary** — the words, the band around them, and
