@@ -109,6 +109,40 @@ const SPRAWL: [(&str, usize, &str); 6] = [
     ("assets/icons", 11, "svg"),
 ];
 
+/// How many commits `spread` writes, and how many files each of them
+/// touches. Both sides have to be past what a pane can hold: the point of
+/// the preset is a choice whose commits *and* whose files overflow at
+/// once, and either alone is already covered (`deep` has the commits,
+/// `long` has the files).
+const SPREAD_COMMITS: usize = 40;
+const SPREAD_FILES: usize = 3;
+
+/// A history where every commit is of its own handful of files — the one
+/// shape a choice can overflow in both directions at once
+/// (デザイン規約 §複数のコミットを選ぶ: the commits it lists and the files
+/// they changed are two lists sharing a pane).
+///
+/// **Neither of the other two scale presets answers it.** `deep` writes
+/// the same blob every time, so a choice of a thousand of its commits
+/// changed nothing at all; `long` puts eighty files in a single commit,
+/// so the list of commits is four rows.
+pub(super) fn spread(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# spread\n", "docs: start the readme")?;
+    for n in 0..SPREAD_COMMITS {
+        for f in 0..SPREAD_FILES {
+            repo.write(
+                &format!("src/part_{n:02}/file_{f}.rs"),
+                &format!("// part {n:02}, file {f}\n"),
+            )?;
+        }
+        repo.git(&["add", "--all"])?;
+        repo.git(&["commit", "-m", &format!("feat: the work of part {n:02}")])?;
+    }
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    Ok(())
+}
+
 /// A commit nobody can read at a glance, over a tree nobody can scroll at
 /// a glance, in a work tree of the same. Everything here is long on
 /// purpose: the message runs past any pane, the commit touches 80 files,

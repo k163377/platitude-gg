@@ -225,26 +225,33 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "read=true wip=false",
     },
-    // The two things a row of the list that choice puts up is for. The
-    // card's `lit=` is the band the row keeps under it — a card opens off
-    // the row's own bottom edge, so the row loses the pointer the instant
-    // it is up and a picture cannot tell "went dark" from "was never
-    // lit". `credit=` says the card was filled from the same row the list
-    // was built out of, which is the whole claim: a commit does not read
-    // differently for being listed somewhere else.
+    // The row of that list cuts its summary to a line; the card its rest
+    // opens holds nothing back and offers no way out of itself. Neither
+    // half is a thing a picture answers — a mark is a few pixels wide, so
+    // a row that dropped the tail frames like one that did not, and a
+    // card that held its body back frames as a shorter card. `lit=` is
+    // the band the row keeps under the card, which takes the pointer off
+    // it the moment it is up.
+    // At the wall the card does stop — the room the window has is what
+    // bounds it, and a message past that has to end somewhere or the card
+    // covers the pane it was opened from. So `held=` is dropped there and
+    // the rest of the claim stands: the card is up, it offers no way out
+    // of itself, and the row it came off keeps its band.
     Verb {
-        name: "graph-choose-card",
-        when: &[],
-        plain: "open=true lit=true subject=true credit=true",
+        name: "graph-choose-said",
+        when: &[(Arg::Is("7:8:11"), "open=true door=false lit=true")],
+        plain: "open=true door=false lit=true held=false",
     },
-    // And the words being a reader's to take away. `ended=` is the value
-    // the drag came away with, `caret=` whether the keyboard went with it
-    // — `Ctrl+C` goes to whatever holds the caret, so a selection without
-    // one is not a value anybody can carry off.
+    // And the words being a reader's to take away, reached from every
+    // corner of the row's air rather than one point in it: a hand that
+    // works from the middle and nowhere else is the fault this kind of
+    // row ships with. `hand=` is the half a sweep cannot say for itself —
+    // a pad whose area had been taken out would answer every sweep it was
+    // asked and never see a press.
     Verb {
         name: "graph-choose-sweep",
         when: &[],
-        plain: "ended=true caret=true",
+        plain: "all=true caret=true hand=true",
     },
     // And what a row of the merged file list opens: each chosen commit's
     // own patch of that file, one band after another. `bands=2` is the

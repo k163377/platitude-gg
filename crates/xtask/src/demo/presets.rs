@@ -15,7 +15,7 @@ use super::deep::{deep, deep_detached, replay};
 use super::pictures::{bigpicture, pictures};
 use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished};
 use super::repo::DemoRepo;
-use super::scale::{edges, long, longpaths, manyhunks, widechars, widelines};
+use super::scale::{edges, long, longpaths, manyhunks, spread, widechars, widelines};
 use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tags};
@@ -134,6 +134,7 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "replay" => replay(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
+        "spread" => spread(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,
         "manyhunks" => manyhunks(&mut repo)?,
         "widechars" => widechars(&mut repo)?,

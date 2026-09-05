@@ -16,12 +16,14 @@ ColumnLayout {
     /// model role cannot be a list, so anything list-shaped crosses the bridge as a string (app-ui.md).
     property string chosenRecords: ""
     readonly property var chosenCommits: detailsPane.readRecords(detailsPane.chosenRecords)
-    /// The commit whose hover card the page has out, so the row it came off keeps its band under it
-    /// (`RowHoverHost.rowCardOid`). Empty when no card is up.
+    /// The commit whose card is out, so the row it came off keeps its band under it. Written by the page, which owns
+    /// the card (`RowHoverHost.rowCardOid`).
     property string rowCardOid: ""
-    /// A row of the commit list has been rested on, or left. **The page answers it**, because the card the graph's rows
-    /// put out is the page's and a commit reads the same in either list (デザイン規約 §複数のコミットを選ぶ).
+    /// A row of the commit list has been rested on, or left. **The page answers it**: the card is a popup of the
+    /// page's, and one card is what keeps the two lists from opening two (デザイン規約 §複数のコミットを選ぶ).
     signal rowHoverRequested(var row, bool inside)
+    /// The place the two lists divide while a choice is up: the pane, less the band each of them stands under.
+    readonly property real listRoom: Math.max(0, detailsPane.height - 2 * Theme.headerHeight)
     /// Whether the pane is showing a choice rather than one commit. **Read off the model, not off the records** — the
     /// model is what the file list below answers to, and the two must turn over together.
     readonly property bool choosing: detailsPane.details.selectionCount > 1
@@ -364,20 +366,32 @@ ColumnLayout {
         id: chosenList
         visible: detailsPane.choosing
         Layout.fillWidth: true
-        // Two lists in one pane: they start from an equal share, and the one that needs less takes only that
-        // (規約 §バケツごとの一覧 の均等割り). A choice is what a hand picked, so its rows are few by nature — this cap
-        // is for the sweep that took a hundred, not for the ordinary three.
+        // Two lists in one pane, and the place is divided the way the working tree's buckets divide theirs
+        // (規約 §バケツごとの一覧): **an equal share each, and whatever the other one cannot use on top**. A choice of
+        // forty commits over one file leaves the file list a row and this one the rest.
+        //
+        // What the file list wants is read off its own content rather than counted in rows — the tree view adds
+        // folder rows, so a count of files is not its height. **What this list wants is counted**: a view's own
+        // content height is zero for the frame its model is being replaced in, and a share worked out from that hands
+        // the whole pane to the list below for one frame, which is a flash every time a commit joins or leaves the
+        // choice. The rows here are one line each, so a count is the same answer and it is there before the view is.
         Layout.preferredHeight: detailsPane.choosing
-            ? Math.min(detailsPane.chosenCommits.length * Theme.rowHeight, detailsPane.height / 2)
+            ? Math.min(detailsPane.chosenCommits.length * Theme.rowHeight,
+                       Math.max(detailsPane.listRoom / 2, detailsPane.listRoom - fileList.contentHeight))
             : 0
+        // Half a row's slack, which is all a face centred in a row has above it: with this the first face stands the
+        // same distance under the band as the faces below it stand from each other, so the column begins the way it
+        // goes on (デザイン規約 §余白 — 行内の詰め).
+        topMargin: (Theme.rowHeight - Theme.iconLg) / 2
         model: detailsPane.chosenCommits
         verticalBar: PaneScrollBar {}
         delegate: ChosenCommitRow {
             cardOid: detailsPane.rowCardOid
             onHoverRequested: (row, inside) => detailsPane.rowHoverRequested(row, inside)
+            onCopyRequested: text => detailsPane.copyRequested(text)
         }
     }
-    /// Automation only: a row of the commit list, for a run that has no pointer to rest on one (verify-ui).
+    /// Automation only: a row of the commit list, handed to a run whole (verify-ui).
     function chosenRowAt(index) {
         return chosenList.itemAtIndex(index)
     }

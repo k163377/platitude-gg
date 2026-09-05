@@ -90,6 +90,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         edges     every string at both ends of what git allows, in Japanese
         long      a message, a commit and a work tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)
+        spread    41 commits of three files each: the one shape where a
+                  choice of commits overflows in both directions at once,
+                  since deep writes the same blob every time and long puts
+                  its 80 files in a single commit (graph-choose-range)
         longpaths one committed-then-changed file under a path wider than
                   any pane: both paths views elide it, and both tree
                   views elide its folder chain (path-tip [..-tree])

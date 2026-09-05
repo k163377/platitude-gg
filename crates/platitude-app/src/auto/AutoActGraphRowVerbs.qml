@@ -121,16 +121,16 @@ Item {
             chooseTimer.after = "diff"
             chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
             chooseTimer.start()
-        } else if (act === "graph-choose-card" || act === "graph-choose-sweep") {
-            // The two things a row of that list is for, once the choice is standing: the card a rest opens over the
-            // commit, and the drag a reader takes the words away with (デザイン規約 §複数のコミットを選ぶ). The choice is
+        } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
+            // The two things a row of that list is for, once the choice is standing: saying the whole of what the
+            // commit says, and letting a reader drag the words away (デザイン規約 §複数のコミットを選ぶ). The choice is
             // built by the same presses `graph-choose` makes, so the argument is the same rows.
             const held = arg === "" ? [] : arg.split(":").map(Number)
             chooseTimer.sweeps = false
             chooseTimer.rows = held.length >= 2 ? held : [1, 3, 5]
             chooseTimer.step = 0
             chooseTimer.readOid = ""
-            chooseTimer.after = act === "graph-choose-card" ? "card" : "sweep"
+            chooseTimer.after = act === "graph-choose-said" ? "said" : "sweep"
             chooseTimer.start()
         } else if (act === "graph-choose" || act === "graph-choose-range") {
             // The choice several commits are held in (デザイン規約 §複数のコミットを選ぶ). The first press is plain and
@@ -218,10 +218,15 @@ Item {
         }
         onTriggered: {
             if (chooseTimer.step < chooseTimer.rows.length) {
-                const item = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.step])
-                // A row the view has not laid out yet is not a row that was pressed (`graph-reclick`).
-                if (!item)
+                const want = chooseTimer.rows[chooseTimer.step]
+                const item = graphPane.view.itemAtIndex(want)
+                // A row the view has not laid out yet is not a row that was pressed (`graph-reclick`) — and a row far
+                // down the history has no delegate at all until the view is over it, which is what a hand does before
+                // it presses one. Sent there and retried on the next tick, the layout being a frame behind.
+                if (!item) {
+                    graphPane.view.positionViewAtIndex(want, ListView.Contain)
                     return
+                }
                 if (chooseTimer.step === 0) {
                     chooseTimer.readOid = item.oid_hex
                     item.leftClick(0, Qt.NoModifier)
@@ -301,33 +306,34 @@ Item {
                 return
             }
             const row = detailsPane.chosenRowAt(0)
-            // A row the list has not laid out yet is not a row anybody rested on.
-            if (!row || !row.faceReady())
+            // A row the list has not built or laid out yet is not a row anybody is reading.
+            if (!row || !row.rowReady())
                 return
-            if (chooseTimer.after === "card") {
+            if (chooseTimer.after === "said") {
+                // The card the row's own rest opens, entered where that rest would (hover cannot be injected).
                 if (!rowCard.opened) {
                     row.askCard()
                     return
                 }
                 chosenRowTimer.stop()
-                // `open=` is the popup's own, `lit=` the band the row keeps while the card stands over it — the card
-                // is drawn off the row's bottom edge, so the row loses the pointer the instant it is up and a picture
-                // cannot tell "went dark" from "was never lit" (`row-card` reads the same pair).
-                Harness.report("chosen_card open=" + rowCard.opened
-                                  + " lit=" + (page.chosenRecords !== "" && row.cardOid === row.oid_hex)
-                                  + " subject=" + (rowCard.subject === row.subject)
-                                  + " credit=" + (rowCard.mates === row.co_authors))
+                // **The row cuts and the card does not** — the two halves of the same claim, and neither is a thing a
+                // picture answers: a mark is a few pixels wide, so a row that dropped the tail of a summary frames the
+                // same as one that did not, and a card that held its body back frames as a shorter card.
+                // **`held=` last of the four**: the wall's own run asks for the three in front of it and nothing
+                // about this one, and a judgement is a run of words that touch (verify-ui).
+                Harness.report("chosen_said open=" + rowCard.opened
+                                  + " door=" + rowCard.asksForMore
+                                  + " lit=" + (row.cardOid === row.oid_hex)
+                                  + " held=" + rowCard.messageCut
+                                  + " cut=" + row.summaryCut)
                 driver.complete()
                 return
             }
-            // The value a sweep can come away with is the short id: it is never cut, and a cut value hands back only
-            // what is on screen (規約 §右のペインの字は掴める — the cut ones are read with Ctrl+A).
-            if (!row.sweep.sweepAt("sha", 0.5, 0.5))
-                return
             chosenRowTimer.stop()
-            Harness.report("chosen_sweep ended=" + (row.sweep.endedOn === row.modelData.sha8)
-                              + " caret=" + row.sweep.caretLanded
-                              + " trace=" + row.sweep.trace)
+            // **From every corner of the row's air, not from one point in it.** A reach that works from the middle
+            // and nowhere else is the fault this kind of row ships with, and the pad says the whole of it in one line
+            // (`SweepPad.sweepAir` — the same sentence `card-sweep` reads).
+            Harness.report("chosen_sweep " + row.sweep.sweepAir(9, ""))
             driver.complete()
         }
     }

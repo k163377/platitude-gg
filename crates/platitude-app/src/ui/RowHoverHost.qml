@@ -112,10 +112,28 @@ Item {
         rowCard.atime = row.atime
         rowCard.mates = row.co_authors
         // Under the pointer, not under the row: a row is as wide as the
-        // pane, so its left edge is nowhere near the hand.
+        // pane, so its left edge is nowhere near the hand. **Worked out
+        // first**, since the bounds below are the room left under it.
         const at = row.mapToItem(host, row.pointerX, row.height)
         rowCard.x = at.x
         rowCard.y = at.y
+        // **What the card is for depends on what the row already showed.** A graph row carries the whole subject, so
+        // the card is a glance at the body and offers the way to the rest; a row of a choice carries one cut line, so
+        // the card is where the message is read and holds none of it back — and offers nothing, a door out of it
+        // being a door out of what the reader was picking (デザイン規約 §複数のコミットを選ぶ). Assigned rather than
+        // bound: the card is one object serving two lists, and a binding would have to name both.
+        const whole = row.wholeMessage === true
+        // **Bounded by the room there is either way.** What "holds nothing back" buys is a paragraph limit lifted,
+        // not a card taller than the screen — uncapped, a five thousand byte body drew a slab the height of the
+        // window over the very list it was opened from (measured `--preset edges`). The room is what lies under the
+        // row, all of it: a card that stops short of the floor is holding back for no reason a reader can see. The
+        // subject takes a quarter of it and the body the rest, less the three rows the author, the date and the
+        // margins stand in.
+        const below = Math.max(0, host.height - at.y)
+        rowCard.bodyRows = whole ? 0 : Metrics.hoverBodyRows
+        rowCard.subjectHeight = whole ? below / 4 : host.graphPane.height / 4
+        rowCard.bodyHeight = whole ? Math.max(0, below - below / 4 - 3 * Theme.rowHeight) : 0
+        rowCard.asksForMore = !whole
         host.rowCardWanted = true
         // Which row it is of, for the row itself to read back — the card
         // holds no commit of its own beyond the fields copied above.
@@ -250,7 +268,8 @@ Item {
         // A quarter of the pane to the subject, which is the only field
         // here whose bound is the room there is — the body is held to a
         // count of lines instead (規約 §hover のツールチップ).
-        subjectHeight: host.graphPane.height / 4
+        // The subject's own bound is set when the card opens, beside the body's — the two lists want different shares
+        // and one card serves both (`openRowCard`).
         // The band the row is holding goes with the card, and it is the
         // card's own close that says when — the row lost the pointer a
         // beat before that and cannot tell.

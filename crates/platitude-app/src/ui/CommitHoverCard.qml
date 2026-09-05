@@ -5,8 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What a graph row says when the pointer rests on it: the message in full, and the facts the row's three columns do not
-// carry — who wrote it, when, and whoever they credited.
+// What a row says when the pointer rests on it: the message in full, and the facts the row does not carry — who wrote
+// it, when, and whoever they credited. **Two lists open it** — the graph's rows and the ones the right pane lists
+// under a choice — and what it holds back depends on what the row it came off had already shown (`bodyRows`).
 //
 // A card rather than a `ToolTip`: a tooltip is a string laid out in one block, and it appears wherever the style
 // decides — which is what made the old one feel detached from the pointer (P3-確認事項 §B). The ground stopped being a
@@ -14,7 +15,8 @@ import platitude.ui
 //
 // It opens nothing of its own: no second popup grows out of it (規約 §co-author の表示). The one thing it does answer
 // for is the message it had to stop — the note under a cut message is pressed, and what the press does is take the
-// reader to the pane that holds the whole of it, which is a place already on screen.
+// reader to the pane that holds the whole of it, which is a place already on screen. **Only where the note stands**
+// (`asksForMore`): a card that held nothing back has nothing to send anyone to.
 //
 // Owned by the page, not the delegate: rows are recycled the moment they scroll off, and a popup parented to one goes
 // with it.
@@ -38,6 +40,21 @@ AppCard {
     /// paragraph is what a glance is worth, and the room there happens to be has nothing to do with it (規約 §hover の
     /// ツールチップ).
     property real subjectHeight: 0
+    /// How many lines of the body are worth a glance. **0 means all of it**, which is what a card opened over a list
+    /// that is already showing the subjects is for: there the body is the whole reason the pointer stopped, and a
+    /// paragraph's worth of it would be the card withholding the one thing it was opened for
+    /// (デザイン規約 §複数のコミットを選ぶ). The subject keeps its cap either way — that one is bounded by the room
+    /// there is, and a card that grows past the screen takes its own footer with it.
+    property int bodyRows: Metrics.hoverBodyRows
+    /// And the room the body may take when it is not counted in lines — the same kind of bound the subject has, and
+    /// for the same reason: **a card is only ever as tall as the window can hold**. Uncapped, a five thousand byte
+    /// body made a slab the height of the screen that covered the pane the card was opened from (measured
+    /// `--preset edges`). 0 leaves it to `bodyRows`.
+    property real bodyHeight: 0
+    /// Whether the card offers the way to the rest of a message it had to stop. Off where nothing here is pressable:
+    /// a card standing over the choice must not be a door, since walking through it is walking away from what the
+    /// reader was picking (デザイン規約 §複数のコミットを選ぶ).
+    property bool asksForMore: true
 
     /// What the credit line was actually given, and whether the names ran past it. Read by the headless runs, which
     /// cannot see an ellipsis and cannot measure a card from a PNG (0 when the commit credits nobody).
@@ -93,7 +110,8 @@ AppCard {
             pixelSize: Theme.fontMd
             // A paragraph's worth, not a share of the pane: the card is what a message is glanced at in, and a preview
             // that reached half the window was promising a read it could not give (規約 §hover のツールチップ).
-            capRows: Metrics.hoverBodyRows
+            capRows: hoverCard.bodyRows
+            capHeight: hoverCard.bodyHeight
         }
         // Where the rest of it is, for the message this card had to stop — **and the way there** (規約 §hover の
         // ツールチップ). The line names itself rather than the commit: the hand reading this is inside the card, and a
@@ -113,7 +131,7 @@ AppCard {
         // it stands on the card's sweep pad the way the band's badges do (規約 §右のペインの字は掴める).
         Item {
             id: noteLine
-            visible: hoverCard.messageCut
+            visible: hoverCard.messageCut && hoverCard.asksForMore
             Layout.fillWidth: true
             implicitHeight: noteWords.implicitHeight + 2 * Theme.borderWidth
             Label {

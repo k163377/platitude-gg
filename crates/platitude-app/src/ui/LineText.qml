@@ -37,6 +37,11 @@ Item {
     /// What the cut mark is drawn on. The pane's own ground by default — the mark is drawn over the last glyphs it
     /// cuts, and needs something opaque under it.
     property color ground: Theme.bgBase
+    /// And whatever is laid over that ground where this line stands — a row's hover wash, and nothing else so far.
+    /// **The mark has to wear the same two layers the row does**: it is drawn on an opaque patch, so a patch painted
+    /// in the resting colour under a row wearing an overlay reads as a box around the `…`. Transparent wherever the
+    /// ground does not move.
+    property color groundOverlay: "transparent"
     /// Whether a press on these words starts a selection here — the ordinary way any text in a window is grabbed, and
     /// Qt's own machinery for it.
     ///
@@ -222,6 +227,11 @@ Item {
         width: markLabel.implicitWidth
         height: line.height
         x: line.cutsHead ? 0 : line.width - width
+        // The second of the row's two layers, in the order the row paints them.
+        Rectangle {
+            anchors.fill: parent
+            color: line.groundOverlay
+        }
         Label {
             id: markLabel
             anchors.fill: parent

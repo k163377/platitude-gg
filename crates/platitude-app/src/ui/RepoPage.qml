@@ -1690,8 +1690,8 @@ Item {
         page.noteDiffNeighbour()
     }
     /// A pointer came to rest on a commit, or left one. **Two lists reach this**: the graph's rows and the ones the
-    /// right pane lists under a choice (デザイン規約 §複数のコミットを選ぶ). One card, one beat, one answer — a commit
-    /// does not read differently for being listed somewhere else, and two copies of this would drift.
+    /// right pane lists under a choice (デザイン規約 §複数のコミットを選ぶ). One card between them — what it holds back
+    /// depends on what the row it came off had already shown (`RowHoverHost.openRowCard`).
     function restOnCommit(row, inside) {
         rowHost.rowCardWanted = inside
         if (inside)

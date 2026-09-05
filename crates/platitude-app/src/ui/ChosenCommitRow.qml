@@ -4,27 +4,26 @@ import QtQuick
 import platitude.ui
 
 // One commit of a choice, as the pane on the right lists it (デザイン規約 §複数のコミットを選ぶ): the face of whoever
-// wrote it, what it says, and its short id.
+// wrote it, its summary, and its short id in the plate every hash in this window is copied from.
 //
-// **The row draws no choice of its own.** Commits are picked in the graph and this list is what was picked, so there is
-// nothing here to select, unselect or aim a menu at — a highlight on these rows would be a second place the choice
-// appeared to live.
+// **The summary is what a row shows, and only that.** A choice of a dozen is a list to run an eye down, so the rows
+// stay one line each and what does not fit is cut; the description and the whole of a cut summary are read in the card
+// a rest opens. What is written here in full was measured to take the pane over — a 2,000 byte summary filled the list
+// on its own and left the others below the fold.
 //
-// **What it does have is the two things the pane is for**: the words are a field a reader can drag over and take away
-// (規約 §右のペインの字は掴める), and a rest opens the graph's own card over the commit (規約 §hover のツールチップ). The
-// card is the graph's — same component, same fields, filled from the same row this list was built out of — because a
-// commit does not read differently for being listed somewhere else.
+// **The row draws no choice of its own and takes no press.** Commits are picked in the graph and this list is what was
+// picked, so there is nothing here to select, unselect or aim a menu at. Its words are fields all the same — dragged
+// over and taken away like the rest of the pane (規約 §右のペインの字は掴める).
 Item {
     id: commitRow
 
     /// One row as `GraphModel.chosenRows` packed it, already taken apart by the pane.
     required property var modelData
-    /// The commit whose card the page has out. The row it came from keeps its band while the card stands: the card
-    /// opens off the row's own bottom edge, so the hand that walks down into it is off the row from that moment
-    /// (`RowHoverHost.rowCardOid`).
+    /// The commit whose card is out. The row it came off keeps its band while the card stands over it: the card opens
+    /// off the row's own bottom edge, so the hand walking down into it is off the row from that moment.
     property string cardOid: ""
 
-    /// The names the card's opener reads off a row, whichever list the row is in (`RowHoverHost.openRowCard`).
+    /// The names the card's opener reads off a row, whichever list it is in (`RowHoverHost.openRowCard`).
     readonly property string oid_hex: commitRow.modelData.oid
     readonly property string subject: commitRow.modelData.subject
     readonly property string body: commitRow.modelData.body
@@ -32,121 +31,85 @@ Item {
     readonly property double atime: commitRow.modelData.atime
     readonly property string co_authors: commitRow.modelData.mates
     /// **-1, and not this row's place in the list.** The number that travels with a card is a row of the graph, which
-    /// is what a press in it lands on; this list has its own numbering and handing that over would pick a commit at
+    /// is what a press in one lands on; this list has its own numbering and handing that over would pick a commit at
     /// random (`RepoPage.activateRow` looks the commit up when it is given -1).
     readonly property int index: -1
     /// Where the pointer is along the row, so the card opens under the hand rather than at the row's left edge.
     readonly property real pointerX: rowHover.point.position.x
+    /// This row showed one cut line of the message, so its card is where the message is read: nothing held back, and
+    /// no way out of it offered (`RowHoverHost.openRowCard`, デザイン規約 §複数のコミットを選ぶ).
+    readonly property bool wholeMessage: true
 
     signal hoverRequested(var row, bool inside)
+    signal copyRequested(string text)
 
     width: ListView.view ? ListView.view.width : 0
     height: Theme.rowHeight
 
+    /// The row is wearing the hover wash — under the pointer, or under the card it put out.
+    readonly property bool lit: rowHover.hovered || commitRow.cardOid === commitRow.oid_hex
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: rowHover.hovered || commitRow.cardOid === commitRow.oid_hex
+        visible: commitRow.lit
     }
 
-    // The hand a range selection is taken with, under everything the row draws: a press reaches it only where no value
-    // took one, which is every gap in the row (規約 §右のペインの字は掴める). Declared before the content so it lies
-    // beneath it.
-    SweepRoom {
+    // The hand the words are dragged over from the air around them, under everything the row draws: a press reaches it
+    // only where no field and no control took one (規約 §右のペインの字は掴める). Declared first so it lies beneath.
+    SweepPad {
         id: sweepHand
         anchors.fill: parent
-        row: commitRow
-    }
-
-    // ---- what a sweep over this row needs to know (`SweepRoom`) ------
-    //
-    // One line, so there is no border to find: everything the row draws stands on it.
-    function lineAt(y) {
-        return 0
-    }
-    function lineValues(line) {
-        return [subjectLine, shaLine]
-    }
-    /// Nothing on this row is a control, so no press belongs to one.
-    function claimedAt(item, x, y) {
-        return false
-    }
-    /// One selection in the window (規約 §右のペインの字は掴める), so a sweep clears this row before it puts one anywhere.
-    function dropValues() {
-        subjectLine.deselect()
-        shaLine.deselect()
+        content: block
     }
     /// Automation only: the sweep as a hand makes it, and what it came away with (verify-ui).
     readonly property alias sweep: sweepHand
-    /// The field one value is drawn in, the slack a hand reaches it through, and the band its line runs down — **the
-    /// whole row**, the air over and under a value being the row's too (`SweepRoom.sweepAt`).
-    function fieldFor(which) {
-        return which === "sha" ? shaLine : subjectLine
-    }
-    function slackFor(which) {
-        return which === "sha" ? shaSlack : subjectSlack
-    }
-    function bandFor(which) {
-        return [0, commitRow.height]
-    }
 
-    IdentIcon {
-        id: face
-        anchors.left: parent.left
+    Item {
+        id: block
+        anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs
-        anchors.verticalCenter: parent.verticalCenter
-        code: commitRow.modelData.avatar
-        imageUrl: commitRow.modelData.avatarUrl
-    }
-    /// Whether the face has what it will paint — a shot of this list waits on it, the picture being read off disk
-    /// (`IdentIcon.pictureReady`).
-    function faceReady() {
-        return face.pictureReady()
-    }
+        // Not padding: the gutter this list's own scroll bar is drawn in. The bar is the pane's own slab — ink against
+        // the edge, opaque — and a row that ended short of this would stand its hash under it (`FileRowDelegate` and
+        // the left panel's rows take the same one).
+        anchors.rightMargin: Theme.navBarGutter
 
-    LineText {
-        id: subjectLine
-        anchors.left: face.right
-        anchors.leftMargin: Theme.spaceSm
-        anchors.right: shaLine.left
-        anchors.rightMargin: Theme.spaceSm
-        anchors.verticalCenter: parent.verticalCenter
-        // A subject is read from the left, and nothing after the mark is worth keeping.
-        cutAt: "end"
-        ground: Theme.bgBase
-        text: commitRow.subject
-    }
-
-    LineText {
-        id: shaLine
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.spaceXs
-        anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(implicitWidth, commitRow.width / 3)
-        // git's own spelling wears git's own family (規約 §git 用語のコード表記).
-        mono: true
-        cutAt: "end"
-        ground: Theme.bgBase
-        color: Theme.textMuted
-        text: commitRow.modelData.sha8
-    }
-
-    // The gaps a hand reaches the values through. Declared rather than left as bare margins so the row keeps them and
-    // a run can aim at them: a layout that closed them would leave the words reachable only on the glyphs themselves,
-    // which is the corner readers actually run into (規約 §右のペインの字は掴める).
-    Item {
-        id: subjectSlack
-        anchors.left: face.right
-        anchors.right: subjectLine.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-    }
-    Item {
-        id: shaSlack
-        anchors.left: subjectLine.right
-        anchors.right: shaLine.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        IdentIcon {
+            id: face
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            code: commitRow.modelData.avatar
+            imageUrl: commitRow.modelData.avatarUrl
+        }
+        // The plate every hash in this window is copied from, with no parent row under it: what a row of this list is
+        // about is the commit, and where it came from is a question for the pane that shows one at a time.
+        HashPlate {
+            id: plate
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            sha8: commitRow.modelData.sha8
+            fullSha: commitRow.modelData.oid
+            // A step under the summary beside it: the words are what a row is read by, and the id is what tells two
+            // of them apart once they have been read (デザイン規約 §複数のコミットを選ぶ).
+            shaColor: Theme.textMuted
+            shaSize: Theme.fontCode
+            onCopyRequested: text => commitRow.copyRequested(text)
+        }
+        LineText {
+            id: subjectLine
+            anchors.left: face.right
+            anchors.leftMargin: Theme.spaceSm
+            anchors.right: plate.left
+            anchors.rightMargin: Theme.spaceSm
+            anchors.verticalCenter: parent.verticalCenter
+            // A summary is read from the left, and nothing after the mark is worth keeping. The whole of it stays in
+            // the field for a drag to take, and the card has it too (規約 §右のペインの字は掴める).
+            cutAt: "end"
+            // The two layers this row paints, in that order — the mark is drawn on an opaque patch, and a patch in
+            // the wrong colour is a box around the `…`.
+            ground: Theme.bgSurface
+            groundOverlay: commitRow.lit ? Theme.bgHover : "transparent"
+            text: commitRow.subject
+        }
     }
 
     // Passive, and on the row's own root: a handler here leaves the fields under it their presses, and hover reaches
@@ -172,4 +135,11 @@ Item {
     function askCard() {
         commitRow.hoverRequested(commitRow, true)
     }
+    /// Whether the face has what it will paint and the words have been laid out — a shot of this list waits on both.
+    function rowReady() {
+        return face.pictureReady() && subjectLine.width > 0
+    }
+    /// Whether the summary ran past the room the row gave it. Read back rather than left to a picture: the mark is a
+    /// few pixels wide, and a row that cut its summary frames the same as one that did not.
+    readonly property alias summaryCut: subjectLine.clipped
 }

@@ -21,6 +21,14 @@ ColumnLayout {
     property string sha8: ""
     property string fullSha: ""
     property string parentSha: ""
+    /// How loud the hash is. The pane's own plate speaks at full strength — there the hash *is* the value the column
+    /// is for. **In a list it stands beside a message and must not outrank it**: the id is how a row is told apart
+    /// once the words already said which commit it is (デザイン規約 §複数のコミットを選ぶ).
+    property color shaColor: Theme.textPrimary
+    /// And how big. The pane's plate speaks at the window's own step; in a list the id sits beside a message and is
+    /// spelled at the step git's own text wears, which is a notch under it — mono at the same size as the words reads
+    /// louder than they do (デザイン規約 §複数のコミットを選ぶ).
+    property real shaSize: Theme.fontMd
 
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
@@ -255,8 +263,8 @@ ColumnLayout {
                 id: shaText
                 text: plate.sha8
                 mono: true
-                pixelSize: Theme.fontMd
-                color: Theme.textPrimary
+                pixelSize: plate.shaSize
+                color: plate.shaColor
                 // The button owns every press on this face. The field is here to be written into, not to be pressed
                 // (デザイン規約 §右のペインの字は掴める).
                 grabbable: false

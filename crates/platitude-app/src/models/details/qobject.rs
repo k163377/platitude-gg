@@ -121,10 +121,17 @@ impl DetailsModel {
             return;
         }
         self.clear_commit();
-        // **The last commit's files go with it.** Left standing they
-        // would sit under a band naming these commits until the read
-        // lands — and stay there for good if it fails.
-        self.take_files(&[]);
+        // **The last commit's files go with it** — but one choice's do
+        // not go when another choice replaces it. Left standing, a
+        // commit's files would sit under a band naming several; emptied
+        // between two choices, the list under this one collapses and the
+        // pane below it takes the whole place for the length of a round
+        // trip, which is a flash every time a commit joins or leaves
+        // (the diff pane keeps its rows across a re-read for the same
+        // reason — `DiffModel::begin_request`).
+        if self.selection_count == 0 {
+            self.take_files(&[]);
+        }
         self.selection_count = oids.len() as i32;
         self.comparing = compare;
         self.selection_loaded = false;
