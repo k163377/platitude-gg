@@ -121,8 +121,10 @@ Item {
     /// **A key handler rather than a `Shortcut`**, and that is what keeps it out of everyone else's way: a shortcut is
     /// matched before the key is delivered at all, so a bar, a popup or a box that wants Escape takes it first and
     /// this is never reached — which is the rule itself, since the mark is the last thing left to dismiss. **Two
-    /// enabled `StandardKey.Cancel` shortcuts in one window fire neither**, so a fourth one here would have taken the
-    /// ask bar's and the notice bar's Escape away with it (`tests/qml/tst_escape.qml` holds all of this).
+    /// enabled `StandardKey.Cancel` shortcuts in one window fire neither**, so a third one here would have taken
+    /// whichever bar was standing down with it (`tests/qml/tst_escape.qml` holds all of this). The two bars keep one
+    /// live between them by an order written where they meet (`noticeBar.yieldsEscape`); anything else that comes to
+    /// want Escape is added the way this one is, as a key handler under all of them.
     ///
     /// Accepted only when there was a mark to take: an Escape this page did nothing with is not this page's.
     function escapePressed() {
@@ -2546,6 +2548,21 @@ Item {
                     NoticeBar {
                         id: noticeBar
                         Layout.fillWidth: true
+                        // **The order Escape is handed out in, and the one place it is written.** Both bars can be
+                        // standing at once — raising a question does not lower a report (`startRowAsk`), and a write
+                        // answered while one stands does not lower the question — and **two enabled
+                        // `StandardKey.Cancel` shortcuts in one window fire neither** (`tests/qml/tst_escape.qml`),
+                        // so one of them has to give way rather than both dying.
+                        //
+                        // **The question keeps it**: it is what is being asked of the reader, it holds the keyboard
+                        // (its pill takes the focus as it opens), and it is the one thing here that stands until it
+                        // is answered — a report is read and nothing follows from it. Under both is the arrival mark,
+                        // last because it takes Escape as a key handler rather than as a shortcut
+                        // (`page.escapePressed`).
+                        //
+                        // Written as this bar's own line rather than handed round from the page: what each bar does
+                        // with Escape stays in its own declaration, and only the order between them is here.
+                        yieldsEscape: graphPane.asking
                         onAcknowledged: page.hideNotice()
                     }
 

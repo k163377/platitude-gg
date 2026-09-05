@@ -100,8 +100,9 @@ Rectangle {
     signal confirmed()
     /// Walked away from — Escape, the ✕, or a click elsewhere.
     signal cancelled()
-    /// The ✕'s own handler, named so the headless run presses what a hand presses (verify-ui: a run that calls a
-    /// second function doing the same thing passes for a mark wired to nothing).
+    /// The way out of a standing question, and **the body both gestures that take it enter** — the ✕ and Escape.
+    /// Named so the headless run presses what a hand presses (verify-ui: a run that calls a second function doing the
+    /// same thing passes for a mark, or a key, wired to nothing).
     function dismiss() {
         bar.cancelled()
     }
@@ -411,11 +412,21 @@ Rectangle {
     // Escape is heard as a shortcut rather than as a key handler on the bar: while a question stands the focus is on
     // the pill or on the form's own box, and the graph list — which takes it on a row click — holds no Escape of its
     // own to swallow it first.
+    //
+    // **Nothing is read here about what else is standing.** A question takes Escape ahead of the report bar, and that
+    // order is written in the one place the two meet (`RepoPage`, デザイン規約 §立っている質問は 1 か所で聞く): this bar is
+    // always the one that wins it, so the condition is its own standing and nothing else.
     Shortcut {
+        id: escapeKey
         // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the single
         // form takes only the first of them (Qt warns about exactly this).
         sequences: [StandardKey.Cancel]
         enabled: bar.open
-        onActivated: bar.cancelled()
+        // The ✕'s own body rather than a second call that does the same thing: Escape and the ✕ walk away from the
+        // same question, and a run pressing the copy would pass for a key wired to nothing (verify-ui).
+        onActivated: bar.dismiss()
     }
+    /// Automation: whether Escape is this bar's to take at this moment. **Read off the shortcut itself**, so a build
+    /// where the key is dead cannot say otherwise — the reading `QuitWaitDialog.escapes` takes, for the same reason.
+    readonly property alias escapes: escapeKey.enabled
 }

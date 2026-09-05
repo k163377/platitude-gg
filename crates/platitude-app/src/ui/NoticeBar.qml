@@ -27,10 +27,17 @@ Rectangle {
     /// Whether the report stands. **Not the words**: they stay put while the bar goes back up, since the bar is on
     /// screen for the whole 200ms it spends going (`AskBar.open` carries the same rule and the reason).
     property bool open: false
+    /// Whether the report hands Escape over to something standing above it. **Two enabled `StandardKey.Cancel`
+    /// shortcuts in one window fire neither** (`tests/qml/tst_escape.qml`) — not one winning, both dying — and this
+    /// bar and the ask bar can stand at the same time, so one of them has to give way. **Which one is not decided
+    /// here**: the order lives in the single place the two meet (`RepoPage`), and this is how the bar that gives way
+    /// is told (デザイン規約 §答えの要らない報せ).
+    property bool yieldsEscape: false
 
     /// Read and taken down. Nothing else follows from it — the write it is about is long over.
     signal acknowledged()
-    /// The pill's own handler, named so a headless run presses what a hand presses (verify-ui).
+    /// The way out of a standing report, and **the body both gestures that take it enter** — the `OK` pill and
+    /// Escape. Named so a headless run presses what a hand presses (verify-ui, `AskBar.dismiss`).
     function dismiss() {
         bar.acknowledged()
     }
@@ -159,11 +166,19 @@ Rectangle {
     }
     // Escape says the same thing as the pill: read, take it away. Heard as a shortcut rather than as a key handler,
     // because the focus may have been taken back by the list underneath (`AskBar`).
+    //
+    // **And it is the half of the pair that gives way** (`yieldsEscape`): a question standing over this report is what
+    // the reader is being asked for, and this is only news.
     Shortcut {
+        id: escapeKey
         // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the single
         // form takes only the first of them (Qt warns about exactly this).
         sequences: [StandardKey.Cancel]
-        enabled: bar.open
-        onActivated: bar.acknowledged()
+        enabled: bar.open && !bar.yieldsEscape
+        // The pill's own body, for the reason the ask bar's Escape enters the ✕'s: one way out of a bar, and both
+        // gestures walk it.
+        onActivated: bar.dismiss()
     }
+    /// Automation: whether Escape is this bar's to take at this moment (`AskBar.escapes`, read the same way).
+    readonly property alias escapes: escapeKey.enabled
 }

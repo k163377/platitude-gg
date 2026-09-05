@@ -46,6 +46,15 @@ Item {
             // photographs a marked row under no bar at all (measured).
             page.switchToRef("R", arg)
             moveAskTimer.start()
+        } else if (act === "ask-over-notice") {
+            // **The two bars standing at the same time**, which is the one arrangement where Escape has to belong to
+            // one of them rather than to both (デザイン規約 §答えの要らない報せ). The report goes up first because that is the
+            // order a hand reaches it in: raising a question leaves a standing report exactly where it is
+            // (`RepoPage.startRowAsk`). Raised through the page's own door the way `report-tone` is — **which** report
+            // it is proves nothing here and the thirteen report verbs prove it already; the pair is the subject.
+            page.showReport("update", "origin", "main", "")
+            askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
+            askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {
             // The same question `move-ask` raises, swept instead of photographed: what a bar names is a branch, a
             // remote or the folder another working copy is holding, and while it stands over the list it is the only
@@ -149,6 +158,78 @@ Item {
             Harness.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
                               + " branch=" + workTree.branch)
+            driver.complete()
+        }
+    }
+    /// PG_AUTO_ACT=ask-over-notice: the report and the question standing together, and which of the two Escape is
+    /// then handed to. **Three beats, and every one of them is a bar that has stopped moving**: the report all the
+    /// way down before the question is raised over it (a bar on its way has no shortcut behind it yet — `open` is
+    /// what enables one, so the pair would be read a frame before it exists), the question all the way down for the
+    /// reason `move-ask` waits, and both of them stopped again after the press.
+    ///
+    /// **The picture answers none of it.** Two bars with two live Escapes frame exactly like two bars with one, and
+    /// a window where Escape does nothing frames like a window where it does the right thing — so all four claims
+    /// are in the line, and what the shot is left showing is only the outcome (`ask_over_notice`).
+    SampleTimer {
+        id: askOverNoticeTimer
+        /// The remote ref the question is raised on, as `move-ask` takes it.
+        property string ref: ""
+        property bool asked: false
+        property bool pressed: false
+        /// What was read at the press, kept because the press is what takes one of the two away.
+        property string stood: ""
+        property string holds: ""
+        property bool askStood: false
+        property bool noticeStood: false
+        /// Which of the two a pair of answers names — said once so all four halves of the line are spelt the same.
+        function naming(ask, notice) {
+            return ask && notice ? "both" : ask ? "question" : notice ? "notice" : "none"
+        }
+        /// A bar between its two ends: neither all the way down nor all the way back up. Nothing about a bar may be
+        /// read there — a run that read one mid-flight would be reading a frame nobody sees.
+        function moving(card) {
+            return !card.settled && !card.shut
+        }
+        onTriggered: {
+            // **Each bar is waited for inside the beat that needs it standing, and nowhere else** (規約 §UI 自動化の因果性):
+            // the press below is what takes one of the two away, so a `settled` read every tick would be broken by
+            // this verb's own answer and the run would wait out the watchdog with the work already done (measured).
+            if (!askOverNoticeTimer.asked) {
+                if (!page.noticeCard.settled)
+                    return
+                askOverNoticeTimer.asked = true
+                page.switchToRef("R", askOverNoticeTimer.ref)
+                return
+            }
+            if (!askOverNoticeTimer.pressed) {
+                if (!graphPane.askCard.settled)
+                    return
+                askOverNoticeTimer.pressed = true
+                askOverNoticeTimer.askStood = graphPane.askCard.open
+                askOverNoticeTimer.noticeStood = page.noticeCard.open
+                askOverNoticeTimer.stood = askOverNoticeTimer.naming(askOverNoticeTimer.askStood,
+                                                                     askOverNoticeTimer.noticeStood)
+                const askEsc = graphPane.askCard.escapes
+                const noticeEsc = page.noticeCard.escapes
+                askOverNoticeTimer.holds = askOverNoticeTimer.naming(askEsc, noticeEsc)
+                // Through the body Escape itself runs, and through **whichever bar is holding it** rather than the
+                // one this run expects to: a build that handed Escape to the other bar has to be judged on what that
+                // bar then did. A build that handed it to neither presses nothing, and the two below say so.
+                if (askEsc)
+                    graphPane.askCard.dismiss()
+                else if (noticeEsc)
+                    page.noticeCard.dismiss()
+                return
+            }
+            if (askOverNoticeTimer.moving(graphPane.askCard) || askOverNoticeTimer.moving(page.noticeCard))
+                return
+            askOverNoticeTimer.stop()
+            Harness.report("ask_over_notice stood=" + askOverNoticeTimer.stood
+                              + " holds=" + askOverNoticeTimer.holds
+                              + " went=" + askOverNoticeTimer.naming(
+                                  askOverNoticeTimer.askStood && !graphPane.askCard.open,
+                                  askOverNoticeTimer.noticeStood && !page.noticeCard.open)
+                              + " left=" + askOverNoticeTimer.naming(graphPane.askCard.open, page.noticeCard.open))
             driver.complete()
         }
     }

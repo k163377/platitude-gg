@@ -126,6 +126,9 @@ QtObject {
                 // The write barrier is behind this one: the question is answered from the timer, not before it.
                 "set-upstream-go",
                 "move-ask", "ask-sweep", "switch-conflicted", "switch-held", "switch-mark",
+                // Nothing is written for this one either: a report raised through the page's door and a question
+                // raised over it, and the completion is both bars having stopped moving after the press.
+                "ask-over-notice",
                 // The write barrier is behind these, not in front of them: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",

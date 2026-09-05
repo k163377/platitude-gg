@@ -229,6 +229,9 @@ Rectangle {
     /// reads its `settled` / `shut` / `label` / `accept` off it and presses the ✕ through `dismiss()`; five names on
     /// this pane said nothing the bar does not, and none of them is a thing that can be pressed from there.
     readonly property alias askCard: askBar
+    /// Whether a question is standing in this pane — **product-facing**, unlike the bar above it: the report bar over
+    /// the middle of the page reads it to know Escape is not its own (`RepoPage`, デザイン規約 §答えの要らない報せ).
+    readonly property alias asking: askBar.open
     function stopAsking() {
         // Only lowered. The words and the colour are left where they are — the bar is on screen for the whole 200ms it
         // takes to go, and the next question is what re-dresses it (`AskBar.open`).

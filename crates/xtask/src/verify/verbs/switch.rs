@@ -44,6 +44,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "move_ask hold=true code= branch=main",
     },
+    // The same question, with a report already standing under it. Two
+    // enabled `StandardKey.Cancel` shortcuts in one window fire neither
+    // (`tests/qml/tst_escape.qml`), so `holds=` is the half that judges
+    // the bug: `both` is it (measured — the build before the order was
+    // written says exactly that), `none` is the same thing from the
+    // other side, and `notice` is the order upside down. **`went=` and
+    // `left=` cannot catch it on their own** — the run presses the body
+    // Escape runs rather than the key, so a bar whose shortcut is dead
+    // still goes down when it is pressed; what they add is that the
+    // press moves one bar and only one. And `stood=both` is the fixture
+    // half: a report the question quietly lowered would make the rest
+    // of the line true and mean nothing.
+    Verb {
+        name: "ask-over-notice",
+        when: &[],
+        plain: "ask_over_notice stood=both holds=question went=question left=notice",
+    },
     // The same bar, swept rather than photographed. `words=true` is the
     // fixture half: a bar with nothing in it has air and no fields, and
     // `all=true` off one would be a green run on a screen the reader
