@@ -100,8 +100,8 @@ Item {
     function claimPageAct() {
         return shotDriver.claimPageAct()
     }
-    /// One run has one ending. The census is not asked for here: it reports on the picture the shot driver saves
-    /// (`AutoShotDriver.appPictured`), which is the scene the completion edge finished building.
+    /// One run has one ending. The census is not asked for here: the picture calls for it
+    /// (`AutoShotDriver.appPictured`) and it walks once the window has stopped arriving, which the ending waits for.
     function finish() {
         shotDriver.finish()
     }
@@ -109,6 +109,7 @@ Item {
     WindowCensus {
         id: census
         window: harness.window
+        onWalked: shotDriver.censusDone()
     }
 
     WindowPerfDriver {
@@ -133,6 +134,7 @@ Item {
         sceneMirror: shotMirrors.sceneMirror
         mainUi: harness.mainUi
         gate: harness.gate
+        censusState: census.waiting ? "waiting" : census.settled ? "settled" : "arriving"
         onAppPictured: census.report()
     }
 

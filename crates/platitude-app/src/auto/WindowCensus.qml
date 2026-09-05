@@ -9,20 +9,25 @@ import platitude
 /// shows: the item tree is walked once, on the picture the run saved, and every type met is reported as
 /// `census=A,B,C` for verify-ui to record against the line that ran (`crates/xtask/verb-census.txt`).
 ///
-/// **One walk, on the saved picture — never on a clock.** A sampled walk records where its ticks landed rather than
-/// what the run did: a row a run raises and takes away again is in the census of the machine whose tick caught it and
-/// out of the census of the machine whose tick came late, so the file the gate reads moves under work that never
-/// touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks and nothing else). What a
-/// verb shows is what it leaves standing, which is what its picture holds.
+/// **One walk, on a window that has stopped arriving — never on a clock.** A sampled walk records where its ticks
+/// landed rather than what the run did: a row a run raises and takes away again is in the census of the machine whose
+/// tick caught it and out of the census of the machine whose tick came late, so the file the gate reads moves under
+/// work that never touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks and
+/// nothing else).
 ///
-/// **And the picture is the edge, not the completion.** A list whose rows stand up in the very frame the grab is
-/// fulfilled in has no delegates before that frame, so a walk taken at `finishAutoAct()` names them or misses them by
-/// a turn (measured: `commit-menu --preset tags` dropped `FileRowDelegate` in one run of ten). `AutoShotDriver`
-/// says when the scene the picture came out of is the settled one, and the walk goes from there.
+/// **The verb's own edge is not that point.** A verb is finished when what it acted on answers, and the repository is
+/// still being read behind it: the opening walks the log before the first status has said whether anything is
+/// uncommitted, so the working-tree row — and the tallies on it — arrive with the pass that status asks for. A walk
+/// taken at the picture is on the near side of that read about as often as the far side, and the two answers differ
+/// by a name, so the checked-in file moved under every gate that ran (measured 2026-09-05: `settings-eol true` lost
+/// `WipTallyRow` in 4 runs of 10 taken one after another and in 9 of 10 taken at once, and `file-menu-conflict
+/// both.txt --preset conflict-kinds` in 10 of 10 taken at once — each time writing its line, because each run
+/// answered that its page had settled).
 ///
-/// **The picture is still only as far along as the verb waited, though**, and a verb whose subject is the window is
-/// finished while the repository is being read. So the walk says which of the two scenes it was standing in
-/// (`pageSettled`), and the recorder writes the line or adds to it accordingly.
+/// So the walk waits for `settled`, and the run's ending waits for the walk (`AutoShotDriver.waitsForCensus`). A verb
+/// that photographs a state on its way somewhere still photographs it — the picture is taken at the same edge as
+/// before — but what it is recorded as showing is the whole of what it brought up, which is the same on every
+/// machine. A window that never settles is the watchdog's to report; there is no clock here that would let one pass.
 ///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
@@ -127,26 +132,35 @@ Item {
             visit(loaded, shown, false)
     }
 
-    /// Whether the page this run photographed had stopped arriving — asked of the picture, where the page verbs ask
-    /// the same thing of the act (`AutoActDriver`).
+    /// Whether the window has stopped arriving — the one point the walk is taken from, and a binding rather than a
+    /// call so the wait below has an edge to hear (every term is a property read, so the dependencies are captured
+    /// through `pageSettled()` as they would be inline).
+    readonly property bool settled: census.pageSettled()
+
+    /// Whether the page this run photographed had stopped arriving. The page verbs ask a shorter version of this of
+    /// the act before they start (`AutoActDriver`); this one is what the census is walked from and so has to name
+    /// every read, not only the ones a verb needs standing before it presses anything.
     ///
-    /// **A run that answers no is a witness to what it showed and to nothing it did not.** A verb whose subject is the
-    /// window finishes on that subject, which is laid out while the repository is still being read, so its lists hold
-    /// whatever had arrived — measured, `band --system-title-bar` photographed a page whose status had not landed in
-    /// 13 runs of 20 and lost `FileRowDelegate` from 6 of those, while all 18 runs that answered yes held it. So the
-    /// census adds such a run's names to the line rather than writing the line with them (`gate::census`), which is
-    /// what keeps a checked-in file from moving under a machine's timing.
+    /// **Every read the page is still waiting on is named here, the selected commit's and the graph's second pass
+    /// included.** A predicate that stopped at the working tree, the refs and the graph called a run settled while the
+    /// changed-file list was on its way, and the verbs that finish on something else of their own then wrote and
+    /// unwrote one another's `FileRowDelegate` from run to run (measured: `ref-list 1 --preset tags` lost it in 2 runs
+    /// of 8 taken at once, and in none of 10 taken one after another — the window opens under load, which is exactly
+    /// where the gate runs).
     ///
-    /// **Every read the page is still waiting on is named here, the selected commit's included.** A predicate that
-    /// stopped at the working tree, the refs and the graph called a run settled while the changed-file list was on its
-    /// way, and the verbs that finish on something else of their own then wrote and unwrote one another's
-    /// `FileRowDelegate` from run to run (measured: `ref-list 1 --preset tags` lost it in 2 runs of 8 taken at once,
-    /// and in none of 10 taken one after another — the window opens under load, which is exactly where the gate runs).
+    /// **`finishCount` counts passes, and the first one is not the last word.** The opening starts the log walk before
+    /// the first status has been read, so whether that walk carries the working-tree row is a race the status wins
+    /// about half the time; when it loses, the status asks for a rebuild and the row — with `WipTallyRow` on it —
+    /// arrives a pass later. What settles it is the rows agreeing with the status: the graph says what it holds
+    /// (`GraphModel.wipRow`) and the working tree says what should stand (`WorkTree.wipRowStands`), both off the one
+    /// rule the walk itself is built from (`platitude_core::graph::wip_row_stands`). A graph that could not be walked
+    /// is waiting for nothing and answers yes with whatever it holds — `graph-stopped` leaves an empty column, and a
+    /// swap that failed (`stale`) leaves the pass before it standing.
     ///
     /// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was
     /// never given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing
     /// is coming, so the run photographed the whole of what its verb shows and may write its line. Answering no for
-    /// those would leave their lines able to grow and never to lose a name.
+    /// those would hold the run open until the watchdog.
     function pageSettled() {
         const page = census.window ? census.window.curPage : null
         if (!page)
@@ -155,17 +169,34 @@ Item {
         if (state === "" || state === "error")
             return true
         // An accepted path is only the beginning: the rows arrive with the reads behind it.
+        const graph = page.pageGraph
         return state === "open" && page.pageWt.loaded
-            && page.pageRefsLoaded && page.pageGraph.finishCount > 0 && page.pageDetailsSettled
+            && page.pageRefsLoaded && graph.finishCount > 0 && page.pageDetailsSettled
+            && (graph.failed || graph.stale || graph.wipRow === page.pageWt.wipRowStands)
     }
 
-    /// The run is finishing: the walk, then the report lines.
+    /// The run is finishing: the walk once the window has settled, then the report lines. Held open by the shot
+    /// driver until this says it is done, so a walk is never taken from a window with a read still out.
+    signal walked()
+    property bool waiting: false
     function report() {
         if (Harness.autoAct === "")
             return
+        if (!census.settled) {
+            census.waiting = true
+            return
+        }
+        census.take()
+    }
+    onSettledChanged: if (census.waiting && census.settled) census.take()
+
+    /// The walk and the two lines, taken once however many times the window settles.
+    function take() {
+        census.waiting = false
         walk()
         // Said first, and on a line of its own: everything after `census=` is a name.
-        Harness.report("census page=" + (census.pageSettled() ? "settled" : "arriving"))
+        Harness.report("census page=" + (census.settled ? "settled" : "arriving"))
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
+        census.walked()
     }
 }

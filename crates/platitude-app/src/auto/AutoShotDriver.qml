@@ -43,9 +43,20 @@ Item {
 
     /// The window's picture is on disk, so the scene it came out of is the settled one: **the completion edge is often
     /// what builds that scene** (see `grabApp`), and a list whose rows stand up in the frame the grab is fulfilled in
-    /// has no delegates at all before it. Anything reading the tree for what this run showed reads it from here
+    /// has no delegates at all before it. Anything reading the tree for what this run showed hears about it from here
     /// (`WindowCensus`), and this is still ahead of the quit, which waits on the parts.
     signal appPictured()
+
+    /// Whether the ending waits for the census to have walked. **A part like the other two**, because the walk is not
+    /// taken at the picture: it waits for the window to have stopped arriving, which is later than the verb's own edge
+    /// as often as not (`WindowCensus`). Without the part the run quits out from under the walk on exactly the runs
+    /// whose census would have been worth having.
+    readonly property bool waitsForCensus: driver.causal
+    function censusDone() {
+        driver.partDone()
+    }
+    /// What the census is doing, for the watchdog's line alone. Bound by whoever holds one (`WindowHarness`).
+    property string censusState: "-"
 
     function claimPageAct() {
         if (driver.pageActClaimed)
@@ -107,8 +118,11 @@ Item {
         interval: Math.max(Harness.autoWatchdogMs, 1)
         onTriggered: {
             console.warn("auto-act watchdog expired verb=" + Harness.autoAct)
+            // `census=waiting` is the one part that can be out long after the picture: the window had a read still on
+            // its way when the run ended (`WindowCensus.pageSettled`), which is what to go and look at.
             console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
-                         + " parts=" + driver.shotParts + " ink=" + Ink.owed)
+                         + " parts=" + driver.shotParts + " ink=" + Ink.owed
+                         + " census=" + driver.censusState)
             Qt.quit()
         }
     }
@@ -145,6 +159,7 @@ Item {
                         ? overlayMirror.item.sourceItem.children.length : 0
         driver.sceneWanted = holding > 0 && driver.sceneMirror !== null && driver.sceneMirror.item !== null
         driver.shotParts = 1 + (overlayMirror.item ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
+                           + (driver.waitsForCensus ? 1 : 0)
         // Asked for here, taken in `grabOverlay` when the mirror answers.
         if (overlayMirror.item) {
             driver.overlayAsked = true

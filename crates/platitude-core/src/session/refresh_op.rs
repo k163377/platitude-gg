@@ -223,16 +223,12 @@ impl RepoSession {
                 // report these counts belong beside.
                 self.observe_head(looked, &status.head());
                 let head_seq = self.standing.head_seq();
-                // The working-tree row stands while the tree is dirty *or*
-                // an operation is — a stop's landing is that row, and the
-                // `edit` stop and the emptied-commit stop both leave the
-                // tree clean while the exit card waits under it
-                // (デザイン規約 §進行中の操作から出る「着地は WIP 行」).
-                // "An operation" is one with an exit card to land: a
-                // bisect also flips `op_state.any()`, and it has no card
-                // and changes nothing about the tree.
-                let dirty =
-                    status.is_dirty() || integrate::InProgress::from_state(&op_state).is_some();
+                // Whether the working-tree row stands, asked of the one
+                // place that rule is written (`graph::wip_row_stands`):
+                // the reader showing this status asks the same question of
+                // the same function, so what the rows hold and what the
+                // window expects them to hold cannot drift apart.
+                let dirty = crate::graph::wip_row_stands(&status, &op_state);
                 // Both halves are recorded whatever the other says: they
                 // are what the next read compares against, and a `||` that
                 // skipped the second would leave it behind.

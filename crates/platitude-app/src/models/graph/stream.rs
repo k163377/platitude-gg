@@ -81,6 +81,11 @@ impl GraphModel {
             self.loading = true;
             self.row_total = 0;
             self.walked_total = 0;
+            // The column is empty, so it holds no working-tree row either:
+            // a walk that fails before its first chunk leaves this
+            // standing, and the last pass's answer there would say the
+            // graph agrees with a status it was never walked from.
+            self.wip_row = false;
             // The query stands — a restart is the same history read
             // again — but its answers went with the rows, and the chunks
             // re-count them.
@@ -320,6 +325,14 @@ impl GraphModel {
         self.walked_total = walked as i32;
         self.truncated = truncated;
         self.finish_count += 1;
+        // What this pass walked with, read off the rows it left rather
+        // than held from the ask: a pass is cancelled and replaced by the
+        // one that overtook it, and only the rows say which of them is on
+        // screen.
+        self.wip_row = self
+            .rows
+            .first()
+            .is_some_and(|row| platitude_core::oid::Oid::hex_is_zero(&row.oid_hex));
         // Only the cut needs the step, and only a settled walk knows
         // there was one — asked for here rather than held from the
         // opening, so a window the settings widen moves the step with it.

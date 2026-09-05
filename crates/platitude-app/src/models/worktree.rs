@@ -192,6 +192,15 @@ pub struct WorkTreeModel {
     /// already on both sides moves no row, and is exactly the change the
     /// reader of this has to hear about.
     tree_revision: i32,
+    /// Whether this status leaves the synthetic working-tree row standing
+    /// at the head of the graph (`platitude_core::graph::wip_row_stands`).
+    ///
+    /// The graph is walked from the same answer, one read behind: the walk
+    /// asks it of the record this status wrote, so between a status that
+    /// moves this and the pass it asks for, the rows on screen are the
+    /// previous answer's. What reads the two together is what has to know
+    /// the picture is still arriving (`GraphModel::wip_row`).
+    wip_row_stands: bool,
     /// The counts `tree_revision` last spoke for; `None` before the
     /// first status, which always counts as movement.
     seen_counts: Option<(i32, i32, i32, i32)>,
@@ -278,6 +287,7 @@ impl WorkTreeModel {
     qproperty!("opEditing", Member = op_editing, Notify = changed);
     qproperty!("opEditOid", Member = op_edit_oid, Notify = changed);
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
+    qproperty!("wipRowStands", Member = wip_row_stands, Notify = changed);
 
     #[qsignal]
     fn changed(&mut self);
@@ -393,6 +403,7 @@ impl WorkTreeModel {
         self.conflict_count = counts.conflicted as i32;
         self.hard_reset_takes = counts.hard_reset_takes() as i32;
         self.counts = counts;
+        self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
         self.op_state = op_state;
         self.op_editing = stop.editing;
         self.op_edit_oid = stop.oid;

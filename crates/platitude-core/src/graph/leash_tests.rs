@@ -5,6 +5,34 @@ use super::testkit::{commit, oid};
 use super::*;
 use crate::model::StrPool;
 use crate::oid::Oid;
+use crate::opstate::OpState;
+use crate::status::{StatusItem, WorkTreeStatus};
+
+#[test]
+fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect() {
+    let clean = WorkTreeStatus::default();
+    let dirty = WorkTreeStatus {
+        items: vec![StatusItem::Untracked {
+            path: "scratch.txt".into(),
+        }],
+        ..WorkTreeStatus::default()
+    };
+    assert!(!wip_row_stands(&clean, &OpState::default()));
+    assert!(wip_row_stands(&dirty, &OpState::default()));
+    // A rebase stopped at `edit` leaves the tree clean, and the row is
+    // where its exit card lands.
+    let rebasing = OpState {
+        rebasing: true,
+        ..OpState::default()
+    };
+    assert!(wip_row_stands(&clean, &rebasing));
+    // A bisect has no card to land, and changes nothing about the tree.
+    let bisecting = OpState {
+        bisecting: true,
+        ..OpState::default()
+    };
+    assert!(!wip_row_stands(&clean, &bisecting));
+}
 
 #[test]
 fn virtual_wip_row_takes_lane_zero_and_dashes_its_edge() {

@@ -79,6 +79,20 @@ pub struct GraphModel {
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.
     finish_count: i32,
+    /// Whether the rows this pass left standing start with the synthetic
+    /// working-tree row (`session::rows::wip_row`, an all-zero id).
+    ///
+    /// **What the rows hold, against what the status says they should**
+    /// (`WorkTree::wip_row_stands`): the opening walks the log before the
+    /// first status has said whether there is anything uncommitted, so a
+    /// pass that lost that race carries no working-tree row and the status
+    /// asks for another. The two disagreeing is how a reader tells that
+    /// the graph on screen is still one read behind the repository.
+    ///
+    /// Settled with the footer rather than tracked through the splices: a
+    /// pass half-way through its chunks is not a graph anybody reads this
+    /// against.
+    wip_row: bool,
     /// Model resets (streaming restarts only — in-place replacements do
     /// not reset). QML re-anchors the viewport only when this moves,
     /// because only a reset zeroes the scroll position.
