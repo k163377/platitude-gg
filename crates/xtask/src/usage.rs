@@ -374,8 +374,8 @@ const TAIL: &str = "  shipped [--no-build]
 
   shots <add|prune|open [--again]|list|path>
       The shot board: pictures land on a page that opens in a window of
-      its own, magnifies to exact integer ratios without smoothing, and
-      is still there after it is closed. A chat pane fits a picture to
+      its own at 1:1, magnifies to exact whole ratios without smoothing,
+      and is still there after it is closed. A chat pane fits a picture to
       its width and cannot zoom it, so a 1440x900 window is unreadable
       there and shooting it larger changes nothing. `verify-ui` puts its
       own pair on the board as it goes, so the usual reason to reach for
