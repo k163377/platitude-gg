@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook pre-write"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-write"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook pre-shell"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-shell"
           }
         ]
       },
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook pre-worktree"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-worktree"
           }
         ]
       },
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook pre-chip"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-chip"
           }
         ]
       }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook post-write"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-write"
           }
         ]
       },
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook post-worktree"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-worktree"
           }
         ]
       },
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook post-chip"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-chip"
           }
         ]
       }
@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook stop"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook stop"
           }
         ]
       }
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook prompt-submit"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook prompt-submit"
           }
         ]
       }
@@ -92,7 +92,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook session-start"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook session-start"
           }
         ]
       }
@@ -102,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo xtask hook session-end"
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook session-end"
           }
         ]
       }

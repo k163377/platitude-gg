@@ -40,7 +40,7 @@ while read -r old new ref; do
         echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PG_GATE_SKIP=1 as the user)" >&2
         exit 1
       fi
-      exec cargo run --quiet -p xtask -- gate verdict "$old" "$new"
+      exec cargo run --quiet -p xtask --profile hooks -- gate verdict "$old" "$new"
       ;;
   esac
 done

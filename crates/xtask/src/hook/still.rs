@@ -198,6 +198,7 @@ mod tests {
             "PG_ALLOW_GUI=1 cargo xtask perf --at main --repo C:/r",
             "cargo run -p xtask -- structure",
             "cargo run --package xtask -- waits",
+            "cargo run --quiet -p xtask --profile hooks -- hook pre-shell",
             "cargo xtask gate 2>&1 | tail -3",
             "cargo fmt --all -- --check",
             "cargo tree -p xtask",

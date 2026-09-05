@@ -379,7 +379,7 @@ fn checked_in_hook() -> String {
     let script = std::fs::read_to_string(&checked_in)
         .unwrap_or_else(|e| panic!("{}: {e}", checked_in.display()))
         .replace(
-            "exec cargo run --quiet -p xtask -- gate verdict",
+            "exec cargo run --quiet -p xtask --profile hooks -- gate verdict",
             &format!("exec \"{exe}\" gate verdict"),
         );
     assert!(

@@ -34,6 +34,21 @@ tracing = "0.1"
 [profile.dev.package.xtask]
 opt-level = 3
 
+# **The hooks build in a directory of their own.** Claude Code's hooks
+# and git's reference-transaction hook run the task runner through
+# `cargo run --profile hooks` (.claude/settings.json, .githooks/), and
+# cargo holds a profile's directory locked for the whole of any build in
+# it: a hook built into target/debug waits behind every `cargo test` a
+# gate runs in the same tree — a tool call, a prompt, the end of a turn,
+# each held for the length of a compile. The same code with its own lock
+# (target/hooks), unoptimised because a hook's work is a few file reads
+# and the compile is what a session waits for.
+[profile.hooks]
+inherits = "dev"
+
+[profile.hooks.package.xtask]
+opt-level = 0
+
 [workspace.lints.rust]
 unsafe_code = "warn"
 

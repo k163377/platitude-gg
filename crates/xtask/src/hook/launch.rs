@@ -280,6 +280,7 @@ mod tests {
             "cargo xtask linux verify-ui commit --preset basic",
             "cargo build --release",
             "cargo run --quiet -p xtask -- hook pre-write",
+            "cargo run --quiet -p xtask --profile hooks -- hook pre-write",
             "cd C:/Users/x/IdeaProjects/platitude-gg && git status",
         ] {
             assert!(
