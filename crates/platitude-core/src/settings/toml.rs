@@ -190,6 +190,20 @@ pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
         })
 }
 
+/// A written-down path, with the air around it taken off.
+///
+/// **An empty string is an answer, not a missing key.** It is how the
+/// settings screen says "whatever `PATH` resolves", so it has to survive
+/// the read — a fallback here would put a value back that the reader had
+/// just cleared. Only a key that is not a string at all falls back
+/// (rules-refs/core.md §読みは `toml::Table` からキーごとに取る).
+pub(super) fn text(table: &Table, key: &str) -> Option<String> {
+    table
+        .get(key)
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_string())
+}
+
 pub(super) fn timeout_secs(table: &Table, key: &str) -> Option<u64> {
     table
         .get(key)

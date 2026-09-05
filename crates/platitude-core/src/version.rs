@@ -59,6 +59,64 @@ fn leading_number(part: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// What one candidate git answered when it was asked its version.
+///
+/// **Four answers rather than a `Result`**, because two of them are not
+/// failures: a git below the minimum runs the app all the same (§git が
+/// 無い時・古い時), and the difference between "nothing to run there" and
+/// "it ran and said something else" is the whole of what a reader needs
+/// to fix a path they typed. The words are the caller's — this says which
+/// of the four it is, and carries only what git or the OS said itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Probe {
+    /// It ran, and named a version at or above [`MINIMUM_GIT`].
+    Supported(GitVersion),
+    /// It ran, and named an older one.
+    Old(GitVersion),
+    /// There is nothing to run at that path.
+    Missing,
+    /// It could not be started, or it started and did not answer like
+    /// git. `message` is the reason in git's or the OS's own words.
+    Failed { message: String },
+}
+
+impl Probe {
+    /// Whether git answered at all — the two versions, old or not.
+    pub fn answered(&self) -> bool {
+        matches!(self, Self::Supported(_) | Self::Old(_))
+    }
+
+    /// The version string git printed, or empty where it printed none.
+    pub fn version(&self) -> &str {
+        match self {
+            Self::Supported(v) | Self::Old(v) => &v.raw,
+            _ => "",
+        }
+    }
+}
+
+/// Asks one git binary for its version, without disturbing the one the
+/// application is already running on.
+///
+/// `program` is a path, or empty for whichever git `PATH` resolves — the
+/// same vocabulary [`crate::settings::Defaults::git_path`] holds, because
+/// this is what reads it.
+pub async fn probe(program: &str, cancel: &CancellationToken) -> Probe {
+    let executor = if program.is_empty() {
+        GitExecutor::new()
+    } else {
+        GitExecutor::with_program(program)
+    };
+    match detect(&executor, cancel).await {
+        Ok(version) if version.supported() => Probe::Supported(version),
+        Ok(version) => Probe::Old(version),
+        Err(GitError::GitNotFound { .. }) => Probe::Missing,
+        Err(error) => Probe::Failed {
+            message: error.to_string(),
+        },
+    }
+}
+
 /// Runs `git --version` and parses the result.
 pub async fn detect(
     executor: &GitExecutor,

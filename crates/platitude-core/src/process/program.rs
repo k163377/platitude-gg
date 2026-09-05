@@ -21,6 +21,54 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+/// The program [`super::GitExecutor::new`] spawns, as a path with
+/// somewhere in it — what a screen showing "the git this app runs" has to
+/// put in front of a reader.
+///
+/// **Read out, never run.** [`default_program`] is what is spawned; this
+/// answers the same question one step further along, resolving the bare
+/// name it may return against the same directories in the same order. A
+/// reading of what the OS would do rather than a promise: either platform
+/// can have the file replaced between this and the next spawn, and it
+/// costs a wrong path on screen and nothing else. Falls back to the bare
+/// name where nothing along the search answers.
+pub fn default_program_path() -> OsString {
+    let named = default_program();
+    if Path::new(&named).components().count() > 1 {
+        return named;
+    }
+    // The file name, not the program name: the bare `git` above is what is
+    // *spawned*, and what a spawn looks for on Windows carries the
+    // extension the same way `behind_launcher` writes it.
+    let file = if cfg!(windows) { "git.exe" } else { "git" };
+    search_dirs()
+        .into_iter()
+        .find_map(|dir| {
+            let candidate = dir.join(file);
+            candidate.is_file().then_some(candidate)
+        })
+        .map_or(named, PathBuf::into_os_string)
+}
+
+/// Whether two paths name the same program.
+///
+/// Separators are levelled and, on Windows, case as well: one of these
+/// comes from a settings file and the other from a chooser, and a reader
+/// who picked the git already running must not be told they picked a
+/// different one. Nothing is resolved — a link and its target are two
+/// answers here, because they are two programs to spawn.
+pub fn same_program(one: &Path, two: &Path) -> bool {
+    fn levelled(path: &Path) -> String {
+        let text = path.to_string_lossy().replace('\\', "/");
+        if cfg!(windows) {
+            text.to_lowercase()
+        } else {
+            text
+        }
+    }
+    levelled(one) == levelled(two)
+}
+
 /// The program [`super::GitExecutor::new`] spawns.
 pub(super) fn default_program() -> OsString {
     let behind = cfg!(windows)
@@ -94,6 +142,39 @@ mod tests {
 
     fn dirs<const N: usize>(dirs: [&str; N]) -> Vec<PathBuf> {
         dirs.iter().map(PathBuf::from).collect()
+    }
+
+    /// Two spellings of one program are one program: the settings file and
+    /// a chooser write paths differently, and a reader who picked the git
+    /// already running must not be told they picked another one.
+    #[test]
+    fn separators_and_windows_case_do_not_make_two_programs() {
+        let slashed = Path::new("C:/Program Files/Git/cmd/git.exe");
+        assert!(same_program(
+            slashed,
+            Path::new(r"C:\Program Files\Git\cmd\git.exe")
+        ));
+        assert_eq!(
+            same_program(slashed, Path::new(r"c:\program files\git\cmd\GIT.EXE")),
+            cfg!(windows),
+            "case is Windows's to ignore and nobody else's"
+        );
+        assert!(!same_program(
+            slashed,
+            Path::new("C:/Program Files/Git/mingw64/bin/git.exe")
+        ));
+    }
+
+    /// The one the settings screen shows behind an empty box: wherever the
+    /// name resolves, it resolves to a file with somewhere in it.
+    #[test]
+    fn the_default_program_resolves_to_a_file() {
+        let found = PathBuf::from(default_program_path());
+        assert!(found.is_file(), "dev/CI machines must have git: {found:?}");
+        assert!(
+            found.components().count() > 1,
+            "resolved to somewhere, not back to the bare name: {found:?}"
+        );
     }
 
     #[test]

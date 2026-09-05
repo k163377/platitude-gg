@@ -30,6 +30,57 @@ async fn missing_binary_maps_to_git_not_found() {
     assert!(matches!(err, GitError::GitNotFound { .. }), "got {err:?}");
 }
 
+/// The empty path is the git on `PATH`, and it is the one the settings
+/// file holds for "whichever one this machine resolves". The probe is
+/// what a typed-in path is checked with, so this is the reading its
+/// default has to keep.
+#[tokio::test]
+async fn probing_the_empty_path_asks_the_git_on_path() {
+    let cancel = CancellationToken::new();
+    let probe = bounded("probe PATH", version::probe("", &cancel)).await;
+    assert!(probe.answered(), "dev/CI machines must have git: {probe:?}");
+    assert!(!probe.version().is_empty(), "{probe:?}");
+}
+
+/// A path with nothing at the end of it is told apart from one that ran
+/// and said something else — the two need different sentences, and it is
+/// the only thing a reader who mistyped a path has to go on.
+#[tokio::test]
+async fn probing_a_path_with_nothing_at_it_answers_missing() {
+    let cancel = CancellationToken::new();
+    let probe = bounded(
+        "probe a missing binary",
+        version::probe("definitely-not-a-real-git-binary", &cancel),
+    )
+    .await;
+    assert_eq!(probe, version::Probe::Missing, "{probe:?}");
+    assert!(!probe.answered());
+    assert_eq!(probe.version(), "");
+}
+
+/// Something that runs and is not git is a failure carrying its own
+/// words, not a missing binary: the reader pointed at a real file and
+/// has to be told what it said.
+#[tokio::test]
+async fn probing_something_that_is_not_git_carries_its_own_words() {
+    let repo_dir = TestRepo::init();
+    // A file that exists and is not a program: the spawn fails with the
+    // OS's own reason on every platform this ships to.
+    let not_git = repo_dir.path.join("not-git.txt");
+    std::fs::write(&not_git, "I am not git\n").unwrap();
+
+    let cancel = CancellationToken::new();
+    let probe = bounded(
+        "probe a file that is not git",
+        version::probe(&not_git.to_string_lossy(), &cancel),
+    )
+    .await;
+    match probe {
+        version::Probe::Failed { message } => assert!(!message.is_empty()),
+        other => panic!("expected a failure carrying a reason, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn opens_a_valid_repository() {
     let mut repo_dir = TestRepo::init();

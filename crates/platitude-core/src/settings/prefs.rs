@@ -3,7 +3,7 @@
 use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
-use super::toml::{clamp_to_i64, initial_commits, minutes, sub_table, timeout_secs};
+use super::toml::{clamp_to_i64, initial_commits, minutes, sub_table, text, timeout_secs};
 
 /// The values a person decided once and every repository is opened with,
 /// read from and written back to the `[defaults]` table this is named
@@ -25,6 +25,18 @@ pub struct Defaults {
     /// because this is what is written into it on open
     /// (`RepoSession::set_log_limit`).
     pub initial_commits: Option<u32>,
+    /// The git this computer runs, or empty for whichever one `PATH`
+    /// resolves. A machine with more than one installed — a newer one
+    /// beside the distribution's, a portable one on a stick — is the
+    /// whole reason it is here.
+    ///
+    /// **A path, not a name**: what is written here is handed to the
+    /// process spawner as the program, so a bare word would be resolved
+    /// through `PATH` again and say nothing the empty string does not.
+    /// Nothing checks it on the way in — [`crate::version::probe`] is
+    /// what asks the binary itself, and a value that answers nothing is
+    /// still what the reader wrote down.
+    pub git_path: String,
 }
 
 impl Default for Defaults {
@@ -33,6 +45,7 @@ impl Default for Defaults {
             auto_fetch_minutes: crate::session::AUTO_FETCH_DEFAULT_MINUTES,
             network_timeout_secs: crate::remote::DEFAULT_NETWORK_TIMEOUT.as_secs(),
             initial_commits: Some(crate::session::DEFAULT_LOG_LIMIT),
+            git_path: String::new(),
         }
     }
 }
@@ -65,6 +78,7 @@ impl Settings {
                     .unwrap_or(fallback.network_timeout_secs),
                 initial_commits: initial_commits(t, "initial_commits")
                     .unwrap_or(fallback.initial_commits),
+                git_path: text(t, "git_path").unwrap_or(fallback.git_path),
             },
             None => fallback,
         };
@@ -95,6 +109,14 @@ impl Settings {
         defaults.insert(
             "initial_commits".into(),
             Value::Integer(self.defaults.initial_commits.map_or(0, i64::from)),
+        );
+        // Written even when empty, and for the same reason the whole
+        // history is written as `0`: empty is an answer here — "whichever
+        // git `PATH` resolves" — and a key left out would be indis-
+        // tinguishable from it only until the default stopped being empty.
+        defaults.insert(
+            "git_path".into(),
+            Value::String(self.defaults.git_path.clone()),
         );
         root.insert("defaults".into(), Value::Table(defaults));
 
@@ -223,6 +245,59 @@ network_timeout_secs = 9
     fn a_count_past_u32_is_the_largest_there_is() {
         let text = format!("[defaults]\ninitial_commits = {}\n", i64::MAX);
         assert_eq!(commits_from(&text), Some(u32::MAX));
+    }
+
+    fn git_path_from(text: &str) -> String {
+        Settings::from_table(&text.parse::<Table>().expect("parse"))
+            .defaults
+            .git_path
+    }
+
+    /// An emptied box survives a round trip. Pinned because the failure is
+    /// silent and one-way: read back as "nobody said", a cleared path
+    /// would put the last binary back the next time the file is written,
+    /// and the reader who went back to the git on `PATH` would find
+    /// themselves still on the other one.
+    #[test]
+    fn an_empty_git_path_is_an_answer_rather_than_a_missing_key() {
+        assert_eq!(git_path_from("[defaults]\ngit_path = \"\"\n"), "");
+
+        let settings = Settings {
+            defaults: Defaults {
+                git_path: String::new(),
+                ..Defaults::default()
+            },
+            ..Settings::default()
+        };
+        let written = settings.to_table();
+        assert_eq!(Settings::from_table(&written), settings, "{written}");
+    }
+
+    /// A path written by hand keeps its separators and loses its air: the
+    /// string is handed to the process spawner as the program, and a
+    /// trailing space would be part of the name it looks for.
+    #[test]
+    fn a_git_path_is_carried_through_with_the_air_taken_off() {
+        assert_eq!(
+            git_path_from("[defaults]\ngit_path = \"  C:/tools/git/bin/git.exe  \"\n"),
+            "C:/tools/git/bin/git.exe"
+        );
+
+        let settings = Settings {
+            defaults: Defaults {
+                git_path: "/opt/git/bin/git".into(),
+                ..Defaults::default()
+            },
+            ..Settings::default()
+        };
+        assert_eq!(Settings::from_table(&settings.to_table()), settings);
+    }
+
+    /// A key that is not a string at all falls back like every other one
+    /// here, so one mistyped line costs only itself.
+    #[test]
+    fn a_git_path_that_is_not_a_string_falls_back_to_the_default() {
+        assert_eq!(git_path_from("[defaults]\ngit_path = 7\n"), "");
     }
 
     /// A number that is not a count at all falls back on its own, so one

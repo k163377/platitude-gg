@@ -11,5 +11,6 @@ name = "Ada Lovelace"
 
 [defaults]
 auto_fetch_minutes = 5
+git_path = "C:/tools/git/cmd/git.exe"
 initial_commits = 4000
 network_timeout_secs = 300
