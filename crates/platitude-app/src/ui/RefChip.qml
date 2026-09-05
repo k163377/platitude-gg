@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The front card of a commit's names: the first one, drawn whole. What else the commit carries is said behind it, one
-// sheet per colour, by the stack that seats this (`RefChipStack`) — this file draws the card and nothing else. There
-// are two things to read off it and they get one channel each — the
+// The front card of a commit's names: the first one drawn whole, and how many more the row carries (`+N`). What kind
+// those others are is said behind the card, one sheet per colour, by the stack that seats this (`RefChipStack`) — this
+// file draws the card and nothing else. There are two things to read off the name and they get one channel each — the
 // frame carries the kind (local = accent, remote = secondary grey, detached HEAD = warning, which is a state rather
 // than a kind, tag = refTag with a fill behind it), and the name carries where the ref is: ordinary text for one that
 // is in this repository, grey for one that is only on the remote (デザイン規約 §ref の種別). The sidebar already reads that way
@@ -54,12 +54,23 @@ Rectangle {
     width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
-    /// Everything in the chip that is not the name: the badge with its gap, and the held mark with its own. Each is
-    /// counted only while it is drawn — the two marks come and go, and a name measured against room that is not taken
-    /// would be cut short of the frame. **What the row carries beyond the first name is not in here** — that is said
-    /// behind the card, outside the frame (`RefChipStack`).
+    /// Everything in the chip that is not the name: the badge with its gap, the count with its own, and the held mark
+    /// with its own. Each is counted only while it is drawn — all three come and go, and a name measured against room
+    /// that is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
+                                       + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
                                        + (chip.recHeld ? chip.heldInk + Theme.spaceXs / 2 : 0)
+    /// What the frame's contents actually come to. `width` is this clamped to `maxWidth`, and whatever it runs over by
+    /// is what the frame clips off its own right-hand end — so nothing inside may ask for more than the name's room
+    /// leaves, which is the whole of what [`furnitureW`] is measured for (`tst_refstack.qml` holds it).
+    readonly property real contentW: chipContent.implicitWidth
+    /// Whether the row carries names this card is not showing, which is the whole of what the count is for.
+    readonly property bool hasCount: chip.records.length > 1
+    /// The count's own seat, measured off the label that draws it rather than off a token standing in for one. **A
+    /// seat priced for a single digit is a seat the two-digit rows overrun**: what it does not cover is handed to the
+    /// name, and the frame clips its own right-hand end off the far side of the row — the badge first (measured on
+    /// `JetBrains/kotlin`: 20 commits carry ten or more refs, and the deepest wears 42).
+    readonly property real countW: countLabel.implicitWidth
     /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that rather than to their
     /// square**: the air a box holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白).
     /// Seated so, the chip reads the same figures from both ends — a whole gap between the frame and the mark, half a
@@ -171,6 +182,13 @@ Rectangle {
         font: nameLabel.font
         text: "Hbxp"
     }
+    // The count's own probe. It is set smaller than the name and in a colour of its own, so the two are seated
+    // separately: one lift for the row would hang the count off the name's top edge (see `inkY`).
+    TextMetrics {
+        id: countInk
+        font: countLabel.font
+        text: "Hbxp"
+    }
     // How far apart the family sets its lines, for the height a wrapped name takes. `TextMetrics` cannot answer this
     // one — it measures a string, and line spacing is the family's.
     FontMetrics {
@@ -244,6 +262,21 @@ Rectangle {
             // The narrower of what the name wants and what it is given. **The same expression either way**: a wrapped
             // label handed its whole room would make every chip in a list as wide as the widest name.
             width: Math.min(implicitWidth, chip.nameRoom)
+        }
+        // How many more names the row carries, which is meta about the row rather than one of the names — the colour
+        // the row's other meta (author, date) is written in.
+        //
+        // **The sheets behind the card say which colours they are; this says how many there are** (デザイン規約 §重ね表示).
+        // The two answer different halves of the same question and neither can be read off the other: a colour is one
+        // sheet however many names wear it, so a commit wearing forty tags draws exactly the fan a commit wearing two
+        // draws — which is the row a reader most needs the number on.
+        Label {
+            id: countLabel
+            y: chip.inkY(countLabel, countInk)
+            visible: chip.hasCount
+            text: "+" + (chip.records.length - 1)
+            color: chip.dulled ? Theme.textMuted : Theme.textSecondary
+            font.pixelSize: Theme.fontSm
         }
         // Remote / PR badge: reserved width above, so it survives any elision.
         //

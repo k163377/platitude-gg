@@ -1,10 +1,13 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// What the sheets behind a chip's front card come to, held against records spelled out whole. **Only the built stack
-// can answer this**: the rule reads each record's colour through the card's own `kindKeyOf`, and what comes out is a
-// list the item builds — no Rust test reaches either.
+// What the sheets behind a chip's front card come to, and what the card itself spends on the count in front of them,
+// held against records spelled out whole. **Only the built stack can answer this**: the rule reads each record's
+// colour through the card's own `kindKeyOf`, and what comes out is a list the item builds — no Rust test reaches
+// either. The card's own arithmetic is here for the same reason: `furnitureW` is a sum of what its labels and marks
+// came out to, which nothing outside a laid-out chip knows.
 //
 // The records are the fixed-width flags plus a name (`encode::labels`): kind, is-head, on-a-remote, has-a-PR, here,
 // held elsewhere. Spelled out rather than assembled, so a flag that moves is a test that fails.
@@ -22,9 +25,32 @@ Item {
     readonly property string tagHere2: "T00010v1.1"
     readonly property string tagAway: "T01000v2.0"
 
+    /// A branch another working copy holds that is also on a remote — the worst-dressed card there is, which is the
+    /// one the column's floor is measured on.
+    readonly property string dressed: "L01011feature/a-name-far-too-long-for-any-column"
+
     RefChipStack {
         id: stack
         maxWidth: 200
+    }
+    // The column arithmetic that has to keep back what the card above spends. Handed a pane so its own two required
+    // properties are answered; nothing here reads the lanes.
+    GraphColumnMetrics {
+        id: columns
+        paneW: 800
+        maxLanes: 4
+    }
+    /// The deepest count a real repository draws, set the way the column's floor prices one. **The family is named
+    /// here, as it is on the floor's own probe**: in the app every label takes it from the window (`Main`), and
+    /// neither this nor the floor's probe has a window over it — a test that measured one against a chip standing in
+    /// the runner's own default font would be comparing two families (it does, and they differ: the runner's default
+    /// came out wider than `Noto Sans CJK JP` on the container and narrower on Windows).
+    Label {
+        id: deepestCount
+        visible: false
+        text: "+41"
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontSm
     }
 
     TestCase {
@@ -139,6 +165,84 @@ Item {
             compare(stack.sheets.length, 0)
             stack.unstacked = false
             compare(stack.sheets.length, 2)
+        }
+    }
+
+    // What the front card counts, and what counting it costs the name. The sheets behind it say which colours the row
+    // carries and this says how many names there are (デザイン規約 §重ね表示) — the two are separate channels, so a row
+    // whose fan does not grow still moves this number.
+    TestCase {
+        name: "RefChipCount"
+        when: windowShown
+
+        /// A row of `n` tags on one commit, which is the shape nearly every deep row in a real repository takes.
+        function tags(n) {
+            const out = []
+            for (let i = 0; i < n; ++i)
+                out.push("T00010v1." + i)
+            return out
+        }
+
+        // A card with one name on it spends nothing beside it: no count, and neither mark. The seat comes and goes
+        // with what is drawn, or every name on the graph stands one count to the left of where it belongs.
+        function test_a_row_with_one_name_counts_nothing() {
+            stack.records = [root.current]
+            verify(!stack.chipItem.hasCount)
+            compare(stack.chipItem.furnitureW, 0)
+        }
+
+        // What the count costs is its own label and the half gap that follows it — the same term shape the two marks
+        // take (デザイン規約 §余白).
+        function test_the_count_takes_its_own_ink_and_half_a_gap() {
+            stack.records = tags(12)
+            const chip = stack.chipItem
+            verify(chip.hasCount)
+            fuzzyCompare(chip.furnitureW, chip.countW + Theme.spaceXs / 2, 0.01)
+        }
+
+        // The fan cannot answer this one: a colour is one sheet however many names wear it, so both of these rows draw
+        // the single repeated sheet and only the count tells them apart.
+        function test_the_count_tells_apart_two_rows_the_fan_draws_alike() {
+            stack.records = tags(2)
+            compare(stack.sheets, ["tag"])
+            const shallow = stack.chipItem.countW
+            stack.records = tags(42)
+            compare(stack.sheets, ["tag"])
+            verify(stack.chipItem.countW > shallow, "a two-digit count took no more room than a one-digit one")
+        }
+
+        // Every term the frame spends beside the name is in `furnitureW`, so the contents of the worst-dressed card
+        // come to exactly the room inside its frame — never past it. A forgotten term is a name handed room the frame
+        // does not have, and the frame clips its own right-hand end (the badge first).
+        function test_the_dressed_card_s_contents_stop_at_its_frame() {
+            stack.records = [root.dressed].concat(tags(41))
+            const chip = stack.chipItem
+            verify(chip.hasCount && chip.hasBadge && chip.recHeld, "the card is not the worst-dressed one")
+            // The row inside the frame is a positioner and the name inside it elides: both answer their width in a
+            // pass after the records land, not in the turn that assigns them. **Waited out, not sampled** — a read
+            // taken at the first pass that answers anything at all catches the name at its unelided width.
+            waitForRendering(stack)
+            fuzzyCompare(chip.contentW, chip.maxWidth - 2 * Theme.spaceXs, 0.01)
+            compare(chip.width, chip.maxWidth)
+        }
+
+        // The floor keeps room for a count the deepest real row can reach, measured off a label of its own: an
+        // unparented one still answers, which is the whole reason this term may be priced here at all.
+        function test_the_column_floor_keeps_room_for_a_two_digit_count() {
+            verify(columns.chipCountInk.implicitWidth > 0, "the count probe measured nothing")
+            verify(columns.chipCountInk.implicitWidth >= deepestCount.implicitWidth,
+                   "the floor prices the count under what the deepest real row draws")
+            verify(columns.chipFurnitureW > columns.chipFan.fanMaxW + columns.chipCountInk.implicitWidth,
+                   "the floor left the count out")
+        }
+
+        // **The column opens at `Metrics.labelColW` without being clamped** (`GraphColumnMetrics.labelW` — only a
+        // width a hand dragged is held inside the two ends), so a floor that rose past it would open every window
+        // with the chip already crushed. Every term added to the furniture is spent out of this margin.
+        function test_the_column_opens_no_narrower_than_its_own_floor() {
+            verify(columns.labelColWMin <= Metrics.labelColW,
+                   "the floor " + columns.labelColWMin + " is past the width the column opens at "
+                   + Metrics.labelColW)
         }
     }
 }

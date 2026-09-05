@@ -4,15 +4,16 @@ import QtQuick
 import platitude.ui
 
 // The chip column of one commit: the front card with the first name on it (`RefChip`), and behind it one sheet per
-// **colour** the row carries — the whole of what the row says about the names it is not showing.
+// **colour** the row carries.
 //
-// **One sheet per colour, not per name.** A colour is what the chip has to say in the first
-// place (デザイン規約 §ref の種別: 枠 = 種別), and counting names instead said the same thing over and over: measured on
-// `JetBrains/kotlin`, 4,351 commits carry more than one ref and 3,650 of them are one commit wearing several tags, so
-// five sixths of what the old `+N` counted was the colour already on the front card. **The one colour that is allowed
-// twice is the front card's own** — a second sheet right behind it says "and more of these", which is the whole of
-// what a count was worth here; the sheets further back are one apiece. Everything the row holds is still read whole in
-// the card the chip unfolds into.
+// **One sheet per colour, not per name — the card's own `+N` is what counts them** (デザイン規約 §重ね表示). The two say
+// different things about the same row and neither can be read off the other: a colour is one sheet however many names
+// wear it, so a commit wearing forty tags fans exactly as one wearing two does. Per name, the fan said the same thing
+// over and over instead — measured on `JetBrains/kotlin`, 4,351 commits carry more than one ref and 3,650 of them are
+// one commit wearing several tags, so five sixths of a per-name fan would have been the colour already on the front
+// card. **The one colour that is allowed twice is the front card's own** — a second sheet right behind it says "and
+// more of these", and the sheets further back are one apiece. Everything the row holds is still read whole in the card
+// the chip unfolds into.
 //
 // **The fan goes down and to the right, and the stack is what the column holds** — the deepest sheet's right edge
 // stands where a bare chip's would, and the front card is pushed left by as many sheets as there are — a name's left

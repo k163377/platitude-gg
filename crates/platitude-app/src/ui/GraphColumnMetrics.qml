@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The graph pane's column arithmetic, in one place: what each of the three columns is allowed to be, what it actually
@@ -60,10 +61,27 @@ QtObject {
     /// sheets there can be is the number of colours a record can wear, which is the stack's own arithmetic and not a
     /// number this file may keep a second copy of. It draws nothing — nothing is handed to it.
     readonly property RefChipStack chipFan: RefChipStack {}
+    /// The count of the names the card is not showing (`RefChip`'s `+N`), at the widest the floor prices it: two
+    /// digits. **Measured off a label rather than a `TextMetrics`** — the metrics come out a few pixels tighter than
+    /// the label the words are actually set in, and a floor measured tight is a floor that still elides (the name
+    /// box's own floor is measured this way for the same reason, `GraphRowChips.nameBoxMinW`). It draws nothing.
+    ///
+    /// **Two digits is where a real repository stops**: on `JetBrains/kotlin`, 20 of the 48,058 commits that carry a
+    /// ref at all carry ten or more, and the deepest wears 42 (`+41`). A row deeper still is not crushed — the card
+    /// measures its own count off the label that draws it (`RefChip.countW`), so the marks and the badge keep their
+    /// seats and the extra digit comes out of the name, which is the one term this floor is a promise about.
+    ///
+    /// **The family is named rather than inherited**, the way `chipFont` above names it: every label in the app takes
+    /// it from the window (`Main`), and nothing here has a window over it.
+    readonly property Label chipCountInk: Label {
+        text: "+99"
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontSm
+    }
     /// Everything a chip column spends on what is not the name: the fan of sheets behind the card, the remote/PR badge
-    /// and the gap before it, the held mark and the gap after it, and the card's own padding on either side. **Each one
-    /// is a term the card takes off the name**, so each one is here, and a floor measured on the bare chip leaves the
-    /// row that wears them with nothing but the cut mark (measured).
+    /// and the gap before it, the count and the gap before it, the held mark and the gap after it, and the card's own
+    /// padding on either side. **Each one is a term the card takes off the name**, so each one is here, and a floor
+    /// measured on the bare chip leaves the row that wears them with nothing but the cut mark (measured).
     ///
     /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
     /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
@@ -72,9 +90,10 @@ QtObject {
     /// `feature/topic-a` one character where three were promised (measured).
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
-    /// own padding. Each mark's term is its plain ink and the half gap that follows it; the fan's is a step per sheet
-    /// and the one gap a sheet of the card's own colour takes (`RefChipStack.fanMaxW`).
+    /// own padding. Each mark's term is its plain ink and the half gap that follows it, and so is the count's; the
+    /// fan's is a step per sheet and the one gap a sheet of the card's own colour takes (`RefChipStack.fanMaxW`).
     readonly property real chipFurnitureW: chipFan.fanMaxW
+        + chipCountInk.implicitWidth + Theme.spaceXs / 2
         + chipBadgeMark.inkWidth + Theme.spaceXs / 2
         + chipHeldMark.inkWidth + Theme.spaceXs / 2
         + 2 * Theme.spaceXs

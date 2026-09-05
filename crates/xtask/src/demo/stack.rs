@@ -4,8 +4,14 @@
 
 use super::repo::DemoRepo;
 
+/// How many tags stand behind the branch on the piled rows — one short of
+/// the forty-two the deepest commit in `JetBrains/kotlin` wears, so the
+/// card counts `+41`.
+const PILED_TAGS: u32 = 41;
+
 /// Every colour a chip column can put on a row, every way two of them can
-/// meet, and every depth the fan is drawn at — **three rows to a shape**,
+/// meet, every depth the fan is drawn at, and the row deep enough that
+/// only the card's own count can say so — **three rows to a shape**,
 /// so the fan is read against its own repeat rather than against a
 /// neighbour of some other depth: what a stack costs the row above and
 /// below it is the whole question the picture answers, and a shape shown
@@ -17,6 +23,7 @@ use super::repo::DemoRepo;
 /// | rows | what each row carries | cards |
 /// |------|-----------------------|-------|
 /// | `main` `next` `side` | the branch, its own remote (folded, so the badge is on the name), a second local, a remote of its own and a tag | 4 |
+/// | `pile` `heap` `bank` | one branch and forty-one tags — the row the count is for, and the one the fan cannot answer | 2 |
 /// | `wide` `deep` `tall` | two locals, one of them held by another working copy, a remote and a tag | 5 |
 /// | `spot` `mark` `note` | a local, a remote and a tag | 3 |
 /// | `stem` `leaf` `root` | a local and one another working copy holds | 2 |
@@ -136,6 +143,35 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
+    }
+
+    // The deepest row a real repository puts on screen, three rows
+    // running: one branch, and forty-one tags standing on the same
+    // commit. **The fan cannot say this and the count cannot say the
+    // fan** — every one of those tags is the single repeated sheet, so
+    // this draws exactly what a commit wearing two tags draws and only
+    // `+41` tells the two apart (デザイン規約 §重ね表示).
+    //
+    // Measured on `JetBrains/kotlin`: 20 of the 48,058 commits that carry
+    // a ref at all carry ten or more, and the deepest wears 42.
+    for (name, series) in [("bank", 10), ("heap", 11), ("pile", 12)] {
+        let body = format!("pile {name}\n");
+        repo.commit(
+            "src/pile.txt",
+            &body,
+            "feat: a branch under forty-one tags on one commit",
+        )?;
+        repo.git(&["branch", name])?;
+        // **One transaction, not forty-one `git tag` runs.** The names
+        // are all this row wants of them, and each `tag` run is a
+        // process of its own; written through `update-ref` they cost
+        // one.
+        let oid = repo.git(&["rev-parse", "HEAD"])?;
+        let mut writes = String::new();
+        for i in 0..PILED_TAGS {
+            writes.push_str(&format!("create refs/tags/v{series}.{i:02} {oid}\n"));
+        }
+        repo.git_stdin(&["update-ref", "--stdin"], &writes)?;
     }
 
     // The everyday row, three deep: the branch this checkout is on, a
