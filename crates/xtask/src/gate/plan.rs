@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use super::census::{self, Census};
 use super::graph::{self, Graph, stem_of};
 use super::stamp::Store;
-use crate::subprocess::git_query;
+use crate::subprocess::{git_query, run_captured};
 
 /// Which side of stage 2 a step runs on: the host, or the Linux container
 /// (which is "here" when the host is Linux — `cargo xtask linux`).
@@ -168,7 +168,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         &worn,
     );
     let store = Store::open(dir)?;
-    let required = owed(&here, &head, &store, steps, ask);
+    let required = owed(&here, &head, &store, steps, ask)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
     let unclaimed = changed
         .iter()
@@ -198,19 +198,64 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
 /// Each step with the stamp that already answers for it, the other side's
 /// dropped when only this one was asked for. An always-step carries no key:
 /// the seconds it takes are not worth one.
-fn owed(here: &str, head: &str, store: &Store, steps: Vec<Step>, ask: &Ask<'_>) -> Vec<Required> {
-    steps
+///
+/// The object ids the keys are made of come from one listing of the
+/// tree, not from a `git rev-parse` per input per step: a whole plan is
+/// hundreds of steps with dozens of inputs each, and a process for every
+/// pair is minutes of every gate spent starting git before the first
+/// step runs — more under the load of other seats gating beside it.
+fn owed(
+    here: &str,
+    head: &str,
+    store: &Store,
+    steps: Vec<Step>,
+    ask: &Ask<'_>,
+) -> Result<Vec<Required>, String> {
+    let ids = tree_ids(here, head)?;
+    Ok(steps
         .into_iter()
         .filter(|step| !(ask.host_only && step.side == Side::Linux))
         .map(|step| {
             let (key, cached) = if step.always {
                 (String::new(), false)
             } else {
-                let key = cache_key(here, head, &step);
+                let key = cache_key(&ids, &step);
                 let cached = !ask.fresh && store.step_green(&key);
                 (key, cached)
             };
             Required { step, key, cached }
+        })
+        .collect())
+}
+
+/// The object id of every path in the tree at `rev`, directories
+/// included (a directory's is its tree's), from one `git ls-tree`.
+fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(here)
+        .args(["ls-tree", "-r", "-t", "-z", "--full-tree", rev]);
+    let output = run_captured(&mut command)?;
+    if !output.status.success() {
+        return Err(format!(
+            "git ls-tree {rev} failed in {here}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(parse_ls_tree(&output.stdout))
+}
+
+/// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each.
+/// `-z` so that a path is spelled as it is, never octal-escaped in
+/// quotes the way a non-ASCII name otherwise comes back.
+fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
+    String::from_utf8_lossy(listing)
+        .split('\0')
+        .filter_map(|entry| {
+            let (head, path) = entry.split_once('\t')?;
+            let id = head.split(' ').nth(2)?;
+            Some((path.to_string(), id.to_string()))
         })
         .collect()
 }
@@ -707,29 +752,20 @@ fn shown_as(stem: &str, worn: &BTreeMap<String, BTreeSet<String>>) -> BTreeSet<S
 }
 
 /// The cache key: the step's identity and command, and the object id of
-/// each input in the tree under test. FNV-1a, a fingerprint and not a
+/// each input in the tree under test (`ids`, from [`tree_ids`]; a path
+/// the tree does not hold is `absent`). FNV-1a, a fingerprint and not a
 /// security claim (the same hash `linux::image_tag` uses).
-fn cache_key(here: &str, head: &str, step: &Step) -> String {
+fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
     let mut text = step.id.clone();
     text.push('\0');
     text.push_str(&step.command.join("\0"));
     text.push('\n');
     for input in &step.inputs {
         let path = input.trim_end_matches('/');
-        let oid = git_query(
-            here,
-            &[
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                &format!("{head}:{path}"),
-            ],
-        )
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "absent".to_string());
+        let oid = ids.get(path).map_or("absent", String::as_str);
         text.push_str(path);
         text.push('=');
-        text.push_str(&oid);
+        text.push_str(oid);
         text.push('\n');
     }
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -817,4 +853,31 @@ pub(crate) fn describe(plan: &Plan) -> String {
         out.push_str(&format!("  {standing:<6} [{side:<5}] {}\n", r.step.id));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_ls_tree;
+
+    /// The listing is read the way `-z` writes it: trees and blobs alike,
+    /// a path spelled whole however it is named, nothing for a line that
+    /// is not an entry.
+    #[test]
+    fn a_tree_listing_answers_for_files_and_directories_alike() {
+        let listing = "040000 tree 1111111111111111111111111111111111111111\tcrates\0\
+            100644 blob 2222222222222222222222222222222222222222\tcrates/a.rs\0\
+            100644 blob 3333333333333333333333333333333333333333\tinternal-docs/規約.md\0";
+        let ids = parse_ls_tree(listing.as_bytes());
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids["crates"], "1111111111111111111111111111111111111111");
+        assert_eq!(
+            ids["crates/a.rs"],
+            "2222222222222222222222222222222222222222"
+        );
+        assert_eq!(
+            ids["internal-docs/規約.md"],
+            "3333333333333333333333333333333333333333"
+        );
+        assert!(parse_ls_tree(b"").is_empty());
+    }
 }
