@@ -77,12 +77,13 @@ Item {
                 rowCardTimer.row = at
                 rowCardTimer.start()
             }
-        } else if (act === "card-message") {
+        } else if (act === "card-message" || act === "card-message-esc") {
             // The note under a message the card had to stop, pressed where a hand presses it
             // (`CommitHoverCard.askMessage` is the click handler's own body). The card is opened the way `row-card`
             // opens it, and the press waits for the note to be there — the note only stands under a cut message, and
             // a card fills its fields in after it is opened.
             cardMessageTimer.row = arg === "" ? 0 : Number(arg)
+            cardMessageTimer.escapes = act === "card-message-esc"
             cardMessageTimer.asked = false
             cardMessageTimer.start()
         } else if (act === "menu-hover") {
@@ -219,6 +220,10 @@ Item {
         id: cardMessageTimer
         property int row: 0
         property bool asked: false
+        /// Whether the run carries on and puts the mark away again with Escape. **Entered where the key handler's
+        /// own body is** (`RepoPage.escapePressed`); that the key reaches that handler at all is Qt's business and is
+        /// held by `tests/qml/tst_escape.qml`, not by this.
+        property bool escapes: false
         /// Which commit the press was of, kept because the card takes its own copy down with it.
         property string oidHex: ""
         onTriggered: {
@@ -242,6 +247,17 @@ Item {
             if (rowCard.opened || detailsPane.details.shaHex !== cardMessageTimer.oidHex)
                 return
             cardMessageTimer.stop()
+            // The mark put away again, for the run that carries on that far. **Its own sentence**, because the two
+            // are judged on opposite answers and the judge reads one unbroken stretch of a line.
+            if (cardMessageTimer.escapes) {
+                const took = page.escapePressed()
+                Harness.report(
+                    "card_message_esc mark=" + detailsPane.attention
+                    + " took=" + took
+                    + " picked=" + (page.selectedRow === cardMessageTimer.row))
+                driver.complete()
+                return
+            }
             Harness.report(
                 "card_message open=" + rowCard.opened
                 + " picked=" + (page.selectedRow === cardMessageTimer.row)

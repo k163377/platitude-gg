@@ -142,7 +142,7 @@ QtObject {
                 // The press on the card's note and the pane it lands in are one sampler's walk: the card has to be
                 // holding a cut message before the note is there to press, and what the press asks for arrives after
                 // it. A render barrier in front of that photographs the commit that was open before.
-                "card-message",
+                "card-message", "card-message-esc",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "details-select", "details-select-away", "details-sweep", "details-hand", "hash-tip", "hash-tip-counting",

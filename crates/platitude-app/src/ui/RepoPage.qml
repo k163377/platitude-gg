@@ -116,6 +116,24 @@ Item {
     function notePress() {
         detailsPane.dropAttention()
     }
+    /// And Escape, which every other standing thing in this window answers (デザイン規約 §hover のツールチップ).
+    ///
+    /// **A key handler rather than a `Shortcut`**, and that is what keeps it out of everyone else's way: a shortcut is
+    /// matched before the key is delivered at all, so a bar, a popup or a box that wants Escape takes it first and
+    /// this is never reached — which is the rule itself, since the mark is the last thing left to dismiss. **Two
+    /// enabled `StandardKey.Cancel` shortcuts in one window fire neither**, so a fourth one here would have taken the
+    /// ask bar's and the notice bar's Escape away with it (`tests/qml/tst_escape.qml` holds all of this).
+    ///
+    /// Accepted only when there was a mark to take: an Escape this page did nothing with is not this page's.
+    function escapePressed() {
+        if (!detailsPane.attention)
+            return false
+        detailsPane.dropAttention()
+        return true
+    }
+    Keys.onEscapePressed: event => {
+        event.accepted = page.escapePressed()
+    }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
         page.foldedByDiff = false

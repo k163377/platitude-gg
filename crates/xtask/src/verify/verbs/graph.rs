@@ -132,6 +132,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "card_message open=false picked=true mark=true shown=true",
     },
+    // The same walk, carried on to Escape. A picture cannot answer any of
+    // it: a mark put away frames exactly like a mark that was never
+    // raised, and whether the page took the key or let it pass is not
+    // drawn at all. `took=` is the half that matters — the mark going is
+    // only this page's doing if this page is what answered.
+    Verb {
+        name: "card-message-esc",
+        when: &[],
+        plain: "card_message_esc mark=false took=true picked=true",
+    },
     // The same card's words taken from the air around them — the
     // padding band, the step between two lines, the room beside a
     // short one (規約 §hover のツールチップ). This card is the one
