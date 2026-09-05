@@ -53,7 +53,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
         --allow-write-failure
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
-                          commands-fail, commands-clear, fetch-fail,
+                          delete-branch-go — whose first `--delete` is the
+                          one git turns down —, commands-fail,
+                          commands-clear, fetch-fail,
                           fetch-recover, fetch-resume, push-retry,
                           remote-refused, tag-refused, push-outdated,
                           commit-refused, notice-over-diff,
