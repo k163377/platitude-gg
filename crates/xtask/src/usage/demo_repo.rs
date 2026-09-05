@@ -106,6 +106,20 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   report: ordinary, detached, locked with a reason,
                   locked without one, one whose folder is gone, and one
                   whose folder and branch both run past the pane
+        pictures  a picture in every bucket the diff pane previews from:
+                  a logo changed in the tree (art/logo.png), a vector
+                  mark changed beside it (art/mark.svg — rows and
+                  pictures at once), an icon staged and never committed
+                  (art/icon.png — no HEAD side), an old mark deleted from
+                  the index (art/old.png — no index side), and a photo
+                  nobody has added (art/photo.png) (preview,
+                  preview-unstaged, preview-staged, preview-close)
+        bigpicture  one picture past what a data URL could carry
+                  (big.png, 3000 square), changed by the newest commit
+                  and changed again in the tree: both sides decode at
+                  once whichever diff is opened, which is the memory the
+                  preview costs and hands back (preview-close, and
+                  perf --file big.png --attribute)
         empty     `git init` and nothing else
 
 ";

@@ -67,7 +67,7 @@ QtObject {
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
                 "diff-band-sweep", "diff-bar",
-                "preview", "preview-unstaged", "preview-staged",
+                "preview", "preview-unstaged", "preview-staged", "preview-close",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.

@@ -18,6 +18,7 @@ mod land;
 mod linux;
 mod note;
 mod perf;
+mod png;
 mod qmltest;
 mod qt;
 mod seats;

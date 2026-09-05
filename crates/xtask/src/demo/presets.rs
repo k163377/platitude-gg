@@ -13,6 +13,7 @@ use super::conflict::{
     rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached, replay};
+use super::pictures::{bigpicture, pictures};
 use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished};
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, widechars, widelines};
@@ -133,6 +134,8 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "widechars" => widechars(&mut repo)?,
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
+        "pictures" => pictures(&mut repo)?,
+        "bigpicture" => bigpicture(&mut repo)?,
         "empty" => {}
         other => return Err(format!("unknown preset: {other}")),
     }

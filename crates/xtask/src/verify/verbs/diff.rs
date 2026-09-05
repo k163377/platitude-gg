@@ -2,7 +2,7 @@
 //! discarding, walking — and where the pane lands when the file under it
 //! moves.
 
-use super::Verb;
+use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
     // The file list's arrows, and the half of the keyboard rule the
@@ -98,20 +98,52 @@ pub(super) const TABLE: &[Verb] = &[
     // with the toggle as the completion, every run shot the header
     // alone). A run fired with no path never opens anything and says
     // `diff_arg named=false` instead, so it fails here too.
+    // On the `pictures` preset's own files the line is the pictures
+    // themselves: `pictures=` is how many sides decoded off the `file:`
+    // URLs they were handed, and a URL that names nothing photographs
+    // as the same caption over the same empty frame as one never
+    // handed over. Two for a file with both sides, one where a side is
+    // not there (staged and never committed, deleted from the index,
+    // untracked).
     Verb {
         name: "preview",
-        when: &[],
+        when: &[(
+            Arg::Is("art/photo.png"),
+            "preview_pane kind=image binary=true pictures=1",
+        )],
         plain: "diff_row act=preview ready=true",
     },
     Verb {
         name: "preview-unstaged",
-        when: &[],
+        when: &[
+            (
+                Arg::Is("art/logo.png"),
+                "preview_pane kind=image binary=true pictures=2",
+            ),
+            (
+                Arg::Is("art/mark.svg"),
+                "preview_pane kind=image binary=false pictures=2",
+            ),
+        ],
         plain: "diff_row act=preview-unstaged ready=true",
     },
     Verb {
         name: "preview-staged",
-        when: &[],
+        when: &[(
+            Arg::OneOf(&["art/icon.png", "art/old.png"]),
+            "preview_pane kind=image binary=true pictures=1",
+        )],
         plain: "diff_row act=preview-staged ready=true",
+    },
+    // The same pane, closed once its pictures were there: `was=image`
+    // is the pictures having been decoded before the close, `url=empty`
+    // the pane having let go of both — the picture after this is of a
+    // page with no diff on it, which is also what a run that never
+    // opened one photographs.
+    Verb {
+        name: "preview-close",
+        when: &[],
+        plain: "preview_close was=image kind= shown=false pictures=0 url=empty",
     },
     // Both sides have to be named on some row, and on a file that has
     // been typed over both of them are removals — the half that used

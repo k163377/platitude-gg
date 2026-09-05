@@ -7,6 +7,7 @@ mod authorship;
 mod basic;
 mod conflict;
 mod deep;
+mod pictures;
 mod presets;
 mod remote;
 mod repo;

@@ -258,55 +258,16 @@ pub(super) fn folder_for(
     }
 }
 
-/// A 2×2 opaque PNG, written out by hand: a signature, an IHDR, one
-/// stored zlib block of the four pixels, an IEND — enough for the avatar
+/// A 2×2 opaque PNG — teal, gold / gold, teal — enough for the avatar
 /// store to decode and file.
 fn tiny_png() -> Vec<u8> {
-    fn crc32(bytes: &[u8]) -> u32 {
-        let mut crc = 0xffff_ffffu32;
-        for byte in bytes {
-            crc ^= u32::from(*byte);
-            for _ in 0..8 {
-                crc = if crc & 1 == 1 {
-                    0xedb8_8320 ^ (crc >> 1)
-                } else {
-                    crc >> 1
-                };
-            }
+    crate::png::rgba(2, 2, |x, y| {
+        if (x + y) % 2 == 0 {
+            [0x2a, 0x9d, 0x8f, 0xff]
+        } else {
+            [0xe9, 0xc4, 0x6a, 0xff]
         }
-        !crc
-    }
-    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
-        out.extend_from_slice(&(body.len() as u32).to_be_bytes());
-        let mut typed = kind.to_vec();
-        typed.extend_from_slice(body);
-        out.extend_from_slice(&typed);
-        out.extend_from_slice(&crc32(&typed).to_be_bytes());
-    }
-    // Two rows, each a filter byte and two RGBA pixels: teal, gold / gold, teal.
-    let raw: Vec<u8> = vec![
-        0, 0x2a, 0x9d, 0x8f, 0xff, 0xe9, 0xc4, 0x6a, 0xff, //
-        0, 0xe9, 0xc4, 0x6a, 0xff, 0x2a, 0x9d, 0x8f, 0xff,
-    ];
-    let (mut a, mut b) = (1u32, 0u32);
-    for byte in &raw {
-        a = (a + u32::from(*byte)) % 65521;
-        b = (b + a) % 65521;
-    }
-    let mut idat = vec![0x78, 0x01, 0x01];
-    idat.extend_from_slice(&(raw.len() as u16).to_le_bytes());
-    idat.extend_from_slice(&(!(raw.len() as u16)).to_le_bytes());
-    idat.extend_from_slice(&raw);
-    idat.extend_from_slice(&((b << 16) | a).to_be_bytes());
-    let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-    let mut ihdr = Vec::new();
-    ihdr.extend_from_slice(&2u32.to_be_bytes());
-    ihdr.extend_from_slice(&2u32.to_be_bytes());
-    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
-    chunk(&mut out, b"IHDR", &ihdr);
-    chunk(&mut out, b"IDAT", &idat);
-    chunk(&mut out, b"IEND", &[]);
-    out
+    })
 }
 
 /// The repositories one run opens, in the order their tabs come up.

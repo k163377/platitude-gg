@@ -122,6 +122,11 @@ impl DemoRepo {
     }
 
     pub(super) fn write(&self, rel: &str, content: &str) -> Result<(), String> {
+        self.write_bytes(rel, content.as_bytes())
+    }
+
+    /// The same for a file that is not text — a picture.
+    pub(super) fn write_bytes(&self, rel: &str, content: &[u8]) -> Result<(), String> {
         let path = self.work.join(rel);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -130,7 +135,16 @@ impl DemoRepo {
     }
 
     pub(super) fn commit(&mut self, rel: &str, content: &str, message: &str) -> Result<(), String> {
-        self.write(rel, content)?;
+        self.commit_bytes(rel, content.as_bytes(), message)
+    }
+
+    pub(super) fn commit_bytes(
+        &mut self,
+        rel: &str,
+        content: &[u8],
+        message: &str,
+    ) -> Result<(), String> {
+        self.write_bytes(rel, content)?;
         self.git(&["add", "--", rel])?;
         self.git(&["commit", "-m", message])?;
         Ok(())

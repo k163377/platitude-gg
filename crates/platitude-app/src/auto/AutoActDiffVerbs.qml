@@ -73,16 +73,18 @@ Item {
             page.toggleDiff(named ? head : "unstaged", wtPath,
                             worktreeModel.origOf(wtPath))
             stageRowTimer.begin()
-        } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged") {
+        } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
+                   || act === "preview-close") {
             // The toggle only asks; the read is a git subprocess away, so completion is the pane settling
             // (`stageRowTimer`), not the ask. No path is a run with nothing to open: said and stopped on the rendered
             // surface, rather than holding a wait no read will answer — the wanted line is what fails it.
+            // "preview-close" opens the unstaged side the same way and closes the pane once the pictures are there.
             if (arg === "") {
                 Harness.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
             } else {
                 page.toggleDiff(act === "preview" ? "untracked"
-                                : act === "preview-unstaged" ? "unstaged" : "staged", arg, "")
+                                : act === "preview-staged" ? "staged" : "unstaged", arg, "")
                 stageRowTimer.begin()
             }
         } else if (act === "colour-place") {
@@ -160,9 +162,12 @@ Item {
             // "diff-band-sweep" is about the band above the rows and not about a row at all, so the settled diff is
             // the whole of what it waits for — a file with no changed line in its first hunk still has a path in the
             // band, and demanding one would leave that run waiting out its watchdog.
-            if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep",
-                 "preview", "preview-unstaged", "preview-staged"].indexOf(Harness.autoAct) >= 0)
+            if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep"].indexOf(Harness.autoAct) >= 0)
                 return diffPane.diffSettled()
+            // The previews wait for the pictures as well as the read: the decode is asynchronous, and a pane
+            // photographed between the two shows an empty frame under a caption.
+            if (["preview", "preview-unstaged", "preview-staged", "preview-close"].indexOf(Harness.autoAct) >= 0)
+                return diffPane.diffSettled() && diffPane.picturesSettled
             return diffPane.firstChangedLine(0) >= 0
         }
         onTriggered: {
@@ -226,10 +231,29 @@ Item {
             // A preview's settled form — rows, a picture, or a binary notice — is the shot; `kind=` is said because
             // the picture cannot say it (a pane the read never reached photographs as the same black under the same
             // DIFF header).
-            if (act === "preview" || act === "preview-unstaged" || act === "preview-staged") {
-                Harness.report("preview_pane kind=" + diffPane.diffModel.previewKind
-                                  + " binary=" + diffPane.diffModel.isBinary)
-                driver.complete()
+            // `pictures=` is how many of the sides decoded — a `file:` URL that names nothing photographs as the
+            // same caption over the same empty frame as one that was never handed over.
+            if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
+                || act === "preview-close") {
+                const was = diffPane.diffModel.previewKind
+                Harness.report("preview_pane kind=" + was
+                                  + " binary=" + diffPane.diffModel.isBinary
+                                  + " pictures=" + diffPane.picturesShown)
+                if (act !== "preview-close") {
+                    driver.complete()
+                    return
+                }
+                // The pane closed through the same door the header's `✕` goes through. What the run is for is
+                // outside it — whether the decoded pictures went with the URLs — and the outside reads the process;
+                // the line says the pane let go of them (`url=empty`), which is the whole of what QML can say.
+                page.closeDiff()
+                Harness.report("preview_close was=" + was
+                                  + " kind=" + diffPane.diffModel.previewKind
+                                  + " shown=" + page.diffShown
+                                  + " pictures=" + diffPane.picturesShown
+                                  + " url=" + (diffPane.diffModel.previewNewUrl === ""
+                                               && diffPane.diffModel.previewOldUrl === "" ? "empty" : "held"))
+                renderedBarrier.begin()
                 return
             }
             // The squares a line only puts out under the pointer, named rather than hovered (hover cannot be injected
