@@ -334,11 +334,11 @@ fn rust_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
 
 /// The crate roots of one package, each walked into the module index:
 /// the lib, the bins (`src/main.rs` and each `src/bin/*.rs`, a crate
-/// apiece), the `it` binary, and every other file directly under tests/
-/// (crates/xtask/tests/gate.rs), which is an integration binary — a
-/// crate — of its own. The bins are indexed by the name cargo builds
-/// them under, which is how a test naming `CARGO_BIN_EXE_<name>` finds
-/// the file it shoots.
+/// apiece), and the integration binaries — every file directly under
+/// tests/ and every `tests/<name>/main.rs` (core's `it`, the gate's
+/// own), which is a crate of its own. The bins are indexed by the name
+/// cargo builds them under, which is how a test naming
+/// `CARGO_BIN_EXE_<name>` finds the file it shoots.
 fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
     let ident = package.replace('-', "_");
     // The root files, spelled in pieces: a whole path in a string here
@@ -353,15 +353,7 @@ fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(),
         g.binaries
             .insert((package.to_string(), package.to_string()), rel(root, &main));
     }
-    let mut roots = vec![
-        (lib, ident.clone(), None),
-        (main, ident.clone(), None),
-        (
-            dir.join("tests").join("it").join("main.rs"),
-            format!("{ident}::it"),
-            Some("it".to_string()),
-        ),
-    ];
+    let mut roots = vec![(lib, ident.clone(), None), (main, ident.clone(), None)];
     for file in rust_files_in(&src.join("bin")) {
         let name = stem_of(&file.display().to_string());
         g.binaries
@@ -372,9 +364,21 @@ fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(),
         // would resolve into the bin.
         roots.push((file, format!("{ident}::{}", name.replace('-', "_")), None));
     }
+    // The integration binaries, the two shapes cargo discovers them in:
+    // `tests/<name>.rs`, and `tests/<name>/main.rs` for one split into
+    // modules (core's `it`, the gate's own).
     for file in rust_files_in(&dir.join("tests")) {
         let stem = stem_of(&file.display().to_string());
         roots.push((file, format!("{ident}::{stem}"), Some(stem)));
+    }
+    if let Ok(entries) = std::fs::read_dir(dir.join("tests")) {
+        for entry in entries.flatten() {
+            let main = entry.path().join("main.rs");
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if entry.path().is_dir() && main.is_file() {
+                roots.push((main, format!("{ident}::{name}"), Some(name)));
+            }
+        }
     }
     for (file, krate, binary) in roots {
         if !file.is_file() {
