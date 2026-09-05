@@ -395,7 +395,7 @@
 - **緩めた空きは `settleTitleCap` で「印と同じ固定費」として数える**(cap の配り合いには入れない)— cap が効くのは長い名前、空きが付くのは短い名前で、両方に同じ数を使うと二重に数える。**cap との clamp は delegate 側だけ**(settle 時点で cap は未確定なので、settle は `titleMaxW` で見積もる = 常に多め → 溢れない側に倒れる)
 - **字間は短い名前だけ開ける**(`Theme.tracking` 0.5 × 8 文字との差の比。規約 §タイポグラフィ)。**幅からではなく字数から決める** — 空きの方が幅から出るので、幅に依存させるとバインディングが循環する。**`titleMeasure` の隠しラベルにも同じ `letterSpacing` を書く**(書かないと strip と tab が同じ名前を別の幅で読む)
 - 報告行は `tab_widths … ease=`(緩めの基準幅 = 8 文字ぶん)。`advanceWidth` はメソッドなので `titleEaseW()` の関数押し出し形(下記の罠)
-- タブは長い名前から縮み、縮みきったらスクロール(規約 §ウィンドウの縁。配り方は `TopBar.settleTitleCap()`)。下限 `tabTitleMinW` は `FontMetrics` から引く — 規約の表が持つのは字数 3 で px ではない(実測 Segoe UI / `fontMd` で 56px。平均送りは小文字より広く実際は 5 文字前後)
+- タブは長い名前から縮み、縮みきったらスクロール(規約 §ウィンドウの縁。配り方は `TopBar.settleTitleCap()`)。下限 `tabTitleMinW` は `FontMetrics` から引く — 規約の表が持つのは字数 6(切れ目が中央なので**両端に 3 文字ずつ**)で px ではない(実測 Segoe UI / `fontMd` で 97px = タブ 105px。平均送りは小文字より広いので実際に立つ字はこれより多い)。**上限は `titleEaseChars` の 8** — 床がそこを越えると、帯が許す最短の名前が「短い」と呼んでいる名前より長くなる
 - **`tabTitleMinW`(TabStrip)と `BandStateGroup` の同型式は、バインディング内の `advanceWidth()` が偶然でしか再評価されない** — 同じ式に `averageCharacterWidth`(プロパティ・fontChanged 通知つき)が居るから引きずられて動いているだけ。式を advanceWidth 単独へ簡略化すると既定フォントの初回値で凍る(§FontMetrics の罠)— 触るなら `settleTitleCap` の関数押し出し形へ
 - 縮める計算は測る用の隠し `Label` を別に持つ(`TopBar.titleMeasure`)— 縮められている当の Label から自然幅を採ると、cap → 幅 → cap の輪をエンジンがループと読む。現在タブの DemiBold も写す(写さないと cap が数 px 甘い)。バインディングにせず関数で押し出す — バインディングはアイテムが 1 つ増えたことを見られない
 - cap は `floor`・タブ幅は `ceil` の整数で計算(`tabs.runAvail`)— 端数のまま配ると溢れていないのに 1px スクロールする strip になる(実測 content=897 対 run=896)

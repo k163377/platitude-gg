@@ -38,8 +38,11 @@ QtObject {
     /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
     readonly property int titleMaxW: 180
     /// The shortest, in characters rather than pixels (同表): the same count costs a different number of pixels in each
-    /// platform's UI font and at every scaling, so the length comes out of the font.
-    readonly property int titleMinChars: 3
+    /// platform's UI font and at every scaling, so the length comes out of the font. **Three at each end** — the cut is
+    /// in the middle (デザイン規約 §タブの所作), so a name has two ends to say itself with and the floor has to hold
+    /// both. Below `titleEaseChars`, which is the ceiling on this: a floor above the length names stop being eased at
+    /// would make the shortest name the strip allows longer than the ones it calls short.
+    readonly property int titleMinChars: 6
     readonly property int titleMinW: Math.ceil(tabMetrics.titleFont.advanceWidth("…")
         + tabMetrics.titleMinChars * tabMetrics.titleFont.averageCharacterWidth)
     /// Where a name stops being helped along (同表). A tab drawn to `ui` comes out narrower than the marks either side
@@ -84,8 +87,9 @@ QtObject {
     }
 
     /// How far a name goes quiet before it reaches the mark standing over it — **in letters, not pixels**, the measure
-    /// the floor and the easing above are already counted in (デザイン規約 レイアウト初期値). The same count as the floor
-    /// keeps: the fade never eats more of a name than the shortest one is allowed to be.
+    /// the floor and the easing above are already counted in (デザイン規約 レイアウト初期値). The count the floor keeps at
+    /// **one end**: what the quiet reaches for is the tail, so it never eats more of a name than that end is allowed
+    /// to be.
     ///
     /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
     readonly property int fadeChars: 3
