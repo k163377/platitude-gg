@@ -179,19 +179,25 @@ Rectangle {
     // own step off the far edge whatever the name does, so what opens up is the room the name is set in (by design —
     // the seat every short name was padded out to made a row of equal blanks). The cap the whole strip shares is not
     // written here: the tab's own width is already measured off it, and this fills what that leaves.
-    Label {
+    //
+    // **Cut in the middle, through `CutName`** (デザイン規約 §タブの所作): a repository is told apart by the end of its
+    // name, and by both ends once a namesake has grown it into a path. That part is also what keeps every capped tab
+    // spending its whole cap — a bare `elide` hands back what fits and leaves the rest at the far edge, so the names
+    // would stop a different distance from their marks along a strip that is cutting them for want of run
+    // (規約 §タイポグラフィ「余りを切れ目へ入れる」).
+    CutName {
         id: tabTitle
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabItem.metrics.tabPadL + tabItem.titleEase - tabItem.easeRight
         anchors.rightMargin: tabItem.markRoom + tabItem.easeRight
         text: tabItem.title
-        elide: Text.ElideRight
         // The other half of the easing: a short name is set with its letters a little apart, so the air it is
         // given belongs to the word rather than standing beside it. Off the letter count, never off the width —
         // the width is what the air is computed from (`TabMetrics.titleTracking`).
-        font.letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
-        verticalAlignment: Text.AlignVCenter
-        font.weight: tabItem.current ? Font.DemiBold : Font.Normal
+        letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
+        weight: tabItem.current ? Font.DemiBold : Font.Normal
         color: Theme.textPrimary
     }
     // What the name does where the mark has come to stand over it (デザイン規約 §タブの所作). The strip gives the mark's

@@ -108,17 +108,18 @@ Rectangle {
                 tabPin.activated()
         }
     }
-    // The tab's own face, at the tab's own margins (`TabItemDelegate` carries what each part of it is for).
-    Label {
+    // The tab's own face, at the tab's own margins and cut where the tab cuts (`TabItemDelegate` carries what each part
+    // of it is for) — a stand-in whose name broke in another place would be a tab the strip has not got.
+    CutName {
         id: pinTitle
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabPin.metrics.tabPadL + tabPin.titleEase - tabPin.easeRight
         anchors.rightMargin: tabPin.markRoom + tabPin.easeRight
         text: tabPin.frontTab ? tabPin.frontTab.title : ""
-        elide: Text.ElideRight
-        font.letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
-        verticalAlignment: Text.AlignVCenter
-        font.weight: Font.DemiBold
+        letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
+        weight: Font.DemiBold
         color: Theme.textPrimary
     }
     // The name goes quiet under the mark on the same terms the rows do. One ground rather than the rows' two: this one

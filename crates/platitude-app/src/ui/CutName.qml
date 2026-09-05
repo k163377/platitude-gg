@@ -28,6 +28,10 @@ Item {
     property color color: Theme.textPrimary
     property int weight: Font.Normal
     property real pixelSize: Theme.fontMd
+    /// How far apart the letters are set — 0 everywhere but the tab strip, which opens a short name's tracking
+    /// (`TabMetrics.titleTracking`). It arrives here rather than on the drawn half alone because the cut is worked out
+    /// through these labels' own font: spacing set past the rulers would measure one name and draw a wider one.
+    property real letterSpacing: 0
     /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
     /// left, and nothing after the cut is worth keeping).
     property string cutAt: "middle"
@@ -187,6 +191,7 @@ Item {
         color: cut.color
         font.pixelSize: cut.pixelSize
         font.weight: cut.weight
+        font.letterSpacing: cut.letterSpacing
         // The family arrives with the window and the size with the caller; either changes what fits.
         onFontChanged: cut.relayout()
     }
