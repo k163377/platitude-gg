@@ -24,13 +24,6 @@ HoverToolButton {
     /// press that did nothing needs to be answered by something (規約 §暗く落とした段).
     property bool armed: false
 
-    /// The air this seat holds between its edge and the mark's ink, for a caller putting something right against it
-    /// (デザイン規約 §余白 「印が自分で持っている余白は、隣の詰めに数える」): the neighbour writes
-    /// `その行の刻み − これ` and the gap the eye measures comes out at the step. Symmetric, because the mark is
-    /// centred and `close` is square in its own box. Asked of the icon rather than guessed at from a token — the
-    /// diagonals are inset further than a straight-stroked mark, so no token is the right number.
-    readonly property real inkAir: (closeButton.width - mark.inkWidth) / 2
-
     padding: 0
     implicitWidth: closeButton.seat
     implicitHeight: closeButton.seat
@@ -88,7 +81,6 @@ HoverToolButton {
     }
     contentItem: Item {
         NavIcon {
-            id: mark
             anchors.centerIn: parent
             width: closeButton.markSize
             height: closeButton.markSize
