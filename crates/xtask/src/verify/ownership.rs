@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub(crate) struct ResourceClaim {
@@ -97,6 +97,68 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
     claim_dir(&std::env::temp_dir().join("pg-verify"), verb)
 }
 
+/// The directories under the system temp that every run of this runner
+/// claims its own directory in (`claim_dir`'s callers): a verb's
+/// pictures and settings, its demo repositories (`demo::claim_root`), a
+/// container run's mount (`keepsakes::keepsake_dir`), and the roots the
+/// tests claim.
+const RUN_BASES: [&str; 4] = ["pg-verify", "pg-demo", "pg-linux", "pg-census"];
+
+/// How long a run's directory stands before it is litter. A run is
+/// minutes long — its watchdog is two, a cold build ten — and the
+/// pictures a person was shown are on the board (`shots`), so a day
+/// later what is left under these is nobody's evidence.
+const RUN_LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Takes yesterday's run directories away, in the background. Nothing
+/// else ever does: every run claims a directory and leaves it, and the
+/// gate runs hundreds of them a day (measured: sixty thousand of them,
+/// six gigabytes, three days after the last sweep by hand). The gate
+/// calls this on its way in; the thread is not waited for — a plan is
+/// half a second and the temp directory is seconds of reading — and a
+/// directory that will not go, or a sweep the process ends first, is the
+/// next sweep's. Nothing is said: a gate's verdict is not about litter.
+pub(crate) fn sweep_yesterdays_runs() {
+    std::thread::spawn(|| {
+        let temp = std::env::temp_dir();
+        let now = SystemTime::now();
+        for base in RUN_BASES {
+            sweep_older_than(&temp.join(base), now, RUN_LITTER_AGE);
+        }
+    });
+}
+
+/// Removes the entries of `base` last written `age` or longer before
+/// `now`, and answers how many went. An entry whose age cannot be read
+/// stays: a date nobody can read is no grounds for deleting.
+fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return 0;
+    };
+    let mut gone = 0;
+    for entry in entries.flatten() {
+        let old = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|written| now.duration_since(written).ok())
+            .is_some_and(|since| since >= age);
+        if !old {
+            continue;
+        }
+        let path = entry.path();
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if removed.is_ok() {
+            gone += 1;
+        }
+    }
+    gone
+}
+
 /// A directory under `base` that this call made and nobody else has.
 ///
 /// **`create_dir` is the ownership edge**; a timestamp alone only names a
@@ -135,6 +197,27 @@ pub(crate) fn claim_dir(base: &Path, stem: &str) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+
+    /// A day is what makes a run's directory litter, read off the clock
+    /// the sweep is handed: the same two entries stand when the sweep
+    /// runs now and go when it runs the day after tomorrow.
+    #[test]
+    fn a_sweep_takes_the_runs_of_a_day_ago_and_leaves_todays() {
+        let base = super::claim_dir(&std::env::temp_dir().join("pg-census"), "sweep")
+            .expect("a base of this test's own");
+        let run = super::claim_dir(&base, "run").expect("a run directory");
+        std::fs::write(run.join("app.png"), b"picture").expect("a picture in it");
+        std::fs::write(base.join("stray"), b"a file beside the runs").expect("a stray file");
+        let now = std::time::SystemTime::now();
+        let age = super::RUN_LITTER_AGE;
+        assert_eq!(super::sweep_older_than(&base, now, age), 0);
+        assert!(run.join("app.png").is_file(), "today's run stands");
+        let later = now + age + age;
+        assert_eq!(super::sweep_older_than(&base, later, age), 2);
+        assert!(!run.exists(), "yesterday's run went, picture and all");
+        assert!(!base.join("stray").exists());
+        std::fs::remove_dir(&base).expect("the base, empty now");
+    }
 
     #[test]
     fn concurrent_runs_atomically_claim_distinct_directories() {

@@ -235,6 +235,11 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// its green steps are stamped and need not run again.
 fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     refuse_what_no_stamp_could_answer_for(plan)?;
+    // Yesterday's runs go on their way out: a verb's repositories and
+    // pictures are left where a person can look at them, and nothing
+    // else ever takes them away (measured: sixty thousand of them, six
+    // gigabytes, in three days).
+    crate::verify::sweep_yesterdays_runs();
     // What the census said before the verbs ran, so that a line one of
     // them rewrote can be told from the file as it was committed.
     let census_before = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
