@@ -98,7 +98,17 @@ impl Census {
             text.push('\n');
         }
         let path = root.join(FILE);
-        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
+        // Whole or not at all: a run killed between the truncate and the
+        // write would leave half a census in the tree, which reads as
+        // every later line gone and which the gate would then ask for a
+        // commit of. Staged under target/, where git does not look, and
+        // moved into place in one step.
+        let staging = root.join("target").join("verb-census.txt.part");
+        if let Some(dir) = staging.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        }
+        std::fs::write(&staging, text).map_err(|e| format!("{}: {e}", staging.display()))?;
+        std::fs::rename(&staging, &path).map_err(|e| format!("{}: {e}", path.display()))
     }
 }
 

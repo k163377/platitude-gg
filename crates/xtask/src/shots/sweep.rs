@@ -189,8 +189,16 @@ pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
         println!("board: collected {collected} picture(s) no run points at");
     }
     let page = board.join("index.html");
-    std::fs::write(&page, page::render(&load_runs(&board.join("runs"))))
-        .map_err(|e| format!("could not write {}: {e}", shown(&page)))?;
+    // Staged and moved into place: six seats rebuild this page, and a
+    // reader pressing F5 must never meet the half of it one of them has
+    // written so far. Under this process's own name — there is no lock
+    // between the seats, and two staging one name would move each
+    // other's halves into place.
+    let staging = board.join(format!("index.html.{}.part", std::process::id()));
+    std::fs::write(&staging, page::render(&load_runs(&board.join("runs"))))
+        .map_err(|e| format!("could not write {}: {e}", shown(&staging)))?;
+    std::fs::rename(&staging, &page)
+        .map_err(|e| format!("could not place {}: {e}", shown(&page)))?;
     Ok(page)
 }
 
