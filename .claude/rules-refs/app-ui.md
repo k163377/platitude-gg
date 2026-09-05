@@ -497,6 +497,7 @@
 - 印の箱に `Theme.buttonMinWidth` を敷かない — 28px の箱が 80px になり 3 点の両側が空くだけ(あの床は語に被せた箱のもの)
 - 印とカード(`BandStateCard`)は同じ 4 つの `readonly property`(→ `stateShown`)を読む — 2 か所に書くと「開くものが無い印」と「印の無いカード」が別々に作れる
 - そのカードにも hover の罠が当たる(`background` / `contentItem` 両方に `HoverHandler`・`hoverKeepMs`・`statePointedAt` 1 本)。`ColumnLayout` に `forceLayout` は無い(Positioner のメソッド)が、採寸は事後で足りる — カードは印の真下に開き手は印の上に居る(実測 cardSize=342x84)
+- **帯の行は立っていないセルを置かないので、初めて立つセルはまだ原点に居る** — バッジが立った frame の `BandStateGroup` は (0,0) の implicit サイズのままで、**手が動くまでポインタが座っている所**(offscreen は原点の手を返して二度と動かさない = rules-refs の `SharedToolTip` の行と同じ手)。そこで取った hover は「手が印へ来た」ではなく「印が手の下へ来た」で、誰も触っていない帯にカードが開き、行が置き直すと hover が落ちて `hoverKeepMs` 後に自分で閉じる = **run ごとに違う絵**(2026-09-05 実測: `file-menu-conflict` 10 run 中 6 でカードが census に入った)。`BandStateGroup.placed`(行が 1 度でも置いたか = `onXChanged`)が真になるまでカードを開かない。**置いた所に既に手が在る場合はその手が動くまで開かない** — このカードは「印へ来た手」に答える。この群は行の先頭セルではない(タブ帯が floor 幅を持って前に立つ)ので原点 = 未配置。先頭に置き替えるとカードが一生開かなくなり、それを言うのは `badges-hover`
 - ヘッドレスは `badges` / `badges-hover`(`identity-tip` も同じカードを読む。仕込み・合格条件は verbs.md)
 - git の版は帯の 4 つ目のバッジ `OLD GIT`、門ではない(規約 §git が無い時・古い時)。core は事実だけ返す — 不採用: 「古ければ Err」で止める API(誰も止めないのに止めると名乗ると読み違えられる)。全画面ゲートは `missing` / `error` の 2 つだけ。右下の版表示は色を変えない(2 か所で言うと「版」と「警告」を別々に持てない)
 - ヘッドレスは `old-git` / `old-git-card` / `old-git-fold`(`git_shim` の仕込み・合格条件・`tint=` の読みは verbs.md)

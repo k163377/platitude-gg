@@ -127,11 +127,32 @@ Item {
     /// standing in for either.
     readonly property alias stateLit: stateKeep.lit
 
+    /// Whether the band has ever placed this group.
+    ///
+    /// **A cell the band skipped is still at the origin.** A row leaves out a child that is not visible, and this
+    /// group stands only once a badge does — so the frame it first stands in, it is still at (0, 0) at its implicit
+    /// size, which is where the pointer is until a hand moves one. The hover taken there is the group arriving under
+    /// the hand rather than the hand arriving on the group, and it opens the card over a band nobody has touched; the
+    /// row then places the group, the hover falls, and the card shuts itself a beat later — which is a picture that
+    /// differs from run to run (measured 2026-09-05: the card stood in 6 headless runs of `file-menu-conflict` in 10,
+    /// and offscreen is where the hand never moves off the origin at all). So the card waits for the row's answer,
+    /// after which the hover is about where the group actually is.
+    ///
+    /// A hand already resting where the group lands keeps its card until it moves, which is the same rule read the
+    /// other way: this card answers a hand that comes to the mark.
+    ///
+    /// **Said once and never taken back**: the row leaves a cell it stops laying out where it put it, so a group that
+    /// stops standing and stands again is already where it belongs. This group is never the row's first cell — the
+    /// tab strip stands in front of it carrying a floor width — so the origin is the unplaced position and no other.
+    /// A band that put this group first would leave the card unable to open at all, which `badges-hover` is what says.
+    property bool placed: false
+    onXChanged: stateGroup.placed = true
+
     signal identityEditRequested()
 
     /// Opens the card; `stateKeep` is what closes it a beat after the last thing asking for it lets go.
     function settleStateCard() {
-        if (!stateGroup.stateLit) {
+        if (!stateGroup.stateLit || !stateGroup.placed) {
             stateKeep.settle()
             return
         }
