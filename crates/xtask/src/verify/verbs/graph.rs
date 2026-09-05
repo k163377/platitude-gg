@@ -107,6 +107,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "list=true lit=true nowhere=true",
     },
+    // The pointer resting on the note a cut message puts out. `lit=`
+    // alone is the rule that was always kept — the line under the words
+    // is the words' own colour — so what pins this note's step down is
+    // `word=`: the note is the one target in that family whose words are
+    // `textMuted`, and a rule following them there moved by half the step
+    // the same vocabulary makes anywhere else. The hex is the token's
+    // value; move `textSecondary` and this line moves with it.
+    Verb {
+        name: "card-note-lit",
+        when: &[],
+        plain: "card_note lit=true word=#94a3b8",
+    },
     // The card that must *not* come out. A picture cannot carry an
     // absence on its own — an empty overlay would frame the same as a
     // run whose hover request never arrived — so the menu is judged

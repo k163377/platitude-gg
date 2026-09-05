@@ -152,6 +152,9 @@ QtObject {
                 // holding a cut message before the note is there to press, and what the press asks for arrives after
                 // it. A render barrier in front of that photographs the commit that was open before.
                 "card-message", "card-message-esc",
+                // The rest on that same note waits on the same first beat, and then on the paint: the colours are
+                // read back off the note itself, which has nothing to say until the card has laid it out.
+                "card-note-lit",
                 "author-card", "author-card-open", "co-authors", "co-authors-open",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "details-select", "details-select-away", "details-sweep", "details-hand", "hash-tip", "hash-tip-counting",

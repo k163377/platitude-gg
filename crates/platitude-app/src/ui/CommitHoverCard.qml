@@ -72,9 +72,17 @@ AppCard {
     function askMessage() {
         hoverCard.messageAsked()
     }
-    /// Whether the note has the pointer — the rule under it is the only ink that moves, and a PNG cannot say whether
-    /// the line that is there is the resting one.
-    readonly property bool notePointed: noteHand.containsMouse
+    /// The pointer resting on the note, for the runs that photograph what it wears — hover cannot be injected
+    /// (verify-ui スキル §hover の絵の撮り方), and the same property a real pointer writes is the only place a run may
+    /// write. Named for the sidebar's own (`NavItemDelegate.tipPointedAt`).
+    property bool notePointedAt: false
+    /// Whether the note has the pointer — nothing here gains ink for it, so a PNG cannot say whether the line that is
+    /// there is the resting one.
+    readonly property bool notePointed: noteHand.containsMouse || hoverCard.notePointedAt
+    /// What the note is actually painting, for a run to read back off the paint rather than off a copy of what the
+    /// note would have decided (`PaneScrollBar.slabColor`, same shape — PG_AUTO_ACT=card-note-lit).
+    readonly property alias noteWordColor: noteWords.color
+    readonly property alias noteRuleColor: noteRule.color
 
     margins: Theme.spaceXs
     // The pointer walks into this one and reads it, so both halves of `AppCard.pointerInside` are wanted — the face's
@@ -138,19 +146,28 @@ AppCard {
                 id: noteWords
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Click here for the whole message")
-                color: Theme.textMuted
+                // A note at rest, and a step up under the pointer (規約 §hover のツールチップ). **The word moves
+                // because the rule follows it**: this line is the one target in that family whose words are
+                // `textMuted`, so a rule that only ever reached the dimmest text there is moved by half the step the
+                // same vocabulary makes anywhere else — 1.59:1 against the credit line's 2.96:1, measured off the
+                // paint. Nothing is added, at rest or under the hand; what moves is the colour of the two.
+                color: hoverCard.notePointed ? Theme.textSecondary : Theme.textMuted
                 font.family: Theme.uiFamily
                 font.pixelSize: Theme.fontSm
             }
             // What says the line can be pressed before the hand is near it: at rest one step under the words, and up
             // to the words' own colour under the pointer (規約 §author の hover — the footer that loads more commits
             // and the parent hash say the same thing the same way). **The only ink a resting card gains is this 1px.**
+            //
+            // The word's own property rather than the token again: "up to the words' colour" is the rule, and written
+            // this way it cannot come apart from the line above.
             Rectangle {
+                id: noteRule
                 x: noteWords.x
                 y: noteWords.height + Theme.borderWidth
                 width: noteWords.width
                 height: Theme.borderWidth
-                color: hoverCard.notePointed ? Theme.textMuted : Theme.borderStrong
+                color: hoverCard.notePointed ? noteWords.color : Theme.borderStrong
             }
             // The words' own width, not the row's: the target is the sentence, and a hand that reaches the empty half
             // of a centred line has not aimed at anything.

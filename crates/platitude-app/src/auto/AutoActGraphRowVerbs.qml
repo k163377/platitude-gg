@@ -97,6 +97,12 @@ Item {
             cardMessageTimer.escapes = act === "card-message-esc"
             cardMessageTimer.asked = false
             cardMessageTimer.start()
+        } else if (act === "card-note-lit") {
+            // The same note with the hand resting on it instead. Written at the property a real pointer writes —
+            // hover cannot be injected (verify-ui スキル §hover の絵の撮り方) — and read back off the paint.
+            cardNoteTimer.row = arg === "" ? 0 : Number(arg)
+            cardNoteTimer.pointed = false
+            cardNoteTimer.start()
         } else if (act === "menu-hover") {
             // Same row and same default as `commit-menu`: the menu goes up, and then the row it is standing on is
             // asked for its hover card.
@@ -564,6 +570,38 @@ Item {
                 + " mark=" + detailsPane.attention
                 + " shown=" + (detailsPane.boxSubject !== "")
                 + " row=" + page.selectedRow)
+            driver.complete()
+        }
+    }
+    // The hand resting on that note rather than pressing it. **Two beats for the same reason the press has one**: the
+    // note only stands under a message the card had to cut, and a card fills its fields in after it is opened — so the
+    // rest goes in once the note is there, and the answer is read on a later sample, off the paint.
+    SampleTimer {
+        id: cardNoteTimer
+        property int row: 0
+        property bool pointed: false
+        onTriggered: {
+            if (!cardNoteTimer.pointed) {
+                const hovered = graphPane.view.itemAtIndex(cardNoteTimer.row)
+                if (!hovered)
+                    return
+                graphPane.view.rowHoverRequested(hovered, true)
+                // A card whose message fits offers nowhere further to go, so there is no note to rest on: this verb's
+                // card is the one that had to stop (規約 §hover のツールチップ).
+                if (!rowCard.opened || !rowCard.messageCut)
+                    return
+                rowCard.notePointedAt = true
+                cardNoteTimer.pointed = true
+                return
+            }
+            cardNoteTimer.stop()
+            // **`lit=` is the rule's own sentence read off the paint** — the line under the words is the words'
+            // colour — and `word=` is what this note's step is: the pair apart, a note whose word stayed at the
+            // dimmest text there is would say `lit=true` just as loudly (規約 §hover のツールチップ).
+            Harness.report(
+                "card_note lit=" + Qt.colorEqual(rowCard.noteRuleColor, rowCard.noteWordColor)
+                + " word=" + rowCard.noteWordColor
+                + " rule=" + rowCard.noteRuleColor)
             driver.complete()
         }
     }
