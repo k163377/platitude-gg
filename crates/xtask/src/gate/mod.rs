@@ -69,6 +69,8 @@ struct Options {
     fresh: bool,
     dry_run: bool,
     verbs: Vec<String>,
+    /// How many verify-ui verbs a side runs at once ([`verbs`]).
+    jobs: usize,
 }
 
 fn options(args: &[String]) -> Result<Options, String> {
@@ -80,6 +82,7 @@ fn options(args: &[String]) -> Result<Options, String> {
         fresh: false,
         dry_run: false,
         verbs: Vec::new(),
+        jobs: default_jobs(),
     };
     let mut at = 0;
     while let Some(arg) = args.get(at) {
@@ -101,16 +104,35 @@ fn options(args: &[String]) -> Result<Options, String> {
                 opts.verbs
                     .push(args.get(at).ok_or("--verb needs a verify-ui line")?.clone());
             }
+            "--jobs" => {
+                at += 1;
+                let value = args.get(at).ok_or("--jobs needs a count")?;
+                opts.jobs = value
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .ok_or_else(|| format!("--jobs takes a count of 1 or more, not {value:?}"))?;
+            }
             other => {
                 return Err(format!(
                     "unknown option {other:?} (gate takes --host-only, --all, --fresh, \
-                     --dry-run, --dir <tree>, --main <ref>, --verb <line>…)"
+                     --dry-run, --dir <tree>, --main <ref>, --verb <line>…, --jobs <n>)"
                 ));
             }
         }
         at += 1;
     }
     Ok(opts)
+}
+
+/// How many verbs a side runs at once unless `--jobs` says: a third of
+/// the logical CPUs, one at least and eight at most. A verb is one app
+/// (its QML engine and offscreen raster) plus the git it spawns, and both
+/// sides run at once; the measurement behind the third is in
+/// internal-docs/反映前テストの機械化.md §実測.
+fn default_jobs() -> usize {
+    let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
+    (cpus / 3).clamp(1, 8)
 }
 
 fn gate(args: &[String]) -> Result<(), String> {
@@ -129,7 +151,7 @@ fn gate(args: &[String]) -> Result<(), String> {
     if opts.dry_run {
         return Ok(());
     }
-    execute(&plan)
+    execute(&plan, opts.jobs)
 }
 
 /// The gate for `land`: the seat's tree, both sides, the census's verbs.
@@ -145,37 +167,16 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
         },
     )?;
     print!("{}", plan::describe(&plan));
-    execute(&plan)
+    execute(&plan, default_jobs())
 }
 
 /// Runs what is not cached, one thread per side, and stamps the commit
 /// when both sides came back with nothing red. A side stops at its first
-/// failure; the other side finishes, so its green steps are stamped and
-/// need not run again.
-fn execute(plan: &Plan) -> Result<(), String> {
-    let here = plan.dir.display().to_string();
-    let dirty = crate::subprocess::git_query(&here, &["status", "--porcelain"])
-        .ok_or("git status failed")?;
-    if !dirty.is_empty() {
-        return Err(format!(
-            "the tree has uncommitted changes, and a stamp names a commit — commit or stash \
-             first:\n{dirty}"
-        ));
-    }
-    if !plan.uncovered.is_empty() {
-        return Err(format!(
-            "no verb shows these components, so the gate cannot pass them:\n{}\nRun a verb \
-             that brings each one up (`cargo xtask verify-ui <verb> …`, or `gate --verb \
-             <line>`) — a passing run records what it showed in {}, and from then on the gate \
-             picks that verb by itself.",
-            plan.uncovered
-                .iter()
-                .map(|f| format!("  {f}"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            census::FILE
-        ));
-    }
+/// red step — except among its verbs, which run to the end of their
+/// block `jobs` at a time ([`verbs`]) — and the other side finishes, so
+/// its green steps are stamped and need not run again.
+fn execute(plan: &Plan, jobs: usize) -> Result<(), String> {
+    refuse_what_no_stamp_could_answer_for(plan)?;
     // What the census said before the verbs ran, so that a line one of
     // them rewrote can be told from the file as it was committed.
     let census_before = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
@@ -191,9 +192,10 @@ fn execute(plan: &Plan) -> Result<(), String> {
         .filter(|r| r.step.side == Side::Linux)
         .collect();
     let started = std::time::Instant::now();
+    println!("gate: verbs {jobs} at a time per side");
     let failures: Vec<String> = std::thread::scope(|scope| {
-        let host = scope.spawn(|| side("host", &plan.dir, &store, &host));
-        let linux = scope.spawn(|| side("linux", &plan.dir, &store, &linux));
+        let host = scope.spawn(|| side("host", &plan.dir, &store, &host, jobs));
+        let linux = scope.spawn(|| side("linux", &plan.dir, &store, &linux, jobs));
         let mut failures = Vec::new();
         for handle in [host, linux] {
             match handle.join() {
@@ -263,52 +265,173 @@ fn execute(plan: &Plan) -> Result<(), String> {
     Ok(())
 }
 
-fn side(name: &str, dir: &Path, store: &Store, steps: &[&Required]) -> Vec<String> {
+/// A tree with uncommitted changes (a stamp names a commit, and this is
+/// not one) and a component no verb shows: nothing a run could answer
+/// for, said before anything runs.
+fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
+    let here = plan.dir.display().to_string();
+    let dirty = crate::subprocess::git_query(&here, &["status", "--porcelain"])
+        .ok_or("git status failed")?;
+    if !dirty.is_empty() {
+        return Err(format!(
+            "the tree has uncommitted changes, and a stamp names a commit — commit or stash \
+             first:\n{dirty}"
+        ));
+    }
+    if !plan.uncovered.is_empty() {
+        return Err(format!(
+            "no verb shows these components, so the gate cannot pass them:\n{}\nRun a verb \
+             that brings each one up (`cargo xtask verify-ui <verb> …`, or `gate --verb \
+             <line>`) — a passing run records what it showed in {}, and from then on the gate \
+             picks that verb by itself.",
+            plan.uncovered
+                .iter()
+                .map(|f| format!("  {f}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            census::FILE
+        ));
+    }
+    Ok(())
+}
+
+/// One side's steps in order: the ones that share the build tree one at
+/// a time, stopping at the first red (a build that failed makes every
+/// later step of the side noise), and the verify-ui verbs — which share
+/// nothing but the release the first of them builds — as one block
+/// through [`verbs`].
+fn side(name: &str, dir: &Path, store: &Store, steps: &[&Required], jobs: usize) -> Vec<String> {
     let logs = dir.join("target").join("gate-logs");
     if let Err(e) = std::fs::create_dir_all(&logs) {
         return vec![format!("{}: {e}", logs.display())];
     }
-    // Whether a verb of this side has built the release in this very
-    // invocation. Only then may the next verb skip the build: a cached
-    // verb's build happened in whatever tree took the stamp, and the
-    // binary here may be older than the tree.
-    let mut built = false;
-    for (index, required) in steps.iter().enumerate() {
-        let id = &required.step.id;
-        if required.cached {
-            println!("[{name}] cached {id}");
+    let mut at = 0;
+    while at < steps.len() {
+        if steps[at].step.builds_app {
+            let end = steps[at..]
+                .iter()
+                .position(|r| !r.step.builds_app)
+                .map_or(steps.len(), |n| at + n);
+            let block: Vec<(usize, &Required)> = (at..end).map(|i| (i, steps[i])).collect();
+            let failures = verbs(name, dir, store, &logs, &block, jobs);
+            if !failures.is_empty() {
+                return failures;
+            }
+            at = end;
             continue;
         }
-        let log = logs.join(format!("{name}-{index:02}.log"));
-        println!("[{name}] run    {id} … (log: {})", log.display());
-        let at = std::time::Instant::now();
-        let mut command = required.step.command.clone();
-        if required.step.builds_app && built {
-            command.push("--no-build".to_string());
+        if let Err(why) = run_one(name, dir, store, &logs, at, steps[at], false) {
+            return vec![why];
         }
-        let outcome = execute_step(dir, &required.step.id, &command, &log);
-        let secs = at.elapsed().as_secs();
-        match outcome {
-            Ok(()) => {
-                println!("[{name}] ok     {id} ({secs}s)");
-                built |= required.step.builds_app;
-                crate::check::print_shots(name, &log);
-                if !required.step.always
-                    && let Err(why) = store.mark_step(
+        at += 1;
+    }
+    Vec::new()
+}
+
+/// One side's verbs: the first uncached one runs alone and builds the
+/// release, the rest reuse that build `jobs` at a time. A red verb stops
+/// none of the others — a verb breaks nothing the next one reads, and
+/// every green is stamped, so the run after the fix owes the reds alone.
+/// Only a verb of this side that built in this very invocation earns the
+/// others their `--no-build`: a cached verb's build happened in whatever
+/// tree took the stamp, and the binary here may be older than the tree.
+fn verbs(
+    name: &str,
+    dir: &Path,
+    store: &Store,
+    logs: &Path,
+    block: &[(usize, &Required)],
+    jobs: usize,
+) -> Vec<String> {
+    for (_, required) in block.iter().filter(|(_, r)| r.cached) {
+        println!("[{name}] cached {}", required.step.id);
+    }
+    let mut queue = block.iter().filter(|(_, r)| !r.cached);
+    let mut failures = Vec::new();
+    // Alone until one is green: a red first verb may have left no build
+    // for the others to reuse.
+    let mut built = false;
+    while !built {
+        let Some((index, required)) = queue.next() else {
+            return failures;
+        };
+        match run_one(name, dir, store, logs, *index, required, false) {
+            Ok(()) => built = true,
+            Err(why) => failures.push(why),
+        }
+    }
+    let rest: Vec<&(usize, &Required)> = queue.collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let failed = std::sync::Mutex::new(failures);
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.max(1).min(rest.len()) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let Some((index, required)) = rest.get(i) else {
+                        break;
+                    };
+                    if let Err(why) = run_one(name, dir, store, logs, *index, required, true) {
+                        failed
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .push(why);
+                    }
+                }
+            });
+        }
+    });
+    failed
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// One step against its log: run, timed, said as ok or FAIL, and stamped
+/// when green (never an always-step, whose seconds are not worth one).
+/// `no_build` is a verb's `--no-build`, the block's to hand out
+/// ([`verbs`]). A failure comes back as the line to report.
+fn run_one(
+    name: &str,
+    dir: &Path,
+    store: &Store,
+    logs: &Path,
+    index: usize,
+    required: &Required,
+    no_build: bool,
+) -> Result<(), String> {
+    let id = &required.step.id;
+    if required.cached {
+        println!("[{name}] cached {id}");
+        return Ok(());
+    }
+    let log = logs.join(format!("{name}-{index:02}.log"));
+    println!("[{name}] run    {id} … (log: {})", log.display());
+    let at = std::time::Instant::now();
+    let mut command = required.step.command.clone();
+    if no_build {
+        command.push("--no-build".to_string());
+    }
+    let outcome = execute_step(dir, id, &command, &log);
+    let secs = at.elapsed().as_secs();
+    match outcome {
+        Ok(()) => {
+            println!("[{name}] ok     {id} ({secs}s)");
+            crate::check::print_shots(name, &log);
+            if !required.step.always {
+                store
+                    .mark_step(
                         &required.key,
                         &format!("{id}\n{}\n", required.step.command.join(" ")),
                     )
-                {
-                    return vec![format!("{id}: green but not stamped: {why}")];
-                }
+                    .map_err(|why| format!("{id}: green but not stamped: {why}"))?;
             }
-            Err(why) => {
-                println!("[{name}] FAIL   {id} ({secs}s): {why}");
-                return vec![id.clone()];
-            }
+            Ok(())
+        }
+        Err(why) => {
+            println!("[{name}] FAIL   {id} ({secs}s): {why}");
+            Err(id.clone())
         }
     }
-    Vec::new()
 }
 
 /// One step, through `check`'s watched runner. With `PG_GATE_FAKE_LOG`

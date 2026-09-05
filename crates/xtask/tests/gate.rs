@@ -482,6 +482,43 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     );
 }
 
+/// The verbs of a side share nothing but the release the first one
+/// builds, so a red one stops none of the others: every verb the change
+/// owes runs, the greens are stamped, and the run after the fix owes the
+/// red alone.
+#[test]
+fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
+    let sb = Sandbox::new("red-verb");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n\
+         stash-menu --preset basic\tDriver Main StashPane\n\
+         stash-open --preset basic\tDriver Main StashPane\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 2\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let red = "verify stash-open --preset basic";
+    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PG_GATE_FAKE_FAIL", red)]);
+    assert!(!ok && text.contains("nothing stamped"), "{text}");
+    let ran = sb.ran();
+    for verb in [
+        "verify stash --preset basic",
+        "verify stash-menu --preset basic",
+        red,
+        "verify-linux stash-open --preset basic",
+    ] {
+        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
+    }
+    sb.gate_ok(&sb.seat, &["--jobs", "2"]);
+    let again = without_always(&sb.ran());
+    assert_eq!(again, set(&[red]), "{again:?}");
+}
+
 #[test]
 fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     let sb = Sandbox::new("qmltest");

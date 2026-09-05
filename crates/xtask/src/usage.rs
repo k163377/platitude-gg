@@ -38,7 +38,7 @@ commands:
       --verb the summary says the touched verbs still have to run — it
       never passes for the whole of stage 2 on its own.
 
-  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]...
+  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]... [--jobs <n>]
       The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
       against main, follows every file that reads a changed file — a
@@ -57,7 +57,11 @@ commands:
       whole tree. Host and container sides run in parallel;
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only
-      what main's move touched. A commit whose every step is green is
+      what main's move touched. The verify-ui verbs of a side share
+      nothing but the release the first of them builds, so they run
+      several at a time and a red one stops none of the others; every
+      other step of a side runs one at a time and the first red stops
+      the side. A commit whose every step is green is
       stamped, and the reference-transaction hook lets a session's git
       move main onto stamped commits only — a git the user runs carries
       no CLAUDECODE mark, and the hook does not answer for it. A
@@ -72,6 +76,8 @@ commands:
         --fresh       ignore the stamps and run everything owed
         --dry-run     print the reach and the steps, run nothing
         --verb <l>    a verify-ui line to run besides the census's
+        --jobs <n>    verbs at a time per side (default: a third of
+                      the logical CPUs, 1 to 8)
         --dir <tree>  gate that tree instead of this one
       gate verdict <old> <new>   the hook's question (exit 0 = may move)
       gate install               copy .githooks/reference-transaction

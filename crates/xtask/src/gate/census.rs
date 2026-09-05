@@ -114,6 +114,7 @@ pub(crate) fn record(
     names: &[String],
     page_settled: bool,
 ) -> Result<usize, String> {
+    let _turn = one_writer(root)?;
     let known = component_files(root)?;
     let mut census = Census::load(root);
     let mut shown: BTreeSet<String> = names
@@ -131,6 +132,28 @@ pub(crate) fn record(
     }
     census.save(root)?;
     Ok(count)
+}
+
+/// The file under one writer at a time, for as long as the handle lives.
+/// The gate runs the verbs several at once (`gate::verbs`), and a run
+/// reads the whole file, puts its own line in and writes the whole back
+/// — two of those at once would each lose the other's line. The lock
+/// lives under target/, which git ignores: a file beside the census
+/// would be a change in the tree the gate refuses to run over.
+fn one_writer(root: &Path) -> Result<std::fs::File, String> {
+    let dir = root.join("target");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join("verb-census.lock");
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    file.lock()
+        .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
+    Ok(file)
 }
 
 /// The names of every QML component file of the app, product and
