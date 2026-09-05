@@ -136,9 +136,15 @@ AppListView {
     // Which row the working tree stands on, mirrored for the delegates the same way: that row writes its message in
     // the branch's blue, wherever it is read (規約 §グラフの中で HEAD を見失わない).
     readonly property int headRow: graphList.graphModel.headRow
-    /// A row was clicked. **The row number travels with the commit**: the page has to place the selection, and
-    /// looking a row up is a walk over every loaded one (`RepoPage.activateRow`).
-    signal rowSelected(string oidHex, int atRow)
+    /// The commits the page is holding, as a set of ids, and how many are in it — mirrored for the delegates the same
+    /// way, since a row can only see the view (デザイン規約 §複数のコミットを選ぶ). Empty while the working tree's row is what
+    /// is shown: that row is not a commit and never joins a choice, so the rows fall back to the current one there.
+    property var chosenOids: ({})
+    property int chosenCount: 0
+    /// A row was clicked, and what the hand was holding down as it landed. **The row number travels with the commit**:
+    /// the page has to place the selection, and looking a row up is a walk over every loaded one
+    /// (`RepoPage.activateRow`). The modifiers decide whether the click moves what is read or only what is chosen.
+    signal rowSelected(string oidHex, int atRow, int modifiers)
     /// A row was right-clicked, anywhere along it. `record` is the name its chip draws (kind + flags + name), empty
     /// where it draws none — what the menu's cards are aimed at (デザイン規約 §グラフ行の右クリック).
     signal rowMenuRequested(string oidHex, string record)

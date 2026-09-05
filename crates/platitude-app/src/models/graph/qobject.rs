@@ -160,6 +160,47 @@ impl GraphModel {
         self.row_of_hex(&oid_hex).map_or(-1, |i| i as i32)
     }
 
+    /// The ids of the rows between two places, ends included, in walk
+    /// order and joined by `\u{1f}` — the commits a Shift click over the
+    /// graph reaches.
+    ///
+    /// **One crossing, not one per row.** A range is as long as the hand
+    /// dragged it and can be the whole loaded window; asking the bridge
+    /// for each row's id in turn would put a walk of the history on a
+    /// click (CLAUDE.md §性能予算).
+    #[qslot]
+    fn oids_between(&self, from: i32, to: i32) -> String {
+        let (lo, hi) = if from <= to { (from, to) } else { (to, from) };
+        let lo = usize::try_from(lo).unwrap_or(0);
+        let Ok(hi) = usize::try_from(hi) else {
+            return String::new();
+        };
+        self.rows
+            .get(lo..=hi.min(self.rows.len().saturating_sub(1)))
+            .unwrap_or_default()
+            .iter()
+            .map(|r| r.oid_hex.as_str())
+            .collect::<Vec<_>>()
+            .join("\u{1f}")
+    }
+
+    /// The ones of `packed` this graph still stands on, in the order
+    /// given — what a choice made before a background pass rewrote the
+    /// rows comes back as.
+    ///
+    /// A choice is held by id rather than by row because the rows move;
+    /// what the rows answer is whether the commit is still one of them.
+    /// Through the id index, and in one crossing for the reason
+    /// [`Self::oids_between`] is.
+    #[qslot]
+    fn present_oids(&self, packed: String) -> String {
+        packed
+            .split('\u{1f}')
+            .filter(|hex| !hex.is_empty() && self.row_of_hex(hex).is_some())
+            .collect::<Vec<_>>()
+            .join("\u{1f}")
+    }
+
     /// Reflog selector when the commit is a stash row (empty otherwise).
     #[qslot]
     fn stash_ref_of(&self, oid_hex: String) -> String {

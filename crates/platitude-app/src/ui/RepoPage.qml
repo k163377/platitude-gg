@@ -157,6 +157,9 @@ Item {
         page.pendingWipSelect = false
         page.selectedOid = ""
         page.selectedStashRef = ""
+        // The working tree's row is not a commit, so nothing is held while it is what is shown — and the rows fall
+        // back to the current one for the highlight there (`GraphRowDelegate.selected`).
+        page.chooseOnly("")
         page.closeDiff()
     }
 
@@ -2083,6 +2086,105 @@ Item {
     // place.
     property int selectedRow: -1
 
+    // ---- the commits being held (デザイン規約 §複数のコミットを選ぶ) ----
+    /// The choice, as a set of commit ids, and how many are in it. **Ids, not rows**: a background pass rewrites the
+    /// rows under the hand, and everything this page holds is re-resolved by id when one lands (`onStatsChanged`).
+    /// Empty only where the working tree's row is what is shown — that row is not a commit.
+    property var chosenOids: ({})
+    property int chosenCount: 0
+    /// Where the last press landed, which is what a Shift click measures its range from. -1 before the first one.
+    property int chosenAnchorRow: -1
+    /// Makes one commit the whole of the choice. Every way a single row becomes what is being read comes through here
+    /// — a plain click, an arrow key, a landing, the find bar — so there is one place the choice is settled from.
+    function chooseOnly(oidHex) {
+        const only = ({})
+        if (oidHex !== "" && !GitFacts.wipOid(oidHex))
+            only[oidHex] = true
+        page.chosenOids = only
+        page.chosenCount = Object.keys(only).length
+    }
+    /// A left click on a row, as this page answers one. **The choice and what is being read are two answers**: a plain
+    /// click makes one commit both, a modified one moves only the choice (デザイン規約 §複数のコミットを選ぶ).
+    function pickRow(oidHex, atRow, modifiers) {
+        const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+        // The working tree's row is not a commit: a modifier on it is the plain click it would be without one.
+        if (mods === Qt.NoModifier || oidHex === "" || GitFacts.wipOid(oidHex)) {
+            page.activateRow(oidHex, atRow)
+            return
+        }
+        if (mods & Qt.ShiftModifier) {
+            page.chooseRange(page.chosenAnchorRow >= 0 ? page.chosenAnchorRow : page.selectedRow, atRow)
+            return
+        }
+        page.chooseAlso(oidHex, atRow)
+    }
+    /// Puts a commit into the choice, or takes it back out — a Ctrl click.
+    ///
+    /// **The last one cannot be taken out.** An empty choice is the working tree's own state, and reaching it from a
+    /// commit would leave the pane on the right describing something no row is drawn as holding.
+    function chooseAlso(oidHex, atRow) {
+        // A fresh object every time: the rows follow this property, and assigning the same one back changes nothing
+        // for them to follow.
+        const next = ({})
+        for (const held in page.chosenOids)
+            next[held] = true
+        if (next[oidHex] === true) {
+            if (page.chosenCount <= 1)
+                return
+            delete next[oidHex]
+        } else {
+            next[oidHex] = true
+        }
+        page.chosenAnchorRow = atRow
+        page.settleChoice(next)
+    }
+    /// Every commit row between two places, ends included — what a Shift click reaches. **The ones scrolled past are
+    /// in it too**: the anchor and the click are on screen by definition, and what lies between them usually is not.
+    ///
+    /// Asked of the model in one crossing (`GraphModel.oidsBetween`): a range is as long as the hand dragged it, and a
+    /// call per row would put a walk of the history on a click (CLAUDE.md §性能予算). The working tree's row is dropped
+    /// wherever a range sweeps over it.
+    function chooseRange(from, to) {
+        if (from < 0 || to < 0)
+            return
+        const packed = graphModel.oidsBetween(from, to)
+        const next = ({})
+        const ids = packed === "" ? [] : packed.split(String.fromCharCode(31))
+        for (const oidHex of ids) {
+            if (oidHex !== "" && !GitFacts.wipOid(oidHex))
+                next[oidHex] = true
+        }
+        // A range that swept nothing but the working tree's row is not a choice; the anchor stays where it was.
+        if (Object.keys(next).length === 0)
+            return
+        page.settleChoice(next)
+    }
+    /// The one place the set and its tally are written together, so a count and a highlight cannot disagree.
+    function settleChoice(next) {
+        page.chosenOids = next
+        page.chosenCount = Object.keys(next).length
+    }
+    /// Drops from the choice whatever the graph no longer stands on. Run when a pass lands: a rewrite takes commits
+    /// away, and a choice that goes on counting them says a number no row on screen adds up to.
+    function settleChoiceAfterPass() {
+        if (page.chosenCount <= 1)
+            return
+        const packed = graphModel.presentOids(Object.keys(page.chosenOids).join(String.fromCharCode(31)))
+        const kept = packed === "" ? [] : packed.split(String.fromCharCode(31))
+        if (kept.length === page.chosenCount)
+            return
+        // Everything the choice named is gone. What is being read answers for it — that one is followed by name
+        // (`followVanishedCommit`), and the choice comes back as it.
+        if (kept.length === 0) {
+            page.chooseOnly(page.selectedOid)
+            return
+        }
+        const next = ({})
+        for (const oidHex of kept)
+            next[oidHex] = true
+        page.settleChoice(next)
+    }
+
     // The commit the viewport is measured against between passes, so the rows a reader is on can be put back under them
     // when new ones arrive above. The WIP row is no use for that — it comes and goes with the working tree — so the
     // newest *real* commit carries the measurement.
@@ -2266,10 +2368,15 @@ Item {
         // here, keyboard ones included, so this is where it stops being true — the one road that keeps it raises it
         // again on the way out (`onMessageAsked`).
         detailsPane.dropAttention()
+        // **A plain landing is one commit**, whatever was being held before it (デザイン規約 §複数のコミットを選ぶ). Settled
+        // above the early return below: a click that lands on the commit already open has nothing left to ask git,
+        // but it still has a choice to take down to that one row.
+        page.chooseOnly(oidHex)
         const row = atRow !== undefined && atRow >= 0 ? atRow : graphModel.rowOf(oidHex)
         if (row >= 0) {
             graphPane.setCurrentRow(row)
             page.selectedRow = row
+            page.chosenAnchorRow = row
         }
         // **The working tree's row is not a hash**, so nothing below can be skipped for it the way it can for a
         // commit: what it shows is whatever the tree is now.
@@ -2353,6 +2460,9 @@ Item {
                         page.followVanishedCommit()
                     }
                 }
+                // After the one being read has been placed: the two follows above settle a choice of their own, and
+                // this drops whatever else the pass took away (`settleChoiceAfterPass`).
+                page.settleChoiceAfterPass()
             }
             page.trySelectDefault()
         }
@@ -2582,7 +2692,9 @@ Item {
                             blank: page.blank
                             chipListAnchor: rowHost.refListAnchor
                             rowCardOid: rowHost.rowCardOid
-                            onRowActivated: (oidHex, atRow) => page.activateRow(oidHex, atRow)
+                            chosenOids: page.chosenOids
+                            chosenCount: page.chosenCount
+                            onRowActivated: (oidHex, atRow, modifiers) => page.pickRow(oidHex, atRow, modifiers)
                             // The bar moves between matches, not between commits — landing on the same row twice changes
                             // nothing and costs no git.
                             onFindLanded: oidHex => {

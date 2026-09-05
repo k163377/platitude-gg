@@ -39,7 +39,13 @@ Item {
     width: ListView.view.width
     height: Theme.graphRowHeight
 
-    readonly property bool selected: ListView.isCurrentItem
+    /// This row is one of the commits being held (デザイン規約 §複数のコミットを選ぶ). **The choice is the whole of the
+    /// highlight wherever there is one** — the current item is only fallen back on where the choice is empty, which is
+    /// the working tree's row: that row is not a commit, so it is never in a choice, and it is where a person lands
+    /// with nothing chosen.
+    readonly property bool selected: rowItem.ListView.view && rowItem.ListView.view.chosenCount > 0
+        ? rowItem.ListView.view.chosenOids[rowItem.oid_hex] === true
+        : rowItem.ListView.isCurrentItem
     // The top row's highlight and hit area bleed over the list's top margin: hovering or selecting the first commit
     // shows one unbroken band level with the neighbouring header bands instead of leaving a dark sliver above the row.
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
@@ -346,12 +352,20 @@ Item {
     /// A left click, as this row answers one. `held` is how long the button was down, which is what the gesture takes
     /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
     /// click in at the row itself rather than at a copy of what the row would have decided.
-    function leftClick(held) {
+    function leftClick(held, modifiers) {
+        const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+        // **A click that is building a choice is not a click on a name.** The gesture that opens the name box is two
+        // plain clicks spaced apart (`ReclickGesture`); a held Ctrl or Shift says the hand is picking commits, and
+        // arming the box off it would put a name box on the row that a range just swept through.
+        if (mods & (Qt.ControlModifier | Qt.ShiftModifier)) {
+            rowItem.claimRow(mods)
+            return
+        }
         // The second click of a double-click is not a click of its own: the first one already did what a click does,
         // and the gesture is the double.
         if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameRecord, held))
             return
-        rowItem.claimRow()
+        rowItem.claimRow(Qt.NoModifier)
     }
     /// A double-click, as this row answers one. Named for the same reason `leftClick` is: **the lane column has a
     /// strip of its own over the list** (`GraphLanePan`, up wherever the lanes overflow their column), and where a row
@@ -367,10 +381,14 @@ Item {
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
     /// picked (規約 §矢印で履歴を辿る). Taken by the list, not by this row: the delegate is recycled when the row scrolls
     /// off, and either button is the same claim.
-    function claimRow() {
+    /// **The keyboard comes here even where the read stays put.** A Ctrl click moves only the choice, but the row it
+    /// landed on is where the arrows resume and where the next Shift click measures its range from, so the current
+    /// item follows every press.
+    function claimRow(modifiers) {
         rowItem.ListView.view.takeKeyboard()
         rowItem.ListView.view.currentIndex = rowItem.index
-        rowItem.ListView.view.rowSelected(rowItem.oid_hex, rowItem.index)
+        rowItem.ListView.view.rowSelected(rowItem.oid_hex, rowItem.index,
+                                          modifiers === undefined ? Qt.NoModifier : modifiers)
     }
 
     MouseArea {
@@ -393,10 +411,13 @@ Item {
         }
         onClicked: mouse => {
             if (mouse.button !== Qt.RightButton) {
-                rowItem.leftClick(Date.now() - rowMouse.pressAt)
+                rowItem.leftClick(Date.now() - rowMouse.pressAt, mouse.modifiers)
                 return
             }
-            rowItem.claimRow()
+            // **A right-click takes the choice down to this row**, whatever was held before it. Every row of the menu
+            // below is about one commit, and leaving several highlighted while the menu acts on one is the one way
+            // this pane could offer to `cherry-pick` three and pick one (デザイン規約 §複数のコミットを選ぶ).
+            rowItem.claimRow(Qt.NoModifier)
             // The synthetic WIP row is not a commit, so nothing in the commit menu applies to it.
             //
             // **The row is not divided here.** Wherever along it the press landed, one menu comes up: its rows are

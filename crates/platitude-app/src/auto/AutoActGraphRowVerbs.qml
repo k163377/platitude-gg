@@ -96,6 +96,17 @@ Item {
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
             menuHoverTimer.start()
+        } else if (act === "graph-choose" || act === "graph-choose-range") {
+            // The choice several commits are held in (デザイン規約 §複数のコミットを選ぶ). The first press is plain and
+            // settles both the choice and what is read; the ones after it are held, and move only the choice. The
+            // argument is the rows, `:`-separated — `graph-choose` takes them one at a time with Ctrl, and
+            // `-range` sweeps from the first to the last with one Shift press, so that one wants exactly two.
+            const picked = arg === "" ? [] : arg.split(":").map(Number)
+            chooseTimer.sweeps = act === "graph-choose-range"
+            chooseTimer.rows = picked.length >= 2 ? picked : (chooseTimer.sweeps ? [1, 5] : [1, 3, 5])
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.start()
         } else if (act === "graph-reclick-lanes") {
             // The argument is the row the presses land on.
             laneClickTimer.row = Number(arg === "" ? "0" : arg)
@@ -130,6 +141,67 @@ Item {
             return false
         }
         return true
+    }
+    // The presses that build a choice, put in at the row's own click function (`GraphRowDelegate.leftClick`) — what a
+    // held modifier does to a click is decided there and in the page, and a run that wrote the choice itself would say
+    // nothing about either.
+    SampleTimer {
+        id: chooseTimer
+        /// The rows pressed, in order. The first press is the plain one.
+        property var rows: []
+        /// Whether the presses after the first sweep a range (Shift) rather than take one row each (Ctrl).
+        property bool sweeps: false
+        property int step: 0
+        /// The commit the plain press landed on, so the report can say what is read stayed on it while the choice grew.
+        property string readOid: ""
+        /// How many commits the presses should end up holding.
+        function wanted() {
+            if (!chooseTimer.sweeps)
+                return chooseTimer.rows.length
+            return Math.abs(chooseTimer.rows[chooseTimer.rows.length - 1] - chooseTimer.rows[0]) + 1
+        }
+        /// How many rows draw themselves chosen — **the output side**. Counted from the top to past the last row this
+        /// run pressed, so a row lit that should not be is counted with the ones that should.
+        function litRows() {
+            let last = 0
+            for (const row of chooseTimer.rows)
+                last = Math.max(last, row)
+            let lit = 0
+            for (let i = 0; i < Math.min(graphModel.rowTotal, last + 3); i++) {
+                const item = graphPane.view.itemAtIndex(i)
+                if (item && item.selected)
+                    lit++
+            }
+            return lit
+        }
+        onTriggered: {
+            if (chooseTimer.step < chooseTimer.rows.length) {
+                const item = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.step])
+                // A row the view has not laid out yet is not a row that was pressed (`graph-reclick`).
+                if (!item)
+                    return
+                if (chooseTimer.step === 0) {
+                    chooseTimer.readOid = item.oid_hex
+                    item.leftClick(0, Qt.NoModifier)
+                } else {
+                    item.leftClick(0, chooseTimer.sweeps ? Qt.ShiftModifier : Qt.ControlModifier)
+                }
+                chooseTimer.step++
+                return
+            }
+            // Every press is in. **The rows are what is waited on**, not the page's tally: a choice nothing draws is
+            // a number in a property, and the highlight is the whole of what this verb shows.
+            const lit = chooseTimer.litRows()
+            if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted())
+                return
+            chooseTimer.stop()
+            Harness.report("graph_choose chosen=" + page.chosenCount
+                              + " lit=" + lit
+                              + " read=" + (page.selectedOid === chooseTimer.readOid)
+                              + " wip=" + page.wipShown
+                              + " rows=" + chooseTimer.rows.join(","))
+            driver.complete()
+        }
     }
     // The chip expansion, entered once the row's delegate exists; `-card` hands over to `rowCardTimer`.
     SampleTimer {

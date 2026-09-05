@@ -15,7 +15,16 @@ Rectangle {
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
-    signal rowActivated(string oidHex, int atRow)
+    /// The commits the page is holding and how many, handed down to the rows that draw themselves chosen. The page
+    /// owns the set — it is the one that re-resolves what it holds by id after every background pass
+    /// (デザイン規約 §複数のコミットを選ぶ).
+    property var chosenOids: ({})
+    property int chosenCount: 0
+
+    /// A row was picked, and what the hand held as it was. `modifiers` is what tells "read this commit" from "add it
+    /// to what is held"; everything that lands a row without a hand on it (the arrows, a landing, the stand-in) says
+    /// `Qt.NoModifier`, which is the plain click.
+    signal rowActivated(string oidHex, int atRow, int modifiers)
     /// Right-click on a row, wherever along it. `record` is the name its chip draws (kind + flags + name), empty on a
     /// row that draws none — the menu is the row's either way, and that name is what its cards are about.
     signal rowMenuOpenRequested(string oidHex, string record)
@@ -262,7 +271,7 @@ Rectangle {
         graphModel: graphArea.graphModel
         asking: askBar.open
         // The walk names the commit it landed on, not the row — the page looks that one up.
-        onActivated: oidHex => graphArea.rowActivated(oidHex, -1)
+        onActivated: oidHex => graphArea.rowActivated(oidHex, -1, Qt.NoModifier)
     }
     function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
@@ -367,6 +376,8 @@ Rectangle {
         workTree: graphArea.workTree
         columns: metrics
         findOn: findBar.findOn
+        chosenOids: graphArea.chosenOids
+        chosenCount: graphArea.chosenCount
         chipListAnchor: graphArea.chipListAnchor
         rowCardOid: graphArea.rowCardOid
         // The arrows are answered here rather than in the list, because it is this pane that walks the history with
@@ -375,7 +386,7 @@ Rectangle {
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
         onRowMenuRequested: (oidHex, record) => graphArea.rowMenuOpenRequested(oidHex, record)
-        onRowSelected: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow)
+        onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
         onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
@@ -461,7 +472,7 @@ Rectangle {
         onActivated: row => {
             graphList.takeKeyboard()
             graphArea.jumpToRow(row)
-            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row)
+            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, Qt.NoModifier)
         }
     }
     /// The stand-in itself — automation-only exposure, the same one `view` is (app-ui.md). A headless run reads what it

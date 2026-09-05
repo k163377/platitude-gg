@@ -206,6 +206,25 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "list_menu list=true menu=true",
     },
+    // Several commits held at once, taken one at a time with Ctrl and
+    // swept with Shift. **The tally is not asserted here** — the run
+    // will not finish until the page holds as many as it pressed *and*
+    // that many rows draw themselves lit, so a choice that never
+    // reached the rows runs into the watchdog instead of reporting.
+    // What is left for this line is the half the completion cannot
+    // reach: a held press moves the choice and **not** what is being
+    // read, and a picture of three lit rows says nothing about which
+    // of them the pane on the right is describing.
+    Verb {
+        name: "graph-choose",
+        when: &[],
+        plain: "read=true wip=false",
+    },
+    Verb {
+        name: "graph-choose-range",
+        when: &[],
+        plain: "read=true wip=false",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame

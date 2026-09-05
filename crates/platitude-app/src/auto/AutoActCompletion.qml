@@ -140,6 +140,9 @@ QtObject {
                 "ref-list", "ref-list-card", "row-part", "graph-reclick", "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
+                // The presses go in one per tick and the rows draw the choice a tick behind the last of them, so
+                // the sampler that watches the highlight settle owns the whole of it.
+                "graph-choose", "graph-choose-range",
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
                 "row-card", "card-sweep", "menu-hover",
                 // The press on the card's note and the pane it lands in are one sampler's walk: the card has to be
