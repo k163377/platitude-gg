@@ -91,6 +91,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // child's PATH only, so the build never sees it.
     let exe = crate::tree::app_exe(&root, &path, opts.build, &[])?;
 
+    // The claim below answers for this machine only, and inside a
+    // container that machine is one run wide: `/out` is the same path in
+    // every one of them and the lock goes to a `/tmp` nobody else can
+    // see. What two container runs collide over is the host directory
+    // behind the mount, which is claimed out there (`keepsakes::bridge`).
     let shot_dir = match &opts.shot_dir {
         Some(dir) => {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

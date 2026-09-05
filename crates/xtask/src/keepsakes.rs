@@ -4,8 +4,19 @@
 //! anything meant to be read afterwards goes to a host directory bridged
 //! in over /out (`linux`).
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+/// What one container run leaves on this side, for as long as it has it.
+pub(crate) struct Keepsake {
+    /// Where the container's mount lands out here.
+    pub(crate) dir: PathBuf,
+    /// Never read. Holding it *is* the run's ownership of `dir`, and it
+    /// is released however the process ends. `None` would mean this run
+    /// had already claimed the path, which it never has: the directory
+    /// was made a line earlier.
+    _claim: Option<crate::verify::ResourceClaim>,
+}
 
 /// The arguments that send a run's pictures out to `mount`, and where
 /// they land on this side. None when the command leaves nothing.
@@ -14,15 +25,24 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// read-only in there, so the container could not write one, and the
 /// seat these pictures belong to is the one out here — which is what
 /// `onto_the_board` is for, once the run is done.
-pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<PathBuf>, String> {
-    let Some(out) = keepsakes(command)? else {
+///
+/// **The claim is taken here rather than in there.** The run inside makes
+/// one too (`verify::run` claims its `--shot-dir`), but it writes that
+/// lock into the container's own `/tmp`, which is empty in every
+/// container — a claim that can never refuse anybody. What two runs can
+/// actually collide over is this directory, and it is only on this side
+/// that a second asker can be told so.
+pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<Keepsake>, String> {
+    let Some(dir) = keepsakes(command)? else {
         return Ok(None);
     };
+    let mut mine = BTreeSet::new();
+    let claim = crate::verify::claim_resource(&dir, "shot directory", &mut mine)?;
     command.push("--shot-dir".to_string());
     command.push(mount.to_string());
     command.push("--no-board".to_string());
-    println!("screenshots and settings: {}", out.display());
-    Ok(Some(out))
+    println!("screenshots and settings: {}", dir.display());
+    Ok(Some(Keepsake { dir, _claim: claim }))
 }
 
 /// Whatever the run left behind, onto the host's board. Nothing left is
@@ -80,6 +100,13 @@ fn naming(command: &[String]) -> (String, String) {
 /// None when the command leaves nothing. verify-ui writes its screenshot
 /// and the settings it ran with into --shot-dir; inside a container that is
 /// a place nobody can open, and the whole verdict is a PNG.
+///
+/// **One per run, or two containers share a settings store.** `/out` is
+/// the same path in every container, so what keeps two of them apart is
+/// this directory alone: hand the same one twice and the second app to
+/// start finds the first still holding `/out/config`
+/// (`settings::Store::claim`), opens the window that says so instead of
+/// the one the verb is about, and waits out its watchdog.
 fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
     if !command.iter().any(|word| word == "verify-ui") {
         return Ok(None);
@@ -92,15 +119,7 @@ fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
 }
 
 pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_nanos();
-    let dir = std::env::temp_dir()
-        .join("pg-linux")
-        .join(format!("{kind}-{nanos}"));
-    std::fs::create_dir_all(&dir).map_err(|e| format!("failed to make {}: {e}", dir.display()))?;
-    Ok(dir)
+    crate::verify::claim_dir(&std::env::temp_dir().join("pg-linux"), kind)
 }
 
 #[cfg(test)]
@@ -149,7 +168,7 @@ mod tests {
             .expect("a bridged run")
             .expect("a directory to bring the pictures back to");
         assert!(!boarding(&sent), "bridge says it whether the caller did");
-        std::fs::remove_dir_all(&out).expect("the directory bridge just made");
+        std::fs::remove_dir_all(&out.dir).expect("the directory bridge just made");
 
         let suite = crate::verify::suite_words("commit");
         assert!(!boarding(&suite), "a suite's run stays off the board");
@@ -170,5 +189,37 @@ mod tests {
             keepsakes(&words("cargo test -p platitude-core")).expect("none"),
             None
         );
+    }
+
+    /// `/out` is the same path in every container, so the directory it is
+    /// mounted from is the whole of what keeps two runs of a side apart —
+    /// their settings stores, their screenshots and the git configuration
+    /// they read an identity from all sit in it. The gate starts a side's
+    /// verbs together (`gate::verbs`), which is where a clock that two of
+    /// them read inside one tick would have handed them one directory.
+    #[test]
+    fn container_runs_started_together_are_handed_a_directory_each() {
+        let start = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let threads: Vec<_> = (0..16)
+            .map(|_| {
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    super::keepsake_dir("shots").expect("a directory for this run")
+                })
+            })
+            .collect();
+        let made: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().expect("a claiming thread"))
+            .collect();
+
+        let unique: std::collections::BTreeSet<_> = made.iter().collect();
+        assert_eq!(unique.len(), made.len(), "two runs were handed one /out");
+        for dir in made {
+            // Empty, and so nobody else's: the claim made it rather than
+            // finding it, which is what `create_dir_all` could not say.
+            std::fs::remove_dir(&dir).expect("an empty directory this call created");
+        }
     }
 }

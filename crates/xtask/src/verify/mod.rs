@@ -18,5 +18,6 @@ mod shim;
 mod verbs;
 
 pub(crate) use options::suite_words;
+pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource};
 pub use run::run;
 pub use shim::git_shim;

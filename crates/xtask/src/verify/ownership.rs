@@ -1,4 +1,9 @@
-//! Per-run filesystem ownership for `verify-ui`.
+//! Per-run filesystem ownership: the directory a run is handed, and the
+//! claim that says one process has it.
+//!
+//! Reachable past `verify` because a run in a container is owned from
+//! out here — `/out` is a mount, and the directory behind it is claimed
+//! on this side (`keepsakes::bridge`).
 
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
@@ -7,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
-pub(super) struct ResourceClaim {
+pub(crate) struct ResourceClaim {
     lock: PathBuf,
 }
 
@@ -20,7 +25,7 @@ impl Drop for ResourceClaim {
 /// Atomically reserve an explicitly shared path for this process. Claims
 /// live outside the target so a repository does not become dirty merely
 /// because it is under test.
-pub(super) fn claim_resource(
+pub(crate) fn claim_resource(
     target: &Path,
     kind: &str,
     claimed: &mut BTreeSet<u64>,
@@ -84,31 +89,43 @@ fn holder_alive(lock: &Path) -> bool {
 }
 
 /// Claim a run-owned directory before any repository, shim, config, or PNG
-/// is created in it. `create_dir` is the ownership edge; a timestamp alone
-/// only names a collision and lets concurrent runs silently share state.
+/// is created in it.
 pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
-    let base = std::env::temp_dir().join("pg-verify");
-    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    claim_dir(&std::env::temp_dir().join("pg-verify"), verb)
+}
+
+/// A directory under `base` that this call made and nobody else has.
+///
+/// **`create_dir` is the ownership edge**; a timestamp alone only names a
+/// collision and lets concurrent runs silently share state, because
+/// `create_dir_all` answers the same for a directory it made and one that
+/// was already standing there. The pid and the serial are in the name for
+/// the two ways a clock alone repeats itself: every process on this
+/// machine reads the same one, and one process can ask twice inside a
+/// single tick of it.
+pub(crate) fn claim_dir(base: &Path, stem: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(base).map_err(|e| format!("could not make {}: {e}", base.display()))?;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
     let pid = std::process::id();
     for serial in 0..1024_u32 {
-        let candidate = base.join(format!("{verb}-{pid}-{nanos}-{serial}"));
+        let candidate = base.join(format!("{stem}-{pid}-{nanos}-{serial}"));
         match std::fs::create_dir(&candidate) {
             Ok(()) => return Ok(candidate),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
                 return Err(format!(
-                    "could not claim verify-ui run directory {}: {error}",
+                    "could not claim the run directory {}: {error}",
                     candidate.display()
                 ));
             }
         }
     }
     Err(format!(
-        "could not claim a unique verify-ui directory for {verb}"
+        "could not claim a unique directory for {stem} under {}",
+        base.display()
     ))
 }
 

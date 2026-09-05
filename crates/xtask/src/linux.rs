@@ -357,10 +357,12 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg(format!("{}=1", crate::still::UNDER));
 
     let mut inside = command.to_vec();
+    // Kept in scope past the run below: the directory behind `/out` is
+    // this run's for as long as this value lives.
     let keepsake = keepsakes::bridge(&mut inside, OUT_MOUNT)?;
     if let Some(out) = &keepsake {
         cmd.arg("--volume")
-            .arg(format!("{}:{OUT_MOUNT}", mount_path(out)));
+            .arg(format!("{}:{OUT_MOUNT}", mount_path(&out.dir)));
     }
 
     cmd.arg(tag);
@@ -375,7 +377,7 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     if status.success() {
         // The line as typed, not the one `bridge` wrote: that one says
         // `--no-board` whether or not the caller did.
-        keepsakes::onto_the_board(keepsake.as_deref(), command);
+        keepsakes::onto_the_board(keepsake.as_ref().map(|out| out.dir.as_path()), command);
         return Ok(());
     }
     Err(match status.code() {
