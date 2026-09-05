@@ -282,13 +282,20 @@ mod tests {
     use super::{Census, names_in, page_settled_in, record};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
-    /// A root holding nothing but the QML files a census may name.
+    /// A root holding nothing but the QML files a census may name: a
+    /// checkout of one test's own, with no census in it yet.
+    ///
+    /// **Claimed, not merely named.** A pid and a counter name a
+    /// directory that this process has not got: pids come round again,
+    /// these roots are never cleaned up, and the census the last holder
+    /// of the number left behind is one `Census::load` reads back as
+    /// this test's own — which is how a test that asks what *no* run
+    /// shows any more comes to find a line it never wrote (observed
+    /// under a gate, where a side spawns processes by the dozen).
     fn root_with(components: &[&str]) -> PathBuf {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let serial = NEXT.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("pg-census-{}-{serial}", std::process::id()));
+        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pg-census"), "root")
+            .expect("a root of this test's own");
         let ui = root.join("crates/platitude-app/src/ui");
         std::fs::create_dir_all(&ui).expect("ui dir");
         std::fs::create_dir_all(root.join("crates/xtask")).expect("xtask dir");
