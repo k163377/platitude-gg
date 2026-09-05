@@ -180,5 +180,12 @@ pub struct AppBackend {
     /// apart by nothing else on screen, and the taskbar's launch entry
     /// gives no clue which one it started.
     held_elsewhere: String,
+    /// Whether the command log is up. The one part of the layout that is
+    /// held for the length of the run instead of in `state.toml`: a tab
+    /// handing over to the next one reads it back from here the way it
+    /// reads the pane widths (`PageLayout`), but a new window comes up
+    /// with the log down — it is where a command's answer is read, not a
+    /// shape the window is kept in.
+    commands_shown: bool,
     check_feed: Arc<Feed<AppMsg>>,
 }

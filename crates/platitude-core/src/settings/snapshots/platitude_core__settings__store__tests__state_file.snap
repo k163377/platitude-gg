@@ -6,7 +6,6 @@ version = 1
 
 [layout]
 commands_height = 280
-commands_shown = false
 details_tree = true
 details_width = 400
 graph_labels_width = -1

@@ -66,8 +66,10 @@ pub struct LayoutState {
     /// following the pane's default even when that default changes.
     pub graph_labels_width: i32,
     pub graph_lanes_width: i32,
+    /// How tall the log stands, never whether it was standing: the log is
+    /// where a command's answer is read, so a session that left it up has
+    /// no claim on the next one's screen.
     pub commands_height: i32,
-    pub commands_shown: bool,
     pub tags_shown: bool,
     pub wip_tree: bool,
     pub details_tree: bool,
@@ -83,7 +85,6 @@ impl Default for LayoutState {
             graph_labels_width: AUTO_WIDTH,
             graph_lanes_width: AUTO_WIDTH,
             commands_height: 280,
-            commands_shown: false,
             tags_shown: true,
             wip_tree: true,
             details_tree: true,
@@ -139,7 +140,6 @@ impl State {
                 graph_labels_width: width_or_auto(l, "graph_labels_width"),
                 graph_lanes_width: width_or_auto(l, "graph_lanes_width"),
                 commands_height: int_in(l, "commands_height", 120..=4_000, d.commands_height),
-                commands_shown: flag(l, "commands_shown", d.commands_shown),
                 tags_shown: flag(l, "tags_shown", d.tags_shown),
                 wip_tree: flag(l, "wip_tree", d.wip_tree),
                 details_tree: flag(l, "details_tree", d.details_tree),
@@ -224,7 +224,6 @@ impl State {
             "commands_height".into(),
             Value::Integer(l.commands_height.into()),
         );
-        layout.insert("commands_shown".into(), Value::Boolean(l.commands_shown));
         layout.insert("tags_shown".into(), Value::Boolean(l.tags_shown));
         layout.insert("wip_tree".into(), Value::Boolean(l.wip_tree));
         layout.insert("details_tree".into(), Value::Boolean(l.details_tree));

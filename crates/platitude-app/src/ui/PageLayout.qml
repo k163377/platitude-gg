@@ -34,7 +34,8 @@ QtObject {
 
     /// The layout this page starts with: what the window is set to now, which after a restart is what the last session
     /// left. Read once rather than bound — from here on the splitters own these, and a binding would fight the drag
-    /// (規約 §左メニューを畳む).
+    /// (規約 §左メニューを畳む). Whether the log is up is the one of them the file does not hold: it follows the reader
+    /// from tab to tab like the rest, and a new launch finds it down (`AppBackend::commands_shown`).
     function applySavedLayout() {
         // The width first: while the list has never been folded, the splitter still reads it through a binding, so this
         // is what puts an unfolded list at the width it was left. Folding after is what pins the rail (`applyFold`,

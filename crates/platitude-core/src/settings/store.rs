@@ -214,7 +214,6 @@ mod tests {
                 graph_labels_width: 190,
                 graph_lanes_width: 300,
                 commands_height: 200,
-                commands_shown: true,
                 tags_shown: false,
                 wip_tree: false,
                 details_tree: true,

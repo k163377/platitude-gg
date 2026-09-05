@@ -153,18 +153,22 @@ impl AppBackend {
         });
     }
 
+    /// The log's own flag never reaches the store: it is held here for
+    /// the length of the run, so the tab arriving finds what the tab
+    /// leaving was showing and the next launch finds nothing
+    /// ([`AppBackend::commands_shown`]).
     pub(super) fn write_layout_flags(
-        &self,
+        &mut self,
         sidebar_collapsed: bool,
         commands_shown: bool,
         tags_shown: bool,
         wip_tree: bool,
         details_tree: bool,
     ) {
+        self.commands_shown = commands_shown;
         Hub::with(|hub| {
             let mut layout = hub.state().layout;
             layout.sidebar_collapsed = sidebar_collapsed;
-            layout.commands_shown = commands_shown;
             layout.tags_shown = tags_shown;
             layout.wip_tree = wip_tree;
             layout.details_tree = details_tree;

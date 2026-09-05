@@ -380,7 +380,7 @@ impl AppBackend {
 
     #[qslot]
     fn start_commands_shown(&self) -> bool {
-        with_flag(|l| l.commands_shown)
+        self.commands_shown
     }
 
     #[qslot]
@@ -437,7 +437,7 @@ impl AppBackend {
 
     #[qslot]
     fn save_layout_flags(
-        &self,
+        &mut self,
         sidebar_collapsed: bool,
         commands_shown: bool,
         tags_shown: bool,

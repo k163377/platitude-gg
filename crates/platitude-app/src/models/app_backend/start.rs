@@ -124,6 +124,7 @@ impl Default for AppBackend {
             build_tree: build_tree(),
             already_running: Hub::with(|hub| !hub.held_elsewhere().is_empty()).unwrap_or(false),
             held_elsewhere: Hub::with(|hub| hub.held_elsewhere().to_string()).unwrap_or_default(),
+            commands_shown: false,
             check_feed: Arc::new(Feed::default()),
         }
     }
