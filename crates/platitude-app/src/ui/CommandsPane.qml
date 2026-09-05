@@ -35,23 +35,27 @@ Rectangle {
     /// Automation: the colour the `>_` in this band came out to (`PG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: seat.markColor
 
-    // The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
-    // somebody came here to read. The page raises it; where it is looking when it comes up is this panel's own answer.
-    onVisibleChanged: if (pane.visible) {
+    /// The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
+    /// somebody came here to read. The page raises it; where it is looking when it comes up is this panel's own
+    /// answer. **Coming up is being built**: the page builds the panel into its seat as the log is raised and takes
+    /// it down as the log is shut (`RepoPage.commandsSeat`), so the panel is never on screen before it is completed
+    /// and never completed off it — a `visible` that moved would be a seat wired some other way.
+    function cameUp() {
         pane.showLatest()
         pane.tellTheZone()
         // The keys this panel answers are the list's, and a panel nobody has clicked in has not been given them
         // (Ctrl+C over a log that is on screen is what a reader would expect to work).
         list.forceActiveFocus()
     }
+    Component.onCompleted: pane.cameUp()
 
     /// The machine's offset from UTC, which is the one thing about the clock the model cannot work out for itself
-    /// (`CommandsModel.setZoneMinutes`). Said again every time the panel comes up rather than once at the start, so a
-    /// session carried across a change of offset stamps what arrives afterwards with the new one.
+    /// (`CommandsModel.setZoneMinutes`). Said again every time the panel comes up rather than only when the page
+    /// starts (`RepoPage`'s model says it first), so a session carried across a change of offset stamps what arrives
+    /// afterwards with the new one.
     function tellTheZone() {
         pane.commandsModel.setZoneMinutes(new Date().getTimezoneOffset())
     }
-    Component.onCompleted: pane.tellTheZone()
     // …and a failure that arrives with the panel already up puts it back at the end as well, over a reader who had
     // scrolled away from it. The rows follow on their own while nobody has (`list.follow`), so this is only about the
     // reader who has: a failure is the one row worth taking them back to, which is the same call the page makes when

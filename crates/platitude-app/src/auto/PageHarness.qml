@@ -9,7 +9,10 @@ import platitude.ui
 /// `RepoPage.qml`'s ids.
 ///
 /// **The menus arrive whole**, not row by row: what a verb needs off `RefRowMenu` is which row it presses, and picking
-/// that row out is harness wiring rather than something the page has to know it is holding.
+/// that row out is harness wiring rather than something the page has to know it is holding. **And they arrive as
+/// their seats**: the page builds a menu the first time it is raised, so what the page can hand over is the seat, and
+/// asking for the menus up front is this file's to do (`RepoPage.keepBuilt`) — a verb reads a menu's rows before
+/// opening it, and a null there is a dead run rather than a refusal.
 Item {
     id: harness
 
@@ -33,19 +36,40 @@ Item {
     required property var detailsPane
     required property var diffPane
     required property var wipPane
-    required property var planPane
     required property var gitCorner
-    /// The menus and the flows a verb enters, each whole.
-    required property var refRowMenu
-    required property var fileRowMenu
-    required property var diffRowMenu
-    required property var commitRowMenu
-    required property var remoteRowMenu
+    /// The seat the plan's face is built in while a plan stands. Not asked for up front: the plan verbs raise the
+    /// face the way a hand does and read it only once it is up, so the driver follows the seat's `item` instead.
+    required property var planSeat
+    /// The seats the five menus are built in, and the flows a verb enters, each whole.
+    required property var refMenuSeat
+    required property var fileMenuSeat
+    required property var diffMenuSeat
+    required property var commitMenuSeat
+    required property var remoteMenuSeat
     required property var rowHost
     required property var clipboard
     required property var commitMenuState
     required property var publishFlow
     required property var upstreamFlow
+
+    /// The menus have been asked for, so the verbs that read them may be built. **Two phases rather than one
+    /// binding**: the driver's properties are read off the menus as it is built, and this whole part is built inside
+    /// the page's own completion, so both phases are over before the page reaches its next line (`HarnessSeat`) — the
+    /// same two the window's harness keeps (`WindowHarness.screensUp`).
+    property bool seatsUp: false
+    readonly property var refRowMenu: harness.refMenuSeat.item
+    readonly property var fileRowMenu: harness.fileMenuSeat.item
+    readonly property var diffRowMenu: harness.diffMenuSeat.item
+    readonly property var commitRowMenu: harness.commitMenuSeat.item
+    readonly property var remoteRowMenu: harness.remoteMenuSeat.item
+    readonly property var planPane: harness.planSeat.item
+
+    Component.onCompleted: {
+        // Only where a verb is going to want one: five menus held ready are working set every measured run would
+        // otherwise carry (`RepoPage.keepBuilt`).
+        harness.page.keepBuilt = Harness.autoAct !== ""
+        harness.seatsUp = true
+    }
 
     /// The page is up: the verbs may start.
     function begin() {
@@ -64,10 +88,11 @@ Item {
         sidebarPane: harness.sidebarPane
     }
 
-    // Built only when a verb was given, so a run that is only being measured carries none of the verbs.
+    // Built only when a verb was given, so a run that is only being measured carries none of the verbs — and only
+    // once the menus it reads are standing.
     Loader {
         id: actsLoader
-        active: Harness.autoAct !== ""
+        active: harness.seatsUp && Harness.autoAct !== ""
         sourceComponent: AutoActDriver {
             page: harness.page
             repoTab: harness.repoTab

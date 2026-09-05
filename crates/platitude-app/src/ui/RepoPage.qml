@@ -706,48 +706,71 @@ Item {
     /// One of this page's right-click menus is standing. What the pointer is over then is the menu; the row it was
     /// opened on is behind it, and nothing behind a menu is being hovered — a card or a tip that comes out now is
     /// drawn over the very rows the hand is reading. The menus are all the page's, so this is
-    /// the one place that can see all of them.
+    /// the one place that can see all of them — and a menu nobody has raised yet is not standing.
     readonly property bool menuStanding:
-        refRowMenu.showing || commitRowMenu.showing || fileRowMenu.showing || remoteRowMenu.showing
-        || diffRowMenu.showing
+        page.menuShowing(refMenuSeat) || page.menuShowing(commitMenuSeat) || page.menuShowing(fileMenuSeat)
+        || page.menuShowing(remoteMenuSeat) || page.menuShowing(diffMenuSeat)
+    function menuShowing(seat) {
+        return seat.item !== null && seat.item.showing
+    }
+
+    /// Every seat on this page that is built on being asked for — the five menus — stands built from the start
+    /// instead. Written from outside: the harness asks for this before its verbs read a menu's rows, since a null
+    /// there is nothing to read rather than a refusal (`PageHarness`), and false wherever nobody wrote it, which is
+    /// every page a person opens. The plan's face and the command log are not in this: their verbs raise them the
+    /// way a hand does, and read them only once they are up.
+    property bool keepBuilt: false
 
     // ---- context menu on a sidebar row ------------------------------
-    RefRowMenu {
-        id: refRowMenu
-        // Every row of this menu moves something — a switch, an integrate, a name taken away — so the whole card is
-        // held while the doors are, wherever it was raised from. **The chip on a graph row is the same door**: one
-        // menu answers for both entrances, and a `switch` that stayed live over there would be the very move the left
-        // pane just closed (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
-        heldReason: page.doorsHeldWhy
-        repoTab: repoTab
-        workTree: workTree
-        graphModel: graphModel
-        branchesModel: branchesModel
-        worktreesModel: worktreesModel
-        tagsModel: tagsModel
-        onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
-        onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
-        onTagHereRequested: oidHex => page.startTagAt(oidHex)
-        onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
-        onDropStashRequested: selector => page.dropStashNow(selector)
-        onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-        onDeleting: (kind, id) => page.showGone(kind, id)
-        // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
-        // whether it stays now is the pointer's to answer again.
-        onDismissed: rowHost.settleRefList()
+    // Each menu is built the first time it is raised, not with the page: five cards of rows, held ready, are working
+    // set a page pays for whether or not a hand ever comes (rules-refs/app-ui.md — the same rule the window's two
+    // dialogs follow, `WindowDialogSeat`). The door activates the seat and then calls into it, which is synchronous;
+    // the seat fills the page so the menu inside measures the window the way it always did (`AppMenu.ownerItem`).
+    Loader {
+        id: refMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: RefRowMenu {
+            // Every row of this menu moves something — a switch, an integrate, a name taken away — so the whole card
+            // is held while the doors are, wherever it was raised from. **The chip on a graph row is the same door**:
+            // one menu answers for both entrances, and a `switch` that stayed live over there would be the very move
+            // the left pane just closed (デザイン規約 §メニュー: 入口が違っても同じ操作は同じ文).
+            heldReason: page.doorsHeldWhy
+            repoTab: repoTab
+            workTree: workTree
+            graphModel: graphModel
+            branchesModel: branchesModel
+            worktreesModel: worktreesModel
+            tagsModel: tagsModel
+            onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+            onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
+            onTagHereRequested: oidHex => page.startTagAt(oidHex)
+            onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
+            onDropStashRequested: selector => page.dropStashNow(selector)
+            onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onDeleting: (kind, id) => page.showGone(kind, id)
+            // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
+            // whether it stays now is the pointer's to answer again.
+            onDismissed: rowHost.settleRefList()
+        }
     }
     // What a remote itself offers. Its own menu rather than rows added to the one above: a remote is repository
     // configuration, and the ref menu is about refs (デザイン規約 §左メニューの所作).
-    RemoteRowMenu {
-        id: remoteRowMenu
-        heldReason: page.doorsHeldWhy
-        repoTab: repoTab
-        onUrlRequested: name => publishFlow.startEditRemote(name)
-        onDismissed: rowHost.settleRefList()
+    Loader {
+        id: remoteMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: RemoteRowMenu {
+            heldReason: page.doorsHeldWhy
+            repoTab: repoTab
+            onUrlRequested: name => publishFlow.startEditRemote(name)
+            onDismissed: rowHost.settleRefList()
+        }
     }
     /// The one door into that menu. Says whether it opened.
     function openRemoteMenu(name) {
-        return remoteRowMenu.offerOn(name)
+        remoteMenuSeat.active = true
+        return remoteMenuSeat.item.offerOn(name)
     }
 
     /// Which surface raised the standing ref menu. Its branch row opens a box to type a name in, and that box belongs
@@ -758,15 +781,17 @@ Item {
     /// here. Says whether it opened.
     function openRefMenu(kind, name, full, oidHex, inSidebar) {
         page.refMenuInSidebar = inSidebar === true
-        return refRowMenu.offerOn(kind, name, full, oidHex)
+        refMenuSeat.active = true
+        return refMenuSeat.item.offerOn(kind, name, full, oidHex)
     }
     /// A new branch on a commit, asked for from a menu: the name box opens where that menu was raised. Nothing is
-    /// created until it is submitted — walking away costs the typing and nothing else.
+    /// created until it is submitted — walking away costs the typing and nothing else. The sidebar's half reads the
+    /// row off the ref menu, which is standing whenever that half is taken: only its door sets `refMenuInSidebar`.
     function startBranchAt(oidHex) {
         if (oidHex === "")
             return
         if (page.refMenuInSidebar)
-            sidebarPane.beginBranchAt(refRowMenu.kind, refRowMenu.refId, oidHex)
+            sidebarPane.beginBranchAt(refMenuSeat.item.kind, refMenuSeat.item.refId, oidHex)
         else
             graphPane.startNaming(oidHex)
     }
@@ -775,7 +800,7 @@ Item {
         if (oidHex === "")
             return
         if (page.refMenuInSidebar)
-            sidebarPane.beginTagAt(refRowMenu.kind, refRowMenu.refId, oidHex)
+            sidebarPane.beginTagAt(refMenuSeat.item.kind, refMenuSeat.item.refId, oidHex)
         else
             graphPane.startTagging(oidHex)
     }
@@ -994,15 +1019,20 @@ Item {
         // A right-click is a click: it walks away from a question that was standing, which may well be about another
         // row.
         page.stopRowAsk()
-        fileRowMenu.offer(bucket, path)
+        fileMenuSeat.active = true
+        fileMenuSeat.item.offer(bucket, path)
     }
-    FileRowMenu {
-        id: fileRowMenu
-        repoTab: repoTab
-        workTree: workTree
-        wipPane: wipPane
-        onMergeToolWanted: page.gitSettingsRequested()
-        onCopyRequested: text => clipboard.copy(text)
+    Loader {
+        id: fileMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: FileRowMenu {
+            repoTab: repoTab
+            workTree: workTree
+            wipPane: wipPane
+            onMergeToolWanted: page.gitSettingsRequested()
+            onCopyRequested: text => clipboard.copy(text)
+        }
     }
 
     // ---- context menu on the diff's own text ------------------------
@@ -1010,12 +1040,17 @@ Item {
     /// (`DiffTextSelect.askMenu`), so nothing about the row travels here.
     function openCodeMenu() {
         page.stopRowAsk()
-        diffRowMenu.offer()
+        diffMenuSeat.active = true
+        diffMenuSeat.item.offer()
     }
-    DiffRowMenu {
-        id: diffRowMenu
-        diffModel: diffModel
-        onCopyRequested: text => clipboard.copy(text)
+    Loader {
+        id: diffMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: DiffRowMenu {
+            diffModel: diffModel
+            onCopyRequested: text => clipboard.copy(text)
+        }
     }
 
     // ---- context menu on a graph row -------------------------------
@@ -1043,8 +1078,10 @@ Item {
     /// asked of the model, which is what the callers with no row in hand do.
     function openRowMenu(oidHex, record) {
         const named = record === undefined ? page.rowRecordAt(oidHex) : record
-        commitRowMenu.targetKind = GitFacts.recordKind(named)
-        commitRowMenu.targetName = commitRowMenu.targetKind === "" ? "" : GitFacts.recordName(named)
+        commitMenuSeat.active = true
+        const menu = commitMenuSeat.item
+        menu.targetKind = GitFacts.recordKind(named)
+        menu.targetName = menu.targetKind === "" ? "" : GitFacts.recordName(named)
         commitMenuState.openRowMenu(oidHex)
     }
 
@@ -1054,52 +1091,57 @@ Item {
         workTree: workTree
         graphModel: graphModel
         worktreesModel: worktreesModel
-        menu: commitRowMenu
+        // Null until the menu is first raised; the one function that reads it is the door that raises it.
+        menu: commitMenuSeat.item
     }
 
-    CommitRowMenu {
-        id: commitRowMenu
-        // The graph's rows are doors onto the same history the left pane's are, so they are held on the same answer:
-        // a reset or a drop let go into the middle of a replay is the same accident a switch would be.
-        heldReason: page.doorsHeldWhy
-        repoTab: repoTab
-        workTree: workTree
-        graphModel: graphModel
-        branchesModel: branchesModel
-        worktreesModel: worktreesModel
-        tagsModel: tagsModel
-        branch: workTree.branch
-        oid: commitMenuState.menuOid
-        stashRef: commitMenuState.menuStashRef
-        published: commitMenuState.menuPublished
-        canSwitch: commitMenuState.menuCanSwitch
-        switchAsks: commitMenuState.menuSwitchAsks
-        canSequence: commitMenuState.menuCanSequence
-        canIntegrate: commitMenuState.menuCanIntegrate
-        canEditHistory: commitMenuState.menuCanEditHistory
-        canMoveBranch: commitMenuState.menuCanMoveBranch
-        canBranchHere: commitMenuState.menuCanBranchHere
-        stashCanWrite: commitMenuState.menuStashCanWrite
-        hardResetTakes: commitMenuState.menuHardResetTakes
-        // The same road the row's double-click takes, held on the same answers (`switchToRef`).
-        onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
-        // Straight to the graph row: this menu is only ever raised on one.
-        onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
-        onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
-        onSquashRequested: oidHex => page.squashCommit(oidHex)
-        onDropRequested: oidHex => page.dropCommit(oidHex)
-        onPlanRequested: oidHex => page.startRebasePlan(oidHex)
-        onResetRequested: mode => page.moveBranchHere(mode)
-        onApplyStashRequested: selector => repoTab.applyStash(selector)
-        onPopStashRequested: selector => page.popStash(selector)
-        onDropStashRequested: selector => page.dropStashNow(selector)
-        // The branch card's own three, answered exactly where the ref menu's are.
-        onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
-        onDeleting: (kind, id) => page.showGone(kind, id)
-        onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-        // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
-        // whether it stays now is the pointer's to answer again.
-        onDismissed: rowHost.settleRefList()
+    Loader {
+        id: commitMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: CommitRowMenu {
+            // The graph's rows are doors onto the same history the left pane's are, so they are held on the same
+            // answer: a reset or a drop let go into the middle of a replay is the same accident a switch would be.
+            heldReason: page.doorsHeldWhy
+            repoTab: repoTab
+            workTree: workTree
+            graphModel: graphModel
+            branchesModel: branchesModel
+            worktreesModel: worktreesModel
+            tagsModel: tagsModel
+            branch: workTree.branch
+            oid: commitMenuState.menuOid
+            stashRef: commitMenuState.menuStashRef
+            published: commitMenuState.menuPublished
+            canSwitch: commitMenuState.menuCanSwitch
+            switchAsks: commitMenuState.menuSwitchAsks
+            canSequence: commitMenuState.menuCanSequence
+            canIntegrate: commitMenuState.menuCanIntegrate
+            canEditHistory: commitMenuState.menuCanEditHistory
+            canMoveBranch: commitMenuState.menuCanMoveBranch
+            canBranchHere: commitMenuState.menuCanBranchHere
+            stashCanWrite: commitMenuState.menuStashCanWrite
+            hardResetTakes: commitMenuState.menuHardResetTakes
+            // The same road the row's double-click takes, held on the same answers (`switchToRef`).
+            onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+            // Straight to the graph row: this menu is only ever raised on one.
+            onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
+            onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
+            onSquashRequested: oidHex => page.squashCommit(oidHex)
+            onDropRequested: oidHex => page.dropCommit(oidHex)
+            onPlanRequested: oidHex => page.startRebasePlan(oidHex)
+            onResetRequested: mode => page.moveBranchHere(mode)
+            onApplyStashRequested: selector => repoTab.applyStash(selector)
+            onPopStashRequested: selector => page.popStash(selector)
+            onDropStashRequested: selector => page.dropStashNow(selector)
+            // The branch card's own three, answered exactly where the ref menu's are.
+            onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
+            onDeleting: (kind, id) => page.showGone(kind, id)
+            onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
+            // whether it stays now is the pointer's to answer again.
+            onDismissed: rowHost.settleRefList()
+        }
     }
 
     ClipboardHelper {
@@ -1182,7 +1224,7 @@ Item {
         id: rowHost
         graphPane: graphPane
         currentBranch: workTree.branch
-        menuStanding: commitRowMenu.opened
+        menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
         // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
@@ -1275,7 +1317,9 @@ Item {
     // ---- the harness -----------------------------------------------
     // The whole of this tab's verification harness, which a shipped build does not carry (`HarnessSeat`). Everything
     // the verbs and the measurements act on is handed over here — a module of its own cannot see this one's ids — and
-    // naming them is an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    // naming them is an automation-only exposure, the same one `GraphPane.view` is (app-ui.md). The menus and the
+    // plan's face go over as the seats they are built in rather than as themselves: none exists until it is asked
+    // for, and asking is the harness's to do (`keepBuilt`).
     HarnessSeat {
         id: harness
         anchors.fill: parent
@@ -1298,13 +1342,13 @@ Item {
             detailsPane: detailsPane,
             diffPane: diffPane,
             wipPane: wipPane,
-            planPane: planPane,
+            planSeat: planSeat,
             gitCorner: gitCorner,
-            refRowMenu: refRowMenu,
-            fileRowMenu: fileRowMenu,
-            diffRowMenu: diffRowMenu,
-            commitRowMenu: commitRowMenu,
-            remoteRowMenu: remoteRowMenu,
+            refMenuSeat: refMenuSeat,
+            fileMenuSeat: fileMenuSeat,
+            diffMenuSeat: diffMenuSeat,
+            commitMenuSeat: commitMenuSeat,
+            remoteMenuSeat: remoteMenuSeat,
             rowHost: rowHost,
             clipboard: clipboard,
             commitMenuState: commitMenuState,
@@ -1766,33 +1810,46 @@ Item {
     }
     /// One mark for a failed command and for this tab's error line both. The page's rule, since the mark moves seats.
     readonly property bool commandsWrong: commandsModel.failed || repoTab.lastError !== ""
+    /// The panel itself, or null: it is built into its seat when the log is raised and taken down with it
+    /// (`commandsSeat`), so everything below that reads the panel reads it through here and answers for a log that
+    /// is down with nothing.
+    readonly property var commandsPane: commandsSeat.item
     /// Automation: the colour the `>_` painted — the log's own band while it is up, the pane's foot while it is down.
-    readonly property color commandsMarkColor: page.commandsOpen ? commandsPane.markColor : sidebarPane.commandsMarkColor
+    readonly property color commandsMarkColor:
+        page.commandsPane !== null ? page.commandsPane.markColor : sidebarPane.commandsMarkColor
     /// What the panel is doing rather than what was asked of it — automation reads this one, so a cut binding fails.
-    readonly property bool commandsShown: commandsPane.visible
+    readonly property bool commandsShown: page.commandsPane !== null && page.commandsPane.visible
     /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
     /// Automation only: the header's `Clear`, pressed from outside the panel (`PG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
-        commandsPane.clearPanel()
+        if (page.commandsPane !== null)
+            page.commandsPane.clearPanel()
     }
     /// Automation only: the hand that drags over the log, and the key that takes what it picked
     /// (`PG_AUTO_ACT=commands-select` / `commands-copy`). Both enter the panel's own functions.
     function pickCommandText(fromRow, fromAt, toRow, toAt) {
-        commandsPane.pickText(fromRow, fromAt, toRow, toAt)
+        if (page.commandsPane !== null)
+            page.commandsPane.pickText(fromRow, fromAt, toRow, toAt)
     }
     /// ...and the same hand started on the ground under the last row (`PG_AUTO_ACT=commands-sweep`).
     function sweepCommandGround(fx, fy) {
-        return commandsPane.sweepGround(fx, fy)
+        return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
     }
-    readonly property bool commandsHasGround: commandsPane.hasGround
-    readonly property real commandsGroundTop: commandsPane.groundTop
+    readonly property bool commandsHasGround: page.commandsPane !== null && page.commandsPane.hasGround
+    readonly property real commandsGroundTop: page.commandsPane !== null ? page.commandsPane.groundTop : 0
     function copyCommandText() {
-        return commandsPane.copySelection()
+        return page.commandsPane !== null && page.commandsPane.copySelection()
     }
 
     RepoTab { id: repoTab }
-    CommandsModel { id: commandsModel }
+    CommandsModel {
+        id: commandsModel
+        // The machine's offset from UTC, said before the first row arrives: the panel says it again each time it is
+        // raised (`CommandsPane.tellTheZone`), but the panel is built only when it is raised, and the rows that
+        // arrive before that are stamped as they arrive.
+        Component.onCompleted: commandsModel.setZoneMinutes(new Date().getTimezoneOffset())
+    }
     GraphModel { id: graphModel }
     WorkTreeModel { id: workTree }
     DetailsModel { id: detailsModel }
@@ -1874,7 +1931,7 @@ Item {
         page: page
         sidebarPane: sidebarPane
         rightPane: rightPane
-        commandsPane: commandsPane
+        commandsSeat: commandsSeat
         graphPane: graphPane
         wipPane: wipPane
         detailsPane: detailsPane
@@ -2522,17 +2579,25 @@ Item {
                             onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
                         }
 
-                        RebasePlanPane {
-                            id: planPane
-                            planModel: planModel
-                            selectedOid: page.selectedOid
-                            // The pane has nothing of its own yet — or the run is holding the face it had then. A
-                            // read that *replaces* a standing plan is not this: those rows still answer a question
-                            // somebody asked, and the pane keeps them until the newer answer lands, which is the
-                            // model's own rule (`RebasePlanModel::open`).
-                            waiting: (planModel.loading && !planModel.active) || page.planLoadHeld
-                            discards: page.planDiscards
-                            onRowPicked: oidHex => page.activateRow(oidHex)
+                        // The plan's face is built when it takes the seat and taken down with it: it is a whole pane
+                        // of rows, a band and a menu that a page pays for otherwise, and everything it shows is the
+                        // model's, so nothing is lost in the taking down (rules-refs/app-ui.md — the dialog-seat
+                        // rule). The seat stands in the stack whether or not it holds a face, so the index above
+                        // still names it.
+                        Loader {
+                            id: planSeat
+                            active: page.planShown
+                            sourceComponent: RebasePlanPane {
+                                planModel: planModel
+                                selectedOid: page.selectedOid
+                                // The pane has nothing of its own yet — or the run is holding the face it had then.
+                                // A read that *replaces* a standing plan is not this: those rows still answer a
+                                // question somebody asked, and the pane keeps them until the newer answer lands,
+                                // which is the model's own rule (`RebasePlanModel::open`).
+                                waiting: (planModel.loading && !planModel.active) || page.planLoadHeld
+                                discards: page.planDiscards
+                                onRowPicked: oidHex => page.activateRow(oidHex)
+                            }
                         }
                     }
                 }
@@ -2668,18 +2733,27 @@ Item {
             }
 
             // ---- command log ------------------------------------------
-            // Hidden until asked for, and raised by a failure. Its band is the left menu's last row, carried across.
-            CommandsPane {
-                id: commandsPane
+            // Raised when asked for, and by a failure. Its band is the left menu's last row, carried across.
+            //
+            // **Built when it is raised and taken down when it is shut**, not hidden: the panel is a list with its
+            // own hand, a band and a ruler, and a page whose log is down would otherwise carry all of it
+            // (rules-refs/app-ui.md — the dialog-seat rule). Nothing is lost in the taking down — the rows and the
+            // selection are the model's — and the panel comes back the way it always came up, on its newest row
+            // (`CommandsPane.cameUp`). The seat is what stands in the split, so the split's own properties are its.
+            Loader {
+                id: commandsSeat
                 visible: page.commandsOpen
-                curPage: page
-                commandsModel: commandsModel
-                errorText: repoTab.lastError
+                active: page.commandsOpen
                 SplitView.preferredHeight: 280
                 SplitView.minimumHeight: pageLayout.commandsMinHeight
-                onCloseRequested: page.commandsOpen = false
-                onErrorCleared: repoTab.clearLastError()
-                onCopyRequested: text => clipboard.copy(text)
+                sourceComponent: CommandsPane {
+                    curPage: page
+                    commandsModel: commandsModel
+                    errorText: repoTab.lastError
+                    onCloseRequested: page.commandsOpen = false
+                    onErrorCleared: repoTab.clearLastError()
+                    onCopyRequested: text => clipboard.copy(text)
+                }
             }
         }
     }
