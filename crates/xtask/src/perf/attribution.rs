@@ -576,6 +576,9 @@ mod tests {
         ] {
             assert!(text.contains(table), "{table} missing from:\n{text}");
         }
-        assert!(text.contains("ping.exe"), "{text}");
+        // Case-blind: the kernel names a file object the way whoever
+        // opened it first spelled it, and under a loaded suite the ping
+        // came back as `PING.EXE`.
+        assert!(text.to_ascii_lowercase().contains("ping.exe"), "{text}");
     }
 }
