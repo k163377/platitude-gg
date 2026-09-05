@@ -17,7 +17,7 @@ pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::pr_set;
 pub use labels::{
     co_author_pairs, encode_co_authors, encode_labels, gone_keys, label_key, label_kind_word,
-    label_name_of, label_names, labels_head, labels_shown,
+    label_name_of, label_names, labels_shown,
 };
 pub use markup::{display_ranges, hit_byte};
 pub use rows::{DiffRow, flatten_patches, is_combined, is_new_file, is_unmerged_only};

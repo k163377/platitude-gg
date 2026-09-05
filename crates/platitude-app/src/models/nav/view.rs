@@ -218,25 +218,6 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// The same lookup for a role whose answer is a flag, and `None`
-    /// where no row answers to `text` at all.
-    ///
-    /// Apart from [`Self::told`] because a flag has no spelling — the
-    /// value's `as_str` is empty for one, so a caller that went through
-    /// there could not tell `false` from "no such row" and would read
-    /// every missing row as an answer.
-    pub(super) fn told_flag(&self, known: Role, text: &str, wanted: Role) -> Option<bool> {
-        (0..self.all.len())
-            .filter_map(|at| self.all.entry(at))
-            .map(|of| Row::Shown {
-                of,
-                depth: 0,
-                from: 0,
-            })
-            .find(|row| self.field(*row, known).as_str() == text)
-            .map(|row| self.field(row, wanted).flag())
-    }
-
     /// The path of the other working copy holding `branch` — what
     /// `worktree_holding` answers, and why it answers it, is on the slot.
     ///

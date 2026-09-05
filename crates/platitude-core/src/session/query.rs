@@ -50,24 +50,22 @@ impl DiffRefreshTask {
 }
 
 impl RepoSession {
-    /// Asks how much of `range` a remote already has, so the UI can warn
-    /// before rewriting published history. A read, not a write.
-    pub fn check_publish(self: &Arc<Self>, range: String) {
-        // A repository with no commits has nothing published, and that is
-        // an answer rather than a read: `rev-list --count HEAD^!` on an
-        // unborn branch is `fatal: ambiguous argument` (measured, 2.55), which
-        // would turn the command log red on a repository doing nothing
-        // wrong.
-        if self.known_head_tip() == Some(None) {
-            self.sink.event(SessionEvent::PublishChecked {
-                range,
-                state: publish::PublishState::default(),
-            });
-            return;
-        }
+    /// Asks again how many commits of a plan's range a remote already has
+    /// — the count the plan's preview arrived with
+    /// (`rebase_plan::PlanPreview::published`), re-read after the refs
+    /// moved under the open plan. A read, not a write; the answer names
+    /// the range, so a plan that has since been put away drops it.
+    ///
+    /// A range a plan asked about always starts from HEAD and HEAD has
+    /// commits, so — unlike the one-commit question the walk answers off
+    /// its rows — there is no unborn case to keep off git here.
+    pub fn check_plan_published(self: &Arc<Self>, range: String) {
         self.spawn_read("publish", |s, workdir, cancel| async move {
             let state = publish::state_of(&s.executor, &workdir, &range, &cancel).await?;
-            Ok(SessionEvent::PublishChecked { range, state })
+            Ok(SessionEvent::PlanPublished {
+                range,
+                published: state.published(),
+            })
         });
     }
 
@@ -76,15 +74,24 @@ impl RepoSession {
     /// Kept out of [`Self::load_details`] on purpose: verifying runs gpg or
     /// ssh-keygen, and the details pane has a 100ms budget. The answer
     /// arrives on its own, after the commit is already on screen.
+    ///
+    /// One at a time: a selection that moves on cancels the verification
+    /// the last one started rather than letting two race — the consumer
+    /// already drops the answer about the row left behind, and this
+    /// spares it the process (`session::latest`).
     pub fn check_signature(self: &Arc<Self>, oid: Oid) {
-        self.spawn_read("signature", move |s, workdir, cancel| async move {
-            let signature =
-                identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await?;
-            Ok(SessionEvent::SignatureChecked {
-                oid: oid.to_hex(),
-                signature,
-            })
-        });
+        self.spawn_read_latest(
+            "signature",
+            &self.signature_read,
+            move |s, workdir, cancel| async move {
+                let signature =
+                    identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await?;
+                Ok(SessionEvent::SignatureChecked {
+                    oid: oid.to_hex(),
+                    signature,
+                })
+            },
+        );
     }
 
     /// Loads a unified diff for one file, and its colours behind it.

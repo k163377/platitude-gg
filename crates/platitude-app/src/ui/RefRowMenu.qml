@@ -161,7 +161,8 @@ Item {
         // Asked only where the row that wears it is offered, and asked of the graph — the answer is already there,
         // and the card is about to be measured with it (see `rebasePublished`).
         refRowMenu.rebasePublished =
-            refRowMenu.integrateOffered && refRowMenu.graphModel.rebaseRewritesPublished(oidHex)
+            refRowMenu.integrateOffered
+            && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.workTree.headOid)
         return refMenu.offer()
     }
 
@@ -249,6 +250,7 @@ Item {
             id: branchMenu
             heldReason: refRowMenu.heldReason
             repoTab: refRowMenu.repoTab
+            graphModel: refRowMenu.graphModel
             workTree: refRowMenu.workTree
             branchesModel: refRowMenu.branchesModel
             worktreesModel: refRowMenu.worktreesModel

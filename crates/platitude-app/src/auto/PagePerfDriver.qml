@@ -75,7 +75,7 @@ Item {
         }
         let row = -1
         const oid = PerfProbe.oid !== "" ? PerfProbe.oid
-                    : PerfProbe.selection === "head" ? branchesModel.headOid : ""
+                    : PerfProbe.selection === "head" ? workTree.headOid : ""
         if (oid !== "")
             row = graphModel.rowOf(oid)
         else if (PerfProbe.selection === "first") {

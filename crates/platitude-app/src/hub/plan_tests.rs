@@ -23,6 +23,7 @@ fn preview(from: &str) -> PlanPreview {
         }],
         onto: None,
         onto_ref: String::new(),
+        published: 0,
     }
 }
 
@@ -35,6 +36,7 @@ fn asked(feeds: &Feeds) -> Vec<String> {
             PlanMsg::Loaded { preview } => format!("loaded {}", preview.from),
             PlanMsg::Refused { from, .. } => format!("refused {from}"),
             PlanMsg::Failed { from } => format!("failed {from}"),
+            PlanMsg::Published { range, published } => format!("published {range} {published}"),
         })
         .collect()
 }

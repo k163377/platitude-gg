@@ -16,35 +16,54 @@ impl NavSectionModel {
         // question from whether they moved (see `refs_settled`).
         let mut settled = false;
         let mut moved = false;
-        if let Some(feed) = self.refs_feed.clone()
-            && let Some(snapshot) = feed.drain().pop()
-        {
-            settled = true;
-            // The first snapshot is news whatever it holds: the default
-            // selection is waiting on `refsLoaded`, and a section that is
-            // legitimately empty would otherwise never say so.
-            arrived |= !self.refs_loaded;
-            self.refs_loaded = true;
-            let fresh = !self
-                .last_refs
-                .as_ref()
-                .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
-            if fresh {
-                moved = true;
-                self.last_refs = Some(Arc::clone(&snapshot));
-                arrived |= match self.section.as_str() {
-                    "branches" => {
-                        let head = snapshot.locals.iter().find(|b| b.is_head);
-                        self.head_name = head.map(|b| b.short.to_string()).unwrap_or_default();
-                        self.head_oid = head.map(|b| b.oid.to_hex()).unwrap_or_default();
-                        self.head_has_remote = head.is_some_and(|b| b.has_remote);
-                        self.head_has_pr = head
-                            .is_some_and(|b| crate::encode::pr_set().contains(b.short.as_str()));
-                        self.take(Source::Locals(snapshot))
+        if let Some(feed) = self.refs_feed.clone() {
+            let mut head_moved = false;
+            // In the order the session said them: a snapshot and the
+            // report of where HEAD stands can land in one drain, and
+            // the row the stand-in follows is worked out once both are
+            // in.
+            for msg in feed.drain() {
+                match msg {
+                    RefsMsg::Snapshot(snapshot) => {
+                        settled = true;
+                        // The first snapshot is news whatever it holds:
+                        // the default selection is waiting on
+                        // `refsLoaded`, and a section that is legitimately
+                        // empty would otherwise never say so.
+                        arrived |= !self.refs_loaded;
+                        self.refs_loaded = true;
+                        let fresh = !self
+                            .last_refs
+                            .as_ref()
+                            .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
+                        if fresh {
+                            moved = true;
+                            self.last_refs = Some(Arc::clone(&snapshot));
+                            arrived |= self.take(match self.section.as_str() {
+                                "branches" => Source::Locals(snapshot),
+                                "remotes" => Source::Remotes(snapshot),
+                                _ => Source::Tags(snapshot),
+                            });
+                        }
                     }
-                    "remotes" => self.take(Source::Remotes(snapshot)),
-                    _ => self.take(Source::Tags(snapshot)),
-                };
+                    // Only the branches section is handed this
+                    // (`hub::sink`): the row it highlights and the
+                    // stand-in above it are the record's, not the
+                    // snapshot's.
+                    RefsMsg::Head(head) => {
+                        if self.head_name != head.branch || self.head_oid != head.oid_hex {
+                            self.head_name = head.branch;
+                            self.head_oid = head.oid_hex;
+                            head_moved = true;
+                        }
+                    }
+                }
+            }
+            if head_moved || moved {
+                // A HEAD that moved is another row highlighted, which is
+                // an arrangement of its own; the marks the stand-in wears
+                // follow either side moving.
+                arrived |= self.settle_head_marks() || head_moved;
             }
         }
         if let Some(feed) = self.status_feed.clone()
@@ -95,5 +114,24 @@ impl NavSectionModel {
         if crate::harness::memprobe::enabled() {
             self.note_footprint();
         }
+    }
+
+    /// What the current branch's own row wears — read off the snapshot
+    /// by name, so the stand-in draws what the row it stands for draws.
+    /// Nothing while the branch is not in the snapshot yet (a HEAD
+    /// reported ahead of the first listing, or a branch made since it).
+    /// Answers whether either mark moved.
+    fn settle_head_marks(&mut self) -> bool {
+        let branch = if self.head_name.is_empty() {
+            None
+        } else {
+            self.all.branch_named(&self.head_name)
+        };
+        let has_remote = branch.is_some_and(|b| b.has_remote);
+        let has_pr = branch.is_some() && crate::encode::pr_set().contains(self.head_name.as_str());
+        let changed = (has_remote, has_pr) != (self.head_has_remote, self.head_has_pr);
+        self.head_has_remote = has_remote;
+        self.head_has_pr = has_pr;
+        changed
     }
 }

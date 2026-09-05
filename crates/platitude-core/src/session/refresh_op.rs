@@ -10,32 +10,19 @@
 use super::joins::status_key;
 use super::*;
 
+/// What a standing operation adds to a status
+/// ([`RepoSession::read_standing_op`]).
+struct StandingOp {
+    sides: conflict::Sides,
+    /// The message a stopped merge is about to record; empty unless one
+    /// is standing.
+    op_message: String,
+    /// The sides the pending merge commit will have as parents. `None` is
+    /// "could not tell"; only nothing merging is an answer of no sides.
+    incoming: Option<Vec<Oid>>,
+}
+
 impl RepoSession {
-    /// What a standing merge is bringing in, as the last status read left
-    /// it (see [`RepoSession::merge_incoming`]).
-    pub(super) fn merge_incoming(&self) -> Vec<Oid> {
-        relock(&self.merge_incoming).clone()
-    }
-
-    /// Why the standing rebase stopped, as the last read that could tell
-    /// left it (see [`RepoSession::rebase_stop_seen`]).
-    fn rebase_stop_seen(&self) -> integrate::RebaseStop {
-        relock(&self.rebase_stop_seen).clone()
-    }
-
-    fn set_rebase_stop_seen(&self, stop: integrate::RebaseStop) {
-        *relock(&self.rebase_stop_seen) = stop;
-    }
-
-    /// Records them, answering whether they moved — a merge that started,
-    /// finished or was aborted redraws the WIP row's leashes.
-    fn set_merge_incoming(&self, incoming: Vec<Oid>) -> bool {
-        let mut slot = relock(&self.merge_incoming);
-        let moved = *slot != incoming;
-        *slot = incoming;
-        moved
-    }
-
     /// Publishes what operation is standing and how far it has got, and
     /// nothing else.
     ///
@@ -66,6 +53,77 @@ impl RepoSession {
     /// synthetic WIP row moved: the working tree turned dirty or clean, or
     /// a standing merge changed what it is bringing in.
     ///
+    /// What the badge and the exit card read of a standing rebase — the
+    /// counter and the stop — or the resting pair where none is standing.
+    ///
+    /// A read that could not tell keeps the stop it had, the way the
+    /// merge's sides and the merge tool do: the tick that answered
+    /// `editing: false` in the middle of an `edit` stop would hand the
+    /// exit card's `--skip` back its plain click, and that click is not
+    /// one the reader gets to take back (`Standing`). The counter is not
+    /// held the same way — a stale N/M would be read as progress that
+    /// happened, and the badge losing it for one tick costs nothing.
+    async fn rebase_standing_held(
+        &self,
+        workdir: &std::path::Path,
+        rebasing: bool,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> (Option<conflict::Progress>, integrate::RebaseStop) {
+        if !rebasing {
+            self.standing
+                .set_rebase_stop(integrate::RebaseStop::default());
+            return (None, integrate::RebaseStop::default());
+        }
+        match integrate::rebase_standing(&self.executor, workdir, cancel).await {
+            Ok((progress, stop)) => {
+                self.standing.set_rebase_stop(stop.clone());
+                (progress, stop)
+            }
+            Err(_) => (None, self.standing.rebase_stop()),
+        }
+    }
+
+    /// What a standing operation adds to a status. All three are the rare
+    /// case, read only while something is stopped: the two sides only
+    /// have names then, and only a stopped merge — the one operation
+    /// finished from the commit box — has a message waiting to go in it
+    /// and sides the pending commit will have as parents.
+    async fn read_standing_op(
+        &self,
+        workdir: &std::path::Path,
+        status: &WorkTreeStatus,
+        op_state: &OpState,
+        cancel: &CancellationToken,
+    ) -> StandingOp {
+        let sides = match integrate::InProgress::from_state(op_state) {
+            Some(op) => conflict::sides(
+                &self.executor,
+                workdir,
+                op,
+                status.branch_head.as_deref(),
+                cancel,
+            )
+            .await
+            .unwrap_or_default(),
+            None => conflict::Sides::default(),
+        };
+        let op_message = if op_state.merging {
+            integrate::stopped_message(&self.executor, workdir, cancel).await
+        } else {
+            String::new()
+        };
+        let incoming = if op_state.merging {
+            opstate::merge_heads(&self.executor, workdir, cancel).await
+        } else {
+            Some(Vec::new())
+        };
+        StandingOp {
+            sides,
+            op_message,
+            incoming,
+        }
+    }
+
     /// Does not rebuild the graph itself: after a write the caller knows
     /// whether it needs one anyway, and rebuilding on both counts would do
     /// it twice.
@@ -74,63 +132,39 @@ impl RepoSession {
             return false;
         };
         let op_gen = self.status_gate.begin();
+        // Stamped before git is spawned, the way the refs read is: what
+        // this status saw of HEAD is offered to the one record under it
+        // (`Standing`).
+        let looked = self.standing.stamp();
         let cancel = self.root_cancel.clone();
         let status = status::load(&self.executor, &workdir, &cancel).await;
         let op = opstate::detect(&self.executor, &workdir, &cancel).await;
         match (status, op) {
             (Ok(status), Ok(op_state)) => {
+                // A read that looked before a write ended has nothing to
+                // say for the repository after it — and nothing more to
+                // spend on it either. Read again rather than lost: the
+                // write behind it re-reads the tree only where it moved
+                // the refs, so a status a fetch that brought nothing
+                // fenced would otherwise wait for the next tick.
+                if !self.standing.current(looked) {
+                    self.refresh_status();
+                    return false;
+                }
                 // Only a standing rebase has a counter to read or a stop
                 // to explain, and the two ride one spawn — this runs every
                 // tick for the life of a stop (`integrate::rebase_standing`).
-                //
-                // A read that could not tell keeps the stop it had, the way
-                // the merge's sides and the merge tool do: the tick that
-                // answered `editing: false` in the middle of an `edit` stop
-                // would hand the exit card's `--skip` back its plain click,
-                // and that click is not one the reader gets to take back
-                // (`RepoSession::rebase_stop_seen`). The counter is not
-                // held the same way — a stale N/M would be read as
-                // progress that happened, and the badge losing it for one
-                // tick costs nothing.
-                let (progress, stop) = if op_state.rebasing {
-                    match integrate::rebase_standing(&self.executor, &workdir, &cancel).await {
-                        Ok((progress, stop)) => {
-                            self.set_rebase_stop_seen(stop.clone());
-                            (progress, stop)
-                        }
-                        Err(_) => (None, self.rebase_stop_seen()),
-                    }
-                } else {
-                    self.set_rebase_stop_seen(integrate::RebaseStop::default());
-                    (None, integrate::RebaseStop::default())
-                };
-                // Likewise: the two sides only have names while something
-                // is stopped, which is the rare case. Nothing stopped
-                // means nothing read.
-                let sides = match integrate::InProgress::from_state(&op_state) {
-                    Some(op) => conflict::sides(&self.executor, &workdir, op, &cancel)
-                        .await
-                        .unwrap_or_default(),
-                    None => conflict::Sides::default(),
-                };
-                // Same rarity, same reason: a stopped merge is the one
-                // thing here finished from the commit box, and only then
-                // is there a message waiting to go in it.
-                let op_message = if op_state.merging {
-                    integrate::stopped_message(&self.executor, &workdir, &cancel).await
-                } else {
-                    String::new()
-                };
-                // The sides the pending merge commit will have as parents.
-                // Same rarity again — only a merge has them, so nothing
-                // else pays for the read. `None` is "could not tell", and
-                // only nothing merging is an answer of no sides at all.
-                let incoming = if op_state.merging {
-                    opstate::merge_heads(&self.executor, &workdir, &cancel).await
-                } else {
-                    Some(Vec::new())
-                };
-                // And again: the tool is only worth naming where there is
+                let (progress, stop) = self
+                    .rebase_standing_held(&workdir, op_state.rebasing, &cancel)
+                    .await;
+                let StandingOp {
+                    sides,
+                    op_message,
+                    incoming,
+                } = self
+                    .read_standing_op(&workdir, &status, &op_state, &cancel)
+                    .await;
+                // The tool is only worth naming where there is
                 // something to open with it, so a clean tree pays nothing
                 // — unless the settings field asked, which it does once
                 // per opening rather than once per poll.
@@ -141,7 +175,7 @@ impl RepoSession {
                         .ok()
                         .flatten()
                         .unwrap_or_default();
-                    self.set_merge_tool_seen(read.clone());
+                    self.standing.set_merge_tool(read.clone());
                     read
                 } else {
                     // Not read this time, so repeat the last answer rather
@@ -149,7 +183,7 @@ impl RepoSession {
                     // open would otherwise watch its value evaporate on
                     // the next tick, and a conflict resolved by the tool
                     // takes the name out of the pane it was just used in.
-                    self.merge_tool_seen()
+                    self.standing.merge_tool()
                 };
                 // Where the marks send a push — the branch's own, with the
                 // repository's riding the same read. One short local `git
@@ -178,6 +212,17 @@ impl RepoSession {
                 if !self.status_gate.is_current(op_gen) {
                     return false;
                 }
+                if !self.standing.current(looked) {
+                    self.refresh_status();
+                    return false;
+                }
+                // What this status saw of HEAD, into the one record every
+                // consumer reads it from — before anything below is sent,
+                // so the counts never arrive ahead of the branch they are
+                // about. The number the record then stands at names the
+                // report these counts belong beside.
+                self.observe_head(looked, &status.head());
+                let head_seq = self.standing.head_seq();
                 // The working-tree row stands while the tree is dirty *or*
                 // an operation is — a stop's landing is that row, and the
                 // `edit` stop and the emptied-commit stop both leave the
@@ -191,12 +236,13 @@ impl RepoSession {
                 // Both halves are recorded whatever the other says: they
                 // are what the next read compares against, and a `||` that
                 // skipped the second would leave it behind.
-                let dirt_flipped = self.wip_dirty.swap(dirty, Ordering::SeqCst) != dirty;
+                let dirt_flipped = self.standing.set_wip_dirty(dirty);
                 // A read that could not tell keeps the sides it had: taking
                 // them away would say the merge ended, and the graph would
                 // be rebuilt without its dotted edges only to be rebuilt
                 // again with them on the next tick.
-                let merge_moved = incoming.is_some_and(|sides| self.set_merge_incoming(sides));
+                let merge_moved =
+                    incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
                 let flipped = dirt_flipped || merge_moved;
                 // Reading the pending diffs is the one part of this that
                 // scales with the change rather than with the tree, so it
@@ -217,6 +263,7 @@ impl RepoSession {
                 };
                 self.sink.event(SessionEvent::StatusLoaded {
                     status,
+                    head_seq,
                     op_state,
                     progress,
                     sides,

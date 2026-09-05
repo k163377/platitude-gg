@@ -209,6 +209,21 @@ pub struct HeadState {
     pub detached: bool,
 }
 
+impl HeadState {
+    /// Where HEAD stands, from what a read found of it: the branch it is
+    /// on, and the commit — a commit with no branch being the one shape
+    /// that is detached. The one spelling of that, for the reads that
+    /// report into one record and are compared there
+    /// (`session::standing`).
+    pub fn of(branch: Option<String>, oid: Option<Oid>) -> Self {
+        Self {
+            detached: branch.is_none() && oid.is_some(),
+            branch,
+            oid,
+        }
+    }
+}
+
 /// Reads HEAD out of a listing that already has it, sparing
 /// [`head_state`]'s two processes. `None` means the listing cannot say —
 /// HEAD is detached, or on a branch with no commits yet, and neither has
@@ -268,17 +283,26 @@ pub async fn head_state(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<HeadState, GitError> {
+    // The full name, cut here rather than by `--short`: that shortens to
+    // whatever reads back unambiguously, so a tag of the same name would
+    // spell the branch `heads/x` while the status spells it `x`, and the
+    // one record would take the two for two HEADs.
     let sym = executor
         .run_unchecked(
             GitCommand::new()
                 .cwd(workdir)
                 // Exit 1 is the answer "HEAD is detached".
                 .answers_by_code(1)
-                .args(["symbolic-ref", "-q", "--short", "HEAD"]),
+                .args(["symbolic-ref", "-q", "HEAD"]),
             cancel,
         )
         .await?;
-    let branch = (sym.code == 0).then(|| sym.stdout_utf8().trim().to_string());
+    let branch = (sym.code == 0).then(|| {
+        let full = sym.stdout_utf8().trim().to_string();
+        full.strip_prefix("refs/heads/")
+            .unwrap_or(&full)
+            .to_string()
+    });
 
     let head = executor
         .run_unchecked(
@@ -303,11 +327,7 @@ pub async fn head_state(
         None
     };
 
-    Ok(HeadState {
-        detached: branch.is_none() && oid.is_some(),
-        branch,
-        oid,
-    })
+    Ok(HeadState::of(branch, oid))
 }
 
 /// Splits a remote-tracking display name (`origin/main`) into the remote

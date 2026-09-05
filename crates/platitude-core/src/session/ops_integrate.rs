@@ -14,29 +14,6 @@ use super::*;
 /// one asks.
 static NEXT_PLAN_ASK: AtomicU64 = AtomicU64::new(1);
 
-/// Latest-request ownership for the interactive-rebase plan — the shape
-/// [`super::details_read::DetailsRead`] has for commit details, kept
-/// separate rather than shared because two are not yet three
-/// (.claude/rules/structure.md §共通化).
-#[derive(Default)]
-pub(super) struct PlanRead {
-    cancel: Option<CancellationToken>,
-}
-
-impl PlanRead {
-    /// Takes the next number and cancels whatever ask held the slot.
-    /// Called before the task is spawned, so the number is settled in the
-    /// order the clicks were made rather than the order they finish.
-    fn begin(&mut self, parent: &CancellationToken) -> (u64, CancellationToken) {
-        let generation = NEXT_PLAN_ASK.fetch_add(1, Ordering::Relaxed);
-        let cancel = parent.child_token();
-        if let Some(previous) = self.cancel.replace(cancel.clone()) {
-            previous.cancel();
-        }
-        (generation, cancel)
-    }
-}
-
 impl RepoSession {
     /// Says a write came to rest on a stop rather than on a commit, when
     /// that is what git did ([`SessionEvent::WriteStopped`]).
@@ -148,7 +125,7 @@ impl RepoSession {
     /// replayed. A read like [`RepoSession::check_publish`] — nothing is
     /// touched, so it stays off the write queue.
     ///
-    /// **One ask at a time** ([`PlanRead`]). The screen has one plan, so
+    /// **One ask at a time** ([`Latest::begin_numbered`]). The screen has one plan, so
     /// a second right-click is not a second question but a replacement
     /// for the first: the earlier read is cancelled where it stands —
     /// `from^..HEAD` off a deep commit is a walk of the whole branch, and
@@ -156,7 +133,9 @@ impl RepoSession {
     /// it was already past the point of stopping, is one the numbering
     /// keeps from overtaking the answer the screen is waiting for.
     pub fn ask_rebase_plan(self: &Arc<Self>, from: String) {
-        let (generation, cancel) = relock(&self.plan_read).begin(&self.root_cancel);
+        let (generation, cancel) = self
+            .plan_read
+            .begin_numbered(&self.root_cancel, &NEXT_PLAN_ASK);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let Some(workdir) = s.workdir() else {
@@ -394,14 +373,6 @@ impl RepoSession {
                 settled: true,
             });
         });
-    }
-
-    pub(super) fn merge_tool_seen(&self) -> String {
-        relock(&self.merge_tool_seen).clone()
-    }
-
-    pub(super) fn set_merge_tool_seen(&self, tool: String) {
-        *relock(&self.merge_tool_seen) = tool;
     }
 
     /// Has the next status read name the merge tool even with nothing

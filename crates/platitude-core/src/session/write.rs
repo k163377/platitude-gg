@@ -200,12 +200,21 @@ impl RepoSession {
             )
         };
         let result = run(exec, info, cancel).await;
+        // The write has ended, and nothing that looked at the repository
+        // before this moment may speak for it after: the reads below are
+        // the ones that answer for what the write left, and a poll that
+        // began under it lands stale (`Standing::fence`). The number the
+        // fence answers travels with the write's answer, so a consumer
+        // landing on "the repository as the write left it" arms on the
+        // report the write is owed by name rather than by counting.
+        let head_seq = self.standing.fence();
         let rebuild_graph = match result {
             Ok(()) => {
                 self.sink.event(SessionEvent::WriteFinished {
                     op,
                     error: None,
                     report: None,
+                    head_seq,
                 });
                 matches!(after, AfterWrite::Graph | AfterWrite::Refs)
             }
@@ -219,6 +228,7 @@ impl RepoSession {
                     op,
                     error: Some(error.to_string()),
                     report: None,
+                    head_seq,
                 });
                 return;
             }
@@ -232,6 +242,7 @@ impl RepoSession {
                     op,
                     error: Some(error.to_string()),
                     report,
+                    head_seq,
                 });
                 // A half-finished command still changed the repository
                 // (conflicted merge, interrupted rebase, partial apply),

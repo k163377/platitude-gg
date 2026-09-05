@@ -1,14 +1,15 @@
 //! What the walk knew about each drawn row that no delegate draws: the
-//! marks it left, and the parenthood the lanes only picture.
+//! marks it left, the parenthood the lanes only picture, and the index
+//! a row is found by.
 //!
 //! **Beside the rows rather than on them.** `GraphRowItem` is at the
 //! fifteen fields `#[derive(QModelItem)]` allows, and nothing here is a
 //! role — it is asked for when a menu opens, the way the stash selector
-//! is (`publishedAt` / `rebaseRewritesPublished`). Kept in step with the
-//! rows at the three places they move: cleared in `reset_unnotified`,
-//! extended in `take_chunk`, rebuilt whole in `replace_walk`.
+//! is (`publishedAt` / `rebaseRewritesPublished` / `reaches`). Kept in
+//! step with the rows at the three places they move: cleared in
+//! `reset_unnotified`, extended in `take_chunk`, rebuilt whole in
+//! `replace_walk`.
 
-use platitude_core::Oid;
 use platitude_core::publish::WalkedRow;
 
 use super::*;
@@ -31,23 +32,34 @@ impl GraphModel {
     pub(super) fn clear_marks(&mut self) {
         self.marks.clear();
         self.parent_oids.clear();
+        self.index.clear();
     }
 
     /// Takes the marks off a chunk of walked rows, in the rows' order.
     pub(super) fn extend_marks(&mut self, rows: &[LogRow]) {
         self.marks.reserve(rows.len());
+        self.index.reserve(rows.len());
         for row in rows {
+            // `oid_hex` is `Oid::to_hex` on the way in, so this reads
+            // back. A row that somehow arrived with an id that does not
+            // is answered as the nowhere id the WIP row carries: no range
+            // ends on it and nothing names it as a parent.
+            let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
             self.parent_oids.extend(row.parents.iter().copied());
+            self.index.push((oid, self.marks.len() as u32));
             self.marks.push(RowMark {
-                // `oid_hex` is `Oid::to_hex` on the way in, so this reads
-                // back. A row that somehow arrived with an id that does
-                // not is answered as the nowhere id the WIP row carries:
-                // no range ends on it and nothing names it as a parent.
-                oid: Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized()),
+                oid,
                 published: row.published,
                 parents_end: self.parent_oids.len() as u32,
             });
         }
+        // Sorted once per chunk rather than kept in order per row: the
+        // walk lands in a handful of chunks, and sorting a window is
+        // nothing beside turning its rows into items. The stable sort,
+        // because it finds the runs already in order — everything before
+        // this chunk — and merges the chunk in, rather than sorting the
+        // whole window again per chunk.
+        self.index.sort();
     }
 
     /// The whole window at once, for a pass that replaced it.
@@ -73,7 +85,7 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// The drawn rows as the range question reads them, in walk order.
+    /// The drawn rows as the range questions read them, in walk order.
     pub(super) fn walked_rows(&self) -> impl Iterator<Item = WalkedRow<'_>> {
         self.marks.iter().enumerate().map(|(row, mark)| WalkedRow {
             oid: mark.oid,
@@ -82,17 +94,31 @@ impl GraphModel {
         })
     }
 
-    /// Where the working tree stands, as an id; `None` while HEAD is
-    /// outside the window and no row has it (`head::settle_head`).
-    pub(super) fn head_oid(&self) -> Option<Oid> {
-        usize::try_from(self.head_row)
-            .ok()
-            .and_then(|row| self.marks.get(row))
-            .map(|mark| mark.oid)
-    }
-
     /// Which row an id is drawn on; `None` when none is.
     pub(super) fn row_at(&self, oid: &Oid) -> Option<usize> {
-        self.marks.iter().position(|mark| mark.oid == *oid)
+        self.index
+            .binary_search_by(|(drawn, _)| drawn.cmp(oid))
+            .ok()
+            .and_then(|at| self.index.get(at))
+            .map(|(_, row)| *row as usize)
+    }
+
+    /// The same for an id given as hex — `None` for a string that is no
+    /// id at all, which no row can be drawn for.
+    pub(super) fn row_of_hex(&self, oid_hex: &str) -> Option<usize> {
+        let oid = Oid::from_hex_str(oid_hex).ok()?;
+        self.row_at(&oid)
+    }
+
+    /// Whether `from` reaches `to` off the drawn rows, or `None` where the
+    /// window cannot say (`publish::reaches`). Both ends have to be drawn
+    /// for the rows to say anything, and the index answers that before
+    /// the rows are walked — the branch older than the window, which is
+    /// the one git is then asked about, costs no walk.
+    pub(super) fn reaches_between(&self, from: Oid, to: Oid) -> Option<bool> {
+        if from != to && (self.row_at(&from).is_none() || self.row_at(&to).is_none()) {
+            return None;
+        }
+        platitude_core::publish::reaches(self.walked_rows(), from, to)
     }
 }

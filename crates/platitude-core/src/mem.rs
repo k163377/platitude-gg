@@ -261,6 +261,12 @@ impl Footprint for crate::session::TagItem {
     }
 }
 
+impl Footprint for crate::session::TagDrift {
+    fn heap_bytes(&self) -> usize {
+        self.name.heap_bytes() + self.remote.heap_bytes()
+    }
+}
+
 impl Footprint for crate::refs::HeadState {
     fn heap_bytes(&self) -> usize {
         self.branch.heap_bytes()
@@ -272,6 +278,8 @@ impl Footprint for crate::session::RefsSnapshot {
         self.locals.heap_bytes()
             + self.remotes.heap_bytes()
             + self.tags.heap_bytes()
+            + self.tags_by_name.heap_bytes()
+            + self.tag_drifts.heap_bytes()
             + self.head.heap_bytes()
             + self.remote_names.heap_bytes()
             + self.remote_urls.heap_bytes()

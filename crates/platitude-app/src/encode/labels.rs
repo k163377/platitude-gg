@@ -141,18 +141,6 @@ pub fn labels_shown(packed: &str, gone: &str) -> String {
         .join(&RECORD_SEP.to_string())
 }
 
-/// Whether one of the names in a chip record string is the one the
-/// working tree stands on — the first flag digit, read by its seat the
-/// way `RefChip.recHead` reads it.
-///
-/// The records are sorted with that one first (`joins::label_index`), so
-/// a row that answers `true` here shows it on the chip it draws.
-pub fn labels_head(encoded: &str) -> bool {
-    encoded
-        .split(RECORD_SEP)
-        .any(|record| record.as_bytes().get(1) == Some(&b'1'))
-}
-
 /// Co-authors → `\u{1f}`-joined records of name, address and identicon
 /// code, in that order, separated by [`FIELD_SEP`].
 ///
@@ -219,11 +207,6 @@ mod tests {
             },
         ];
         assert_eq!(encode_no_pr(&labels), "L11010main\u{1f}T00010v1.0");
-        // The seat the head flag is read by, from either end of the list.
-        assert!(labels_head("L11010main\u{1f}T00010v1.0"));
-        assert!(labels_head("T00010v1.0\u{1f}L11010main"));
-        assert!(!labels_head("L01010main\u{1f}T00010v1.0"));
-        assert!(!labels_head(""));
     }
 
     /// The fifth flag, spelled out: the chip is what says a move cannot

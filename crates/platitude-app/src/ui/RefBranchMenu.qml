@@ -19,12 +19,18 @@ AppMenu {
     /// (`worktreeHolding`) — the lists live in those sections alone.
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
+    /// The drawn rows, which answer whether the branch is merged as the menu opens (`reaches`).
+    required property GraphModel graphModel
 
     /// The branch this card is about, frozen by `offerOn`. `kind` is `branch` or `remote`; empty on a row that names
     /// no branch, which is what takes the card off the menu.
     readonly property alias kind: state.kind
     readonly property alias refId: state.refId
     readonly property alias refName: state.refName
+    /// Whether the everyday delete's answer was in hand as the card opened, off the graph's rows, and what it was
+    /// — the automation reads them (`delete-branch-early`); the row reads `refusedRow`.
+    readonly property alias deleteAnswered: state.deleteAnswered
+    readonly property alias deleteMerged: state.deleteMerged
 
     /// The branch git has just refused to delete, while the card that asked is still standing — so the delete row
     /// turns into the held `-D` where the hand already is (デザイン規約 §左メニューの所作). Written by the card itself
@@ -73,6 +79,11 @@ AppMenu {
         property bool canDeleteRemote: false
         property bool canSetUpstream: false
         property bool onCurrentBranch: false
+        /// git's safety valve, answered off the rows as the card opens: whether an answer is in hand, and whether the
+        /// tip is reachable from the branch's reference point. Merged until answered, so a card still waiting on git
+        /// wears the plain row.
+        property bool deleteAnswered: false
+        property bool deleteMerged: true
     }
 
     function offerOn(kind, name, full, oidHex) {
@@ -81,6 +92,8 @@ AppMenu {
         state.refName = name
         state.refId = full
         state.refOid = oidHex
+        state.deleteAnswered = false
+        state.deleteMerged = true
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
             state.remoteDrifted = false
@@ -116,11 +129,22 @@ AppMenu {
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")
         state.onCurrentBranch = offers.includes("current")
-        // Whether the everyday delete would be refused, asked as the menu opens: the unmerged answer usually lands
-        // before the pointer does, and the delete row wears `-D` from the start instead of only after a refused click
-        // (§左メニューの所作). The chip column is settled at open, so the swap moves no other row.
-        if (branchCard.repoTab.state === "open" && kind === "branch" && state.canDelete)
-            branchCard.repoTab.checkBranchDelete(full)
+        // Whether the everyday delete would be refused, answered as the menu opens so the delete row wears `-D` from
+        // the start instead of only after a refused click (§左メニューの所作). Put to the graph's rows first — in hand
+        // in the same frame for every branch the window draws, with git's own reference point worked out on that side
+        // (`GraphModel.branchDeleteMerged`, 規約 §行が読む答えはどこから来るか) — and to git only for a tip or a
+        // reference older than the window, whose answer lands as `branchDeleteAsked` / `branchDeleteMerged`. The chip
+        // column is settled at open, so the swap moves no other row.
+        if (branchCard.repoTab.state === "open" && kind === "branch" && state.canDelete) {
+            const merged = branchCard.graphModel.branchDeleteMerged(
+                oidHex, branchCard.branchesModel.upstreamOidOf(full), branchCard.workTree.headOid)
+            if (merged !== "") {
+                state.deleteMerged = merged === "yes"
+                state.deleteAnswered = true
+            } else {
+                branchCard.repoTab.checkBranchDelete(full)
+            }
+        }
     }
 
     /// Whether an answer that names a branch is about the one this card stands on.
@@ -192,12 +216,13 @@ AppMenu {
         readonly property bool remoteRow: state.kind === "remote"
         readonly property bool branchRow: state.kind === "branch"
         // git already refused `--delete` while this menu stood — or the check run at open came back unmerged, the same
-        // answer a click ahead of time (§左メニューの所作).
+        // answer a click ahead of time (§左メニューの所作): the rows' own where they could say, git's echo otherwise.
         readonly property bool refusedRow:
             branchRow
             && (branchCard.forceDeleteBranch === state.refId
-                || (branchCard.repoTab.branchDeleteAsked === state.refId
-                    && !branchCard.repoTab.branchDeleteMerged))
+                || (state.deleteAnswered ? !state.deleteMerged
+                    : (branchCard.repoTab.branchDeleteAsked === state.refId
+                       && !branchCard.repoTab.branchDeleteMerged)))
         readonly property bool heldRow: remoteRow || refusedRow
         code: refusedRow ? "branch -D"
             : branchRow ? "branch --delete"

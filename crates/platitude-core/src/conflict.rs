@@ -116,10 +116,16 @@ pub struct Sides {
 /// | merge | the current branch | `MERGE_HEAD`, named |
 /// | cherry-pick | the current branch | `CHERRY_PICK_HEAD`, named |
 /// | revert | the current branch | `REVERT_HEAD`, named |
+///
+/// `branch` is the current branch as the status that asks read it —
+/// `None` detached, which names no side and is left to the caller's own
+/// wording. Handed in rather than asked of git again: the status runs
+/// every tick for the life of a stop, and HEAD is what it already read.
 pub async fn sides(
     executor: &GitExecutor,
     workdir: &Path,
     op: InProgress,
+    branch: Option<&str>,
     cancel: &CancellationToken,
 ) -> Result<Sides, GitError> {
     if op == InProgress::Rebase {
@@ -161,19 +167,7 @@ pub async fn sides(
         });
     }
 
-    let head = GitCommand::new()
-        .cwd(workdir)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"]);
-    let ours = executor
-        .run(head, cancel)
-        .await?
-        .stdout_utf8()
-        .trim()
-        .into();
-    // A detached HEAD names itself "HEAD", which says nothing about a
-    // side; better to leave it to the caller's own wording.
-    let ours = if ours == "HEAD" { String::new() } else { ours };
-
+    let ours = branch.unwrap_or_default().to_string();
     let pseudo_ref = match op {
         InProgress::Merge => "MERGE_HEAD",
         InProgress::CherryPick => "CHERRY_PICK_HEAD",

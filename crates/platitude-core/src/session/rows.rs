@@ -67,9 +67,12 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
     }
 }
 
-/// Row counts of one completed log pass. They differ in both directions:
-/// the synthetic WIP row is shown but never walked, and a stash's
-/// synthetic index/untracked parents are walked but never shown.
+/// What one completed log pass has to answer for besides its rows: the
+/// counts, and what it read off HEAD's own row.
+///
+/// The counts differ in both directions: the synthetic WIP row is shown
+/// but never walked, and a stash's synthetic index/untracked parents are
+/// walked but never shown.
 #[derive(Clone, Copy, Default)]
 pub(super) struct LogTotals {
     /// Rows delivered to the UI.
@@ -77,6 +80,23 @@ pub(super) struct LogTotals {
     /// Commits the walk emitted — what `--max-count` limits, so this is
     /// what decides `truncated`.
     pub(super) walked: u32,
+    /// The commit the walk started from; `None` on a branch with no
+    /// commits yet.
+    pub(super) head: Option<Oid>,
+    /// Whether a remote already has that commit, as the walk marked its
+    /// row (`session::published`); `None` where the window stopped short
+    /// of it — which is the one case that has to be asked of git
+    /// (`RepoSession::settle_head_published`).
+    pub(super) head_published: Option<bool>,
+}
+
+impl LogTotals {
+    /// Keeps the mark a row carries where the row is HEAD's own.
+    pub(super) fn note_row(&mut self, oid: &Oid, published: bool) {
+        if self.head == Some(*oid) {
+            self.head_published = Some(published);
+        }
+    }
 }
 
 /// One sifted stream entry (stash rows carry their reflog selector).

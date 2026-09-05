@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use platitude_core::Oid;
 use platitude_core::find::{Query, Row};
 use platitude_core::session::LogRow;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
@@ -29,7 +30,26 @@ pub struct GraphModel {
     /// order — see `marks.rs` for what is in it and why it rides here.
     marks: Vec<RowMark>,
     /// The parent ids the spans in `marks` point into, flattened.
-    parent_oids: Vec<platitude_core::Oid>,
+    parent_oids: Vec<Oid>,
+    /// Every drawn row by its id, in id order — how a row is found from
+    /// outside (`marks::row_at`): the pin's row on every drain, a
+    /// sidebar jump, a menu's question about a commit. A binary search
+    /// rather than a scan of the window per ask. Kept in step with
+    /// `marks` at the same three places.
+    index: Vec<(Oid, u32)>,
+    /// Where HEAD stands, as the one record has it (`GraphMsg::Head`) —
+    /// what the row the pin leads to is found by. `None` until the
+    /// session has reported it. **Not read off the chips**: those arrive
+    /// a pass after the rows, and are one refs read's own picture rather
+    /// than the record's (`session::standing`). A question about a range
+    /// from HEAD is handed the record's value by the asker
+    /// (`rebaseRewritesPublished`), so the rows and the headline never
+    /// answer for two HEADs in one frame.
+    head_oid: Option<Oid>,
+    /// The commit the stand-in is drawn for — HEAD where its row is
+    /// drawn, else the last HEAD whose row was, until a pass lands
+    /// (`head::settle_head`).
+    pinned_oid: Option<Oid>,
     generation: u64,
     loading: bool,
     /// Chip records to leave undrawn — see the property's own note in

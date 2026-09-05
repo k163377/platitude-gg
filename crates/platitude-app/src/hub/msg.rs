@@ -75,22 +75,16 @@ pub enum TabMsg {
         running: bool,
         error: String,
         report: Option<platitude_core::WriteReport>,
+        /// The smallest number the first report of HEAD after this write
+        /// can carry (`SessionEvent::WriteFinished::head_seq`); 0 while
+        /// the write is running. What a landing on the write's tip arms
+        /// on (`WorkTreeModel.headSeq`).
+        head_seq: u64,
     },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {
         local: String,
         start: String,
-    },
-    /// How much of a range a remote already has (rewrite warning).
-    Publish {
-        range: String,
-        total: i32,
-        published: i32,
-    },
-    /// Whether anything besides the current branch still reaches its tip,
-    /// which is what a rewrite here would cost.
-    HeadReach {
-        reached_elsewhere: bool,
     },
     /// Whether a remote already carries a branch name, as of now rather
     /// than as of the last fetch. The question rides along: the box that
@@ -170,9 +164,75 @@ pub enum TabMsg {
     },
 }
 
+/// Where HEAD stands, as the one record has it (`session::standing`) —
+/// the message every consumer that draws something *at* HEAD is handed,
+/// so none of them reads it out of a source of its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadMsg {
+    /// The commit, hex; empty on a branch with no commits yet.
+    pub oid_hex: String,
+    /// The branch, empty when detached or unborn-without-a-name.
+    pub branch: String,
+    pub detached: bool,
+    /// The report's number (`SessionEvent::HeadObserved::seq`): a move,
+    /// or the first read after a write, in the order accepted and across
+    /// sessions. A consumer armed on a write's answer holds the number
+    /// that answer named, and a report at or above it looked after the
+    /// write.
+    pub seq: u64,
+}
+
+impl HeadMsg {
+    pub fn of(head: &platitude_core::refs::HeadState, seq: u64) -> Self {
+        Self {
+            oid_hex: head.oid.map(|o| o.to_hex()).unwrap_or_default(),
+            branch: head.branch.clone().unwrap_or_default(),
+            detached: head.detached,
+            seq,
+        }
+    }
+}
+
+/// The headline consumer's feed (`WorkTreeModel`): where the tree stands
+/// and what the last status found on it — one queue, in the order the
+/// session said them, so the counts never arrive ahead of the branch
+/// they are about.
+#[derive(Debug)]
+pub enum StateMsg {
+    Head(HeadMsg),
+    Status(Box<StatusMsg>),
+    /// Whether a remote already has the commit HEAD is on. `oid_hex` is
+    /// the commit the answer is about, empty on an unborn branch; a
+    /// consumer holding a HEAD this is not yet about shows no warning.
+    HeadPublished {
+        oid_hex: String,
+        published: bool,
+    },
+    /// Whether anything besides the current branch still reaches its
+    /// tip, which is what a rewrite here would cost.
+    HeadReach {
+        reached_elsewhere: bool,
+    },
+}
+
+/// What a sidebar refs section is handed: the snapshot its rows are, and
+/// — for the branches section — where HEAD stands, so the row it
+/// highlights and the stand-in it rides are the one record's
+/// (`session::standing`) rather than the snapshot's own reading.
+#[derive(Debug)]
+pub enum RefsMsg {
+    Snapshot(Arc<RefsSnapshot>),
+    Head(HeadMsg),
+}
+
 /// Graph-model messages (log stream lifecycle).
 #[derive(Debug)]
 pub enum GraphMsg {
+    /// Where HEAD stands — what the row the working tree is on is found
+    /// by, and what a range asked of the rows starts from. Carried on
+    /// this feed rather than read off the chips: the chips arrive a pass
+    /// after the rows, and a move lands before either.
+    Head(HeadMsg),
     Started {
         generation: u64,
     },
@@ -258,6 +318,10 @@ pub struct OpProgressMsg {
 #[derive(Debug)]
 pub struct StatusMsg {
     pub status: WorkTreeStatus,
+    /// The number of the report of HEAD this status stands beside
+    /// (`SessionEvent::StatusLoaded::head_seq`): the counts are about
+    /// the HEAD the consumer holds only while the two numbers agree.
+    pub head_seq: u64,
     pub op_state: OpState,
     /// "commit N of M" while a rebase is stepping.
     pub progress: Option<platitude_core::conflict::Progress>,
@@ -299,6 +363,10 @@ pub enum PlanMsg {
     /// The read failed (the failure itself reaches the error surface);
     /// this puts the model's waiting state down.
     Failed { from: String },
+    /// The count a remote already has of the range, asked again after
+    /// the refs moved under the open plan. Names the range, so a plan
+    /// since put away drops it.
+    Published { range: String, published: i32 },
 }
 
 /// What the diff feed carries. Two messages rather than one, because the

@@ -409,15 +409,18 @@ Item {
     SampleTimer {
         id: earlyDeleteTimer
         onTriggered: {
-            // The row's `code` is never empty on a branch, so it cannot tell "git has not answered yet" from "answered
-            // merged" — both wear `branch --delete`. What readiness there is comes from the echo of the branch asked
-            // about, which the asking clears before the question goes out (app-ui.md §UI 自動化の因果性).
-            if (repoTab.branchDeleteAsked !== Harness.autoActArg)
+            // The row's `code` is never empty on a branch, so it cannot tell "not answered yet" from "answered merged"
+            // — both wear `branch --delete`. The card says whether an answer is in hand: the graph's, in the frame
+            // the card opened (`RefBranchMenu.deleteAnswered`), or git's by the echo of the branch asked about, which
+            // the asking clears before the question goes out (app-ui.md §UI 自動化の因果性).
+            const fromRows = refBranchCard.deleteAnswered
+            if (!fromRows && repoTab.branchDeleteAsked !== Harness.autoActArg)
                 return
             earlyDeleteTimer.stop()
-            Harness.report("delete_early asked="
-                                       + (repoTab.branchDeleteAsked !== "")
-                                       + " merged=" + repoTab.branchDeleteMerged
+            Harness.report("delete_early asked=true"
+                                       + " from=" + (fromRows ? "rows" : "git")
+                                       + " merged=" + (fromRows ? refBranchCard.deleteMerged
+                                                                : repoTab.branchDeleteMerged)
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)
                                        + " note=" + refDeleteItem.note)

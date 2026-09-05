@@ -111,6 +111,72 @@ pub fn range_rewrites_published<'a>(
     false
 }
 
+/// Which commit `branch --delete` measures a branch's tip against —
+/// git's `branch_merged`: the branch's upstream where that resolves, and
+/// HEAD otherwise (measured: `upstream_integration`). `None` where
+/// neither is known, which is no answer rather than "merged".
+pub fn delete_reference(upstream: Option<Oid>, head: Option<Oid>) -> Option<Oid> {
+    upstream.or(head)
+}
+
+/// Whether `from` reaches `to` — whether `to` is an ancestor of `from`,
+/// or `from` itself — answered off rows already on screen, the way
+/// [`range_rewrites_published`] answers its range. What `branch --delete`
+/// asks of its reference point ([`delete_reference`];
+/// `merge-base --is-ancestor <branch> <reference>`), read here so the
+/// delete row can wear `-D` as the menu opens instead of a process later
+/// ([`crate::branch::is_merged_into`] is the same question asked the slow
+/// way).
+///
+/// `rows` is the walk's own order, children before every parent, so one
+/// pass down from `from` is enough: by the time `to`'s row is reached,
+/// every path from `from` that could have carried the colour down to it
+/// has been through here.
+///
+/// **`None` where the window cannot say.** `to` on no row is a commit the
+/// walk stopped short of, and so is a `from` on none; `Some(false)` is
+/// given only where `from` is drawn and `to` was reached without the
+/// colour — either `from` was emitted earlier and none of its ancestors
+/// in between is `to`, or `from` is emitted later, which the order says
+/// is not a descendant.
+pub fn reaches<'a>(
+    rows: impl IntoIterator<Item = WalkedRow<'a>>,
+    from: Oid,
+    to: Oid,
+) -> Option<bool> {
+    if from == to {
+        return Some(true);
+    }
+    let mut pending: HashSet<Oid> = HashSet::from([from]);
+    let mut from_drawn = false;
+    let mut to_drawn = false;
+    for row in rows {
+        if row.oid == to {
+            to_drawn = true;
+            if pending.contains(&to) {
+                return Some(true);
+            }
+            // `from` still ahead in the order, if it is drawn at all, is
+            // not above `to`; the answer then waits only on whether it is
+            // drawn.
+            if from_drawn {
+                return Some(false);
+            }
+            continue;
+        }
+        if row.oid == from {
+            from_drawn = true;
+        }
+        if pending.remove(&row.oid) {
+            pending.extend(row.parents.iter().copied());
+        }
+        if to_drawn && from_drawn {
+            return Some(false);
+        }
+    }
+    (from_drawn && to_drawn).then_some(false)
+}
+
 /// Counts a revision range and the part of it no remote has.
 ///
 /// `range` is anything `git rev-list` accepts — `origin/main..HEAD` for a
@@ -153,6 +219,19 @@ async fn count(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// git's `branch_merged`, as `upstream_integration` measures it: the
+    /// upstream where there is one, HEAD otherwise, and no answer where
+    /// neither is known.
+    #[test]
+    fn the_delete_measures_against_the_upstream_where_there_is_one() {
+        let one = Oid::from_hex_str(&"1".repeat(40)).expect("test oid");
+        let two = Oid::from_hex_str(&"2".repeat(40)).expect("test oid");
+        assert_eq!(delete_reference(Some(one), Some(two)), Some(one));
+        assert_eq!(delete_reference(None, Some(two)), Some(two));
+        assert_eq!(delete_reference(Some(one), None), Some(one));
+        assert_eq!(delete_reference(None, None), None);
+    }
 
     #[test]
     fn published_is_the_remainder() {
@@ -288,5 +367,81 @@ mod tests {
             (3, vec![], false),
         ]);
         assert!(!window.asked(1, 3));
+    }
+
+    impl Window {
+        fn reaches(&self, from: u8, to: u8) -> Option<bool> {
+            let rows: Vec<(Oid, Vec<Oid>, bool)> = self
+                .0
+                .iter()
+                .map(|(id, parents, published)| {
+                    (
+                        oid(*id),
+                        parents.iter().map(|p| oid(*p)).collect(),
+                        *published,
+                    )
+                })
+                .collect();
+            super::reaches(
+                rows.iter().map(|(oid, parents, published)| WalkedRow {
+                    oid: *oid,
+                    parents,
+                    published: *published,
+                }),
+                oid(from),
+                oid(to),
+            )
+        }
+    }
+
+    /// A branch merged into its reference point is one the reference
+    /// reaches — down the first parent or through a merge's other side.
+    #[test]
+    fn a_reference_reaches_the_commits_behind_it() {
+        let stretch = a_local_stretch();
+        assert_eq!(stretch.reaches(1, 3), Some(true));
+        assert_eq!(stretch.reaches(1, 1), Some(true), "a commit reaches itself");
+        assert_eq!(
+            stretch.reaches(3, 1),
+            Some(false),
+            "an older commit does not reach a newer one"
+        );
+        let merged = a_merged_side();
+        assert_eq!(
+            merged.reaches(5, 7),
+            Some(true),
+            "through the merge's second side"
+        );
+        assert_eq!(
+            merged.reaches(6, 7),
+            Some(false),
+            "a sibling is not an ancestor"
+        );
+    }
+
+    /// Two branches side by side, neither reaching the other, are told
+    /// apart from the window not saying — both are drawn.
+    #[test]
+    fn two_drawn_commits_neither_above_the_other_answer_no() {
+        let window = Window(vec![
+            (1, vec![3], false),
+            (2, vec![3], false),
+            (3, vec![], false),
+        ]);
+        assert_eq!(window.reaches(1, 2), Some(false));
+        assert_eq!(window.reaches(2, 1), Some(false));
+    }
+
+    /// A commit the window does not draw cannot be answered for either
+    /// way: the answer is git's to give, not a guess.
+    #[test]
+    fn a_commit_off_the_window_leaves_the_question_open() {
+        let stretch = a_local_stretch();
+        assert_eq!(
+            stretch.reaches(1, 9),
+            None,
+            "the branch is older than the window"
+        );
+        assert_eq!(stretch.reaches(9, 4), None, "the reference is not drawn");
     }
 }

@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
+use crate::publish;
 use crate::sequencer;
 
 /// One commit of the range, as the screen lists it.
@@ -49,6 +50,12 @@ pub struct PlanPreview {
     /// warning asks about this string, so it cannot drift from what the
     /// rebase touches.
     pub range: String,
+    /// How many commits of that range a remote already has, as of this
+    /// read — the `already pushed` count the run button wears. Read with
+    /// the rows rather than asked for afterwards, so the screen opens
+    /// with its warning on; the refs moving under an open plan is what
+    /// asks again ([`crate::session::RepoSession::check_plan_published`]).
+    pub published: u32,
     pub rows: Vec<PlanRow>,
     /// The commit the rows land on, for the screen's own `onto` row.
     /// `None` when `root` — there is nothing under the first commit.
@@ -93,9 +100,10 @@ pub enum PlanAnswer {
 
 /// Reads what a plan from `from` (a full commit id) would be made of.
 ///
-/// Two serial process latencies, not five: the range read carries the
-/// merge answer in its own `%P` field, and the onto row and its branch
-/// name — both about the already-resolved upstream — run side by side
+/// Two serial process latencies, not seven: the range read carries the
+/// merge answer in its own `%P` field, and the onto row, its branch name
+/// and the count a remote already has of the range — all about the
+/// already-resolved range — run side by side
 /// (CLAUDE.md §性能予算: 操作応答 100ms、spawn は 1 本 ~25ms). More go out
 /// only where git says there is nothing under `from`, to tell the
 /// history's first commit from a clone that stops there
@@ -133,13 +141,22 @@ pub async fn preview(
         return Ok(PlanAnswer::Refused(PlanRefusal::OffBranch));
     }
 
-    let (onto, onto_ref) = if root {
-        (None, String::new())
+    // What the remotes already have of the range, beside the base reads:
+    // a warning that arrived a beat after the screen opened would be one
+    // the reader had already pressed past. The count is the answer even
+    // where it could not be read — no warning is what a plan over a
+    // repository with no remote shows, and a read that failed is logged
+    // where every read's failure is.
+    let published = publish::state_of(executor, workdir, &range, cancel);
+    let (onto, onto_ref, published) = if root {
+        let published = published.await;
+        (None, String::new(), published)
     } else {
         let just_the_base = format!("{upstream}^!");
-        let (onto, named) = tokio::join!(
+        let (onto, named, published) = tokio::join!(
             read_rows(executor, workdir, &just_the_base, cancel),
             branch_at(executor, workdir, &upstream, cancel),
+            published,
         );
         // The name is the decoration; the base itself is the answer. The
         // screen already writes the short id where no branch stands there
@@ -150,13 +167,22 @@ pub async fn preview(
             tracing::debug!(%error, "no branch name for the plan's base; its id stands in");
             String::new()
         });
-        (onto?.rows.pop(), named)
+        (onto?.rows.pop(), named, published)
+    };
+    let published = match published {
+        Ok(state) => state.published(),
+        Err(error) if error.is_cancelled() => return Err(error),
+        Err(error) => {
+            tracing::warn!(%error, "could not count what a remote has of the plan's range");
+            0
+        }
     };
     Ok(PlanAnswer::Plan(Box::new(PlanPreview {
         from: from.to_string(),
         upstream,
         root,
         range,
+        published,
         rows: read.rows,
         onto,
         onto_ref,

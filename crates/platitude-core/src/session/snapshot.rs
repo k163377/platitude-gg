@@ -4,11 +4,23 @@
 use super::*;
 
 /// Sidebar-ready refs snapshot (sorted).
+///
+/// **Keyed by name as well as listed.** The rows are what the sidebar
+/// draws; the lookups ([`Self::local_named`] and the two beside it) are
+/// what a menu asks as it opens — which remote a branch speaks for, which
+/// sides a tag stands on — and a walk over fifty thousand rows per
+/// question is what the budget rules out (CLAUDE.md 性能予算 — ref 同士の
+/// 突き合わせは索引を 1 本作ってから回す). Branches are sorted by name
+/// already; tags are sorted for the eye (newest first) and carry a second
+/// order for the lookup.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RefsSnapshot {
     pub locals: Vec<BranchItem>,
     pub remotes: Vec<BranchItem>,
     pub tags: Vec<TagItem>,
+    /// `tags` in name order, as indices into it — the lookup's half of a
+    /// list the eye reads newest-first. Four bytes a tag.
+    pub tags_by_name: Vec<u32>,
     /// Tags this repository holds that a remote carries on some other
     /// commit. A run of its own rather than a field on every
     /// [`TagItem`]: a name standing on two commits is rare, and 45,901
@@ -29,6 +41,55 @@ pub struct RefsSnapshot {
     pub push_default: Option<crate::remote::PushDefault>,
 }
 
+impl RefsSnapshot {
+    /// The local branch called `short`, by binary search over the sorted
+    /// list.
+    pub fn local_named(&self, short: &str) -> Option<&BranchItem> {
+        Self::branch_named(&self.locals, short)
+    }
+
+    /// The remote-tracking branch shown as `short` (`origin/main`).
+    pub fn remote_named(&self, short: &str) -> Option<&BranchItem> {
+        Self::branch_named(&self.remotes, short)
+    }
+
+    /// The tag called `short`, through the name-ordered index.
+    pub fn tag_named(&self, short: &str) -> Option<&TagItem> {
+        self.tags_by_name
+            .binary_search_by(|at| {
+                self.tags
+                    .get(*at as usize)
+                    .map_or(std::cmp::Ordering::Less, |tag| {
+                        tag.short.as_str().cmp(short)
+                    })
+            })
+            .ok()
+            .and_then(|found| self.tags_by_name.get(found))
+            .and_then(|at| self.tags.get(*at as usize))
+    }
+
+    fn branch_named<'a>(sorted: &'a [BranchItem], short: &str) -> Option<&'a BranchItem> {
+        sorted
+            .binary_search_by(|branch| branch.short.as_str().cmp(short))
+            .ok()
+            .and_then(|at| sorted.get(at))
+    }
+
+    /// Builds the name-ordered index over `tags`, once the tags are in
+    /// their own order. Called by whoever last sorted them — the joins
+    /// here, and a test that builds a snapshot by hand.
+    pub fn index_tags(&mut self) {
+        let mut by_name: Vec<(&str, u32)> = self
+            .tags
+            .iter()
+            .enumerate()
+            .map(|(at, tag)| (tag.short.as_str(), at as u32))
+            .collect();
+        by_name.sort_unstable();
+        self.tags_by_name = by_name.into_iter().map(|(_, at)| at).collect();
+    }
+}
+
 /// One sidebar branch row.
 ///
 /// The commit is kept as an [`Oid`] and spelled out where it is shown.
@@ -47,6 +108,14 @@ pub struct BranchItem {
     /// wherever the two stand — the one its badge is about, and the one a
     /// rename offers to carry over. Empty when it speaks for none.
     pub upstream: crate::Name,
+    /// The commit the configured upstream stands on — that reading, or
+    /// under `remote = .` a branch here — and `None` where the branch has
+    /// none or the ref it names is not in the listing. **The reference
+    /// point `branch --delete` measures the tip against** (git's
+    /// `branch_merged`: the upstream where it resolves, HEAD otherwise),
+    /// so a menu can answer the safety valve off the drawn rows
+    /// (`publish::reaches`) with exactly git's two halves.
+    pub upstream_oid: Option<Oid>,
     /// That reading stands on **another commit**. The pair is then two
     /// rows on the graph rather than one folded chip
     /// ([`crate::refs::RemoteBranches::folded_into_local`]), and the

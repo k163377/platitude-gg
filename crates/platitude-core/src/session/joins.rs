@@ -24,6 +24,9 @@ pub(super) struct RefJoins<'a> {
     /// Where each tag this repository holds points, by short name. Answers
     /// both "is this name here" and "is it on the same commit as there".
     tag_commit: HashMap<&'a str, Oid>,
+    /// Where each local branch points, by refname — for the one upstream
+    /// the remote index cannot answer, a branch here (`remote = .`).
+    local_commit: HashMap<&'a str, Oid>,
     /// The branches other working copies have checked out. A third join
     /// on the same listing, and the reason it is here rather than in the
     /// app: **the sidebar row and the graph chip ask the same question**,
@@ -47,12 +50,31 @@ impl<'a> RefJoins<'a> {
             .filter(|r| r.kind == RefKind::Tag)
             .map(|r| (r.short.as_str(), r.commit_oid()))
             .collect();
+        let local_commit = refs
+            .iter()
+            .filter(|r| r.kind == RefKind::LocalBranch)
+            .map(|r| (r.name.as_str(), r.commit_oid()))
+            .collect();
         Self {
             remotes,
             folded,
             tag_commit,
+            local_commit,
             held,
         }
+    }
+
+    /// The commit a local branch's configured upstream stands on, or
+    /// `None` where it has none or the ref it names is not in the listing
+    /// — git's own two halves of `branch --delete`'s reference point
+    /// (`BranchItem::upstream_oid`). The remote index answers first; a
+    /// branch here is the one upstream it does not hold.
+    fn upstream_commit(&self, r: &RefEntry) -> Option<Oid> {
+        if let Some(remote) = self.remotes.spoken_for(r) {
+            return Some(remote.commit_oid());
+        }
+        let up = r.upstream.as_deref()?;
+        self.local_commit.get(up).copied()
     }
 
     /// Whether another working copy has this ref out. Only a local branch
@@ -280,6 +302,7 @@ pub(super) fn build_snapshot(
                     has_remote: spoken.is_some(),
                     is_head: r.is_head,
                     upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
+                    upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
                     held_elsewhere: joins.held_elsewhere(r),
                 });
@@ -291,6 +314,7 @@ pub(super) fn build_snapshot(
                 has_remote: true,
                 is_head: false,
                 upstream: crate::Name::default(),
+                upstream_oid: None,
                 // The setting is the local branch's, so this side has
                 // none to have drifted from.
                 upstream_drifted: false,
@@ -357,6 +381,8 @@ pub(super) fn build_snapshot(
     snapshot.locals.shrink_to_fit();
     snapshot.remotes.shrink_to_fit();
     snapshot.tags.shrink_to_fit();
+    // The lookup's order over the tags, taken once they are in the eye's.
+    snapshot.index_tags();
     // Looked up by name and remote when a menu opens over a tag, so it is
     // sorted the once here rather than scanned every time.
     snapshot

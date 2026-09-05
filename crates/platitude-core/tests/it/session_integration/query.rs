@@ -566,29 +566,29 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     session.close();
 }
 
-/// The publish check answers through its own event, so a UI can warn
-/// before rewriting history a remote already has.
+/// The count of what a remote already has of a plan's range answers
+/// through its own event, echoing the range, so the plan that asked can
+/// tell the answer from one about a plan since put away.
 #[tokio::test(flavor = "multi_thread")]
-async fn publish_check_answers_through_the_session() {
+async fn a_plans_published_count_answers_through_the_session() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
 
     let (sink, session) = opened(&repo).await;
 
-    session.check_publish("HEAD~1..HEAD".into());
-    let state = sink
-        .wait_for("PublishChecked", |evs| {
+    session.check_plan_published("HEAD~1..HEAD".into());
+    let published = sink
+        .wait_for("PlanPublished", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::PublishChecked { range, state } if range == "HEAD~1..HEAD" => {
-                    Some(*state)
+                SessionEvent::PlanPublished { range, published } if range == "HEAD~1..HEAD" => {
+                    Some(*published)
                 }
                 _ => None,
             })
         })
         .await;
-    assert_eq!(state.total, 1);
-    assert!(!state.rewrites_published(), "nothing is on a remote");
+    assert_eq!(published, 0, "nothing is on a remote");
     session.close();
 }
 

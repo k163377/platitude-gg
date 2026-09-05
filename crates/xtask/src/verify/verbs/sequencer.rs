@@ -253,15 +253,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_details_held row=1 oid=true outside=true diff=false centre=graph",
     },
-    // And the question the standing plan was refusing to ask: whether a
-    // remote already has the commit is asked on the *edge* of the boxes
-    // being written into, and the plan spent that edge. Typing again after
-    // it closes has to raise a new one — nothing in the picture says
-    // whether the range was ever asked about.
+    // And the warning the standing plan was keeping off the boxes: whether
+    // a remote already has the commit rides beside HEAD rather than being
+    // asked on the edge of typing, so a plan that stood over the boxes
+    // cannot have spent it. Typing again after it closes has to find the
+    // boxes dirty on HEAD's own row — nothing in the picture says which
+    // commit the warning is about.
     Verb {
         name: "plan-reword-ask",
         when: &[],
-        plain: "plan_reword_ask dirty=true asked=true",
+        plain: "plan_reword_ask dirty=true onhead=true",
     },
     // The far end of the same stop, and of every other exit-card row:
     // where putting the operation down leaves the reader. The face it

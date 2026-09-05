@@ -13,8 +13,22 @@ impl GraphModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
+        // Whether anything the bindings read moved. A report of HEAD that
+        // found it where it was — the first read after every write sends
+        // one — moves nothing here, and waking every binding on the
+        // footer for it is a sweep per write for no change.
+        let mut changed = false;
         for msg in feed.drain() {
             match msg {
+                // Read as sent, with no generation to check: where HEAD
+                // stands is the repository's, not one stream's, and a
+                // stream starting over does not move it.
+                GraphMsg::Head(head) => {
+                    let head = Oid::from_hex_str(&head.oid_hex).ok();
+                    changed |= self.head_oid != head;
+                    self.head_oid = head;
+                    continue;
+                }
                 GraphMsg::Started { generation } => self.start_walk(generation),
                 GraphMsg::Chunk { generation, rows } => self.take_chunk(generation, &rows),
                 GraphMsg::Labels { generation, rows } => self.take_labels(generation, rows),
@@ -42,12 +56,21 @@ impl GraphModel {
                 // takes it back from the same place (`log::tell_graph_stale`).
                 GraphMsg::Stale { stale } => self.stale = stale,
             }
+            changed = true;
         }
-        self.settle_head();
+        changed |= self.settle_head();
         if crate::harness::memprobe::enabled() {
             crate::harness::memprobe::note("graph-rows", self.tab_id, &self.rows);
+            crate::harness::memprobe::note_bytes(
+                "graph-index",
+                self.tab_id,
+                self.index.capacity() * size_of::<(Oid, u32)>(),
+                self.index.len(),
+            );
         }
-        self.stats_changed();
+        if changed {
+            self.stats_changed();
+        }
     }
 
     fn start_walk(&mut self, generation: u64) {
@@ -147,6 +170,10 @@ impl GraphModel {
             self.rows.shrink_to_fit();
             self.marks.shrink_to_fit();
             self.parent_oids.shrink_to_fit();
+            self.index.shrink_to_fit();
+            // A pass landed: the stand-in follows HEAD from here, drawn
+            // or not (`settle_head`).
+            self.pinned_oid = None;
             tracing::info!(total, elapsed_ms, truncated, "graph stream finished");
         }
     }
@@ -184,6 +211,9 @@ impl GraphModel {
         // The whole graph, so the marks are the whole graph's too —
         // written before the splice churns `rows` into the same shape.
         self.replace_marks(rows);
+        // A pass landed: the stand-in follows HEAD from here, drawn or
+        // not (`settle_head`).
+        self.pinned_oid = None;
         self.splice_notified(items);
         debug_assert_eq!(self.marks.len(), self.rows.len());
         let loaded = self.rows.len() as i32;

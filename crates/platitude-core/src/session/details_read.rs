@@ -1,25 +1,10 @@
-//! Latest-request ownership for commit details.
+//! The commit details read: one at a time, and numbered
+//! ([`Latest::begin_numbered`]).
 use super::*;
 
 // Feeds can outlive a closed/reopened session. An old sink must never carry
 // a larger identity than a new session's request into the same consumer.
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Default)]
-pub(super) struct DetailsRead {
-    cancel: Option<CancellationToken>,
-}
-
-impl DetailsRead {
-    fn begin(&mut self, parent: &CancellationToken) -> (u64, CancellationToken) {
-        let generation = NEXT_REQUEST.fetch_add(1, Ordering::Relaxed);
-        let cancel = parent.child_token();
-        if let Some(previous) = self.cancel.replace(cancel.clone()) {
-            previous.cancel();
-        }
-        (generation, cancel)
-    }
-}
 
 /// The task has finished, including delivery to its sink.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,7 +42,9 @@ impl RepoSession {
     /// can race with a result that has already entered the sink.
     pub fn load_details(self: &Arc<Self>, oid: Oid) -> Option<DetailsTask> {
         let workdir = self.workdir()?;
-        let (generation, cancel) = relock(&self.details_read).begin(&self.root_cancel);
+        let (generation, cancel) = self
+            .details_read
+            .begin_numbered(&self.root_cancel, &NEXT_REQUEST);
         let (send, done) = tokio::sync::oneshot::channel();
         let task = DetailsTask { generation, done };
         let session = Arc::clone(self);

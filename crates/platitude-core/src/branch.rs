@@ -271,28 +271,6 @@ pub async fn set_upstream(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// The configured upstream of a local branch, as the full refname
-/// (`refs/remotes/origin/main`), or `None` where none is configured.
-///
-/// This is the reference point `branch --delete` measures "merged"
-/// against; without one the measure falls back to HEAD, and that choice
-/// stays with the caller — it is the one rule of git's not answered by
-/// git here.
-pub async fn upstream_of(
-    executor: &GitExecutor,
-    workdir: &Path,
-    name: &str,
-    cancel: &CancellationToken,
-) -> Result<Option<String>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["for-each-ref", "--format=%(upstream)"])
-        .arg(format!("refs/heads/{name}"));
-    let out = executor.run(cmd, cancel).await?;
-    let upstream = out.stdout_utf8().trim().to_string();
-    Ok((!upstream.is_empty()).then_some(upstream))
-}
-
 /// True when every commit of `rev` is already reachable from `into`.
 ///
 /// This is what makes deleting a branch safe; the UI asks before offering

@@ -26,14 +26,17 @@ fn a_filtered_remote_row_shows_its_whole_name() {
 /// of the row it stands for, and none at all while there is no such row.
 #[test]
 fn the_head_row_reports_the_fold_its_stand_in_takes() {
+    // The row is the one the record names (`RefsMsg::Head`), not the
+    // one the snapshot marks.
     let branches = |head: &str| {
         let mut model = section(
             "branches",
             Source::Locals(locals(vec![
-                local("feature/topic-a", head == "feature/topic-a"),
-                local("main", head == "main"),
+                local("feature/topic-a", false),
+                local("main", false),
             ])),
         );
+        model.head_name = head.to_string();
         model.arrange();
         model
     };

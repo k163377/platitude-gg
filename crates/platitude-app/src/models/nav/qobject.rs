@@ -196,9 +196,26 @@ impl NavSectionModel {
     }
 
     /// Commit id of the ref with this name; empty when there is none.
+    ///
+    /// The ref sections answer through the snapshot's name index
+    /// (`Source::branch_named` / `tag_named`) — a menu opening over a
+    /// row must not walk fifty thousand rows for it. The rest are
+    /// short lists and answer the general way.
     #[qslot]
     pub(super) fn oid_of_name(&self, name: String) -> String {
-        self.told(Role::Name, &name, Role::OidHex)
+        match &self.all {
+            Source::Locals(_) | Source::Remotes(_) => self
+                .all
+                .branch_named(&name)
+                .map(|branch| branch.oid.to_hex())
+                .unwrap_or_default(),
+            Source::Tags(_) => self
+                .all
+                .tag_named(&name)
+                .map(|tag| tag.oid.to_hex())
+                .unwrap_or_default(),
+            _ => self.told(Role::Name, &name, Role::OidHex),
+        }
     }
 
     /// Which row on show this ref sits on; -1 when it is on none. What a
@@ -212,7 +229,25 @@ impl NavSectionModel {
     /// it speaks for none, and for every section but the branches.
     #[qslot]
     fn upstream_of(&self, name: String) -> String {
-        self.told(Role::Name, &name, Role::Upstream)
+        self.all
+            .branch_named(&name)
+            .map(|branch| branch.upstream.as_str().to_string())
+            .unwrap_or_default()
+    }
+
+    /// The commit this branch's configured upstream stands on, hex —
+    /// **the reference point `branch --delete` measures the tip against**
+    /// (`BranchItem::upstream_oid`); empty where the branch has none or
+    /// the ref it names is not there, which is where git measures against
+    /// HEAD instead. What the branch card puts to the graph's rows as the
+    /// menu opens (`GraphModel.reaches`).
+    #[qslot]
+    fn upstream_oid_of(&self, name: String) -> String {
+        self.all
+            .branch_named(&name)
+            .and_then(|branch| branch.upstream_oid)
+            .map(|oid| oid.to_hex())
+            .unwrap_or_default()
     }
 
     /// Whether that reading stands on another commit
@@ -226,8 +261,9 @@ impl NavSectionModel {
     /// where it is deleted from.
     #[qslot]
     fn upstream_drifted(&self, name: String) -> bool {
-        self.told_flag(Role::Name, &name, Role::UpstreamDrifted)
-            .unwrap_or(false)
+        self.all
+            .branch_named(&name)
+            .is_some_and(|branch| branch.upstream_drifted)
     }
 
     /// Which sides the tag with this name stands on — `here` / `remote` /
@@ -248,13 +284,10 @@ impl NavSectionModel {
         }
         // No row of this name at all — a section that has not been read
         // yet, or a name this one does not carry.
-        let Some(only_remote) = self.told_flag(Role::Name, &name, Role::OnlyRemote) else {
+        let Some(tag) = self.all.tag_named(&name) else {
             return String::new();
         };
-        let carried = self
-            .told_flag(Role::Name, &name, Role::HasRemote)
-            .unwrap_or(false);
-        match (only_remote, carried) {
+        match (!tag.here, tag.has_remote) {
             (true, _) => "remote".to_string(),
             (false, true) => "both".to_string(),
             (false, false) => "here".to_string(),

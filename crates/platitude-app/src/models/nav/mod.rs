@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::{Feed, Hub, StatusMsg, attached};
+use crate::hub::{Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
 use super::qml_register;
@@ -90,10 +90,17 @@ pub struct NavSectionModel {
     /// because the run does (`Bucket::run`), which is what keeps the
     /// heading's number and the rows under it one rule.
     run_files: i32,
-    /// Current branch (branches section only) — feeds the sticky row
-    /// that stands in for it while its own row is scrolled off.
+    /// Current branch (branches section only), as the one record has it
+    /// (`RefsMsg::Head`, the report every consumer at HEAD is handed —
+    /// `hub::sink`). What the highlighted row is found by
+    /// (`Role::IsHead`), and what the sticky row that stands in for it
+    /// while its own row is scrolled off says. **Not read off the
+    /// snapshot**: that is one refs read's picture, and a status read
+    /// that landed since may already have moved HEAD.
     head_name: String,
     head_oid: String,
+    /// What that branch's own row wears, read off the snapshot by name
+    /// once both are in hand (`drain::settle_head_marks`).
     head_has_remote: bool,
     head_has_pr: bool,
     /// Visible row of the current entry, or -1 when it has none (a
@@ -139,7 +146,7 @@ pub struct NavSectionModel {
     /// pointer is the whole check — the rows are not rebuilt to discover
     /// they are identical.
     last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
-    refs_feed: Option<Arc<Feed<Arc<platitude_core::session::RefsSnapshot>>>>,
+    refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
     worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,

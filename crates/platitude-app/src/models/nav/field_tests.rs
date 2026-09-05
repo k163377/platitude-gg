@@ -106,7 +106,7 @@ fn a_tag_row_says_which_sides_its_name_stands_on() {
     assert_eq!(model.tag_sides("v-theirs".into()), "remote");
     // **Not `here`.** A name no row carries has to be told from one that
     // is only local, or a section still loading would offer the everyday
-    // delete on a tag nobody has (`told_flag` answers `None`, not false).
+    // delete on a tag nobody has (`tag_named` answers `None`, not a tag).
     assert_eq!(model.tag_sides("v-nobody".into()), "");
     assert_eq!(model.tag_sides(String::new()), "");
 }
@@ -288,6 +288,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         has_remote: false,
         is_head: false,
         upstream: "".into(),
+        upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: held,
     };
@@ -295,6 +296,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         locals: vec![local("main", false), local("feature/topic-a", true)],
         remotes: Vec::new(),
         tags: Vec::new(),
+        tags_by_name: Vec::new(),
         tag_drifts: Vec::new(),
         head: None,
         remote_names: Vec::new(),

@@ -31,6 +31,7 @@ pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
         has_remote: true,
         is_head: false,
         upstream: "".into(),
+        upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
     }
@@ -44,6 +45,7 @@ pub(super) fn local(short: &str, is_head: bool) -> platitude_core::session::Bran
         has_remote: false,
         is_head,
         upstream: "".into(),
+        upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
     }
@@ -71,16 +73,20 @@ pub(super) fn drifted(
     tags: Vec<platitude_core::session::TagItem>,
     tag_drifts: Vec<platitude_core::session::TagDrift>,
 ) -> Arc<platitude_core::session::RefsSnapshot> {
-    Arc::new(platitude_core::session::RefsSnapshot {
+    let mut snapshot = platitude_core::session::RefsSnapshot {
         locals: Vec::new(),
         remotes,
         tags,
+        tags_by_name: Vec::new(),
         tag_drifts,
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
         push_default: None,
-    })
+    };
+    // The index the name lookups go through, the way the joins build it.
+    snapshot.index_tags();
+    Arc::new(snapshot)
 }
 
 pub(super) fn section(kind: &str, all: Source) -> NavSectionModel {

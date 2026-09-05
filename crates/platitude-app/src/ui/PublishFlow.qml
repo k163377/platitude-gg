@@ -65,8 +65,10 @@ Item {
     /// repository's — `elsewhere` is about wherever `pushTargetLabel` says the push is going. The counts behind this
     /// come from the last fetch, so they prove the negative only: a push may still be refused when they say it fits.
     readonly property string pushState:
-        publishFlow.repoTab.state !== "open" ? "closed"
-        : GitFacts.pushStanding(publishFlow.workTree.loaded && publishFlow.workTree.headOid === "",
+        // Closed as well while the counts are not yet about the branch HEAD is on (`WorkTreeModel.countsSettled`):
+        // between a move of HEAD and the status read behind it, the branch is named and its standing is not.
+        publishFlow.repoTab.state !== "open" || !publishFlow.workTree.countsSettled ? "closed"
+        : GitFacts.pushStanding(publishFlow.workTree.unborn,
                                 publishFlow.workTree.detached, publishFlow.workTree.branch,
                                 publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
                                 publishFlow.workTree.ahead, publishFlow.workTree.behind,

@@ -130,18 +130,6 @@ impl RepoTab {
                         self.fetch_settled(&error, announce);
                     }
                 }
-                TabMsg::Publish {
-                    range,
-                    total,
-                    published,
-                } => {
-                    self.publish_range = range;
-                    self.publish_total = total;
-                    self.publish_published = published;
-                }
-                TabMsg::HeadReach { reached_elsewhere } => {
-                    self.head_reached_elsewhere = reached_elsewhere;
-                }
                 TabMsg::MoveNeedsAsk { local, start } => {
                     self.move_ask_local = local;
                     self.move_ask_start = start;
@@ -163,6 +151,7 @@ impl RepoTab {
                     running,
                     error,
                     report,
+                    head_seq,
                 } => {
                     if running {
                         self.busy_count += 1;
@@ -176,7 +165,7 @@ impl RepoTab {
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(op, error, report);
+                        self.settle_write(op, error, report, head_seq);
                     }
                 }
             }
@@ -230,6 +219,7 @@ impl RepoTab {
         op: String,
         error: String,
         report: Option<platitude_core::WriteReport>,
+        head_seq: u64,
     ) {
         self.busy_count = (self.busy_count - 1).max(0);
         if self.busy_count == 0 {
@@ -334,6 +324,7 @@ impl RepoTab {
             stopped: self.last_write_stopped,
             failed: !landed,
             at_tip: self.write_at_tip,
+            head_seq: i32::try_from(head_seq).unwrap_or(i32::MAX),
         });
         self.last_write_error = error;
     }

@@ -54,7 +54,10 @@ impl RepoSession {
         let mut sifter = Sifter::new(&stash_refs);
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
-        let mut totals = LogTotals::default();
+        let mut totals = LogTotals {
+            head: Some(head_tip),
+            ..LogTotals::default()
+        };
 
         // Something to commit: prepend the synthetic WIP row so the
         // current chain owns lane 0 from the very first paint.
@@ -81,9 +84,8 @@ impl RepoSession {
                 };
                 if pending.len() >= threshold {
                     let items = sifter.take(&mut pending);
-                    totals.shown += items.len() as u32;
                     first_sent = true;
-                    self.emit_rows(generation, &items, parser.pool());
+                    self.emit_rows(generation, &items, parser.pool(), &mut totals);
                 }
             })
             .await;
@@ -96,8 +98,7 @@ impl RepoSession {
             .map_err(|e| unreadable_walk(e.to_string()))?;
         if !pending.is_empty() {
             let items = sifter.take(&mut pending);
-            totals.shown += items.len() as u32;
-            self.emit_rows(generation, &items, parser.pool());
+            self.emit_rows(generation, &items, parser.pool(), &mut totals);
         }
         totals.walked = sifter.walked;
         Ok(totals)
@@ -106,9 +107,9 @@ impl RepoSession {
     /// Buffered variant of [`RepoSession::stream_log`]: rows accumulate
     /// into the caller's builder/vec without touching shared state or the
     /// sink (used by every offscreen rebuild — the tag-inclusive swap
-    /// pass and `refresh_log`'s background refreshes). Returns the number
-    /// of commits the walk emitted (what `--max-count` limits — the shown
-    /// row count is `out.len()`).
+    /// pass and `refresh_log`'s background refreshes). The shown row
+    /// count is `out.len()`; what comes back is the rest of what the pass
+    /// has to answer for ([`LogTotals`]).
     pub(super) async fn collect_log(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -117,7 +118,7 @@ impl RepoSession {
         builder: &mut GraphBuilder,
         marks: &mut PublishMarks,
         out: &mut Vec<LogRow>,
-    ) -> Result<u32, GitError> {
+    ) -> Result<LogTotals, GitError> {
         // An unborn HEAD has nothing to log (see stream_log).
         let head_tip = match self.known_head_tip() {
             Some(tip) => tip,
@@ -128,7 +129,11 @@ impl RepoSession {
             if self.pending_commit().is_some() {
                 out.push(super::rows::wip_root_row(builder));
             }
-            return Ok(0);
+            return Ok(LogTotals::default());
+        };
+        let mut totals = LogTotals {
+            head: Some(head_tip),
+            ..LogTotals::default()
         };
 
         // The row and the sides it leashes, decided once (see stream_log).
@@ -166,7 +171,9 @@ impl RepoSession {
                     return;
                 }
                 for item in &sifter.take(&mut pending) {
-                    out.push(item.row(parser.pool(), builder, marks));
+                    let row = item.row(parser.pool(), builder, marks);
+                    totals.note_row(&item.meta.oid, row.published);
+                    out.push(row);
                 }
             })
             .await;
@@ -177,9 +184,13 @@ impl RepoSession {
             .finish()
             .map_err(|e| unreadable_walk(e.to_string()))?;
         for item in &sifter.take(&mut pending) {
-            out.push(item.row(parser.pool(), builder, marks));
+            let row = item.row(parser.pool(), builder, marks);
+            totals.note_row(&item.meta.oid, row.published);
+            out.push(row);
         }
-        Ok(sifter.walked)
+        totals.shown = out.len() as u32;
+        totals.walked = sifter.walked;
+        Ok(totals)
     }
 
     /// The sides the uncommitted row would leash, or `None` when there is
@@ -208,8 +219,8 @@ impl RepoSession {
     /// names and no edge reaches — appearing and vanishing with a merge
     /// the graph never mentions.
     fn pending_commit(&self) -> Option<Vec<Oid>> {
-        let incoming = self.merge_incoming();
-        let stacked = self.wip_dirty.load(Ordering::SeqCst) || !incoming.is_empty();
+        let incoming = self.standing.merge_incoming();
+        let stacked = self.standing.wip_dirty() || !incoming.is_empty();
         stacked.then_some(incoming)
     }
 
@@ -242,14 +253,22 @@ impl RepoSession {
     }
 
     /// Builds graph rows for a batch and sends them (holding the shared
-    /// lock so generations cannot interleave).
+    /// lock so generations cannot interleave), counting them and what the
+    /// walk marked HEAD's own row with into `totals`.
     ///
     /// A stream may only add to the graph it reset: `generation` matching
     /// the installed one is what says these rows belong to what the
     /// consumer shows. The counter would answer a different question —
     /// it moves for passes that never reach anybody, and a stream still
-    /// on screen would stop delivering halfway through.
-    fn emit_rows(&self, generation: u64, batch: &[StreamItem], pool: &crate::model::StrPool) {
+    /// on screen would stop delivering halfway through. A refused batch
+    /// counts nothing: its stream's totals are nobody's.
+    fn emit_rows(
+        &self,
+        generation: u64,
+        batch: &[StreamItem],
+        pool: &crate::model::StrPool,
+        totals: &mut LogTotals,
+    ) {
         let tags = self.tags_shown();
         let mut guard = self.lock_shared();
         if guard.generation != generation {
@@ -260,6 +279,7 @@ impl RepoSession {
         for item in batch {
             let shared = &mut *shared;
             let mut row = item.row(pool, &mut shared.builder, &mut shared.publish_marks);
+            totals.note_row(&item.meta.oid, row.published);
             let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
             if !labels.is_empty() {
                 row.labels = labels.clone();
@@ -267,6 +287,7 @@ impl RepoSession {
             }
             rows.push(row);
         }
+        totals.shown += rows.len() as u32;
         shared.sent_rows.extend(rows.iter().map(RowPrint::of));
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }

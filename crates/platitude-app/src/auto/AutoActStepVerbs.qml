@@ -42,7 +42,7 @@ Item {
             // nothing holds the selection for a draft. `-edge` walks off the bottom; `-far` sends the view away first
             // so the stepped-off row is off screen. `-diff` opens a file over the graph: the pane swapped off screen
             // has to let the keyboard go, or the arrows walk the selection behind the diff.
-            page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
             graphStepTimer.away = act === "graph-step-far"
@@ -55,7 +55,7 @@ Item {
             // The same door with the key held down: every step behind the first says the key was already down. What it
             // proves is `reads=` — the settle cannot tell a repeat from a press on its own (`GraphRowWalk.noteStep`),
             // and this is the run where it would get it wrong.
-            page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
@@ -74,7 +74,7 @@ Item {
                 fileStepTimer.bucket = named ? head : "unstaged"
                 fileStepTimer.path = named ? arg.substring(cut + 1) : arg
             } else {
-                page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+                page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
                 fileStepTimer.pane = "changes"
                 fileStepTimer.bucket = ""
                 fileStepTimer.path = arg
@@ -87,7 +87,7 @@ Item {
             // name a row the list has actually built, since `itemAtIndex` answers for no other. The default is the
             // first row of the list, which is also the one the picture can hold: a folder struck shut below the fold
             // frames exactly like one left open.
-            page.activateRow(branchesModel.headOid !== "" ? branchesModel.headOid : graphModel.oidAt(0))
+            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             // Said rather than assumed: the tree is the list's resting look, but a run that inherited the paths view
             // would wait out the watchdog looking for a folder row that flat paths never put there.
             detailsModel.setTreeView(true)

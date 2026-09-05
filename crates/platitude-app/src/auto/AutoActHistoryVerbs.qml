@@ -61,8 +61,8 @@ Item {
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
                    || act === "edit-message-focus") {
-            // HEAD's own, not the branch tip: the only row that takes typing (`offers::message_edit`), branch or not.
-            page.jumpToRef(workTree.headOid !== "" ? workTree.headOid : branchesModel.headOid)
+            // HEAD's own: the only row that takes typing (`offers::message_edit`), branch or not.
+            page.jumpToRef(workTree.headOid)
             rewordTimer.start()
         } else if (act === "cherry-pick" || act === "cherry-pick-stops") {
             const pickOid = driver.autoActOid(arg)
@@ -132,7 +132,7 @@ Item {
                               + " " + dropCommitItem.text
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
-                              + " reached=" + repoTab.headReachedElsewhere)
+                              + " reached=" + workTree.headReachedElsewhere)
             if (act !== "drop-commit") {
                 // "drop-stops" is the replay that walks into a hole and stops with the work still in the stash it
                 // took: the landing is the working tree, and the count and the stash's own row are what say where
@@ -293,18 +293,18 @@ Item {
             // `screenshot saved=true`). Waited out the way `stashLandTimer` waits for it.
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0
-                    || !graphPane.rowOnScreen(row) || page.selectedOid !== branchesModel.headOid
+                    || !graphPane.rowOnScreen(row) || page.selectedOid !== workTree.headOid
                     || !driver.cardSettled)
                 return
             tipLandedTimer.stop()
             Harness.report(
                 "tip_landed follows="
-                + (page.selectedOid !== "" && page.selectedOid === branchesModel.headOid)
+                + (page.selectedOid !== "" && page.selectedOid === workTree.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
                 // Next to the pair above because that is where the harness reads it: the name is what tells the
                 // three verbs' own writes from anything else that could have moved the counter (`must_say`).
                 + " op=" + tipLandedTimer.answeredOp
-                + " head=" + branchesModel.headOid.substring(0, 8)
+                + " head=" + workTree.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
             driver.complete()
@@ -327,9 +327,17 @@ Item {
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
+            const tab = driver.repoTab
+            if (resetLandedTimer.running && resetLandedTimer.armed === 0) {
+                for (let i = 0; i < tab.writeAnswerCount(); i++) {
+                    if (tab.writeAnswerSeq(i) > driver.writeSeqBefore && tab.writeAnswerOp(i) === "reset") {
+                        resetLandedTimer.armed = tab.writeAnswerHeadSeq(i)
+                        break
+                    }
+                }
+            }
             if (!tipLandedTimer.running || tipLandedTimer.answeredOp !== "")
                 return
-            const tab = driver.repoTab
             for (let i = 0; i < tab.writeAnswerCount(); i++) {
                 if (tab.writeAnswerSeq(i) <= driver.writeSeqBefore || !tab.writeAnswerAtTip(i))
                     continue
@@ -355,19 +363,24 @@ Item {
         /// anything read back afterwards: what is being checked is that git did what this verb asked.
         property string target: ""
         property string mode: ""
+        /// The number the reset's own answer named for the first report of HEAD after it (`writeAnswerHeadSeq`),
+        /// taken on the notify the way `tipLandedTimer` takes its answer; 0 until the answer lands.
+        property int armed: 0
         function begin(oidHex, flag) {
             resetLandedTimer.target = oidHex
             resetLandedTimer.mode = flag
+            resetLandedTimer.armed = 0
             resetLandedTimer.start()
         }
         onTriggered: {
-            // **Both sides of the write's own refresh, and by identity on each.** The status and the refs are
-            // published together (`session::write::run_write` joins the two), so either may arrive first — and a
-            // landing that waits only for the refs reads a working tree from before the reset. That is not a
-            // near-miss: `--hard` is judged on the tree it left, and the run reported the one it was about to write
-            // over (measured — `files=2` on a tree the reset had already cleared).
-            if (repoTab.busyCount !== 0 || branchesModel.headOid !== resetLandedTimer.target
-                    || workTree.headOid !== resetLandedTimer.target)
+            // **The write's own status, by the number its answer named.** HEAD is one record, and the refs read moves
+            // it ahead of the status that follows (`session::write::run_write` joins the two) — while `--hard` is
+            // judged on the tree it left, and a reset to the very commit HEAD is on moves no name at all. So the
+            // wait is on the status's own word for which report it stands beside (`WorkTreeModel.statusSeq`), at or
+            // above what the reset's answer named: a status counted before the write cannot reach that number.
+            if (repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
+                    || workTree.headOid !== resetLandedTimer.target
+                    || workTree.statusSeq < resetLandedTimer.armed)
                 return
             const row = graphModel.rowOf(resetLandedTimer.target)
             if (row < 0 || !driver.cardSettled)
@@ -380,7 +393,7 @@ Item {
                 "reset_landed mode=" + resetLandedTimer.mode
                 + " files=" + workTree.hardResetTakes
                 + " untracked=" + workTree.untrackedCount
-                + " head=" + branchesModel.headOid.substring(0, 8)
+                + " head=" + workTree.headOid.substring(0, 8)
                 + " row=" + row + " rows=" + graphModel.rowTotal)
             driver.complete()
         }

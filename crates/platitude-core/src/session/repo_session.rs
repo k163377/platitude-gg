@@ -26,9 +26,10 @@ pub struct RepoSession {
     pub(super) log_options: Mutex<LogOptions>,
     pub(super) log_gen: AtomicU64,
     pub(super) log_cancel: Mutex<Option<CancellationToken>>,
-    pub(super) details_read: Mutex<DetailsRead>,
+    /// One commit-details read at a time, numbered (`load_details`).
+    pub(super) details_read: Latest,
     /// One interactive-rebase plan ask at a time (`ask_rebase_plan`).
-    pub(super) plan_read: Mutex<PlanRead>,
+    pub(super) plan_read: Latest,
     /// Whether the write in flight is one that replays
     /// ([`super::replays_history`]) — the poll reads it to know it may
     /// keep running under this one.
@@ -75,33 +76,30 @@ pub struct RepoSession {
     /// line 1. Self-invalidating: the cache carries the source text's
     /// hash and is dropped by the reader when the text has changed.
     pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
-    /// Dirty working tree — one of the two halves that put a synthetic WIP
-    /// row in front of the log stream (the other is below).
-    pub(super) wip_dirty: std::sync::atomic::AtomicBool,
-    /// What a standing merge is bringing in (`MERGE_HEAD`), empty the rest
-    /// of the time: the WIP row leashes these as well as HEAD, so it draws
-    /// the fork the merge commit is about to have. Kept beside
-    /// [`RepoSession::wip_dirty`] because the two decide the same row —
-    /// either one makes it (a merge resolved as ours has a merge commit to
-    /// write with nothing dirty left to show for it), and either moving is
-    /// a graph to rebuild.
-    pub(super) merge_incoming: Mutex<Vec<Oid>>,
+    /// Where the repository stands, as the reads left it — HEAD and
+    /// everything derived from it, the dirty tree, the standing merge's
+    /// sides, the rebase stop and the merge tool. **The one record of
+    /// each**: every read reports into it and every reader asks it, and
+    /// the stamps it orders the reports by are what keep a read that
+    /// looked before a write from overwriting the write's own read
+    /// (`session::standing`).
+    pub(super) standing: Standing,
     /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
     /// name the merge tool even with nothing conflicted. Cleared by that
     /// read: two `git config` spawns on every poll of every open tab is
     /// not a price the common case should pay for a settings field.
     pub(super) merge_tool_wanted: std::sync::atomic::AtomicBool,
-    /// The last answer, repeated by refreshes that did not read it.
-    pub(super) merge_tool_seen: Mutex<String>,
-    /// Why the standing rebase stopped, as the last read that managed to
-    /// tell left it. A read of git's markers can fail transiently — the
-    /// spawn loses a race with a write, the antivirus holds the file — and
-    /// a single tick answering "not an `edit` stop" is not a blank the exit
-    /// card can afford: it turns the `--skip` row from a hold back into a
-    /// plain click, and that click takes the stopped commit out
-    /// (`offers::skip_is_free`). Cleared by the first read that finds no
-    /// rebase standing.
-    pub(super) rebase_stop_seen: Mutex<integrate::RebaseStop>,
+    /// One signature verification at a time: a selection that moves on
+    /// cancels the gpg or ssh-keygen run the last one started, which is
+    /// the slowest read a click can start (`session::latest`).
+    pub(super) signature_read: Latest,
+    /// One remote-branch check at a time — a name being typed asks per
+    /// settled keystroke, and each ask is a network round trip.
+    pub(super) remote_branch_read: Latest,
+    /// One check of whether a remote already has HEAD's commit at a time,
+    /// for the rare pass that could not read it off its rows
+    /// ([`RepoSession::settle_head_published`]).
+    pub(super) head_published_read: Latest,
     /// Line-ending baselines already sampled, keyed by (directory,
     /// extension) — what a house style is scoped to, and what makes the
     /// second file opened in a directory cost nothing.
@@ -203,21 +201,6 @@ pub struct RepoSession {
     /// One permit for the background read of the above, so a second
     /// permission-granting call cannot stack another on top of it.
     pub(super) remote_tags_slot: Arc<tokio::sync::Semaphore>,
-    /// What the last refs read saw of the branch tip, so the walk behind
-    /// [`reachable`] can be started without reading the listing again.
-    pub(super) head_hold: Mutex<Option<HeadHold>>,
-    /// The same read's answer to "what commit is HEAD on", kept where the
-    /// graph walk can reach it: `None` until a refs read has landed,
-    /// `Some(None)` for a branch with no commits yet.
-    ///
-    /// Two levels because the walk has to tell "nobody has looked" from
-    /// "looked, and there is nothing there" — they take opposite actions.
-    /// Separate from [`Self::head_hold`], whose own `None` already means
-    /// the second of those.
-    pub(super) head_tip: Mutex<Option<Option<Oid>>>,
-    /// The last answer sent, so a re-check landing on the same one says
-    /// nothing.
-    pub(super) head_reach_seen: Mutex<Option<bool>>,
     /// One permit: the walk is the only part of a refresh that scales with
     /// the history rather than the refs, and a tick arriving mid-walk is
     /// dropped rather than stacked.
@@ -339,12 +322,42 @@ impl RepoSession {
         F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
     {
+        let cancel = self.root_cancel.clone();
+        self.spawn_read_under(op, cancel, read);
+    }
+
+    /// [`Self::spawn_read`] for a read that answers one question at a
+    /// time: `latest` cancels the ask still out, so the read this starts
+    /// is the only one of its kind running ([`Latest`]). A cancelled read
+    /// reports nothing — the ask that displaced it is the one being
+    /// waited on.
+    pub(super) fn spawn_read_latest<F, Fut>(
+        self: &Arc<Self>,
+        op: &'static str,
+        latest: &Latest,
+        read: F,
+    ) where
+        F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
+    {
+        let cancel = latest.begin(&self.root_cancel);
+        self.spawn_read_under(op, cancel, read);
+    }
+
+    fn spawn_read_under<F, Fut>(
+        self: &Arc<Self>,
+        op: &'static str,
+        cancel: CancellationToken,
+        read: F,
+    ) where
+        F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
+    {
         let Some(workdir) = self.workdir() else {
             return;
         };
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
             match read(Arc::clone(&s), workdir, cancel).await {
                 Ok(event) => s.sink.event(event),
                 Err(e) => s.fail(op, e),

@@ -66,6 +66,7 @@ mod heap;
 #[cfg(test)]
 mod join_tests;
 mod joins;
+mod latest;
 mod log;
 mod model;
 mod open;
@@ -86,6 +87,7 @@ mod remote_tags;
 mod repo_session;
 mod rows;
 mod snapshot;
+mod standing;
 mod stash_round;
 mod state;
 #[cfg(test)]
@@ -94,7 +96,6 @@ mod walk;
 mod write;
 
 pub use auto_fetch::OpenFetch;
-use details_read::DetailsRead;
 pub use details_read::{DetailsOutcome, DetailsTask};
 pub use event::SessionEvent;
 use feed::CommandFeed;
@@ -103,9 +104,9 @@ use graph_refresh::GraphPasses;
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };
+use latest::Latest;
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
-use ops_integrate::PlanRead;
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
@@ -115,10 +116,11 @@ use read_flight::ReadFlight;
 pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
+use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
 use state::{
-    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, HeadHold, OpGate, OpenFetchState,
-    Shared, WriteRequest,
+    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpGate, OpenFetchState, Shared,
+    WriteRequest,
 };
 pub use write::{remote_paced, replays_history};
 

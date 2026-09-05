@@ -20,7 +20,8 @@ impl RebasePlanModel {
     qproperty!("ontoAvatarUrl", Member = onto_avatar_url, Notify = changed);
     qproperty!("ontoRef", Member = onto_ref, Notify = changed);
     qproperty!("expectHead", Member = expect_head, Notify = changed);
-    qproperty!("publishRange", Member = publish_range, Notify = changed);
+    // The rewrite warning's count, the plan's own (`pushed_count`).
+    qproperty!("pushedCount", Member = pushed_count, Notify = changed);
     qproperty!("dirty", Member = dirty, Notify = changed);
     qproperty!("dropCount", Member = drops, Notify = changed);
     qproperty!("stepCount", Member = step_count, Notify = changed);
@@ -120,6 +121,24 @@ impl RebasePlanModel {
     #[qslot]
     fn cancel_plan(&mut self) {
         self.close();
+    }
+
+    /// Asks again how many of the plan's rows a remote already has — for
+    /// the refs having moved under the open plan (a fetch landing, a
+    /// push from elsewhere). The answer lands on `pushedCount`, matched
+    /// by range. Nothing while no plan stands: the count is the plan's,
+    /// and there is no range to ask about.
+    ///
+    /// Called on the refs *moving*, not on every refs tick — the read
+    /// behind it is a `rev-list`, and hung off the tick it would poll the
+    /// repository at the status rate (`NavSectionModel.refsMoved`).
+    #[qslot]
+    fn refresh_pushed(&mut self) {
+        if !self.active || self.publish_range.is_empty() {
+            return;
+        }
+        let range = self.publish_range.clone();
+        crate::hub::with_session(self.tab_id, |s| s.check_plan_published(range.clone()));
     }
 
     /// Whether a fold may stand on `row` right now — what the verb menu

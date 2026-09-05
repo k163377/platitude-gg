@@ -78,7 +78,7 @@ Item {
             // amend first, and open the plan from HEAD's own row so nothing moves the selection. Every other way in
             // right-clicks a row further down, and **that** is what takes the draft — the arrows and the clicks
             // walk off an unsaved message the same way (`graph-step-dirty`), which is not what this asks about.
-            const tip = workTree.headOid !== "" ? workTree.headOid : driver.branchesModel.headOid
+            const tip = workTree.headOid
             page.jumpToRef(tip)
             planAmendTimer.begin(tip)
         } else {
@@ -383,20 +383,17 @@ Item {
                     renderedBarrier.begin()
                     return
                 }
-                // The keystroke that would have asked whether a remote already has this commit was spent while the
-                // plan was standing over the slot (`RepoPage.askSelectedPublished`), and the question is asked on
-                // the edge rather than on every letter. So type again, and wait for the slot to be carrying this
-                // very commit's own answer.
+                // Whether a remote already has this commit is HEAD's own answer, kept beside HEAD rather than asked
+                // on the edge of typing (`WorkTreeModel.headPublished`) — so the plan that stood over the boxes
+                // cannot have spent it. Type again, and read the warning back with the boxes dirty.
                 detailsPane.setMessageText(planRewordTimer.retyped, "")
-                planRewordTimer.stage = "asked"
+                planRewordTimer.stage = "retyped"
                 return
             }
-            if (planRewordTimer.stage === "asked") {
-                if (repoTab.publishRange !== page.selectedOid + "^!")
-                    return
+            if (planRewordTimer.stage === "retyped") {
                 planRewordTimer.stop()
                 Harness.report("plan_reword_ask dirty=" + detailsPane.messageDirty
-                                  + " asked=" + (repoTab.publishRange === page.selectedOid + "^!")
+                                  + " onhead=" + (page.selectedOid === workTree.headOid)
                                   + " published=" + page.selectedPublished)
                 renderedBarrier.begin()
             }

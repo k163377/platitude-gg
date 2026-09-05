@@ -247,6 +247,14 @@ impl RepoSession {
         };
         match walk {
             Ok(totals) => {
+                // What the pass read off HEAD's own row goes to the one
+                // record before the consumer hears the pass is over — from
+                // the stream the consumer is on: a superseded one had its
+                // rows refused (`emit_rows`), and its "not in the window"
+                // is not the window's answer.
+                if self.lock_shared().generation == generation {
+                    self.settle_head_published(totals.head, totals.head_published);
+                }
                 let footer = Footer {
                     walked: totals.walked,
                     // Truncation is a property of the walk: the shown count
@@ -342,7 +350,13 @@ impl RepoSession {
             }
         };
         let walked = match result {
-            Ok(walked) => walked,
+            Ok(totals) => {
+                // The mark on HEAD's row is a fact about the repository,
+                // and it goes to the record whether or not the picture
+                // below turns out to be the one already on screen.
+                self.settle_head_published(totals.head, totals.head_published);
+                totals.walked
+            }
             Err(error) => {
                 watch.answered();
                 // The fast pass is already on screen; report quietly.

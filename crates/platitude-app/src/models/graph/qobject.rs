@@ -152,21 +152,18 @@ impl GraphModel {
         crate::harness::fail_graph_pass(self.tab_id, &step);
     }
 
-    /// Row index of a commit (sidebar jump); -1 when absent.
+    /// Row index of a commit (sidebar jump); -1 when absent. Through the
+    /// id index (`marks::row_at`), not a scan of the window.
     #[qslot]
     fn row_of(&self, oid_hex: String) -> i32 {
-        self.rows
-            .iter()
-            .position(|r| r.oid_hex == oid_hex)
-            .map_or(-1, |i| i as i32)
+        self.row_of_hex(&oid_hex).map_or(-1, |i| i as i32)
     }
 
     /// Reflog selector when the commit is a stash row (empty otherwise).
     #[qslot]
     fn stash_ref_of(&self, oid_hex: String) -> String {
-        self.rows
-            .iter()
-            .find(|r| r.oid_hex == oid_hex)
+        self.row_of_hex(&oid_hex)
+            .and_then(|i| self.rows.get(i))
             .map(|r| r.stash_ref.clone())
             .unwrap_or_default()
     }
@@ -185,7 +182,7 @@ impl GraphModel {
     /// all this is ever asked about, because a menu opens on a row.
     #[qslot]
     fn published_at(&self, oid_hex: String) -> bool {
-        let Ok(oid) = platitude_core::Oid::from_hex_str(oid_hex.trim()) else {
+        let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
             return false;
         };
         self.row_at(&oid).is_some_and(|row| self.published_row(row))
@@ -203,15 +200,57 @@ impl GraphModel {
     /// would land after the card was on screen and grow the widest row,
     /// taking its right edge out from under the hand
     /// (デザイン規約 §行が読む答えはどこから来るか).
+    ///
+    /// `head` is handed in by the asker off the one record
+    /// (`WorkTreeModel.headOid`), so the range this answers for is the
+    /// one the rebase would replay, and the same HEAD the rest of the
+    /// card is about — not the row a chip happens to mark, and not a
+    /// copy of the record that could be a drain behind it.
     #[qslot]
-    fn rebase_rewrites_published(&self, onto_oid_hex: String) -> bool {
-        let Ok(onto) = platitude_core::Oid::from_hex_str(onto_oid_hex.trim()) else {
-            return false;
-        };
-        let Some(head) = self.head_oid() else {
+    fn rebase_rewrites_published(&self, onto_oid_hex: String, head_oid_hex: String) -> bool {
+        let (Ok(onto), Ok(head)) = (
+            Oid::from_hex_str(onto_oid_hex.trim()),
+            Oid::from_hex_str(head_oid_hex.trim()),
+        ) else {
             return false;
         };
         platitude_core::publish::range_rewrites_published(self.walked_rows(), head, onto)
+    }
+
+    /// Whether `branch --delete` would go through for the branch whose
+    /// tip is `tip_hex`, off the drawn rows: `yes` / `no`, or empty where
+    /// the window cannot say (`publish::reaches`). The reference point is
+    /// git's own rule (`publish::delete_reference`): the upstream where
+    /// the listing resolves one (`upstream_hex`, empty otherwise), HEAD
+    /// otherwise (`head_hex`, the one record's — empty before the first
+    /// read).
+    ///
+    /// So the delete row wears `-D` as the menu opens instead of a
+    /// process later. Empty is not `no`: it sends the menu to git for the
+    /// slow answer (`RepoTab.checkBranchDelete`), the way a tip or a
+    /// reference older than the window has to be answered.
+    #[qslot]
+    fn branch_delete_merged(
+        &self,
+        tip_hex: String,
+        upstream_hex: String,
+        head_hex: String,
+    ) -> String {
+        let Ok(tip) = Oid::from_hex_str(tip_hex.trim()) else {
+            return String::new();
+        };
+        let reference = platitude_core::publish::delete_reference(
+            Oid::from_hex_str(upstream_hex.trim()).ok(),
+            Oid::from_hex_str(head_hex.trim()).ok(),
+        );
+        let Some(reference) = reference else {
+            return String::new();
+        };
+        match self.reaches_between(reference, tip) {
+            Some(true) => "yes".to_string(),
+            Some(false) => "no".to_string(),
+            None => String::new(),
+        }
     }
 
     /// The lane colour of the row a ref sits on, as an index into the

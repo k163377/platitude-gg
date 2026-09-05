@@ -178,14 +178,20 @@ impl RepoSession {
     /// can tell "this creates a branch" from "this advances one somebody
     /// else made". A read, not a write — but one that reaches the network,
     /// which is why it is only asked while that question is on screen.
+    ///
+    /// One at a time: the name is asked about as it is typed, and a new
+    /// ask cancels the round trip the last one started rather than
+    /// letting two race for the far side (`session::latest`). A cancelled
+    /// ask answers nothing — the one that displaced it is the one the
+    /// question is waiting on.
     pub fn check_remote_branch(self: &Arc<Self>, remote_name: String, branch: String) {
         let Some(workdir) = self.workdir() else {
             return;
         };
         let timeout = self.network_timeout();
+        let cancel = self.remote_branch_read.begin(&self.root_cancel);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
             let mut tip = String::new();
             let mut theirs = 0;
             let state = match remote::branch_tip(
@@ -236,6 +242,8 @@ impl RepoSession {
                         Err(_) => remote::RemoteBranchState::Unknown,
                     }
                 }
+                // A newer ask took the question over: nothing to answer.
+                Err(e) if e.is_cancelled() => return,
                 // A remote that cannot be reached answers too, and the
                 // failure is not raised as one: the question is standing
                 // and about to say so itself, so opening the command log
@@ -243,6 +251,9 @@ impl RepoSession {
                 // recorded either way).
                 Err(_) => remote::RemoteBranchState::Unreachable,
             };
+            if cancel.is_cancelled() {
+                return;
+            }
             s.sink.event(SessionEvent::RemoteBranchChecked {
                 remote: remote_name,
                 branch,

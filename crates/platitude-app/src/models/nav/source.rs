@@ -78,6 +78,27 @@ impl Source {
         }
     }
 
+    /// The branch row named `short`, through the snapshot's own index —
+    /// the two ref sections are name-ordered, so a menu's question about
+    /// a name is a binary search rather than a walk of every row
+    /// (`RefsSnapshot::local_named`). `None` for every other section.
+    pub(super) fn branch_named(&self, short: &str) -> Option<&platitude_core::session::BranchItem> {
+        match self {
+            Self::Locals(snapshot) => snapshot.local_named(short),
+            Self::Remotes(snapshot) => snapshot.remote_named(short),
+            _ => None,
+        }
+    }
+
+    /// The tag row named `short`, the same way (`RefsSnapshot::tag_named`
+    /// — the tags keep their own order, so the index is a separate one).
+    pub(super) fn tag_named(&self, short: &str) -> Option<&platitude_core::session::TagItem> {
+        match self {
+            Self::Tags(snapshot) => snapshot.tag_named(short),
+            _ => None,
+        }
+    }
+
     /// Where `remote` carries `name` when that is not where this
     /// repository has the tag; empty when the two agree, when that remote
     /// does not carry the name, or when nothing has read the remotes yet.

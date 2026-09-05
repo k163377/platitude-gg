@@ -4,19 +4,6 @@
 
 use super::*;
 
-/// What the refs read last saw of the branch tip, which is everything the
-/// reachability walk needs to start (see [`crate::reachable`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct HeadHold {
-    /// The commit HEAD is on.
-    pub(super) tip: Oid,
-    /// Short name of the branch HEAD is on; empty when detached.
-    pub(super) branch: String,
-    /// Some other ref already sits exactly on `tip`, which the listing
-    /// answers on its own — no walk needed.
-    pub(super) on_a_ref: bool,
-}
-
 /// How a config file looked, closely enough to tell "somebody wrote this"
 /// from "nobody has touched it".
 ///

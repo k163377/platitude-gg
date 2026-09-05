@@ -62,12 +62,12 @@ Item {
             if (!page.wipShown && !driver.cardSettled)
                 return
             stashLandTimer.stop()
-            const row = graphModel.rowOf(branchesModel.headOid)
+            const row = graphModel.rowOf(workTree.headOid)
             Harness.report("stash_landed wip=" + page.wipShown
-                              + " follows=" + (page.selectedOid === branchesModel.headOid)
+                              + " follows=" + (page.selectedOid === workTree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               + " lit=" + (graphPane.view.currentIndex === row)
-                              + " head=" + branchesModel.headOid.substring(0, 8)
+                              + " head=" + workTree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row + " rows=" + graphModel.rowTotal
                               // What the entry ended up called, last because it is the one field with spaces in it.
@@ -107,14 +107,14 @@ Item {
                     return
             }
             opExitLandTimer.stop()
-            const row = graphModel.rowOf(branchesModel.headOid)
+            const row = graphModel.rowOf(workTree.headOid)
             Harness.report("op_exit_landed wip=" + page.wipShown
                               + " op=" + workTree.opText
-                              + " follows=" + (page.selectedOid === branchesModel.headOid)
+                              + " follows=" + (page.selectedOid === workTree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               + " lit=" + (graphPane.view.currentIndex === row)
                               + " files=" + worktreeModel.total
-                              + " head=" + branchesModel.headOid.substring(0, 8)
+                              + " head=" + workTree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row)
             renderedBarrier.begin()

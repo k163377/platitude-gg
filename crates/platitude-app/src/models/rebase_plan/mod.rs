@@ -88,9 +88,17 @@ pub struct RebasePlanModel {
     /// The run pins it, and a tip that moves under the open plan closes
     /// it (`note_head`).
     pub(super) expect_head: String,
-    /// What `RepoTab.checkPublish` should be asked for the rewrite
-    /// warning: the very range the plan replays.
+    /// The very range the plan replays, as core spelled it — what the
+    /// rewrite warning's count is about, and what `refreshPushed` asks
+    /// about again. Empty while no plan stands.
     pub(super) publish_range: String,
+    /// How many of the plan's rows a remote already has — the `rewrites
+    /// pushed commits` warning's number (`RebasePlanRunBar`). Counted
+    /// by core as the plan opens (`PlanPreview::published`) and counted
+    /// again when the refs move under the open plan (`PlanMsg::Published`),
+    /// so the plan carries its own answer rather than reading one off
+    /// the tab that another question could overwrite.
+    pub(super) pushed_count: i32,
     /// [`Self::is_dirty`] as a property, settled by every mutation — the
     /// run button's `enabled:` has to follow it, and a binding on a slot
     /// freezes at its first answer (app-ui.md).

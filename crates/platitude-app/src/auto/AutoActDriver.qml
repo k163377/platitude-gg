@@ -367,9 +367,9 @@ Item {
                     return
                 driver.claimed = true
             }
-            // `Opened` only means the path was accepted. Refs and the graph are the baseline every page verb is allowed
-            // to act on.
-            if (repoTab.state !== "open" || !workTree.loaded
+            // `Opened` only means the path was accepted. Refs, the graph and where HEAD stands are the baseline every
+            // page verb is allowed to act on.
+            if (repoTab.state !== "open" || !workTree.loaded || !workTree.headKnown
                     || !branchesModel.refsLoaded || graphModel.finishCount === 0)
                 return
             autoActTimer.stop()
@@ -381,7 +381,7 @@ Item {
     // name it has not been told, and a demo repository is built fresh every time.
     function autoActOid(arg) {
         if (arg === "")
-            return branchesModel.headOid
+            return workTree.headOid
         if (arg.indexOf("row:") === 0)
             return graphModel.oidAt(Number(arg.substring(4)))
         return arg

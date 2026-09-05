@@ -42,25 +42,28 @@ impl RepoSession {
 
     /// Asks whether `branch --delete` would go through for this branch:
     /// merged into its reference point it deletes quietly, unmerged git
-    /// refuses. Asked when a menu opens over the branch, so its delete
-    /// row can wear `-D` from the start instead of only after a refused
-    /// try. Both halves of the answer are git's own — the upstream from
-    /// `for-each-ref`, the reachability from `merge-base` — and the only
-    /// rule copied here is which reference point wins. A read, not a
-    /// write, so it skips the queue the way the other checks do.
+    /// refuses. Asked when a menu opens over a branch the drawn rows
+    /// could not answer for (`GraphModel.branchDeleteMerged`), so its
+    /// delete row can wear `-D` from the start instead of only after a
+    /// refused try. The reference point is read off the snapshot, which
+    /// already holds git's own rule for it (`BranchItem::upstream_oid`:
+    /// the upstream where the listing resolves it, HEAD otherwise — a
+    /// configured name that resolves to nothing is not the measure), and
+    /// the reachability is `merge-base`'s. A read, not a write, so it
+    /// skips the queue the way the other checks do.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
             return;
         };
+        let snapshot = self.published_snapshot();
+        let reference = snapshot
+            .as_deref()
+            .and_then(|snapshot| snapshot.local_named(&branch))
+            .and_then(|item| item.upstream_oid)
+            .map_or_else(|| "HEAD".to_string(), |oid| oid.to_hex());
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            let reference = match branch::upstream_of(&s.executor, &workdir, &branch, &cancel).await
-            {
-                Ok(Some(upstream)) => upstream,
-                Ok(None) => "HEAD".to_string(),
-                Err(_) => return,
-            };
             let rev = format!("refs/heads/{branch}");
             if let Ok(merged) =
                 branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel).await

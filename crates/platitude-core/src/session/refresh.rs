@@ -52,6 +52,10 @@ impl RepoSession {
             return false;
         };
         let op_gen = self.refs_gate.begin();
+        // Stamped before git is spawned: what the stamp orders is when
+        // the repository was looked at, not when the answer came back
+        // (`Standing`).
+        let looked = self.standing.stamp();
         let cancel = self.root_cancel.clone();
         let refs = refs::load(&self.executor, &workdir, &cancel).await;
         // The listing marks the branch HEAD is on, so the ordinary case is
@@ -71,7 +75,17 @@ impl RepoSession {
         let remotes = self.remotes(&workdir, &cancel).await.unwrap_or_default();
         match (refs, head) {
             (Ok(refs), Ok(head)) => {
+                // Neither a read a newer one has overtaken nor one that
+                // looked before a write ended may speak for the
+                // repository (`Standing::current`). The fenced one is
+                // read again rather than lost: a write that touched only
+                // the index reads no refs behind itself, and nothing else
+                // would until the next tick.
                 if !self.refs_gate.is_current(op_gen) {
+                    return false;
+                }
+                if !self.standing.current(looked) {
+                    self.refresh_refs();
                     return false;
                 }
                 // First, and before the joins: the walk asks git where
@@ -83,7 +97,7 @@ impl RepoSession {
                 // own, and both of them are past this point before it
                 // returns. What it settles is every rebuild after — a
                 // commit, a fetch, a poll tick that found a ref moved.
-                self.remember_head_hold(&refs, &head);
+                self.record_head_from_refs(looked, &refs, &head);
                 let remote_tags = self.remote_tag_index();
                 let key = refs_key(&refs, &head);
                 let previous = relock(&self.refs_key).replace(key);

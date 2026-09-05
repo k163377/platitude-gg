@@ -296,7 +296,7 @@ Item {
             // waited out from here. Both marks are re-read on the spot rather than carried over from
             // `prepareCompletion` — the page's own opening fetch can have answered in between.
             driver.writeSeqBefore = repoTab.writeSeq
-            driver.headOidBefore = branchesModel.headOid
+            driver.headOidBefore = workTree.headOid
             page.commitNow()
             resetAuthorLandedTimer.start()
         }
@@ -318,13 +318,13 @@ Item {
         id: resetAuthorLandedTimer
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
-                    || branchesModel.headOid === driver.headOidBefore
-                    || graphModel.rowOf(branchesModel.headOid) < 0
+                    || workTree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(workTree.headOid) < 0
                     || !driver.cardSettled)
                 return
             resetAuthorLandedTimer.stop()
             Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
-                              + " head=" + branchesModel.headOid.substring(0, 8)
+                              + " head=" + workTree.headOid.substring(0, 8)
                               + " shown=" + detailsModel.shaHex.substring(0, 8)
                               + " author=" + detailsModel.authorName
                               + " committer=" + detailsModel.committerName)
@@ -412,7 +412,7 @@ Item {
         property string headWas: ""
         function begin() {
             mergeCommitTimer.wanted = workTree.opSubject
-            mergeCommitTimer.headWas = branchesModel.headOid
+            mergeCommitTimer.headWas = workTree.headOid
             // Read now rather than at the report: the editor is cleared by the landing, so afterwards every run says
             // the boxes were empty.
             mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
@@ -426,8 +426,8 @@ Item {
             // merely "HEAD is somewhere in the graph": refs and the walk arrive behind the write and behind each
             // other, so the old tip answers that question perfectly well, and the shot came back framing the branch
             // still on it with a working-tree row above (measured).
-            if (!branchesModel.refsLoaded || branchesModel.headOid === mergeCommitTimer.headWas
-                    || graphModel.rowOf(branchesModel.headOid) < 0
+            if (!workTree.headKnown || workTree.headOid === mergeCommitTimer.headWas
+                    || graphModel.rowOf(workTree.headOid) < 0
                     || driver.graphTopKind() === "wip")
                 return
             if (mergeCommitTimer.seenHead < 0) {

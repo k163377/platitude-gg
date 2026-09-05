@@ -59,6 +59,15 @@ pub struct WorkTreeStatus {
 }
 
 impl WorkTreeStatus {
+    /// Where this read saw HEAD — the branch, or detached the commit
+    /// alone, or neither on a branch with no commits yet. What the read
+    /// offers the session's one record of HEAD (`session::standing`).
+    pub fn head(&self) -> crate::refs::HeadState {
+        crate::refs::HeadState::of(self.branch_head.clone(), self.branch_oid)
+    }
+}
+
+impl WorkTreeStatus {
     pub fn staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items
             .iter()

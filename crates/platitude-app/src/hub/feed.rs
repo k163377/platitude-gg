@@ -54,6 +54,23 @@ impl<T> Feed<T> {
         Self::wake(guard);
     }
 
+    /// Replaces the queued messages of this one's kind — its enum variant
+    /// — and keeps the rest: snapshot semantics for a feed that carries
+    /// more than one kind. A status the consumer has not drained yet is a
+    /// picture nobody wants back once a newer one is here, and the HEAD
+    /// report queued beside it is not.
+    pub fn push_coalescing(&self, item: T) {
+        let kind = std::mem::discriminant(&item);
+        let guard = {
+            let mut s = self.lock();
+            s.queue
+                .retain(|queued| std::mem::discriminant(queued) != kind);
+            s.queue.push_back(item);
+            s
+        };
+        Self::wake(guard);
+    }
+
     /// One pending answer, ordered by request rather than completion.
     /// Keep the watermark after draining so a late duplicate cannot wake
     /// the consumer or retain stale data. A new session resets it explicitly.
@@ -139,12 +156,14 @@ pub struct Feeds {
     pub graph: Arc<Feed<GraphMsg>>,
     /// Refs fan out to one feed per sidebar section (one consumer each).
     /// Shared, not copied: a deep copy per section duplicates tens of
-    /// thousands of strings.
-    pub refs_branches: Arc<Feed<Arc<RefsSnapshot>>>,
-    pub refs_remotes: Arc<Feed<Arc<RefsSnapshot>>>,
-    pub refs_tags: Arc<Feed<Arc<RefsSnapshot>>>,
-    /// Status headline consumer (WorkTreeModel: header props/counts).
-    pub status: Arc<Feed<StatusMsg>>,
+    /// thousands of strings. The branches section's also carries HEAD.
+    pub refs_branches: Arc<Feed<RefsMsg>>,
+    pub refs_remotes: Arc<Feed<RefsMsg>>,
+    pub refs_tags: Arc<Feed<RefsMsg>>,
+    /// Status headline consumer (WorkTreeModel): where the tree stands
+    /// — HEAD and what is derived from it — and the last status's
+    /// counts, in the order the session said them.
+    pub status: Arc<Feed<StateMsg>>,
     /// Status list consumers — one `worktree` NavSectionModel per bucket
     /// run of the changed files the right pane's WIP view lists. Each run
     /// is a list of its own with a share of the pane of its own, and a feed

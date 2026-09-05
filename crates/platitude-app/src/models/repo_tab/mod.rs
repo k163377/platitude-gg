@@ -115,10 +115,6 @@ pub struct RepoTab {
     branch_delete_landed: String,
     branch_delete_refused: String,
     branch_delete_seq: i32,
-    /// Last answer to `checkPublish`: how much of a range a remote has.
-    publish_range: String,
-    publish_total: i32,
-    publish_published: i32,
     /// The commit the standing `checkSignature` is about — **the
     /// question, where `signature_oid` and its three are the answer**.
     ///
@@ -138,11 +134,6 @@ pub struct RepoTab {
     /// question — the selection can move without this tab being asked
     /// anything.
     signature_wanted: String,
-    /// Whether something other than the current branch still reaches its
-    /// tip — whether a rewrite here leaves the old commits drawn or leaves
-    /// them to the reflog. False until the session says otherwise, which
-    /// is the answer that asks more of the person doing it.
-    head_reached_elsewhere: bool,
     /// Author identity; `identityReady` false means git cannot commit yet
     /// and the UI should ask for a name and address.
     author_name: String,
@@ -339,11 +330,14 @@ pub struct RepoTab {
 /// named on this side of the bridge**, the same way `settle_write` names
 /// them for the group (app-ui.md: no business logic in QML). `seq` is the
 /// number `write_seq` counted it at, so a run tells its own answer from
-/// one already counted before it pressed.
+/// one already counted before it pressed; `head_seq` is the number the
+/// session named for the first report of HEAD after the write
+/// (`TabMsg::WriteState::head_seq`), which a landing on its tip arms on.
 struct WriteAnswer {
     seq: i32,
     op: String,
     stopped: bool,
     failed: bool,
     at_tip: bool,
+    head_seq: i32,
 }

@@ -24,8 +24,6 @@ impl NavSectionModel {
                     Role::IsHead => Value::Flag(item.is_head),
                     Role::HasRemote => Value::Flag(item.has_remote),
                     Role::OnlyRemote => Value::Flag(item.only_remote),
-                    Role::Upstream => Value::Said(""),
-                    Role::UpstreamDrifted => Value::Flag(false),
                     Role::HasPr => Value::Flag(item.has_pr),
                     Role::EolMark => Value::Flag(item.eol_mark),
                     Role::Depth => Value::Number(item.depth),
@@ -52,7 +50,15 @@ impl NavSectionModel {
                 Entry::Worktree { .. } | Entry::File { .. } => Value::Said(""),
             },
             Role::IsHead => Value::Flag(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => branch.is_head,
+                // By the name the one record reports (`head_name`), not
+                // the snapshot's own marker: the two agree on a quiet
+                // repository and differ exactly where it matters — a
+                // status read that landed after the listing was taken.
+                Entry::Local(branch) => {
+                    !self.head_name.is_empty() && branch.short.as_str() == self.head_name
+                }
+                // A remote-tracking ref is never what HEAD is on.
+                Entry::Remote(_) => false,
                 // The working copy this window shows is marked the way the
                 // current branch is.
                 Entry::Worktree { entry, current } => {
@@ -69,14 +75,6 @@ impl NavSectionModel {
                 Entry::Stash(_) | Entry::Worktree { .. } | Entry::File { .. } => false,
             }),
             Role::OnlyRemote => Value::Flag(matches!(of, Entry::Tag(tag) if !tag.here)),
-            Role::Upstream => Value::Said(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => &branch.upstream,
-                _ => "",
-            }),
-            Role::UpstreamDrifted => Value::Flag(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => branch.upstream_drifted,
-                _ => false,
-            }),
             Role::HasPr => Value::Flag(match of {
                 Entry::Local(branch) => crate::encode::pr_set().contains(branch.short.as_str()),
                 Entry::Remote(branch) => crate::encode::pr_set().contains(pr_key(&branch.short)),

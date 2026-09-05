@@ -24,6 +24,8 @@ Item {
     /// What the two cards need to work their own answers out — the same models the sidebar's ref menu hands them, so
     /// the two entrances to a name cannot drift (RefBranchMenu / RefTagMenu).
     required property WorkTreeModel workTree
+    /// The drawn rows — what the branch card puts the delete's safety valve to as it opens (`RefBranchMenu`).
+    required property GraphModel graphModel
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
     required property NavSectionModel tagsModel
@@ -241,7 +243,7 @@ Item {
             code: "drop"
             note: rowMenu.published ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
-            holdMs: rowMenu.repoTab.headReachedElsewhere ? 0 : Metrics.holdMs
+            holdMs: rowMenu.workTree.headReachedElsewhere ? 0 : Metrics.holdMs
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
                 commitMenu.dismiss()
@@ -339,6 +341,7 @@ Item {
             heldReason: rowMenu.heldReason
             repoTab: rowMenu.repoTab
             workTree: rowMenu.workTree
+            graphModel: rowMenu.graphModel
             branchesModel: rowMenu.branchesModel
             worktreesModel: rowMenu.worktreesModel
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)

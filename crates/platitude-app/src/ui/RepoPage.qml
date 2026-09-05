@@ -132,25 +132,17 @@ Item {
         page.selectedOid = ""
         page.selectedStashRef = ""
         page.closeDiff()
-        page.refreshHeadPublished()
     }
 
     // ---- commit editor -------------------------------------------
     property bool amending: false
-    property bool headPublished: false
-    readonly property string headRange: "HEAD^!"
-    function refreshHeadPublished() {
-        if (repoTab.state === "open")
-            repoTab.checkPublish(page.headRange)
-    }
+    // Whether a remote already has the commit HEAD is on — the amend's `already pushed`. Answered by the session off
+    // the walk's own marks and kept beside HEAD (`WorkTreeModel.headPublished`), so nothing here asks git for it and
+    // a HEAD that moved wears no answer about the commit it left.
+    readonly property bool headPublished: workTree.headPublished
     Connections {
         target: repoTab
         function onChanged() {
-            // One shared answer slot, so only the reply to the range this page asked about is read.
-            if (repoTab.publishRange === page.headRange)
-                page.headPublished = repoTab.publishPublished > 0
-            if (page.selectedOid !== "" && repoTab.publishRange === page.selectedOid + "^!")
-                page.selectedPublished = repoTab.publishPublished > 0
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
@@ -515,10 +507,9 @@ Item {
     property bool planLoadHeld: false
     /// The plan model itself — an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property var rebasePlan: planModel
-    /// The rewrite warning's count for the plan's own range: the shared publish slot, read only while it answers
-    /// this very range (the slot rule — 聞いた範囲の答えだけを読む).
-    readonly property int planPushed: page.planActive && repoTab.publishRange === planModel.publishRange
-                                      ? repoTab.publishPublished : 0
+    /// The rewrite warning's count for the plan's own range — the plan's own answer, counted by the read that opens
+    /// it and again when the refs move under it (`RebasePlanModel.pushedCount`); 0 while no plan stands.
+    readonly property int planPushed: planModel.pushedCount
     /// Whether the details pane's boxes are, right now, a plan row's reword input: the plan stands, the row the
     /// selection sits on carries the verb, **and the pane is showing that very commit** — anything else that moves
     /// the selection (a shortcut, a landing) must not leave typing routed into a row whose message is not on
@@ -564,8 +555,6 @@ Item {
             // is already on that row: the model opens it there, because writing it from here would fire the
             // model's one `changed()` inside the very binding delivering it (`RebasePlanModel::take`).
             page.activateRow(planModel.expectHead)
-            if (planModel.publishRange !== "")
-                repoTab.checkPublish(planModel.publishRange)
         } else {
             // Discarded, stale, run, or put away under a standing operation — the plan is gone either way, and so is
             // the row that was going to carry whatever a `reword` left in the right pane's boxes. Nothing moved the
@@ -579,23 +568,13 @@ Item {
     // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the
     // freeze leaves running — so the count is asked again whenever the refs actually move (`refsMoved`, not the
     // every-tick `refsSettled` — that would spawn a rev-list at the status rate), and the run button's amber
-    // follows the fetch instead of freezing at the plan's opening (規約 §フル interactive rebase).
+    // follows the fetch instead of freezing at the plan's opening (規約 §フル interactive rebase). The plan asks for
+    // itself and reads its own answer by range, so no other question can take the answer's place.
     Connections {
         target: branchesModel
         function onRefsMoved() {
-            if (page.planActive && planModel.publishRange !== "")
-                repoTab.checkPublish(planModel.publishRange)
+            planModel.refreshPushed()
         }
-    }
-    // The publish slot is shared, and something else can put its own range in it while the plan stands (the flows
-    // are frozen, but a landing answer asked before the freeze is not). The note reads only its own range, so a
-    // clobbered slot would blank the amber — this converges it back. Edge-triggered on the very property, so it
-    // re-asks once per clobber, not once per tick.
-    readonly property bool planPushedClobbered: page.planActive && planModel.publishRange !== ""
-                                                && repoTab.publishRange !== planModel.publishRange
-    onPlanPushedClobberedChanged: {
-        if (page.planPushedClobbered)
-            repoTab.checkPublish(planModel.publishRange)
     }
     Connections {
         target: planModel
@@ -1085,6 +1064,7 @@ Item {
         heldReason: page.doorsHeldWhy
         repoTab: repoTab
         workTree: workTree
+        graphModel: graphModel
         branchesModel: branchesModel
         worktreesModel: worktreesModel
         tagsModel: tagsModel
@@ -1268,31 +1248,17 @@ Item {
     readonly property string selectedSignatureSigner:
         page.signatureIsForSelection ? repoTab.signatureSigner : ""
 
-    // Whether a remote already has the selected commit — what the save row's warning rests on. Asked only once its
-    // message is touched: that is the first moment the answer can matter, and it spares a rev-list on every selection
-    // click.
-    property bool selectedPublished: false
-    function askSelectedPublished() {
-        // Not while a plan stands: the slot is the plan's (its amber note reads it), and the save row this answer
-        // warns on is the plan's reword chip, which carries the plan's own warning instead.
-        if (page.selectedOid !== "" && repoTab.state === "open" && !page.planActive)
-            repoTab.checkPublish(page.selectedOid + "^!")
-    }
-    onSelectedOidChanged: page.selectedPublished = false
+    // Whether a remote already has the selected commit — what the save row's warning rests on. Only HEAD's own commit
+    // takes typing (`messageEdit`), so the answer is HEAD's own (`WorkTreeModel.headPublished`), read while the
+    // selection stands on it; under a plan the reword chip carries the plan's own warning instead. Nothing is asked
+    // on the keystroke: the answer rides beside HEAD, and a plan standing over the boxes cannot have spent it.
+    readonly property bool selectedPublished: !page.planActive && page.selectedOid !== ""
+                                              && page.selectedOid === workTree.headOid && workTree.headPublished
 
     // **Moving off a half-written message drops it, and nothing asks** (デザイン規約 §コミットメッセージの 2 つの枠).
     // A message that has not been saved is a draft of somebody else's commit; the way to keep it is to press the
     // button, and the two ways to drop it — Escape, and reading another commit — are both things the reader did on
-    // purpose. So nothing stands between a click in the graph and the commit it lands on.
-    Connections {
-        target: detailsPane
-        // The first keystroke is the first moment "is this on a remote" can matter, and it spares a rev-list on every
-        // selection click.
-        function onMessageDirtyChanged() {
-            if (detailsPane.messageDirty)
-                page.askSelectedPublished()
-        }
-    }
+    // purpose. So nothing stands between a click in the graph and the commit it lands on (`DetailsPane.syncMessage`).
 
     // An assignment is not something git knows about, so nothing here is waiting for a refresh to bring it: the rows
     // and the card re-read the store themselves.
@@ -1532,10 +1498,15 @@ Item {
             else if (repoTab.writeAnswerAtTip(i)) {
                 page.pendingWipSelect = false
                 page.pendingHeadSelect = true
-                page.pendingHeadSeenSeq = workTree.statusSeq
+                // The answer names the first report that may answer it (`RepoTab.writeAnswerHeadSeq`): the report
+                // in hand may be the one before the write or already the one after it — the two feeds are drained
+                // in no fixed order — and the number tells them apart where a count of reports could not.
+                page.pendingHeadFromSeq = repoTab.writeAnswerHeadSeq(i)
                 page.pendingHeadAsked = true
             }
         }
+        // The report that answers the landing may already be in hand (above).
+        page.tryPendingHeadSelect()
         // The write moved what the two sides hold, so a diff left open on either is a picture of a file as it was —
         // the same staleness the file list's own `+` used to leave behind.
         //
@@ -1559,7 +1530,6 @@ Item {
         // same to the file, and to which side of the index it sits on.
         if (repoTab.writeMovedHead)
             page.closeDiff()
-        page.refreshHeadPublished()
     }
 
     // Center area switches between the graph and a file diff. The pieces are kept apart rather than parsed back out of
@@ -2043,10 +2013,12 @@ Item {
     // first still describe the repository as it was — reading the branch out of them lands on the commit that was just
     // replaced. Resolved once the graph holds where the branch points, which is only true of the refreshed pair.
     property bool pendingHeadSelect: false
-    /// The `WorkTreeModel.statusSeq` the arming saw. The detached fallback below may only read a status that arrived
-    /// after it — the messages in flight at the arming still describe the repository as it was, and a stale HEAD
-    /// still has a row to land on.
-    property int pendingHeadSeenSeq: -1
+    /// The first report of HEAD that may answer the landing (`WorkTreeModel.headSeq`). A write's answer names it
+    /// (`RepoTab.writeAnswerHeadSeq`): the report in hand at that arming may still describe the repository as it
+    /// was, with a stale HEAD that has a row to land on, and only a report numbered at or above the answer's looked
+    /// after the write. An arming read out of a report already in hand (the working tree emptying, the selected
+    /// commit vanishing) takes that very report.
+    property int pendingHeadFromSeq: 0
     // Whether the landing is one the person here asked for, in which case the viewport goes to it as well: a commit
     // they meant to make is not an answer if it lands off screen. The other two ways this is set happen *to* the window
     // — a commit made in a terminal, a rewrite that swept the selected commit away while the poll was watching — and a
@@ -2095,23 +2067,22 @@ Item {
         page.stashLanded = false
         page.wipShown = false
         page.pendingHeadSelect = true
-        // The status this is read out of **is** the one that answers: the fallback below may read anything younger
-        // than what the arming saw, and what this arming saw is the status before this one.
-        page.pendingHeadSeenSeq = workTree.statusSeq - 1
+        // The status this is read out of **is** the one that answers: the report of HEAD that came with it is already
+        // in hand (`hub::sink` sends it ahead of the status), and that is the commit the changes went into.
+        page.pendingHeadFromSeq = workTree.headSeq
         // Only ours is a landing anybody asked for, so only ours takes the viewport along.
         page.pendingHeadAsked = ourStash
     }
     function tryPendingHeadSelect() {
-        if (!page.pendingHeadSelect || !branchesModel.refsLoaded)
+        if (!page.pendingHeadSelect || !workTree.headKnown)
             return
-        // The branches section answers only for a branch; detached, HEAD is still somewhere, and the status model is
-        // the one that says where (`WorkTreeModel.headOid` — "branch or not"). Without the fallback a landing owed
-        // after a write made detached never resolves — but only a status that arrived after the arming may answer
-        // (`statusSeq`): the one in flight still describes the repository as it was, and its stale HEAD has a row.
-        const statusFresh = workTree.statusSeq !== page.pendingHeadSeenSeq
-        const head = branchesModel.headOid !== "" ? branchesModel.headOid
-                   : statusFresh ? workTree.headOid : ""
-        const row = head !== "" ? graphModel.rowOf(head) : -1
+        // Where HEAD stands is the one record's, branch or not (`WorkTreeModel.headOid`), so a write that left it
+        // detached lands the same as any other. Only a report counted after the arming may answer
+        // (`pendingHeadFromSeq`): the one in flight at a write's answer still describes the repository as it was,
+        // and its stale HEAD has a row.
+        if (workTree.headSeq < page.pendingHeadFromSeq)
+            return
+        const row = workTree.headOid !== "" ? graphModel.rowOf(workTree.headOid) : -1
         if (row < 0)
             return
         page.pendingHeadSelect = false
@@ -2157,7 +2128,9 @@ Item {
         }
         page.selectedOid = ""
         page.pendingHeadSelect = true
-        page.pendingHeadSeenSeq = workTree.statusSeq
+        // The graph that let the commit go was rebuilt behind a read that had already reported where HEAD went, so
+        // the report in hand is the one to land on.
+        page.pendingHeadFromSeq = workTree.headSeq
     }
 
     // A reworded commit came back under a different hash: the one now standing where it stood is it, since only the
@@ -2227,10 +2200,11 @@ Item {
         if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect || page.rowPickedElsewhere
                 || graphModel.rowTotal === 0)
             return
-        // Refs decide which commit is "current" — wait for them instead of guessing the newest row too early.
-        if (!branchesModel.refsLoaded)
+        // Where HEAD stands decides which commit is "current" — wait for the report instead of guessing the newest
+        // row too early (`WorkTreeModel.headKnown`). Detached, the newest row is the one to open on.
+        if (!workTree.headKnown)
             return
-        let row = branchesModel.headOid !== "" ? graphModel.rowOf(branchesModel.headOid) : -1
+        let row = workTree.branchOid !== "" ? graphModel.rowOf(workTree.branchOid) : -1
         if (row < 0) {
             if (graphModel.loading)
                 return // the head row may still be streaming in
@@ -2280,18 +2254,11 @@ Item {
             page.trySelectDefault()
         }
     }
+    // Where HEAD stands is not the refs' to say — the record's report rides the working-tree model, and the landings
+    // and the default selection are paid there (`workTree.onChanged`).
     Connections {
         target: branchesModel
-        function onChanged() {
-            // Refs can be the half that was missing, when the walk had already delivered the commit they now point at.
-            page.tryPendingHeadSelect()
-            page.trySelectDefault()
-        }
-        // Refs that settled without moving say nothing through `changed` (identical rows are deliberately quiet — see
-        // the model), and a write that recorded nothing leaves them exactly so: a cherry-pick of a commit this branch
-        // already has owes the same landing as one that wrote a commit, and this is the only word that it can be paid.
         function onRefsSettled() {
-            page.tryPendingHeadSelect()
             // The listing is the half a move onto a branch that was not there waits on: the status behind the write
             // already has HEAD on it, and until this arrives the screen still says no such branch (`moveLanding`).
             page.absorbMoveLanding()
@@ -2352,13 +2319,12 @@ Item {
             // merge put in the box are that operation's, and an abort takes them back out — asked before it, the box it
             // has yet to empty reads as a message somebody is writing.
             page.leaveWipWhenDone(moved || opGone)
-            // The status can be the half a detached landing was waiting on (`tryPendingHeadSelect`'s fallback reads
-            // this model, and only a status younger than the arming may answer). **Only the detached half**: with a
-            // branch name standing, resolution stays with the refs/graph events — a status that arrives first would
-            // otherwise hand the still-stale `branchesModel.headOid` a row to land on, which is the exact stale read
-            // the pending flag exists to wait out.
-            if (branchesModel.headOid === "")
-                page.tryPendingHeadSelect()
+            // The report of where HEAD stands rides this model (`WorkTreeModel.headSeq`), so this is where a landing
+            // owed to a write is paid — only a report counted after the arming answers (`tryPendingHeadSelect`), and
+            // the first read after a write always sends one, moved or not, so a write that recorded nothing (a
+            // cherry-pick of a commit the branch already has) pays the same landing as one that wrote a commit.
+            page.tryPendingHeadSelect()
+            page.trySelectDefault()
         }
     }
     Connections {
@@ -2695,7 +2661,7 @@ Item {
                         anchors.rightMargin: Theme.spaceMd
                         plan: planModel
                         pushedCount: page.planPushed
-                        tipHeldElsewhere: repoTab.headReachedElsewhere
+                        tipHeldElsewhere: workTree.headReachedElsewhere
                         busy: repoTab.busyCount > 0
                     }
                 }

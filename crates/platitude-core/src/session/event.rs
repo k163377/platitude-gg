@@ -82,6 +82,31 @@ pub enum SessionEvent {
         generation: u64,
         rows: Vec<(u32, Vec<RefLabel>)>,
     },
+    /// Where HEAD stands, as the newest read that reported it left it —
+    /// the one answer every consumer reads it from
+    /// (`session::standing`). Sent when it moved, and once more by the
+    /// first read to land after a write whether or not it moved: that is
+    /// the report a consumer waiting on "the repository as the write left
+    /// it" is owed. A quiet tick sends nothing.
+    ///
+    /// `seq` numbers the report, in the order the reports were accepted
+    /// and across sessions (`session::standing`): a consumer waiting on a
+    /// write holds the number that write's answer named
+    /// ([`WriteFinished::head_seq`](SessionEvent::WriteFinished)), and a
+    /// report numbered at or above it is one that looked after the write.
+    HeadObserved {
+        head: HeadState,
+        seq: u64,
+    },
+    /// Whether a remote already has the commit HEAD is on — the `already
+    /// pushed` note an amend wears — read off the walk's own marks
+    /// (`session::published`) and sent when the answer moved. `oid` is
+    /// the commit the answer is about, `None` on a branch with no commits
+    /// yet, so a consumer holding a HEAD this is not yet about can tell.
+    HeadPublished {
+        oid: Option<Oid>,
+        published: bool,
+    },
     /// Shared rather than owned: every sidebar section is handed the whole
     /// snapshot and reads its own part of it, and a deep copy per section
     /// is tens of thousands of strings duplicated for nobody
@@ -91,6 +116,12 @@ pub enum SessionEvent {
     },
     StatusLoaded {
         status: WorkTreeStatus,
+        /// The number of the report of HEAD this status stands beside —
+        /// the record's, after what the read saw of HEAD went into it
+        /// ([`HeadObserved::seq`](SessionEvent::HeadObserved)). What says
+        /// the counts are about the HEAD the consumer holds, and what a
+        /// consumer waiting on a write's tree waits for.
+        head_seq: u64,
         op_state: OpState,
         /// "commit N of M" while a rebase is stepping through commits.
         progress: Option<conflict::Progress>,
@@ -197,10 +228,13 @@ pub enum SessionEvent {
         branch: String,
         merged: bool,
     },
-    /// Answer to [`RepoSession::check_publish`].
-    PublishChecked {
+    /// Answer to [`RepoSession::check_plan_published`]: how many commits
+    /// of a plan's range a remote already has, as of now. The range is
+    /// echoed back because the plan that asked may have been put away and
+    /// another opened by the time this lands.
+    PlanPublished {
         range: String,
-        state: publish::PublishState,
+        published: u32,
     },
     /// Answer to [`RepoSession::ask_rebase_plan`]: the rows the
     /// interactive-rebase screen opens over. `from` is echoed back (inside
@@ -349,10 +383,16 @@ pub enum SessionEvent {
     /// and what it said is a report rather than an error
     /// ([`crate::report::WriteReport`]). It rides beside `error`, which
     /// goes on carrying git's whole message for the log.
+    ///
+    /// `head_seq` is the smallest number the first report of HEAD after
+    /// this write can carry (`Standing::fence`): a consumer landing on
+    /// what the write left arms on it, and is answered by the report
+    /// numbered at or above it — whichever of the two reaches it first.
     WriteFinished {
         op: &'static str,
         error: Option<String>,
         report: Option<crate::report::WriteReport>,
+        head_seq: u64,
     },
     /// A git subprocess was spawned (command log). Only what the user
     /// asked for, unless background reads were switched on — plus the

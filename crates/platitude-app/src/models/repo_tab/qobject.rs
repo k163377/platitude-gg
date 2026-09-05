@@ -73,18 +73,6 @@ impl RepoTab {
         Member = branch_delete_seq,
         Notify = changed
     );
-    qproperty!("publishRange", Member = publish_range, Notify = changed);
-    qproperty!("publishTotal", Member = publish_total, Notify = changed);
-    qproperty!(
-        "publishPublished",
-        Member = publish_published,
-        Notify = changed
-    );
-    qproperty!(
-        "headReachedElsewhere",
-        Member = head_reached_elsewhere,
-        Notify = changed
-    );
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -253,6 +241,16 @@ impl RepoTab {
     #[qslot]
     fn write_answer_seq(&self, index: i32) -> i32 {
         self.write_answer_at(index).map_or(0, |a| a.seq)
+    }
+
+    /// The number the session named for the first report of HEAD after
+    /// that write (`WriteAnswer::head_seq`): a landing on what the write
+    /// left arms on it, and `WorkTreeModel.headSeq` at or above it is a
+    /// report that looked after the write — whichever of the two this
+    /// page reads first.
+    #[qslot]
+    fn write_answer_head_seq(&self, index: i32) -> i32 {
+        self.write_answer_at(index).map_or(0, |a| a.head_seq)
     }
 
     /// Which write answered. Raw data, the way `lastWriteError` is: what
@@ -772,11 +770,16 @@ impl RepoTab {
         self.look_up_remote_branch(remote, branch)
     }
 
-    /// Asks whether `git branch --delete` would refuse this branch (not
+    /// Asks git whether `branch --delete` would refuse this branch (not
     /// merged into its upstream, or HEAD without one), so a menu's
     /// delete row can wear `-D` from the start. The answer arrives as
     /// `branchDeleteAsked` / `branchDeleteMerged`; no answer arrives
     /// where the reads fail, and the row stays on its plain form.
+    ///
+    /// **The slow way, for the names the rows cannot answer**: the menu
+    /// asks the graph first (`GraphModel.reaches`), which answers in the
+    /// same frame for every branch the window draws, and comes here only
+    /// for a tip or a reference point older than the window.
     #[qslot]
     fn check_branch_delete(&mut self, branch: String) {
         self.look_up_branch_delete(branch)
@@ -944,13 +947,6 @@ impl RepoTab {
     #[qslot]
     fn ask_merge_tools(&mut self) {
         self.list_merge_tools()
-    }
-
-    /// Asks how much of `range` is already on a remote; the answer arrives
-    /// as `publishRange` / `publishTotal` / `publishPublished`.
-    #[qslot]
-    fn check_publish(&mut self, range: String) {
-        self.with_session(|s| s.check_publish(range.clone()));
     }
 
     /// Asks what git makes of `oid_hex`'s signature; the answer arrives as

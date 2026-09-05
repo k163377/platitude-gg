@@ -45,9 +45,11 @@ impl RebasePlanModel {
                     .map(|s| s.oid_hex.clone())
                     .unwrap_or_default();
                 // The very range the rebase replays, spelled by core once
-                // — the rewrite warning asks about this string, so it
-                // cannot drift from what the run touches.
+                // — the rewrite warning's count is about this string, so
+                // it cannot drift from what the run touches — and the
+                // count itself, taken in the same read.
                 self.publish_range = preview.range;
+                self.pushed_count = i32::try_from(preview.published).unwrap_or(i32::MAX);
                 let onto = preview.onto.unwrap_or_default();
                 self.onto_subject = onto.subject;
                 self.onto_author = onto.author_name.clone();
@@ -98,6 +100,17 @@ impl RebasePlanModel {
                 self.asked_from = String::new();
                 self.changed();
             }
+            // The count asked again after the refs moved (`refreshPushed`).
+            // Matched by range rather than by the ask's generation: a plan
+            // put away and another opened since is a different range, and
+            // the old answer is dropped on the name.
+            PlanMsg::Published { range, published } => {
+                if !self.active || range != self.publish_range || published == self.pushed_count {
+                    return;
+                }
+                self.pushed_count = published;
+                self.changed();
+            }
         }
     }
 
@@ -123,6 +136,8 @@ impl RebasePlanModel {
         self.asked_from = String::new();
         self.selected_row = -1;
         self.head_suspect = false;
+        self.publish_range = String::new();
+        self.pushed_count = 0;
         self.reset_rows(Vec::new());
         self.initial = Vec::new();
         self.settle();

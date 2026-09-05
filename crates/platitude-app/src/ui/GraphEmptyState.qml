@@ -17,8 +17,7 @@ Item {
     required property var workTree
     /// A repository is open and has no commits yet. Not `blank`'s other half: a window with nothing in it and a
     /// repository with nothing in it are two different screens.
-    readonly property bool unborn: !emptyState.blank && emptyState.workTree.loaded
-                                   && emptyState.workTree.headOid === ""
+    readonly property bool unborn: !emptyState.blank && emptyState.workTree.unborn
     /// The line under the heading, held with the branch's seat still open in it: the name is drawn in the colour it
     /// wears everywhere else and the sentence in the screen's own, so the two are cut apart at `%1` rather than the
     /// name being looked for in the finished line (`Words.nameInSentence`, デザイン規約 §ref の種別).

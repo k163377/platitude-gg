@@ -13,6 +13,11 @@ pub(super) struct BridgeSink {
     /// tab has opened over the same `Feeds`. Retired, the late answers go
     /// nowhere instead of into somebody else's page.
     pub(super) retired: std::sync::atomic::AtomicBool,
+    /// The refs snapshot the tab was last told its remotes out of. A quiet
+    /// tick republishes the very same one (`session::chips`), and the tab
+    /// — every binding on it — must not be woken to be told the same
+    /// three names again. Weak, so the sink keeps nothing alive.
+    remotes_told: Mutex<std::sync::Weak<RefsSnapshot>>,
 }
 
 impl BridgeSink {
@@ -20,7 +25,22 @@ impl BridgeSink {
         Self {
             feeds,
             retired: std::sync::atomic::AtomicBool::new(false),
+            remotes_told: Mutex::new(std::sync::Weak::new()),
         }
+    }
+
+    /// Whether `snapshot` is the one the tab already has its remotes
+    /// from, marking it as told either way.
+    fn remotes_already_told(&self, snapshot: &Arc<RefsSnapshot>) -> bool {
+        let mut told = match self.remotes_told.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if std::sync::Weak::ptr_eq(&told, &Arc::downgrade(snapshot)) {
+            return true;
+        }
+        *told = Arc::downgrade(snapshot);
+        false
     }
 
     /// No more of this session's answers reach the feeds — the page is
@@ -103,26 +123,60 @@ impl SessionSink for BridgeSink {
             SessionEvent::LabelsChanged { generation, rows } => {
                 self.feeds.graph.push(GraphMsg::Labels { generation, rows });
             }
-            SessionEvent::RefsLoaded { snapshot } => {
-                self.feeds.tab.push(TabMsg::Remotes {
-                    names: snapshot.remote_names.clone(),
-                    urls: snapshot.remote_urls.clone(),
-                    push_default: snapshot
-                        .push_default
-                        .as_ref()
-                        .map(|marked| marked.remote.clone())
-                        .unwrap_or_default(),
-                    push_default_local: snapshot
-                        .push_default
-                        .as_ref()
-                        .is_some_and(|marked| marked.local),
+            SessionEvent::HeadObserved { head, seq } => {
+                let head = HeadMsg::of(&head, seq);
+                // Every consumer that draws something at HEAD, and only
+                // those: the headline, the branches section (its
+                // highlighted row and the stand-in that rides above it)
+                // and the graph (the row the pin leads to). Each holds
+                // the newest report and nothing older.
+                self.feeds
+                    .status
+                    .push_coalescing(StateMsg::Head(head.clone()));
+                self.feeds
+                    .refs_branches
+                    .push_coalescing(RefsMsg::Head(head.clone()));
+                self.feeds.graph.push_coalescing(GraphMsg::Head(head));
+            }
+            SessionEvent::HeadPublished { oid, published } => {
+                self.feeds.status.push_coalescing(StateMsg::HeadPublished {
+                    oid_hex: oid.map(|o| o.to_hex()).unwrap_or_default(),
+                    published,
                 });
-                self.feeds.refs_branches.push_replace(Arc::clone(&snapshot));
-                self.feeds.refs_remotes.push_replace(Arc::clone(&snapshot));
-                self.feeds.refs_tags.push_replace(snapshot);
+            }
+            SessionEvent::RefsLoaded { snapshot } => {
+                // The tab hears about its remotes only when the snapshot
+                // is a new one: a quiet tick republishes the same
+                // pointer, and waking every binding on the tab for it is
+                // the one thing a quiet tick must not do.
+                if !self.remotes_already_told(&snapshot) {
+                    self.feeds.tab.push(TabMsg::Remotes {
+                        names: snapshot.remote_names.clone(),
+                        urls: snapshot.remote_urls.clone(),
+                        push_default: snapshot
+                            .push_default
+                            .as_ref()
+                            .map(|marked| marked.remote.clone())
+                            .unwrap_or_default(),
+                        push_default_local: snapshot
+                            .push_default
+                            .as_ref()
+                            .is_some_and(|marked| marked.local),
+                    });
+                }
+                self.feeds
+                    .refs_branches
+                    .push_coalescing(RefsMsg::Snapshot(Arc::clone(&snapshot)));
+                self.feeds
+                    .refs_remotes
+                    .push_coalescing(RefsMsg::Snapshot(Arc::clone(&snapshot)));
+                self.feeds
+                    .refs_tags
+                    .push_coalescing(RefsMsg::Snapshot(snapshot));
             }
             SessionEvent::StatusLoaded {
                 status,
+                head_seq,
                 op_state,
                 progress,
                 sides,
@@ -142,6 +196,7 @@ impl SessionSink for BridgeSink {
                 ] {
                     run.push_replace(StatusMsg {
                         status: status.clone(),
+                        head_seq,
                         op_state,
                         progress,
                         sides: sides.clone(),
@@ -152,17 +207,20 @@ impl SessionSink for BridgeSink {
                         stop: stop.clone(),
                     });
                 }
-                self.feeds.status.push_replace(StatusMsg {
-                    status,
-                    op_state,
-                    progress,
-                    sides,
-                    op_message,
-                    merge_tool,
-                    push_remote,
-                    eol_marks,
-                    stop,
-                });
+                self.feeds
+                    .status
+                    .push_coalescing(StateMsg::Status(Box::new(StatusMsg {
+                        status,
+                        head_seq,
+                        op_state,
+                        progress,
+                        sides,
+                        op_message,
+                        merge_tool,
+                        push_remote,
+                        eol_marks,
+                        stop,
+                    })));
             }
             // `push_replace`, like the snapshot it is a slice of: what the
             // badge shows is where the replay is *now*, and a tick the GUI
@@ -349,15 +407,16 @@ impl SessionSink for BridgeSink {
                     .plan
                     .push_latest(generation, PlanMsg::Failed { from });
             }
-            SessionEvent::PublishChecked { range, state } => {
-                self.feeds.tab.push(TabMsg::Publish {
+            SessionEvent::PlanPublished { range, published } => {
+                self.feeds.plan.push(PlanMsg::Published {
                     range,
-                    total: state.total as i32,
-                    published: state.published() as i32,
+                    published: i32::try_from(published).unwrap_or(i32::MAX),
                 });
             }
             SessionEvent::HeadReachChecked { reached_elsewhere } => {
-                self.feeds.tab.push(TabMsg::HeadReach { reached_elsewhere });
+                self.feeds
+                    .status
+                    .push_coalescing(StateMsg::HeadReach { reached_elsewhere });
             }
             SessionEvent::MergeToolsLoaded { names, settled } => {
                 self.feeds.tab.push(TabMsg::MergeTools { names, settled });
@@ -391,8 +450,14 @@ impl SessionSink for BridgeSink {
                 running: true,
                 error: String::new(),
                 report: None,
+                head_seq: 0,
             }),
-            SessionEvent::WriteFinished { op, error, report } => {
+            SessionEvent::WriteFinished {
+                op,
+                error,
+                report,
+                head_seq,
+            } => {
                 // A write that did not happen and has something to say
                 // for itself is not an error of this window's: the page
                 // reports it in words of its own, and the red line that
@@ -411,6 +476,7 @@ impl SessionSink for BridgeSink {
                     running: false,
                     error: error.unwrap_or_default(),
                     report,
+                    head_seq,
                 });
             }
         }
