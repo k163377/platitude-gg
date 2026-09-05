@@ -378,8 +378,11 @@ ColumnLayout {
         // content height is zero for the frame its model is being replaced in, and a share worked out from that hands
         // the whole pane to the list below for one frame, which is a flash every time a commit joins or leaves the
         // choice. The rows here are one line each, so a count is the same answer and it is there before the view is.
+        //
+        // **The margin above the first row is counted with them**: it is the view's own rather than a row's, and a
+        // view standing short of its own content scrolls with nothing down there to reach.
         Layout.preferredHeight: detailsPane.choosing
-            ? Math.min(detailsPane.chosenCommits.length * Theme.rowHeight,
+            ? Math.min(chosenList.topMargin + detailsPane.chosenCommits.length * Theme.rowHeight,
                        Math.max(detailsPane.listRoom / 2, detailsPane.listRoom - fileList.contentHeight))
             : 0
         // Half a row's slack, which is all a face centred in a row has above it: with this the first face stands the
@@ -399,6 +402,12 @@ ColumnLayout {
     function chosenRowAt(index) {
         return chosenList.itemAtIndex(index)
     }
+    /// Automation only: the commit list has laid its rows out, and how far past the view its content runs — **the
+    /// view's own margins counted** (verify-ui). A picture answers neither: two pixels of scroll on a list that has
+    /// nothing below the fold frames exactly like none.
+    readonly property bool chosenListDrawn: chosenList.visible && chosenList.contentHeight > 0
+    readonly property real chosenListSpare: Math.max(
+        0, chosenList.topMargin + chosenList.contentHeight - chosenList.height)
     DetailsMessageBlock {
         id: block
         visible: !detailsPane.choosing

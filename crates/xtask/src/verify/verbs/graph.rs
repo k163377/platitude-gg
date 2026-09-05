@@ -215,15 +215,20 @@ pub(super) const TABLE: &[Verb] = &[
     // reach: a held press moves the choice and **not** what is being
     // read, and a picture of three lit rows says nothing about which
     // of them the pane on the right is describing.
+    // `spare=0` is the other half a picture cannot answer: the list
+    // stands as tall as what it holds, **its own top margin counted**.
+    // Counted from the rows alone it came out one margin short, which is
+    // a view that scrolls two pixels to reach nothing at all — and two
+    // pixels of scroll frame exactly like none.
     Verb {
         name: "graph-choose",
         when: &[],
-        plain: "read=true wip=false",
+        plain: "read=true wip=false spare=0",
     },
     Verb {
         name: "graph-choose-range",
         when: &[],
-        plain: "read=true wip=false",
+        plain: "read=true wip=false spare=0",
     },
     // The row of that list cuts its summary to a line; the card its rest
     // opens holds nothing back and offers no way out of itself. Neither

@@ -248,14 +248,15 @@ Item {
                 chooseTimer.step++
                 return
             }
-            // Every press is in. **Three things have to land, and each is on the output side**: the page's tally, the
-            // highlight the rows drew of it (a choice nothing draws is a number in a property), and the pane on the
-            // right having answered *for this choice* — `selectionLoaded` rather than `!loading`, because a read that
+            // Every press is in. **Four things have to land, and each is on the output side**: the page's tally, the
+            // highlight the rows drew of it (a choice nothing draws is a number in a property), the pane on the right
+            // having answered *for this choice* — `selectionLoaded` rather than `!loading`, because a read that
             // failed also stops loading and leaves an empty list, which is the same shape as a choice of commits that
-            // changed nothing (規約 §UI 自動化の因果性).
+            // changed nothing — and the list of commits having laid its rows out, since what is asked about that
+            // list below is a measurement and an unlaid-out view answers 0 to every one (規約 §UI 自動化の因果性).
             const lit = chooseTimer.litRows()
             if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted()
-                    || !detailsModel.selectionLoaded)
+                    || !detailsModel.selectionLoaded || !detailsPane.chosenListDrawn)
                 return
             chooseTimer.stop()
             // The choice is standing and the pane has answered for it. Two verbs go on from here into the list it put
@@ -268,6 +269,10 @@ Item {
                               + " lit=" + lit
                               + " read=" + (page.selectedOid === chooseTimer.readOid)
                               + " wip=" + page.wipShown
+                              // How far the commit list runs past the view it stands in, the view's own margins
+                              // counted. A choice this small fits, so anything but 0 is a list that scrolls to
+                              // reach nothing.
+                              + " spare=" + detailsPane.chosenListSpare
                               + " compared=" + detailsModel.comparing
                               + " files=" + detailsModel.fileTotal
                               + " rows=" + chooseTimer.rows.join(","))
