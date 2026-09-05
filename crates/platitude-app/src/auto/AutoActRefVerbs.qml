@@ -54,13 +54,20 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
-        if (act === "delete-branch" || act === "delete-branch-go") {
-            // On a branch git refuses, the row turns into the held force-delete, which "-go" then runs to its end.
-            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
-            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
-            refMenu.openSub(refBranchCard)
-            if (act === "delete-branch-go")
-                forceDeleteTimer.start()
+        if (act === "delete-branch" || act === "delete-branch-go" || act === "delete-branch-refused") {
+            // On a branch git refuses, the row turns into the held force-delete, which "-go" then runs to its end and
+            // "-refused" stands still and reads. **The card goes up and the row is pressed from the sampler rather
+            // than from here** (`deleteRowTimer`): nothing is deleted while a write is running, and the page drops a
+            // request made then instead of queueing it (`RepoPage.deleteRow`) — so a press put in a tick early goes
+            // nowhere, and every one of these waits out the watchdog on a write nobody made.
+            //
+            // The plain one is finished by the write barrier `dispatchFinished` puts up, which reads nothing until
+            // the press arms it; the other two own their own completion (`AutoActCompletion.defersCompletion`) and
+            // their tail goes on off the press itself.
+            driver.expectWriteAtPress()
+            deleteRowTimer.after = act === "delete-branch-go" ? "hold"
+                                 : act === "delete-branch-refused" ? "refused" : ""
+            deleteRowTimer.start()
         } else if (act === "delete-gone") {
             // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
             // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
@@ -105,21 +112,15 @@ Item {
                 driver.barrierNotice.start()
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
-        } else if (act === "delete-branch-refused") {
-            // Same entry as delete-branch; this one waits for git's answer rather than acting on it.
-            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
-            page.deleteRow("branch", arg, arg, branchesModel.oidOfName(arg))
-            refMenu.openSub(refBranchCard)
-            refusedRowTimer.start()
         } else if (act === "delete-branch-chip") {
             // The same delete, asked from the graph row's entrance — the very card the sidebar's row opens
             // (`RefBranchMenu`). **The subject is the card going.** The row is left standing for a refusal
             // (`AppMenuItem.staysOpen`), so a delete git takes has to take the card down behind it, and a card that
             // closed frames exactly like one that was never opened — only the report can say which.
-            page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
-            commitMenu.openSub(commitBranchCard)
-            // The row's own press: a stays-open row is picked rather than triggered (`AppMenuItem.picked`).
-            commitDeleteItem.picked()
+            //
+            // The menu goes up and the row is pressed from the sampler, on the same terms as the sidebar's three
+            // above: both entrances end at the one page function, and it drops what it is asked while a write runs.
+            driver.expectWriteAtPress()
             chipDeleteTimer.start()
         } else if (act === "chip-menu") {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — there is no second menu on
@@ -207,6 +208,50 @@ Item {
             return false
         }
         return true
+    }
+    /// Says whether the delete this run asked for went out, and reports it either way. **The input's own answer**
+    /// (`RepoPage.deleteRowAsked`) rather than a second reading of what would have stopped it: a run that latched on
+    /// a press the page dropped waits on a write nobody made, which is the watchdog's whole ceiling in silence. The
+    /// caller finishes the run where it stands on a false answer, and this line is what fails it
+    /// (`verify/verbs/nav.rs`). `busy=` is read after the press rather than before, so it says whether the count rose
+    /// under it; the row's own two say whether a reader would have had that press at all.
+    function deleteRowLanded(row) {
+        Harness.report("delete_row asked=" + page.deleteRowAsked
+                          + " busy=" + repoTab.busyCount
+                          + " offered=" + row.offered
+                          + " blocked=" + (row.blockedReason !== ""))
+        return page.deleteRowAsked
+    }
+    // The delete asked of the left pane's card. **The card goes up and the row is pressed here rather than at the
+    // dispatch**: the delete row is only in the card while nothing is running (`offers::ref_menu`) and the page drops
+    // a request made then on the same terms (`RepoPage.deleteRow`), so a tick early is a press that goes nowhere.
+    SampleTimer {
+        id: deleteRowTimer
+        /// What goes on after the press: `hold` runs the held `-D` git's refusal leaves behind, `refused` stands
+        /// still and reads the row it turned into, and "" is the plain delete, which the write barrier finishes.
+        property string after: ""
+        onTriggered: {
+            // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性).
+            if (repoTab.busyCount !== 0)
+                return
+            deleteRowTimer.stop()
+            const arg = Harness.autoActArg
+            const oid = branchesModel.oidOfName(arg)
+            page.openRefMenu("branch", arg, arg, oid)
+            page.deleteRow("branch", arg, arg, oid)
+            refMenu.openSub(refBranchCard)
+            if (!acts.deleteRowLanded(refDeleteItem)) {
+                // Nothing went out, so nothing is coming to wait for: the tail is never started and the run says
+                // where it stands rather than spending the ceiling on a write nobody made.
+                driver.complete()
+                return
+            }
+            driver.pressedWrite()
+            if (deleteRowTimer.after === "hold")
+                forceDeleteTimer.start()
+            else if (deleteRowTimer.after === "refused")
+                refusedRowTimer.start()
+        }
     }
     // git's refusal has to come back before the row it turns into a held one can be held — or photographed.
     SampleTimer {
@@ -460,7 +505,29 @@ Item {
     // is what tells a landing from a refusal — a turned-down delete leaves the row wearing `branch -D`.
     SampleTimer {
         id: chipDeleteTimer
+        /// Whether the row has been pressed yet. While it has not, every tick is the input's own branch and nothing
+        /// below is read.
+        property bool pressed: false
         onTriggered: {
+            if (!chipDeleteTimer.pressed) {
+                // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性), the same one the
+                // sidebar's three read: the page drops the request while a write is running.
+                if (repoTab.busyCount !== 0)
+                    return
+                const arg = Harness.autoActArg
+                page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
+                commitMenu.openSub(commitBranchCard)
+                // The row's own press: a stays-open row is picked rather than triggered (`AppMenuItem.picked`).
+                commitDeleteItem.picked()
+                if (!acts.deleteRowLanded(commitDeleteItem)) {
+                    chipDeleteTimer.stop()
+                    driver.complete()
+                    return
+                }
+                chipDeleteTimer.pressed = true
+                driver.pressedWrite()
+                return
+            }
             if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
                 return
             chipDeleteTimer.stop()

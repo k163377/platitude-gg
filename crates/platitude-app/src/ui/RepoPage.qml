@@ -992,7 +992,15 @@ Item {
             page.goneStash = ""
     }
 
+    /// Whether the delete this page was last asked for went out to git, or was dropped before it did. **Both
+    /// entrances end here** — the left row's card and the graph row's — and a signal carries no answer back to
+    /// either, so the answer stands here. The automation reads it as "did the input land"
+    /// (app-ui.md §UI 自動化の因果性), the same question `RefBranchMenu.deleteAsked` answers for the card: a request
+    /// this page dropped leaves nothing for a write barrier to wait on, and waiting on it is the watchdog's whole
+    /// ceiling in silence. Nothing on screen needs it.
+    property bool deleteRowAsked: false
     function deleteRow(kind, id, name, oidHex) {
+        page.deleteRowAsked = false
         if (kind !== "branch")
             return
         // The one row in any menu that outlives its own write (it stays open for git's answer), so it is also the one
@@ -1005,6 +1013,7 @@ Item {
         page.expectedRefusals++
         page.showGone("branch", id)
         repoTab.deleteBranch(id, false)
+        page.deleteRowAsked = true
     }
     /// Held, not asked (デザイン規約 §長押し).
     function dropStashNow(ref) {
