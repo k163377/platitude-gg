@@ -1140,13 +1140,7 @@ fn snapshots(root: &Path, g: &mut Graph) -> Result<(), String> {
 /// QML: a capitalised word that is another QML file's name is a type
 /// reference, and one that is a `#[qobject]` type is a model reference.
 fn qml(root: &Path, g: &mut Graph) -> Result<(), String> {
-    let mut files = Vec::new();
-    collect(
-        root,
-        &root.join("crates/platitude-app/src"),
-        "qml",
-        &mut files,
-    )?;
+    let files = qml_files(root)?;
     let by_name: BTreeMap<String, String> = files.iter().map(|f| (stem_of(f), f.clone())).collect();
     for file in &files {
         let raw = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
@@ -1176,6 +1170,19 @@ fn qml(root: &Path, g: &mut Graph) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Every QML file of the app, product and harness alike, as workspace
+/// paths — the set the census can name, edges or none.
+pub(crate) fn qml_files(root: &Path) -> Result<Vec<String>, String> {
+    let mut files = Vec::new();
+    collect(
+        root,
+        &root.join("crates/platitude-app/src"),
+        "qml",
+        &mut files,
+    )?;
+    Ok(files)
 }
 
 /// A file's name without directory or extension — what a QML type is

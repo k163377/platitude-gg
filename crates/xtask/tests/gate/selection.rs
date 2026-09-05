@@ -331,3 +331,86 @@ fn a_source_change_owes_no_policy_check() {
     sb.gate_ok(&sb.seat, &[]);
     assert!(!sb.ran().contains("deny"));
 }
+
+/// A source taken out of the tree has no readers the graph can name —
+/// the graph is read off the tree, and `Main.qml` still naming the pane
+/// resolves to nothing rather than to an edge — so its reach is
+/// everything: the one reach that cannot miss the reader.
+#[test]
+fn a_source_taken_out_of_the_tree_owes_everything() {
+    let sb = Sandbox::new("gone");
+    std::fs::remove_file(sb.seat.join("crates/platitude-app/src/ui/StashPane.qml")).expect("rm");
+    sb.commit_all(&sb.seat, "refactor(app-ui): drop the pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(
+        text.contains("everything (crates/platitude-app/src/ui/StashPane.qml is gone"),
+        "{text}"
+    );
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    for owed in [
+        "shipped",
+        "verify stash --preset basic",
+        "test xtask (all)",
+        "clippy platitude-app",
+    ] {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+}
+
+/// A test file taken out is not that: nothing outside its own binary can
+/// name it, and the root that declared it changes with it — which is
+/// the whole binary, what any change to the core's crate owes (its
+/// clippy, the app's bare start), and nothing beside them.
+#[test]
+fn a_test_taken_out_of_its_binary_owes_that_binary_and_nothing_else() {
+    let sb = Sandbox::new("test-gone");
+    std::fs::remove_file(
+        sb.seat
+            .join("crates/platitude-core/tests/it/refs_integration.rs"),
+    )
+    .expect("rm");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/tests/it/main.rs",
+        "mod support;\nmod stash_integration;\n",
+    );
+    sb.commit_all(&sb.seat, "test(core): drop the refs tests", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!text.contains("everything"), "{text}");
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    assert_eq!(
+        ran,
+        set(&[
+            "bare",
+            "clippy platitude-core",
+            "clippy-linux platitude-core",
+            "test it (all)",
+            "test it (all) linux",
+        ]),
+        "{ran:?}"
+    );
+}
+
+/// A file moved is a file gone under its old name, and git's rename
+/// detection would list the new name alone: the readers still naming
+/// the old one would then never be reached. Read with renames off.
+#[test]
+fn a_renamed_source_is_seen_to_have_gone() {
+    let sb = Sandbox::new("renamed");
+    let pane = sb.seat.join("crates/platitude-app/src/ui/StashPane.qml");
+    let text = std::fs::read_to_string(&pane).expect("the pane");
+    std::fs::remove_file(&pane).expect("rm");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPanel.qml",
+        &text,
+    );
+    sb.commit_all(&sb.seat, "refactor(app-ui): rename the pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(
+        text.contains("everything (crates/platitude-app/src/ui/StashPane.qml is gone"),
+        "{text}"
+    );
+}

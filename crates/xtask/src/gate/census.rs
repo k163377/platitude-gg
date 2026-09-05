@@ -169,14 +169,10 @@ fn one_writer(root: &Path) -> Result<std::fs::File, String> {
 /// The names of every QML component file of the app, product and
 /// harness alike.
 fn component_files(root: &Path) -> Result<BTreeSet<String>, String> {
-    let mut files = Vec::new();
-    collect(
-        root,
-        &root.join("crates/platitude-app/src"),
-        "qml",
-        &mut files,
-    )?;
-    Ok(files.iter().map(|f| stem_of(f)).collect())
+    Ok(super::graph::qml_files(root)?
+        .iter()
+        .map(|f| stem_of(f))
+        .collect())
 }
 
 /// Whether a QML file can stand in the item tree at all. A singleton or a

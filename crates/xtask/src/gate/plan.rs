@@ -121,13 +121,17 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
     let onto_main = base == main;
     let g = graph::build(dir)?;
     // quotepath off: a non-ASCII name would otherwise come back
-    // octal-escaped in quotes and match no file.
+    // octal-escaped in quotes and match no file. Renames off: with them
+    // on, a file moved is listed under its new name alone, and the old
+    // one — the path every reader still names — is never seen to have
+    // gone (`gone_source`).
     let changed: Vec<String> = git_query(
         &here,
         &[
             "-c",
             "core.quotepath=false",
             "diff",
+            "--no-renames",
             "--name-only",
             &base,
             &head,
@@ -140,19 +144,32 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
     .collect();
     let everything = if ask.all {
         Some("--all".to_string())
+    } else if let Some(input) = changed.iter().find(|f| moves_everything(f)) {
+        Some(input.clone())
     } else {
-        changed.iter().find(|f| moves_everything(f)).cloned()
+        changed
+            .iter()
+            .find(|f| gone_source(dir, f))
+            .map(|f| format!("{f} is gone"))
     };
     // What the change itself reaches is what has to be shown; a build
     // input widens what runs, not what the census owes.
     let touched = g.reach(&changed);
     let reach = if everything.is_some() {
-        g.deps
+        // Every node of the graph, and every QML file whether or not it
+        // is one: a component that names nothing — or names only what
+        // is gone — has no edge, and so no key here, and the verbs whose
+        // census names it alone would be the ones "everything" missed.
+        let mut every: BTreeSet<String> = g
+            .deps
             .keys()
+            .chain(g.rdeps.keys())
             .chain(g.modules.keys())
             .filter(|f| !f.ends_with('/'))
             .cloned()
-            .collect()
+            .collect();
+        every.extend(graph::qml_files(dir)?);
+        every
     } else {
         touched.clone()
     };
@@ -271,6 +288,30 @@ fn moves_everything(file: &str) -> bool {
             && (file.ends_with("/Cargo.toml") || file.ends_with("/build.rs")))
         // What the app's build script links in: no source names it.
         || file.starts_with("crates/platitude-app/assets/")
+}
+
+/// A source the tree no longer holds, whose readers the graph cannot
+/// name: the graph is read off the tree, and a `use` or a QML type name
+/// still pointing at the file resolves to nothing rather than to an edge.
+/// Its reach would be the file alone — no crate entered, so no clippy,
+/// no test, no verb — and a module deleted with another crate still
+/// naming it would be stamped green. Everything is the one reach that
+/// cannot miss the reader.
+fn gone_source(dir: &Path, file: &str) -> bool {
+    (file.ends_with(".rs") || file.ends_with(".qml") || file.ends_with("/qmldir"))
+        && !gone_test(file)
+        && !dir.join(file).exists()
+}
+
+/// A test taken out has no reader the graph could miss. A module under
+/// `tests/` is named by nothing outside its binary, and the root or
+/// `mod.rs` declaring it moves with it — a declaration left behind is
+/// one `fmt` refuses to resolve — which reaches that binary whole. A
+/// QtTest file is named by nothing at all, and `qmltest_steps` reads it
+/// off the reach by path, where the changed file stands whether or not
+/// the tree holds it.
+fn gone_test(file: &str) -> bool {
+    file.contains("/tests/") && (file.ends_with(".rs") || stem_of(file).starts_with("tst_"))
 }
 
 fn under(file: &str, input: &str) -> bool {
