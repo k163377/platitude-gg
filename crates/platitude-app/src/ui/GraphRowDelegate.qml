@@ -212,15 +212,23 @@ Item {
             // **Only on the row they belong to.** A nested layout defaults to `Layout.fillWidth: true`, so left up on
             // every commit row this takes a share of the free space even with all six counts at zero and nothing drawn
             // (67px of a 400px row, measured), which is that much of the message cut off for a column holding nothing.
-            WipTallyRow {
+            //
+            // **Built on the uncommitted row alone.** A delegate is built per row on screen, and the tallies are six
+            // marks — a canvas each — with a number beside every one; on a commit's row they were built and hidden,
+            // which is heap the graph's rows are measured by (rules-refs/app-ui.md, the Loader rule). Invisible while
+            // inactive as well: a layout skips an invisible item, and an empty loader would still take the spacing.
+            Loader {
+                active: rowItem.isWip
                 visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm
-                conflicted: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipConflicted : 0
-                added: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipAdded : 0
-                modified: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipModified : 0
-                deleted: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipDeleted : 0
-                renamed: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipRenamed : 0
-                copied: rowItem.isWip && rowItem.ListView.view ? rowItem.ListView.view.wipCopied : 0
+                sourceComponent: WipTallyRow {
+                    conflicted: rowItem.ListView.view ? rowItem.ListView.view.wipConflicted : 0
+                    added: rowItem.ListView.view ? rowItem.ListView.view.wipAdded : 0
+                    modified: rowItem.ListView.view ? rowItem.ListView.view.wipModified : 0
+                    deleted: rowItem.ListView.view ? rowItem.ListView.view.wipDeleted : 0
+                    renamed: rowItem.ListView.view ? rowItem.ListView.view.wipRenamed : 0
+                    copied: rowItem.ListView.view ? rowItem.ListView.view.wipCopied : 0
+                }
             }
             Item {
                 visible: rowItem.isWip

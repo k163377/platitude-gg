@@ -86,8 +86,8 @@ Rectangle {
     signal stageHunkRequested(int hunk)
 
     // The hunk's discard lives in its heading. Reached from outside for the smoke run, which holds it the way a hand
-    // does.
-    readonly property alias discardButton: discardHunkButton
+    // does. `null` on every row that is not a heading with tools on it — the tools are built only there (`hunkTools`).
+    readonly property var discardButton: hunkTools.item ? hunkTools.item.discardButton : null
 
     width: diffRow.rowWidth
     height: Theme.rowHeight
@@ -108,7 +108,7 @@ Rectangle {
     readonly property int stageSeatW: diffRow.kind === "hunk" ? 0 : diffRow.seatW
     /// How much of the row's right edge the hunk heading has to give up to the two words that act on the hunk. git's
     /// `@@` line is as long as the enclosing signature and would otherwise run under them.
-    readonly property real toolsRoom: hunkTools.visible ? hunkTools.width + Theme.spaceSm * 2 : 0
+    readonly property real toolsRoom: hunkTools.item ? hunkTools.width + Theme.spaceSm * 2 : 0
 
     // The hunk under the pointer wears the wash a row anywhere else in the app wears under one.
     Rectangle {
@@ -261,78 +261,97 @@ Rectangle {
         // (デザイン規約 §行末の改行が無いこと). As a row it stood between the removed line and the added one and parted the
         // pair the eye reads as one change; as a mark it travels with the text, so it is at the end of the line
         // whichever way the pane has been sent.
-        NavIcon {
+        //
+        // **Built only on the line that has it.** A delegate is built per line on screen, and the mark is a canvas
+        // with a hover and a tip of its own — on every other line it would be built and hidden, which is the heap
+        // this pane is measured by (the rule the hunk tools below follow; rules-refs/app-ui.md, the Loader rule).
+        Loader {
             id: noEolMark
-            visible: diffRow.no_newline
-            kind: "no-entry"
-            // A mark that stands at the end of a line of words (デザイン規約 §寸法), with the stroke dropped to that step
-            // so it carries the weight of the letters beside it rather than 4/3 of it.
-            width: Theme.iconSm
-            height: Theme.iconSm
-            stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-            tint: Theme.danger
+            active: diffRow.no_newline
             // Off the ink, not the box: the mark's square holds air past its ring, and a whole `spaceXs` on top of
             // that would leave the last character further from this than any other pair in the row (§余白).
-            x: codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (width - inkWidth) / 2
+            x: noEolMark.item
+               ? codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (noEolMark.item.width - noEolMark.item.inkWidth) / 2
+               : 0
             anchors.verticalCenter: parent.verticalCenter
-            // The words the note used to carry, kept where a mark can still hand them over. It takes no button: the
-            // press over the code belongs to the hand picking text out of the rows (`DiffTextSelect`).
-            ToolTip.visible: noEolHover.containsMouse
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: qsTr("No newline at end of file")
-            MouseArea {
-                id: noEolHover
-                anchors.fill: parent
-                acceptedButtons: Qt.NoButton
-                hoverEnabled: true
+            sourceComponent: NavIcon {
+                kind: "no-entry"
+                // A mark that stands at the end of a line of words (デザイン規約 §寸法), with the stroke dropped to that
+                // step so it carries the weight of the letters beside it rather than 4/3 of it.
+                width: Theme.iconSm
+                height: Theme.iconSm
+                stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                tint: Theme.danger
+                // The words the note used to carry, kept where a mark can still hand them over. It takes no button:
+                // the press over the code belongs to the hand picking text out of the rows (`DiffTextSelect`).
+                ToolTip.visible: noEolHover.containsMouse
+                ToolTip.delay: Metrics.tipDelayMs
+                ToolTip.text: qsTr("No newline at end of file")
+                MouseArea {
+                    id: noEolHover
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
+                }
             }
         }
     }
     // Hunk-level staging. The row carries the hunk index the patch builder needs, so what is staged is exactly what is
     // shown — and so is what is thrown away. Absent on a diff with no pieces in it (see `partial`).
-    Row {
+    //
+    // **Built only on a heading that has them, never hidden on the other lines.** A delegate is built per line on
+    // screen, and each `ActionButton` is a label with its rulers, a hold and its timers — on the lines that are not
+    // headings the pair was the heaviest thing in the row while drawing nothing (measured: 57 lines of a commit's diff
+    // cost 75MB of heap, most of it in parts the rows never showed). Same rule as the dialogs behind
+    // `WindowDialogSeat` (rules-refs/app-ui.md).
+    Loader {
         id: hunkTools
-        visible: diffRow.partial && diffRow.kind === "hunk"
+        active: diffRow.partial && diffRow.kind === "hunk"
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceSm
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spaceXs
-        // Only the unstaged side has a piece to throw away: on the staged side the button beside this one puts the hunk
-        // back where it can be.
-        //
-        // Held, not asked about (デザイン規約 §長押し): the button sits in the hunk's own heading, so what it takes is the thing
-        // it is standing on, and a bar coming down over the diff to say so is machinery a hunk does not need.
-        //
-        // Shaped like the held row of a right-click menu, not like the toolbar's framed button: this one sits in a line
-        // of other words rather than in a row of other buttons, and a frame around one word in a heading reads as a box
-        // that has come loose. The mark says it is held, and the hold fills the words' own ground edge to edge.
-        ActionButton {
-            id: discardHunkButton
-            visible: !diffRow.staged
-            text: qsTr("Discard hunk")
-            font.pixelSize: Theme.fontSm
-            // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ). The mark is what still says this one
-            // is held rather than clicked — the colour is saying something else.
-            tone: diffRow.underPointer ? Theme.danger : Theme.textSecondary
-            holdTone: Theme.danger
-            holdMs: Metrics.holdMs
-            enabled: !diffRow.busy
-            onHeld: diffRow.discardRequested(diffRow.hunk)
-        }
-        // The same pair of colours the file rows put on their own `+` and `−`: staging is the green half of the gesture
-        // and unstaging the red one, and the heading should not name them in a different voice than the list does — but
-        // it says it at the volume of a heading that is not being pointed at. At rest both words wear `textSecondary`,
-        // which is the colour the `@@` beside them already has, so the whole heading reads as one grey line until the
-        // pointer arrives (デザイン規約 §diff の中のステージ). A file diff carries 2 hunks at the middle and 8 at the ninetieth
-        // percentile — measured over 52 files — so leaving them all lit puts 2 to 4 coloured words on screen against
-        // the header's one.
-        ActionButton {
-            text: diffRow.staged ? qsTr("Unstage hunk") : qsTr("Stage hunk")
-            font.pixelSize: Theme.fontSm
-            tone: !diffRow.underPointer ? Theme.textSecondary
-                  : diffRow.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
-            enabled: !diffRow.busy
-            onActivated: diffRow.stageHunkRequested(diffRow.hunk)
+        sourceComponent: Row {
+            /// The smoke run's handle on the discard, read through the loader (`diffRow.discardButton`).
+            readonly property alias discardButton: discardHunkButton
+            spacing: Theme.spaceXs
+            // Only the unstaged side has a piece to throw away: on the staged side the button beside this one puts the
+            // hunk back where it can be.
+            //
+            // Held, not asked about (デザイン規約 §長押し): the button sits in the hunk's own heading, so what it takes is the
+            // thing it is standing on, and a bar coming down over the diff to say so is machinery a hunk does not need.
+            //
+            // Shaped like the held row of a right-click menu, not like the toolbar's framed button: this one sits in a
+            // line of other words rather than in a row of other buttons, and a frame around one word in a heading reads
+            // as a box that has come loose. The mark says it is held, and the hold fills the words' own ground edge to
+            // edge.
+            ActionButton {
+                id: discardHunkButton
+                visible: !diffRow.staged
+                text: qsTr("Discard hunk")
+                font.pixelSize: Theme.fontSm
+                // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ). The mark is what still says this
+                // one is held rather than clicked — the colour is saying something else.
+                tone: diffRow.underPointer ? Theme.danger : Theme.textSecondary
+                holdTone: Theme.danger
+                holdMs: Metrics.holdMs
+                enabled: !diffRow.busy
+                onHeld: diffRow.discardRequested(diffRow.hunk)
+            }
+            // The same pair of colours the file rows put on their own `+` and `−`: staging is the green half of the
+            // gesture and unstaging the red one, and the heading should not name them in a different voice than the
+            // list does — but it says it at the volume of a heading that is not being pointed at. At rest both words
+            // wear `textSecondary`, which is the colour the `@@` beside them already has, so the whole heading reads
+            // as one grey line until the pointer arrives (デザイン規約 §diff の中のステージ). A file diff carries 2 hunks at the
+            // middle and 8 at the ninetieth percentile — measured over 52 files — so leaving them all lit puts 2 to 4
+            // coloured words on screen against the header's one.
+            ActionButton {
+                text: diffRow.staged ? qsTr("Unstage hunk") : qsTr("Stage hunk")
+                font.pixelSize: Theme.fontSm
+                tone: !diffRow.underPointer ? Theme.textSecondary
+                      : diffRow.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
+                enabled: !diffRow.busy
+                onActivated: diffRow.stageHunkRequested(diffRow.hunk)
+            }
         }
     }
     // The mark a changed line puts out for the hand: `+` where a press takes the line into the staging area and `−`
@@ -344,30 +363,39 @@ Rectangle {
     // **It writes, there and then**, and it is the only thing in the row that takes a press at all.
     //
     // It stands in the seat the row holds between the two numbers (`stageSeatW`).
-    Rectangle {
-        visible: diffRow.partial && diffRow.underPointer && (diffRow.kind === "add" || diffRow.kind === "del")
+    //
+    // **Built only on a line that can be staged on its own** — a changed line of a diff with pieces in it. The rows of
+    // a commit's diff never carry one, and the context lines of any diff do not either, so on those it is not built
+    // rather than hidden (the hunk tools' rule). Whether the pointer is on the line is still what shows it: the
+    // pointer moves faster than a canvas can be built and painted, so the mark waits built and hidden on the lines
+    // the pointer can reach.
+    Loader {
+        active: diffRow.partial && (diffRow.kind === "add" || diffRow.kind === "del")
         x: oldNoCol.width + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
-        width: Theme.iconMd
-        height: Theme.iconMd
-        radius: Theme.radiusSm
-        color: stageLineHover.containsMouse ? Theme.bgHover : "transparent"
-        ToolTip.visible: stageLineHover.containsMouse
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: diffRow.staged ? qsTr("Unstage this line") : qsTr("Stage this line")
-        NavIcon {
-            anchors.centerIn: parent
-            width: Theme.iconSm
-            height: Theme.iconSm
-            kind: diffRow.staged ? "minus" : "plus"
-            tint: diffRow.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
-        }
-        MouseArea {
-            id: stageLineHover
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: !diffRow.busy
-            onClicked: diffRow.lineStageRequested(diffRow.hunk, diffRow.line)
+        sourceComponent: Rectangle {
+            visible: diffRow.underPointer
+            width: Theme.iconMd
+            height: Theme.iconMd
+            radius: Theme.radiusSm
+            color: stageLineHover.containsMouse ? Theme.bgHover : "transparent"
+            ToolTip.visible: stageLineHover.containsMouse
+            ToolTip.delay: Metrics.tipDelayMs
+            ToolTip.text: diffRow.staged ? qsTr("Unstage this line") : qsTr("Stage this line")
+            NavIcon {
+                anchors.centerIn: parent
+                width: Theme.iconSm
+                height: Theme.iconSm
+                kind: diffRow.staged ? "minus" : "plus"
+                tint: diffRow.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
+            }
+            MouseArea {
+                id: stageLineHover
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: !diffRow.busy
+                onClicked: diffRow.lineStageRequested(diffRow.hunk, diffRow.line)
+            }
         }
     }
     // No square for throwing one line away. A line can be staged on its own because staging loses nothing — the line

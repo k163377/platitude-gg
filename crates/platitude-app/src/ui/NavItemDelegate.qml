@@ -189,28 +189,37 @@ Item {
         row: navRow
     }
     // The name, in a box, where the name was — drawn outside the list, which is the box's own business (`NavNameBox`).
-    NavNameBox {
-        id: editField
-        row: navRow
-        seat: rowLayout.boxSeat
-        drawnIn: navRow.boxLayer
-        // Where the seat sits inside the row is the layout's to say, so what the box is told is where the row's own
-        // columns begin; it adds the seat's place to that itself.
-        rowsX: navRow.boxRowsX + rowLayout.x
-        rowsY: navRow.boxRowsY
-        rowsTop: navRow.boxRowsTop
-        rowsHeight: navRow.boxRowsHeight
-        editing: navRow.editing
-        mode: navRow.editMode
-        // What the box is naming, which is not always what the row is: `Create tag here…` opens on a branch row too.
-        namesKind: navRow.editMode === "tag" ? "tag"
-                 : navRow.editMode === "branch" ? "branch" : navRow.kindHint
-        carried: navRow.editText
-        refused: navRow.editRefused
-        refusedWhy: navRow.editRefusedWhy
-        onTyped: text => navRow.editTyped(text)
-        onSubmitted: text => navRow.editAccepted(text)
-        onCancelled: navRow.editCancelled()
+    //
+    // **Built only while this row is being typed into.** A delegate is built per row on screen, and the box is a text
+    // field with a ruler of its own — on every row nobody is naming it was built and hidden, which is the heap the
+    // rows are measured by (rules-refs/app-ui.md, the Loader rule). The box parents itself out of here on its own
+    // (`NavNameBox.parent`); the loader only owns it.
+    Loader {
+        id: editSeat
+        active: navRow.editing
+        sourceComponent: NavNameBox {
+            row: navRow
+            seat: rowLayout.boxSeat
+            drawnIn: navRow.boxLayer
+            // Where the seat sits inside the row is the layout's to say, so what the box is told is where the row's
+            // own columns begin; it adds the seat's place to that itself.
+            rowsX: navRow.boxRowsX + rowLayout.x
+            rowsY: navRow.boxRowsY
+            rowsTop: navRow.boxRowsTop
+            rowsHeight: navRow.boxRowsHeight
+            editing: navRow.editing
+            mode: navRow.editMode
+            // What the box is naming, which is not always what the row is: `Create tag here…` opens on a branch row
+            // too.
+            namesKind: navRow.editMode === "tag" ? "tag"
+                     : navRow.editMode === "branch" ? "branch" : navRow.kindHint
+            carried: navRow.editText
+            refused: navRow.editRefused
+            refusedWhy: navRow.editRefusedWhy
+            onTyped: text => navRow.editTyped(text)
+            onSubmitted: text => navRow.editAccepted(text)
+            onCancelled: navRow.editCancelled()
+        }
     }
     // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over there
     // — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is not: it is the
@@ -230,14 +239,14 @@ Item {
     readonly property bool clickGuarded: navRow.reclick ? navRow.reclick.guarded : false
     /// Whether the box on this row has the keyboard. The output side: a box drawn where nothing can be typed reads as
     /// a box, and the folded list's section is a popup, which takes the keyboard only when something in it asks.
-    readonly property bool editFocused: editField.activeFocus
+    readonly property bool editFocused: editSeat.item ? editSeat.item.activeFocus : false
     /// What the box came out as, for the runs that photograph it (`NavNameBox`): as drawn, as what is in it wants,
     /// whether it is on screen at all, and where it landed.
-    readonly property real editBoxWidth: editField.width
-    readonly property real editBoxWhole: editField.wantWidth
+    readonly property real editBoxWidth: editSeat.item ? editSeat.item.width : 0
+    readonly property real editBoxWhole: editSeat.item ? editSeat.item.wantWidth : 0
     readonly property real editBoxSeat: rowLayout.boxSeat.width
-    readonly property bool editBoxShown: editField.visible
-    readonly property string editBoxAt: editField.cameOut
+    readonly property bool editBoxShown: editSeat.item ? editSeat.item.visible : false
+    readonly property string editBoxAt: editSeat.item ? editSeat.item.cameOut : ""
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers, held) {

@@ -52,7 +52,7 @@ RowLayout {
     /// Automation: the turn the fold arrow is drawn at, -1 on a row that has none. Read off the icon rather than off
     /// the condition behind it, so a run cannot go green with the arrow unwired (verify-ui — the same reading as
     /// `FileRowDelegate.litKey`).
-    readonly property real foldTurn: foldArrow.visible ? foldArrow.rotation : -1
+    readonly property real foldTurn: foldSeat.item ? foldSeat.item.rotation : -1
     /// How wide the slot every row opens with is. **The seat is taken on the ink, not on the box the mark is drawn
     /// in** — the same reading `NavHeader`'s own fold seat makes, where an `iconMd` chevron stands in an `iconSm` seat
     /// and overflows it (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A change code fills its box, so a list
@@ -76,26 +76,32 @@ RowLayout {
 
     spacing: Theme.spaceXs
 
-    // The seat every row opens with.
+    // The seat every row opens with. **Each mark in it is built only on the rows that wear it**: a delegate is built
+    // per row on screen and every mark is a canvas, so a mark built and hidden on the rows it is not for is heap the
+    // rows are measured by (rules-refs/app-ui.md, the Loader rule).
     Item {
         Layout.preferredWidth: nameCell.seatSize
         Layout.preferredHeight: nameCell.seatSize
         Layout.alignment: Qt.AlignVCenter
-        NavIcon {
-            id: foldArrow
+        Loader {
+            id: foldSeat
+            active: nameCell.folder
             anchors.centerIn: parent
             anchors.horizontalCenterOffset: nameCell.seatNudge
-            visible: nameCell.folder
-            width: Theme.iconSm
-            height: Theme.iconSm
-            kind: "chevron"
-            rotation: nameCell.folded ? 0 : 90
-            tint: Theme.textSecondary
+            sourceComponent: NavIcon {
+                width: Theme.iconSm
+                height: Theme.iconSm
+                kind: "chevron"
+                rotation: nameCell.folded ? 0 : 90
+                tint: Theme.textSecondary
+            }
         }
-        ChangeIcon {
+        Loader {
+            active: !nameCell.folder && nameCell.showChange
             anchors.fill: parent
-            visible: !nameCell.folder && nameCell.showChange
-            change: nameCell.change
+            sourceComponent: ChangeIcon {
+                change: nameCell.change
+            }
         }
         // The fold arrow's step, not the change mark's. These stand in the sidebar alone, beside the arrows of the
         // rows they are nested among, and a mark drawn on the wider grid carried a heavier line than the folds it
@@ -106,14 +112,16 @@ RowLayout {
         // **Placed, not filled.** A mark given the seat's own size takes the seat's top-left corner, and on a row
         // whose seat is centred in it that reads as a mark riding a step high (observed — the slip the
         // first pass at this made). So it is centred down the seat and set against its left edge (`seatNudge`).
-        NavIcon {
+        Loader {
+            active: nameCell.seatMark !== ""
             anchors.centerIn: parent
             anchors.horizontalCenterOffset: nameCell.seatNudge
-            width: Theme.iconSm
-            height: Theme.iconSm
-            visible: nameCell.seatMark !== ""
-            kind: nameCell.seatMark
-            tint: nameCell.seatTint
+            sourceComponent: NavIcon {
+                width: Theme.iconSm
+                height: Theme.iconSm
+                kind: nameCell.seatMark
+                tint: nameCell.seatTint
+            }
         }
     }
     // A rename is two names with the way between them drawn rather than typed: U+2192 is East Asian Ambiguous, so the
@@ -126,36 +134,47 @@ RowLayout {
         visible: nameCell.showName
         Layout.fillWidth: true
         spacing: 0
-        CutName {
-            id: origName
-            visible: !nameCell.folder && nameCell.origPath !== ""
+        // **The old name and its arrow are built only on a rename** — a label pair and a canvas that one row in a
+        // thousand wears (the seat's rule). Invisible while inactive as well: a layout skips an invisible item, and an
+        // empty loader would still take the spacing.
+        Loader {
+            id: origSeat
+            active: !nameCell.folder && nameCell.origPath !== ""
+            visible: origSeat.active
             Layout.fillWidth: true
             // The ceiling is the name's own width, and `CutName` reports that already rounded up — the layout hands an
             // item the whole pixel below a fractional ceiling, and a ceiling one hair under the name's own width cuts
-            // it (app-ui.md §自然幅の上限は切り上げる).
-            Layout.maximumWidth: origName.implicitWidth
-            text: nameCell.origPath
-            pixelSize: Theme.fontMd
-            // The name the file has now is the subject; where it came from is context, and wears the colour the rest of
-            // the app gives context (§テキスト: author / 日時 / 短縮ハッシュ). **Not `textMuted`** — that one is the disabled
-            // signal (§無効), and a second meaning for it cannot be read apart.
-            color: Theme.textSecondary
+            // it (app-ui.md §自然幅の上限は切り上げる). The loader's implicit width is the name's.
+            Layout.maximumWidth: origSeat.implicitWidth
+            sourceComponent: CutName {
+                text: nameCell.origPath
+                pixelSize: Theme.fontMd
+                // The name the file has now is the subject; where it came from is context, and wears the colour the
+                // rest of the app gives context (§テキスト: author / 日時 / 短縮ハッシュ). **Not `textMuted`** — that one is
+                // the disabled signal (§無効), and a second meaning for it cannot be read apart.
+                color: Theme.textSecondary
+            }
         }
-        Item {
-            visible: origName.visible
-            Layout.preferredWidth: renameMark.inkWidth + Theme.spaceXs * 2
+        Loader {
+            id: renameSeat
+            active: origSeat.active
+            visible: origSeat.active
+            Layout.preferredWidth: renameSeat.item ? renameSeat.item.inkWidth + Theme.spaceXs * 2 : 0
             Layout.preferredHeight: Theme.iconSm
             Layout.alignment: Qt.AlignVCenter
-            NavIcon {
-                id: renameMark
-                anchors.centerIn: parent
-                kind: "arrow"
-                // Beside a word, so a step under the row's own mark, with the line taken down by the same ratio
-                // (app-ui.md §語の隣に立つ印).
-                width: Theme.iconSm
-                height: Theme.iconSm
-                stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-                tint: Theme.textSecondary
+            sourceComponent: Item {
+                readonly property real inkWidth: renameMark.inkWidth
+                NavIcon {
+                    id: renameMark
+                    anchors.centerIn: parent
+                    kind: "arrow"
+                    // Beside a word, so a step under the row's own mark, with the line taken down by the same ratio
+                    // (app-ui.md §語の隣に立つ印).
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                    tint: Theme.textSecondary
+                }
             }
         }
         CutName {
@@ -165,18 +184,21 @@ RowLayout {
             pixelSize: Theme.fontMd
             weight: nameCell.weight
             color: nameCell.folder ? Theme.textSecondary : nameCell.tone
-            NavIcon {
-                visible: nameCell.marked
-                kind: "bang"
-                tint: nameCell.markTint
-                width: Theme.iconSm
-                height: Theme.iconSm
+            // Built only on a marked row (the seat's rule).
+            Loader {
+                active: nameCell.marked
                 // Clamped: a cut name ends at the column's own right edge, and the mark belongs to the name that is on
                 // screen. Half a gap back into the name's own trailing bearing, so it reads as part of the word rather
                 // than as the next column.
                 x: Math.min(newName.inkWidth - Theme.spaceXs / 2,
                             newName.width - Theme.iconSm)
                 y: 0
+                sourceComponent: NavIcon {
+                    kind: "bang"
+                    tint: nameCell.markTint
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                }
             }
         }
     }

@@ -9,6 +9,12 @@ import platitude.ui
 // The row itself (`NavItemDelegate`) keeps the gestures, the washes and the box: this is only the ink. It is handed
 // the whole row rather than eighteen mirrored properties — the row is recycled with its delegate, so there is nothing
 // here to keep, and a second copy of every binding would be paid on every reuse.
+//
+// **Every column past the name is built only on the rows that wear it.** A delegate is built per row on screen, and
+// a column built and hidden on every row is heap the rows are measured by (rules-refs/app-ui.md, the Loader rule).
+// Each of those loaders is invisible while inactive as well: a layout skips an invisible item, and an empty loader
+// would still take the spacing. The marks name their size to the layout outright — a canvas has no implicit size for
+// a loader to pass on.
 RowLayout {
     id: body
 
@@ -70,44 +76,64 @@ RowLayout {
     // Worktree rows: checked-out branch on the right. Cut in the part that keeps the column's edges (`CutName`) — this
     // one is the row's right-aligned column, so a cut that stopped short of the gutter left the branch names hanging
     // a different distance from the edge on every row.
-    CutName {
-        visible: !body.row.folder && body.row.kindHint === "worktree"
-        text: body.row.bucket !== "" ? body.row.bucket : qsTr("detached")
-        color: Theme.textSecondary
-        pixelSize: Theme.fontSm
+    Loader {
+        id: branchSeat
+        active: !body.row.folder && body.row.kindHint === "worktree"
+        visible: branchSeat.active
         Layout.maximumWidth: body.row.listWidth / 2
+        sourceComponent: CutName {
+            text: body.row.bucket !== "" ? body.row.bucket : qsTr("detached")
+            color: Theme.textSecondary
+            pixelSize: Theme.fontSm
+        }
     }
     // Current branch's ahead/behind, left of the state icon.
-    HeadTrack {
-        visible: !body.row.folder && body.row.kindHint === "branch" && body.row.is_head && body.row.headTracks
-        ahead: body.row.headAhead
-        behind: body.row.headBehind
+    Loader {
+        id: trackSeat
+        active: !body.row.folder && body.row.kindHint === "branch" && body.row.is_head && body.row.headTracks
+        visible: trackSeat.active
         Layout.alignment: Qt.AlignVCenter
+        sourceComponent: HeadTrack {
+            ahead: body.row.headAhead
+            behind: body.row.headBehind
+        }
     }
     // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
     // 4; PG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
     // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
     // (`ls-remote --tags`).
-    NavIcon {
-        visible: !body.row.folder
-                 && (((body.row.kindHint === "branch"
-                       || body.row.kindHint === "tag")
-                      && (body.row.has_remote || body.row.has_pr))
-                     || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
-        kind: body.row.has_pr ? "pr" : "remote"
-        tint: body.row.has_pr ? Theme.success : Theme.textSecondary
+    Loader {
+        id: remoteSeat
+        active: !body.row.folder
+                && (((body.row.kindHint === "branch"
+                      || body.row.kindHint === "tag")
+                     && (body.row.has_remote || body.row.has_pr))
+                    || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
+        visible: remoteSeat.active
         // The size the graph's chips wear the same badge at: one question, one mark, one size (デザイン規約 §寸法).
-        width: Theme.iconSm
-        height: Theme.iconSm
+        Layout.preferredWidth: Theme.iconSm
+        Layout.preferredHeight: Theme.iconSm
+        sourceComponent: NavIcon {
+            kind: body.row.has_pr ? "pr" : "remote"
+            tint: body.row.has_pr ? Theme.success : Theme.textSecondary
+            width: Theme.iconSm
+            height: Theme.iconSm
+        }
     }
     // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds
     // on every other row — one question, one mark, one size. `accent` because what it answers is which of the rows
     // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ), not what kind of ref the row is.
-    NavIcon {
-        visible: body.row.pushesHere
-        kind: "push"
-        tint: Theme.accent
-        width: Theme.iconSm
-        height: Theme.iconSm
+    Loader {
+        id: pushSeat
+        active: body.row.pushesHere
+        visible: pushSeat.active
+        Layout.preferredWidth: Theme.iconSm
+        Layout.preferredHeight: Theme.iconSm
+        sourceComponent: NavIcon {
+            kind: "push"
+            tint: Theme.accent
+            width: Theme.iconSm
+            height: Theme.iconSm
+        }
     }
 }

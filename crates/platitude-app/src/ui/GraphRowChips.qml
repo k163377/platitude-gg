@@ -6,6 +6,12 @@ import platitude.ui
 
 // The chip column of one commit-graph row: the names this commit carries, or — on a row that carries none — the box
 // that puts one there. The row owns the gestures; this owns what is drawn and what is under a point.
+//
+// **The box is built only while it is open; the chip is built on every row.** A delegate is built per row on screen,
+// and a name box is a text field with a ruler of its own that nobody is typing into nearly all of the time — built
+// and hidden on every row, it was heap the graph's rows are measured by (rules-refs/app-ui.md, the Loader rule). The
+// chip stays eager for the reason on it: rows are recycled as the graph scrolls, and a part that comes and goes with
+// the row's data is rebuilt on every recycling.
 Item {
     id: chipColumn
 
@@ -37,7 +43,8 @@ Item {
     readonly property alias chipWaiting: rowChip.waiting
     /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
     /// ground the box is standing on, and a headless run (`PG_AUTO_ACT=name-box`) to say which of the two it got.
-    readonly property alias nameBoxWidth: nameField.width
+    /// Zero while there is no box.
+    readonly property real nameBoxWidth: nameSeat.item ? nameSeat.item.width : 0
 
     signal namingSubmitted(string name)
     signal namingEdited(string text)
@@ -54,21 +61,10 @@ Item {
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
     /// reason a single one does. What comes out is the same card either way.
     readonly property bool hasChip: rowChip.visible
-    /// The narrowest the box goes: the whole of what it opened holding. The placeholder is all there is to say what a
-    /// box that makes a name is for, so a cut one (`Create branch he…`) asks nothing — and the column is narrower than
-    /// that at every width up to and including its default. A rename measures the name instead:
-    /// there the box is the name's own seat, and one cut short is a name the reader cannot check before Enter.
-    ///
-    /// Measured off a label that is never drawn, the way the diff's number column measures (app-ui.md): `TextMetrics`
-    /// comes out a few pixels tighter than the label the words are actually set in, and a floor measured tight is a
-    /// floor that still elides. Both terms come off the field itself, because it is the field's own placeholder that
-    /// has to fit: Controls lays it out in `width` less the two paddings and elides whatever is left over.
-    readonly property real nameBoxMinW:
-        Math.ceil(placeholderInk.implicitWidth) + nameField.leftPadding + nameField.rightPadding
-    /// What the box has to be able to show: the question where it is asking one, the name where it opened holding one.
-    /// **Latched as the box opens rather than followed as it is typed into** — a box whose right edge walks out from
-    /// under the caret is one nobody can aim at (`NavNameBox` measures its own the same way).
-    property string inkText: ""
+
+    /// What the box opened holding, kept on the column so the box can be handed it whichever lands first — the ask,
+    /// or the box itself (`focusBox`).
+    property string askedText: ""
     /// Carries the box on from whatever the last delegate to hold it was left with. `text` comes off the view, not off
     /// this column: this delegate is recycled the moment the row scrolls off.
     ///
@@ -76,12 +72,22 @@ Item {
     /// so what it comes up holding is what is being changed, and typing over it is the first thing a hand does. The
     /// two boxes that make a name come up empty and have nothing to select.
     function takeNamingFocus(text) {
-        nameField.text = text === undefined ? "" : text
-        chipColumn.inkText = chipColumn.namingMode === "rename" ? nameField.text
-                                                                : nameField.placeholderText
+        chipColumn.askedText = text === undefined ? "" : text
+        chipColumn.focusBox()
+    }
+    /// Puts `askedText` in the box and the keyboard on it. Nothing to do until the box is built: it is built as
+    /// `naming` turns true, and whether that comes before or after the ask is not written down anywhere — so the
+    /// loader calls here when the box is built (`onLoaded`) and the ask calls here when it lands, and whichever is
+    /// second finds both in place.
+    function focusBox() {
+        const field = nameSeat.item
+        if (field === null || !chipColumn.naming)
+            return
+        field.text = chipColumn.askedText
+        field.inkText = chipColumn.namingMode === "rename" ? field.text : field.placeholderText
         if (chipColumn.namingMode === "rename")
-            nameField.selectAll()
-        nameField.forceActiveFocus()
+            field.selectAll()
+        field.forceActiveFocus()
     }
 
     // The open box reaches past the column's edge on any width under its floor, and the lane cell is laid out after
@@ -92,6 +98,12 @@ Item {
         id: rowChip
         // Assigning `visible` here replaces the chip's own rule, so the "has anything to show" half has to be repeated:
         // without it a row with no refs draws an empty frame.
+        //
+        // **Built on every row and hidden where there is no name — unlike the box beside it.** A chip stands on one
+        // row in three, and rows are recycled as the graph scrolls: built only where there is a name, the chip was
+        // built and torn down on every recycling that crossed that line, and the working set over one scroll of the
+        // window came out 35MB *higher* than with a chip built once per delegate (measured — the churn's own heap,
+        // not the chip's). The box is different: nobody is naming a row while the graph scrolls.
         visible: chipColumn.records.length > 0 && !chipColumn.naming
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
@@ -103,9 +115,9 @@ Item {
     }
     // A row with nothing to move to answers the double-click with the one thing that would give it something: a name.
     // The question is asked where the chips would be, not over the window (デザイン規約: 表示の切り替えで足りるならダイアログを出さない).
-    SlimField {
-        id: nameField
-        visible: chipColumn.naming
+    Loader {
+        id: nameSeat
+        active: chipColumn.naming
         // Anchored by the head, which is the edge that holds still, and grown the one way from there — into the graph
         // (規約 §グラフ行のダブルクリック「開く向きは 1 つ」). The card a chip unfolds into takes the same ground for the same
         // reason: what covers the lanes is out only while a hand is on it, and this box is not read at all if the
@@ -113,42 +125,65 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
-        // The column, until the column is narrower than the question. Left at the slim field's own size, which is the
-        // chip's: what is typed here becomes the chip that stands in this column, so it is read at the size it will be
-        // read at — but the box is an offer before it is a name, and one that cannot be read is not an offer.
-        width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, chipColumn.nameBoxMinW)
-        // The frame says which kind is being named — the same rule the chip this box turns into follows
-        // (§ref の種別: 枠 = 種別). A branch's colour is the focus ring's own value, so only the tag has one to say, and a
-        // rename is told by the kind it is changing rather than by the mode.
-        focusTone: (chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode) === "tag"
-                   ? Theme.refTag : Theme.borderFocus
-        // A rename has none: what the box is for is the name it opened holding (§左メニューの所作), and a question written
-        // over that name would be answering for the reader.
-        placeholderText: chipColumn.namingMode === "rename" ? ""
-                       : chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
-                                                         : qsTr("Create branch here?")
-        refused: chipColumn.namingRefused
-        ToolTip.visible: nameField.refused && nameField.activeFocus && chipColumn.namingRefusedWhy !== ""
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: chipColumn.namingRefusedWhy
-        // Refused text stays in the box: Enter that does nothing is the answer, and the frame and its tooltip say why
-        // (§可否・警告の出し場所).
-        onAccepted: {
-            if (!chipColumn.namingRefused)
-                chipColumn.namingSubmitted(nameField.text.trim())
+        onLoaded: chipColumn.focusBox()
+        sourceComponent: SlimField {
+            id: nameField
+            /// The narrowest the box goes: the whole of what it opened holding. The placeholder is all there is to say
+            /// what a box that makes a name is for, so a cut one (`Create branch he…`) asks nothing — and the column
+            /// is narrower than that at every width up to and including its default. A rename measures the name
+            /// instead: there the box is the name's own seat, and one cut short is a name the reader cannot check
+            /// before Enter.
+            ///
+            /// Measured off a label that is never drawn, the way the diff's number column measures (app-ui.md):
+            /// `TextMetrics` comes out a few pixels tighter than the label the words are actually set in, and a floor
+            /// measured tight is a floor that still elides. Both terms come off the field itself, because it is the
+            /// field's own placeholder that has to fit: Controls lays it out in `width` less the two paddings and
+            /// elides whatever is left over.
+            readonly property real nameBoxMinW:
+                Math.ceil(placeholderInk.implicitWidth) + nameField.leftPadding + nameField.rightPadding
+            /// What the box has to be able to show: the question where it is asking one, the name where it opened
+            /// holding one. **Latched as the box opens rather than followed as it is typed into** — a box whose right
+            /// edge walks out from under the caret is one nobody can aim at (`NavNameBox` measures its own the same
+            /// way).
+            property string inkText: ""
+            // The column, until the column is narrower than the question. Left at the slim field's own size, which is
+            // the chip's: what is typed here becomes the chip that stands in this column, so it is read at the size
+            // it will be read at — but the box is an offer before it is a name, and one that cannot be read is not
+            // an offer.
+            width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
+            // The frame says which kind is being named — the same rule the chip this box turns into follows
+            // (§ref の種別: 枠 = 種別). A branch's colour is the focus ring's own value, so only the tag has one to say, and
+            // a rename is told by the kind it is changing rather than by the mode.
+            focusTone: (chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode) === "tag"
+                       ? Theme.refTag : Theme.borderFocus
+            // A rename has none: what the box is for is the name it opened holding (§左メニューの所作), and a question
+            // written over that name would be answering for the reader.
+            placeholderText: chipColumn.namingMode === "rename" ? ""
+                           : chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
+                                                             : qsTr("Create branch here?")
+            refused: chipColumn.namingRefused
+            ToolTip.visible: nameField.refused && nameField.activeFocus && chipColumn.namingRefusedWhy !== ""
+            ToolTip.delay: Metrics.tipDelayMs
+            ToolTip.text: chipColumn.namingRefusedWhy
+            // Refused text stays in the box: Enter that does nothing is the answer, and the frame and its tooltip say
+            // why (§可否・警告の出し場所).
+            onAccepted: {
+                if (!chipColumn.namingRefused)
+                    chipColumn.namingSubmitted(nameField.text.trim())
+            }
+            // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name
+            // is still worth not losing.
+            onTextEdited: chipColumn.namingEdited(nameField.text)
+            Keys.onEscapePressed: chipColumn.namingCancelled()
+            // The box's floor, measured. Never drawn — it stands in for what the field lays out inside itself, which
+            // cannot be measured before the box it is being measured for has a width.
+            Label {
+                id: placeholderInk
+                visible: false
+                text: nameField.inkText
+                font: nameField.font
+            }
         }
-        // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name is
-        // still worth not losing.
-        onTextEdited: chipColumn.namingEdited(nameField.text)
-        Keys.onEscapePressed: chipColumn.namingCancelled()
-    }
-    // The box's floor, measured. Never drawn — it stands in for what the field lays out inside itself, which cannot be
-    // measured before the box it is being measured for has a width.
-    Label {
-        id: placeholderInk
-        visible: false
-        text: chipColumn.inkText
-        font: nameField.font
     }
     // Nothing in this column can be hovered on its own: the row's MouseArea fills the row and is declared after it, so
     // it takes every hover the chips would have seen (デザイン規約 §hover の ツールチップ). What the stacked chips hold is read from
