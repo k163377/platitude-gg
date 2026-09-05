@@ -8,6 +8,14 @@ use super::*;
 
 impl RepoSession {
     pub fn refresh_refs(self: &Arc<Self>) {
+        self.read_refs_from(self.refs_read.stamp());
+    }
+
+    /// The refs pass for a caller whose place in the flight is already
+    /// taken (`ReadFlight::stamp`). The fenced read asks again through
+    /// here from inside its own pass, so a write's own read behind the
+    /// fence answers it as well and no listing is spent twice.
+    pub(super) fn read_refs_from(self: &Arc<Self>, stamp: Stamp) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             // **The rebuild is asked for from inside the pass**, so that a
@@ -18,7 +26,7 @@ impl RepoSession {
             // by somebody else's pass is covered by the same rule, since
             // that pass asked before it could answer anyone.
             s.refs_read
-                .run(|| async {
+                .run_from(stamp, || async {
                     let moved = s.publish_refs().await;
                     if moved {
                         s.refresh_log();
@@ -80,12 +88,14 @@ impl RepoSession {
                 // repository (`Standing::current`). The fenced one is
                 // read again rather than lost: a write that touched only
                 // the index reads no refs behind itself, and nothing else
-                // would until the next tick.
+                // would until the next tick. Its place is taken here, in
+                // this pass, so the fence's own read — already waiting
+                // on the gate where the write reads refs — answers it.
                 if !self.refs_gate.is_current(op_gen) {
                     return false;
                 }
                 if !self.standing.current(looked) {
-                    self.refresh_refs();
+                    self.read_refs_from(self.refs_read.stamp());
                     return false;
                 }
                 // First, and before the joins: the walk asks git where
@@ -181,12 +191,19 @@ impl RepoSession {
     }
 
     pub fn refresh_status(self: &Arc<Self>) {
+        self.read_status_from(self.status_read.stamp());
+    }
+
+    /// The status pass for a caller whose place is already taken — the
+    /// fenced read's own ask (`read_refs_from` says why the place is
+    /// taken inside the pass).
+    pub(super) fn read_status_from(self: &Arc<Self>, stamp: Stamp) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             // Asked for from inside the pass, for the reason
-            // [`RepoSession::refresh_refs`] gives.
+            // [`RepoSession::read_refs_from`] gives.
             s.status_read
-                .run(|| async {
+                .run_from(stamp, || async {
                     // An external change (another tool, the terminal) can
                     // make the tree dirty or clean, which adds or removes
                     // the WIP row.

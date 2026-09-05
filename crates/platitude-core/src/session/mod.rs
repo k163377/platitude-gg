@@ -112,7 +112,7 @@ pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
 use published::PublishMarks;
 pub use query::{DiffRefreshOutcome, DiffRefreshTask};
-use read_flight::ReadFlight;
+use read_flight::{ReadFlight, Stamp};
 pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};

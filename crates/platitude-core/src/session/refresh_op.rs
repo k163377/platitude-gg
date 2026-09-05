@@ -148,7 +148,7 @@ impl RepoSession {
                 // the refs, so a status a fetch that brought nothing
                 // fenced would otherwise wait for the next tick.
                 if !self.standing.current(looked) {
-                    self.refresh_status();
+                    self.read_status_from(self.status_read.stamp());
                     return false;
                 }
                 // Only a standing rebase has a counter to read or a stop
@@ -213,7 +213,7 @@ impl RepoSession {
                     return false;
                 }
                 if !self.standing.current(looked) {
-                    self.refresh_status();
+                    self.read_status_from(self.status_read.stamp());
                     return false;
                 }
                 // What this status saw of HEAD, into the one record every

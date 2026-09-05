@@ -67,7 +67,36 @@ impl Default for ReadFlight {
     }
 }
 
+/// A caller's place in the flight, taken before it asks for the gate:
+/// the pass numbered above it is the one that started after the caller
+/// had its reason, and answers it. Taken apart from the run for the
+/// caller that asks **from inside a pass** — a read that found itself
+/// fenced (`Standing::current`) asks again while it still holds the gate,
+/// so its stamp is older than any pass the fence's own read starts, and
+/// that read answers it too instead of a third listing being spent.
+/// Counted as a caller from here until it is run.
+#[must_use = "a stamp is a caller until it is run"]
+pub(super) struct Stamp {
+    /// Passes that had started when this caller asked.
+    asked: u64,
+}
+
 impl ReadFlight {
+    /// Takes a caller's place now, to be run later ([`Self::run_from`]).
+    pub(super) fn stamp(&self) -> Stamp {
+        // One lock for both, so that a caller counted here is a caller
+        // whose stamp is already taken: what the count means is "asking
+        // for a pass no older than this one", and a caller registered
+        // before its stamp would not have chosen its pass yet.
+        let asked = {
+            let passes = relock(&self.passes);
+            self.live.fetch_add(1, Ordering::SeqCst);
+            passes.started
+        };
+        self.woken();
+        Stamp { asked }
+    }
+
     /// Answers this caller, running the read only where no pass that
     /// started after it asked has already answered the same question.
     ///
@@ -81,7 +110,20 @@ impl ReadFlight {
     {
         // The stamp is taken before the gate is asked for, so a pass
         // numbered above it is known to have started afterwards.
-        let stamped = Live::stamp(self);
+        self.run_from(self.stamp(), read).await
+    }
+
+    /// [`Self::run`] for a caller whose place was taken earlier
+    /// ([`Self::stamp`]).
+    pub(super) async fn run_from<F, Fut>(&self, stamp: Stamp, read: F) -> bool
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = bool>,
+    {
+        let stamped = Live {
+            flight: self,
+            asked: stamp.asked,
+        };
         let _gate = self.gate.lock().await;
         {
             let passes = relock(&self.passes);
@@ -129,8 +171,9 @@ impl ReadFlight {
     }
 }
 
-/// One caller of [`ReadFlight::run`], from the stamp it took to the
-/// answer it leaves with.
+/// One caller of [`ReadFlight::run_from`], from the stamp it was given
+/// to the answer it leaves with. The stamp counted the caller in; this
+/// counts it out.
 ///
 /// Dropped by the caller itself, so one that unwound or went down with
 /// the runtime still reports that it has left rather than holding the
@@ -139,22 +182,6 @@ struct Live<'a> {
     flight: &'a ReadFlight,
     /// Passes that had started when this caller asked.
     asked: u64,
-}
-
-impl<'a> Live<'a> {
-    fn stamp(flight: &'a ReadFlight) -> Self {
-        // One lock for both, so that a caller counted here is a caller
-        // whose stamp is already taken: what the count means is "asking
-        // for a pass no older than this one", and a caller registered
-        // before its stamp would not have chosen its pass yet.
-        let asked = {
-            let passes = relock(&flight.passes);
-            flight.live.fetch_add(1, Ordering::SeqCst);
-            passes.started
-        };
-        flight.woken();
-        Self { flight, asked }
-    }
 }
 
 impl Drop for Live<'_> {
@@ -304,6 +331,73 @@ mod tests {
             );
         }
         assert_eq!(ran.passes(), 2, "one read and one repeat, not one each");
+    }
+
+    /// A read that finds itself fenced asks again from inside its own
+    /// pass: the stamp it takes there is older than the pass the fence's
+    /// own read runs next, so that pass answers it and no third read is
+    /// spent — where a stamp taken after the gate was let go would be
+    /// numbered past that pass and read again.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_caller_stamped_inside_a_pass_shares_the_repeat_behind_it() {
+        let flight = Arc::new(ReadFlight::default());
+        let ran = Arc::new(Ran::default());
+        let (reading, started) = tokio::sync::oneshot::channel();
+        let (release, held) = tokio::sync::oneshot::channel();
+
+        let first = {
+            let flight = Arc::clone(&flight);
+            let ran = Arc::clone(&ran);
+            tokio::spawn(async move {
+                flight
+                    .run(move || async move {
+                        ran.enter();
+                        let _ = reading.send(());
+                        let _ = held.await;
+                        ran.leave();
+                        false
+                    })
+                    .await
+            })
+        };
+        started.await.expect("the first pass began");
+        // Taken while the first pass is still reading — what the fenced
+        // read does before it lets the gate go.
+        let again = flight.stamp();
+
+        let other = {
+            let flight = Arc::clone(&flight);
+            let ran = Arc::clone(&ran);
+            tokio::spawn(async move {
+                flight
+                    .run(move || async move {
+                        ran.enter();
+                        ran.leave();
+                        true
+                    })
+                    .await
+            })
+        };
+        flight.wait_for_askers(3).await;
+        let _ = release.send(());
+        assert!(!first.await.expect("the first pass answered"));
+        assert!(other.await.expect("the other caller answered"));
+
+        assert!(
+            flight
+                .run_from(again, || async {
+                    ran.enter();
+                    ran.leave();
+                    false
+                })
+                .await,
+            "answered by the other caller's pass, which started after the stamp"
+        );
+        assert_eq!(
+            ran.passes(),
+            2,
+            "the first read and one repeat, not a third"
+        );
     }
 
     /// The distinction the whole thing is for: a caller is never handed
