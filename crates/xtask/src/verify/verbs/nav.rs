@@ -80,6 +80,34 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "delete_early asked=true",
     },
+    // The three deletes asked of the left row's card, each judged first
+    // on the press having left the page at all. **The picture cannot
+    // answer that**: the page drops a delete asked while a write is
+    // running (`RepoPage.deleteRow`), and a card standing over a row
+    // nobody acted on frames exactly like one whose write is still out —
+    // so the run waits on a write nobody made, and 120 silent seconds of
+    // watchdog is the whole of what it says (`AutoActRefVerbs`, the same
+    // hole `delete-branch-early` had).
+    //
+    // One line for all three because it is one claim, and it is the only
+    // one they share: what each does after the press is its own — `-go`
+    // holds the `-D` the refusal left, `-refused` stands still and reads
+    // the row it turned into, and the plain one stops at the write.
+    Verb {
+        name: "delete-branch",
+        when: &[],
+        plain: "delete_row asked=true",
+    },
+    Verb {
+        name: "delete-branch-go",
+        when: &[],
+        plain: "delete_row asked=true",
+    },
+    Verb {
+        name: "delete-branch-refused",
+        when: &[],
+        plain: "delete_row asked=true",
+    },
     // The delete table's greyed rows, each saying why it is out. **The
     // picture cannot answer this**: a tooltip is words, and a row that
     // greyed for the wrong reason frames exactly like one that greyed
