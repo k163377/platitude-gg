@@ -303,6 +303,18 @@ fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     if rewrote {
         return Ok(Gated::CensusMoved);
     }
+    // A daily run over a commit the full gate already stamped keeps the
+    // full stamp: what it ran is a part of what that one ran, and
+    // writing `full=false` over it would send the next landing back
+    // through a container side that has already answered.
+    if plan.host_only
+        && store
+            .commit(&plan.head)
+            .is_some_and(|found| found.full && found.main == plan.main && found.base == plan.base)
+    {
+        println!("gate: PASS — {head} keeps its full stamp (this run was host-only)");
+        return Ok(Gated::Stamped);
+    }
     let stamp = CommitStamp {
         main: plan.main.clone(),
         base: plan.base.clone(),

@@ -239,3 +239,17 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
     );
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
+
+/// A daily run over a commit the full gate already stamped keeps that
+/// stamp: writing a host-only one over it would send the landing back
+/// through a container side that had already answered.
+#[test]
+fn a_daily_run_keeps_a_full_stamp_it_finds() {
+    let sb = Sandbox::new("keep-full");
+    sb.write_refs(&sb.seat, 18);
+    sb.commit_all(&sb.seat, "feat(core): eighteen", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let text = sb.gate_ok(&sb.seat, &["--host-only"]);
+    assert!(text.contains("keeps its full stamp"), "{text}");
+    sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
+}
