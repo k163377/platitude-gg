@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::sampler::Limits;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Options {
     pub(super) repo: PathBuf,
     pub(super) label: String,
@@ -30,6 +30,15 @@ pub(super) struct Options {
     /// for: the Rust counter (`breakdown`) cannot see the C++ side, and
     /// that is where the excess over the budget sits.
     pub(super) attribute: bool,
+    /// Start the invocation with the calibration run, which weighs the
+    /// font database's population on its own so the budget line can be
+    /// read net of it (`perf::fonts`). Off, the working set is published
+    /// as sampled, walk included.
+    pub(super) calibrate: bool,
+    /// Ask this run's app to pay the font walk before `perf_done`, idle
+    /// either side, and say when (`PG_PERF_FONT_WALK`). The calibration
+    /// run's own; no option sets it.
+    pub(super) font_walk: bool,
     pub(super) scroll: bool,
     pub(super) select: bool,
     pub(super) selection: String,
@@ -106,6 +115,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         watchdog_ms: 300_000,
         settle_ms: 0,
         attribute: false,
+        calibrate: true,
+        font_walk: false,
         scroll: true,
         select: true,
         selection: "first".into(),
@@ -162,6 +173,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 );
             }
             "--attribute" => opts.attribute = true,
+            "--no-font-walk" => opts.calibrate = false,
             "--no-scroll" => opts.scroll = false,
             "--no-select" => opts.selection = "none".into(),
             "--selection" => opts.selection = value()?,
@@ -220,6 +232,10 @@ fn shipped(opts: &mut Options) -> Result<(), String> {
         opts.selection = "none".into();
         opts.scroll = false;
         opts.diff = false;
+        // The calibration run is the harness paying the walk on cue,
+        // and a build with no harness takes no cue: its working set is
+        // published as sampled.
+        opts.calibrate = false;
     }
     Ok(())
 }
@@ -344,7 +360,23 @@ mod tests {
     fn a_shipped_run_drives_nothing() {
         let opts = options(&["--repo", "C:/r", "--shipped"]).expect("a plain shipped run");
         assert!(!opts.harness && !opts.select && !opts.scroll && !opts.diff);
+        assert!(!opts.calibrate && !opts.font_walk);
         assert_eq!(opts.selection, "none");
+    }
+
+    /// Every invocation weighs the font walk unless told not to, with a
+    /// repository and without one alike; no run pays it on its own
+    /// account — that is the calibration run's shape (`fonts`).
+    #[test]
+    fn the_font_walk_is_weighed_unless_declined() {
+        let asked = options(&["--repo", "C:/r"]).expect("the plain options");
+        assert!(asked.calibrate && !asked.font_walk);
+        assert!(
+            !options(&["--repo", "C:/r", "--no-font-walk"])
+                .unwrap()
+                .calibrate
+        );
+        assert!(options(&["--no-open"]).unwrap().calibrate);
     }
 
     /// `--at` names a commit for the rig to build; without it the

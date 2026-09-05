@@ -62,9 +62,9 @@ fn a_host_line_parses_into_the_machine_alone() {
 #[test]
 fn the_peak_and_the_last_reading_come_off_one_series() {
     let mut series = Series::default();
-    series.absorb(sample(100, true, 1, 0, 24_000_000));
-    series.absorb(sample(300, true, 2, 0, 48_000_000));
-    series.absorb(sample(200, true, 3, 0, 72_000_000));
+    series.absorb(sample(100, true, 1, 0, 24_000_000), 0);
+    series.absorb(sample(300, true, 2, 0, 48_000_000), 0);
+    series.absorb(sample(200, true, 3, 0, 72_000_000), 0);
     assert_eq!(series.peak_working_set, 300);
     assert_eq!(series.last.map(|s| s.working_set), Some(200));
     assert_eq!(series.conditions.samples, 3);
@@ -74,8 +74,8 @@ fn the_peak_and_the_last_reading_come_off_one_series() {
 fn an_idle_machine_reads_as_no_foreign_load() {
     let mut series = Series::default();
     // Every 100ns of capacity went to idle across all three ticks.
-    series.absorb(sample(100, true, 1, 0, 24_000_000));
-    series.absorb(sample(100, true, 2, 0, 48_000_000));
+    series.absorb(sample(100, true, 1, 0, 24_000_000), 0);
+    series.absorb(sample(100, true, 2, 0, 48_000_000), 0);
     assert!(series.conditions.busy_percent.abs() < 0.001);
     assert!(
         series
@@ -89,8 +89,8 @@ fn an_idle_machine_reads_as_no_foreign_load() {
 fn work_the_measured_process_did_is_not_foreign_load() {
     let mut series = Series::default();
     // Half the machine busy, and all of it the app's own.
-    series.absorb(sample(100, true, 1, 0, 24_000_000));
-    series.absorb(sample(100, true, 2, 12_000_000, 36_000_000));
+    series.absorb(sample(100, true, 1, 0, 24_000_000), 0);
+    series.absorb(sample(100, true, 2, 12_000_000, 36_000_000), 0);
     assert!((series.conditions.busy_percent - 50.0).abs() < 0.001);
     assert!(series.conditions.foreign_percent.abs() < 0.001);
     assert!(
@@ -104,8 +104,8 @@ fn work_the_measured_process_did_is_not_foreign_load() {
 #[test]
 fn a_busy_machine_is_refused_and_names_the_share() {
     let mut series = Series::default();
-    series.absorb(sample(100, true, 1, 0, 24_000_000));
-    series.absorb(sample(100, true, 2, 0, 36_000_000));
+    series.absorb(sample(100, true, 1, 0, 24_000_000), 0);
+    series.absorb(sample(100, true, 2, 0, 36_000_000), 0);
     let complaint = series
         .conditions
         .complaint(&Limits::default(), None)
@@ -122,7 +122,7 @@ fn a_busy_machine_is_refused_and_names_the_share() {
 fn a_window_that_lost_the_front_is_still_a_reading() {
     let mut series = Series::default();
     for tick in 1..=10 {
-        series.absorb(sample(100, tick > 3, tick, 0, tick * 24_000_000));
+        series.absorb(sample(100, tick > 3, tick, 0, tick * 24_000_000), 0);
     }
     assert!(
         series
@@ -140,7 +140,7 @@ fn a_locked_session_is_refused() {
     for tick in 1..=10 {
         let mut tick_sample = sample(100, false, tick, 0, tick * 24_000_000);
         tick_sample.interactive = tick < 8;
-        series.absorb(tick_sample);
+        series.absorb(tick_sample, 0);
     }
     let complaint = series
         .conditions
@@ -162,7 +162,7 @@ fn a_blink_of_the_secure_desktop_is_not() {
     for tick in 1..=10 {
         let mut tick_sample = sample(100, true, tick, 0, tick * 24_000_000);
         tick_sample.interactive = tick != 4 && tick != 5;
-        series.absorb(tick_sample);
+        series.absorb(tick_sample, 0);
     }
     assert_eq!(series.conditions.longest_blind, 2);
     assert!(
@@ -181,7 +181,7 @@ fn scattered_blinks_do_not_add_up_to_a_lock() {
     for tick in 1..=12 {
         let mut tick_sample = sample(100, true, tick, 0, tick * 24_000_000);
         tick_sample.interactive = tick % 5 != 0;
-        series.absorb(tick_sample);
+        series.absorb(tick_sample, 0);
     }
     assert_eq!(series.conditions.interactive, 10);
     assert_eq!(series.conditions.longest_blind, 1);

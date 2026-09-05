@@ -40,6 +40,15 @@
 //! belongs to the harness the shipped build leaves out; run it beside the
 //! ordinary one to say what carrying the harness costs.
 //!
+//! `--no-font-walk` leaves out the calibration run. By default every
+//! invocation starts with one: the repository opened and driven no
+//! further than a graph, then one glyph the UI family lacks shaped
+//! before `perf_done`, idle either side. That is Qt populating its whole
+//! font database — tens of MB once per process, whichever glyph asked —
+//! and the record reads the budget line net of it, so it is weighed
+//! where the sampler can see it rather than in the middle of the scroll
+//! ([`fonts`]). The report says the walk, and the working set less it.
+//!
 //! `--at <rev>` measures the rig's build of that commit rather than this
 //! tree's own ([`rig`]): the seat keeps its target/ and its edits, the
 //! number is of a commit anybody can name again, and the other side of
@@ -49,6 +58,7 @@ mod artifacts;
 mod attribution;
 mod corpus;
 mod display;
+mod fonts;
 mod measure;
 mod options;
 mod reading;
@@ -166,10 +176,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let mut kept: Vec<Reading> = Vec::new();
     let mut retries = 0;
+    let font_walk = calibrate(&bench, &opts, &mut retries)?;
     for run in first..=opts.runs {
         let discarded = run == 0;
-        let reading = bench.take(run, &mut retries)?;
-        say(run, discarded, &reading);
+        let note = if discarded { " (discarded)" } else { "" };
+        let reading = bench.take(&run.to_string(), &opts, &mut retries)?;
+        say(&run.to_string(), note, &reading);
         if !discarded {
             kept.push(reading);
         }
@@ -185,6 +197,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             corpus: corpus.as_ref(),
             built: &built,
             retries,
+            font_walk: font_walk.as_ref(),
         },
     );
     Ok(())
@@ -238,6 +251,25 @@ fn scenario(opts: &Options) -> String {
         "{}/{}/{}/{}/{}/{}",
         opts.selection, opts.diff, opts.scroll, opts.open, opts.oid, opts.file
     )
+}
+
+/// The calibration run, before the others: the repository opened and
+/// driven no further than a graph, then the font walk, idle either side
+/// (`fonts`). Not the discarded run's stand-in — it opens nothing a
+/// `git show` reads, so the cold cache is still the first run's to pay
+/// (`warmth`) — and not kept: its one number is read beside the kept
+/// runs, not among them. `None` where the invocation declined it.
+fn calibrate(
+    bench: &Bench<'_>,
+    opts: &Options,
+    retries: &mut u32,
+) -> Result<Option<fonts::FontWalk>, String> {
+    if !opts.calibrate {
+        return Ok(None);
+    }
+    let reading = bench.take("font-walk", &fonts::calibration(opts), retries)?;
+    say("font-walk", " (calibration)", &reading);
+    Ok(reading.font_walk)
 }
 
 /// Which run the kept ones start at. The first run is discarded to pay
@@ -297,7 +329,9 @@ impl Bench<'_> {
     }
 
     /// One run, taken again for as long as its cause's budget allows
-    /// (`measure::Spoiled::budget`).
+    /// (`measure::Spoiled::budget`). `opts` is the run's own: the
+    /// calibration run drives less than the kept ones
+    /// (`fonts::calibration`).
     ///
     /// A run spoiled by the host is not a slow application and must not
     /// be published as one; it is also not a failure of the application,
@@ -305,11 +339,11 @@ impl Bench<'_> {
     /// the machine rather than firing straight into the same noise —
     /// which is what makes "somebody walked away and the session locked"
     /// end in a measurement instead of in a wasted afternoon.
-    fn take(&self, run: u32, retries: &mut u32) -> Result<Reading, String> {
+    fn take(&self, run: &str, opts: &Options, retries: &mut u32) -> Result<Reading, String> {
         let mut attempt = 0;
         let mut spent = [0u32; measure::Spoiled::CAUSES];
         loop {
-            sampler::wait_for_quiet(&self.opts.limits, QUIET_CEILING)?;
+            sampler::wait_for_quiet(&opts.limits, QUIET_CEILING)?;
             let run_dir = self.output.join(if attempt == 0 {
                 format!("run-{run}")
             } else {
@@ -317,14 +351,7 @@ impl Bench<'_> {
             });
             std::fs::create_dir(&run_dir).map_err(|e| e.to_string())?;
             display::capture(&run_dir, "before")?;
-            let result = measure(
-                self.exe,
-                self.path,
-                self.root,
-                self.opts,
-                &run_dir,
-                self.screen,
-            );
+            let result = measure(self.exe, self.path, self.root, opts, &run_dir, self.screen);
             std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
                 .map_err(|e| e.to_string())?;
             display::capture(&run_dir, "after")?;
@@ -342,7 +369,7 @@ impl Bench<'_> {
             attempt += 1;
             let taken = &mut spent[spoiled.cause()];
             *taken += 1;
-            if *taken > spoiled.budget(self.opts.retries) {
+            if *taken > spoiled.budget(opts.retries) {
                 return Err(format!(
                     "run {run} was not a reading of the application after {} attempt(s) spoiled \
                      by {}: {}. {}",
@@ -417,17 +444,22 @@ fn corpus_line(corpus: Option<&corpus::Corpus>) -> String {
     corpus.map_or_else(|| "no repository".to_string(), ToString::to_string)
 }
 
-fn say(run: u32, discarded: bool, reading: &Reading) {
+/// One run's line. `walk=` is the graph walk; the font walk, where the
+/// run paid one, follows it by name.
+fn say(run: &str, note: &str, reading: &Reading) {
     println!(
-        "  run {}{}: ws={:.1}MB private={:.1}MB startup={} graph={} walk={} fps={}",
-        run,
-        if discarded { " (discarded)" } else { "" },
+        "  run {run}{note}: ws={:.1}MB private={:.1}MB startup={} graph={} walk={} fps={}{}",
         mb(reading.peak_working_set),
         mb(reading.peak_private),
         reading.startup_ms.map_or("-".into(), |v| v.to_string()),
         reading.graph_ms.map_or("-".into(), |v| v.to_string()),
         reading.total_ms.map_or("-".into(), |v| v.to_string()),
         reading.fps.map_or("-".into(), |v| format!("{v:.1}")),
+        reading
+            .font_walk
+            .as_ref()
+            .map(fonts::FontWalk::line)
+            .unwrap_or_default(),
     );
 }
 

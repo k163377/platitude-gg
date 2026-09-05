@@ -29,6 +29,9 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("diff"),
                 "perf_complete selection=first details=true diff=true graph=false scrolled=false",
             ),
+            // The last of the calibration run's three lines, said only
+            // once the walk before it was paid and left to settle.
+            (Arg::Is("font-walk"), "perf_font_walk_settled clock_ms="),
         ],
         plain: "perf_complete selection=first details=true diff=true graph=true scrolled=true",
     },

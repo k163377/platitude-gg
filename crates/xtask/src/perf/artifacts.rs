@@ -116,10 +116,10 @@ pub(super) fn prepare(
     let mut manifest =
         std::fs::File::create(directory.join("manifest.txt")).map_err(|e| e.to_string())?;
     writeln!(manifest,
-        "protocol=5\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\nruns={}\n",
+        "protocol=6\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\ncalibrate={}\nruns={}\n",
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.features(),
         opts.repo.display(), opts.selection, opts.oid, opts.file, opts.diff, opts.scroll,
-        opts.open, opts.settle_ms, opts.breakdown, opts.attribute, opts.runs).map_err(|e| e.to_string())?;
+        opts.open, opts.settle_ms, opts.breakdown, opts.attribute, opts.calibrate, opts.runs).map_err(|e| e.to_string())?;
     // Which source the exe is of: the tree it was built in and the commit
     // that tree stood on. Under `--at` the tree is the rig and the commit
     // is exactly the one asked for; otherwise source.patch below says

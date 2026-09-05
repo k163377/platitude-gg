@@ -92,6 +92,14 @@ pub(crate) struct Knobs {
     /// frame it is measuring.
     #[cfg(feature = "automation")]
     pub perf_trace_frames: bool,
+    /// `PG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
+    /// family lacks and say when, either side of an idle. What it is for:
+    /// the first such glyph makes Qt populate its whole font database,
+    /// and `cargo xtask perf` weighs that at a moment its sampler can see
+    /// rather than in the middle of the scroll (`WindowPerfDriver`,
+    /// xtask `perf::fonts`).
+    #[cfg(feature = "automation")]
+    pub perf_font_walk: bool,
     /// Whether anything at all is driving this run
     /// (`settings::Env::automated` — any `PG_*` knob but the three that
     /// say nothing about who is at the window). The settings store is
@@ -142,6 +150,7 @@ fn read() -> Knobs {
         perf_file: text("PG_PERF_FILE"),
         perf_no_diff: text("PG_PERF_DIFF") == "0",
         perf_trace_frames: on("PG_PERF_TRACE_FRAMES"),
+        perf_font_walk: on("PG_PERF_FONT_WALK"),
         automated: platitude_core::settings::Env::system().automated(),
         fake_pr: text("PG_FAKE_PR")
             .split(',')
@@ -178,6 +187,10 @@ mod tests {
             assert!(
                 !knobs.perf_no_diff,
                 "the diff is in until a run asks for it out"
+            );
+            assert!(
+                !knobs.perf_font_walk,
+                "the walk is paid where the rows ask for it until a run asks for it up front"
             );
         }
         assert!(

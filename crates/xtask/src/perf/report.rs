@@ -11,6 +11,7 @@
 
 use super::corpus::Corpus;
 use super::display::Screen;
+use super::fonts::{FontWalk, signed_mb};
 use super::{Options, Reading};
 
 pub(super) fn mb(bytes: u64) -> f64 {
@@ -23,6 +24,10 @@ pub(super) struct Context<'a> {
     /// What was measured: the commit, and the tree it was built in.
     pub(super) built: &'a super::rig::Built,
     pub(super) retries: u32,
+    /// What the calibration run weighed the font walk at, read beside
+    /// the kept runs rather than among them (`perf::fonts`); `None`
+    /// under `--no-font-walk` and for the shipped build.
+    pub(super) font_walk: Option<&'a FontWalk>,
 }
 
 pub(super) fn report(opts: &Options, kept: &[Reading], context: &Context<'_>) {
@@ -157,6 +162,57 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
             opts.settle_ms
         );
     }
+    if let Some(walk) = context.font_walk {
+        for line in font_walk_lines(kept, walk, opts.settle_ms) {
+            println!("{line}");
+        }
+    }
+}
+
+/// The walk's weight, and the working set net of it — the line the
+/// budget is read against (ci/baseline/perf-windows-x64.md §判定). The
+/// working set above stays as sampled, walk included, so the two can be
+/// read against each other.
+fn font_walk_lines(kept: &[Reading], walk: &FontWalk, settle_ms: u64) -> Vec<String> {
+    let (Some(working_set), Some(private)) = (walk.working_set(), walk.private()) else {
+        return vec![
+            "  font walk   : not weighed — the calibration run said its three lines, but the \
+             sampler had no tick on one side of them"
+                .to_string(),
+        ];
+    };
+    let charge = walk.charge();
+    let mut lines = vec![format!(
+        "  font walk   : {} working set, {} private — Qt populating its font database for the \
+         first glyph the UI family lacks, weighed by the calibration run (run-font-walk){}",
+        signed_mb(working_set),
+        signed_mb(private),
+        if charge == 0 {
+            "; nothing to take off — the walk had already been paid before that run asked"
+        } else {
+            ", and taken off the working set below"
+        }
+    )];
+    let net: Vec<f64> = kept
+        .iter()
+        .map(|r| mb(r.peak_working_set.saturating_sub(charge)))
+        .collect();
+    lines.push(format!(
+        "  net         : {} (working set less the font walk — the line the budget is read against)",
+        spread(&net)
+    ));
+    let settled: Vec<f64> = kept
+        .iter()
+        .filter(|r| r.settled_working_set > 0)
+        .map(|r| mb(r.settled_working_set.saturating_sub(charge)))
+        .collect();
+    if !settled.is_empty() {
+        lines.push(format!(
+            "  settled net : {} (settled working set less the font walk, after {settle_ms}ms idle)",
+            spread(&settled)
+        ));
+    }
+    lines
 }
 
 /// How long a person waited: to a frame with the graph in it, and to the
@@ -378,8 +434,66 @@ fn median(sorted: &[f64]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reading, attribution_lines, count_spread, median, spread};
+    use super::{Reading, attribution_lines, count_spread, font_walk_lines, median, spread};
     use crate::perf::attribution::{Attribution, Heap};
+    use crate::perf::fonts::{FontWalk, Tick};
+
+    /// The walk's weight is said beside the working set, and the net
+    /// line is every kept run's peak less that weight — settled too,
+    /// where the runs settled. A walk that added nothing takes nothing
+    /// off, and says why.
+    #[test]
+    fn the_budget_line_is_read_net_of_the_font_walk() {
+        let kept = [
+            Reading {
+                peak_working_set: 300 << 20,
+                settled_working_set: 296 << 20,
+                ..Reading::default()
+            },
+            Reading {
+                peak_working_set: 304 << 20,
+                settled_working_set: 298 << 20,
+                ..Reading::default()
+            },
+        ];
+        let tick = |at_us, working_set: u64, private: u64| Tick {
+            at_us,
+            working_set: working_set << 20,
+            private: private << 20,
+        };
+        let walk = FontWalk {
+            begin_us: Some(1),
+            done_us: Some(2),
+            settled_us: Some(3),
+            before: Some(tick(0, 200, 150)),
+            after: Some(tick(3, 255, 203)),
+        };
+        let text = font_walk_lines(&kept, &walk, 8000).join("\n");
+        assert!(
+            text.contains("font walk   : +55.0MB working set, +53.0MB private"),
+            "{text}"
+        );
+        assert!(text.contains("taken off the working set below"), "{text}");
+        assert!(text.contains("net         : 245.0–249.0"), "{text}");
+        assert!(text.contains("settled net : 241.0–243.0"), "{text}");
+        assert!(text.contains("after 8000ms idle"), "{text}");
+        let paid = FontWalk {
+            after: walk.before,
+            ..walk.clone()
+        };
+        let text = font_walk_lines(&kept, &paid, 8000).join("\n");
+        assert!(text.contains("+0.0MB working set"), "{text}");
+        assert!(text.contains("already been paid"), "{text}");
+        assert!(text.contains("net         : 300.0–304.0"), "{text}");
+        assert!(text.contains("settled net : 296.0–298.0"), "{text}");
+        let unweighed = FontWalk {
+            after: None,
+            ..walk
+        };
+        let text = font_walk_lines(&kept, &unweighed, 8000).join("\n");
+        assert!(text.contains("not weighed"), "{text}");
+        assert!(!text.contains("net         :"), "{text}");
+    }
 
     #[test]
     fn a_spread_of_one_value_is_printed_once() {

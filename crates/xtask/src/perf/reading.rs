@@ -74,6 +74,11 @@ pub(super) struct Reading {
     /// What the settled process held, read from outside it under
     /// `--attribute`; the whole text is `attribution.txt` in the run.
     pub(super) attribution: Option<super::attribution::Attribution>,
+    /// The font walk the run was asked to pay before `perf_done`, as its
+    /// three lines arrived, and — once `measure` has read the sampler
+    /// back at them — what the process weighed either side
+    /// (`perf::fonts`). `None` where the run never said the lines.
+    pub(super) font_walk: Option<super::fonts::FontWalk>,
     pub(super) perf_done: bool,
 }
 
@@ -126,6 +131,15 @@ pub(super) fn read_app(
                 }
                 if found.graph_ms.is_none() && graph_finished(&line) {
                     found.graph_ms = Some(started.elapsed().as_millis() as u64);
+                }
+                // On the parent's clock, like the two above: the sampler
+                // the walk is read back against runs on that clock.
+                if let Some(mark) = super::fonts::mark(&line) {
+                    let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+                    found
+                        .font_walk
+                        .get_or_insert_with(Default::default)
+                        .note(mark, at_us);
                 }
                 if line.contains("perf_failed") {
                     found.failure = Some(line.clone());
@@ -210,6 +224,7 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     if !reading.perf_done {
         gaps.push("perf completion (no `perf_done`)");
     }
+    gaps.extend(font_walk_gap(reading, opts));
     if !opts.open {
         return if gaps.is_empty() {
             Ok(())
@@ -274,6 +289,21 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.join(", ")
     ))
 }
+
+/// What the calibration run is missing when it lost its one number: the
+/// walk, said in order and sampled either side. Asked of both its
+/// shapes — with a repository and without one — and of no other run.
+fn font_walk_gap(reading: &Reading, opts: &Options) -> Option<&'static str> {
+    let weighed = reading
+        .font_walk
+        .as_ref()
+        .is_some_and(super::fonts::FontWalk::weighed);
+    (opts.font_walk && !weighed).then_some(
+        "the font walk, said in order and sampled either side (`perf_font_walk_begin` / \
+         `done` / `settled`, with a memory tick before the first and before the last)",
+    )
+}
+
 /// The line every build says when the graph has finished streaming —
 /// ordinary application logging, not the harness, which is what makes it
 /// the one edge the two builds share (`Reading::graph_ms`).

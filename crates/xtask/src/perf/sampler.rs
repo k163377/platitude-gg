@@ -408,10 +408,20 @@ pub(super) struct Series {
     pub(super) last: Option<Sample>,
     first: Option<Sample>,
     pub(super) conditions: Conditions,
+    /// Every tick's two memory numbers, on the parent's clock, so a
+    /// moment the app names can be read back off the series it was
+    /// sampled in (`fonts::FontWalk::weigh`). Ten a second for the
+    /// length of a run: a few thousand.
+    pub(super) history: Vec<super::fonts::Tick>,
 }
 
 impl Series {
-    fn absorb(&mut self, sample: Sample) {
+    fn absorb(&mut self, sample: Sample, at_us: u64) {
+        self.history.push(super::fonts::Tick {
+            at_us,
+            working_set: sample.working_set,
+            private: sample.private,
+        });
         self.peak_working_set = self.peak_working_set.max(sample.working_set);
         self.peak_private = self.peak_private.max(sample.private);
         self.conditions.absorb(&sample, self.last.as_ref());
@@ -440,6 +450,7 @@ impl Sampler {
             last: held.last.clone(),
             first: held.first.clone(),
             conditions: held.conditions.clone(),
+            history: held.history.clone(),
         }
     }
 
@@ -546,10 +557,11 @@ impl Armed {
             )
             .map_err(|e| e.to_string())?;
             let mut record = |sample: Sample| -> Result<(), String> {
+                let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
                 writeln!(
                     csv,
                     "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                    started.elapsed().as_micros(),
+                    at_us,
                     sample.working_set,
                     sample.private,
                     if sample.display.is_empty() {
@@ -572,7 +584,7 @@ impl Armed {
                 shared
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .absorb(sample);
+                    .absorb(sample, at_us);
                 Ok(())
             };
             #[cfg(windows)]

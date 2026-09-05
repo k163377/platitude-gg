@@ -162,6 +162,7 @@ fn command(
         (opts.select, "PG_AUTO_SELECT", "1".to_string()),
         (opts.scroll, "PG_AUTO_SCROLL", "1".to_string()),
         (opts.breakdown, "PG_MEM_REPORT", "1".to_string()),
+        (opts.font_walk, "PG_PERF_FONT_WALK", "1".to_string()),
     ] {
         if asked {
             cmd.env(name, value);
@@ -299,6 +300,13 @@ pub(super) fn measure(
         0
     };
     reading.conditions = series.conditions.clone();
+    // The walk read back against the same series: the last tick before
+    // the app said it was about to ask, and the last before it said it
+    // had settled (`fonts::FontWalk::weigh`).
+    reading.font_walk = reading
+        .font_walk
+        .take()
+        .map(|walk| walk.weigh(&series.history));
     // Written before the verdict, because the verdict may be that this
     // is not a reading — and a run refused for the state of the machine
     // is exactly the one whose numbers a later reader wants to see.

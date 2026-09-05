@@ -56,6 +56,10 @@ pub struct Harness {
     /// The window drives the memory breakdown off a timer instead of
     /// leaving it to whoever remembers to ask.
     mem_report: bool,
+    /// Shape one glyph the UI family lacks before `perf_done`, either side
+    /// of an idle, and say when: the font database's population, paid
+    /// where the memory sampler can weigh it (`WindowPerfDriver`).
+    perf_font_walk: bool,
     /// Whether anything at all is driving this run — any `PG_*` knob but
     /// the three that say nothing about who is at the window
     /// (`settings::Env::automated`).
@@ -79,6 +83,7 @@ impl Default for Harness {
             auto_identity_save: knobs.identity_save,
             scroll_to: knobs.scroll_to.clone(),
             mem_report: super::memprobe::enabled(),
+            perf_font_walk: knobs.perf_font_walk,
             automated: knobs.automated,
         }
     }
@@ -101,6 +106,7 @@ impl Harness {
     qproperty!("autoIdentitySave", Member = auto_identity_save, Constant);
     qproperty!("scrollTo", Member = scroll_to, Constant);
     qproperty!("memReport", Member = mem_report, Constant);
+    qproperty!("perfFontWalk", Member = perf_font_walk, Constant);
     qproperty!("automated", Member = automated, Constant);
 
     /// The reporting channel the harness reads its answers off (QML →
