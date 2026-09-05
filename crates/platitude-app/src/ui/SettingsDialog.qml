@@ -110,16 +110,14 @@ AppDialog {
         // chosen. Two `git config` reads, which is the same order of cost as the identity read above; the
         // eight-second one (`--tool-help`) still waits for the category itself.
         gitPane.landOnFront()
-        // Opened from an avatar, the caret is already spoken for and the screen has none left to place.
-        if (!appPane.focusPrefill()) {
-            if (settingsDialog.category === "git")
-                gitPane.focusIdentity()
-            else
-                appPane.focusFetch()
-        }
+        // **The screen opens with no caret in a box.** A settings screen is read before any of it is answered, and a
+        // caret dropped into the first field of a category aims the reader's next keystroke at a value they did not
+        // come to change. The one door that places one is the avatar's badge, which opened this screen to name a
+        // picture — and it is the door that says so, not the category.
+        appPane.focusPrefill()
         // Through the press rather than the popup: what a run asking for this is after is the state a finger on the
         // field leaves behind, and opening the list from outside would photograph that just as well with the wiring
-        // cut. Last, because a press also takes the caret — the focus settled just above is the one a person would be
+        // cut. Last, because a press also takes the caret — whatever was settled above is what a person would be
         // taking it from.
         if (settingsDialog.pressToolOnOpen)
             gitPane.pressToolField()

@@ -127,9 +127,6 @@ ColumnLayout {
     function loadIdentity() {
         identityFields.load()
     }
-    function focusIdentity() {
-        identityFields.focusName()
-    }
     /// Automation: leaves this group's name box holding an edit, so the way out has something to stop for.
     function autoTypeIdentity(text) {
         identityFields.autoTypeName(text)

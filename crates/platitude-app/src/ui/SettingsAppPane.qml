@@ -228,23 +228,19 @@ ColumnLayout {
         pane.readAuthorChoices()
     }
     /// Opened from an avatar, the first thing left to do is name the
-    /// picture, so the focus goes there rather than to the top field.
-    /// Answers whether it took the caret, so the screen knows whether it
-    /// still has one to place.
+    /// picture, so the caret goes there. **The only caret this screen
+    /// places as it opens** (`SettingsDialog.onOpened`) — a category is
+    /// read before it is answered, so no chapter's first field takes one.
     function focusPrefill() {
         if (pane.prefillEmail === "") {
             avatarWho.wanted = ""
             avatarWho.editText = ""
-            return false
+            return
         }
         const who = pane.prefillName + " <" + pane.prefillEmail + ">"
         avatarWho.wanted = who
         avatarWho.editText = who
         chooseAvatar.forceActiveFocus()
-        return true
-    }
-    function focusFetch() {
-        fetchField.forceActiveFocus()
     }
 
     // An empty field is the off switch — nothing to type is the
