@@ -107,12 +107,15 @@ impl Default for GitExecutor {
 }
 
 impl GitExecutor {
-    /// Uses `git` resolved from `PATH`.
+    /// Uses `git` resolved from `PATH` — or, where PATH names the launcher
+    /// Git for Windows installs there, the git behind it
+    /// ([`super::program`]).
     pub fn new() -> Self {
-        Self::of(OsString::from("git"))
+        Self::of(super::program::default_program())
     }
 
-    /// Uses an explicit git binary (tests, portable installs).
+    /// Uses an explicit git binary (tests, portable installs). Taken as
+    /// given: nothing is looked behind.
     pub fn with_program(program: impl Into<OsString>) -> Self {
         Self::of(program.into())
     }

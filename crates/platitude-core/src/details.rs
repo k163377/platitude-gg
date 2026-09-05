@@ -79,7 +79,8 @@ pub struct CommitDetails {
 /// **One invocation, not two.** `show` prints the file list after the
 /// format expansion, so asking for both together spares the details pane
 /// a second process — and on Windows the process is the expensive part
-/// of a 100ms interaction budget (measured ~25ms warm for this call).
+/// of a 100ms interaction budget (measured: git's own work in this call
+/// is about a millisecond, the rest is the process — `process::program`).
 pub async fn commit_details(
     executor: &GitExecutor,
     workdir: &Path,
