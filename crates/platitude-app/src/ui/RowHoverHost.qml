@@ -51,6 +51,11 @@ Item {
     /// the row went dark under a card that is still up — leaving the
     /// message with nothing on screen saying which commit it is of.
     property string rowCardOid: ""
+    /// And which row of the graph that is, held for the reason the
+    /// chip's list holds its own (`refListRow`): a press in the card
+    /// picks the row, and looking one up is a walk over every loaded
+    /// row (CLAUDE.md §性能予算).
+    property int rowCardRow: -1
     /// The chip's list is up, or is about to be. Only one of the two is
     /// ever out, and the chip's is the more particular
     /// (デザイン規約 §hover のツールチップ).
@@ -80,6 +85,13 @@ Item {
     signal recordChosen(string oidHex, int atRow)
     signal recordMenuAsked(string oidHex, string record)
 
+    /// The note under a cut message was pressed in the row's card: the
+    /// reader is asking for the whole of it, and the whole of it is in
+    /// the pane one click away (デザイン規約 §hover のツールチップ).
+    /// The same pair the card's rows are chosen by — this is that click,
+    /// made from inside the card.
+    signal messageAsked(string oidHex, int atRow)
+
     anchors.fill: parent
 
     /// A menu went up over whatever was resting: the card goes now rather
@@ -106,6 +118,7 @@ Item {
         // Which row it is of, for the row itself to read back — the card
         // holds no commit of its own beyond the fields copied above.
         host.rowCardOid = row.oid_hex
+        host.rowCardRow = row.index
         rowCard.open()
     }
     function settleRowCard() {
@@ -239,7 +252,20 @@ Item {
         // The band the row is holding goes with the card, and it is the
         // card's own close that says when — the row lost the pointer a
         // beat before that and cannot tell.
-        onClosed: host.rowCardOid = ""
+        onClosed: {
+            host.rowCardOid = ""
+            host.rowCardRow = -1
+        }
+        // **Read before the close, never after**: closing is what clears
+        // the pair above, so a card that took its own commit down with it
+        // would send the page looking for nothing. Down now rather than
+        // in a beat's time — what the press leads to is behind this card.
+        onMessageAsked: {
+            const oidHex = host.rowCardOid
+            const atRow = host.rowCardRow
+            host.closeRowCard()
+            host.messageAsked(oidHex, atRow)
+        }
     }
     HoverCardHost {
         id: rowCardKeep

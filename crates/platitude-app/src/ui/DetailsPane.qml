@@ -206,6 +206,20 @@ ColumnLayout {
     /// Smoke hook: what the boxes are holding. `boxMoved` says the text left
     /// its resting point, never whose text stands there instead.
     readonly property alias boxSubject: block.subjectText
+
+    /// A reader was sent here from somewhere that could not hold the whole
+    /// message (the graph row's hover card), so the boxes say which they
+    /// are (デザイン規約 §hover のツールチップ). The mark stands until the
+    /// reader's next press — they arrived, and the first thing they do is
+    /// the proof of it (`RepoPage.notePress`).
+    function callAttention() {
+        block.callAttention()
+    }
+    function dropAttention() {
+        block.dropAttention()
+    }
+    readonly property alias attention: block.attention
+
     /// Smoke hook: put the caret in the description box, the way a click in
     /// it does. The colour the text takes under a caret is what the shot is of.
     function focusDescription() {

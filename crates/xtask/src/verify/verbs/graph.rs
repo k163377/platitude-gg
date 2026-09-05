@@ -119,6 +119,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "row_card open=true lit=true",
     },
+    // The note under a message that card had to cut, pressed. Three of
+    // the four are things a picture frames the same either way: a card
+    // that never opened and a card that closed leave the same empty
+    // overlay, the mark the pane wears says nothing about *why* it is
+    // there, and the row the selection landed on is not written
+    // anywhere on screen. `picked=` is the whole of the claim — the
+    // press has to land on the commit the card was of, not on whatever
+    // row the page had before.
+    Verb {
+        name: "card-message",
+        when: &[],
+        plain: "card_message open=false picked=true mark=true shown=true",
+    },
     // The same card's words taken from the air around them — the
     // padding band, the step between two lines, the room beside a
     // short one (規約 §hover のツールチップ). This card is the one

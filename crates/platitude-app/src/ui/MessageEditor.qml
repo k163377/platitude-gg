@@ -34,6 +34,18 @@ ColumnLayout {
     property string standingSubject: ""
     property string standingBody: ""
 
+    // ---- the mark a reader arrives at -------------------------------
+    /// A reader was sent to these boxes from somewhere that could not hold the whole message — the graph row's hover
+    /// card, whose note is the way here (デザイン規約 §hover のツールチップ). The pair says which it is until the
+    /// reader's next press: they were moved without asking, and what they were moved to has to be findable at a
+    /// glance. **Only the pane that is sent to sets it** — the commit editor is where the hand already is.
+    ///
+    /// **The mark is the frames' own colour, not a second thing drawn** — both boxes already carry a border, so a
+    /// resting window gains no ink for it, and the two frames take the pair as one block.
+    property bool attention: false
+    function callAttention() { editor.attention = true }
+    function dropAttention() { editor.attention = false }
+
     // ---- what the pane says about its own geometry ------------------
     /// The pane's file list height. The list is the one thing under the block that gives, and two rows is where it
     /// stops being a list — so what it has past those rows is the whole of what this pair may borrow (デザイン規約
@@ -221,7 +233,7 @@ ColumnLayout {
         Layout.preferredHeight: editor.summaryNeed
         color: Theme.bgBase
         radius: Theme.radiusMd
-        border.color: Theme.borderDefault
+        border.color: editor.attention ? Theme.accent : Theme.borderDefault
         border.width: Theme.borderWidth
         // The band the inset below leaves between this frame and the words. Declared first, so it is under the view
         // and reaches only a press the text did not take (`SweepBand`).
@@ -277,7 +289,7 @@ ColumnLayout {
         placeholderText: editor.readOnly ? ""
                          : editor.standingBody !== "" ? editor.standingBody
                          : qsTr("Description")
-        border.color: Theme.borderSubtle
+        border.color: editor.attention ? Theme.accent : Theme.borderSubtle
         restHeight: editor.descRest
         room: editor.descRoom
         owed: editor.descOwed

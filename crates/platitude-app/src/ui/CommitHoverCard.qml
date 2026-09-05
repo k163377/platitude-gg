@@ -12,9 +12,9 @@ import platitude.ui
 // decides — which is what made the old one feel detached from the pointer (P3-確認事項 §B). The ground stopped being a
 // reason when the shared tip took the same card (`SharedToolTip`); the one-block shape is still one.
 //
-// It answers and offers nothing: nothing in it opens anything further. Whoever wants the addresses behind the credited
-// names, or the message as an editable field, has the details pane a click away — a preview that grows its own second
-// popup is a preview asking to be read like a pane (規約 §co-author の表示).
+// It opens nothing of its own: no second popup grows out of it (規約 §co-author の表示). The one thing it does answer
+// for is the message it had to stop — the note under a cut message is pressed, and what the press does is take the
+// reader to the pane that holds the whole of it, which is a place already on screen.
 //
 // Owned by the page, not the delegate: rows are recycled the moment they scroll off, and a popup parented to one goes
 // with it.
@@ -47,6 +47,17 @@ AppCard {
     /// The cap stopped the message somewhere. What the body says while it is hidden cannot be read off it — a hidden
     /// layout child is a zero-width one, and a field wrapped at zero calls itself cut every time.
     readonly property bool messageCut: subjectLine.clipped || (bodyLine.visible && bodyLine.clipped)
+
+    /// The note under a cut message was pressed. The card holds no commit of its own beyond the fields it was handed,
+    /// so which one this is about is the owner's answer (`RowHoverHost`).
+    signal messageAsked()
+    /// The press itself, so a headless run enters where the hand does rather than beside it (verify-ui スキル).
+    function askMessage() {
+        hoverCard.messageAsked()
+    }
+    /// Whether the note has the pointer — the rule under it is the only ink that moves, and a PNG cannot say whether
+    /// the line that is there is the resting one.
+    readonly property bool notePointed: noteHand.containsMouse
 
     margins: Theme.spaceXs
     // The pointer walks into this one and reads it, so both halves of `AppCard.pointerInside` are wanted — the face's
@@ -84,10 +95,11 @@ AppCard {
             // that reached half the window was promising a read it could not give (規約 §hover のツールチップ).
             capRows: Metrics.hoverBodyRows
         }
-        // Where the rest of it is, for the message this card had to stop. Nothing here opens anything, so naming the
-        // place that holds the whole of it is all the card can do — and the place is a click away, on the row the
-        // pointer is already resting on (規約 §hover のツールチップ). **The commit is named rather than left to
-        // "click"**: the hand reading this is inside the card, where a press does nothing.
+        // Where the rest of it is, for the message this card had to stop — **and the way there** (規約 §hover の
+        // ツールチップ). The line names itself rather than the commit: the hand reading this is inside the card, and a
+        // sentence that sends it back out to a row it has already left is a sentence about a target the reader cannot
+        // see. The press does what the row's own click does, and the card is in the way of what it leads to, so it
+        // goes with the press.
         //
         // **It stands with the message**, under the mark and ahead of the author: put at the foot of the card it has
         // two lines of somebody else's facts between it and the `…` it answers, and reads as a note about the
@@ -97,15 +109,42 @@ AppCard {
         // itself.
         //
         // A `Label` rather than a `CardText`, because this is the card speaking and not the commit: a note that joined
-        // the selection would be dragged out along with the message somebody came here to copy.
-        Label {
+        // the selection would be dragged out along with the message somebody came here to copy. It is a target now, so
+        // it stands on the card's sweep pad the way the band's badges do (規約 §右のペインの字は掴める).
+        Item {
+            id: noteLine
             visible: hoverCard.messageCut
             Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: qsTr("Click the commit for the whole message")
-            color: Theme.textMuted
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.fontSm
+            implicitHeight: noteWords.implicitHeight + 2 * Theme.borderWidth
+            Label {
+                id: noteWords
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Click here for the whole message")
+                color: Theme.textMuted
+                font.family: Theme.uiFamily
+                font.pixelSize: Theme.fontSm
+            }
+            // What says the line can be pressed before the hand is near it: at rest one step under the words, and up
+            // to the words' own colour under the pointer (規約 §author の hover — the footer that loads more commits
+            // and the parent hash say the same thing the same way). **The only ink a resting card gains is this 1px.**
+            Rectangle {
+                x: noteWords.x
+                y: noteWords.height + Theme.borderWidth
+                width: noteWords.width
+                height: Theme.borderWidth
+                color: hoverCard.notePointed ? Theme.textMuted : Theme.borderStrong
+            }
+            // The words' own width, not the row's: the target is the sentence, and a hand that reaches the empty half
+            // of a centred line has not aimed at anything.
+            MouseArea {
+                id: noteHand
+                x: noteWords.x
+                width: noteWords.width
+                height: noteLine.height
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: hoverCard.askMessage()
+            }
         }
         // The same width the message is held to. Nothing in git bounds an author's name either, and this one line was
         // the only field here outside the share: a name of a couple of hundred characters widened the whole card past

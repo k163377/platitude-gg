@@ -147,6 +147,12 @@ ApplicationWindow {
             if (root.curPage !== null)
                 root.curPage.releasePressedAway(scenePos)
         }
+        // And the press itself, whatever it was: the mark the right pane wears after a reader was sent to it stands
+        // until they do the next thing (デザイン規約 §hover のツールチップ).
+        onPressedAnywhere: {
+            if (root.curPage !== null)
+                root.curPage.notePress()
+        }
     }
 
     /// Automation (`PG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of

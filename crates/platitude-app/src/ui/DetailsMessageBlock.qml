@@ -91,6 +91,9 @@ Flickable {
     function showAuthor(on) { authorRow.showAuthor(on) }
     function setMessage(subject, body) { msgEditor.setMessage(subject, body) }
     function setTexts(subject, body) { msgEditor.setTexts(subject, body) }
+    function callAttention() { msgEditor.callAttention() }
+    function dropAttention() { msgEditor.dropAttention() }
+    readonly property alias attention: msgEditor.attention
     function focusDescription() { msgEditor.focusDescription() }
     function rollDescription(dy) { msgEditor.rollDescription(dy) }
     function holdDescriptionBar(on) { msgEditor.holdDescriptionBar(on) }

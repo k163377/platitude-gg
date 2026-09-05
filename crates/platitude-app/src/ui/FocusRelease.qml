@@ -25,6 +25,12 @@ Item {
     /// for every one of them: a press on the find card's own `✕` is a press on that card.
     signal pressedAway(var scenePos)
 
+    /// A press landed, wherever it went and whatever it was on. What the window put on screen to say "here is what you
+    /// asked for" is taken back by the first thing the reader does next — a mark that has been acted through has
+    /// already said what it had to say (デザイン規約 §hover のツールチップ). Presses inside a popup do not come here:
+    /// the overlay stands above this item, which is the right answer for a card the reader is still reading.
+    signal pressedAnywhere()
+
     anchors.fill: parent
     anchors.topMargin: -watcher.window.contentItem.y
     z: 10000
@@ -34,6 +40,7 @@ Item {
         onActiveChanged: {
             if (!active)
                 return
+            watcher.pressedAnywhere()
             const item = watcher.window.activeFocusItem
             // Only text editors hold a caret worth releasing; list views and buttons manage their own focus.
             if (!item || item.cursorPosition === undefined)

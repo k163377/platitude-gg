@@ -31,6 +31,7 @@ Item {
     readonly property var commitTagCard: driver.commitTagCard
     readonly property var refList: driver.refList
     readonly property var rowCard: driver.rowCard
+    readonly property var detailsPane: driver.detailsPane
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
@@ -76,6 +77,14 @@ Item {
                 rowCardTimer.row = at
                 rowCardTimer.start()
             }
+        } else if (act === "card-message") {
+            // The note under a message the card had to stop, pressed where a hand presses it
+            // (`CommitHoverCard.askMessage` is the click handler's own body). The card is opened the way `row-card`
+            // opens it, and the press waits for the note to be there — the note only stands under a cut message, and
+            // a card fills its fields in after it is opened.
+            cardMessageTimer.row = arg === "" ? 0 : Number(arg)
+            cardMessageTimer.asked = false
+            cardMessageTimer.start()
         } else if (act === "menu-hover") {
             // Same row and same default as `commit-menu`: the menu goes up, and then the row it is standing on is
             // asked for its hover card.
@@ -200,6 +209,45 @@ Item {
             + " list=" + refList.opened
             + " subject=" + (rowCard.subject !== "")
             + " body=" + (rowCard.body !== ""))
+            driver.complete()
+        }
+    }
+    // The press on that card's note, and where it leaves the reader. Two beats: the card has to be up and holding a
+    // message it had to cut before the note is anywhere on screen, and the pane it sends them to answers a request
+    // that goes out at the press — so the picture is of the arrival, not of the press.
+    SampleTimer {
+        id: cardMessageTimer
+        property int row: 0
+        property bool asked: false
+        /// Which commit the press was of, kept because the card takes its own copy down with it.
+        property string oidHex: ""
+        onTriggered: {
+            if (!cardMessageTimer.asked) {
+                const hovered = graphPane.view.itemAtIndex(cardMessageTimer.row)
+                if (!hovered)
+                    return
+                graphPane.view.rowHoverRequested(hovered, true)
+                // **The note is what is being pressed**, so a card without one is not this verb's card: a message
+                // that fits says so by not offering anywhere further to go (規約 §hover のツールチップ).
+                if (!rowCard.opened || !rowCard.messageCut)
+                    return
+                cardMessageTimer.oidHex = hovered.oid_hex
+                rowCard.askMessage()
+                cardMessageTimer.asked = true
+                return
+            }
+            // The arrival: the card is gone, the row it was of is the page's selection, and the pane holds that
+            // commit's own message. **`details` is asked for at the press**, so waiting on it is waiting on the very
+            // thing the note promised — a shot taken before it frames the message of whatever was open before.
+            if (rowCard.opened || detailsPane.details.shaHex !== cardMessageTimer.oidHex)
+                return
+            cardMessageTimer.stop()
+            Harness.report(
+                "card_message open=" + rowCard.opened
+                + " picked=" + (page.selectedRow === cardMessageTimer.row)
+                + " mark=" + detailsPane.attention
+                + " shown=" + (detailsPane.boxSubject !== "")
+                + " row=" + page.selectedRow)
             driver.complete()
         }
     }

@@ -110,6 +110,12 @@ Item {
         sidebarPane.stopEdit()
         graphPane.dropEmptyBoxes(scenePos)
     }
+    /// A press landed anywhere in the window (Main's `FocusRelease` again, this one on every press rather than only
+    /// the ones that take a caret away). The right pane's mark says where a reader was just sent, and the first thing
+    /// they do after arriving is the answer that they arrived (デザイン規約 §hover のツールチップ).
+    function notePress() {
+        detailsPane.dropAttention()
+    }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
         page.foldedByDiff = false
@@ -1238,6 +1244,13 @@ Item {
         onRecordActivated: record => page.activateRecord(record)
         // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
+        // The note under a message the card had to cut: the row's own click, made from inside the card, and then the
+        // pane that holds the whole of it says so — the reader was sent somewhere and the sentence they read is gone
+        // by the time they arrive (デザイン規約 §hover のツールチップ).
+        onMessageAsked: (oidHex, atRow) => {
+            page.activateRow(oidHex, atRow)
+            detailsPane.callAttention()
+        }
         // A right-click on one of the card's rows raises the row's own menu, aimed at the name that was pressed.
         onRecordMenuAsked: (oidHex, record) => page.openRowMenu(oidHex, record)
     }
@@ -2229,6 +2242,10 @@ Item {
         // progress.
         graphPane.stopNaming()
         page.stopRowAsk()
+        // And the right pane's mark is about the commit it was raised over. Every road to another commit comes through
+        // here, keyboard ones included, so this is where it stops being true — the one road that keeps it raises it
+        // again on the way out (`onMessageAsked`).
+        detailsPane.dropAttention()
         const row = atRow !== undefined && atRow >= 0 ? atRow : graphModel.rowOf(oidHex)
         if (row >= 0) {
             graphPane.setCurrentRow(row)
