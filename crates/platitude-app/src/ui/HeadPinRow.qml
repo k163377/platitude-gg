@@ -92,7 +92,9 @@ Rectangle {
         NavIcon {
             visible: headPin.branchesModel.headHasRemote || headPin.branchesModel.headHasPr
             kind: headPin.branchesModel.headHasPr ? "pr" : "remote"
-            tint: headPin.branchesModel.headHasPr ? Theme.success : Theme.textSecondary
+            // One slot, one colour: which of the two marks it is answers the question, so the colour is free to be
+            // the quiet one every row mark wears (デザイン規約 §ref の種別).
+            tint: Theme.textSecondary
             width: Theme.iconSm
             height: Theme.iconSm
         }

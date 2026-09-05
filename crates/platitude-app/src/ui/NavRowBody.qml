@@ -101,7 +101,8 @@ RowLayout {
     // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
     // 4; PG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
     // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
-    // (`ls-remote --tags`).
+    // (`ls-remote --tags`). **Both marks wear one colour**: the mark itself is the answer, and a colour on top of it
+    // would be a second one (デザイン規約 §ref の種別).
     Loader {
         id: remoteSeat
         active: !body.row.folder
@@ -115,7 +116,7 @@ RowLayout {
         Layout.preferredHeight: Theme.iconSm
         sourceComponent: NavIcon {
             kind: body.row.has_pr ? "pr" : "remote"
-            tint: body.row.has_pr ? Theme.success : Theme.textSecondary
+            tint: Theme.textSecondary
             width: Theme.iconSm
             height: Theme.iconSm
         }

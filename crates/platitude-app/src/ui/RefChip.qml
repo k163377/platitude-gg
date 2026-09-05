@@ -301,7 +301,7 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
                 kind: chip.recPr ? "pr" : "remote"
-                tint: chip.dulled ? Theme.textMuted : chip.recPr ? Theme.success : Theme.textSecondary
+                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
                 width: Theme.iconSm
                 height: Theme.iconSm
             }
