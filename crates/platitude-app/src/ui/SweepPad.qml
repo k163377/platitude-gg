@@ -169,9 +169,9 @@ Item {
         pad.releaseNow()
         return true
     }
-    /// Automation: every place in this pad's air, swept one after another, as the one line the run reports. Seven
+    /// Automation: every place in this pad's air, swept one after another, as the one line the run reports. Eight
     /// surfaces carry this hand now and each one of them was asking the same four things, so the sentence is written
-    /// here rather than seven times in the two drivers.
+    /// here rather than eight times in the two drivers.
     ///
     /// **`all=` rather than a count**, because how much air a surface has depends on the words in it and on the
     /// machine that drew them — but the count rides along as `reach=`, because a reach that works from only one place

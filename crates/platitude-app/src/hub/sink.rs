@@ -243,6 +243,10 @@ impl SessionSink for BridgeSink {
                     details: Box::new(details),
                 },
             ),
+            SessionEvent::SelectionLoaded { generation, files } => self
+                .feeds
+                .details
+                .push_latest(generation, DetailsMsg::Selection { generation, files }),
             SessionEvent::DetailsFailed {
                 generation,
                 oid,

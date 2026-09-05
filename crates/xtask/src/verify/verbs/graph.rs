@@ -225,6 +225,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "read=true wip=false",
     },
+    // The two things a row of the list that choice puts up is for. The
+    // card's `lit=` is the band the row keeps under it — a card opens off
+    // the row's own bottom edge, so the row loses the pointer the instant
+    // it is up and a picture cannot tell "went dark" from "was never
+    // lit". `credit=` says the card was filled from the same row the list
+    // was built out of, which is the whole claim: a commit does not read
+    // differently for being listed somewhere else.
+    Verb {
+        name: "graph-choose-card",
+        when: &[],
+        plain: "open=true lit=true subject=true credit=true",
+    },
+    // And the words being a reader's to take away. `ended=` is the value
+    // the drag came away with, `caret=` whether the keyboard went with it
+    // — `Ctrl+C` goes to whatever holds the caret, so a selection without
+    // one is not a value anybody can carry off.
+    Verb {
+        name: "graph-choose-sweep",
+        when: &[],
+        plain: "ended=true caret=true",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame

@@ -85,6 +85,32 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
+    /// Diff of one file between two commits — the file list a choice of
+    /// exactly two puts up (デザイン規約 §複数のコミットを選ぶ). `from_hex`
+    /// is the older side, the one the comparison is measured from.
+    #[qslot]
+    fn request_range_file(
+        &mut self,
+        from_hex: String,
+        to_hex: String,
+        path: String,
+        orig_path: String,
+    ) {
+        let (Ok(from), Ok(to)) = (
+            Oid::from_hex_str(from_hex.trim()),
+            Oid::from_hex_str(to_hex.trim()),
+        ) else {
+            return;
+        };
+        let target = DiffTarget::Range {
+            from,
+            to,
+            path: path.clone(),
+            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+        };
+        self.begin_request(path, target);
+    }
+
     /// Diff of a working-tree entry (bucket: staged/unstaged/untracked/
     /// conflicts).
     #[qslot]

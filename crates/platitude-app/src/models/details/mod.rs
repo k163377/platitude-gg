@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use platitude_core::Oid;
+use platitude_core::session::SelectionRead;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::hub::{DetailsMsg, Feed, Hub};
@@ -88,6 +89,21 @@ pub struct DetailsModel {
     committer_time: i64,
     message_subject: String,
     message_body: String,
+    /// How many commits the choice holds, and whether the file list is
+    /// the two-commit comparison rather than what a set of them changed
+    /// (デザイン規約 §複数のコミットを選ぶ). 0 / false while one commit is
+    /// what is being read, which is every other pane in this file.
+    selection_count: i32,
+    comparing: bool,
+    /// Whether the files below a choice are its own answer. **"No answer
+    /// yet" is not "no files"**: a read that failed leaves the list empty
+    /// with nothing loading, which is the same shape as a choice whose
+    /// commits changed nothing (規約 §UI 自動化の因果性).
+    selection_loaded: bool,
+    /// The two ends of a comparison, oldest first — what the header
+    /// names. Empty unless `comparing`.
+    compare_from: String,
+    compare_to: String,
     loading: bool,
     requested: String,
     requested_generation: Option<u64>,
@@ -123,6 +139,11 @@ impl Default for DetailsModel {
             committer_time: 0,
             message_subject: String::new(),
             message_body: String::new(),
+            selection_count: 0,
+            comparing: false,
+            selection_loaded: false,
+            compare_from: String::new(),
+            compare_to: String::new(),
             loading: false,
             requested: String::new(),
             requested_generation: None,
@@ -130,6 +151,69 @@ impl Default for DetailsModel {
             feed: None,
             tab_id: 0,
         }
+    }
+}
+
+impl DetailsModel {
+    /// Lays a file list into the CHANGES rows. One commit's own files
+    /// and what a choice of several changed are the same list read the
+    /// same way — the only thing that differs is which git command
+    /// answered.
+    pub(super) fn take_files(&mut self, files: &[platitude_core::parse::name_status::FileChange]) {
+        self.raw_files = files
+            .iter()
+            .map(|f| FileItem {
+                change: f.status.to_string(),
+                path: f.path.clone(),
+                orig_path: f.orig_path.clone().unwrap_or_default(),
+                name: f.path.clone(),
+                // The flat view spells every row whole, both names with
+                // it; the tree cuts them together (`build_file_tree`).
+                orig_name: f.orig_path.clone().unwrap_or_default(),
+                ..Default::default()
+            })
+            .collect();
+        self.file_total = self.raw_files.len() as i32;
+        self.folder_overrides.clear();
+        self.rebuild_rows();
+        self.reset();
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("details-files", self.tab_id, &self.raw_files);
+        }
+    }
+
+    /// Empties everything that describes one commit. What a choice of
+    /// several holds is not a commit — it has no author, no message and
+    /// no hash — so the card above the file list has to go rather than
+    /// stand there still wearing the last one read.
+    pub(super) fn clear_commit(&mut self) {
+        self.sha_hex.clear();
+        self.sha8.clear();
+        self.parent_hex.clear();
+        self.author_name.clear();
+        self.author_email.clear();
+        self.author_time = 0;
+        self.avatar = 0;
+        self.avatar_url.clear();
+        self.co_authors.clear();
+        self.committer_name.clear();
+        self.committer_email.clear();
+        self.committer_avatar = 0;
+        self.committer_avatar_url.clear();
+        self.committer_differs = false;
+        self.commit_time_differs = false;
+        self.committer_time = 0;
+        self.message_subject.clear();
+        self.message_body.clear();
+    }
+
+    /// Puts the pane back on one commit, whatever choice it was holding.
+    pub(super) fn clear_selection(&mut self) {
+        self.selection_count = 0;
+        self.comparing = false;
+        self.selection_loaded = false;
+        self.compare_from.clear();
+        self.compare_to.clear();
     }
 }
 

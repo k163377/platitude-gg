@@ -39,6 +39,11 @@ pub fn worktree_target(kind: &str, path: &str, orig_path: &str) -> Option<DiffTa
 pub fn diff_key(target: &DiffTarget) -> String {
     match target {
         DiffTarget::Commit { oid, path, .. } => format!("commit:{}:{path}", oid.to_hex()),
+        // Both ends, so the key changes when either does — the pane
+        // re-reads a file whose comparison moved under it.
+        DiffTarget::Range { from, to, path, .. } => {
+            format!("range:{}:{}:{path}", from.to_hex(), to.to_hex())
+        }
         DiffTarget::Staged { path, .. } => format!("staged:{path}"),
         DiffTarget::Unstaged { path } => format!("unstaged:{path}"),
         DiffTarget::Untracked { path } => format!("untracked:{path}"),

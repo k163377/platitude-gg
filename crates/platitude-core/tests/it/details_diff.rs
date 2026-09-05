@@ -433,3 +433,127 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
         assert_eq!(patches[0].path(), path);
     }
 }
+
+// ---------------------------------------------------------------------------
+// A choice of several commits (デザイン規約 §複数のコミットを選ぶ)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_choice_lists_what_each_of_its_commits_changed() {
+    // The commit between the two chosen ones contributes nothing: what is
+    // listed is what the chosen commits did, not what lies between them.
+    let mut repo = TestRepo::init();
+    let older = repo.commit_file_id("a.txt", "a\n", "older chosen");
+    repo.commit_file("between.txt", "b\n", "not chosen");
+    let newer = repo.commit_file_id("c.txt", "c\n", "newer chosen");
+
+    let (executor, cancel) = env();
+    // Newest first, the order the graph hands a choice over in.
+    let chosen = [
+        Oid::from_hex_str(&newer).unwrap(),
+        Oid::from_hex_str(&older).unwrap(),
+    ];
+    let files = details::union_files(&executor, &repo.path, &chosen, &cancel)
+        .await
+        .unwrap();
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, vec!["c.txt", "a.txt"]);
+}
+
+#[tokio::test]
+async fn a_path_two_of_the_chosen_touched_is_listed_once_as_the_newest_left_it() {
+    let mut repo = TestRepo::init();
+    let added = repo.commit_file_id("f.txt", "one\n", "adds it");
+    let changed = repo.commit_file_id("f.txt", "two\n", "changes it");
+
+    let (executor, cancel) = env();
+    let chosen = [
+        Oid::from_hex_str(&changed).unwrap(),
+        Oid::from_hex_str(&added).unwrap(),
+    ];
+    let files = details::union_files(&executor, &repo.path, &chosen, &cancel)
+        .await
+        .unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "f.txt");
+    // The most recent thing to have happened to it, not the first.
+    assert_eq!(files[0].status, 'M');
+}
+
+#[tokio::test]
+async fn comparing_two_commits_is_not_what_each_of_them_changed() {
+    // The two readings a choice can have are different answers, and this
+    // is the difference: a comparison carries whatever the unchosen commit
+    // between them did, and drops what the older of the two did itself —
+    // that being the side it is measured from.
+    let mut repo = TestRepo::init();
+    repo.commit_file("base.txt", "base\n", "root");
+    let older = repo.commit_file_id("a.txt", "a\n", "older chosen");
+    repo.commit_file("between.txt", "b\n", "not chosen");
+    let newer = repo.commit_file_id("c.txt", "c\n", "newer chosen");
+
+    let (executor, cancel) = env();
+    let from = Oid::from_hex_str(&older).unwrap();
+    let to = Oid::from_hex_str(&newer).unwrap();
+
+    let compared = details::compare_files(&executor, &repo.path, &from, &to, &cancel)
+        .await
+        .unwrap();
+    let paths: Vec<&str> = compared.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, vec!["between.txt", "c.txt"]);
+
+    let union = details::union_files(&executor, &repo.path, &[to, from], &cancel)
+        .await
+        .unwrap();
+    let paths: Vec<&str> = union.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, vec!["c.txt", "a.txt"]);
+}
+
+#[tokio::test]
+async fn a_choice_of_nothing_reads_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    let (executor, cancel) = env();
+    let files = details::union_files(&executor, &repo.path, &[], &cancel)
+        .await
+        .unwrap();
+    assert!(files.is_empty());
+}
+
+#[tokio::test]
+async fn the_patch_behind_a_compared_row_is_between_the_two_commits() {
+    let mut repo = TestRepo::init();
+    let from = repo.commit_file_id("f.txt", "one\n", "first");
+    repo.commit_file("f.txt", "two\n", "between");
+    let to = repo.commit_file_id("f.txt", "three\n", "last");
+
+    let (executor, cancel) = env();
+    let patches = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Range {
+            from: Oid::from_hex_str(&from).unwrap(),
+            to: Oid::from_hex_str(&to).unwrap(),
+            path: "f.txt".to_string(),
+            orig_path: None,
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patches[0].path(), "f.txt");
+    let lines: Vec<(DiffLineKind, &str)> = patches[0].hunks[0]
+        .lines
+        .iter()
+        .map(|l| (l.kind, l.text.as_str()))
+        .collect();
+    // Both ends, and nothing of the commit standing between them.
+    assert_eq!(
+        lines,
+        vec![
+            (DiffLineKind::Deletion, "one"),
+            (DiffLineKind::Addition, "three")
+        ]
+    );
+}

@@ -3,9 +3,11 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The two things a graph row puts under a resting pointer — the card of
-// its own message, and the refs one chip had to stack — and the beat that
-// decides when either of them goes away.
+// The two things a row puts under a resting pointer — the card of its own
+// message, and the refs one chip had to stack — and the beat that decides
+// when either of them goes away. The card serves two lists: the graph's
+// rows and the ones the right pane lists under a choice
+// (デザイン規約 §複数のコミットを選ぶ); the chip's list is the graph's alone.
 //
 // Held here rather than in the rows: delegates are recycled out from under
 // an open popup (each of the two says so for itself). Held together

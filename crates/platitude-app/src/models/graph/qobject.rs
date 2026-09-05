@@ -184,21 +184,78 @@ impl GraphModel {
             .join("\u{1f}")
     }
 
-    /// The ones of `packed` this graph still stands on, in the order
-    /// given — what a choice made before a background pass rewrote the
-    /// rows comes back as.
+    /// The ones of `packed` this graph still stands on, **in walk
+    /// order** — what a choice comes back as after a background pass
+    /// rewrote the rows.
     ///
     /// A choice is held by id rather than by row because the rows move;
     /// what the rows answer is whether the commit is still one of them.
     /// Through the id index, and in one crossing for the reason
     /// [`Self::oids_between`] is.
+    ///
+    /// **The order is this graph's, not the order they were pressed in.**
+    /// Both readings behind a choice depend on it: a comparison is
+    /// measured from the older end, and a merged file list gives a path
+    /// the status of the newest commit to have touched it
+    /// (`details::union_files`).
     #[qslot]
     fn present_oids(&self, packed: String) -> String {
-        packed
-            .split('\u{1f}')
-            .filter(|hex| !hex.is_empty() && self.row_of_hex(hex).is_some())
+        let mut held: Vec<(usize, &str)> = packed
+            .split(crate::encode::RECORD_SEP)
+            .filter_map(|hex| Some((self.row_of_hex(hex)?, hex)))
+            .collect();
+        held.sort_unstable();
+        held.into_iter()
+            .map(|(_, hex)| hex)
             .collect::<Vec<_>>()
-            .join("\u{1f}")
+            .join(&crate::encode::RECORD_SEP.to_string())
+    }
+
+    /// The rows a choice of commits names, in walk order — what the pane
+    /// on the right lists above the changed files
+    /// (デザイン規約 §複数のコミットを選ぶ).
+    ///
+    /// **No git runs for this**: every commit in a choice was picked off
+    /// a row, and the row already carries what naming it takes — down to
+    /// the message body and the credits, which is what lets the card
+    /// these rows put out be the graph's own (`CommitHoverCard`).
+    ///
+    /// Rows are `\u{1d}`-separated and their cells `\u{1c}` — the outer
+    /// pair, because one of the cells is a packed list itself
+    /// (`encode::ROW_SEP`). Cells: id, short id, subject, body, author,
+    /// time, identicon, picture, credits.
+    ///
+    /// **The order handed in is the order handed back**, and what hands it
+    /// in is [`Self::present_oids`] — so the reader sees the commits
+    /// listed in the order they are stacked in, not the order they were
+    /// pressed in.
+    ///
+    /// One lookup per chosen commit, through the id index: filtering the
+    /// loaded rows for the handful named here would put a walk of the
+    /// history on a click (CLAUDE.md §性能予算).
+    #[qslot]
+    fn chosen_rows(&self, packed: String) -> String {
+        packed
+            .split(crate::encode::RECORD_SEP)
+            .filter_map(|hex| self.rows.get(self.row_of_hex(hex)?))
+            .map(|row| {
+                let sep = crate::encode::CELL_SEP;
+                let short = row.oid_hex.get(..8).unwrap_or(row.oid_hex.as_str());
+                format!(
+                    "{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}",
+                    row.oid_hex,
+                    short,
+                    row.subject,
+                    row.body,
+                    row.author,
+                    row.atime,
+                    row.avatar,
+                    row.avatar_url,
+                    row.co_authors
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(&crate::encode::ROW_SEP.to_string())
     }
 
     /// Reflog selector when the commit is a stash row (empty otherwise).

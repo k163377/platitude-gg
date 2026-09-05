@@ -229,7 +229,7 @@ Item {
             // and on which machine drew it, so the number is a diagnosis and "every one of them, and there was at
             // least one" is the judgement. `caret=` is the half a selection does not say — `Ctrl+C` goes to the field
             // holding the keyboard, so a value picked out without one is not a value the reader can take away. The
-            // sentence itself is the pad's (`SweepPad.sweepAir`), which is where the seven surfaces that carry this
+            // sentence itself is the pad's (`SweepPad.sweepAir`), which is where the eight surfaces that carry this
             // hand say it once.
             Harness.report("tip_sweep " + tip.background.pad.sweepAir(7))
             driver.complete()

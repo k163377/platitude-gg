@@ -6,6 +6,7 @@
 //! standard `a/ b/` prefixes, so the parsers see a stable shape
 //! regardless of user config.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -170,6 +171,132 @@ fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
     })
 }
 
+/// A record marker no status token can begin with, so a log covering
+/// several commits can be cut back into them. What lies between two
+/// records is `<status>\0<path>\0` pairs, and a status is an ASCII
+/// capital (measured, git 2.55).
+const UNION_MARK: u8 = 0x01;
+
+/// How many commit ids go on one command line. The ids **are** the
+/// arguments and Windows caps a command line at 32k, while one Shift
+/// click can sweep a choice over more rows than that
+/// (`GraphModel::oids_between`) — so the reading is chunked rather than
+/// capped, and every choice a person would actually make is still one
+/// invocation.
+const UNION_CHUNK: usize = 200;
+
+/// The files a set of commits changed, each against its own first
+/// parent, merged into one list.
+///
+/// **Not a range.** A graph's rows are a walk over every branch, so two
+/// rows next to each other need not be parent and child and "the commits
+/// between" is no git range at all; what is well defined is what each of
+/// these commits did (デザイン規約 §複数のコミットを選ぶ). A path several of
+/// them touched is listed once, wearing the status of the first commit
+/// asked for — callers pass them newest first, so that is the most
+/// recent thing to have happened to it.
+pub async fn union_files(
+    executor: &GitExecutor,
+    workdir: &Path,
+    oids: &[Oid],
+    cancel: &CancellationToken,
+) -> Result<Vec<FileChange>, GitError> {
+    let mut out: Vec<FileChange> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for chunk in oids.chunks(UNION_CHUNK) {
+        for change in union_chunk(executor, workdir, chunk, cancel).await? {
+            if seen.insert(change.path.clone()) {
+                out.push(change);
+            }
+        }
+    }
+    Ok(out)
+}
+
+async fn union_chunk(
+    executor: &GitExecutor,
+    workdir: &Path,
+    oids: &[Oid],
+    cancel: &CancellationToken,
+) -> Result<Vec<FileChange>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(DIFF_SHAPE_ARGS)
+        .args([
+            "log",
+            // The order asked for is the order the graph stands in.
+            // Plain `--no-walk` re-sorts by date, which would put the
+            // status of a path onto whichever commit git thinks is
+            // newest rather than whichever the reader is looking at.
+            "--no-walk=unsorted",
+            "-z",
+            "-r",
+            "--name-status",
+            "--find-renames",
+            "--diff-merges=first-parent",
+            // Nothing but the marker: this reading wants the files, and
+            // the rows naming the commits are already on screen.
+            "--format=%x01",
+        ])
+        .args(oids.iter().map(Oid::to_hex));
+    let out = executor.run(cmd, cancel).await?;
+    let mut changes = Vec::new();
+    // The first split is what stands before the first record: nothing.
+    for record in out.stdout.split(|b| *b == UNION_MARK).skip(1) {
+        // What `log` puts between the format expansion and the file list
+        // is `\0\n` — the NUL `-z` terminates the record with, then the
+        // newline it writes after any format (measured, git 2.55). The
+        // NUL alone would come out as an empty token, which the parser
+        // drops; the newline would arrive glued to the first status.
+        let files = record.strip_prefix(b"\0").unwrap_or(record);
+        let files = files.strip_prefix(b"\n").unwrap_or(files);
+        changes.extend(
+            parse_name_status(files).map_err(|e| GitError::UnexpectedOutput {
+                command: "git log --no-walk --name-status".to_string(),
+                message: e.to_string(),
+            })?,
+        );
+    }
+    Ok(changes)
+}
+
+/// The files that differ between two commits — what "these two" means
+/// where a choice holds exactly two (デザイン規約 §複数のコミットを選ぶ).
+///
+/// A tree against a tree, so it is answerable for any pair whether or
+/// not one is an ancestor of the other. **It is not [`union_files`] of
+/// the same two**: this one carries whatever unselected commits did
+/// between them and drops what the older of the two did itself, that
+/// being the side it is measured from.
+pub async fn compare_files(
+    executor: &GitExecutor,
+    workdir: &Path,
+    from: &Oid,
+    to: &Oid,
+    cancel: &CancellationToken,
+) -> Result<Vec<FileChange>, GitError> {
+    let from_hex = from.to_hex();
+    let to_hex = to.to_hex();
+    // The same plumbing the one-commit list runs through, so the two
+    // agree about renames: what this list calls a rename is what the
+    // patch behind the row will be asked for (`DiffTarget::Range`).
+    let cmd = GitCommand::new().cwd(workdir).args(DIFF_SHAPE_ARGS).args([
+        "diff-tree",
+        "-z",
+        "-r",
+        "--no-commit-id",
+        "--name-status",
+        "--find-renames",
+        from_hex.as_str(),
+        to_hex.as_str(),
+    ]);
+    let out = executor.run(cmd, cancel).await?;
+    parse_name_status(&out.stdout).map_err(|e| GitError::UnexpectedOutput {
+        command: format!("git diff-tree --name-status {from_hex} {to_hex}"),
+        message: e.to_string(),
+    })
+}
+
 /// Which diff a pane is asking for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiffTarget {
@@ -180,6 +307,16 @@ pub enum DiffTarget {
         parent: Option<Oid>,
         path: String,
         /// Source path when the file list reported a rename/copy.
+        orig_path: Option<String>,
+    },
+    /// One file between two commits — what a choice of exactly two
+    /// commits reads (デザイン規約 §複数のコミットを選ぶ). Two trees, so
+    /// neither has to be an ancestor of the other.
+    Range {
+        from: Oid,
+        to: Oid,
+        path: String,
+        /// Source path where the file list reported a rename/copy.
         orig_path: Option<String>,
     },
     /// Index vs HEAD for one file.
@@ -274,6 +411,28 @@ pub async fn file_diff_raw(
                 Some(p1) => c.args([p1.to_hex(), oid.to_hex()]),
                 None => c.args(["--root".to_string(), oid.to_hex()]),
             };
+            c = c.arg("--").arg(literal_pathspec(path));
+            if let Some(orig) = orig_path {
+                c = c.arg(literal_pathspec(orig));
+            }
+            c
+        }
+        DiffTarget::Range {
+            from,
+            to,
+            path,
+            orig_path,
+        } => {
+            let mut c = base
+                .args([
+                    "diff-tree",
+                    "-r",
+                    "--no-commit-id",
+                    "-p",
+                    "--no-ext-diff",
+                    "--find-renames",
+                ])
+                .args([from.to_hex(), to.to_hex()]);
             c = c.arg("--").arg(literal_pathspec(path));
             if let Some(orig) = orig_path {
                 c = c.arg(literal_pathspec(orig));

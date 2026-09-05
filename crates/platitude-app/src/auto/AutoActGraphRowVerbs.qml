@@ -26,6 +26,7 @@ Item {
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
+    readonly property var detailsModel: driver.detailsModel
     readonly property var commitMenu: driver.commitMenu
     readonly property var commitBranchCard: driver.commitBranchCard
     readonly property var commitTagCard: driver.commitTagCard
@@ -96,6 +97,17 @@ Item {
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
             menuHoverTimer.start()
+        } else if (act === "graph-choose-card" || act === "graph-choose-sweep") {
+            // The two things a row of that list is for, once the choice is standing: the card a rest opens over the
+            // commit, and the drag a reader takes the words away with (デザイン規約 §複数のコミットを選ぶ). The choice is
+            // built by the same presses `graph-choose` makes, so the argument is the same rows.
+            const held = arg === "" ? [] : arg.split(":").map(Number)
+            chooseTimer.sweeps = false
+            chooseTimer.rows = held.length >= 2 ? held : [1, 3, 5]
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.after = act === "graph-choose-card" ? "card" : "sweep"
+            chooseTimer.start()
         } else if (act === "graph-choose" || act === "graph-choose-range") {
             // The choice several commits are held in (デザイン規約 §複数のコミットを選ぶ). The first press is plain and
             // settles both the choice and what is read; the ones after it are held, and move only the choice. The
@@ -106,6 +118,7 @@ Item {
             chooseTimer.rows = picked.length >= 2 ? picked : (chooseTimer.sweeps ? [1, 5] : [1, 3, 5])
             chooseTimer.step = 0
             chooseTimer.readOid = ""
+            chooseTimer.after = ""
             chooseTimer.start()
         } else if (act === "graph-reclick-lanes") {
             // The argument is the row the presses land on.
@@ -154,6 +167,9 @@ Item {
         property int step: 0
         /// The commit the plain press landed on, so the report can say what is read stayed on it while the choice grew.
         property string readOid: ""
+        /// What to do once the choice is standing: `card` rests on a row of the list the pane put up, `sweep` drags
+        /// a value out of one, `""` stops at the choice.
+        property string after: ""
         /// How many commits the presses should end up holding.
         function wanted() {
             if (!chooseTimer.sweeps)
@@ -189,17 +205,67 @@ Item {
                 chooseTimer.step++
                 return
             }
-            // Every press is in. **The rows are what is waited on**, not the page's tally: a choice nothing draws is
-            // a number in a property, and the highlight is the whole of what this verb shows.
+            // Every press is in. **Three things have to land, and each is on the output side**: the page's tally, the
+            // highlight the rows drew of it (a choice nothing draws is a number in a property), and the pane on the
+            // right having answered *for this choice* — `selectionLoaded` rather than `!loading`, because a read that
+            // failed also stops loading and leaves an empty list, which is the same shape as a choice of commits that
+            // changed nothing (規約 §UI 自動化の因果性).
             const lit = chooseTimer.litRows()
-            if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted())
+            if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted()
+                    || !detailsModel.selectionLoaded)
                 return
             chooseTimer.stop()
+            // The choice is standing and the pane has answered for it. Two verbs go on from here into the list it put
+            // up; the rest report the choice itself.
+            if (chooseTimer.after !== "") {
+                chosenRowTimer.start()
+                return
+            }
             Harness.report("graph_choose chosen=" + page.chosenCount
                               + " lit=" + lit
                               + " read=" + (page.selectedOid === chooseTimer.readOid)
                               + " wip=" + page.wipShown
+                              + " compared=" + detailsModel.comparing
+                              + " files=" + detailsModel.fileTotal
                               + " rows=" + chooseTimer.rows.join(","))
+            driver.complete()
+        }
+    }
+    // What the rows of the choice's own list answer: the card a rest opens over one, and the drag a reader takes its
+    // words away with. Both go in at the row itself — the card through the one property the rest timer writes, the
+    // drag through the hand under the row (`SweepRoom.sweepAt`, which enters from every corner of the gap beside the
+    // value, since a reach that works from one place in it is the fault this kind of row ships with).
+    SampleTimer {
+        id: chosenRowTimer
+        onTriggered: {
+            const row = detailsPane.chosenRowAt(0)
+            // A row the list has not laid out yet is not a row anybody rested on.
+            if (!row || !row.faceReady())
+                return
+            if (chooseTimer.after === "card") {
+                if (!rowCard.opened) {
+                    row.askCard()
+                    return
+                }
+                chosenRowTimer.stop()
+                // `open=` is the popup's own, `lit=` the band the row keeps while the card stands over it — the card
+                // is drawn off the row's bottom edge, so the row loses the pointer the instant it is up and a picture
+                // cannot tell "went dark" from "was never lit" (`row-card` reads the same pair).
+                Harness.report("chosen_card open=" + rowCard.opened
+                                  + " lit=" + (page.chosenRecords !== "" && row.cardOid === row.oid_hex)
+                                  + " subject=" + (rowCard.subject === row.subject)
+                                  + " credit=" + (rowCard.mates === row.co_authors))
+                driver.complete()
+                return
+            }
+            // The value a sweep can come away with is the short id: it is never cut, and a cut value hands back only
+            // what is on screen (規約 §右のペインの字は掴める — the cut ones are read with Ctrl+A).
+            if (!row.sweep.sweepAt("sha", 0.5, 0.5))
+                return
+            chosenRowTimer.stop()
+            Harness.report("chosen_sweep ended=" + (row.sweep.endedOn === row.modelData.sha8)
+                              + " caret=" + row.sweep.caretLanded
+                              + " trace=" + row.sweep.trace)
             driver.complete()
         }
     }
@@ -365,7 +431,7 @@ Item {
                 return
             }
             cardSweepTimer.stop()
-            // The whole of the sweep is the pad's own sentence now (`SweepPad.sweepAir`) — seven surfaces carry this
+            // The whole of the sweep is the pad's own sentence now (`SweepPad.sweepAir`) — eight surfaces carry this
             // hand and were each asking it the same four things. `open=` is this verb's own half and goes in where it
             // always stood.
             Harness.report("card_sweep "

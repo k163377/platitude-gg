@@ -37,6 +37,7 @@ BandStateMetrics 1.0 BandStateMetrics.qml
 BandWidest 1.0 BandWidest.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
+ChosenCommitRow 1.0 ChosenCommitRow.qml
 CodeChip 1.0 CodeChip.qml
 ColumnDivider 1.0 ColumnDivider.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml

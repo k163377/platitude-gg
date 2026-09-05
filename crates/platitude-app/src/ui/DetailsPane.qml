@@ -11,6 +11,33 @@ ColumnLayout {
     id: detailsPane
 
     required property var details
+    /// The commits a choice holds, packed as the graph named them (`GraphModel.chosenRows`) — empty while one commit
+    /// is what is being read. Taken apart below into the rows this pane lists (デザイン規約 §複数のコミットを選ぶ): a
+    /// model role cannot be a list, so anything list-shaped crosses the bridge as a string (app-ui.md).
+    property string chosenRecords: ""
+    readonly property var chosenCommits: detailsPane.readRecords(detailsPane.chosenRecords)
+    /// The commit whose hover card the page has out, so the row it came off keeps its band under it
+    /// (`RowHoverHost.rowCardOid`). Empty when no card is up.
+    property string rowCardOid: ""
+    /// A row of the commit list has been rested on, or left. **The page answers it**, because the card the graph's rows
+    /// put out is the page's and a commit reads the same in either list (デザイン規約 §複数のコミットを選ぶ).
+    signal rowHoverRequested(var row, bool inside)
+    /// Whether the pane is showing a choice rather than one commit. **Read off the model, not off the records** — the
+    /// model is what the file list below answers to, and the two must turn over together.
+    readonly property bool choosing: detailsPane.details.selectionCount > 1
+    /// Takes `GraphModel.chosenRows` apart. Rows are `\u{1d}`-separated and their cells `\u{1c}` — the outer pair,
+    /// one cell being a packed list itself (`encode::ROW_SEP`).
+    function readRecords(packed) {
+        if (packed === "")
+            return []
+        const out = []
+        for (const record of packed.split(String.fromCharCode(29))) {
+            const f = record.split(String.fromCharCode(28))
+            out.push({ "oid": f[0], "sha8": f[1], "subject": f[2], "body": f[3], "author": f[4],
+                       "atime": Number(f[5]), "avatar": Number(f[6]), "avatarUrl": f[7], "mates": f[8] })
+        }
+        return out
+    }
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
     // Whether this commit's message may be rewritten from here — the page
@@ -315,9 +342,15 @@ ColumnLayout {
     // The pane's band: `COMMIT`, or — while the selected row is a stash — what that stash is and what can be done
     // with it (`StashActionsBand`). Exactly one stands and both are `headerHeight`, so `blockRoom` reads the token
     // rather than either: a layout gives a hidden child no height, so whichever is down would answer 0.
+    // **The band is what says how the files below were read.** Three or more commits are listed as themselves and the
+    // list under them is what they all changed; exactly two are being compared, and the list is what differs between
+    // them (デザイン規約 §複数のコミットを選ぶ). Those are different questions with the same answer shape, so the word
+    // above the commits is the only place a reader can tell them apart.
     PaneHeader {
         visible: detailsPane.stashRef === ""
-        text: qsTr("COMMIT")
+        text: !detailsPane.choosing ? qsTr("COMMIT")
+                                    : detailsPane.details.comparing ? qsTr("COMPARING") : qsTr("COMMITS")
+        count: detailsPane.choosing ? detailsPane.details.selectionCount : -1
     }
     StashActionsBand {
         Layout.fillWidth: true
@@ -325,8 +358,32 @@ ColumnLayout {
         onApplyRequested: selector => detailsPane.applyStashRequested(selector)
         onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
+    // The commits a choice holds. **No highlight and nothing to press**: they are picked in the graph, and a second
+    // place the choice appeared to live is a second place it could disagree with itself.
+    AppListView {
+        id: chosenList
+        visible: detailsPane.choosing
+        Layout.fillWidth: true
+        // Two lists in one pane: they start from an equal share, and the one that needs less takes only that
+        // (規約 §バケツごとの一覧 の均等割り). A choice is what a hand picked, so its rows are few by nature — this cap
+        // is for the sweep that took a hundred, not for the ordinary three.
+        Layout.preferredHeight: detailsPane.choosing
+            ? Math.min(detailsPane.chosenCommits.length * Theme.rowHeight, detailsPane.height / 2)
+            : 0
+        model: detailsPane.chosenCommits
+        verticalBar: PaneScrollBar {}
+        delegate: ChosenCommitRow {
+            cardOid: detailsPane.rowCardOid
+            onHoverRequested: (row, inside) => detailsPane.rowHoverRequested(row, inside)
+        }
+    }
+    /// Automation only: a row of the commit list, for a run that has no pointer to rest on one (verify-ui).
+    function chosenRowAt(index) {
+        return chosenList.itemAtIndex(index)
+    }
     DetailsMessageBlock {
         id: block
+        visible: !detailsPane.choosing
         Layout.fillWidth: true
         Layout.preferredHeight: Math.min(block.wants, detailsPane.blockRoom)
         details: detailsPane.details
@@ -365,7 +422,7 @@ ColumnLayout {
     // heading has scrolled away is a list of nothing in particular.
     DetailsChangesBand {
         id: changesBand
-        visible: detailsPane.details.shaHex !== ""
+        visible: detailsPane.details.shaHex !== "" || detailsPane.choosing
         Layout.fillWidth: true
         count: detailsPane.details.fileTotal
         treeView: detailsPane.details.treeView

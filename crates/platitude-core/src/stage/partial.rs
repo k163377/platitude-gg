@@ -66,7 +66,7 @@ pub async fn apply_partial(
                 Some(path.clone()),
             )
         }
-        DiffTarget::Commit { .. } => {
+        DiffTarget::Commit { .. } | DiffTarget::Range { .. } => {
             return Err(GitError::UnexpectedOutput {
                 command: "git apply --cached".to_string(),
                 message: "a committed diff cannot be staged".to_string(),

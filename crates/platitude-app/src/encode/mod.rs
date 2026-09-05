@@ -39,3 +39,11 @@ pub const RECORD_SEP: char = '\u{1f}';
 /// there is a second field, and like [`RECORD_SEP`] it cannot occur in any
 /// of those.
 pub const FIELD_SEP: char = '\u{1e}';
+
+/// The outer pair, for a list whose rows carry packed fields of their own:
+/// the two above are spoken for *inside* such a row, a commit's co-author
+/// cell being a `\u{1f}`/`\u{1e}` packing already
+/// ([`labels::encode_co_authors`]). Picked for the same reason those two
+/// were — no name, address, path or line of a message holds one.
+pub const ROW_SEP: char = '\u{1d}';
+pub const CELL_SEP: char = '\u{1c}';

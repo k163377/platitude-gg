@@ -295,6 +295,14 @@ pub enum SessionEvent {
         generation: u64,
         details: CommitDetails,
     },
+    /// What a choice of several commits changed — the file list alone,
+    /// the rows naming the commits being on screen already
+    /// (デザイン規約 §複数のコミットを選ぶ). Shares the details numbering,
+    /// the two being answers to the same pane.
+    SelectionLoaded {
+        generation: u64,
+        files: Vec<crate::parse::name_status::FileChange>,
+    },
     /// A details failure is addressed to its request, including its error.
     /// The consumer surfaces it only if that request is still current.
     DetailsFailed {

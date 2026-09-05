@@ -1682,13 +1682,35 @@ Item {
         if (kind !== "commit")
             wipPane.readOne(kind, path)
         if (kind === "commit")
-            diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex, path, origPath)
+            page.askCommitDiff(path, origPath)
         else
             diffModel.requestWorkTree(kind, path, origPath)
         page.diffShown = true
         page.diffNeighbour = ""
         page.noteDiffNeighbour()
     }
+    /// A pointer came to rest on a commit, or left one. **Two lists reach this**: the graph's rows and the ones the
+    /// right pane lists under a choice (デザイン規約 §複数のコミットを選ぶ). One card, one beat, one answer — a commit
+    /// does not read differently for being listed somewhere else, and two copies of this would drift.
+    function restOnCommit(row, inside) {
+        rowHost.rowCardWanted = inside
+        if (inside)
+            rowHost.openRowCard(row)
+        else
+            rowHost.settleRowCard()
+    }
+    /// The patch behind a row of the commit pane's list: that commit's own change to the file, or — while exactly two
+    /// commits are being compared — what differs between them there (デザイン規約 §複数のコミットを選ぶ).
+    function askCommitDiff(path, origPath) {
+        if (detailsModel.comparing) {
+            diffModel.requestRangeFile(detailsModel.compareFrom, detailsModel.compareTo, path, origPath)
+            return
+        }
+        diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex, path, origPath)
+    }
+    /// Whether a row of the commit pane's list can be opened at all. **A merged list has no one patch per row**: the
+    /// file was changed by however many of the chosen commits touched it, and the pane below shows one diff.
+    readonly property bool commitFilesOpen: detailsModel.selectionCount <= 2
     // Stages (or unstages) one hunk, or one line of it. The indices address the diff currently on screen, so the pane
     // is reloaded afterwards: once the patch is applied the rows have moved.
     function stageSelection(hunk, line) {
@@ -2094,6 +2116,10 @@ Item {
     property int chosenCount: 0
     /// Where the last press landed, which is what a Shift click measures its range from. -1 before the first one.
     property int chosenAnchorRow: -1
+    /// The choice as the models want it: the ids in walk order, and the rows that name them. Settled together, so the
+    /// list on the right and the files under it can never be of different commits.
+    property string chosenPacked: ""
+    property string chosenRecords: ""
     /// Makes one commit the whole of the choice. Every way a single row becomes what is being read comes through here
     /// — a plain click, an arrow key, a landing, the find bar — so there is one place the choice is settled from.
     function chooseOnly(oidHex) {
@@ -2102,6 +2128,8 @@ Item {
             only[oidHex] = true
         page.chosenOids = only
         page.chosenCount = Object.keys(only).length
+        page.chosenPacked = ""
+        page.chosenRecords = ""
     }
     /// A left click on a row, as this page answers one. **The choice and what is being read are two answers**: a plain
     /// click makes one commit both, a modified one moves only the choice (デザイン規約 §複数のコミットを選ぶ).
@@ -2160,9 +2188,32 @@ Item {
         page.settleChoice(next)
     }
     /// The one place the set and its tally are written together, so a count and a highlight cannot disagree.
+    ///
+    /// **A choice that has come back down to one commit is not a choice**: it is that commit being read, which is what
+    /// every other way of landing on one row does (`activateRow`).
     function settleChoice(next) {
+        const ids = Object.keys(next)
+        if (ids.length === 1) {
+            page.activateRow(ids[0])
+            return
+        }
         page.chosenOids = next
-        page.chosenCount = Object.keys(next).length
+        page.chosenCount = ids.length
+        page.readChoice(ids)
+    }
+    /// Puts the choice to the graph for its order and the rows that name it, and asks the pane on the right for what
+    /// these commits hold. **Two are read as what differs between them, three or more as what all of them changed**
+    /// (デザイン規約 §複数のコミットを選ぶ).
+    function readChoice(ids) {
+        page.chosenPacked = graphModel.presentOids(ids.join(String.fromCharCode(31)))
+        page.chosenRecords = page.chosenPacked === "" ? "" : graphModel.chosenRows(page.chosenPacked)
+        if (page.chosenPacked === "")
+            return
+        // None of what a single commit's pane says applies to several: no stash sits under a choice, and the diff
+        // that was open was of one file of one commit.
+        page.selectedStashRef = ""
+        page.closeDiff()
+        detailsModel.requestSelection(page.chosenPacked, page.chosenCount === 2)
     }
     /// Drops from the choice whatever the graph no longer stands on. Run when a pass lands: a rewrite takes commits
     /// away, and a choice that goes on counting them says a number no row on screen adds up to.
@@ -2368,9 +2419,10 @@ Item {
         // here, keyboard ones included, so this is where it stops being true — the one road that keeps it raises it
         // again on the way out (`onMessageAsked`).
         detailsPane.dropAttention()
-        // **A plain landing is one commit**, whatever was being held before it (デザイン規約 §複数のコミットを選ぶ). Settled
-        // above the early return below: a click that lands on the commit already open has nothing left to ask git,
-        // but it still has a choice to take down to that one row.
+        // **A plain landing is one commit**, whatever was being held before it (デザイン規約 §複数のコミットを選ぶ).
+        // Whether it was several is carried past the early return below: a click on the commit already open has
+        // nothing left to ask git for *unless* the pane is showing a choice, and then everything below has to run.
+        const wasChoice = page.chosenCount > 1
         page.chooseOnly(oidHex)
         const row = atRow !== undefined && atRow >= 0 ? atRow : graphModel.rowOf(oidHex)
         if (row >= 0) {
@@ -2389,7 +2441,7 @@ Item {
         // `git show` and a gpg run per click for an answer already on screen (the find bar says the same of landing
         // twice on one row). The second click of the rename gesture is exactly this click, so the wait it opens would
         // be spent on work nobody is waiting for (デザイン規約 §グラフ行のダブルクリック).
-        if (!page.wipShown && page.selectedOid === oidHex)
+        if (!page.wipShown && !wasChoice && page.selectedOid === oidHex)
             return
         page.wipShown = false
         page.selectedOid = oidHex
@@ -2710,13 +2762,7 @@ Item {
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.openRefList(oidHex, atRow, records, anchor)
                             onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
-                            onRowHoverRequested: (row, inside) => {
-                                rowHost.rowCardWanted = inside
-                                if (inside)
-                                    rowHost.openRowCard(row)
-                                else
-                                    rowHost.settleRowCard()
-                            }
+                            onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
                             onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                             // Nothing moves: a tag is left on the commit and the tree stays where it is.
                             onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
@@ -2828,6 +2874,9 @@ Item {
                         anchors.bottomMargin: planRunBar.visible ? planRunBar.height : 0
                         visible: !page.wipShown
                         details: detailsModel
+                        chosenRecords: page.chosenRecords
+                        rowCardOid: rowHost.rowCardOid
+                        onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it
@@ -2877,8 +2926,14 @@ Item {
                                 page.saveMessage(oidHex, subject, body)
                             }
                         }
-                        onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
-                        onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
+                        onFileActivated: (path, origPath) => {
+                            if (page.commitFilesOpen)
+                                page.toggleDiff("commit", path, origPath)
+                        }
+                        onFileWalked: (path, origPath) => {
+                            if (page.commitFilesOpen)
+                                page.openDiff("commit", path, origPath)
+                        }
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
                         // The badge's press goes to the window, which owns the settings card.
                         onAvatarEditRequested: (name, email) => page.avatarSettingsRequested(name, email)

@@ -374,6 +374,7 @@ async fn read_source(
 pub(crate) fn target_path(target: &DiffTarget) -> &str {
     match target {
         DiffTarget::Commit { path, .. }
+        | DiffTarget::Range { path, .. }
         | DiffTarget::Staged { path, .. }
         | DiffTarget::Unstaged { path }
         | DiffTarget::Untracked { path } => path,
@@ -400,6 +401,17 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
                 None => SideSource::Absent,
             };
             (old, blob(&oid.to_hex(), path))
+        }
+        // Both sides are commits, so both are blobs — the older one under
+        // whatever name the rename detection gave it there.
+        DiffTarget::Range {
+            from,
+            to,
+            path,
+            orig_path,
+        } => {
+            let old_path = orig_path.as_deref().unwrap_or(path);
+            (blob(&from.to_hex(), old_path), blob(&to.to_hex(), path))
         }
         DiffTarget::Staged { path, orig_path } => {
             let old_path = orig_path.as_deref().unwrap_or(path);

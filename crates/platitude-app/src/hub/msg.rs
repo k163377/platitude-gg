@@ -415,6 +415,12 @@ pub enum DetailsMsg {
         generation: u64,
         details: Box<platitude_core::details::CommitDetails>,
     },
+    /// What a choice of several commits changed — the file list alone
+    /// (デザイン規約 §複数のコミットを選ぶ).
+    Selection {
+        generation: u64,
+        files: Vec<platitude_core::parse::name_status::FileChange>,
+    },
     /// Only the consumer of the matching request may surface this error.
     Failed {
         generation: u64,
@@ -426,7 +432,9 @@ pub enum DetailsMsg {
 impl DetailsMsg {
     pub fn generation(&self) -> u64 {
         match self {
-            Self::Loaded { generation, .. } | Self::Failed { generation, .. } => *generation,
+            Self::Loaded { generation, .. }
+            | Self::Selection { generation, .. }
+            | Self::Failed { generation, .. } => *generation,
         }
     }
 }

@@ -42,6 +42,15 @@ impl DetailsModel {
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
     qproperty!("messageBody", Member = message_body, Notify = changed);
+    qproperty!("selectionCount", Member = selection_count, Notify = changed);
+    qproperty!("comparing", Member = comparing, Notify = changed);
+    qproperty!(
+        "selectionLoaded",
+        Member = selection_loaded,
+        Notify = changed
+    );
+    qproperty!("compareFrom", Member = compare_from, Notify = changed);
+    qproperty!("compareTo", Member = compare_to, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!("fileTotal", Member = file_total, Notify = changed);
@@ -79,11 +88,68 @@ impl DetailsModel {
             tracing::warn!(oid_hex, "invalid oid in details request");
             return;
         };
+        self.clear_selection();
         self.requested = oid_hex;
         self.requested_at = Some(Instant::now());
         self.requested_generation = crate::hub::from_session(self.tab_id, |s| s.load_details(oid))
             .flatten()
             .map(|task| task.generation());
+        self.loading = self.requested_generation.is_some();
+        self.changed();
+    }
+
+    /// Requests what a choice of several commits changed. `packed` is
+    /// their ids **newest first**, joined by `\u{1f}` — the order the
+    /// graph stands in.
+    ///
+    /// `compare` picks which question is being asked: two commits are
+    /// read as what differs between them, three or more as what all of
+    /// them changed (デザイン規約 §複数のコミットを選ぶ). The header is
+    /// settled here rather than when the files land, so the pane turns
+    /// over with the press instead of a round trip later.
+    #[qslot]
+    fn request_selection(&mut self, packed: String, compare: bool) {
+        let mut oids = Vec::new();
+        for hex in packed.split('\u{1f}').filter(|h| !h.is_empty()) {
+            let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
+                tracing::warn!(hex, "invalid oid in a selection request");
+                return;
+            };
+            oids.push(oid);
+        }
+        if oids.len() < 2 {
+            return;
+        }
+        self.clear_commit();
+        // **The last commit's files go with it.** Left standing they
+        // would sit under a band naming these commits until the read
+        // lands — and stay there for good if it fails.
+        self.take_files(&[]);
+        self.selection_count = oids.len() as i32;
+        self.comparing = compare;
+        self.selection_loaded = false;
+        self.compare_from.clear();
+        self.compare_to.clear();
+        if compare {
+            // Oldest first — the side a comparison is measured from.
+            // Whole ids: what reads these is the patch behind a row of
+            // the list (`DiffModel::request_range_file`), not a caption.
+            self.compare_from = oids.last().map(Oid::to_hex).unwrap_or_default();
+            self.compare_to = oids.first().map(Oid::to_hex).unwrap_or_default();
+        }
+        // Named by the newest of the choice, so a failure addressed to
+        // it still finds a reader (the drain's `Failed` arm).
+        self.requested = oids.first().map(Oid::to_hex).unwrap_or_default();
+        self.requested_at = Some(Instant::now());
+        let mode = if compare {
+            SelectionRead::Compare
+        } else {
+            SelectionRead::Union
+        };
+        self.requested_generation =
+            crate::hub::from_session(self.tab_id, |s| s.load_selection(oids, mode))
+                .flatten()
+                .map(|task| task.generation());
         self.loading = self.requested_generation.is_some();
         self.changed();
     }
@@ -101,6 +167,17 @@ impl DetailsModel {
         }
         let details = match msg {
             crate::hub::DetailsMsg::Loaded { details, .. } => details,
+            // What a choice of several commits changed. Only the file
+            // list arrives — the header was settled by the request, the
+            // commits themselves being named by rows already on screen.
+            crate::hub::DetailsMsg::Selection { files, .. } => {
+                self.requested_at = None;
+                self.loading = false;
+                self.selection_loaded = true;
+                self.take_files(&files);
+                self.changed();
+                return;
+            }
             crate::hub::DetailsMsg::Failed {
                 oid_hex, message, ..
             } => {
@@ -165,27 +242,7 @@ impl DetailsModel {
         self.message_subject = subject;
         self.message_body = body;
         self.loading = false;
-        self.raw_files = details
-            .files
-            .iter()
-            .map(|f| FileItem {
-                change: f.status.to_string(),
-                path: f.path.clone(),
-                orig_path: f.orig_path.clone().unwrap_or_default(),
-                name: f.path.clone(),
-                // The flat view spells every row whole, both names with
-                // it; the tree cuts them together (`build_file_tree`).
-                orig_name: f.orig_path.clone().unwrap_or_default(),
-                ..Default::default()
-            })
-            .collect();
-        self.file_total = self.raw_files.len() as i32;
-        self.folder_overrides.clear();
-        self.rebuild_rows();
-        self.reset();
-        if crate::harness::memprobe::enabled() {
-            crate::harness::memprobe::note("details-files", self.tab_id, &self.raw_files);
-        }
+        self.take_files(&details.files);
         self.changed();
     }
 
