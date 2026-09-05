@@ -244,50 +244,16 @@ fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     // them rewrote can be told from the file as it was committed.
     let census_before = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
     let store = Store::open(&plan.dir)?;
-    let host: Vec<&Required> = plan
-        .required
-        .iter()
-        .filter(|r| r.step.side == Side::Host)
-        .collect();
-    let linux: Vec<&Required> = plan
-        .required
-        .iter()
-        .filter(|r| r.step.side == Side::Linux)
-        .collect();
-    // The lanes are the machine's — beside the repository's `.git`,
-    // which every seat shares (`lanes`). `jobs` above the machine's
-    // count widens the pool, an explicit ask; below it, it narrows this
-    // gate's share of it.
-    let common = crate::subprocess::common_git_dir(&plan.dir.display().to_string())
-        .map(std::path::PathBuf::from)
-        .ok_or_else(|| format!("{} is not a git repository", plan.dir.display()))?;
-    let count = jobs.max(default_jobs());
-    let host_lanes = crate::lanes::Lanes {
-        common: &common,
-        side: "host",
-        count,
+    let logs = plan.dir.join("target").join("gate-logs");
+    std::fs::create_dir_all(&logs).map_err(|e| format!("{}: {e}", logs.display()))?;
+    // The faked steps of the tests run nothing, in a repository that has
+    // no task runner to build.
+    let runner = if std::env::var_os(FAKE_LOG).is_some() {
+        None
+    } else {
+        Some(runner(&plan.dir, &logs)?)
     };
-    let linux_lanes = crate::lanes::Lanes {
-        common: &common,
-        side: "linux",
-        count,
-    };
-    let started = std::time::Instant::now();
-    println!("gate: verbs {jobs} at a time per side, on the machine's {count} lanes");
-    let failures: Vec<String> = std::thread::scope(|scope| {
-        let host = scope.spawn(|| side("host", &plan.dir, &store, &host, jobs, &host_lanes));
-        let linux = scope.spawn(|| side("linux", &plan.dir, &store, &linux, jobs, &linux_lanes));
-        let mut failures = Vec::new();
-        for handle in [host, linux] {
-            match handle.join() {
-                Ok(mut side_failures) => failures.append(&mut side_failures),
-                Err(_) => failures.push("a side panicked".to_string()),
-            }
-        }
-        failures
-    });
-    let secs = started.elapsed().as_secs();
-    println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
+    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs)?;
     let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
     // step went red, so this is said on both roads out.
@@ -350,6 +316,74 @@ fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     Ok(Gated::Stamped)
 }
 
+/// Both sides at once, each on a thread of its own ([`side`]) and their
+/// verbs in the machine's lanes: what came back red, once the wall clock
+/// has been said.
+fn run_sides(
+    plan: &Plan,
+    store: &Store,
+    logs: &Path,
+    runner: Option<&Path>,
+    jobs: usize,
+) -> Result<Vec<String>, String> {
+    let host: Vec<&Required> = plan
+        .required
+        .iter()
+        .filter(|r| r.step.side == Side::Host)
+        .collect();
+    let linux: Vec<&Required> = plan
+        .required
+        .iter()
+        .filter(|r| r.step.side == Side::Linux)
+        .collect();
+    // The lanes are the machine's — beside the repository's `.git`,
+    // which every seat shares (`lanes`). `jobs` above the machine's
+    // count widens the pool, an explicit ask; below it, it narrows this
+    // gate's share of it.
+    let common = crate::subprocess::common_git_dir(&plan.dir.display().to_string())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| format!("{} is not a git repository", plan.dir.display()))?;
+    let count = jobs.max(default_jobs());
+    let host_lanes = crate::lanes::Lanes {
+        common: &common,
+        side: "host",
+        count,
+    };
+    let linux_lanes = crate::lanes::Lanes {
+        common: &common,
+        side: "linux",
+        count,
+    };
+    let started = std::time::Instant::now();
+    println!("gate: verbs {jobs} at a time per side, on the machine's {count} lanes");
+    let host_ground = Ground {
+        name: "host",
+        dir: &plan.dir,
+        store,
+        logs,
+        runner,
+    };
+    let linux_ground = Ground {
+        name: "linux",
+        ..host_ground
+    };
+    let failures: Vec<String> = std::thread::scope(|scope| {
+        let host = scope.spawn(|| side(&host_ground, &host, jobs, &host_lanes));
+        let linux = scope.spawn(|| side(&linux_ground, &linux, jobs, &linux_lanes));
+        let mut failures = Vec::new();
+        for handle in [host, linux] {
+            match handle.join() {
+                Ok(mut side_failures) => failures.append(&mut side_failures),
+                Err(_) => failures.push("a side panicked".to_string()),
+            }
+        }
+        failures
+    });
+    let secs = started.elapsed().as_secs();
+    println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
+    Ok(failures)
+}
+
 /// A tree with uncommitted changes (a stamp names a commit, and this is
 /// not one) and a component no verb shows: nothing a run could answer
 /// for, said before anything runs.
@@ -380,23 +414,29 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
     Ok(())
 }
 
+/// What one side's steps stand on: the side's name, the tree, the
+/// stamps, the logs, and the runner copy its xtask steps start from
+/// (`None` under the tests' faked steps).
+#[derive(Clone, Copy)]
+struct Ground<'a> {
+    name: &'a str,
+    dir: &'a Path,
+    store: &'a Store,
+    logs: &'a Path,
+    runner: Option<&'a Path>,
+}
+
 /// One side's steps in order: the ones that share the build tree one at
 /// a time, stopping at the first red (a build that failed makes every
 /// later step of the side noise), and the verify-ui verbs — which share
 /// nothing but the release the first of them builds — as one block
 /// through [`verbs`].
 fn side(
-    name: &str,
-    dir: &Path,
-    store: &Store,
+    ground: &Ground<'_>,
     steps: &[&Required],
     jobs: usize,
     lanes: &crate::lanes::Lanes<'_>,
 ) -> Vec<String> {
-    let logs = dir.join("target").join("gate-logs");
-    if let Err(e) = std::fs::create_dir_all(&logs) {
-        return vec![format!("{}: {e}", logs.display())];
-    }
     let mut at = 0;
     while at < steps.len() {
         if steps[at].step.builds_app {
@@ -405,14 +445,14 @@ fn side(
                 .position(|r| !r.step.builds_app)
                 .map_or(steps.len(), |n| at + n);
             let block: Vec<(usize, &Required)> = (at..end).map(|i| (i, steps[i])).collect();
-            let failures = verbs(name, dir, store, &logs, &block, jobs, lanes);
+            let failures = verbs(ground, &block, jobs, lanes);
             if !failures.is_empty() {
                 return failures;
             }
             at = end;
             continue;
         }
-        if let Err(why) = run_one(name, dir, store, &logs, at, steps[at], false) {
+        if let Err(why) = run_one(ground, at, steps[at], false) {
             return vec![why];
         }
         at += 1;
@@ -431,15 +471,20 @@ fn side(
 /// Every verb runs in a lane of the machine's (`lanes`), the first one
 /// included: what bounds the load is the count of apps running, and the
 /// building verb is one of them.
+///
+/// A building verb that went red because the app did not build ends the
+/// block: the next one alone would build the same sources to the same
+/// error, and a block of a hundred verbs would spend its minutes saying
+/// so a hundred times. The side's clippy usually fails first on a source
+/// that does not compile; what reaches here is a build that fails only
+/// in release, or only with the harness feature on.
 fn verbs(
-    name: &str,
-    dir: &Path,
-    store: &Store,
-    logs: &Path,
+    ground: &Ground<'_>,
     block: &[(usize, &Required)],
     jobs: usize,
     lanes: &crate::lanes::Lanes<'_>,
 ) -> Vec<String> {
+    let name = ground.name;
     for (_, required) in block.iter().filter(|(_, r)| r.cached) {
         println!("[{name}] cached {}", required.step.id);
     }
@@ -458,7 +503,7 @@ fn verbs(
             tally.0 += 1;
             tally.1 += lane.waited;
         }
-        run_one(name, dir, store, logs, index, required, no_build)
+        run_one(ground, index, required, no_build)
     };
     let mut queue = block.iter().filter(|(_, r)| !r.cached);
     let mut failures = Vec::new();
@@ -471,7 +516,15 @@ fn verbs(
         };
         match in_a_lane(*index, required, false) {
             Ok(()) => built = true,
-            Err(why) => failures.push(why),
+            Err(why) => {
+                failures.push(why);
+                if app_did_not_build(&log_of(ground, *index)) {
+                    let left = queue.count();
+                    println!("[{name}] the app did not build — {left} verb(s) not run");
+                    failures.push(format!("{left} verb(s) not run: the app did not build"));
+                    return failures;
+                }
+            }
         }
     }
     let rest: Vec<&(usize, &Required)> = queue.collect();
@@ -509,39 +562,43 @@ fn verbs(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Where a side's step at `index` writes what it says.
+fn log_of(ground: &Ground<'_>, index: usize) -> std::path::PathBuf {
+    ground.logs.join(format!("{}-{index:02}.log", ground.name))
+}
+
 /// One step against its log: run, timed, said as ok or FAIL, and stamped
 /// when green (never an always-step, whose seconds are not worth one).
 /// `no_build` is a verb's `--no-build`, the block's to hand out
 /// ([`verbs`]). A failure comes back as the line to report.
 fn run_one(
-    name: &str,
-    dir: &Path,
-    store: &Store,
-    logs: &Path,
+    ground: &Ground<'_>,
     index: usize,
     required: &Required,
     no_build: bool,
 ) -> Result<(), String> {
+    let name = ground.name;
     let id = &required.step.id;
     if required.cached {
         println!("[{name}] cached {id}");
         return Ok(());
     }
-    let log = logs.join(format!("{name}-{index:02}.log"));
+    let log = log_of(ground, index);
     println!("[{name}] run    {id} … (log: {})", log.display());
     let at = std::time::Instant::now();
     let mut command = required.step.command.clone();
     if no_build {
         command.push("--no-build".to_string());
     }
-    let outcome = execute_step(dir, id, &command, &log);
+    let outcome = execute_step(ground.dir, id, &command, &log, ground.runner);
     let secs = at.elapsed().as_secs();
     match outcome {
         Ok(()) => {
             println!("[{name}] ok     {id} ({secs}s)");
             crate::check::print_shots(name, &log);
             if !required.step.always {
-                store
+                ground
+                    .store
                     .mark_step(
                         &required.key,
                         &format!("{id}\n{}\n", required.step.command.join(" ")),
@@ -557,15 +614,25 @@ fn run_one(
     }
 }
 
-/// One step, through `check`'s watched runner. With `PG_GATE_FAKE_LOG`
+/// The tests' switch: with it set no step runs at all (`execute_step`).
+const FAKE_LOG: &str = "PG_GATE_FAKE_LOG";
+
+/// One step, through `check`'s watched runner, its xtask launcher
+/// swapped for the runner copy ([`launched`]). With `PG_GATE_FAKE_LOG`
 /// set the step is not run at all: its id is appended to that file and
 /// it passes, unless `PG_GATE_FAKE_FAIL` names it — which is how the
 /// tests watch selection and caching without a toolchain in the
 /// throwaway repository. `PG_GATE_FAKE_REWRITE` names a step that
 /// rewrites the census the way a passing verb does: one line put in,
 /// once, so the run after the commit of it finds nothing to move.
-fn execute_step(dir: &Path, id: &str, command: &[String], log: &Path) -> Result<(), String> {
-    if let Ok(fake) = std::env::var("PG_GATE_FAKE_LOG") {
+fn execute_step(
+    dir: &Path,
+    id: &str,
+    command: &[String],
+    log: &Path,
+    runner: Option<&Path>,
+) -> Result<(), String> {
+    if let Ok(fake) = std::env::var(FAKE_LOG) {
         use std::io::Write;
         // Both sides append from their own thread: one write per line,
         // under one lock, or the ids interleave mid-word.
@@ -605,7 +672,7 @@ fn execute_step(dir: &Path, id: &str, command: &[String], log: &Path) -> Result<
         }
         return Ok(());
     }
-    match crate::check::run_step(dir, command, log) {
+    match crate::check::run_step(dir, &launched(command, runner), log) {
         Ok(true) => Ok(()),
         Ok(false) => {
             let text =
@@ -619,6 +686,90 @@ fn execute_step(dir: &Path, id: &str, command: &[String], log: &Path) -> Result<
         }
         Err(why) => Err(why),
     }
+}
+
+/// What a runner copy is called, beside the logs; the pid follows.
+const RUNNER: &str = "xtask-runner-";
+
+/// The task runner the steps start from: this program, built from the
+/// tree once and copied beside the logs.
+///
+/// A step that is one of xtask's own verbs is spelled `cargo run -p
+/// xtask -- …` in the plan, and cargo holds `target/debug` for the
+/// length of any build there — so eight launchers starting at once, with
+/// the container side's host launchers beside them, waited on each other
+/// (measured: a fifth of a gate's host verb logs showed the wait on the
+/// build directory and most of them the package-cache one; from the
+/// copy, none). Built with cargo all the same, so that it is the
+/// tree's code — under `land` the rebase has just brought sources in —
+/// and copied rather than run in place, because the landing has renamed
+/// the slot away from under this very process and the slot is what cargo
+/// rebuilds. What earlier gates left is taken away first; a copy a
+/// process of theirs still holds stays, its name carrying their pid.
+fn runner(dir: &Path, logs: &Path) -> Result<std::path::PathBuf, String> {
+    let exe = format!("xtask{}", std::env::consts::EXE_SUFFIX);
+    {
+        let _busy = crate::still::busy(dir, "cargo build -p xtask")?;
+        let output = std::process::Command::new("cargo")
+            .args(["build", "-p", "xtask"])
+            .current_dir(dir)
+            .output()
+            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "the task runner did not build in {}:\n{}",
+                dir.display(),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(logs) {
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().starts_with(RUNNER) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    let built = dir.join("target").join("debug").join(&exe);
+    let copy = logs.join(format!(
+        "{RUNNER}{}{}",
+        std::process::id(),
+        std::env::consts::EXE_SUFFIX
+    ));
+    std::fs::copy(&built, &copy).map_err(|e| {
+        format!(
+            "could not copy {} to {}: {e}",
+            built.display(),
+            copy.display()
+        )
+    })?;
+    Ok(copy)
+}
+
+/// The command as it is started: a step that is one of this program's
+/// own verbs — `cargo run -p xtask -- <verb>…`, which the plan keeps
+/// spelling so that a stamp's key names one line on every machine —
+/// starts from the runner copy, and any other step as spelled.
+fn launched(command: &[String], runner: Option<&Path>) -> Vec<String> {
+    const THROUGH_CARGO: [&str; 5] = ["cargo", "run", "-p", "xtask", "--"];
+    let through_cargo = command.len() >= THROUGH_CARGO.len()
+        && command
+            .iter()
+            .zip(THROUGH_CARGO)
+            .all(|(word, spelled)| word == spelled);
+    match runner {
+        Some(runner) if through_cargo => std::iter::once(runner.display().to_string())
+            .chain(command[THROUGH_CARGO.len()..].iter().cloned())
+            .collect(),
+        _ => command.to_vec(),
+    }
+}
+
+/// Whether a red verb's log says the app itself did not build — cargo's
+/// own line, or the runner's when it reports the build (`tree::app_exe`).
+fn app_did_not_build(log: &Path) -> bool {
+    let text = String::from_utf8_lossy(&std::fs::read(log).unwrap_or_default()).into_owned();
+    text.contains("could not compile") || text.contains("cargo build --release failed")
 }
 
 /// Stop hook: where the seat's gate stands, for the user's eyes. A seat
@@ -651,4 +802,77 @@ pub(crate) fn standing(cwd: &str) -> Option<String> {
             format!("gate: seat {seat} is {ahead} commit(s) ahead of main, tip gated in full.")
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{app_did_not_build, launched};
+
+    fn words(line: &[&str]) -> Vec<String> {
+        line.iter().map(|w| (*w).to_string()).collect()
+    }
+
+    #[test]
+    fn an_xtask_step_starts_from_the_runner_and_a_cargo_step_as_spelled() {
+        let runner = Path::new("C:/x/target/gate-logs/xtask-runner-7.exe");
+        assert_eq!(
+            launched(
+                &words(&[
+                    "cargo",
+                    "run",
+                    "-p",
+                    "xtask",
+                    "--",
+                    "verify-ui",
+                    "wip",
+                    "--no-build"
+                ]),
+                Some(runner)
+            ),
+            words(&[
+                "C:/x/target/gate-logs/xtask-runner-7.exe",
+                "verify-ui",
+                "wip",
+                "--no-build"
+            ])
+        );
+        let test = words(&["cargo", "test", "-p", "xtask", "--lib"]);
+        assert_eq!(launched(&test, Some(runner)), test);
+        let verb = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
+        assert_eq!(
+            launched(&verb, None),
+            verb,
+            "without a copy the plan's spelling stands"
+        );
+    }
+
+    #[test]
+    fn a_build_that_failed_is_read_off_the_verbs_log() {
+        let dir = std::env::temp_dir().join(format!("pg-gate-build-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let log = dir.join("host-08.log");
+        std::fs::write(
+            &log,
+            "building (release, automation)…\nerror[E0425]: cannot find value\n\
+             error: could not compile `platitude-app` (bin \"platitude-gg\") due to 1 previous error\n",
+        )
+        .expect("a log");
+        assert!(app_did_not_build(&log));
+        std::fs::write(
+            &log,
+            "building (release, automation)…\nFAIL: wip in 2.1s (exit 1)\n",
+        )
+        .expect("a log");
+        assert!(
+            !app_did_not_build(&log),
+            "a verb red on its own account is not a build that failed"
+        );
+        assert!(
+            !app_did_not_build(&dir.join("host-99.log")),
+            "no log, no build to have failed"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

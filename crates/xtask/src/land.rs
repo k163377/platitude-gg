@@ -92,6 +92,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             seat.path
         ));
     }
+    let mut phases = Phases::start();
     if let Some(word) = step_out_of_the_build_slot(&[&seat.path, &primary.path]) {
         println!("{word}");
     }
@@ -100,8 +101,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
         rebase(&seat.path)?;
+        phases.mark("rebase");
     }
     gate_in_the_seat(seat_dir, &branch)?;
+    phases.mark("gate");
     let ahead = crate::seats::commits_in(&here, &format!("main..{branch}")).unwrap_or(ahead);
     let before = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     if primary.branch == "main" {
@@ -109,6 +112,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else {
         forward_ref(&here, primary, &branch)?;
     }
+    phases.mark("fast-forward (verdict included)");
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     // Again, now that main carries what it carries: git runs the copy
     // beside .git, and a landing that changed the script would otherwise
@@ -117,7 +121,54 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
     release_claim(&here, &trees, &branch);
     clear_the_board(&listing, &branch);
+    phases.mark("hook, claim and board");
+    println!("{}", phases.report());
     Ok(())
+}
+
+/// Where a landing's time went, phase by phase: the one line that lets
+/// the next look at "landing is slow" start from numbers rather than
+/// from the transcripts — the gate's own wall clock is in its output,
+/// but the rebase, the verdict and the board are not.
+struct Phases {
+    started: std::time::Instant,
+    last: std::time::Instant,
+    marks: Vec<String>,
+}
+
+impl Phases {
+    fn start() -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            started: now,
+            last: now,
+            marks: Vec::new(),
+        }
+    }
+
+    /// Closes the phase called `what` at this moment.
+    fn mark(&mut self, what: &str) {
+        let now = std::time::Instant::now();
+        self.marks
+            .push(format!("{what} {}", clock(now.duration_since(self.last))));
+        self.last = now;
+    }
+
+    fn report(&self) -> String {
+        format!(
+            "land: {} — {} in all",
+            self.marks.join(", "),
+            clock(self.started.elapsed())
+        )
+    }
+}
+
+/// A duration the way the gate says its wall clock: minutes and seconds,
+/// to the second — a phase of a landing is compared against the gate's
+/// line, and a minute rounded down would hide most of one.
+fn clock(took: std::time::Duration) -> String {
+    let secs = took.as_secs();
+    format!("{}m{:02}s", secs / 60, secs % 60)
 }
 
 /// What a landing leaves in a build slot it stepped out of and could not
@@ -129,9 +180,10 @@ const INFLIGHT: &str = "xtask-inflight-";
 /// of `trees`'.
 ///
 /// Everything past here runs cargo in a tree this landing moves: the
-/// gate's steps build the seat's task runner (`cargo run -p xtask`) over
-/// the sources the rebase brought in, and the hook's verdict builds the
-/// primary's over the ones the fast-forward checked out. `cargo xtask
+/// gate builds the seat's task runner (`cargo build -p xtask`) over the
+/// sources the rebase brought in and starts its steps from a copy of it,
+/// and the hook's verdict builds the primary's over the ones the
+/// fast-forward checked out. `cargo xtask
 /// land` is itself `<tree>/target/<profile>/xtask`, so on Windows that
 /// build stops at `failed to remove file … (os error 5)` — a running
 /// image cannot be replaced — and the landing dies before its first step.
@@ -437,7 +489,7 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_slot_tree, landed_claim, same_tree};
+    use super::{build_slot_tree, clock, landed_claim, same_tree};
     use crate::seats::worktree_blocks;
 
     /// A tree root spelled the way the running system spells one.
@@ -523,5 +575,13 @@ mod tests {
         assert_eq!(trees[0].path, "C:/x/platitude-gg");
         assert!(trees[0].branch.is_empty());
         assert_eq!(trees[1].branch, "worktree-a");
+    }
+
+    #[test]
+    fn a_phase_is_said_to_the_second_like_the_gates_wall_clock() {
+        assert_eq!(clock(std::time::Duration::from_secs(0)), "0m00s");
+        assert_eq!(clock(std::time::Duration::from_secs(7)), "0m07s");
+        assert_eq!(clock(std::time::Duration::from_secs(244)), "4m04s");
+        assert_eq!(clock(std::time::Duration::from_millis(59_900)), "0m59s");
     }
 }
