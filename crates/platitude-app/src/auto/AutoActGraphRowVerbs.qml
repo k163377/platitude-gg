@@ -65,6 +65,15 @@ Item {
             refListOpenTimer.row = Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
+        } else if (act === "ref-list-lit") {
+            // The stacked list with the pointer resting on one of its rows. The hand that walked down off the chip is
+            // the only way a reader ever reads these names, so the wash it brings is part of the card's own picture.
+            // The argument is `<行>[:<カードの行>]`, the same shape `list-menu` takes.
+            const lit = arg.split(":")
+            refListOpenTimer.row = lit[0] === "" ? 0 : Number(lit[0])
+            refListOpenTimer.cards = false
+            refListOpenTimer.litRow = lit.length > 1 ? Number(lit[1]) : 0
+            refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
             // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
             // row 1, not row 0**: the presets it runs on carry a dirty working tree, whose row stands at the top and
@@ -404,6 +413,8 @@ Item {
         property bool cards: false
         /// Which row of the list `list-menu` presses; -1 for the verbs that only open it.
         property int menuRow: -1
+        /// Which row of the list `ref-list-lit` rests the pointer on; -1 for the verbs that leave it off the card.
+        property int litRow: -1
         onTriggered: {
             const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
             if (!stacked)
@@ -419,6 +430,8 @@ Item {
                 rowCardTimer.start()
             } else if (refListOpenTimer.menuRow >= 0)
                 listMenuTimer.start()
+            else if (refListOpenTimer.litRow >= 0)
+                listLitTimer.start()
             else
                 refListShownTimer.start()
         }
@@ -442,6 +455,27 @@ Item {
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
                               + " rows=" + commitMenu.offeredRows)
+            driver.complete()
+        }
+    }
+    // The pointer coming to rest on one of that list's rows, put in once the list is actually up — the rows are the
+    // popup's own, and an unopened popup has none to rest on.
+    SampleTimer {
+        id: listLitTimer
+        onTriggered: {
+            if (!refList.opened)
+                return
+            if (!refList.pointRow(refListOpenTimer.litRow))
+                return
+            listLitTimer.stop()
+            // **`lit=` is read back off the row**, not off what was written into it: the wash is one shade over the
+            // card's own ground, so a row that never took the answer frames the same as one that did. `nowhere=` is
+            // the half that says which kind of row this was — a row with nowhere to go is the one whose wash the
+            // colour of its name cannot stand in for, so a picture of a row that leads somewhere proves nothing.
+            Harness.report("ref_list_lit row=" + refListOpenTimer.litRow
+                              + " list=" + refList.opened
+                              + " lit=" + refList.rowLit(refListOpenTimer.litRow)
+                              + " nowhere=" + refList.rowLeadsNowhere(refListOpenTimer.litRow))
             driver.complete()
         }
     }

@@ -96,6 +96,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "chip_delete branch=base row=-1 code=branch --delete menu=false card=false",
     },
+    // The pointer resting on one of that card's rows. The wash is one
+    // shade over the card's own ground, so a row that never took the
+    // answer frames the same as one that did — and the row worth aiming
+    // at is one with nowhere to go, which is what `nowhere=` pins down:
+    // every other row is told apart by the colour of its name as well,
+    // so the wash is the only thing that row has.
+    Verb {
+        name: "ref-list-lit",
+        when: &[],
+        plain: "list=true lit=true nowhere=true",
+    },
     // The card that must *not* come out. A picture cannot carry an
     // absence on its own — an empty overlay would frame the same as a
     // run whose hover request never arrived — so the menu is judged

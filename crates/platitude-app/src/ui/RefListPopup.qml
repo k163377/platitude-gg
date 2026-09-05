@@ -109,6 +109,26 @@ AppCard {
         row.rightClick()
         return true
     }
+    /// The pointer coming to rest on one of these rows, and what that row is wearing because of it — hover cannot be
+    /// injected (verify-ui §hover の絵の撮り方), so a run writes the row's own `pointedAt` and reads the wash back off
+    /// the row rather than off a copy of what the row would have decided (PG_AUTO_ACT=ref-list-lit).
+    function pointRow(i) {
+        const row = rowsRepeater.itemAt(i)
+        if (!row)
+            return false
+        row.pointedAt = true
+        return true
+    }
+    function rowLit(i) {
+        const row = rowsRepeater.itemAt(i)
+        return row ? row.lit : false
+    }
+    /// Which kind of row that was: a row with nowhere to go wears the same wash as one that leads somewhere, so a run
+    /// that means to prove it has to say which it aimed at.
+    function rowLeadsNowhere(i) {
+        const row = rowsRepeater.itemAt(i)
+        return row ? row.leadsNowhere : false
+    }
     function rowArmed(i) {
         const row = rowsRepeater.itemAt(i)
         return row && refList.rowClicks ? refList.rowClicks.rowRenameArmed(row.modelData) : false
@@ -151,10 +171,19 @@ AppCard {
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
+                /// The pointer resting on this row, for the runs that photograph the wash — hover cannot be injected
+                /// (verify-ui §hover の絵の撮り方), and the same property a real pointer writes is the only place a run
+                /// may write. Named for the sidebar's own (`NavItemDelegate.tipPointedAt`).
+                property bool pointedAt: false
+                /// Wearing the hover wash. **Every row wears it, whether or not it leads anywhere** (規約 §グラフ行の
+                /// ダブルクリック) — the pointer is on a target either way (every row takes the click, and all but the
+                /// marker have a name to change), and a list where some rows answer the hand and others do not reads
+                /// as one that sometimes stops working. Where a row leads is said by the colour of its name, as it is
+                /// in the sidebar, whose rows light the same way.
+                readonly property bool lit: rowHover.hovered || refRow.pointedAt
                 // The branch the working tree already stands on is not a place to go, but it is not unavailable either
                 // — it is where the reader is, and it says so in the colour the sidebar says it in (§ref の種別). Only the
-                // hover and the click come off. A tag leads nowhere for its own reason (§タグでは detach しない) and keeps its
-                // colour too.
+                // move comes off. A tag leads nowhere for its own reason (§タグでは detach しない) and keeps its colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
                     && GitFacts.recordName(refRow.modelData) === refList.currentBranch
@@ -165,7 +194,7 @@ AppCard {
                 // **Neither is said in the chip's colour here.** The held one already says it in its own record (a
                 // dulled frame and the `tree` mark, wherever it is drawn), and the marker's colour is a state rather
                 // than a kind: muting it here would make the same marker amber on the row and grey in the card it
-                // unfolds into. What this answers is the hover wash and the click, below.
+                // unfolds into. What this answers is the move and the menu, below.
                 readonly property bool unavailable:
                     refRow.modelData[0] === "H" || refRow.modelData[5] === "1"
                 readonly property bool leadsNowhere:
@@ -179,7 +208,7 @@ AppCard {
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
                 radius: Theme.radiusSm
-                color: rowHover.hovered && !refRow.leadsNowhere ? Theme.bgHover : "transparent"
+                color: refRow.lit ? Theme.bgHover : "transparent"
 
                 RefChip {
                     id: rowChip
