@@ -5,7 +5,8 @@ import platitude
 import platitude.ui
 
 /// The stand-in for the tab in front, and the strip travelling to the row it stands for: the two halves of one rule,
-/// read as a pair (`TabPin`).
+/// read as a pair (`TabPin`). And the third way that travel is asked for — a repository opened into a strip standing
+/// somewhere else (デザイン規約 §タブの所作), which is the same arrival by another road.
 ///
 /// Its own file rather than more of `WindowTabActs`: that one is about what a hand does to a tab — carrying it,
 /// closing it, measuring what the strip made of it — and this is about the one thing the strip draws when a tab is
@@ -140,6 +141,61 @@ Item {
                 + " from=" + tabPinGoTimer.from
                 + " run=" + acts.topBar.runOffset()
                 + " tabs=" + acts.pageRepeater.count)
+            acts.window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=tab-open-go: a repository opened into a strip that is already crowded and standing away from where
+    // the new tab lands. The band travels to it, and the stand-in it had up steps aside (デザイン規約 §タブの所作).
+    //
+    // Staged exactly as the two above are, with the first tab in front and the run sent to its far end — which is the
+    // end a tab opened now arrives at. The argument is the repository to open: one the strip has not got, built
+    // beside the twelve it came up with, because everything handed to the run at startup is already in the strip.
+    //
+    // No picture answers this one either: a strip standing on its newest tab frames the same whether it travelled
+    // there or was sitting on that end all along. `travelled=` is the band having moved under the ask, and
+    // `arrived=` the tab it moved for being whole in the run at the end of it.
+    SampleTimer {
+        id: tabOpenGoTimer
+        running: Harness.autoAct === "tab-open-go"
+        property bool opened: false
+        property int from: 0
+        property int had: 0
+        onTriggered: {
+            if (!tabOpenGoTimer.opened) {
+                // The staging is the precondition of the opening and of nothing else (`tab-pin-go` above): read again
+                // afterwards it ends in "the stand-in is up", which this verb is here to take away.
+                if (!acts.staged(0) || Harness.autoActArg === "")
+                    return
+                tabOpenGoTimer.from = acts.topBar.runOffset()
+                tabOpenGoTimer.had = acts.pageRepeater.count
+                tabOpenGoTimer.opened = true
+                acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                return
+            }
+            // The tab has to be standing in the strip before the travel it causes can be waited on: the item for a row
+            // the model has only just gained arrives with the next layout, and until then the strip is answering for
+            // the twelve it already had.
+            if (acts.pageRepeater.count !== tabOpenGoTimer.had + 1
+                    || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count
+                    || acts.topBar.tabRunTravelling
+                    || !acts.topBar.frontTabWhole
+                    || acts.topBar.tabPinShown)
+                return
+            // And the repository under it opened, so what is photographed is the page the tab was opened for.
+            const page = acts.window.curPage
+            if (page === null || page.pageTab.state !== "open"
+                    || !page.pageWt.loaded || page.pageGraph.finishCount === 0)
+                return
+            stop()
+            Harness.report(
+                "tab_open_go arrived=" + acts.topBar.frontTabWhole
+                + " gone=" + !acts.topBar.tabPinShown
+                + " travelled=" + (acts.topBar.runOffset() !== tabOpenGoTimer.from)
+                + " from=" + tabOpenGoTimer.from
+                + " run=" + acts.topBar.runOffset()
+                + " tabs=" + acts.pageRepeater.count
+                + " active=" + acts.tabsModel.currentIndex)
             acts.window.finishAutoAct()
         }
     }

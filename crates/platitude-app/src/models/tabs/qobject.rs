@@ -49,6 +49,18 @@ impl TabsModel {
     #[qsignal]
     pub(super) fn leaving_tab(&mut self, index: i32);
 
+    /// Somebody asked to be shown the repository now in front, so the band
+    /// travels to that tab's seat (デザイン規約 §タブの所作).
+    ///
+    /// Its own signal rather than `current_index_changed`: the strip's own
+    /// gestures move that one too — a press, a carry putting the row
+    /// somewhere else — and those are the reader putting the band where it
+    /// stands, which is the one thing this may not take back. Emitted after
+    /// the index has moved, so the strip reads a model that has already
+    /// answered.
+    #[qsignal]
+    pub(super) fn front_tab_asked(&mut self);
+
     /// The folder picked in the dialog did not open. `kind` is `plain` /
     /// `bare` / `other`, `message` git's own words (`other` alone), and
     /// `near` the folder to bring the picker back up at.
@@ -78,6 +90,7 @@ impl TabsModel {
         // open one does (デザイン規約 §タブの所作).
         if let Some(position) = self.position_of(path.trim()) {
             self.set_current_index(position as i32);
+            self.front_tab_asked();
             return;
         }
         if !self.attached {
@@ -132,6 +145,7 @@ impl TabsModel {
         }
         if let Some(position) = self.position_of(&path) {
             self.set_current_index(position as i32);
+            self.front_tab_asked();
             return;
         }
         let title = title_of(&path);
@@ -148,6 +162,7 @@ impl TabsModel {
         self.current_index = self.items.len() as i32 - 1;
         self.report();
         self.current_index_changed();
+        self.front_tab_asked();
     }
 
     /// Puts back the tabs the last session had open.
@@ -215,6 +230,7 @@ impl TabsModel {
         self.current_index = wanted_held.unwrap_or(wanted).min(self.items.len() - 1) as i32;
         self.report();
         self.current_index_changed();
+        self.front_tab_asked();
     }
 
     #[qslot]

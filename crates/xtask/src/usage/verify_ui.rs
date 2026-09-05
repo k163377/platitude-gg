@@ -107,6 +107,12 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       left edge). Twelve rather than eight because the run has to be
       worth photographing on both machines — the wider Linux band leaves
       eight tabs three pixels to travel in.
+      `tab-open-go` stages that same strip and then opens a thirteenth
+      repository into it, which is the other road the band travels by: a
+      repository asked for is one the reader means to see, so the strip
+      goes to the seat it lands in. It builds that repository itself when
+      no argument names one — the twelve handed to the run are opened at
+      startup, and a tab already in the strip cannot arrive in it.
       `tab-name` opens a strip of a different shape: four repositories
       called `repo` — two of them under a parent they also share — and
       one nobody shares at all, which is what a name that has to grow to

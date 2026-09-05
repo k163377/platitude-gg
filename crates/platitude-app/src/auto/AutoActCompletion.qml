@@ -213,7 +213,7 @@ QtObject {
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
-                "tab-pin", "tab-pin-go",
+                "tab-pin", "tab-pin-go", "tab-open-go",
                 "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "graph-stale", "graph-stopped",
                 "band-actions", "band-actions-none",

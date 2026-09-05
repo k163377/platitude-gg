@@ -145,6 +145,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_pin_go gone=true onScreen=true travelled=true",
     },
+    // And the same arrival asked for by opening a repository rather than
+    // by pressing the stand-in. No picture holds this one either: a strip
+    // standing on its newest tab frames the same whether the band went
+    // there or was sitting on that end all along, so the three that are
+    // judged say the band moved, the tab it moved for is whole in the run,
+    // and the stand-in that was up has stepped aside.
+    Verb {
+        name: "tab-open-go",
+        when: &[],
+        plain: "tab_open_go arrived=true gone=true travelled=true",
+    },
     // The ☰'s card, standing. `yield=true` is the half no picture holds:
     // the band's empty run is the platform's caption, and while the card
     // is up it has to stop being that or every press landing there is

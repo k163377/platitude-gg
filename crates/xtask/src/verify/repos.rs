@@ -240,6 +240,14 @@ pub(super) fn folder_for(
             }
             Ok(dir.display().to_string())
         }
+        // The one repository this verb's strip has not got: the thirteenth
+        // off the same ladder, so the tab that arrives is named like the
+        // twelve it arrives among. Built here rather than beside them
+        // because [`for_run`]'s list is what the run opens at startup.
+        "tab-open-go" => {
+            let repo = crate::demo::create_named("basic", None, TAB_NAMES[12])?;
+            Ok(repo.display().to_string())
+        }
         // The avatar card's verbs file a picture on their way in, and a
         // path typed by hand names one machine — the census could never
         // record such a line as one to run again. A picture made here is
@@ -302,14 +310,17 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
         // A strip that has to overflow: eight of them, against a window
         // the verb puts down on its floor.
         tab_width_repos("8")?
-    } else if opts.verb == "tab-pin" || opts.verb == "tab-pin-go" {
-        // The same floor, four tabs further: what these two photograph is
-        // a stand-in with the strip running underneath it, and eight tabs
+    } else if opts.verb == "tab-pin" || opts.verb == "tab-pin-go" || opts.verb == "tab-open-go" {
+        // The same floor, four tabs further: what these photograph is a
+        // stand-in with the strip running underneath it, and eight tabs
         // leave a run of three pixels on the machine with the wider band
         // (measured: Linux `run=3` against Windows `run=83`, because the
         // Linux band carries neither a grab run nor window buttons). The
         // stand-in stood either way — `must_say` says so — but the
-        // picture was of a strip that had not moved.
+        // picture was of a strip that had not moved. `tab-open-go` opens
+        // one more on top of these, and that one is built by
+        // [`folder_for`]: everything handed over here is opened at
+        // startup, and a tab already in the strip cannot arrive in it.
         tab_width_repos("12")?
     } else {
         let presets: Vec<String> = if opts.preset.is_empty() {

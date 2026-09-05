@@ -25,6 +25,12 @@ Item {
     /// rather than looked up, because the item for a row the model has only just gained arrives with the next layout.
     /// Null while no tab is open. The stand-in at the edge is drawn off it, and the travel to it is measured off it.
     property Item frontTab: null
+    /// A road outside the strip has asked to be shown the repository it has just put in front (`TabsModel`), and
+    /// whether the strip is to travel there or simply start there (`askFrontTab`). Held rather than acted on where it
+    /// arrives: the item for a row the model has only just gained comes with the next layout, so what is in front at
+    /// the moment of the ask is still the tab being left.
+    property bool frontAsked: false
+    property bool frontAskTravels: false
 
     /// Automation: the run the tabs were handed, and what they made of it. A picture cannot say which tabs gave way and
     /// which were left alone — every strip that fits looks like every other one — so the widths themselves are the
@@ -100,9 +106,9 @@ Item {
             tabStrip.tabsModel.closeTab(id)
             return
         }
-        // A press outranks a travel in flight, whatever it goes on to be: the carry that may follow sends the strip
-        // itself (`TabCarry.driftRun`), and two hands on `contentX` is one of them drawing over the other.
-        tabRun.halt()
+        // A press outranks whatever else is moving the strip, or about to (`takeRun`): the carry that may follow sends
+        // the strip itself (`TabCarry.driftRun`).
+        tabStrip.takeRun()
         tabStrip.tabsModel.setCurrentIndex(index)
     }
 
@@ -171,6 +177,40 @@ Item {
     /// (デザイン規約 §タブの所作; the travel itself is `TabRun.showTab`).
     function showFrontTab() {
         return tabRun.showTab(tabStrip.frontTab)
+    }
+
+    /// Asked (デザイン規約 §タブの所作). Travelled to when the strip already had a tab in front to travel from — a strip
+    /// that stood nowhere leaves the reader no distance to read, so that one starts at the seat instead.
+    function askFrontTab() {
+        tabStrip.frontAskTravels = tabStrip.frontTab !== null
+        tabStrip.frontAsked = true
+        Qt.callLater(tabStrip.answerFrontAsk)
+    }
+
+    /// The ask, answered once the strip's own front tab is the row the model says is in front — which is now when the
+    /// ask moved nobody, and the next layout when it did.
+    ///
+    /// Always a turn late (`Qt.callLater`, which folds repeat asks into one): a tab reports itself in front from its
+    /// own `Component.onCompleted`, and a view lays its items out after it has built them — read there, the newest tab
+    /// is still standing at `x: 0` and the strip travels to the wrong end of the run (measured).
+    function answerFrontAsk() {
+        if (!tabStrip.frontAsked || !tabStrip.frontTab
+                || tabStrip.frontTab.index !== tabStrip.tabsModel.currentIndex)
+            return
+        tabStrip.frontAsked = false
+        if (tabStrip.frontAskTravels)
+            tabRun.showTab(tabStrip.frontTab)
+        else
+            tabRun.landOn(tabStrip.frontTab)
+    }
+
+    /// The reader's own hand on the strip — a press, the wheel, the carry that may follow a press. It outranks a
+    /// travel in flight and an ask still waiting for its tab alike (デザイン規約 §タブの所作「帯自身の所作も頼みではない」):
+    /// two hands on `contentX` is one of them drawing over the other, and a band the reader has just put somewhere is
+    /// not one an earlier ask may still take back.
+    function takeRun() {
+        tabRun.halt()
+        tabStrip.frontAsked = false
     }
 
     /// Automation: where the strip stands in its run and whether it has reached the far end (`tab-edge`), and the run
@@ -261,6 +301,9 @@ Item {
     }
 
     implicitWidth: tabStrip.tabsWantWidth
+    // The layout an ask was waiting for: the tab it named has been built, and the view has put it in its row
+    // (`answerFrontAsk`).
+    onFrontTabChanged: Qt.callLater(tabStrip.answerFrontAsk)
 
     /// Not declared inside `tabs`: a Flickable adopts its children into contentItem, where they travel with the scroll.
     TabMetrics {
@@ -332,8 +375,9 @@ Item {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: event => {
                 const step = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-                // A hand on the wheel outranks a travel in flight: the strip goes where it is being sent.
-                tabRun.halt()
+                // A hand on the wheel outranks whatever else is moving the strip, or about to (`takeRun`): the strip
+                // goes where it is being sent.
+                tabStrip.takeRun()
                 tabs.contentX = tabRun.clamp(tabs.contentX - step)
             }
         }
@@ -399,6 +443,17 @@ Item {
     TabRun {
         id: tabRun
         view: tabs
+    }
+    // The roads into a repository, heard in one place: opening one, arriving at the tab that already holds it, and
+    // putting back what the last session left open all mean "show me this", and the strip answers the three alike
+    // (デザイン規約 §タブの所作「入口ごとに判定を書かない」). Its own signal rather than `currentIndex`, which the strip's own
+    // gestures move as well — a press and a carry are the reader putting the band where it stands, and this may not
+    // take that back.
+    Connections {
+        target: tabStrip.tabsModel
+        function onFrontTabAsked() {
+            tabStrip.askFrontTab()
+        }
     }
     // Opening one more. Drawn rather than typed: a typed `+` resolves to whatever shape and line weight the platform
     // has, where every other mark in the window holds `Metrics.iconStroke` (デザイン規約 §寸法「印はフォントの字に任せない」).

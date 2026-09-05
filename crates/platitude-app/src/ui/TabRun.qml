@@ -39,25 +39,47 @@ QtObject {
         tabRun.travel.stop()
     }
 
-    /// The strip, travelled until `tab` is whole in the run — the least it can move and still have all of that tab on
-    /// screen, which is the landing the sidebar's own rows are sent to (`NavList` / `ListView.Contain`). Quick rather
-    /// than instant (デザイン規約 §アニメーション の 200ms): a strip that jumps leaves the reader working out which way it
-    /// went and how far, which is the question the press was asking. Answers false when there is nowhere to go.
-    function showTab(tab) {
-        if (!tab)
-            return false
+    /// Where the strip has to stand for `tab` to be whole in the run — the least it can move and still have all of
+    /// that tab on screen, which is the landing the sidebar's own rows are sent to (`NavList` / `ListView.Contain`).
+    /// Its own function because two arrivals go there and differ in nothing else.
+    function wholeAt(tab) {
         let to = tabRun.view.contentX
+        if (!tab)
+            return to
         if (tab.x < to)
             to = tab.x
         else if (tab.x + tab.width > to + tabRun.view.width)
             to = tab.x + tab.width - tabRun.view.width
-        to = tabRun.clamp(to)
+        return tabRun.clamp(to)
+    }
+
+    /// The strip, travelled until `tab` is whole in the run. Quick rather than instant (デザイン規約 §アニメーション の
+    /// 200ms): a strip that jumps leaves the reader working out which way it went and how far, which is the question
+    /// the press was asking. Answers false when there is nowhere to go.
+    function showTab(tab) {
+        if (!tab)
+            return false
+        const to = tabRun.wholeAt(tab)
         if (to === tabRun.view.contentX)
             return false
         tabRun.travel.stop()
         tabRun.travel.from = tabRun.view.contentX
         tabRun.travel.to = to
         tabRun.travel.start()
+        return true
+    }
+
+    /// The same landing, arrived at rather than travelled to — what a strip that has stood nowhere yet does with the
+    /// tab it is handed (デザイン規約 §タブの所作). A travel is read against where the strip was, and a strip coming up
+    /// has no such place, so the 200ms would be saying nothing to nobody.
+    function landOn(tab) {
+        if (!tab)
+            return false
+        const to = tabRun.wholeAt(tab)
+        if (to === tabRun.view.contentX)
+            return false
+        tabRun.travel.stop()
+        tabRun.view.contentX = to
         return true
     }
 
