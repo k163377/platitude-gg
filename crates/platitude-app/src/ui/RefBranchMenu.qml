@@ -31,6 +31,12 @@ AppMenu {
     /// — the automation reads them (`delete-branch-early`); the row reads `refusedRow`.
     readonly property alias deleteAnswered: state.deleteAnswered
     readonly property alias deleteMerged: state.deleteMerged
+    /// Whether the delete row has an answer coming at all — in hand off the rows, or asked of git. **False is a card
+    /// standing over a row nobody asked about**: the delete is out (the branch the tree is on, one another working
+    /// copy holds, anything running), and this is frozen as the card opens like the rest of it, so no answer is
+    /// coming later either. The automation reads it as the answer to "did the input land"
+    /// (app-ui.md §UI 自動化の因果性); nothing on screen needs it.
+    readonly property alias deleteAsked: state.deleteAsked
 
     /// The branch git has just refused to delete, while the card that asked is still standing — so the delete row
     /// turns into the held `-D` where the hand already is (デザイン規約 §左メニューの所作). Written by the card itself
@@ -84,6 +90,8 @@ AppMenu {
         /// wears the plain row.
         property bool deleteAnswered: false
         property bool deleteMerged: true
+        /// Whether anybody was asked (see the alias).
+        property bool deleteAsked: false
     }
 
     function offerOn(kind, name, full, oidHex) {
@@ -94,6 +102,7 @@ AppMenu {
         state.refOid = oidHex
         state.deleteAnswered = false
         state.deleteMerged = true
+        state.deleteAsked = false
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
             state.remoteDrifted = false
@@ -144,6 +153,7 @@ AppMenu {
             } else {
                 branchCard.repoTab.checkBranchDelete(full)
             }
+            state.deleteAsked = true
         }
     }
 

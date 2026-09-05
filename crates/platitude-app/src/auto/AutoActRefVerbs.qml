@@ -156,8 +156,8 @@ Item {
             Harness.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
-            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
-            refMenu.openSub(refBranchCard)
+            // **The card goes up from the sampler rather than from here** — what it is about has to be true at the
+            // moment it opens, and this is the one tick nobody chose (`earlyDeleteTimer`).
             earlyDeleteTimer.start()
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
@@ -408,13 +408,41 @@ Item {
     // Waits on the early answer, not on a refusal: nothing here writes.
     SampleTimer {
         id: earlyDeleteTimer
+        /// Whether the card is up on the branch yet. While it is not, every tick is the input's own branch and
+        /// nothing below is read.
+        property bool cardUp: false
         onTriggered: {
+            const arg = Harness.autoActArg
+            if (!earlyDeleteTimer.cardUp) {
+                // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性): the delete row is
+                // only in the card while nothing is running (`offers::ref_menu`), and the card works its answers out
+                // once as it opens — put up a tick early it asks nobody and is never asked again, which spends the
+                // watchdog's 120 seconds in silence instead of failing on a line anyone can read.
+                if (repoTab.busyCount !== 0)
+                    return
+                earlyDeleteTimer.cardUp = true
+                page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+                refMenu.openSub(refBranchCard)
+                if (refBranchCard.deleteAsked)
+                    return
+                // The input says it did not land, so nothing is coming to latch on: the branch names no commit, or
+                // its delete is out (the branch the tree is on, one another working copy holds). Reported in facts
+                // rather than in the row's own sentence — `must_say` never matches a non-ASCII line on Windows
+                // (verify-ui §Windows での実行・デバッグの罠), and the em dash is in every one of them.
+                earlyDeleteTimer.stop()
+                Harness.report("delete_early asked=false"
+                                  + " oid=" + (branchesModel.oidOfName(arg) !== "")
+                                  + " offered=" + refDeleteItem.offered
+                                  + " blocked=" + (refDeleteItem.blockedReason !== ""))
+                driver.complete()
+                return
+            }
             // The row's `code` is never empty on a branch, so it cannot tell "not answered yet" from "answered merged"
             // — both wear `branch --delete`. The card says whether an answer is in hand: the graph's, in the frame
             // the card opened (`RefBranchMenu.deleteAnswered`), or git's by the echo of the branch asked about, which
             // the asking clears before the question goes out (app-ui.md §UI 自動化の因果性).
             const fromRows = refBranchCard.deleteAnswered
-            if (!fromRows && repoTab.branchDeleteAsked !== Harness.autoActArg)
+            if (!fromRows && repoTab.branchDeleteAsked !== arg)
                 return
             earlyDeleteTimer.stop()
             Harness.report("delete_early asked=true"
