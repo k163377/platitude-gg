@@ -37,7 +37,7 @@ AppDialog {
     readonly property string wantedName: nameField.text.trim()
     /// The folder as a person reads it, rather than as a URL.
     readonly property string parentPath: cloneDialog.parentUrl !== ""
-                                         ? GitFacts.folderPath(cloneDialog.parentUrl) : ""
+                                         ? GitFacts.pickedPath(cloneDialog.parentUrl) : ""
     /// Whether there is a clone to ask for: somewhere to fetch from, somewhere to put it, and a name for it. The
     /// accept button reads this, and so does the headless run — which needs the form's own answer to wait on rather
     /// than a second reading of the three fields (規約 §UI 自動化の因果性).

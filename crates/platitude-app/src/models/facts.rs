@@ -311,11 +311,33 @@ impl GitFacts {
         platitude_core::remote::folder_name_for(&url)
     }
 
-    /// The local path a `file://` folder URL names
-    /// (`urlpath::file_url_to_path`) — what a chooser shows once the
-    /// platform's dialog has answered with one.
+    /// The folder a path sits in, as a `file:` URL — where a chooser
+    /// opened on that path should start (`urlpath::file_url`). Empty
+    /// where the path has no folder above it, and for the empty path.
+    ///
+    /// The other direction of [`Self::picked_path`], and here for the
+    /// same reason: separators, drive letters and percent-encoding are
+    /// the one part of a path QML has no business spelling out.
     #[qslot]
-    fn folder_path(&self, url: String) -> String {
+    fn folder_url_of(&self, path: String) -> String {
+        let path = path.trim();
+        if path.is_empty() {
+            return String::new();
+        }
+        std::path::Path::new(path)
+            .parent()
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .map(crate::urlpath::file_url)
+            .unwrap_or_default()
+    }
+
+    /// The local path a `file://` URL names
+    /// (`urlpath::file_url_to_path`) — what a box shows once the
+    /// platform's chooser has answered with one. Folder or file: the
+    /// chooser answers in URLs either way, and a path is what every box
+    /// this reaches is holding.
+    #[qslot]
+    fn picked_path(&self, url: String) -> String {
         crate::urlpath::file_url_to_path(&url)
             .to_string_lossy()
             .into_owned()

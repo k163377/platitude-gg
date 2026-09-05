@@ -215,6 +215,20 @@ ApplicationWindow {
         anchors.fill: parent
     }
 
+    // A different git has been chosen and answered, so this window is done: `main` starts the successor once the
+    // window has gone and the settings files have been let go of (規約 §設定の画面).
+    //
+    // **Read here rather than sent from the settings screen.** `root.close()` is the one road out — the close gate
+    // that waits a running write out stands on it — and a screen that reached for it would be a second spelling of
+    // that road (`AppMenuButton` exit row). The answer is data on the model; the window that owns the road reads it.
+    Connections {
+        target: AppBackend
+        function onRestartWantedChanged() {
+            if (AppBackend.restartWanted)
+                root.close()
+        }
+    }
+
     // The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
     // (`RepoPageStack`).
     readonly property alias curPage: body.curPage

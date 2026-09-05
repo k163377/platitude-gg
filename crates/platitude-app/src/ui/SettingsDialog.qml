@@ -157,6 +157,25 @@ AppDialog {
     /// the reader was shown what is holding it and the next press goes through (規約 §設定の画面).
     property bool askingLeave: false
 
+    /// A way out was taken over a git waiting to be applied and turned down. Unlike [`askingLeave`] no second press
+    /// gets past it: this only turns the mark, so the reader is told what is holding the screen rather than left
+    /// pressing a `✕` that does nothing. Falls with the offer — the box put back is the way out.
+    property bool askingGitPath: false
+    onOpenedChanged: if (!settingsDialog.opened) settingsDialog.askingGitPath = false
+    Connections {
+        target: AppBackend
+        function onGitPathChanged() {
+            if (!AppBackend.gitPathOffersRestart)
+                settingsDialog.askingGitPath = false
+        }
+    }
+
+    /// Sends the chapters to the git box. It is the first chapter of its category, so the head of the column is
+    /// where it stands (`SettingsAppPane`) — mapped like [`showUnsaved`] only where a chapter can be anywhere.
+    function showGitPath() {
+        chapters.contentY = 0
+    }
+
     /// The way out, for the two things that take it: the `✕` in the corner and Escape. One function so they cannot
     /// come apart, and so a run enters the same road a hand does (規約 §UI 自動化の因果性).
     ///
@@ -166,6 +185,18 @@ AppDialog {
     /// standing right there. **The second press closes**, because a way out that can be refused twice is not a way
     /// out. Leaving puts the boxes back, so a screen opened again is not still offering the edit that was dropped.
     function escapeOut() {
+        // **A chosen git holds the screen shut, and no press gets past it.** The other thing that stops a way out
+        // arms once and lets the second press through, because what it is holding is an edit the reader may mean to
+        // drop. This is not an edit — the path is already written, and the only question left is which binary the
+        // window in front of them is running. Leaving with the two disagreeing is the state this chapter exists to
+        // prevent (規約 §設定の画面). The way back is the box: emptied, or put back to what it was, the offer falls
+        // and the screen lets go.
+        if (AppBackend.gitPathOffersRestart) {
+            settingsDialog.category = "app"
+            settingsDialog.askingGitPath = true
+            settingsDialog.showGitPath()
+            return
+        }
         if (settingsDialog.unsavedIdentities > 0 && !settingsDialog.askingLeave) {
             settingsDialog.category = "git"
             settingsDialog.askingLeave = true
@@ -221,7 +252,7 @@ AppDialog {
             Layout.alignment: Qt.AlignHCenter
             word: settingsDialog.categoryWord
             unsaved: settingsDialog.unsavedIdentities > 0
-            armed: settingsDialog.askingLeave
+            armed: settingsDialog.askingLeave || settingsDialog.askingGitPath
             onClosed: settingsDialog.escapeOut()
         }
         // The band's edge is the window's, so this one line is not laid in the block.
@@ -264,9 +295,16 @@ AppDialog {
                         id: categoryRow
                         required property var modelData
                         readonly property bool current: settingsDialog.category === categoryRow.modelData.key
+                        /// A git waiting to be applied holds the reader here: the screen will not let go until the
+                        /// box is answered, and the other category is a screenful of git's own configuration to
+                        /// wander into meanwhile (規約 §設定の画面). The row a reader is standing in is never the
+                        /// one held down — that would grey the category they are reading.
+                        enabled: categoryRow.current || !AppBackend.gitPathOffersRestart
                         /// What a press on this row does. The handler below is one line onto it so a run enters the
                         /// same road a hand does (規約 §UI 自動化の因果性).
                         function tap() {
+                            if (!categoryRow.enabled)
+                                return
                             settingsDialog.category = categoryRow.modelData.key
                         }
                         Layout.fillWidth: true
@@ -298,8 +336,9 @@ AppDialog {
                             // showing is the wash under it, exactly as in the left menu these rows are dressed as —
                             // there a row does not go dim for not being the one selected. Dimming the others says
                             // the wrong thing too: the category nobody is in is the one there is any reason to press
-                            // (規約 §無効 「選ばれていないことを無効の色で言わない」).
-                            color: Theme.textPrimary
+                            // (規約 §無効 「選ばれていないことを無効の色で言わない」). **Held down is not that** —
+                            // a row that cannot be pressed at all is the one case the disabled ink is for (§無効).
+                            color: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
                         }
                         HoverHandler {
                             id: categoryHover
