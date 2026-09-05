@@ -9,14 +9,21 @@
 //! a smoothed enlargement is a guess, and the system image viewers all
 //! smooth.
 //!
-//! Which is why a view opens at 1:1 rather than fitted. Nearest-neighbour
-//! only *adds* pixels honestly; under 1 it drops them, so the fitted
-//! opening was reading every picture too big for the window through the
-//! one filter that deletes 1px rules and replaces a flat colour with
-//! whichever neighbour survived. Shrinking is now the reader's own
-//! choice (`0`), it interpolates, and the ratio says `smoothed` where it
-//! does — the guess is worth making, but not worth mistaking for the
-//! picture.
+//! Which is why one picture opens at 1:1 rather than fitted.
+//! Nearest-neighbour only *adds* pixels honestly; under 1 it drops them,
+//! so the fitted opening was reading every picture too big for the
+//! window through the one filter that deletes 1px rules and replaces a
+//! flat colour with whichever neighbour survived. Shrinking interpolates
+//! instead, and the ratio says `smoothed` where it does — the guess is
+//! worth making, but not worth mistaking for the picture.
+//!
+//! A *row* of them opens fitted all the same, because 1:1 costs it the
+//! one thing it is: at one image pixel per screen pixel the picture
+//! beside the first is off the right-hand edge, and a difference read by
+//! panning between the halves is back in the reader's memory, which is
+//! what putting them abreast was meant to end. The whole row is worth
+//! the shrink the bar owns up to, and `1` is one key away where a pixel
+//! has to be read.
 //!
 //! The seat filter shows the whole roster whatever the board holds, the
 //! seats with nothing on it disabled. Built from the seats that happen to
@@ -185,20 +192,25 @@ function draw(){imgs.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
 function place(){const s=FLAT[i];if(!s)return;
  x=s.w*z<=stage.clientWidth?(stage.clientWidth-s.w*z)/2:0;
  y=s.h*z<=stage.clientHeight?(stage.clientHeight-s.h*z)/2:0;draw()}
-// What every view opens at: one image pixel on one screen pixel,
-// whatever it costs in panning. The old opening shrank whatever did not
-// fit, which is the one ratio that cannot be read. Not `one`: `show()`
+// What a view of one picture opens at: one image pixel on one screen
+// pixel, whatever it costs in panning — the shrink it used to open at
+// is the one ratio a 1px call cannot be read off. Not `one`: `show()`
 // keeps a local of that name for the first picture in the view, and a
 // call from inside it reaches the local (measured: TypeError, and no
 // opening view at all).
 function oneToOne(){z=1;place()}
-// The whole picture inside the window, the one thing 1:1 cannot give,
-// and now the only place a ratio under 1 is reached. Magnifies as well,
-// held to a whole ratio so a picture smaller than the window fills it
+// The whole view inside the window, the one thing 1:1 cannot give, and
+// the only place a ratio under 1 is reached — from `0`, and from the
+// opening of a row that holds more than one picture. Magnifies as well,
+// held to a whole ratio so a view smaller than the window fills it
 // without going soft.
 function fit(){const s=FLAT[i];if(!s)return;
  const raw=Math.min(stage.clientWidth/s.w,stage.clientHeight/s.h);
  z=raw>=1?Math.floor(raw):raw;place()}
+// What a view opens at. One picture at 1:1; a row of them at the ratio
+// `0` gives, because at 1:1 the picture beside the first stands off the
+// window's edge and the comparison is back in the reader's memory.
+function opening(){if(FLAT[i].parts.length>1)fit();else oneToOne()}
 function show(n){if(!FLAT.length)return;i=(n+FLAT.length)%FLAT.length;const s=FLAT[i];
  imgs.textContent='';imgs.style.display='';
  // The width and height are written on every picture, so the row is
@@ -216,7 +228,7 @@ function show(n){if(!FLAT.length)return;i=(n+FLAT.length)%FLAT.length;const s=FL
   +one.w+'x'+one.h+(s.parts.length>1?' each':'')+(s.verb?'  \u00b7 '+s.verb:'');
  side.querySelectorAll('.thumbs img').forEach(e=>e.classList.toggle('on',+e.dataset.k===i));
  const on=side.querySelector('.thumbs img.on');
- if(on)on.scrollIntoView({block:'nearest'});oneToOne()}
+ if(on)on.scrollIntoView({block:'nearest'});opening()}
 function zoomAt(cx,cy,nz){x=cx-(cx-x)*(nz/z);y=cy-(cy-y)*(nz/z);z=nz;draw()}
 stage.addEventListener('wheel',function(e){e.preventDefault();const r=stage.getBoundingClientRect();
  zoomAt(e.clientX-r.left,e.clientY-r.top,
@@ -436,24 +448,37 @@ mod tests {
         assert!(render(&[run("a", "chip padding")]).contains("abreast:false"));
     }
 
-    /// A view opens at 1:1, and nothing on the way in may shrink it. The
-    /// board exists to be read, and the fitted opening it used to have
-    /// put every picture bigger than the window through a shrink — which
-    /// is the one ratio at which the picture stops being the evidence.
+    /// A view of one picture opens at 1:1, and nothing on the way in may
+    /// shrink it. The board exists to be read, and the fitted opening it
+    /// used to have put every picture bigger than the window through a
+    /// shrink — which is the one ratio at which the picture stops being
+    /// the evidence.
     #[test]
-    fn a_view_opens_at_one_image_pixel_per_screen_pixel() {
+    fn a_view_of_one_picture_opens_at_one_image_pixel_per_screen_pixel() {
         let page = render(&[run("a", "chip padding")]);
         assert!(page.contains("function oneToOne(){z=1;place()}"));
         // Both ways in: the picture chosen, and the window reshaped
         // under whatever the reader had already zoomed to. The name is
         // load-bearing — `one` is taken inside `show()`, and the call
         // would reach that local instead of the opening view.
-        assert!(page.contains("scrollIntoView({block:'nearest'});oneToOne()}"));
+        assert!(page.contains("scrollIntoView({block:'nearest'});opening()}"));
         assert!(page.contains("addEventListener('resize',place)"));
         // The ceiling that used to hold the fit at 100% is what kept a
         // small picture from filling the window; the floor of 1 is gone
         // with it, so `0` may magnify as well as shrink.
         assert!(!page.contains("stage.clientHeight/s.h,1)"));
+    }
+
+    /// A row of them opens fitted instead — the one place the board
+    /// shrinks a view on the way in. At 1:1 the picture beside the first
+    /// stands off the right-hand edge, and the comparison is read out of
+    /// the reader's memory rather than off the screen.
+    #[test]
+    fn a_row_of_pictures_opens_with_the_whole_row_in_the_window() {
+        let page = render(&[run("a", "chip padding")]);
+        assert!(
+            page.contains("function opening(){if(FLAT[i].parts.length>1)fit();else oneToOne()}")
+        );
     }
 
     /// Nearest-neighbour only where it adds whole pixels. Under 1 it
