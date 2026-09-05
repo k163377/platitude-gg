@@ -75,9 +75,12 @@ pub(crate) fn claim_resource(
     Ok(Some(ResourceClaim { lock }))
 }
 
-/// Whether the process that wrote `lock` still exists. Unreadable or
-/// half-written locks answer "alive": refusing is the safe side, and the
-/// writer may be between create and write.
+/// Whether the process that wrote `lock` still exists — and is a task
+/// runner, which is the only thing that ever writes one: a pid that a
+/// killed run left behind is a name the machine gives out again, and a
+/// stranger under it must not hold the path (`subprocess::task_runner_exists`).
+/// Unreadable or half-written locks answer "alive": refusing is the safe
+/// side, and the writer may be between create and write.
 fn holder_alive(lock: &Path) -> bool {
     let Some(pid) = std::fs::read_to_string(lock).ok().and_then(|text| {
         text.lines()
@@ -85,7 +88,7 @@ fn holder_alive(lock: &Path) -> bool {
     }) else {
         return true;
     };
-    crate::subprocess::process_exists(pid)
+    crate::subprocess::task_runner_exists(pid)
 }
 
 /// Claim a run-owned directory before any repository, shim, config, or PNG
@@ -159,24 +162,18 @@ mod tests {
         }
     }
 
+    /// The state a killed run leaves behind: a lock naming a process that
+    /// is gone. The pid is one no process can have rather than a reaped
+    /// child's — a reaped number is the kernel's to give out again, and
+    /// under a suite forking git on every thread it is somebody else's
+    /// before the second claim asks (`subprocess::NO_SUCH_PID`).
     #[test]
     fn a_lock_whose_writer_is_gone_is_reclaimed() {
         let target = super::fresh_shot_dir("stale-claim").expect("target directory");
-        // A pid that has certainly exited: our own child, reaped.
-        let mut probe = if cfg!(windows) {
-            let mut c = std::process::Command::new("cmd");
-            c.args(["/C", "exit 0"]);
-            c
-        } else {
-            std::process::Command::new("true")
-        };
-        let child = probe.spawn().expect("spawn a short-lived child");
-        let dead_pid = child.id();
-        let mut child = child;
-        child.wait().expect("reap the child");
+        let dead_pid = crate::subprocess::NO_SUCH_PID;
 
         // First claim writes the lock, then the file is doctored to name
-        // the dead pid — the state a killed run leaves behind.
+        // the dead pid.
         let mut first_set = BTreeSet::new();
         let first = super::claim_resource(&target, "test resource", &mut first_set)
             .expect("first claim")
@@ -189,6 +186,49 @@ mod tests {
         super::claim_resource(&target, "test resource", &mut second_set)
             .expect("a stale lock is reclaimed")
             .expect("new claim over the stale lock");
+        std::fs::remove_dir(target).expect("remove empty target directory");
+    }
+
+    /// A lock whose pid a stranger inherited is as stale as one whose pid
+    /// nobody has: only a task runner ever writes one, so a process of any
+    /// other name under the number is the number given out again.
+    #[test]
+    fn a_lock_whose_pid_a_stranger_inherited_is_reclaimed() {
+        let target = super::fresh_shot_dir("inherited-claim").expect("target directory");
+        // A live process that is not a task runner: a child of this
+        // test's own, held alive for the length of the claim.
+        let mut stranger = if cfg!(windows) {
+            let mut c = std::process::Command::new("ping");
+            c.args(["-n", "30", "127.0.0.1"]);
+            c
+        } else {
+            let mut c = std::process::Command::new("sleep");
+            c.arg("30");
+            c
+        };
+        let mut stranger = stranger
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("a process that is not the runner");
+        let inherited = stranger.id();
+
+        let mut first_set = BTreeSet::new();
+        let first = super::claim_resource(&target, "test resource", &mut first_set)
+            .expect("first claim")
+            .expect("new claim");
+        let lock = first.lock.clone();
+        std::mem::forget(first);
+        std::fs::write(&lock, format!("pid={inherited}\npath=doctored\n"))
+            .expect("doctor the lock");
+
+        let mut second_set = BTreeSet::new();
+        let reclaimed = super::claim_resource(&target, "test resource", &mut second_set);
+        stranger.kill().expect("the stranger is ended");
+        stranger.wait().expect("the stranger is reaped");
+        reclaimed
+            .expect("a lock held by a stranger is reclaimed")
+            .expect("new claim over the inherited lock");
         std::fs::remove_dir(target).expect("remove empty target directory");
     }
 

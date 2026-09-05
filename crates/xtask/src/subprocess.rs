@@ -64,3 +64,102 @@ pub(crate) fn process_exists(pid: u32) -> bool {
         .map(|status| status.success())
         .unwrap_or(true)
 }
+
+/// Whether the process `pid` names still exists **and is this task
+/// runner** — for the claims nothing but the runner ever writes (a
+/// verify-ui run's hold on a repository, a shot directory, a config
+/// directory). A pid is a name the machine hands out again the moment its
+/// process is gone, so a lock a killed run left behind would otherwise
+/// stand for as long as whatever inherited the number — a git, a browser
+/// tab — and refuse the path until that stranger exits. The image name
+/// tells the two apart. Answers "alive" when it could not ask, as
+/// [`process_exists`] does.
+#[cfg(windows)]
+pub(crate) fn task_runner_exists(pid: u32) -> bool {
+    let Ok(out) = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .output()
+    else {
+        return true;
+    };
+    // `"xtask.exe","12345","Console","1","75,836 K"`: the image and the
+    // pid are the first two fields, ahead of the one holding a comma.
+    String::from_utf8_lossy(&out.stdout).lines().any(|line| {
+        let mut fields = line.split(',').map(|field| field.trim().trim_matches('"'));
+        let image = fields.next().unwrap_or_default();
+        fields.next().unwrap_or_default() == pid.to_string() && is_task_runner(image)
+    })
+}
+
+/// The same, asking `ps` for the command name.
+#[cfg(not(windows))]
+pub(crate) fn task_runner_exists(pid: u32) -> bool {
+    let Ok(out) = std::process::Command::new("ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .output()
+    else {
+        return true;
+    };
+    // A pid nobody has answers with nothing and a non-zero exit.
+    out.status.success() && is_task_runner(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// Whether an image name is this runner's, however it is spelled: cargo's
+/// `xtask.exe`, a test binary's `xtask-<hash>`, a landing's
+/// `xtask-inflight-<pid>` (`land::step_out_of_the_build_slot`).
+fn is_task_runner(image: &str) -> bool {
+    let name = image.rsplit(['/', '\\']).next().unwrap_or(image);
+    name.get(..5)
+        .is_some_and(|head| head.eq_ignore_ascii_case("xtask"))
+}
+
+/// A pid no process on this machine can carry — for the tests that need a
+/// claim whose process is gone. Spawning a child and reaping it hands its
+/// number back to the kernel, which gives it out again; under a suite
+/// forking git on every thread the number is somebody else's before the
+/// assertion runs, and the test meets a live stranger where it looked for
+/// a corpse. Windows hands out multiples of four only, and Linux stops at
+/// `pid_max`, which is 2^22 at the most: odd, and above both, so nobody's.
+#[cfg(test)]
+pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
+
+#[cfg(test)]
+mod tests {
+    use super::{NO_SUCH_PID, is_task_runner, process_exists, task_runner_exists};
+
+    #[test]
+    fn the_runner_is_known_by_its_image_name_however_cargo_spelled_it() {
+        for image in [
+            "xtask.exe",
+            "XTASK.EXE",
+            "xtask",
+            "xtask-4aadee3d869c602a.exe",
+            "xtask-inflight-31336.exe",
+            "C:\\x\\target\\debug\\xtask.exe",
+            "/x/target/debug/xtask",
+        ] {
+            assert!(is_task_runner(image), "{image}");
+        }
+        for image in [
+            "git.exe",
+            "ping.exe",
+            "cargo.exe",
+            "",
+            "xtas",
+            "notxtask.exe",
+        ] {
+            assert!(!is_task_runner(image), "{image}");
+        }
+    }
+
+    /// This process is the runner's own test binary, and the pid no
+    /// process can have is nobody's — whichever probe is asked.
+    #[test]
+    fn this_process_is_alive_and_the_pid_nobody_can_have_is_not() {
+        let me = std::process::id();
+        assert!(process_exists(me));
+        assert!(task_runner_exists(me));
+        assert!(!process_exists(NO_SUCH_PID));
+        assert!(!task_runner_exists(NO_SUCH_PID));
+    }
+}

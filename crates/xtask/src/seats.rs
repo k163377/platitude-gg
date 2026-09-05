@@ -787,19 +787,11 @@ mod tests {
         }
     }
 
-    /// A pid that has certainly exited: our own child, reaped.
+    /// A pid that certainly names no process — not a reaped child's,
+    /// which is the kernel's to give out again before the assertion runs
+    /// (`subprocess::NO_SUCH_PID`).
     fn dead_pid() -> u32 {
-        let mut probe = if cfg!(windows) {
-            let mut command = std::process::Command::new("cmd");
-            command.args(["/C", "exit 0"]);
-            command
-        } else {
-            std::process::Command::new("true")
-        };
-        let mut child = probe.spawn().expect("spawn a short-lived child");
-        let pid = child.id();
-        child.wait().expect("reap the child");
-        pid
+        crate::subprocess::NO_SUCH_PID
     }
 
     #[test]
