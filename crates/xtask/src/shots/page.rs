@@ -4,10 +4,19 @@
 //! デザイン規約.md governs what the app paints, and nothing here ends up
 //! in a build. What the page owes the reader is only this — the seat
 //! that took each picture, stated where it cannot be missed, and a
-//! magnifier that does not interpolate. Integer ratios with
+//! magnifier that does not interpolate. Whole ratios with
 //! `image-rendering: pixelated` are the point: a 1px design call read off
 //! a smoothed enlargement is a guess, and the system image viewers all
 //! smooth.
+//!
+//! Which is why a view opens at 1:1 rather than fitted. Nearest-neighbour
+//! only *adds* pixels honestly; under 1 it drops them, so the fitted
+//! opening was reading every picture too big for the window through the
+//! one filter that deletes 1px rules and replaces a flat colour with
+//! whichever neighbour survived. Shrinking is now the reader's own
+//! choice (`0`), it interpolates, and the ratio says `smoothed` where it
+//! does — the guess is worth making, but not worth mistaking for the
+//! picture.
 //!
 //! The seat filter shows the whole roster whatever the board holds, the
 //! seats with nothing on it disabled. Built from the seats that happen to
@@ -58,17 +67,18 @@ const STYLE: &str = r#"
  kbd{background:#1b2547;border:1px solid #2e3c6e;border-radius:3px;padding:1px 5px;color:#a8b6e0}
  #stage{flex:1;position:relative;overflow:hidden;cursor:grab}
  #stage.drag{cursor:grabbing}
- #imgs{position:absolute;transform-origin:0 0;display:flex;gap:24px;align-items:flex-start}
+ #imgs{position:absolute;transform-origin:0 0;display:flex;gap:24px;align-items:flex-start;
+  image-rendering:pixelated}
  #imgs figure{margin:0}
  #imgs figcaption{height:28px;font:600 19px/28px "Segoe UI",system-ui,sans-serif;
   color:#8494c0;letter-spacing:.04em;white-space:nowrap}
- #imgs img{display:block;image-rendering:pixelated;background:#000}
+ #imgs img{display:block;background:#000}
  #empty{position:absolute;inset:0;display:grid;place-items:center;color:#5c6a99}
 "#;
 
 /// The gap between two pictures read abreast, and the band their words
-/// sit in — the same numbers the style above uses, because `fit()` has
-/// to know how big the view is before a single picture has loaded.
+/// sit in — the same numbers the style above uses, because the view has
+/// to know how big it is before a single picture has loaded.
 const GAP: u32 = 24;
 const CAP: u32 = 28;
 
@@ -134,11 +144,39 @@ seats.forEach(s=>chip(s,'seat '+s,!held.has(s)));
 const asked=/^#seat-(.+)$/.exec(location.hash);
 pick(asked&&chips.has(asked[1])?asked[1]:'');
 let i=0,z=1,x=0,y=0;
+// Nearest-neighbour is only right where it *adds* pixels at a whole
+// ratio. Shrinking with it drops them instead of averaging them, which
+// takes the 1px rules out and swaps flat colours for whichever
+// neighbour survived, so a view that does not fit is the one place the
+// board must interpolate, and it says so where the ratio is written.
+// The approximation mark carries the rest of that: a fit one pixel
+// short of 1:1 rounds to `100%`, and a reader has to be able to tell
+// that from the ratio a 1px call may be read off.
+function exact(){return z>=1&&Math.abs(z-Math.round(z))<1e-9}
 function draw(){imgs.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
- document.getElementById('zoom').textContent=(z*100).toFixed(0)+'%'}
+ imgs.style.imageRendering=exact()?'pixelated':'auto';
+ document.getElementById('zoom').textContent=
+  (exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')}
+// Centred while the view holds it, against the top-left corner once it
+// does not: a picture read past the window's edges is read from the
+// corner the app's own furniture starts at, not from its middle.
+function place(){const s=FLAT[i];if(!s)return;
+ x=s.w*z<=stage.clientWidth?(stage.clientWidth-s.w*z)/2:0;
+ y=s.h*z<=stage.clientHeight?(stage.clientHeight-s.h*z)/2:0;draw()}
+// What every view opens at: one image pixel on one screen pixel,
+// whatever it costs in panning. The old opening shrank whatever did not
+// fit, which is the one ratio that cannot be read. Not `one`: `show()`
+// keeps a local of that name for the first picture in the view, and a
+// call from inside it reaches the local (measured: TypeError, and no
+// opening view at all).
+function oneToOne(){z=1;place()}
+// The whole picture inside the window, the one thing 1:1 cannot give,
+// and now the only place a ratio under 1 is reached. Magnifies as well,
+// held to a whole ratio so a picture smaller than the window fills it
+// without going soft.
 function fit(){const s=FLAT[i];if(!s)return;
- z=Math.min(stage.clientWidth/s.w,stage.clientHeight/s.h,1);
- x=(stage.clientWidth-s.w*z)/2;y=(stage.clientHeight-s.h*z)/2;draw()}
+ const raw=Math.min(stage.clientWidth/s.w,stage.clientHeight/s.h);
+ z=raw>=1?Math.floor(raw):raw;place()}
 function show(n){if(!FLAT.length)return;i=(n+FLAT.length)%FLAT.length;const s=FLAT[i];
  imgs.textContent='';imgs.style.display='';
  // The width and height are written on every picture, so the row is
@@ -155,7 +193,8 @@ function show(n){if(!FLAT.length)return;i=(n+FLAT.length)%FLAT.length;const s=FL
   (s.parts.length>1?s.parts.map(p=>p.cap||p.from).join(' | ')+'  ':one.from+'  ')
   +one.w+'x'+one.h+(s.parts.length>1?' each':'')+(s.verb?'  \u00b7 '+s.verb:'');
  side.querySelectorAll('.thumbs img').forEach(e=>e.classList.toggle('on',+e.dataset.k===i));
- const on=side.querySelector('.thumbs img.on');if(on)on.scrollIntoView({block:'nearest'});fit()}
+ const on=side.querySelector('.thumbs img.on');
+ if(on)on.scrollIntoView({block:'nearest'});oneToOne()}
 function zoomAt(cx,cy,nz){x=cx-(cx-x)*(nz/z);y=cy-(cy-y)*(nz/z);z=nz;draw()}
 stage.addEventListener('wheel',function(e){e.preventDefault();const r=stage.getBoundingClientRect();
  zoomAt(e.clientX-r.left,e.clientY-r.top,
@@ -172,7 +211,7 @@ addEventListener('keydown',function(e){
  else if(e.key==='0')fit();
  else if('1248'.indexOf(e.key)>=0){const r=stage.getBoundingClientRect();
   zoomAt(r.width/2,r.height/2,+e.key)}});
-addEventListener('resize',fit);
+addEventListener('resize',place);
 if(FLAT.length){document.getElementById('empty').remove();show(0)}else{imgs.style.display='none'}
 "#;
 
@@ -352,6 +391,45 @@ mod tests {
     #[test]
     fn an_ordinary_run_is_read_one_picture_at_a_time() {
         assert!(render(&[run("a", "chip padding")]).contains("abreast:false"));
+    }
+
+    /// A view opens at 1:1, and nothing on the way in may shrink it. The
+    /// board exists to be read, and the fitted opening it used to have
+    /// put every picture bigger than the window through a shrink — which
+    /// is the one ratio at which the picture stops being the evidence.
+    #[test]
+    fn a_view_opens_at_one_image_pixel_per_screen_pixel() {
+        let page = render(&[run("a", "chip padding")]);
+        assert!(page.contains("function oneToOne(){z=1;place()}"));
+        // Both ways in: the picture chosen, and the window reshaped
+        // under whatever the reader had already zoomed to. The name is
+        // load-bearing — `one` is taken inside `show()`, and the call
+        // would reach that local instead of the opening view.
+        assert!(page.contains("scrollIntoView({block:'nearest'});oneToOne()}"));
+        assert!(page.contains("addEventListener('resize',place)"));
+        // The ceiling that used to hold the fit at 100% is what kept a
+        // small picture from filling the window; the floor of 1 is gone
+        // with it, so `0` may magnify as well as shrink.
+        assert!(!page.contains("stage.clientHeight/s.h,1)"));
+    }
+
+    /// Nearest-neighbour only where it adds whole pixels. Under 1 it
+    /// deletes them — a 1px rule lands on the pixel that was dropped and
+    /// a flat colour comes back as whichever neighbour survived — so the
+    /// shrink interpolates and the ratio admits it.
+    #[test]
+    fn only_a_whole_ratio_is_read_without_interpolation() {
+        let page = render(&[run("a", "chip padding")]);
+        assert!(page.contains("function exact(){return z>=1&&Math.abs(z-Math.round(z))<1e-9}"));
+        assert!(page.contains("imgs.style.imageRendering=exact()?'pixelated':'auto'"));
+        // Both halves of the ratio: the mark that keeps a fit rounding
+        // to `100%` from reading as the ratio a 1px call may be made
+        // off, and the word for what is being done to the picture.
+        assert!(page.contains("(exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')"));
+        // The rule has to live where the ratio changes, not on the
+        // pictures: a rule on `#imgs img` outranks what `draw()` writes
+        // on their parent, and the flip would do nothing at all.
+        assert!(page.contains("#imgs img{display:block;background:#000}"));
     }
 
     #[test]
