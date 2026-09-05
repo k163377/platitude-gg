@@ -195,3 +195,47 @@ fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
         "the note comes down with the gate that wrote it"
     );
 }
+
+/// A verb that passed rewrote its census line, so the tree that passed
+/// is not the commit: nothing is stamped until the generated file is
+/// committed, and the gate over that commit finds every step cached.
+#[test]
+fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() {
+    let sb = Sandbox::new("rewrote");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &[],
+        &[("PG_GATE_FAKE_REWRITE", "verify stash --preset basic")],
+    );
+    assert!(!ok, "{text}");
+    assert!(
+        text.contains("the tree moved with them") && text.contains("review the diff"),
+        "{text}"
+    );
+    assert_eq!(
+        sb.git_ok(&sb.seat, &["status", "--porcelain"]),
+        "M crates/xtask/verb-census.txt",
+        "the rewrite stands in the tree"
+    );
+    let merge = sb.git(&sb.repo, &["merge", "--ff-only", "worktree-a"], &[]);
+    assert!(merge.is_err(), "nothing was stamped: {merge:?}");
+    let _ = sb.ran();
+    sb.commit_all(&sb.seat, "chore(xtask): the verb census", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(
+        text.contains("cached verify stash --preset basic"),
+        "{text}"
+    );
+    assert_eq!(
+        sb.ran(),
+        set(&ALWAYS),
+        "the commit of the census owed nothing new: the census is no step's input"
+    );
+    sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
+}

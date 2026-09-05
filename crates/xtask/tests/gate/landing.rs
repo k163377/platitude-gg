@@ -1,12 +1,9 @@
 //! `land`: the rebase, the gate and the fast-forward in order, the build
 //! slot it steps out of, and the seats it refuses.
 
-#[cfg(target_os = "linux")]
 use std::process::Command;
 
-#[cfg(target_os = "linux")]
-use crate::support::output_past_a_busy_image;
-use crate::support::{EXE, Sandbox, without_always};
+use crate::support::{EXE, Sandbox, output_past_a_busy_image, without_always};
 
 #[test]
 fn land_rebases_then_gates_then_fast_forwards() {
@@ -165,4 +162,49 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
         "no rebase left in flight"
     );
     assert_eq!(sb.main_sha(), main_before);
+}
+
+/// The landing commits the census its gate rewrote and gates again,
+/// rather than stopping to have a person commit a generated file.
+#[test]
+fn land_commits_the_census_its_gate_rewrote() {
+    let sb = Sandbox::new("land-census");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 4\n    property var model: StashModel\n}\n",
+    );
+    let before = sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let mut command = Command::new(EXE);
+    command
+        .args(["land", "worktree-a", "--dir"])
+        .arg(&sb.repo)
+        .current_dir(&sb.repo)
+        .env("PG_GATE_FAKE_REWRITE", "verify stash --preset basic");
+    sb.env(&mut command);
+    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("committed on worktree-a"), "{text}");
+    assert!(text.contains("landed worktree-a"), "{text}");
+    assert_eq!(
+        sb.git_ok(&sb.seat, &["log", "-1", "--format=%s"]),
+        "chore(xtask): the verb census as the land's gate rewrote it"
+    );
+    assert_eq!(sb.git_ok(&sb.seat, &["rev-parse", "HEAD~1"]), before);
+    assert_eq!(
+        sb.main_sha(),
+        sb.head(&sb.seat),
+        "main is the seat's tip, census and all"
+    );
+    let census = std::fs::read_to_string(sb.repo.join("crates/xtask/verb-census.txt"))
+        .expect("the census on main");
+    assert!(
+        census.contains("stash --preset basic\tDriver Main StashPane Theme"),
+        "{census}"
+    );
 }

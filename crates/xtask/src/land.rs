@@ -17,6 +17,7 @@
 //! allows onto a stamped commit and nothing else. History stays linear,
 //! and a landed seat already stands at main's tip.
 
+use crate::gate::Gated;
 use crate::seats::{SEAT_CLAIM, WorktreeBlock, worktree_blocks};
 use crate::subprocess::git_query;
 
@@ -100,7 +101,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
         rebase(&seat.path)?;
     }
-    crate::gate::for_landing(seat_dir, "main")?;
+    gate_in_the_seat(seat_dir, &branch)?;
+    let ahead = crate::seats::commits_in(&here, &format!("main..{branch}")).unwrap_or(ahead);
     let before = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     if primary.branch == "main" {
         forward_in(&primary.path, &branch)?;
@@ -216,6 +218,66 @@ fn tidy(path: &str) -> String {
     } else {
         path
     }
+}
+
+/// The gate in the seat, and the census its verbs may move: a verb that
+/// passed rewrote its line, and the tree that passed is then not the
+/// commit a stamp names. The rewrite is a generated file's, committed
+/// here where a session would commit it, and the gate is asked again —
+/// which finds every step cached, the census being no step's input.
+/// Twice is a census moving under the machine's timing rather than under
+/// the change, and that is reported rather than chased.
+fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> {
+    if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
+        return Ok(());
+    }
+    commit_census(&crate::seats::slashed(seat))?;
+    println!(
+        "the land's gate rewrote {}: committed on {branch}, and the gate runs again",
+        crate::gate::CENSUS_FILE
+    );
+    if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
+        return Ok(());
+    }
+    Err(format!(
+        "the verbs rewrote {} again, on the run that was to stamp the commit holding the first \
+         rewrite — the census is moving under the machine's timing rather than under the change. \
+         Read the two rewrites' diffs before landing.",
+        crate::gate::CENSUS_FILE
+    ))
+}
+
+/// The message every commit of the census the gate rewrote carries — the
+/// one sessions wrote by hand for it before the landing did.
+const CENSUS_COMMIT: &str = "chore(xtask): the verb census as the land's gate rewrote it";
+
+/// Commits the census the gate's verbs rewrote, and nothing beside it:
+/// the gate ran over a clean tree, so the rewrite is the whole of what
+/// can stand — and anything else standing there is refused, because a
+/// landing commits what the machine wrote and never what a person left.
+fn commit_census(seat: &str) -> Result<(), String> {
+    let census = crate::gate::CENSUS_FILE;
+    let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
+    if dirty.trim() != format!("M {census}") {
+        return Err(format!(
+            "the gate left more than {census} changed in {seat}, and a landing commits the \
+             census alone:\n{dirty}"
+        ));
+    }
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("-C")
+        .arg(seat)
+        .args(["commit", "-q", "-m", CENSUS_COMMIT, "--", census]);
+    let output = crate::subprocess::run_captured(&mut command)?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "the census could not be committed in {seat}:\n{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    ))
 }
 
 /// `git rebase main` in the seat, non-interactively. A rebase that stops

@@ -33,7 +33,7 @@ use std::path::Path;
 use plan::{Plan, Required, Side};
 use stamp::{CommitStamp, Store};
 
-pub(crate) use census::{names_in, page_settled_in, record};
+pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
 pub(crate) use hooks::{SESSION, SKIP, install};
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -163,11 +163,24 @@ fn gate(args: &[String]) -> Result<(), String> {
     if opts.dry_run {
         return Ok(());
     }
-    execute(&plan, opts.jobs)
+    match execute(&plan, opts.jobs)? {
+        Gated::Stamped => Ok(()),
+        // A tree left dirty without a word is the next gate refusing to
+        // run over a change nobody made — which is the whole complaint
+        // the recording answers. Said as the failure it is for the
+        // stamp: the commit that passed has to be the one holding it.
+        Gated::CensusMoved => Err(format!(
+            "the verbs passed and the tree moved with them — nothing stamped for {}.{}",
+            short(&plan.head),
+            census_rewritten()
+        )),
+    }
 }
 
 /// The gate for `land`: the seat's tree, both sides, the census's verbs.
-pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
+/// What it answers is the landing's to act on — a census the verbs moved
+/// is committed there and gated again, rather than reported.
+pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> {
     let _sole = crate::lanes::sole(&running_note(seat), "land's gate")?;
     let plan = plan::make(
         seat,
@@ -183,6 +196,31 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
     execute(&plan, default_jobs())
 }
 
+/// What a gate whose every step was green left behind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Gated {
+    /// The commit is stamped.
+    Stamped,
+    /// Nothing is: the host's verbs rewrote the census, so the tree that
+    /// passed is no longer the commit a stamp would name. The rewrite is
+    /// generated — commit it and gate again, which finds every step
+    /// cached.
+    CensusMoved,
+}
+
+fn short(sha: &str) -> String {
+    sha.chars().take(10).collect()
+}
+
+/// The line that says what a verb's rewrite means for whoever reads it.
+fn census_rewritten() -> String {
+    format!(
+        " The verbs rewrote {}: it is generated, so review the diff and commit it (never by \
+         hand), and the gate can stamp the commit that holds it.",
+        census::FILE
+    )
+}
+
 /// Where a tree's running gate leaves its note (`lanes::sole`): under
 /// `target/`, which the tree's git does not read, so the note is not the
 /// uncommitted change the gate refuses to run over.
@@ -195,7 +233,7 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// red step — except among its verbs, which run to the end of their
 /// block `jobs` at a time ([`verbs`]) — and the other side finishes, so
 /// its green steps are stamped and need not run again.
-fn execute(plan: &Plan, jobs: usize) -> Result<(), String> {
+fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     refuse_what_no_stamp_could_answer_for(plan)?;
     // What the census said before the verbs ran, so that a line one of
     // them rewrote can be told from the file as it was committed.
@@ -245,33 +283,25 @@ fn execute(plan: &Plan, jobs: usize) -> Result<(), String> {
     });
     let secs = started.elapsed().as_secs();
     println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
-    let head = plan.head.chars().take(10).collect::<String>();
+    let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
-    // step went red, so this is said on both roads out. A tree left dirty
-    // without a word is the next gate refusing to run over a change
-    // nobody made — which is the whole complaint the recording answers.
-    let rewrote = if std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before
-    {
-        format!(
-            " The verbs rewrote {}: it is generated, so review the diff and commit it (never by \
-             hand), and the gate can stamp the commit that holds it.",
-            census::FILE
-        )
-    } else {
-        String::new()
-    };
+    // step went red, so this is said on both roads out.
+    let rewrote = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before;
     if !failures.is_empty() {
         return Err(format!(
-            "gate failed: {} — nothing stamped for {head}.{rewrote}",
-            failures.join(" / ")
+            "gate failed: {} — nothing stamped for {head}.{}",
+            failures.join(" / "),
+            if rewrote {
+                census_rewritten()
+            } else {
+                String::new()
+            }
         ));
     }
     // Green, and the tree that passed is no longer the commit: a stamp
     // names one, so the file has to be in it before a stamp is written.
-    if !rewrote.is_empty() {
-        return Err(format!(
-            "the verbs passed and the tree moved with them — nothing stamped for {head}.{rewrote}"
-        ));
+    if rewrote {
+        return Ok(Gated::CensusMoved);
     }
     let stamp = CommitStamp {
         main: plan.main.clone(),
@@ -300,7 +330,7 @@ fn execute(plan: &Plan, jobs: usize) -> Result<(), String> {
             "off main"
         }
     );
-    Ok(())
+    Ok(Gated::Stamped)
 }
 
 /// A tree with uncommitted changes (a stamp names a commit, and this is
@@ -514,7 +544,9 @@ fn run_one(
 /// set the step is not run at all: its id is appended to that file and
 /// it passes, unless `PG_GATE_FAKE_FAIL` names it — which is how the
 /// tests watch selection and caching without a toolchain in the
-/// throwaway repository.
+/// throwaway repository. `PG_GATE_FAKE_REWRITE` names a step that
+/// rewrites the census the way a passing verb does: one line put in,
+/// once, so the run after the commit of it finds nothing to move.
 fn execute_step(dir: &Path, id: &str, command: &[String], log: &Path) -> Result<(), String> {
     if let Ok(fake) = std::env::var("PG_GATE_FAKE_LOG") {
         use std::io::Write;
@@ -532,6 +564,27 @@ fn execute_step(dir: &Path, id: &str, command: &[String], log: &Path) -> Result<
         let failing = std::env::var("PG_GATE_FAKE_FAIL").unwrap_or_default();
         if failing.split(',').any(|f| f == id) {
             return Err("failed on purpose (PG_GATE_FAKE_FAIL)".into());
+        }
+        if let Some(line) = id.strip_prefix("verify ")
+            && std::env::var("PG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
+        {
+            // The verb's own line with one more name on it — the shape
+            // of a run that met a component it had not before.
+            let path = dir.join(census::FILE);
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let rewritten: String = text
+                .lines()
+                .map(|held| {
+                    if held.starts_with(&format!("{line}\t")) && !held.ends_with(" Theme") {
+                        format!("{held} Theme\n")
+                    } else {
+                        format!("{held}\n")
+                    }
+                })
+                .collect();
+            if rewritten != text {
+                std::fs::write(&path, rewritten).map_err(|e| format!("{}: {e}", path.display()))?;
+            }
         }
         return Ok(());
     }
