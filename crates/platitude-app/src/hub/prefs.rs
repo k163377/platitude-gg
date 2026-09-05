@@ -69,6 +69,23 @@ impl Hub {
         }
     }
 
+    /// Records which git this computer runs. Empty is whichever one
+    /// `PATH` resolves.
+    ///
+    /// **Written down, not put in force.** The executor every session
+    /// spawns through was settled at install (`resolve_git`), and a run
+    /// that swapped it mid-flight would leave the tabs already open on
+    /// the old binary and the next ones on the new — one repository, two
+    /// gits, and no way to tell from the window which of them answered.
+    /// The next start reads this file and is on one binary throughout.
+    pub fn set_git_path(&mut self, path: String) {
+        if self.settings.defaults.git_path == path {
+            return;
+        }
+        self.settings.defaults.git_path = path;
+        self.save_settings_now();
+    }
+
     // -- avatars ------------------------------------------------------------
 
     /// A `file:` URL for the picture assigned to an address, or empty —

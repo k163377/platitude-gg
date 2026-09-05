@@ -17,10 +17,13 @@ impl Hub {
             state = ?store.state_path(),
             "settings store"
         );
+        let chosen = resolve_git(&runtime, &settings.defaults.git_path);
         HUB.with(|h| {
             *h.borrow_mut() = Some(Hub {
                 runtime: Some(runtime),
-                executor: GitExecutor::new(),
+                executor: chosen.executor,
+                git_program: chosen.program,
+                restart_wanted: false,
                 tabs: HashMap::new(),
                 next_tab_id: 0,
                 parked_writes: Vec::new(),
@@ -92,4 +95,102 @@ impl Hub {
     pub fn executor(&self) -> GitExecutor {
         self.executor.clone()
     }
+
+    /// Where the git this run spawns actually is. The settings screen
+    /// shows it behind an empty box, which is the one place "the git on
+    /// `PATH`" can be said as something a reader could go and look at.
+    pub fn git_program(&self) -> &str {
+        &self.git_program
+    }
+
+    /// Where an empty box points: the git `PATH` resolves, which is what
+    /// the next start would spawn if the settings named nothing.
+    pub fn path_program(&self) -> String {
+        path_program()
+    }
+
+    /// Says that this run is to be replaced by one on the git that has
+    /// just been chosen. Only ever set: a restart asked for is a restart
+    /// that happens, because what asked for it is a settings file already
+    /// written — a window that came back on the old binary would disagree
+    /// with its own settings screen.
+    pub fn want_restart(&mut self) {
+        self.restart_wanted = true;
+    }
+
+    pub fn restart_wanted(&self) -> bool {
+        self.restart_wanted
+    }
+}
+
+/// What the settings' `git_path` came to: the handle everything spawns
+/// through, and where that binary is.
+struct GitChoice {
+    executor: GitExecutor,
+    program: String,
+}
+
+impl GitChoice {
+    fn on_path() -> Self {
+        Self {
+            executor: GitExecutor::new(),
+            program: path_program(),
+        }
+    }
+}
+
+/// Where the git this app would spawn with no path named is — the one
+/// `PATH` resolves, or the one behind the launcher standing on it
+/// (`process::default_program_path`).
+///
+/// **Asked even when the settings name a binary**, because the settings
+/// screen has to be able to tell an emptied box from a chosen one: empty
+/// means this, and a reader who picks the very git already running must
+/// not be told they picked another.
+fn path_program() -> String {
+    platitude_core::process::default_program_path()
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Which git this run spawns, settled once — before the hub exists, so
+/// nothing can ever hold a handle to a different one (`Hub::executor` is
+/// cloned by every session, and the first tab is opened from the same
+/// handler that starts the version check).
+///
+/// **A named git that does not answer is fallen back on, not obeyed.**
+/// Obeying it would put the window behind the missing-git gate, which has
+/// no way into the settings screen — the reader would be locked out of
+/// the one box that could fix the path, by the value in that box. The
+/// fallback is the same reading the rules already take of an old git:
+/// only a git that is nowhere at all is a gate (規約 §git が無い時・古い時).
+/// Nothing on screen says it happened: what does is the settings screen
+/// asking that same path again as it opens, and answering in red under
+/// the box that holds it.
+fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
+    if git_path.is_empty() {
+        return GitChoice::on_path();
+    }
+    // One `git --version`, and only for a run whose settings name a git:
+    // the window is not up yet, so this is startup time being spent
+    // (CLAUDE.md §性能予算).
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));
+    if probe.answered() {
+        tracing::info!(
+            path = git_path,
+            version = probe.version(),
+            "git from settings"
+        );
+        return GitChoice {
+            executor: GitExecutor::with_program(git_path),
+            program: git_path.to_string(),
+        };
+    }
+    tracing::warn!(
+        path = git_path,
+        outcome = ?probe,
+        "the git named in the settings did not answer; running the one on PATH"
+    );
+    GitChoice::on_path()
 }

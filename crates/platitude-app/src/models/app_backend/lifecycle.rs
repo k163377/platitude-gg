@@ -37,6 +37,42 @@ impl AppBackend {
         }
     }
 
+    /// Asks one candidate git for its version, without touching the git
+    /// this run is already on (`version::probe` builds its own executor).
+    ///
+    /// The screen runs this as it opens and again whenever the box is
+    /// finished with, so a path is never shown without an answer beside
+    /// it — and a path that has been fixed on disk since it was typed
+    /// answers differently the next time the screen is opened.
+    pub(super) fn begin_git_path_check(&mut self, path: String) {
+        self.git_path_state = "checking".into();
+        self.git_path_version.clear();
+        self.git_path_error.clear();
+        // Nothing is offered while the answer is out: a button that kept
+        // the last path's offer would be one the reader could hold over a
+        // path git has not been asked about.
+        self.settle_restart_offer();
+        self.git_path_changed();
+        let feed = Arc::clone(&self.check_feed);
+        let spawned = Hub::with(|hub| {
+            let Some(handle) = hub.runtime_handle() else {
+                return false;
+            };
+            handle.spawn(async move {
+                let cancel = tokio_util::sync::CancellationToken::new();
+                let probe = version::probe(&path, &cancel).await;
+                feed.push(AppMsg::GitPathProbed { path, probe });
+            });
+            true
+        })
+        .unwrap_or(false);
+        if !spawned {
+            self.git_path_state = "failed".into();
+            self.git_path_error = "internal: runtime unavailable".into();
+            self.git_path_changed();
+        }
+    }
+
     pub(super) fn begin_identity_check(&mut self) {
         self.identity_state = "checking".into();
         let feed = Arc::clone(&self.check_feed);
@@ -135,6 +171,7 @@ impl AppBackend {
     pub(super) fn take_feed(&mut self) {
         let mut check_identity = false;
         let mut wrote = false;
+        let mut probed = false;
         for msg in self.check_feed.drain() {
             match msg {
                 AppMsg::GitOk { version, supported } => {
@@ -170,6 +207,37 @@ impl AppBackend {
                     self.identity_state = "error".into();
                     self.identity_error = message;
                 }
+                AppMsg::GitPathProbed { path, probe } => {
+                    // An answer about a path the box has moved past says
+                    // nothing about the one it holds now, and the run
+                    // that replaced it has its own answer coming.
+                    if path != self.git_path {
+                        continue;
+                    }
+                    probed = true;
+                    self.git_path_version = probe.version().to_string();
+                    self.git_path_error.clear();
+                    self.git_path_state = match probe {
+                        version::Probe::Supported(_) => "ok",
+                        version::Probe::Old(_) => "old",
+                        version::Probe::Missing => "missing",
+                        version::Probe::Failed { message } => {
+                            self.git_path_error = message;
+                            "failed"
+                        }
+                    }
+                    .into();
+                    // **The version read is what offers the restart.** A
+                    // path that answers is one the window can come back
+                    // on; one that does not would come back on the git
+                    // from `PATH` (`Hub::resolve_git`), and the reader
+                    // would find that out after losing the window rather
+                    // than in the line under the box. An old git answers
+                    // and so is offered — the rules make only a missing
+                    // git a gate (規約 §git が無い時・古い時), and the
+                    // band's badge says the rest.
+                    self.settle_restart_offer();
+                }
                 AppMsg::IdentitySaved {
                     error,
                     name_saved,
@@ -195,6 +263,9 @@ impl AppBackend {
         if wrote {
             // Open repositories hold their own copy of the configuration.
             Hub::with(|hub| hub.refresh_authors());
+        }
+        if probed {
+            self.git_path_changed();
         }
         self.git_state_changed();
         self.identity_changed();

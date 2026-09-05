@@ -46,6 +46,13 @@ enum AppMsg {
     IdentityUnknown {
         message: String,
     },
+    /// One candidate git answered — or did not. `path` is what was asked,
+    /// so an answer that arrives after the box has moved on can be
+    /// dropped rather than shown against a path it is not about.
+    GitPathProbed {
+        path: String,
+        probe: version::Probe,
+    },
     /// An identity write finished; `error` carries git's own message and
     /// the two flags say which half git now reports as what was asked for.
     IdentitySaved {
@@ -114,6 +121,45 @@ pub struct AppBackend {
     /// a reader who has not typed one. Held rather than spelled out in
     /// QML: the number is core's (`session::DEFAULT_LOG_LIMIT`).
     initial_commits_default: i32,
+    /// The git this computer runs, as the settings file holds it: a path,
+    /// or empty for whichever one `PATH` resolves. Application-wide for
+    /// the same reason the interval is — which git is installed is an
+    /// answer about the machine, not about one repository.
+    git_path: String,
+    /// What the git at [`Self::git_path`] said when it was last asked its
+    /// version: "checking" while the ask is out, then "ok" / "old" /
+    /// "missing" / "failed". The screen holds the four sentences; this
+    /// says which of them ([`version::Probe`], whose words are git's).
+    git_path_state: String,
+    /// The version string that git printed, empty where it printed none.
+    git_path_version: String,
+    /// git's or the OS's own words for a probe that failed. Passed
+    /// through: the reason a binary would not start is not ours to write.
+    git_path_error: String,
+    /// Where an empty box points: the git `PATH` resolves
+    /// (`Hub::path_program`). Held so the offer can be worked out from
+    /// **which binary** each answer names rather than from how it is
+    /// spelled — a box emptied, and a box holding the very path this run
+    /// spawns, are both the git already running.
+    git_path_on_path: String,
+    /// The box is holding a git this run is not on, and that git
+    /// answered — the one state the chapter grows a button and a warning
+    /// for.
+    ///
+    /// **One spelling of the rule, read by everything.** The button's
+    /// shape, the warning beside it and the press's own guard are the
+    /// same three terms; written twice, a screen could offer a restart
+    /// the press then refuses, or refuse one the screen was offering.
+    git_path_offers_restart: bool,
+    /// A git that answers has been chosen and it is not the one this run
+    /// is on, so the window is to close and come back. Read by the window,
+    /// which is where the one road out lives (`Main.qml`).
+    restart_wanted: bool,
+    /// Where the git this run spawns actually is. **What the box shows
+    /// behind an empty value**: "the one on `PATH`" is not somewhere a
+    /// reader can go and look, and a path is. Read once — the binary is
+    /// settled for the length of the run (`Hub::git_program`).
+    git_path_in_use: String,
     /// Assigned pictures, packed one per record: address, name, URL.
     /// The settings list is the only reader, and it is a handful of rows.
     avatars: String,

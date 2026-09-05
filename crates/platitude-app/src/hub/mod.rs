@@ -85,6 +85,16 @@ struct Tab {
 pub struct Hub {
     runtime: Option<tokio::runtime::Runtime>,
     executor: GitExecutor,
+    /// Where the binary [`Hub::executor`] spawns actually is: the path the
+    /// settings named, or what `PATH` resolves `git` to (`resolve_git`).
+    /// Settled at install with the executor, because it describes that
+    /// same handle.
+    git_program: String,
+    /// A different git was chosen and answered, so this run is to be
+    /// replaced by one on it. Read by `main` after the window is gone —
+    /// which is the only moment a process can start its own successor
+    /// without the two fighting over the settings files.
+    restart_wanted: bool,
     tabs: HashMap<i32, Tab>,
     next_tab_id: i32,
     /// Write loops of closed sessions that still had local writes to

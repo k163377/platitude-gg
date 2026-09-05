@@ -99,6 +99,39 @@ impl AppBackend {
         Member = initial_commits_default,
         Constant
     );
+    qproperty!("gitPath", Member = git_path, Notify = git_path_changed);
+    qproperty!(
+        "gitPathState",
+        Member = git_path_state,
+        Notify = git_path_changed
+    );
+    qproperty!(
+        "gitPathVersion",
+        Member = git_path_version,
+        Notify = git_path_changed
+    );
+    qproperty!(
+        "gitPathError",
+        Member = git_path_error,
+        Notify = git_path_changed
+    );
+    qproperty!("gitPathInUse", Member = git_path_in_use, Constant);
+    // `gitPathOffersRestart` is the one state the chapter grows a button
+    // and a warning for, and the same rule the press is guarded by: the
+    // box holds a git this run is not on, and that git answered.
+    qproperty!(
+        "gitPathOffersRestart",
+        Member = git_path_offers_restart,
+        Notify = git_path_changed
+    );
+    // `restartWanted` is read by the window rather than acted on here:
+    // `main` starts the successor, and it can only do that once the
+    // window is gone and the settings files have been let go of.
+    qproperty!(
+        "restartWanted",
+        Member = restart_wanted,
+        Notify = git_path_changed
+    );
     qproperty!("avatars", Member = avatars, Notify = avatars_changed);
     qproperty!(
         "avatarError",
@@ -131,6 +164,12 @@ impl AppBackend {
 
     #[qsignal]
     pub(super) fn settings_changed(&mut self);
+
+    /// The path, and everything the git at it last said. One signal for
+    /// the four because the line under the box reads them together — a
+    /// state without its version is half a sentence.
+    #[qsignal]
+    pub(super) fn git_path_changed(&mut self);
 
     /// An assignment was made or taken away. Every list already on screen
     /// re-reads itself off this — the graph rows, the details card and
@@ -167,6 +206,32 @@ impl AppBackend {
     #[qslot]
     fn set_initial_commits(&mut self, commits: i32) {
         self.apply_initial_commits(commits);
+    }
+
+    /// Records which git this computer runs — a path, or empty for
+    /// whichever one `PATH` resolves — and asks that binary for its
+    /// version. What it answers arrives on `gitPathState` and its three
+    /// neighbours; nothing is refused on the way in, because a path that
+    /// answers nothing is still what the reader wrote down.
+    #[qslot]
+    fn set_git_path(&mut self, path: String) {
+        self.apply_git_path(&path);
+    }
+
+    /// The settings screen has opened: the path it is about to show is
+    /// asked for its version, and nothing it does counts as a way out yet.
+    #[qslot]
+    fn open_git_path_screen(&mut self) {
+        self.begin_git_path_screen();
+    }
+
+    /// The button offering the chosen git has been held all the way down.
+    /// Puts `restartWanted` up — the window's cue to close, and `main`'s
+    /// to start the successor. Refused where the screen was not offering
+    /// it (`AppBackend::restart_now`).
+    #[qslot]
+    fn apply_git_path_now(&mut self) {
+        self.restart_now();
     }
 
     /// Asks Windows not to round the window's corners. A no-op on the

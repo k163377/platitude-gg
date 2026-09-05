@@ -49,7 +49,7 @@ fn main() {
     // taskbar's own launch entry starts lands here and goes no further:
     // two processes writing one `state.toml` overwrite each other's tabs
     // and window shape, last one out winning.
-    let (store, held_elsewhere, _lock) = claim_store(Build {
+    let (store, held_elsewhere, lock) = claim_store(Build {
         tree: &tree,
         debug: cfg!(debug_assertions),
         // Asked of the harness, not of the environment: a build without
@@ -294,8 +294,55 @@ fn main() {
         .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
         .run();
 
+    // Asked before the hub is taken down, because taking it down is what
+    // consumes it.
+    let restart = Hub::with(|hub| hub.restart_wanted()).unwrap_or(false);
     Hub::shutdown();
+    if restart {
+        // **The lock goes first, by name.** It is held for the length of
+        // the run and `std::process::exit` runs no destructor, so a
+        // successor started over a live one would be turned away and come
+        // up as the screen that says another process has the files
+        // (`claim_store`). Dropping it here leaves nothing between the two.
+        drop(lock);
+        start_again();
+    }
     std::process::exit(code);
+}
+
+/// Starts this same build again and leaves it running.
+///
+/// The one thing a process can do about a setting that is read once at
+/// startup: the window has already gone and the files have been let go of
+/// (`main`), so what comes up reads the settings the last window wrote —
+/// including which git to spawn, which is what asked for this.
+///
+/// The same arguments, because they are what this run was asked for. A
+/// failure is reported and nothing else: the reader is left with no
+/// window, which is worse than the restart not happening, but there is
+/// nothing on screen left to say it to.
+fn start_again() {
+    // **Never under a harness.** A driven run inherits its own automation
+    // in the environment it would hand on (.claude/rules/app-ui.md §UI
+    // 自動化の因果性 — a harness does not pass its state to a child), so
+    // the successor would replay the verb, hold the run's own settings
+    // directory, and outlive the parent that was supposed to bound it.
+    if crate::harness::knobs().automated {
+        tracing::info!("a restart was asked for; a driven run does not start one");
+        return;
+    }
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(error) => {
+            tracing::error!(%error, "cannot start again: this build has no path");
+            return;
+        }
+    };
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    match std::process::Command::new(&exe).args(&args).spawn() {
+        Ok(child) => tracing::info!(pid = child.id(), path = ?exe, "started again"),
+        Err(error) => tracing::error!(%error, path = ?exe, "could not start again"),
+    }
 }
 
 /// The store this run may use, the directory it was refused if it was, and

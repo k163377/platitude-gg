@@ -103,6 +103,17 @@ impl Default for AppBackend {
                 .map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX)),
             initial_commits_min: platitude_core::session::MIN_LOG_LIMIT as i32,
             initial_commits_default: platitude_core::session::DEFAULT_LOG_LIMIT as i32,
+            git_path: Hub::with(|hub| hub.settings().defaults.git_path.clone()).unwrap_or_default(),
+            git_path_on_path: Hub::with(|hub| hub.path_program()).unwrap_or_default(),
+            git_path_offers_restart: false,
+            restart_wanted: false,
+            // Nothing has been asked yet. The screen asks as it opens, so
+            // the resting state is never on show for long — and a run
+            // that never opens the screen never spends the subprocess.
+            git_path_state: String::new(),
+            git_path_version: String::new(),
+            git_path_error: String::new(),
+            git_path_in_use: Hub::with(|hub| hub.git_program().to_string()).unwrap_or_default(),
             avatars: packed_avatars(),
             avatar_error: String::new(),
             avatar_patterns: platitude_core::avatar::EXTENSIONS
