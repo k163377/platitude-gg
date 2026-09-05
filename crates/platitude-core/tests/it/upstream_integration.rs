@@ -9,6 +9,18 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget};
 
+/// What `%(upstream)` prints for a local branch — the spelling the refs
+/// listing carries (`RefEntry::upstream`) and joins the delete's
+/// reference point on; `None` where nothing is configured.
+fn upstream_of(repo: &mut TestRepo, branch: &str) -> Option<String> {
+    let printed = repo.git(&[
+        "for-each-ref",
+        "--format=%(upstream)",
+        &format!("refs/heads/{branch}"),
+    ]);
+    (!printed.is_empty()).then_some(printed)
+}
+
 /// A local branch created from a remote-tracking ref must track it, so the
 /// sidebar badge and push defaults are right from the first checkout.
 #[tokio::test]
@@ -130,17 +142,12 @@ async fn the_upstream_is_the_delete_reference_point() {
     let (exec, cancel) = env();
 
     assert_eq!(
-        branch::upstream_of(&exec, &clone.path, "topic", &cancel)
-            .await
-            .expect("upstream read")
-            .as_deref(),
+        upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/main"),
         "the configured upstream comes back as the full refname"
     );
     assert_eq!(
-        branch::upstream_of(&exec, &clone.path, "keeper", &cancel)
-            .await
-            .expect("upstream read"),
+        upstream_of(&mut clone, "keeper"),
         None,
         "a branch started from a local commit has none"
     );
@@ -163,6 +170,79 @@ async fn the_upstream_is_the_delete_reference_point() {
         .expect("merge check"),
         "the upstream does not reach the new commit, which is the measure git refuses over"
     );
+    let err = branch::delete(&exec, &clone.path, "topic", false, &cancel)
+        .await
+        .expect_err("refused over the upstream while HEAD stands on the tip");
+    assert!(err.to_string().contains("not fully merged"), "{err}");
+}
+
+/// The other half of the reference point: an upstream that is a local
+/// branch (`remote = .`). `%(upstream)` spells it as a `refs/heads/`
+/// name, which is the key the refs listing joins it on
+/// (`BranchItem::upstream_oid`), and git measures the delete against it
+/// just the same — a tip HEAD does not reach goes once that branch does
+/// (measured; what git prints about HEAD is a warning, not a refusal).
+#[tokio::test]
+async fn a_local_upstream_is_the_reference_point_too() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
+    repo.git(&["checkout", "-b", "topic"]);
+    repo.commit_file("b.txt", "two\n", "topic work");
+    repo.git(&["checkout", "main"]);
+    repo.git(&["merge", "--ff-only", "topic"]);
+    repo.git(&["branch", "--set-upstream-to=main", "topic"]);
+    repo.git(&["checkout", "-b", "elsewhere", &root]);
+    let (exec, cancel) = env();
+
+    assert_eq!(
+        upstream_of(&mut repo, "topic").as_deref(),
+        Some("refs/heads/main"),
+        "a local upstream comes back under refs/heads/, the key the listing holds it by"
+    );
+    assert!(
+        !branch::is_merged_into(&exec, &repo.path, "refs/heads/topic", "HEAD", &cancel)
+            .await
+            .expect("merge check"),
+        "HEAD stands on the root and does not reach the tip"
+    );
+    branch::delete(&exec, &repo.path, "topic", false, &cancel)
+        .await
+        .expect("the tip is on its upstream, which is the measure");
+    assert!(!repo.git(&["branch", "--list", "topic"]).contains("topic"));
+}
+
+/// An upstream that names nothing — here one whose branch was deleted
+/// after being set — is still configured (`%(upstream)` prints the
+/// name), but it is not the measure: git falls back to HEAD (measured).
+/// The listing join answers the same way by looking the name up rather
+/// than trusting it, so the delete row reads HEAD there too.
+#[tokio::test]
+async fn an_upstream_that_names_nothing_leaves_head_as_the_reference_point() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file_id("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "later work");
+    repo.git(&["branch", "topic", "main"]);
+    repo.git(&["branch", "helper", "main"]);
+    repo.git(&["branch", "--set-upstream-to=helper", "topic"]);
+    repo.git(&["branch", "-D", "helper"]);
+    repo.git(&["checkout", "-b", "elsewhere", &root]);
+    let (exec, cancel) = env();
+
+    assert_eq!(
+        upstream_of(&mut repo, "topic").as_deref(),
+        Some("refs/heads/helper"),
+        "the configuration outlives the branch it named"
+    );
+    let err = branch::delete(&exec, &repo.path, "topic", false, &cancel)
+        .await
+        .expect_err("HEAD is the measure once the upstream resolves to nothing");
+    assert!(err.to_string().contains("not fully merged"), "{err}");
+
+    repo.git(&["checkout", "main"]);
+    branch::delete(&exec, &repo.path, "topic", false, &cancel)
+        .await
+        .expect("HEAD reaches the tip now");
+    assert!(!repo.git(&["branch", "--list", "topic"]).contains("topic"));
 }
 
 /// What `--set-upstream-to` is given has to be the full remote-tracking
@@ -198,10 +278,7 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     .await
     .expect("set upstream");
     assert_eq!(
-        branch::upstream_of(&exec, &clone.path, "topic", &cancel)
-            .await
-            .expect("upstream read")
-            .as_deref(),
+        upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/feature/x"),
         "the remote branch, not the local one wearing its name"
     );
@@ -237,10 +314,7 @@ async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {
     .await
     .expect("the other working copy is no refusal here");
     assert_eq!(
-        branch::upstream_of(&exec, &clone.path, "topic", &cancel)
-            .await
-            .expect("upstream read")
-            .as_deref(),
+        upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/main")
     );
 }
