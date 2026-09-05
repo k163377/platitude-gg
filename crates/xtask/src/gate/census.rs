@@ -339,6 +339,26 @@ mod tests {
     }
 
     #[test]
+    fn the_terms_beside_the_answer_are_neither_a_name_nor_a_second_answer() {
+        // The window says what it settled on beside the answer
+        // (`WindowCensus.terms`), so both readers here have to survive
+        // words they were not written for: the answer is the first of
+        // them, and the names are the line that says `census=` — which
+        // the answer's line, saying `census page=`, is not.
+        let lines = vec![
+            "INFO bench: census page=settled waited=true state=open finish=2 failed=false \
+             stale=false wipRow=true wipRowStands=true"
+                .to_string(),
+            "INFO bench: census=AppCard,WipTallyRow".to_string(),
+        ];
+        assert!(page_settled_in(&lines));
+        assert_eq!(
+            names_in(&lines),
+            Some(vec!["AppCard".into(), "WipTallyRow".into()])
+        );
+    }
+
+    #[test]
     fn a_run_that_said_nothing_of_the_page_is_read_as_one_still_arriving() {
         let arriving = ["2026-09-02T01:18:33Z  INFO bench: census page=arriving".to_string()];
         assert!(!page_settled_in(&arriving));

@@ -179,23 +179,51 @@ Item {
     /// driver until this says it is done, so a walk is never taken from a window with a read still out.
     signal walked()
     property bool waiting: false
+    /// The picture was called for before the window had settled, so the walk is from a later moment than the
+    /// photograph. Held past `waiting`, which the walk clears before it says anything.
+    property bool waited: false
     function report() {
         if (Harness.autoAct === "")
             return
         if (!census.settled) {
             census.waiting = true
+            census.waited = true
             return
         }
         census.take()
     }
     onSettledChanged: if (census.waiting && census.settled) census.take()
 
+    /// What the window answered `settled` with, beside the answer — so a census that moves says why on the run's own
+    /// line rather than leaving the next reader to reproduce a machine.
+    ///
+    /// **Only the terms that can still differ once the answer is yes.** Every read `pageSettled` waits on is true
+    /// whenever it says settled, so repeating those would say nothing. The rows-against-the-status term is the one
+    /// with a way out: through `failed` or `stale` a run settles on whatever pass is standing, and that pass may hold
+    /// no working-tree row at all. **`WipTallyRow` is the only component that stands or falls with that row** — it
+    /// sits behind `GraphRowDelegate`'s loader, where every other `Wip*` stands in the tree with `visible` false and
+    /// is counted anyway — so these words are what says whether the row it hangs on was there to be met.
+    ///
+    /// `waited` is which moment the walk came from: the picture's, or a later one the run held itself open for.
+    function terms() {
+        const page = census.window ? census.window.curPage : null
+        const said = "waited=" + census.waited
+        if (!page)
+            return said + " state=nopage"
+        const graph = page.pageGraph
+        const state = page.pageTab.state === "" ? "none" : page.pageTab.state
+        return said + " state=" + state + " finish=" + graph.finishCount
+            + " failed=" + graph.failed + " stale=" + graph.stale + " wipRow=" + graph.wipRow
+            + " wipRowStands=" + page.pageWt.wipRowStands
+    }
+
     /// The walk and the two lines, taken once however many times the window settles.
     function take() {
         census.waiting = false
         walk()
-        // Said first, and on a line of its own: everything after `census=` is a name.
-        Harness.report("census page=" + (census.settled ? "settled" : "arriving"))
+        // Said first, and on a line of its own: everything after `census=` is a name. The terms ride on the answer's
+        // line, which is read one word at a time (`gate::census::page_settled_in`).
+        Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms())
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
         census.walked()
     }
