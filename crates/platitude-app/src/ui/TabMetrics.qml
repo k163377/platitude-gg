@@ -91,6 +91,10 @@ QtObject {
     /// **one end**: what the quiet reaches for is the tail, so it never eats more of a name than that end is allowed
     /// to be.
     ///
+    /// **The same count answers the stand-in's own edge** (`TabPin.dissolveW`), where the dark lets go over the run
+    /// rather than stopping at a line. What the two hide is different — this tab's tail, against the tabs behind it —
+    /// but one band holding two dissolve lengths reads as two materials, so there is one number for both.
+    ///
     /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
     readonly property int fadeChars: 3
     function fadeW() {
