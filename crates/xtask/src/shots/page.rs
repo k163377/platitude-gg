@@ -28,6 +28,14 @@
 //! board is re-read (`window.rs`) and it carries nothing else over, so a
 //! filter held only in a variable comes back as `all` on the one press
 //! whose whole point was the picture the reader has just taken.
+//!
+//! And a chip that hides the picture on the stage hands over the top of
+//! what it left standing; one that leaves it there moves nothing, which
+//! is every press of `all`. The opening goes the same way — the fragment
+//! is read before the first picture is chosen, and a board that came
+//! back from F5 held to a seat would otherwise open on a run its own
+//! filter is hiding. The arrows stay the board's own: filter or no, they
+//! walk every view in the order the runs went up.
 
 use super::Run;
 
@@ -122,9 +130,23 @@ const held=new Set(RUNS.map(r=>r.seat));
 const seats=ROSTER.concat([...held].filter(s=>!ROSTER.includes(s)));
 const filter=document.getElementById('filter');
 const chips=new Map();
-function pick(seat){chips.forEach((b,s)=>b.classList.toggle('on',s===seat));
+// The seat the board is held to, '' for the whole of it.
+let only='';
+function pick(seat){only=seat;chips.forEach((b,s)=>b.classList.toggle('on',s===seat));
  side.querySelectorAll('.run').forEach(
   r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))}
+// The first view the filter leaves standing: the top of the board as the
+// reader now sees it. Not `top` — `window.top` cannot be shadowed by a
+// declaration at this scope.
+function first(){return only?FLAT.findIndex(f=>f.seat===only):0}
+// The stage follows the chip that was just pressed: a picture it has
+// hidden is not the one the reader asked for, so the top of what is left
+// comes up instead. One the chip leaves standing stays put — `all`
+// widens the board rather than sending anybody back to the top of it.
+// Called from the chip alone, never from `pick`, which the opening runs
+// before `i` is initialised.
+function follow(){if(!FLAT.length||!only||FLAT[i].seat===only)return;
+ const k=first();if(k>=0)show(k)}
 // The chosen seat goes in the fragment, which is what the reload F5 makes
 // carries over. replaceState rather than location.hash: a file:// page is
 // allowed it (measured) and it leaves no history entry behind every chip.
@@ -134,7 +156,7 @@ function remember(seat){try{history.replaceState(null,'',seat?'#seat-'+seat:'#')
 function chip(seat,text,empty){const b=document.createElement('button');b.textContent=text;
  if(empty){b.disabled=true;b.title='nothing from seat '+seat+' on the board'}
  else{if(seat)b.style.color=ink(seat);chips.set(seat,b);
-  b.onclick=()=>{pick(seat);remember(seat)}}
+  b.onclick=()=>{pick(seat);remember(seat);follow()}}
  filter.append(b)}
 chip('','all',false);
 seats.forEach(s=>chip(s,'seat '+s,!held.has(s)));
@@ -212,7 +234,8 @@ addEventListener('keydown',function(e){
  else if('1248'.indexOf(e.key)>=0){const r=stage.getBoundingClientRect();
   zoomAt(r.width/2,r.height/2,+e.key)}});
 addEventListener('resize',place);
-if(FLAT.length){document.getElementById('empty').remove();show(0)}else{imgs.style.display='none'}
+if(FLAT.length){document.getElementById('empty').remove();show(Math.max(first(),0))}
+else{imgs.style.display='none'}
 "#;
 
 const BODY: &str = r#"<div id="wrap"><div id="side"><div id="head">
@@ -361,6 +384,26 @@ mod tests {
         let page = render(&[run("a", "chip padding")]);
         assert!(page.contains("history.replaceState(null,'',seat?'#seat-'+seat:'#')"));
         assert!(page.contains("/^#seat-(.+)$/.exec(location.hash)"));
+    }
+
+    /// The chip moves the stage as well as the list. A board held to one
+    /// seat while showing a picture from another says the reader is
+    /// looking at their own work when they are not.
+    #[test]
+    fn a_chip_that_hides_the_shown_picture_hands_over_the_top_of_what_is_left() {
+        let page = render(&[run("a", "chip padding"), run("e", "graph lanes")]);
+        assert!(page.contains("b.onclick=()=>{pick(seat);remember(seat);follow()}"));
+        assert!(page.contains("function first(){return only?FLAT.findIndex(f=>f.seat===only):0}"));
+        // And leaves it alone where the chip hides nothing: `all` widens
+        // the board, and a picture already standing under the chosen
+        // seat is the one the reader was reading.
+        assert!(
+            page.contains("function follow(){if(!FLAT.length||!only||FLAT[i].seat===only)return")
+        );
+        // The same on the way in. The fragment is read before the first
+        // picture is chosen, so the board that comes back from F5 held
+        // to a seat opens on that seat's top rather than the board's.
+        assert!(page.contains("show(Math.max(first(),0))"));
     }
 
     /// A pair reaches the page as one view: the flag the script reads to
