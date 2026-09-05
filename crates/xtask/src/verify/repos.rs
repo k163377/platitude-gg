@@ -74,19 +74,15 @@ pub(super) fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
 ///
 /// Built under one root so the paths differ only where the names do: an
 /// answer that came out right because each repository sat in a directory
-/// of its own would say nothing about the rule.
+/// of its own would say nothing about the rule. That root is this run's
+/// own (`demo::claim_root`) — a shared one hands two runs the same five
+/// repositories to build and then open.
 ///
 /// `solo` comes last and carries the history, for the reason the ladder's
 /// last one does: the tab opened last is the one in front, so that is the
 /// page under the strip in the picture.
 pub(super) fn tab_name_repos() -> Result<Vec<PathBuf>, String> {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_nanos();
-    let root = std::env::temp_dir()
-        .join("pg-demo")
-        .join(format!("tab-name-{nanos}"));
+    let root = crate::demo::claim_root("tab-name")?;
     let mut made = Vec::with_capacity(5);
     for (under, name) in [
         (Some("foo"), "repo"),

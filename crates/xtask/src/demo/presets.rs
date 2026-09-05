@@ -1,7 +1,6 @@
 //! The preset table and the command entry that drives it.
 
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
@@ -45,7 +44,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 }
 
 /// Where the repository gets built: what `--at` named, resolved against
-/// the directory the command was typed in, or a fresh one under the
+/// the directory the command was typed in, or one claimed under the
 /// system temp.
 ///
 /// **A relative `--at` is written into the repository and read back by a
@@ -60,16 +59,19 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     match at {
         Some(dir) => std::path::absolute(&dir)
             .map_err(|e| format!("could not resolve {}: {e}", dir.display())),
-        None => {
-            let nanos = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| e.to_string())?
-                .as_nanos();
-            Ok(std::env::temp_dir()
-                .join("pg-demo")
-                .join(format!("{preset}-{nanos}")))
-        }
+        None => claim_root(preset),
     }
+}
+
+/// A directory of this run's own to build a demo repository in.
+///
+/// **`pg-demo` is one directory for the whole machine**, so the name
+/// under it is the whole of what keeps two runs apart, and a name read
+/// off a clock is not enough — the seats build their repositories
+/// concurrently, and two that share a root `git init` into each other.
+/// `claim_dir` makes `create_dir` say which run owns the answer.
+pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
+    crate::verify::claim_dir(&std::env::temp_dir().join("pg-demo"), stem)
 }
 
 /// Builds `preset` with the work tree called `name` rather than `repo` —
@@ -148,6 +150,39 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
 #[cfg(test)]
 mod tests {
     use super::root_for;
+
+    /// `pg-demo` is one directory for every seat on the machine, so the
+    /// root a preset is built in is the whole of what keeps two runs
+    /// apart — the repositories, the `origin.git` they push to and the
+    /// configuration they are isolated by all sit in it. The gate starts
+    /// a side's verbs together (`gate::verbs`), and each of them builds
+    /// its own repository, which is where a clock that two of them read
+    /// inside one tick would have handed them one root to `git init` in.
+    #[test]
+    fn preset_runs_started_together_are_handed_a_root_each() {
+        let start = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let threads: Vec<_> = (0..16)
+            .map(|_| {
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    root_for("basic", None).expect("a root for this run")
+                })
+            })
+            .collect();
+        let made: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().expect("a claiming thread"))
+            .collect();
+
+        let unique: std::collections::BTreeSet<_> = made.iter().collect();
+        assert_eq!(unique.len(), made.len(), "two runs were handed one root");
+        for root in made {
+            // Empty, and so nobody else's: the claim made it rather than
+            // finding it, which is what `create_dir_all` could not say.
+            std::fs::remove_dir(&root).expect("an empty directory this call created");
+        }
+    }
 
     /// A relative `--at` reaches `origin`'s URL, which git resolves
     /// against a directory of its own choosing — so it has to be made

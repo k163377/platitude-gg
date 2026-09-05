@@ -17,5 +17,6 @@ mod stack;
 mod tags;
 mod worktrees;
 
+pub(crate) use presets::claim_root;
 pub use presets::{create, create_named, run};
 pub(crate) use scale::pasted;
