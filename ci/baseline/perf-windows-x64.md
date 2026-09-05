@@ -186,11 +186,14 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
   残りはページの QML オブジェクト群)。**行選択と diff の +26 もヒープ**(+23、+80K ブロック)
 - **スクロールの +65 はヒープではない**(busy +2)。**フォントの写像 +30** と、**ヒープ外の
   private +30**(2〜4MB の確保が 6 → 14 個)の 2 つで、どちらも同じ引き金で出る(次項)
-- **フォント 31MB の正体は「一族に無いグリフを Qt がフォント DB の全 family をアルファベット順に
-  開いて探す」歩き方**で、CJK ではない。165 ファイルが各 0.1–1.5MB ずつ触られていて、
+- **フォント 31MB の正体は「一族に無いグリフ 1 つで Qt がフォント DB の全 family を populate する」
+  代金**で、CJK ではない(fallback 一覧を作る `QPlatformFontDatabase::fallbacksForFamily` が
+  writing system で絞る前に全 family へ `ensurePopulated()` を当て、DirectWrite の populate は
+  family ごとに face を作って残す — 検索は Segoe UI Emoji で止まるが、一覧を作った時点で全部
+  開いている)。165 ファイルが各 0.1–1.5MB ずつ触られていて、
   `calibri` / `cambria` / `corbel` / `constantia` / `ebrima` / `gabriola` / `Nirmala` …
-  CJK と無関係なラテン字体まで並ぶ(`attribution.txt` の resident by file)。歩いて作った
-  font engine(DirectWrite の face + Qt のエンジン)は残るので、ヒープ外の private +30 も
+  CJK と無関係なラテン字体まで並ぶ(`attribution.txt` の resident by file)。populate で作った
+  face(DirectWrite の face + Qt のエンジン)は残るので、ヒープ外の private +30 も
   同じ歩きの代金。**引き金はコーパスの 2,000 行に 2 つ入る絵文字の subject**(`corpus::shape` —
   基準リポジトリの窓の写し)。同じ demo リポジトリ(`basic`、日本語の subject 入り)を
   開くだけの settled で切り分けると: 絵文字なし 164.7–165.6(フォント 2.8MB / 9 ファイル)、
@@ -198,8 +201,9 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
   165–166 ファイル、private +25)**。**見えている行に絵文字が 1 つあれば +55MB**、日本語の
   subject は何も足さない。QML の `font` 型には `families` が無く(Qt 6.10.3 の
   `QQuickFontValueType` は `family` と `contextFontMerging` まで)、qtbridge にも `QFont` の口が
-  無いので、探索の順を先に当てる手は QML からは書けない — 残件は
-  [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能
+  無く、あっても `QFontDatabase` の fallback / emoji API は一覧の先頭に前置きするだけで populate を
+  止めない(使い捨てプローブの実測: 90 family / 162 ファイルのまま。止まるのは色フォントを primary に
+  した run だけ)— 扱いは [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能
 - **image の 71MB は動かない**(窓だけ 66.1 → 判定 71.1。増分 5MB は文法ハイライトの経路が
   触った exe のページ)
 

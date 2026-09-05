@@ -8,7 +8,7 @@
 
 - `details-failure --preset perf`: 実在しないOIDの詳細を要求し、`details_failure loading=false error=true` とPNGで確認する。詳細失敗は要求世代に属し、現要求だけがスピナーを下ろして既存エラー面へ渡す。
 
-- `perf none|details|diff|scroll|scroll-none --preset perf`: 性能ドライバーの表示契約。未選択、詳細、diff、diffを閉じて表示グラフをスクロール、未選択スクロールの5通り。全て `perf_complete` の状態とPNGで判定する。offscreenのfps・メモリは性能値に使わず、実測は `cargo xtask perf`。空コミットを持つ `deep` はdiff要求を失敗させるため、変更ファイル付きの専用presetを使う。
+- `perf none|details|diff|scroll|scroll-none|font-walk --preset perf`: 性能ドライバーの表示契約。未選択、詳細、diff、diffを閉じて表示グラフをスクロール、未選択スクロールの5通りと、較正 run の形 `font-walk`。全て `perf_complete` の状態とPNGで判定する。offscreenのfps・メモリは性能値に使わず、実測は `cargo xtask perf`。空コミットを持つ `deep` はdiff要求を失敗させるため、変更ファイル付きの専用presetを使う。 `font-walk` は `cargo xtask perf` の較正 run の形(未選択・スクロール無し、`perf_done` の前に `WindowPerfDriver` が一族に無いグリフを 1 つ組んで `perf_font_walk_begin` / `done` / `settled` の 3 行を言う)で、判定は `settled` の行。offscreen の FreeType DB にはフォントが無いので歩きの代金はここでは出ず、実測は `perf` の `font walk` 行(rules-refs/app-ui.md)。
 
 書き込み操作の headless 検証は **`PG_AUTO_ACT` = 動詞 / `PG_AUTO_ACT_ARG`**:
 
