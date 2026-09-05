@@ -174,6 +174,15 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     Ok(cmd)
 }
 
+/// Whether this verb's subject is a second process finding the settings
+/// held. Every other run has a store nobody else can be in — its config
+/// directory is made for it and thrown away after — so one that reports
+/// the store taken is a broken run, and [`super::outcome`] reads this to
+/// tell the two apart.
+pub(super) fn stages_a_held_store(verb: &str) -> bool {
+    verb == "solo" || verb == "gate-sweep"
+}
+
 /// Holds the settings lock for the two verbs whose subject is a *second*
 /// process finding it held.
 ///
@@ -183,7 +192,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
 /// is spelled again here, and a drift shows up as the run reporting
 /// `blocked=false`.
 fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<std::fs::File>, String> {
-    if verb != "solo" && verb != "gate-sweep" {
+    if !stages_a_held_store(verb) {
         return Ok(None);
     }
     let path = config_dir.join("lock");

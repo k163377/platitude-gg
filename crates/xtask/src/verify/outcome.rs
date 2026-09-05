@@ -23,6 +23,17 @@ pub(super) struct Outcome {
     pub(super) watchdog_expired: bool,
     pub(super) write_failures: usize,
     pub(super) allow_write_failure: bool,
+    /// Whether the app was refused the settings it was handed *and
+    /// nothing staged that* — the two verbs whose subject is a held
+    /// store are not counted here ([`super::child`]).
+    ///
+    /// A run's config directory is made for it alone, so the only
+    /// reading left is that something else got hold of it, and the run
+    /// goes on with an empty store and a window about *that*, which the
+    /// verb's own waiting never comes back from. Said in the second it
+    /// happens rather than read off the top of the log after the
+    /// watchdog has spent two minutes.
+    pub(super) store_refused: bool,
     /// What a verb whose failure the camera cannot see has to be caught
     /// saying. `solo` photographs a perfectly good ordinary window if the
     /// lock was never held, `details-fit` frames a pane whose content ran
@@ -41,6 +52,7 @@ impl Outcome {
             && !self.timed_out
             && !self.watchdog_expired
             && !self.write_sank_it()
+            && !self.store_refused
             && (self.must_say.is_none() || self.said)
     }
 
@@ -73,6 +85,13 @@ pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> 
             .filter(|l| l.contains("write failed"))
             .count(),
         allow_write_failure: opts.allow_write_failure,
+        // ASCII only, and so readable on both sides: a Windows Qt writes
+        // its log lines in the local code page (verify-ui skill).
+        store_refused: !super::child::stages_a_held_store(&opts.verb)
+            && err_lines
+                .iter()
+                .chain(out_lines.iter())
+                .any(|l| l.contains("another platitude-gg is using these settings")),
         must_say,
         said: must_say.is_none_or(|wanted| {
             err_lines
@@ -168,6 +187,14 @@ pub(super) fn announce(
              --allow-write-failure."
         );
     }
+    if outcome.store_refused {
+        println!(
+            "  the settings this run was handed were already held, so it opened the window \
+             that says so rather than the one the verb is about. Nothing else knows that \
+             directory, so two runs were given one: on the container side, the host \
+             directory mounted at /out."
+        );
+    }
     if outcome.passed() {
         Ok(())
     } else {
@@ -187,9 +214,28 @@ mod tests {
         watchdog_expired: false,
         write_failures: 0,
         allow_write_failure: false,
+        store_refused: false,
         must_say: None,
         said: true,
     };
+
+    /// A run's settings are its own — nothing else knows the directory —
+    /// so a store that came back held means two runs were handed one, and
+    /// the picture is of a window about that. Waiting out the watchdog to
+    /// discover it costs two minutes and says only that the verb never
+    /// finished.
+    #[test]
+    fn a_run_refused_its_own_settings_fails_where_it_stands() {
+        let refused = Outcome {
+            store_refused: true,
+            ..WELL
+        };
+        assert!(!refused.passed());
+        assert!(
+            !refused.watchdog_expired,
+            "the point is that this is said before the watchdog gets there"
+        );
+    }
 
     #[test]
     fn a_verb_the_harness_stages_has_to_be_caught_saying_so() {
