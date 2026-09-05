@@ -69,6 +69,15 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           one, so an installation older than the supported
                           minimum can be photographed working. Implied by
                           the verbs old-git and old-git-card.
+        --other-git <ver> stand a second git beside the pictures, answering
+                          <ver>, and tell the app where it is — a git that
+                          answers and is *not* the one the run is on, which
+                          is the one state the settings screen's git
+                          chapter grows a button for and the one no path
+                          names on both a desk and a container. Takes the
+                          place of --old-git rather than joining it, and
+                          the runs about it (settings-git-leave,
+                          settings-git-path other) imply one.
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they

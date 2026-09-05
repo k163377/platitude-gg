@@ -150,6 +150,93 @@ Item {
         }
     }
 
+    // PG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
+    // having answered. The argument is the path to write, or none for the resting state — an empty box, which is
+    // "whichever git PATH resolves" and is what a fresh settings directory comes up holding.
+    //
+    // **The picture cannot judge this one.** A path is drawn the same whether or not there is a binary at the end of
+    // it, and the sentence under the box arrives a subprocess after the box does — so a run that photographed the
+    // moment it typed would frame `Asking for the version…` and read as green. What is waited on is the answer
+    // itself, and the line says which of the four it was.
+    //
+    // Typed through the box's own door (`SettingsAppPane.autoTypeGitPath` = text, then the edit being finished with),
+    // never by writing `AppBackend.gitPath` — that would photograph the wiring cut (規約 §UI 自動化の因果性). Writing
+    // the settings file is this run's to do: `verify::run` gives every run a config directory of its own, so what is
+    // written here is the harness's own value and not the machine's (同 §).
+    SampleTimer {
+        id: gitPathTimer
+        running: Harness.autoAct === "settings-git-path"
+        /// The path has been typed. The run with no argument never types, and photographs what the screen opened on.
+        property bool acted: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("app")
+                return
+            }
+            if (!gitPathTimer.acted) {
+                // `in-use` is the path this run is already spawning — the box holding it is a box holding the git
+                // already running, which is the one thing that does *not* offer a restart. `other` is the second git
+                // the run was staged with (`--other-git`), which is what does: a git that answers and is not this
+                // one, on either OS, without the argument naming a path.
+                if (Harness.autoActArg === "in-use")
+                    acts.appPane.autoTypeGitPath(AppBackend.gitPathInUse)
+                else if (Harness.autoActArg === "other")
+                    acts.appPane.autoTypeGitPath(Harness.otherGit)
+                else if (Harness.autoActArg !== "")
+                    acts.appPane.autoTypeGitPath(Harness.autoActArg)
+                gitPathTimer.acted = true
+                return
+            }
+            // The screen asks as it opens, so there is an answer coming either way; the run that typed has a second
+            // one after it, and this is the state of whichever ask is outstanding.
+            if (AppBackend.gitPathState === "" || AppBackend.gitPathState === "checking")
+                return
+            gitPathTimer.stop()
+            Harness.report("git_path " + acts.appPane.gitPathTally())
+            window.finishAutoAct()
+        }
+    }
+
+    // PG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
+    // typed is the second git this run was staged with (`--other-git`), which is what the way out has to run into.
+    //
+    // **Neither half is a picture.** A screen that stayed is drawn exactly like one nobody asked to close, and the
+    // `✕` turning is a shape a run has to be told about — so the line says that the way out was taken, that the
+    // screen is still up, and that what is holding it is the offer rather than an unsaved identity.
+    SampleTimer {
+        id: gitLeaveTimer
+        running: Harness.autoAct === "settings-git-leave"
+        /// The path has been typed, and the way out has been taken.
+        property bool typed: false
+        property bool left: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("app")
+                return
+            }
+            if (!gitLeaveTimer.typed) {
+                acts.appPane.autoTypeGitPath(Harness.otherGit)
+                gitLeaveTimer.typed = true
+                return
+            }
+            // The offer is what the way out has to run into, and it arrives a subprocess after the typing.
+            if (!AppBackend.gitPathOffersRestart)
+                return
+            if (!gitLeaveTimer.left) {
+                settingsDialog.escapeOut()
+                gitLeaveTimer.left = true
+                return
+            }
+            gitLeaveTimer.stop()
+            Harness.report("settings_git_leave offers=" + AppBackend.gitPathOffersRestart
+                           + " armed=" + settingsDialog.askingGitPath
+                           + " unsaved=" + settingsDialog.unsavedIdentities
+                           + " open=" + settingsDialog.opened)
+            Harness.report("git_path " + acts.appPane.gitPathTally())
+            window.finishAutoAct()
+        }
+    }
+
     // PG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
     // row, in git's own spelling (`true` / `input` / `false`) or `inherited` for the row that writes nothing.
     //

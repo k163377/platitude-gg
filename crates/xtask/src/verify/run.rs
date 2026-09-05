@@ -10,6 +10,58 @@ use super::repos::{body_for, folder_for, seed_merge_tool};
 use super::shim::stage_old_git;
 use super::{child, outcome, repos, seed};
 
+/// Which gits a run is staged with: the version an old one answers, the
+/// PATH the app is handed, and where a second one stands.
+///
+/// **A run asks for one of the two, never both** — the copy that stands in
+/// for git reads one pair of variables to know what it is, and two of them
+/// on one app would be the same copy told two things.
+fn gits_for<'a>(
+    opts: &'a super::options::Options,
+    shot_dir: &std::path::Path,
+    path: &std::ffi::OsString,
+) -> Result<(&'a str, std::ffi::OsString, Option<std::path::PathBuf>), String> {
+    // The three verbs named for it bring their own version, so that the
+    // run reads `verify-ui old-git` and nothing else. Below any minimum
+    // this app will ever have: minimums only go up.
+    let old_git = match (opts.old_git.as_str(), opts.verb.as_str()) {
+        ("", "old-git" | "old-git-card" | "old-git-fold") => "2.42.0",
+        (asked, _) => asked,
+    };
+    if !old_git.is_empty() && !opts.other_git.is_empty() {
+        return Err("--old-git and --other-git are one git each; a run takes one".into());
+    }
+    if !old_git.is_empty() {
+        let staged = stage_old_git(shot_dir, path)?;
+        println!("git for this run: {old_git} (real git behind it)");
+        return Ok((old_git, staged, None));
+    }
+    // The runs whose subject is a second git bring their own version, so
+    // that the line reads `verify-ui settings-git-leave` and nothing else
+    // — and so a run typed without one waits out its watchdog for a path
+    // that was never staged. A plain modern number: the shim only prints
+    // it, and all it has to be is at or above the supported minimum. If a
+    // minimum ever passes it the shots turn red and this moves up.
+    let asks_for_one = opts.verb == "settings-git-leave"
+        || (opts.verb == "settings-git-path" && opts.arg == "other");
+    let other = match (opts.other_git.as_str(), asks_for_one) {
+        ("", true) => "2.55.0",
+        (asked, _) => asked,
+    };
+    if other.is_empty() {
+        return Ok((old_git, path.clone(), None));
+    }
+    // A second git, standing where nothing resolves to it, so a run can
+    // point the settings box at a git that answers and is not the one it
+    // is running.
+    let staged = super::shim::stage_other_git(shot_dir)?;
+    println!(
+        "a second git for this run: {} answering {other}",
+        staged.display()
+    );
+    Ok((other, path.clone(), Some(staged)))
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
     let (root, _busy) = crate::still::announced("verify-ui")?;
@@ -90,20 +142,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             &opened
         }
     );
-    // The three verbs named for it bring their own version, so that the
-    // run reads `verify-ui old-git` and nothing else. Below any minimum
-    // this app will ever have: minimums only go up.
-    let old_git = match (opts.old_git.as_str(), opts.verb.as_str()) {
-        ("", "old-git" | "old-git-card" | "old-git-fold") => "2.42.0",
-        (asked, _) => asked,
-    };
-    let child_path = if old_git.is_empty() {
-        path.clone()
-    } else {
-        let staged = stage_old_git(&shot_dir, &path)?;
-        println!("git for this run: {old_git} (real git behind it)");
-        staged
-    };
+    let (shim_version, child_path, other_git) = gits_for(&opts, &shot_dir, &path)?;
 
     // Which machine a run happens on must not reach the picture, and git
     // takes its answer to "who is sitting here" from two places the run
@@ -134,7 +173,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         child_path: &child_path,
         path: &path,
         arg: &arg,
-        old_git,
+        shim_version,
+        other_git: other_git.as_deref(),
         repos: &repos,
         opts: &opts,
     })?;

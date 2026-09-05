@@ -60,6 +60,66 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settled=true loading=false open=true typing=true",
     },
+    // Which git the app runs, and what that binary answered. **Nothing
+    // here is a picture**: a path is drawn the same whether or not there
+    // is anything at the end of it, and the sentence under the box takes
+    // a subprocess to arrive — so a run photographed at the moment it
+    // typed frames "Asking for the version…" and reads as green.
+    //
+    // The three rows are the three states the chapter has. With no
+    // argument the box is empty and the store is empty — the resting
+    // state a fresh settings directory comes up in — and the git on
+    // `PATH` answered it. **Which** of the two answers is not claimed:
+    // the container runs the supported minimum, a desk runs the newest,
+    // and the run that photographs an old one is handed its git by
+    // `--old-git`.
+    //
+    // `in-use` types the path this run is already spawning: **a box holding
+    // the git already running offers nothing**, whatever it is spelled
+    // like, and that is the row that says so. `other` types the second git
+    // the run was staged with (`--other-git`) and gets the button. **The
+    // flags are one claim each and a picture answers none**: `offers=` is
+    // the rule the press is guarded by, and `held=` is the frozen copy the
+    // button was drawn from — a button whose word says `Restart to apply`
+    // over a `holdMs` of zero photographs exactly like one that holds, and
+    // would fall through under a hand.
+    //
+    // With a path that has nothing at the end of it, the refusal has to
+    // be the *missing* one: a run that fell back to "it ran and said
+    // something else" would be photographing the wrong sentence, and
+    // `offers=false` is what says the loud button stayed away.
+    // **Which version is not claimed anywhere here.** The container runs
+    // the supported minimum, a desk runs the newest, and the run that
+    // photographs an old one is handed its git by `--old-git` — including
+    // the `in-use` run, which is how the offered shape is seen over a git
+    // below the minimum. What every row claims instead is the run of
+    // flags, which is why they stand together in the line.
+    Verb {
+        name: "settings-git-path",
+        when: &[
+            (Arg::Is(""), "git_path shown= stored= answered=true"),
+            (
+                Arg::Is("in-use"),
+                "answered=true offers=false held=false restart=false",
+            ),
+            (
+                Arg::Is("other"),
+                "answered=true offers=true held=true restart=false",
+            ),
+        ],
+        plain: "answered=false offers=false held=false restart=false state=missing",
+    },
+    // The way out taken over a git waiting to be applied. **Nothing here
+    // is a picture**: a screen that stayed is drawn exactly like one
+    // nobody asked to close, and the four halves of the claim are the way
+    // out having been taken, the screen still standing, the mark turned,
+    // and *what* is holding it — an unsaved identity would hold the same
+    // screen the same way, and this must be the offer.
+    Verb {
+        name: "settings-git-leave",
+        when: &[],
+        plain: "settings_git_leave offers=true armed=true unsaved=0 open=true",
+    },
     // The rail is the one way between the two categories that no other
     // verb travels: the rest name a category before the screen is up. A
     // picture of the git chapters cannot say which of the two put them

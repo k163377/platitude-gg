@@ -41,6 +41,13 @@ pub(crate) struct Knobs {
     /// `PG_SHOT_DIR` — where a headless run leaves its pictures.
     /// Backslashes forward: QML takes it as a URL.
     pub shot_dir: String,
+    /// `PG_OTHER_GIT` — a second git this run may be pointed at, staged
+    /// beside the pictures and deliberately **not** on PATH. What the
+    /// settings screen's chapter needs to be photographed at all: the one
+    /// state it grows a button for is a git that answers and is not the
+    /// one running, and a run cannot name a second installation that
+    /// exists on both a desk and a container (`--other-git`).
+    pub other_git: String,
     /// `PG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
     /// bounded. It never chooses when a screenshot is taken.
     pub watchdog_ms: i32,
@@ -135,6 +142,7 @@ fn read() -> Knobs {
         act_arg: text("PG_AUTO_ACT_ARG"),
         open: text("PG_AUTO_OPEN"),
         shot_dir: text("PG_SHOT_DIR").replace('\\', "/"),
+        other_git: text("PG_OTHER_GIT"),
         watchdog_ms: text("PG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
         select: on("PG_AUTO_SELECT"),
         scroll: on("PG_AUTO_SCROLL"),

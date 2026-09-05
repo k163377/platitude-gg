@@ -35,6 +35,10 @@ pub(super) struct Options {
     /// passes everything else to the real one (`git_shim`). Empty is the
     /// ordinary case: the git this machine has.
     pub(super) old_git: String,
+    /// A second git the run may point the settings box at: staged beside
+    /// the pictures, never on PATH (`shim::stage_other_git`). The version
+    /// it answers `--version` with is what is asked for here.
+    pub(super) other_git: String,
     /// What the pictures show, for the board. Empty falls back to the
     /// verb and its argument, which is a poor name but a true one — the
     /// board would rather hold a weakly named run than lose the run.
@@ -92,6 +96,10 @@ impl Options {
             words.push("--old-git".to_string());
             words.push(self.old_git.clone());
         }
+        if !self.other_git.is_empty() {
+            words.push("--other-git".to_string());
+            words.push(self.other_git.clone());
+        }
         Some(words.join(" "))
     }
 }
@@ -141,6 +149,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         restore: false,
         allow_write_failure: false,
         old_git: String::new(),
+        other_git: String::new(),
         label: String::new(),
         no_board: false,
         no_census: false,
@@ -184,6 +193,9 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--allow-write-failure" => opts.allow_write_failure = true,
             "--old-git" => {
                 opts.old_git = it.next().ok_or("--old-git needs a version")?.clone();
+            }
+            "--other-git" => {
+                opts.other_git = it.next().ok_or("--other-git needs a version")?.clone();
             }
             // A misspelled flag must not ride on as a verb argument — the
             // run would go out under different conditions than asked for.

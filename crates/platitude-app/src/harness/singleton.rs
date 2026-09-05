@@ -35,6 +35,9 @@ pub struct Harness {
     /// Where a headless run leaves its pictures; empty is a run that takes
     /// none.
     shot_dir: String,
+    /// A second git this run may be pointed at, staged beside the pictures
+    /// and not on PATH; empty where none was asked for (`--other-git`).
+    other_git: String,
     /// The deadline that keeps a broken causal run bounded. It never
     /// chooses when a screenshot is taken.
     auto_watchdog_ms: i32,
@@ -74,6 +77,7 @@ impl Default for Harness {
             auto_act_arg: knobs.act_arg.clone(),
             auto_open: knobs.open.clone(),
             shot_dir: knobs.shot_dir.clone(),
+            other_git: knobs.other_git.clone(),
             auto_watchdog_ms: knobs.watchdog_ms,
             auto_select: knobs.select,
             auto_scroll: knobs.scroll,
@@ -97,6 +101,7 @@ impl Harness {
     qproperty!("autoActArg", Member = auto_act_arg, Constant);
     qproperty!("autoOpen", Member = auto_open, Constant);
     qproperty!("shotDir", Member = shot_dir, Constant);
+    qproperty!("otherGit", Member = other_git, Constant);
     qproperty!("autoWatchdogMs", Member = auto_watchdog_ms, Constant);
     qproperty!("autoSelect", Member = auto_select, Constant);
     qproperty!("autoPerf", Member = auto_perf, Constant);

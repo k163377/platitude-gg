@@ -12,7 +12,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use super::options::Options;
-use super::shim::{SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git};
+use super::shim::{OTHER_GIT, SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git};
 
 /// Grace after the app-side watchdog before the parent reaps a wedged GUI.
 const GRACE_MS: u64 = 20_000;
@@ -29,7 +29,11 @@ pub(super) struct Start<'a> {
     pub(super) child_path: &'a OsString,
     pub(super) path: &'a OsString,
     pub(super) arg: &'a str,
-    pub(super) old_git: &'a str,
+    /// The version the staged copy of this binary answers `--version`
+    /// with, whether it stands on PATH (`--old-git`) or beside the
+    /// pictures (`--other-git`); empty where neither was asked for.
+    pub(super) shim_version: &'a str,
+    pub(super) other_git: Option<&'a std::path::Path>,
     pub(super) repos: &'a [PathBuf],
     pub(super) opts: &'a Options,
 }
@@ -93,7 +97,8 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         child_path,
         path,
         arg,
-        old_git,
+        shim_version,
+        other_git,
         repos,
         opts,
     } = *start;
@@ -118,12 +123,17 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
-    if !old_git.is_empty() {
-        // The two the copy on the front of PATH reads: what to answer
-        // `--version` with, and who to hand the rest to. Both are set on
-        // the app, so every git it starts inherits them.
-        cmd.env(SHIM_VERSION, old_git)
+    // The two the staged copy reads to be a git: what to answer
+    // `--version` with, and who to hand the rest to. Both are set on the
+    // app, so every git it starts inherits them — which is how the copy
+    // works whether it stands on PATH (`--old-git`) or somewhere only the
+    // settings box points at (`--other-git`, whose place the app is told).
+    if !shim_version.is_empty() {
+        cmd.env(SHIM_VERSION, shim_version)
             .env(SHIM_REAL, real_git(path)?);
+    }
+    if let Some(other) = other_git {
+        cmd.env(OTHER_GIT, other);
     }
     // The automation hooks report through tracing at info; without this
     // their lines never reach the verdict output.

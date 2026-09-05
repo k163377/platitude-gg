@@ -10,6 +10,9 @@ use std::process::{Command, ExitCode};
 pub(super) const SHIM_VERSION: &str = "PG_SHIM_GIT_VERSION";
 /// The git that copy passes everything else to.
 pub(super) const SHIM_REAL: &str = "PG_SHIM_REAL_GIT";
+/// Set on the app when `--other-git` asks for one: where a second git
+/// stands, staged beside the pictures and **not** on PATH.
+pub(super) const OTHER_GIT: &str = "PG_OTHER_GIT";
 
 /// Stands in for git when this binary was copied onto a run's PATH under
 /// git's name (`--old-git`), and returns `None` in every other process —
@@ -52,6 +55,24 @@ pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
         .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file())
         .ok_or_else(|| format!("--old-git needs a real git on PATH; no {name} found on it"))
+}
+
+/// Stands a second git beside the pictures and leaves PATH alone,
+/// returning where it is.
+///
+/// **The one thing a run cannot find for itself.** The settings screen's
+/// git chapter grows its button only for a git that answers and is not the
+/// one running, and no path names a second installation on both a desk and
+/// a container. This one is the same copy `--old-git` puts on PATH, put
+/// somewhere nothing resolves to instead — so a run can point the box at
+/// it and the app spawns it exactly as it would any other git.
+pub(super) fn stage_other_git(shot_dir: &std::path::Path) -> Result<PathBuf, String> {
+    let dir = shot_dir.join("gitother");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+    let me = std::env::current_exe().map_err(|e| format!("could not find this binary: {e}"))?;
+    let other = dir.join(if cfg!(windows) { "git.exe" } else { "git" });
+    std::fs::copy(&me, &other).map_err(|e| format!("could not write {}: {e}", other.display()))?;
+    Ok(other)
 }
 
 /// Puts a copy of this binary on the front of `path` under git's name, and
