@@ -199,6 +199,21 @@ impl Sandbox {
         std::fs::write(&path, text).expect("write");
     }
 
+    /// The core's leaf module `refs` changed to a body nobody else has,
+    /// with a unit test of its own: the smallest change that owes the
+    /// core's unit tests and nothing beside them. A distinct `n` per
+    /// test keeps two tests' commits from being one object.
+    fn write_refs(&self, dir: &Path, n: u32) {
+        self.write(
+            dir,
+            "crates/platitude-core/src/refs.rs",
+            &format!(
+                "pub fn refs() {{ let _ = {n}; }}\n#[cfg(test)]\nmod tests {{\n    #[test]\n    \
+                 fn t() {{}}\n}}\n"
+            ),
+        );
+    }
+
     fn commit_all(&self, dir: &Path, message: &str, extra: &[(&str, &str)]) -> String {
         self.git_ok(dir, &["add", "-A"]);
         self.git(dir, &["commit", "-q", "-m", message], extra)
@@ -434,11 +449,7 @@ fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
 #[test]
 fn a_leaf_core_change_stays_narrow() {
     let sb = Sandbox::new("leaf");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 2; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 2);
     sb.commit_all(&sb.seat, "feat(core): refs", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
@@ -668,11 +679,7 @@ fn a_step_is_asked_again_only_when_what_it_reads_changed() {
     // tests read stash and its readers, none of which moved, so that
     // step stays green. The verbs and the shipped build read the whole
     // app and core — the core moved, so they run again.
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 4; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 4);
     sb.commit_all(&sb.seat, "feat(core): four", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let second = without_always(&sb.ran());
@@ -690,11 +697,7 @@ fn a_step_is_asked_again_only_when_what_it_reads_changed() {
 #[test]
 fn a_host_only_run_stamps_half_and_the_full_run_reuses_it() {
     let sb = Sandbox::new("host-only");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 5; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 5);
     sb.commit_all(&sb.seat, "feat(core): five", &[]);
     let text = sb.gate_ok(&sb.seat, &["--host-only"]);
     assert!(text.contains("host-only"), "{text}");
@@ -720,11 +723,7 @@ fn a_host_only_run_stamps_half_and_the_full_run_reuses_it() {
 #[test]
 fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     let sb = Sandbox::new("hook");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 6; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 6);
     let tip = sb.commit_all(&sb.seat, "feat(core): six", &[]);
     let main_before = sb.main_sha();
 
@@ -813,11 +812,7 @@ fn the_users_own_git_moves_main_with_no_stamp() {
 #[test]
 fn a_red_step_leaves_main_where_it_was() {
     let sb = Sandbox::new("red");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 7; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 7);
     sb.commit_all(&sb.seat, "feat(core): seven", &[]);
     let (ok, text) = sb.gate(
         &sb.seat,
@@ -845,11 +840,7 @@ fn land_rebases_then_gates_then_fast_forwards() {
     let sb = Sandbox::new("land");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
     let moved = sb.commit_all(&sb.repo, "docs: main moved", &[("PG_GATE_SKIP", "1")]);
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 8; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 8);
     let before = sb.commit_all(&sb.seat, "feat(core): eight", &[]);
     assert!(
         sb.git(
@@ -899,11 +890,7 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
         "feat(xtask): main moved",
         &[("PG_GATE_SKIP", "1")],
     );
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 16; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
 
     let slot = sb.seat.join("target").join("debug");
@@ -981,11 +968,7 @@ fn a_pseudo_run_off_main_is_reused_after_the_rebase() {
     let sb = Sandbox::new("pseudo");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
     sb.commit_all(&sb.repo, "docs: main moved", &[("PG_GATE_SKIP", "1")]);
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 9; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 9);
     let tip = sb.commit_all(&sb.seat, "feat(core): nine", &[]);
     let text = sb.gate_ok(&sb.seat, &[]);
     assert!(text.contains("off main"), "{text}");
@@ -1012,11 +995,7 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     // Main's move touches the stash module.
     sb.write(&sb.repo, "crates/platitude-core/src/stash.rs", "pub fn stash() { let _ = 10; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n");
     sb.commit_all(&sb.repo, "feat(core): main moved", &[("PG_GATE_SKIP", "1")]);
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 11; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 11);
     sb.commit_all(&sb.seat, "feat(core): eleven", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let _ = sb.ran();
@@ -1040,11 +1019,7 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
 #[test]
 fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     let sb = Sandbox::new("refusals");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 12; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 12);
     let tip = sb.commit_all(&sb.seat, "feat(core): twelve", &[]);
     sb.write(
         &sb.seat,
@@ -1055,11 +1030,7 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     assert!(!ok && text.contains("uncommitted"), "{text}");
     std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
 
-    sb.write(
-        &sb.repo,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 13; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.repo, 13);
     let main_before = sb.commit_all(&sb.repo, "feat(core): thirteen", &[("PG_GATE_SKIP", "1")]);
     let (ok, text) = sb.land("worktree-a");
     assert!(!ok && text.contains("walked back"), "{text}");
@@ -1157,11 +1128,7 @@ fn a_policy_change_owes_cargo_deny_and_nothing_else() {
 #[test]
 fn a_source_change_owes_no_policy_check() {
     let sb = Sandbox::new("deny-source");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-core/src/refs.rs",
-        "pub fn refs() { let _ = 14; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-    );
+    sb.write_refs(&sb.seat, 14);
     sb.commit_all(&sb.seat, "feat(core): refs", &[]);
     sb.gate_ok(&sb.seat, &[]);
     assert!(!sb.ran().contains("deny"));
