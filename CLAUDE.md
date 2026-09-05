@@ -61,7 +61,7 @@
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
-- 性能 4 項目のうち**メモリと操作応答が予算超過**。数値・計測条件・読み方は [実測記録](ci/baseline/perf-windows-x64.md) が正(計測対象は `cargo xtask corpus` が生成する合成リポジトリ。撃ち方は同記録 §計測条件)。改善の残件は P3-確認事項 §app
+- 性能 4 項目のうち**メモリが予算超過**(判定行の max で数 MB。正体は絵文字 1 文字が呼ぶフォントのフォールバック探索)。数値・計測条件・読み方は [実測記録](ci/baseline/perf-windows-x64.md) が正(計測対象は `cargo xtask corpus` が生成する合成リポジトリ。撃ち方は同記録 §計測条件)。改善の残件は P3-確認事項 §app
 - CI(3OS + 完全オフライン job)は記述済み・**push するまで実行しない**。初回検証と軽量 / 完全性の分割は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5、ネットワーク非通信の証明は [実装計画.md](internal-docs/実装計画.md) §11
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
