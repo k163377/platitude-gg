@@ -5,15 +5,20 @@ import platitude.ui
 
 // The settings screen's top band: what the screen is, what it is showing, and the way out of it (規約 §設定の画面).
 //
-// Laid in the same block the chapters are, so the title stands over the rail and the mark over the column it closes.
-// **The block's lanes are written on what stands in them** rather than as margins on the band: a margin would sit
-// outside the width being centred, and the band would land a few pixels off the body it lines up with (measured).
-RowLayout {
+// **Two lanes, not one block**: the title is laid on the block the chapters are, so it stands over the rail; the exit
+// is hung off the band's own right edge instead, because a hand aiming at it aims at the corner of the screen
+// (規約 §設定の画面). That is what the plain `Item` is for — a RowLayout could only place the two in one run.
+Item {
     id: head
 
+    /// How wide the screen's one block is (`SettingsDialog.blockWidth`). Read to find where that block's left edge
+    /// falls, so the title starts level with the rail below it; the band itself is always the full width.
+    required property real blockWidth
     /// What the screen is showing, for the second half of the title. Read from the one list the rail is laid out
     /// from, so the two can never come to call a category by different names (`SettingsDialog.categories`).
     required property string word
+    /// The mark for that same category, off that same list — the rail's row and the title wear the one mark.
+    required property string categoryIcon
     /// Something on the screen is holding an edit git has not been given, so the way out costs something.
     required property bool unsaved
     /// A press was made over that and turned down: the next one goes through.
@@ -23,47 +28,66 @@ RowLayout {
     signal closed()
 
     Layout.fillWidth: true
-    Layout.topMargin: Theme.spaceLg
-    Layout.bottomMargin: Theme.spaceLg
-    spacing: Theme.spaceSm
+    // The band's own height, since nothing in it fills: the exit's seat with a step of air either side of it.
+    implicitHeight: Theme.toolbarHeight + 2 * Theme.spaceLg
 
-    Label {
-        Layout.leftMargin: Theme.spaceXxl
-        text: qsTr("Settings")
-        font.pixelSize: Theme.fontXl
-        font.weight: Font.DemiBold
+    RowLayout {
+        // The block's left edge, plus the lane the rail keeps inside it. **Written on what stands in the lane**
+        // rather than as a margin on the band: a margin would sit outside the width being centred, and the title
+        // would land a few pixels off the column it lines up with (measured).
+        anchors.left: parent.left
+        anchors.leftMargin: Math.max(0, (head.width - head.blockWidth) / 2) + Theme.spaceXxl
+        anchors.right: closeMark.left
+        anchors.rightMargin: Theme.spaceSm
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Theme.spaceSm
+
+        NavIcon {
+            Layout.preferredWidth: Theme.iconLg
+            Layout.preferredHeight: Theme.iconLg
+            kind: "gear"
+            tint: Theme.textPrimary
+        }
+        Label {
+            text: qsTr("Settings")
+            font.pixelSize: Theme.fontXl
+            font.weight: Font.DemiBold
+        }
+        // What the screen is showing, beside what the screen is. **The same step, told apart by weight and ink** —
+        // it is the second half of one title rather than a subtitle, so dropping it a step would break the phrase
+        // (規約 §タイポグラフィ 「見出しを段で作らない」). The rule between them is the one every divider in this
+        // window is drawn in.
+        Rectangle {
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: Theme.borderWidth
+            implicitHeight: Theme.iconLg
+            color: Theme.borderDefault
+        }
+        NavIcon {
+            Layout.preferredWidth: Theme.iconLg
+            Layout.preferredHeight: Theme.iconLg
+            kind: head.categoryIcon
+            tint: Theme.textSecondary
+        }
+        Label {
+            text: head.word
+            font.pixelSize: Theme.fontXl
+            color: Theme.textSecondary
+        }
+        Item { Layout.fillWidth: true }
     }
-    // What the screen is showing, beside what the screen is (Apple HIG asks a settings window's title to name the
-    // pane it is on). **The same step, told apart by weight and ink** — it is the second half of one title rather
-    // than a subtitle, so dropping it a step would break the phrase
-    // (規約 §タイポグラフィ 「見出しを段で作らない」). The rule between them is the one every divider in this
-    // window is drawn in.
-    Rectangle {
-        Layout.alignment: Qt.AlignVCenter
-        implicitWidth: Theme.borderWidth
-        implicitHeight: Theme.iconLg
-        color: Theme.borderDefault
-    }
-    Label {
-        text: head.word
-        font.pixelSize: Theme.fontXl
-        color: Theme.textSecondary
-    }
-    Item { Layout.fillWidth: true }
-    // **The mark alone, and the key in its one line.** No drawn `Esc` beside it: the products this screen was
-    // checked against agree — IBM Carbon's modal lists the three ways out (the `✕` in the upper right, a click
-    // outside, and Escape) and draws only the first. A legend for a key everyone already reaches for is furniture
-    // in the corner of every reading.
+    // **The mark alone, and the key in its one line.** No drawn `Esc` beside it: the products this screen was checked
+    // against draw only the `✕`, and a legend for a key everyone already reaches for is furniture in the corner of
+    // every reading (規約 §設定の画面).
     CloseToolButton {
         id: closeMark
-        Layout.alignment: Qt.AlignVCenter
-        // The block's lane with the air the mark holds inside its own seat taken off, so what stands a whole inset
-        // from the block's edge is its ink rather than the box around it (デザイン規約 §余白) — which is also what
-        // lines it up with the right edge of the column below.
-        Layout.rightMargin: Theme.spaceXxl - closeMark.inkAir
-        // A mark this small in a band this empty is a hard thing to hit, and at `iconSm` it reads as an
-        // afterthought beside a `fontXl` word (observed). The seat grows into room that was doing
-        // nothing (規約 §当たり判定); the mark grows because what it closes is the whole screen.
+        // Hard against the band's right edge, with no margin of its own — the air around the mark is the seat's, so
+        // what the hand meets in the screen's corner is the target rather than the gap beside it (規約 §当たり判定).
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        // **A square of `toolbarHeight`, which covers the window button's `railWidth` cell** (規約 §当たり判定 — the
+        // seat grows, the paint does not). The mark grows too, because what it closes is the whole screen: at
+        // `iconSm` it reads as an afterthought beside a `fontXl` word (observed).
         seat: Theme.toolbarHeight
         markSize: Theme.iconMd
         // **It carries the warning, and it is never disabled** — a dead `✕` says "no way out" and gives no reason.

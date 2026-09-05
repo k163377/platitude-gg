@@ -366,6 +366,30 @@ InkCanvas {
             ctx.moveTo(11.5 * s, 4.5 * s)
             ctx.lineTo(4.5 * s, 11.5 * s)
             ctx.stroke()
+        } else if (icon.kind === "gear") {
+            // The settings mark, stood beside the screen's own title. **One closed path for the teeth**, walked as
+            // eight of them with four corners each — a rim drawn as separate spokes leaves eight seams the round join
+            // cannot close, and at `iconMd` those read as a dotted ring. The corners sit an eighth of a turn apart,
+            // half of that off the tooth's own centre, so a tooth is as wide as the gap beside it.
+            ctx.lineJoin = "round"
+            ctx.beginPath()
+            for (let tooth = 0; tooth < 8; tooth++) {
+                for (let corner = 0; corner < 4; corner++) {
+                    const angle = (tooth + (corner - 0.5) / 4) * Math.PI / 4
+                    const radius = (corner < 2 ? 6 : 4.7) * s
+                    const x = 8 * s + Math.cos(angle) * radius
+                    const y = 8 * s + Math.sin(angle) * radius
+                    if (tooth === 0 && corner === 0)
+                        ctx.moveTo(x, y)
+                    else
+                        ctx.lineTo(x, y)
+                }
+            }
+            ctx.closePath()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(8 * s, 8 * s, 2 * s, 0, 2 * Math.PI)
+            ctx.stroke()
         } else if (icon.kind === "window-minimize") {
             // The three window marks are the platform's own shapes, drawn here because the band that carries them is
             // ours now. Kept on the same grid as every other mark, so they sit level with the menu at the other end.

@@ -22,17 +22,22 @@ AppDialog {
     /// screen, and the door decides which of them the reader lands on.
     property string category: "app"
 
-    /// The categories, and what each is called. **One list**: the rail lays it out and the title reads the current
-    /// word out of it, so the two can never come to call the same category by different names.
-    readonly property var categories: [{ key: "app", word: qsTr("Application") },
-                                       { key: "git", word: qsTr("Git") }]
-    readonly property string categoryWord: {
-        for (let i = 0; i < settingsDialog.categories.length; i++) {
-            if (settingsDialog.categories[i].key === settingsDialog.category)
-                return settingsDialog.categories[i].word
+    /// The categories, what each is called, and the mark each wears. **One list**: the rail lays it out and the title
+    /// reads the current entry out of it, so the two can never come to call the same category by different names.
+    readonly property var categories: [{ key: "app", word: qsTr("Application"), icon: "window-maximize" },
+                                       { key: "git", word: qsTr("Git"), icon: "branch" }]
+    /// The entry the reader is standing on, looked up once — the word and the mark are two halves of one row, and a
+    /// second walk of the same list is a second place to keep in step with it. Undefined before `category` names a
+    /// row that exists, which is what the two readings below answer with an empty string for.
+    readonly property var categoryEntry: {
+        for (const entry of settingsDialog.categories) {
+            if (entry.key === settingsDialog.category)
+                return entry
         }
-        return ""
+        return undefined
     }
+    readonly property string categoryIcon: settingsDialog.categoryEntry ? settingsDialog.categoryEntry.icon : ""
+    readonly property string categoryWord: settingsDialog.categoryEntry ? settingsDialog.categoryEntry.word : ""
 
     /// The tab this screen reads git through: the avatar candidates come off its graph, the merge editor off its
     /// working tree. The settings themselves are global, but "whose commits are these" and "what would git launch"
@@ -144,7 +149,7 @@ AppDialog {
     /// only place a Save stands between what is typed and what git holds (規約 §設定の画面).
     readonly property int unsavedIdentities: gitPane.unsavedIdentities
     /// How wide the screen's one block is: the rail, the line beside it, and the column of chapters, with the same
-    /// step on both sides of that line. Everything on the screen that is not a full-width rule is laid inside it.
+    /// step on both sides of that line. The title and body share this block; the exit stays at the window edge.
     /// **Symmetric on purpose**: one `spaceXxl` of air outside the rail, and one on the far side of the column for
     /// the bar to stand in. Centre the block and the ink is centred with it — a lane on one side only would put
     /// everything the reader looks at that far left of the middle.
@@ -220,10 +225,7 @@ AppDialog {
     onUnsavedIdentitiesChanged: settingsDialog.askingLeave = false
 
     // Two bands, and the rule between them is what says the top one does not move (規約 §設定の画面). It runs the
-    // whole width — the screen covers the window, so a line stopped short of the frame would read as an unfinished
-    // one rather than as the edge of a band. **What is inside the bands does not**: both are laid in the one block
-    // the screen is centred on, so the title stands over the rail and the way out over the column it closes. That is
-    // what the padding here is 0 for — each band carries its own, and the rule carries none.
+    // whole width. The title follows the centred body; the close target reaches the screen's right edge.
     padding: 0
 
     contentItem: ColumnLayout {
@@ -242,13 +244,11 @@ AppDialog {
         }
 
         // ---- the header band -------------------------------------------------
-        // Laid in the same block the chapters are, so the title stands over the rail and the way out over the column
-        // it closes (`SettingsHeader`). Its own file for the reason the panes are: this screen is at the length it
-        // is held to, and the band is a whole thing rather than a line of it.
+        // Only the title follows the body's width cap; the exit belongs to the screen's edge.
         SettingsHeader {
-            Layout.maximumWidth: settingsDialog.blockWidth
-            Layout.alignment: Qt.AlignHCenter
+            blockWidth: settingsDialog.blockWidth
             word: settingsDialog.categoryWord
+            categoryIcon: settingsDialog.categoryIcon
             unsaved: settingsDialog.unsavedIdentities > 0
             armed: settingsDialog.askingLeave || settingsDialog.askingGitPath
             onClosed: settingsDialog.escapeOut()
@@ -325,9 +325,19 @@ AppDialog {
                             visible: categoryRow.modelData.key === "git"
                                      && settingsDialog.unsavedIdentities > 0
                         }
-                        Label {
+                        NavIcon {
+                            id: categoryMark
                             anchors.verticalCenter: parent.verticalCenter
                             x: Theme.spaceSm
+                            width: Theme.iconMd
+                            height: Theme.iconMd
+                            kind: categoryRow.modelData.icon
+                            tint: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: categoryMark.right
+                            anchors.leftMargin: Theme.spaceSm
                             text: categoryRow.modelData.word
                             font.pixelSize: Theme.fontMd
                             // **Every row is `textPrimary`, standing or not** (observed). What says which one is
@@ -368,7 +378,7 @@ AppDialog {
             //
             // **The bar stands at the window's edge, not against the chapters.** The band's right inset is spent
             // inside this view rather than outside it, so the room the reader can see to the right of the form is
-            // where the bar goes — the chapters keep their own right edge, level with the `✕`, and nothing of theirs
+            // where the bar goes — the chapters keep their own right edge, and nothing of theirs
             // comes near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and
             // nothing more, which is the same "just barely" in a smaller size.
             // **No margin of its own.** The row's `spacing` is the step on both sides of the line, and an extra one
