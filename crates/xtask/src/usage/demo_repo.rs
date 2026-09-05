@@ -75,6 +75,8 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
         manytags  basic, with more tags than any pane can show at once
+        stack     every colour a chip column stacks, one commit each
+        stack-max detached HEAD on the deepest row there is: all six
         deep      more commits than the graph loads at once: the window
                   cut, which nothing shorter can show (graph-tail)
         deep-detached

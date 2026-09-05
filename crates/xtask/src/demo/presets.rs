@@ -18,6 +18,7 @@ use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, slowh
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, widechars, widelines};
 use super::signing::{errsig, signed};
+use super::stack::{stack, stack_max};
 use super::tags::{manytags, tags};
 use super::worktrees::worktrees;
 
@@ -116,6 +117,8 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
+        "stack" => stack(&mut repo)?,
+        "stack-max" => stack_max(&mut repo)?,
         "deep" => deep(&mut repo)?,
         "perf" => {
             deep(&mut repo)?;

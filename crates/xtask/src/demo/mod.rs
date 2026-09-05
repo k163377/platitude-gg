@@ -13,6 +13,7 @@ mod remote;
 mod repo;
 mod scale;
 mod signing;
+mod stack;
 mod tags;
 mod worktrees;
 
