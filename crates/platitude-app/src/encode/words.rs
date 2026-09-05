@@ -1,16 +1,5 @@
-//! Values a sentence or an `Image` reads directly: byte sizes, data
-//! URLs, the pieces of the line-ending notice, and how a rename says
-//! where it came from.
-
-use base64::Engine as _;
-
-/// `data:` URL a QML `Image` loads directly — no temp files, no image
-/// providers, and blob content works the same as working-tree content.
-pub fn image_data_url(mime: &str, bytes: &[u8]) -> String {
-    let mut out = format!("data:{mime};base64,");
-    base64::engine::general_purpose::STANDARD.encode_string(bytes, &mut out);
-    out
-}
+//! Values a sentence reads directly: byte sizes, the pieces of the
+//! line-ending notice, and how a rename says where it came from.
 
 /// A line-ending notice taken apart into the pieces its sentence
 /// (`Words.lineEndings`) needs.
@@ -133,15 +122,6 @@ mod tests {
         // happen — but a panic here would take the whole list down.
         let path = "文/new.txt";
         assert_eq!(rename_source("文/old.txt", path, 1), "文/old.txt");
-    }
-
-    #[test]
-    fn image_data_urls_are_base64_with_the_mime_up_front() {
-        assert_eq!(
-            image_data_url("image/png", b"abc"),
-            "data:image/png;base64,YWJj"
-        );
-        assert_eq!(image_data_url("image/gif", b""), "data:image/gif;base64,");
     }
 
     #[test]

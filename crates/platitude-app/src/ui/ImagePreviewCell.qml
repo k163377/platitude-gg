@@ -14,11 +14,17 @@ ColumnLayout {
     /// The side's own word — `Before` / `After`. The size stands beside it with a drawn dot between them, so this cell
     /// composes its own line rather than being handed one already spelled.
     required property string caption
+    /// A `file:` URL — the working-tree file itself, or the file core wrote the blob to — stamped with the read it was
+    /// made at, so a file that moved under the pane comes back as a source that changed (`DiffModel.previewOldUrl`).
     required property string url
     required property string sizeText
     /// Whether the image is a vector one — the model's word (`DiffModel.previewVector`), not something read back off
     /// the URL. SVG rasters scale smoothly, pixel rasters must not.
     required property bool isVector
+    /// Automation: the decode is asynchronous, so a read that has settled is not yet a picture on screen. `settled`
+    /// is the decoder's answer either way, `shown` the picture being there.
+    readonly property bool settled: previewImage.status === Image.Ready || previewImage.status === Image.Error
+    readonly property bool shown: previewImage.status === Image.Ready
     visible: sizeText !== ""
     spacing: Theme.spaceXs
 
@@ -82,19 +88,21 @@ ColumnLayout {
             fillMode: Image.PreserveAspectFit
             source: previewCell.url
             asynchronous: true
+            // Decoded once, held by this item alone, and let go with the URL: a closed pane keeps no picture in the
+            // pixmap cache.
             cache: false
             // No sourceSize: it does not cap decoding, it *rescales* rasters to the given size (a 16px icon came back
-            // blurry at screen width). Decode memory is already bounded by the 16 MiB byte cap in
-            // platitude-core::preview. Integer upscales stay crisp (pixel art); shrinking and vector rasters smooth.
+            // blurry at screen width). Integer upscales stay crisp (pixel art); shrinking and vector rasters smooth.
             smooth: previewFrame.displayScale < 1 || previewCell.isVector
             mipmap: true
             visible: status === Image.Ready
         }
+        // A side with nothing to show: a file core could not write, or a format this runtime has no decoder for.
         Label {
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width - 2 * Theme.spaceSm)
             visible: previewCell.url === "" || previewImage.status === Image.Error
-            text: previewCell.url === "" ? qsTr("Too large to preview") : qsTr("Preview unavailable")
+            text: qsTr("Preview unavailable")
             elide: Text.ElideRight
             color: Theme.textMuted
         }

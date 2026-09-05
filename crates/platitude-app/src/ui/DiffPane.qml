@@ -299,6 +299,10 @@ Rectangle {
         const m = diffPane.diffModel
         return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "")
     }
+    /// Automation: a settled read is not yet a picture on screen — the decode is asynchronous — so a verb that
+    /// photographs the preview waits for the pictures too (`DiffFileNotices.picturesSettled`).
+    readonly property bool picturesSettled: fileNotices.picturesSettled
+    readonly property int picturesShown: fileNotices.picturesShown
 
     // Everything the rows are laid out from — the line-number column, the gutter, one column of the mono font and what
     // a wide glyph costs over it — measured off three rulers that are never drawn (`DiffTextMetrics`).
@@ -327,6 +331,7 @@ Rectangle {
         // heading (デザイン規約 §その他の操作). What follows is what the pane has to say about the file rather than about
         // any line in it — and the picture that stands in for one no rows can show.
         DiffFileNotices {
+            id: fileNotices
             Layout.fillWidth: true
             Layout.fillHeight: diffPane.diffModel.previewKind === "image"
             diffModel: diffPane.diffModel

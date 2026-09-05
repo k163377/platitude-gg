@@ -1,13 +1,15 @@
-//! File previews (image bytes / binary sizes) against real git.
+//! File previews (image files / binary sizes) against real git.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
+
+use std::path::Path;
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::Oid;
 use platitude_core::details::{self, DiffTarget};
-use platitude_core::preview::{self, IMAGE_BYTE_CAP};
+use platitude_core::preview::{self, PreviewFiles};
 
 /// A tiny valid PNG (1x1 RGBA). Contains NUL bytes, so git classifies the
 /// file as binary; the exact pixels are irrelevant here.
@@ -28,6 +30,21 @@ fn tiny_png_v2() -> Vec<u8> {
 
 fn write_bytes(repo: &TestRepo, rel: &str, bytes: &[u8]) {
     std::fs::write(repo.path.join(rel), bytes).unwrap();
+}
+
+/// Somewhere of this test's own for the blob sides to be written to. The
+/// temp dir has to outlive the files — dropping them removes their own
+/// directory, and the assertions below read what is left.
+fn files() -> (tempfile::TempDir, PreviewFiles) {
+    let dir = tempfile::tempdir().unwrap();
+    let files = PreviewFiles::at(dir.path().join("s"));
+    (dir, files)
+}
+
+/// What a side's file holds, read back off the disk the pane would read
+/// it from.
+fn bytes_of(side: &preview::PreviewSide) -> Vec<u8> {
+    std::fs::read(side.file.as_ref().expect("a file to read")).unwrap()
 }
 
 /// One repository, four targets where one side simply is not there: an
@@ -56,9 +73,11 @@ async fn a_side_that_is_not_there_previews_as_absent() {
     write_bytes(&repo, "stray.png", TINY_PNG);
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
 
-    // Untracked: new side only — and the all-additions text diff of an
-    // untracked binary is flagged binary.
+    // Untracked: new side only, and it is the working-tree file itself —
+    // and the all-additions text diff of an untracked binary is flagged
+    // binary.
     let target = DiffTarget::Untracked {
         path: "stray.png".to_string(),
     };
@@ -66,16 +85,20 @@ async fn a_side_that_is_not_there_previews_as_absent() {
         .await
         .unwrap();
     assert!(patches[0].is_binary);
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
+    let p = preview::file_preview(&executor, &repo.path, &target, true, files.read(1), &cancel)
         .await
         .unwrap();
     assert_eq!(p.image_mime, Some("image/png"));
     assert!(p.old.is_none());
     let new = p.new.unwrap();
     assert_eq!(new.size, TINY_PNG.len() as u64);
-    assert_eq!(new.bytes.as_deref(), Some(TINY_PNG));
+    assert_eq!(
+        new.file.as_deref(),
+        Some(repo.path.join("stray.png").as_path())
+    );
 
-    // Staged addition: the index blob is read; there is no HEAD side.
+    // Staged addition: the index blob is written out; there is no HEAD
+    // side.
     let p = preview::file_preview(
         &executor,
         &repo.path,
@@ -84,12 +107,19 @@ async fn a_side_that_is_not_there_previews_as_absent() {
             orig_path: None,
         },
         true,
+        files.read(2),
         &cancel,
     )
     .await
     .unwrap();
     assert!(p.old.is_none(), "no HEAD side for a newly added file");
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(TINY_PNG));
+    let new = p.new.unwrap();
+    assert_eq!(bytes_of(&new), TINY_PNG);
+    assert_eq!(new.size, TINY_PNG.len() as u64);
+    assert!(
+        new.file.as_ref().unwrap().ends_with("2-new.png"),
+        "named by the read and the side, with the blob's own extension"
+    );
 
     // Staged deletion: old side only.
     let p = preview::file_preview(
@@ -100,11 +130,12 @@ async fn a_side_that_is_not_there_previews_as_absent() {
             orig_path: None,
         },
         true,
+        files.read(3),
         &cancel,
     )
     .await
     .unwrap();
-    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
+    assert_eq!(bytes_of(&p.old.unwrap()), TINY_PNG);
     assert!(p.new.is_none(), "deleted from the index");
 
     // Root commit: no parent, so no old side.
@@ -118,6 +149,7 @@ async fn a_side_that_is_not_there_previews_as_absent() {
             orig_path: None,
         },
         true,
+        files.read(4),
         &cancel,
     )
     .await
@@ -127,7 +159,7 @@ async fn a_side_that_is_not_there_previews_as_absent() {
 }
 
 #[tokio::test]
-async fn modified_image_previews_both_sides() {
+async fn modified_image_previews_the_index_file_and_the_tree_file() {
     let mut repo = TestRepo::init();
     write_bytes(&repo, "logo.png", TINY_PNG);
     repo.git(&["add", "--", "logo.png"]);
@@ -136,14 +168,23 @@ async fn modified_image_previews_both_sides() {
     write_bytes(&repo, "logo.png", &v2);
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
     let target = DiffTarget::Unstaged {
         path: "logo.png".to_string(),
     };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
+    let p = preview::file_preview(&executor, &repo.path, &target, true, files.read(1), &cancel)
         .await
         .unwrap();
-    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(v2.as_slice()));
+    let old = p.old.unwrap();
+    assert_eq!(bytes_of(&old), TINY_PNG, "the index side is written out");
+    assert!(old.file.as_ref().unwrap().ends_with("1-old.png"));
+    let new = p.new.unwrap();
+    assert_eq!(
+        new.file.as_deref(),
+        Some(repo.path.join("logo.png").as_path()),
+        "the working-tree side is the file itself, copied nowhere"
+    );
+    assert_eq!(new.size, v2.len() as u64);
 }
 
 #[tokio::test]
@@ -160,17 +201,23 @@ async fn committed_image_previews_parent_and_commit_blobs() {
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&head).unwrap(),
         parent: Some(Oid::from_hex_str(&parent).unwrap()),
         path: "logo.png".to_string(),
         orig_path: None,
     };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
+    let p = preview::file_preview(&executor, &repo.path, &target, true, files.read(5), &cancel)
         .await
         .unwrap();
-    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(v2.as_slice()));
+    let old = p.old.unwrap();
+    let new = p.new.unwrap();
+    assert_eq!(bytes_of(&old), TINY_PNG);
+    assert_eq!(bytes_of(&new), v2);
+    assert_eq!(old.size, TINY_PNG.len() as u64);
+    assert_eq!(new.size, v2.len() as u64);
+    assert_ne!(old.file, new.file, "two sides, two files");
 }
 
 /// The colours are read against the side the commit has, and the probe in
@@ -214,21 +261,22 @@ async fn renamed_image_reads_the_old_side_from_orig_path() {
     let parent = repo.git(&["rev-parse", "HEAD^"]);
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
     let target = DiffTarget::Commit {
         oid: Oid::from_hex_str(&head).unwrap(),
         parent: Some(Oid::from_hex_str(&parent).unwrap()),
         path: "b.png".to_string(),
         orig_path: Some("a.png".to_string()),
     };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
+    let p = preview::file_preview(&executor, &repo.path, &target, true, files.read(1), &cancel)
         .await
         .unwrap();
-    assert_eq!(p.old.unwrap().bytes.as_deref(), Some(TINY_PNG));
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(TINY_PNG));
+    assert_eq!(bytes_of(&p.old.unwrap()), TINY_PNG);
+    assert_eq!(bytes_of(&p.new.unwrap()), TINY_PNG);
 }
 
 #[tokio::test]
-async fn non_image_binary_reports_sizes_without_bytes() {
+async fn non_image_binary_reports_sizes_without_files() {
     let mut repo = TestRepo::init();
     let old_bytes = [0u8, 1, 2, 3, 4];
     write_bytes(&repo, "blob.bin", &old_bytes);
@@ -238,6 +286,7 @@ async fn non_image_binary_reports_sizes_without_bytes() {
     write_bytes(&repo, "blob.bin", &new_bytes);
 
     let (executor, cancel) = env();
+    let (dir, files) = files();
     let target = DiffTarget::Unstaged {
         path: "blob.bin".to_string(),
     };
@@ -246,7 +295,7 @@ async fn non_image_binary_reports_sizes_without_bytes() {
         .unwrap();
     assert!(patches[0].is_binary);
 
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
+    let p = preview::file_preview(&executor, &repo.path, &target, true, files.read(1), &cancel)
         .await
         .unwrap();
     assert_eq!(p.image_mime, None);
@@ -254,8 +303,12 @@ async fn non_image_binary_reports_sizes_without_bytes() {
     let new = p.new.unwrap();
     assert_eq!(old.size, old_bytes.len() as u64);
     assert_eq!(new.size, new_bytes.len() as u64);
-    assert!(old.bytes.is_none(), "non-images carry sizes only");
-    assert!(new.bytes.is_none());
+    assert!(old.file.is_none(), "non-images carry sizes only");
+    assert!(new.file.is_none());
+    assert!(
+        !dir.path().join("s").exists(),
+        "nothing was written, so nothing was made to write into"
+    );
 }
 
 #[tokio::test]
@@ -265,10 +318,19 @@ async fn plain_text_has_no_preview() {
     repo.write_file("notes.txt", "b\n");
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
     let target = DiffTarget::Unstaged {
         path: "notes.txt".to_string(),
     };
-    let p = preview::file_preview(&executor, &repo.path, &target, false, &cancel).await;
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &target,
+        false,
+        files.read(1),
+        &cancel,
+    )
+    .await;
     assert!(p.is_none());
 }
 
@@ -280,6 +342,7 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
     repo.write_file("icon.svg", svg);
 
     let (executor, cancel) = env();
+    let (_dir, files) = files();
     let target = DiffTarget::Untracked {
         path: "icon.svg".to_string(),
     };
@@ -289,29 +352,156 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
         .unwrap();
     assert!(!patches[0].is_binary);
     // … and the preview is still offered for rendering.
-    let p = preview::file_preview(&executor, &repo.path, &target, false, &cancel)
-        .await
-        .unwrap();
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &target,
+        false,
+        files.read(1),
+        &cancel,
+    )
+    .await
+    .unwrap();
     assert_eq!(p.image_mime, Some("image/svg+xml"));
-    assert_eq!(p.new.unwrap().bytes.as_deref(), Some(svg.as_bytes()));
+    assert_eq!(bytes_of(&p.new.unwrap()), svg.as_bytes());
 }
 
+/// No cap on either side: a picture past what a data URL could have
+/// carried is the working-tree file on one side and a blob streamed out
+/// whole on the other, byte for byte, across every chunk the pipe hands
+/// over.
 #[tokio::test]
-async fn oversized_image_reports_size_only() {
+async fn a_large_image_is_handed_over_whole() {
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "x\n", "base");
-    // Sparse-ish: one write, no git object involved (untracked target).
-    let big = vec![0u8; (IMAGE_BYTE_CAP + 1) as usize];
+    // Past the 16 MiB the data-URL preview used to stop at, in the tree
+    // only: no git object, and the file is the preview.
+    let huge_len = 17 * 1024 * 1024 + 1;
+    let big = vec![0u8; huge_len];
     write_bytes(&repo, "huge.png", &big);
+    // And a blob of some size, so the stream out of `cat-file` runs over
+    // many chunks: what lands has to be exactly what went in.
+    let staged: Vec<u8> = (0..3 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+    write_bytes(&repo, "staged.png", &staged);
+    repo.git(&["add", "--", "staged.png"]);
 
     let (executor, cancel) = env();
-    let target = DiffTarget::Untracked {
-        path: "huge.png".to_string(),
-    };
-    let p = preview::file_preview(&executor, &repo.path, &target, true, &cancel)
-        .await
-        .unwrap();
+    let (_dir, files) = files();
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Untracked {
+            path: "huge.png".to_string(),
+        },
+        true,
+        files.read(1),
+        &cancel,
+    )
+    .await
+    .unwrap();
     let new = p.new.unwrap();
-    assert_eq!(new.size, IMAGE_BYTE_CAP + 1);
-    assert!(new.bytes.is_none(), "over the cap: size only");
+    assert_eq!(new.size, huge_len as u64);
+    assert_eq!(
+        new.file.as_deref(),
+        Some(repo.path.join("huge.png").as_path())
+    );
+
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Staged {
+            path: "staged.png".to_string(),
+            orig_path: None,
+        },
+        true,
+        files.read(2),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let new = p.new.unwrap();
+    assert_eq!(new.size, staged.len() as u64);
+    assert_eq!(bytes_of(&new), staged);
+}
+
+/// The files of one read go when the next read is published, and the
+/// rest when the pane closes — and a read whose target is no picture at
+/// all still sweeps, since the pane has moved on all the same.
+#[tokio::test]
+async fn the_next_read_sweeps_the_files_of_the_one_before_it() {
+    let mut repo = TestRepo::init();
+    write_bytes(&repo, "logo.png", TINY_PNG);
+    repo.git(&["add", "--", "logo.png"]);
+    repo.git(&["commit", "-m", "v1"]);
+    write_bytes(&repo, "logo.png", &tiny_png_v2());
+    repo.write_file("notes.txt", "a\n");
+
+    let (executor, cancel) = env();
+    let (_dir, files) = files();
+    let picture = DiffTarget::Unstaged {
+        path: "logo.png".to_string(),
+    };
+    let first = preview::file_preview(
+        &executor,
+        &repo.path,
+        &picture,
+        true,
+        files.read(1),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let first_old = first.old.unwrap().file.unwrap();
+    assert!(first_old.exists());
+
+    // The same file read again: the pane is handed a new file under a
+    // new name, and the one before it goes.
+    let second = preview::file_preview(
+        &executor,
+        &repo.path,
+        &picture,
+        true,
+        files.read(2),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    files.sweep_before(2);
+    let second_old = second.old.unwrap().file.unwrap();
+    assert_ne!(
+        first_old, second_old,
+        "a re-read is a new file, so a new URL"
+    );
+    assert!(!first_old.exists(), "swept by the read after it");
+    assert!(second_old.exists());
+
+    // A read of something no picture stands in for sweeps just the same.
+    let text = DiffTarget::Untracked {
+        path: "notes.txt".to_string(),
+    };
+    let none =
+        preview::file_preview(&executor, &repo.path, &text, false, files.read(3), &cancel).await;
+    assert!(none.is_none());
+    files.sweep_before(3);
+    assert!(!second_old.exists());
+
+    // And the pane closing takes whatever the last read left.
+    let third = preview::file_preview(
+        &executor,
+        &repo.path,
+        &picture,
+        true,
+        files.read(4),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let third_old = third.old.unwrap().file.unwrap();
+    assert!(third_old.exists());
+    files.release();
+    assert!(!third_old.exists());
+    assert!(
+        Path::new(&third_old).parent().unwrap().exists(),
+        "the directory stays for the next read; the close removes it"
+    );
 }

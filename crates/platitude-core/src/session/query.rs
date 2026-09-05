@@ -219,9 +219,20 @@ impl RepoSession {
                 let patches = Arc::new(patches);
                 let marks = Arc::new(crate::intraline::marks(&patches));
                 let is_binary = patches.iter().any(|p| p.is_binary);
-                let preview =
-                    preview::file_preview(&self.executor, &workdir, &target, is_binary, &cancel)
-                        .await;
+                let preview = preview::file_preview(
+                    &self.executor,
+                    &workdir,
+                    &target,
+                    is_binary,
+                    self.preview_files.read(epoch),
+                    &cancel,
+                )
+                .await;
+                // The picture files of the reads before this one go now,
+                // whether or not this one wrote any: the pane is about
+                // to be handed this read, and what it still shows of the
+                // last it has already decoded (`preview::PreviewFiles`).
+                self.preview_files.sweep_before(epoch);
                 // Noted before the event and not after it: what the next
                 // re-read compares against is what the pane was handed.
                 self.note_diff(&target, fingerprint);

@@ -228,6 +228,9 @@ impl DiffModel {
         self.shown_marks = Default::default();
         self.apply_endings(None);
         self.apply_preview(None);
+        // The picture files the read wrote go with the pane: nothing
+        // names them any more, and no next read is coming to sweep them.
+        crate::hub::with_session(self.tab_id, |s| s.release_preview());
         self.forget_selection();
         self.reset();
         self.changed();

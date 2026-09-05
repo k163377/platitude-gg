@@ -25,7 +25,6 @@ automation = []
 memprobe = []
 
 [dependencies]
-base64 = "0.23.0"
 platitude-core.workspace = true
 qtbridge = "0.2"
 tokio.workspace = true

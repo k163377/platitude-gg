@@ -26,7 +26,7 @@ pub use select::{diff_key, hunk_selection, worktree_target};
 // `ending_words` by inference, and a name nobody writes is an unused
 // import here (`encode` is a private module, so a `pub use` in it is not
 // a public re-export).
-pub use words::{ending_words, human_size, image_data_url, rename_source};
+pub use words::{ending_words, human_size, rename_source};
 
 /// Record separator for the packed lists QML unpacks itself: label chips
 /// and co-authors. A refname cannot hold it (git refuses control

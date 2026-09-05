@@ -27,6 +27,10 @@ ColumnLayout {
     required property var theirsColor
     /// How wide a branch name may run in the legend.
     required property real nameCap
+    /// Automation: whether every picture the preview names has decoded or failed to, and how many are on screen
+    /// (`ImagePreviewCell.settled` / `shown`). A side with no URL has nothing to wait for.
+    readonly property bool picturesSettled: (before.url === "" || before.settled) && (after.url === "" || after.settled)
+    readonly property int picturesShown: (before.shown ? 1 : 0) + (after.shown ? 1 : 0)
 
     spacing: 0
 
@@ -110,6 +114,7 @@ ColumnLayout {
         Layout.margins: Theme.spaceSm
         spacing: Theme.spaceSm
         ImagePreviewCell {
+            id: before
             Layout.fillWidth: true
             Layout.fillHeight: true
             caption: qsTr("Before")
@@ -118,6 +123,7 @@ ColumnLayout {
             isVector: notices.diffModel.previewVector
         }
         ImagePreviewCell {
+            id: after
             Layout.fillWidth: true
             Layout.fillHeight: true
             caption: qsTr("After")

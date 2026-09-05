@@ -10,7 +10,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
     DiffRow, diff_key, display_ranges, flatten_patches, has_wide, hit_byte, human_size,
-    image_data_url, is_combined, is_new_file, is_unmerged_only, widest_columns,
+    is_combined, is_new_file, is_unmerged_only, widest_columns,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -134,7 +134,10 @@ pub struct DiffModel {
     coloured: bool,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
-    /// data: URLs for the image sides ("" = no renderable image there).
+    /// `file:` URLs for the image sides ("" = no renderable image there):
+    /// the working-tree file itself, or the file core wrote the blob to
+    /// (`platitude_core::preview::PreviewFiles`), stamped with the read
+    /// they were made at (`rows::apply_preview`).
     preview_old_url: String,
     preview_new_url: String,
     /// Whether the previewed image is a vector one (`image/svg+xml`).

@@ -566,6 +566,73 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     session.close();
 }
 
+/// A picture's blob side has no path a URL could name, so the session
+/// writes it to a file of the run's own and hands the pane that. The file
+/// goes when the pane lets go of it, and its directory with the session
+/// (`preview::PreviewFiles`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session() {
+    let mut repo = TestRepo::init();
+    // The extension is all the preview asks; the bytes are anything git
+    // calls binary.
+    repo.write_file("logo.png", "\u{0}PNG-shaped bytes\n");
+    repo.git(&["add", "--", "logo.png"]);
+    repo.git(&["commit", "-m", "picture"]);
+    repo.write_file("logo.png", "\u{0}PNG-shaped bytes, changed\n");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+
+    fn old_files(events: &[SessionEvent]) -> Vec<std::path::PathBuf> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                SessionEvent::DiffLoaded {
+                    preview: Some(preview),
+                    ..
+                } => preview.old.as_ref().and_then(|side| side.file.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    let target = DiffTarget::Unstaged {
+        path: "logo.png".to_string(),
+    };
+    session.load_diff(target.clone());
+    let first = sink
+        .wait_for("the picture's diff", |events| old_files(events).pop())
+        .await;
+    assert!(
+        first.starts_with(platitude_core::preview::run_dir()),
+        "written under the run's own directory: {}",
+        first.display()
+    );
+    assert!(first.is_file());
+    let dir = first.parent().unwrap().to_path_buf();
+
+    // The pane closed: the file goes, the directory stays for the next
+    // read.
+    session.release_preview();
+    assert!(!first.exists(), "released with the pane");
+    assert!(dir.exists());
+
+    // Read again: a new file under a new name, since the URL that names
+    // it has to be a new one.
+    session.load_diff(target);
+    let second = sink
+        .wait_for("the picture's second diff", |events| {
+            old_files(events).into_iter().find(|file| *file != first)
+        })
+        .await;
+    assert!(second.is_file());
+    assert_eq!(second.parent().unwrap(), dir);
+
+    // And the session closing takes the directory itself.
+    session.close();
+    assert!(!second.exists());
+    assert!(!dir.exists(), "the session's directory goes with the close");
+}
+
 /// The count of what a remote already has of a plan's range answers
 /// through its own event, echoing the range, so the plan that asked can
 /// tell the answer from one about a plan since put away.

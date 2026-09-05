@@ -76,6 +76,12 @@ pub struct RepoSession {
     /// line 1. Self-invalidating: the cache carries the source text's
     /// hash and is dropped by the reader when the text has changed.
     pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
+    /// The files a picture's blob sides are written to so the pane can
+    /// name them by URL (`preview::PreviewFiles`). Numbered by the diff
+    /// epoch above; each read published sweeps the reads before it, the
+    /// pane closing sweeps them all ([`RepoSession::release_preview`]),
+    /// and the close removes the directory.
+    pub(super) preview_files: preview::PreviewFiles,
     /// Where the repository stands, as the reads left it — HEAD and
     /// everything derived from it, the dirty tree, the standing merge's
     /// sides, the rebase stop and the merge tool. **The one record of
@@ -287,6 +293,14 @@ impl RepoSession {
     /// in the tail, which die on this cancel as always. Idempotent.
     pub fn close(&self) {
         self.root_cancel.cancel();
+        self.preview_files.remove_all();
+    }
+
+    /// The pane closed: the picture files the last diff read wrote are
+    /// nobody's to look at any more. The next read sweeps them too, so
+    /// this only matters for a pane that is not reading again.
+    pub fn release_preview(&self) {
+        self.preview_files.release();
     }
 
     /// How many local writes are queued or running — the ones

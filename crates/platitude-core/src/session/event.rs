@@ -307,7 +307,7 @@ pub enum SessionEvent {
         /// Shared with the colouring that follows, which reads the same
         /// lines to say what colour each run of them is.
         patches: Arc<Vec<FilePatch>>,
-        /// Image bytes / binary sizes when the text diff is not the whole
+        /// Image files / binary sizes when the text diff is not the whole
         /// story (`None` for ordinary text files).
         preview: Option<FilePreview>,
         /// Fingerprint of the bytes `patches` was parsed from. Hunk/line

@@ -733,8 +733,8 @@ pub(super) fn content(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {
 }
 
 /// Extensions the preview pane reads as an image rather than as text,
-/// which is a different path through `preview::file_preview` and a cap
-/// of its own (`preview::IMAGE_BYTE_CAP`).
+/// which is a different path through `preview::file_preview`: the blob
+/// is written to a file of the run's own and shown from there.
 const PICTURES: [&str; 1] = ["png"];
 
 /// One source file's body, in a language the diff pane highlights

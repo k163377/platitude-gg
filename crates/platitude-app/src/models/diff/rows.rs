@@ -160,14 +160,23 @@ impl DiffModel {
             "binary".to_string()
         };
         self.preview_vector = p.image_mime == Some("image/svg+xml");
+        // The URL names the read as well as the file. An `Image` reloads
+        // on a source that changed and on nothing else, and the
+        // working-tree side keeps its path from one read to the next —
+        // so the fingerprint of the bytes the read was made at rides on
+        // the URL: a file that moved under the pane is decoded again, and
+        // one that did not is not. Qt reads a `file:` URL's path and
+        // leaves its query alone.
+        let stamp = &self.fingerprint;
         let url = |side: &Option<PreviewSide>| -> String {
-            let (Some(mime), Some(s)) = (p.image_mime, side.as_ref()) else {
+            let Some(file) = side.as_ref().and_then(|s| s.file.as_deref()) else {
                 return String::new();
             };
-            s.bytes
-                .as_ref()
-                .map(|b| image_data_url(mime, b))
-                .unwrap_or_default()
+            let url = crate::urlpath::file_url(file);
+            if url.is_empty() {
+                return url;
+            }
+            format!("{url}?read={stamp}")
         };
         let size = |side: &Option<PreviewSide>| -> String {
             side.as_ref()

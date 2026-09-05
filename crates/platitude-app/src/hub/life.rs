@@ -78,6 +78,10 @@ impl Hub {
                 });
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
+            // Every session is gone with the runtime, and each took its
+            // own picture files with it; this is the run's directory
+            // itself, and whatever a read cut short left in it.
+            platitude_core::preview::remove_run_dir();
         }
     }
 
