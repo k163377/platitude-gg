@@ -358,6 +358,9 @@ Item {
         // plain clicks spaced apart (`ReclickGesture`); a held Ctrl or Shift says the hand is picking commits, and
         // arming the box off it would put a name box on the row that a range just swept through.
         if (mods & (Qt.ControlModifier | Qt.ShiftModifier)) {
+            // And it ends one already waiting: the hand went off to pick commits, so coming back to this row later is
+            // a first click again, not the second half of a gesture it walked away from.
+            rowItem.ListView.view.dropRename()
             rowItem.claimRow(mods)
             return
         }
@@ -370,13 +373,25 @@ Item {
     /// A double-click, as this row answers one. Named for the same reason `leftClick` is: **the lane column has a
     /// strip of its own over the list** (`GraphLanePan`, up wherever the lanes overflow their column), and where a row
     /// leads has to be decided in one place, or the part under that strip answers differently from the rest.
-    function doubleClick() {
+    /// Answers whether it led anywhere — **the row's own decision, read back**. What is on the other side of it is a
+    /// write that lands ticks later, so nothing on screen says at the moment of the press whether the row took the
+    /// gesture or turned it down.
+    function doubleClick(modifiers) {
+        const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+        // **A held double-click is two selection presses, not a double-click** (デザイン規約 §複数のコミットを選ぶ).
+        // Qt hands the pair over as a double whatever the hand was holding, and the modifier with it — measured,
+        // `tst_moddblclick` — so this is the only place the two can be told apart. What is on the other side of the
+        // plain one is `switch`, which moves the working tree and takes uncommitted changes with it: toggling a row
+        // out of a choice and back in, quickly, must not be a way to reach it.
+        if (mods & (Qt.ControlModifier | Qt.ShiftModifier))
+            return false
         // The second click came inside the window after all, so the gesture was the double-click and not the name.
         // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
         rowItem.ListView.view.dropRename()
         if (!rowItem.movable)
-            return
+            return false
         rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
+        return true
     }
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
     /// picked (規約 §矢印で履歴を辿る). Taken by the list, not by this row: the delegate is recycled when the row scrolls
@@ -434,7 +449,7 @@ Item {
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton)
                 return
-            rowItem.doubleClick()
+            rowItem.doubleClick(mouse.modifiers)
         }
         onPositionChanged: mouse => rowItem.pointerRowX = mouse.x
         onContainsMouseChanged: {

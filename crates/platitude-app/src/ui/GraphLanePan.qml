@@ -69,7 +69,7 @@ MouseArea {
     onDoubleClicked: mouse => {
         const row = pan.rowAt(mouse)
         if (row)
-            row.doubleClick()
+            row.doubleClick(mouse.modifiers)
     }
     onReleased: mouse => {
         if (pan.panning)

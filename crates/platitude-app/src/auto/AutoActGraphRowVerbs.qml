@@ -98,6 +98,18 @@ Item {
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
             menuHoverTimer.start()
+        } else if (act === "graph-choose-dbl") {
+            // **The gesture a choice must not turn into.** Toggling a row out of the choice and back in, quickly, is
+            // two presses at one spot — which Qt hands over as a double-click, modifier and all (measured,
+            // `tst_moddblclick`). On the other side of the plain double-click is `switch`, so the row has to tell the
+            // two apart (デザイン規約 §複数のコミットを選ぶ). The argument is the rows, as `graph-choose` takes them.
+            const dblRows = arg === "" ? [] : arg.split(":").map(Number)
+            chooseTimer.sweeps = false
+            chooseTimer.rows = dblRows.length >= 2 ? dblRows : [1, 3, 5]
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.after = "dbl"
+            chooseTimer.start()
         } else if (act === "graph-choose-diff") {
             // What a row of the merged file list opens: **each chosen commit's own patch of that file, stacked** —
             // not one diff across the span (デザイン規約 §複数のコミットを選ぶ). The argument is the path, the rows being
@@ -252,6 +264,26 @@ Item {
     SampleTimer {
         id: chosenRowTimer
         onTriggered: {
+            if (chooseTimer.after === "dbl") {
+                // The pair as the area delivers it: two clicks, then the double the second one is also reported as.
+                // Put in at the row's own functions, which is where the two are told apart.
+                const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
+                if (!at)
+                    return
+                chosenRowTimer.stop()
+                at.leftClick(0, Qt.ControlModifier)
+                const led = at.doubleClick(Qt.ControlModifier)
+                // **`switch` is what the plain double-click leads to**, and it lands ticks later — so the branch on
+                // screen at the moment of the press says nothing either way. What the row answered is the decision
+                // itself, read back off the same function a hand goes through. `movable=` is the other half: a row
+                // that leads nowhere turns the gesture down for a reason of its own, and this one does lead somewhere.
+                Harness.report("chosen_dbl led=" + led
+                                  + " movable=" + at.movable
+                                  + " naming=" + (graphPane.namingOid !== "")
+                                  + " branch=" + workTree.branch)
+                driver.complete()
+                return
+            }
             if (chooseTimer.after === "diff") {
                 // Through the page's own opener, the one a press on a file row goes to (`graph-step-diff` enters the
                 // same way). The stack is the shot, so the run waits for the rows to be laid out under it.

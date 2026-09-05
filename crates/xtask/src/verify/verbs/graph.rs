@@ -256,6 +256,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "bands=2 chosen=3",
     },
+    // The gesture a choice must not turn into. Toggling a row out of the
+    // choice and back in, quickly, is two presses at one spot — which the
+    // area hands over as a double-click, modifier and all (measured,
+    // `tst_moddblclick`). On the other side of the plain one is `switch`,
+    // which moves the working tree and takes uncommitted changes with it.
+    // `led=false` is the claim, and it is the row's own answer: the write
+    // lands ticks later, so the branch on screen at the moment of the
+    // press says nothing either way. `movable=true` is what keeps the run
+    // from being vacuous — a row that leads nowhere would answer `false`
+    // for a reason of its own. `naming=false` is the other half of the
+    // same press: the spaced second click opens a name box, and a hand
+    // building a choice is not naming anything.
+    Verb {
+        name: "graph-choose-dbl",
+        when: &[],
+        plain: "led=false movable=true naming=false",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame
