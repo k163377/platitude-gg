@@ -112,6 +112,10 @@ pub struct DiffModel {
     /// sets a wide glyph, and on a Latin-only mono family that loads a
     /// fallback font this process otherwise has no reason to hold.
     has_wide: bool,
+    /// How many commits this reading stacked, each with a band of its own
+    /// above its patch (デザイン規約 §複数のコミットを選ぶ). 0 for every
+    /// diff that is of one thing, which is all the others.
+    commit_bands: i32,
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it

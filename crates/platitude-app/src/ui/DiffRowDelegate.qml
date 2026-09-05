@@ -91,8 +91,16 @@ Rectangle {
 
     width: diffRow.rowWidth
     height: Theme.rowHeight
+    /// A row that names something rather than showing a line of a file: the hunk's own heading, and — where several
+    /// commits' patches of one file stand one after another — the commit each block is of
+    /// (デザイン規約 §複数のコミットを選ぶ). Neither has a line number, a stage seat or a place in the gutter.
+    readonly property bool banded: diffRow.kind === "hunk" || diffRow.kind === "commit"
     color: kind === "add" ? Theme.diffAddedBg
-           : kind === "del" ? Theme.diffRemovedBg : kind === "hunk" ? Theme.diffHunkHeaderBg : "transparent"
+           : kind === "del" ? Theme.diffRemovedBg
+           : kind === "hunk" ? Theme.diffHunkHeaderBg
+           // The window's own band ground, the one every heading in it wears (`PaneHeader`): a commit is a step
+           // above the hunks it brought, and wearing the hunk's own would make the two read as one kind of row.
+           : kind === "commit" ? Theme.bgElevated : "transparent"
     /// Under the pointer. A heading's own row is line -1, so a hunk named without a line means the heading.
     readonly property bool underPointer: diffRow.hoverHunk === diffRow.hunk && diffRow.hoverLine === diffRow.line
     /// The pointer is on this hunk's heading, so the whole hunk lights: the heading's two words act on exactly these
@@ -105,7 +113,7 @@ Rectangle {
     ///
     /// Where no line can be staged on its own the seat closes to the plain gap — a diff with no pieces in it never puts
     /// a mark out, and holding the room open would leave a hole nothing ever stands in.
-    readonly property int stageSeatW: diffRow.kind === "hunk" ? 0 : diffRow.seatW
+    readonly property int stageSeatW: diffRow.banded ? 0 : diffRow.seatW
     /// How much of the row's right edge the hunk heading has to give up to the two words that act on the hunk. git's
     /// `@@` line is as long as the enclosing signature and would otherwise run under them.
     readonly property real toolsRoom: hunkTools.item ? hunkTools.width + Theme.spaceSm * 2 : 0
@@ -140,7 +148,7 @@ Rectangle {
             //
             // Both columns close on a hunk heading, which has no line to number: the heading takes the row from its
             // left edge.
-            width: diffRow.kind === "hunk" ? 0 : Theme.spaceXs + diffRow.numberW
+            width: diffRow.banded ? 0 : Theme.spaceXs + diffRow.numberW
             leftPadding: Theme.spaceXs
             height: parent.height
             verticalAlignment: Text.AlignVCenter
@@ -159,7 +167,7 @@ Rectangle {
         }
         Label {
             id: newNoCol
-            width: diffRow.kind === "hunk" ? 0 : diffRow.numberW + Theme.spaceXs
+            width: diffRow.banded ? 0 : diffRow.numberW + Theme.spaceXs
             height: parent.height
             verticalAlignment: Text.AlignVCenter
             text: diffRow.new_no >= 0 ? diffRow.new_no : ""
@@ -221,16 +229,16 @@ Rectangle {
             // A hunk heading does not travel: it is the pane's own words about the rows below, and words that slid off
             // the left while the code was read would take with them the only thing saying which hunk this is. It gives
             // up the right of the row to the two buttons and elides into what is left.
-            x: diffRow.kind === "hunk" ? 0 : -diffRow.codeX
-            width: diffRow.kind === "hunk" ? codeRoom.width : implicitWidth
-            elide: diffRow.kind === "hunk" ? Text.ElideRight : Text.ElideNone
+            x: diffRow.banded ? 0 : -diffRow.codeX
+            width: diffRow.banded ? codeRoom.width : implicitWidth
+            elide: diffRow.banded ? Text.ElideRight : Text.ElideNone
             height: parent.height
             verticalAlignment: Text.AlignVCenter
             // A hunk heading starts at the row's own left edge: the two columns beside it are empty
             // — a heading has no line to number — so indenting it by them lines the pane's own words up with the
             // file's, behind a gutter that says nothing. One `spaceXs`, the same gap everything else in the gutter
             // stands at.
-            leftPadding: diffRow.kind === "hunk" ? Theme.spaceXs : 0
+            leftPadding: diffRow.banded ? Theme.spaceXs : 0
             text: diffRow.text
             // A coloured line arrives already marked up, and the plain ones must stay plain: `StyledText` on a line of
             // source would read its `<T>` as a tag and drop it (規約 §シンタックスハイライト).
@@ -244,7 +252,7 @@ Rectangle {
             //
             // The hunk heading is smaller still: it is the pane's own words rather than the file's, and at the file's
             // size its `@@` line runs under the two words sitting at the right of the same row.
-            font.pixelSize: diffRow.kind === "hunk" ? Theme.fontSm : Theme.fontCode
+            font.pixelSize: diffRow.banded ? Theme.fontSm : Theme.fontCode
             // Where the theme said nothing — an uncoloured language, a row past the lexer's budget, the moment before
             // the colours land — this is still the whole of the row's colour. A changed line reads in the window's own
             // words (規約 §シンタックスハイライト): the wash and the weight already name it, and green-on-green said the
@@ -254,7 +262,10 @@ Rectangle {
             // anything to say with, and painting it the added-line green puts the loudest thing in the pane on the part
             // nobody is reading (デザイン規約 §シンタックスハイライト). It keeps its background — it really is in the file.
             color: diffRow.fence ? Theme.textMuted
-                   : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg : diffRow.kind === "meta" ? Theme.textMuted
+                   : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg
+                   // The band's own voice, the one every heading in this window speaks in (`PaneHeader`).
+                   : diffRow.kind === "commit" ? Theme.textSecondary
+                   : diffRow.kind === "meta" ? Theme.textMuted
                    : Theme.textPrimary
         }
         // git's `\ No newline at end of file`, said where the thing it is about is: at the end of this line

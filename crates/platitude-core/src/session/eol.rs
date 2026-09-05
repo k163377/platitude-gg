@@ -17,7 +17,9 @@ impl RepoSession {
         cancel: &CancellationToken,
     ) -> EndingContext {
         let (path, historical) = match target {
-            DiffTarget::Commit { path, .. } | DiffTarget::Range { path, .. } => (path, true),
+            DiffTarget::Commit { path, .. }
+            | DiffTarget::Range { path, .. }
+            | DiffTarget::Choice { path, .. } => (path, true),
             DiffTarget::Staged { path, .. }
             | DiffTarget::Unstaged { path }
             | DiffTarget::Untracked { path } => (path, false),

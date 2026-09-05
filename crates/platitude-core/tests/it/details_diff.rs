@@ -521,6 +521,82 @@ async fn a_choice_of_nothing_reads_nothing() {
 }
 
 #[tokio::test]
+async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
+    let mut repo = TestRepo::init();
+    let older = repo.commit_file_id("f.txt", "one\n", "older chosen");
+    repo.commit_file("f.txt", "two\n", "not chosen");
+    let newer = repo.commit_file_id("f.txt", "three\n", "newer chosen");
+
+    let (executor, cancel) = env();
+    let patches = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Choice {
+            // Newest first, the order a choice arrives in.
+            oids: vec![
+                Oid::from_hex_str(&newer).unwrap(),
+                Oid::from_hex_str(&older).unwrap(),
+            ],
+            path: "f.txt".to_string(),
+            orig_path: None,
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+
+    // One block per chosen commit that touched it, oldest first — the way
+    // the history ran, and the way a cherry-pick would apply them. Each
+    // says which commit it is of, or the second reads as more of the first.
+    assert_eq!(patches.len(), 2);
+    assert!(patches[0].from_commit.ends_with("older chosen"));
+    assert!(patches[1].from_commit.ends_with("newer chosen"));
+
+    let lines = |i: usize| -> Vec<(DiffLineKind, String)> {
+        patches[i].hunks[0]
+            .lines
+            .iter()
+            .map(|l| (l.kind, l.text.clone()))
+            .collect()
+    };
+    assert_eq!(lines(0), vec![(DiffLineKind::Addition, "one".to_string())]);
+    // The unchosen commit's own line is not put on screen as something that
+    // arrived: it shows only where the chosen commit took it away.
+    assert_eq!(
+        lines(1),
+        vec![
+            (DiffLineKind::Deletion, "two".to_string()),
+            (DiffLineKind::Addition, "three".to_string())
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_diff_of_one_thing_names_no_commit_above_it() {
+    let mut repo = TestRepo::init();
+    let sha = repo.commit_file_id("f.txt", "one\n", "root");
+
+    let (executor, cancel) = env();
+    let patches = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Commit {
+            oid: Oid::from_hex_str(&sha).unwrap(),
+            parent: None,
+            path: "f.txt".to_string(),
+            orig_path: None,
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+    // The band is for a stack; one patch standing alone has the pane's own
+    // heading above it and needs no second one.
+    assert_eq!(patches.len(), 1);
+    assert!(patches[0].from_commit.is_empty());
+}
+
+#[tokio::test]
 async fn the_patch_behind_a_compared_row_is_between_the_two_commits() {
     let mut repo = TestRepo::init();
     let from = repo.commit_file_id("f.txt", "one\n", "first");

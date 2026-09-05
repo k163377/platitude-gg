@@ -11,6 +11,7 @@ impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
     qproperty!("widestColumns", Member = widest_columns, Notify = changed);
     qproperty!("hasWide", Member = has_wide, Notify = changed);
+    qproperty!("commitBands", Member = commit_bands, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
@@ -105,6 +106,29 @@ impl DiffModel {
         let target = DiffTarget::Range {
             from,
             to,
+            path: path.clone(),
+            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+        };
+        self.begin_request(path, target);
+    }
+
+    /// One file as each of several chosen commits changed it, stacked
+    /// (デザイン規約 §複数のコミットを選ぶ). `packed` is their ids newest
+    /// first, joined by `\u{1f}` — the order the graph stands in.
+    #[qslot]
+    fn request_choice_file(&mut self, packed: String, path: String, orig_path: String) {
+        let mut oids = Vec::new();
+        for hex in packed.split('\u{1f}').filter(|h| !h.is_empty()) {
+            let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
+                return;
+            };
+            oids.push(oid);
+        }
+        if oids.is_empty() {
+            return;
+        }
+        let target = DiffTarget::Choice {
+            oids,
             path: path.clone(),
             orig_path: (!orig_path.is_empty()).then_some(orig_path),
         };

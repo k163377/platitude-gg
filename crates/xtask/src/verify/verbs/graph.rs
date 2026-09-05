@@ -246,6 +246,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "ended=true caret=true",
     },
+    // And what a row of the merged file list opens: each chosen commit's
+    // own patch of that file, one band after another. `bands=2` is the
+    // whole claim — two of the three chosen commits touched it, and a
+    // diff across the span would be one block carrying the work of the
+    // one that was not chosen.
+    Verb {
+        name: "graph-choose-diff",
+        when: &[],
+        plain: "bands=2 chosen=3",
+    },
     // The two clicks of the rename gesture, at the row and at the card
     // its chip unfolds into. `armed=` is the half no picture answers —
     // a box that never opened and a wait that was never taken frame

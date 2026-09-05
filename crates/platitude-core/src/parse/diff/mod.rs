@@ -112,6 +112,12 @@ pub struct FilePatch {
     /// the two sides does not exist, so there is nothing to compare. The
     /// entry carries the path and nothing else.
     pub unmerged: bool,
+    /// Which commit this patch is of, as a line to put above it — empty
+    /// for every diff that is of one thing (a commit, the index, the
+    /// tree). Filled only where several patches of the same file stand
+    /// one after another and the reader has to be told where each came
+    /// from (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ).
+    pub from_commit: String,
     pub hunks: Vec<DiffHunk>,
 }
 

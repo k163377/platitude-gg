@@ -118,6 +118,27 @@ pub fn flatten_patches(
 ) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
+        // Several commits' patches of one file stand one after another, so
+        // each says which commit it is of — without it the second block
+        // reads as more of the first (デザイン規約 §複数のコミットを選ぶ).
+        // **Above everything the patch turns out to be**, the binary note
+        // included: what the band names is the whole of what follows.
+        if !patch.from_commit.is_empty() {
+            rows.push(DiffRow {
+                kind: "commit",
+                old_no: -1,
+                new_no: -1,
+                text: patch.from_commit.clone(),
+                rich: false,
+                emph: String::new(),
+                fence: false,
+                no_newline: false,
+                hunk: -1,
+                line: -1,
+                patch: i32::try_from(patch_index).unwrap_or(-1),
+                markers: String::new(),
+            });
+        }
         if patch.unmerged {
             // No rows: the pane builds the unmerged sentence from the
             // stage letters (`Words.conflict`).

@@ -84,6 +84,9 @@ impl DiffModel {
         // pane's ruler stands for is one of the file's own characters,
         // and a coloured row spells it inside markup.
         self.has_wide = has_wide(&patches);
+        // How many commits this reading stacked. Every other diff is of
+        // one thing and answers 0 (デザイン規約 §複数のコミットを選ぶ).
+        self.commit_bands = patches.iter().filter(|p| !p.from_commit.is_empty()).count() as i32;
         self.extend_notified(rows);
         if crate::harness::memprobe::enabled() {
             crate::harness::memprobe::note("diff-lines", self.tab_id, &self.lines);

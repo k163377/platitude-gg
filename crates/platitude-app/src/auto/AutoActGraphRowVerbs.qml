@@ -33,6 +33,7 @@ Item {
     readonly property var refList: driver.refList
     readonly property var rowCard: driver.rowCard
     readonly property var detailsPane: driver.detailsPane
+    readonly property var diffPane: driver.diffPane
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
@@ -97,6 +98,17 @@ Item {
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
             menuHoverTimer.start()
+        } else if (act === "graph-choose-diff") {
+            // What a row of the merged file list opens: **each chosen commit's own patch of that file, stacked** —
+            // not one diff across the span (デザイン規約 §複数のコミットを選ぶ). The argument is the path, the rows being
+            // fixed at three that share one file (`--preset basic`'s `src/topic.txt`, touched by two of them).
+            chooseTimer.sweeps = false
+            chooseTimer.rows = [3, 5, 6]
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.after = "diff"
+            chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
+            chooseTimer.start()
         } else if (act === "graph-choose-card" || act === "graph-choose-sweep") {
             // The two things a row of that list is for, once the choice is standing: the card a rest opens over the
             // commit, and the drag a reader takes the words away with (デザイン規約 §複数のコミットを選ぶ). The choice is
@@ -170,6 +182,8 @@ Item {
         /// What to do once the choice is standing: `card` rests on a row of the list the pane put up, `sweep` drags
         /// a value out of one, `""` stops at the choice.
         property string after: ""
+        /// The file `graph-choose-diff` opens out of the merged list.
+        property string diffPath: ""
         /// How many commits the presses should end up holding.
         function wanted() {
             if (!chooseTimer.sweeps)
@@ -238,6 +252,22 @@ Item {
     SampleTimer {
         id: chosenRowTimer
         onTriggered: {
+            if (chooseTimer.after === "diff") {
+                // Through the page's own opener, the one a press on a file row goes to (`graph-step-diff` enters the
+                // same way). The stack is the shot, so the run waits for the rows to be laid out under it.
+                if (!page.diffShown) {
+                    page.toggleDiff("commit", chooseTimer.diffPath, "")
+                    return
+                }
+                if (!diffPane.diffSettled() || diffPane.view.count === 0)
+                    return
+                chosenRowTimer.stop()
+                Harness.report("chosen_diff bands=" + diffPane.diffModel.commitBands
+                                  + " chosen=" + page.chosenCount
+                                  + " path=" + page.diffPath)
+                driver.complete()
+                return
+            }
             const row = detailsPane.chosenRowAt(0)
             // A row the list has not laid out yet is not a row anybody rested on.
             if (!row || !row.faceReady())

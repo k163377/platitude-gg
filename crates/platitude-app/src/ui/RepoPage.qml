@@ -1699,18 +1699,23 @@ Item {
         else
             rowHost.settleRowCard()
     }
-    /// The patch behind a row of the commit pane's list: that commit's own change to the file, or — while exactly two
-    /// commits are being compared — what differs between them there (デザイン規約 §複数のコミットを選ぶ).
+    /// The patch behind a row of the commit pane's list, in the three shapes that list comes in
+    /// (デザイン規約 §複数のコミットを選ぶ): one commit's own change to the file, what differs between exactly two, or —
+    /// for a merged list — what **each** of the chosen commits did to it, one block after another.
+    ///
+    /// **The last is not a comparison across the span.** The list above it is what these commits did, so the patches
+    /// behind a row of it are theirs: a diff of the two ends would carry whatever unchosen commits stand in between.
     function askCommitDiff(path, origPath) {
+        if (detailsModel.selectionCount > 2) {
+            diffModel.requestChoiceFile(page.chosenPacked, path, origPath)
+            return
+        }
         if (detailsModel.comparing) {
             diffModel.requestRangeFile(detailsModel.compareFrom, detailsModel.compareTo, path, origPath)
             return
         }
         diffModel.requestCommitFile(detailsModel.shaHex, detailsModel.parentHex, path, origPath)
     }
-    /// Whether a row of the commit pane's list can be opened at all. **A merged list has no one patch per row**: the
-    /// file was changed by however many of the chosen commits touched it, and the pane below shows one diff.
-    readonly property bool commitFilesOpen: detailsModel.selectionCount <= 2
     // Stages (or unstages) one hunk, or one line of it. The indices address the diff currently on screen, so the pane
     // is reloaded afterwards: once the patch is applied the rows have moved.
     function stageSelection(hunk, line) {
@@ -2926,14 +2931,8 @@ Item {
                                 page.saveMessage(oidHex, subject, body)
                             }
                         }
-                        onFileActivated: (path, origPath) => {
-                            if (page.commitFilesOpen)
-                                page.toggleDiff("commit", path, origPath)
-                        }
-                        onFileWalked: (path, origPath) => {
-                            if (page.commitFilesOpen)
-                                page.openDiff("commit", path, origPath)
-                        }
+                        onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
+                        onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
                         // The badge's press goes to the window, which owns the settings card.
                         onAvatarEditRequested: (name, email) => page.avatarSettingsRequested(name, email)

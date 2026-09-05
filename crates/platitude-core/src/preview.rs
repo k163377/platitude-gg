@@ -375,6 +375,7 @@ pub(crate) fn target_path(target: &DiffTarget) -> &str {
     match target {
         DiffTarget::Commit { path, .. }
         | DiffTarget::Range { path, .. }
+        | DiffTarget::Choice { path, .. }
         | DiffTarget::Staged { path, .. }
         | DiffTarget::Unstaged { path }
         | DiffTarget::Untracked { path } => path,
@@ -413,6 +414,10 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
             let old_path = orig_path.as_deref().unwrap_or(path);
             (blob(&from.to_hex(), old_path), blob(&to.to_hex(), path))
         }
+        // **A stack of patches has no pair of sides.** The pane shows what
+        // each chosen commit did to the file in turn, so there is no one
+        // "before" and no one "after" to put a picture of side by side.
+        DiffTarget::Choice { .. } => (SideSource::Absent, SideSource::Absent),
         DiffTarget::Staged { path, orig_path } => {
             let old_path = orig_path.as_deref().unwrap_or(path);
             (blob("HEAD", old_path), blob(":0", path))

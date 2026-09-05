@@ -44,6 +44,12 @@ pub fn diff_key(target: &DiffTarget) -> String {
         DiffTarget::Range { from, to, path, .. } => {
             format!("range:{}:{}:{path}", from.to_hex(), to.to_hex())
         }
+        // Every commit in it, for the same reason: the stack is of these,
+        // and a choice that gained or lost one is a different reading.
+        DiffTarget::Choice { oids, path, .. } => {
+            let held: Vec<String> = oids.iter().map(platitude_core::Oid::to_hex).collect();
+            format!("choice:{}:{path}", held.join(","))
+        }
         DiffTarget::Staged { path, .. } => format!("staged:{path}"),
         DiffTarget::Unstaged { path } => format!("unstaged:{path}"),
         DiffTarget::Untracked { path } => format!("untracked:{path}"),

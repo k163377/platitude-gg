@@ -24,6 +24,10 @@ struct Reading {
     /// unified diff, which counts its one old side in `old_no`; one entry
     /// per parent for a combined one.
     parent_no: Vec<u32>,
+    /// The commit the patches that follow are of, where the stream names
+    /// one (`\u{1}` at the head of a line — `DiffTarget::Choice`). Empty
+    /// for every diff of one thing, which is all the others.
+    label: String,
 }
 
 impl Reading {
@@ -50,6 +54,7 @@ impl Reading {
                 file.old_path = strip_prefix_a(&a);
                 file.new_path = strip_prefix_b(&b);
             }
+            file.from_commit = self.label.clone();
             self.current = Some(file);
             return true;
         }
@@ -66,6 +71,7 @@ impl Reading {
                 old_path: Some(path.clone()),
                 new_path: Some(path),
                 is_combined: true,
+                from_commit: self.label.clone(),
                 ..FilePatch::default()
             });
             return true;
@@ -172,6 +178,20 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     // newline and strips one trailing CR (an interior one stays: CRLF file
     // content is data).
     for line in text.lines() {
+        // A stream carrying several commits' patches names each one before
+        // its own (`DiffTarget::Choice`). No line of a diff and no line of
+        // a file can begin with this byte — git never writes it, and a
+        // file that did would have its patch printed as binary.
+        if let Some(rest) = line.strip_prefix('\u{1}') {
+            // **What stood before it is finished.** git writes a blank
+            // line between the record and the patch under it (measured
+            // 2.55), and with the previous file still open that blank
+            // lands in its last hunk as an empty context line — a row of
+            // a file nobody wrote.
+            reading.flush_file();
+            reading.label = rest.to_string();
+            continue;
+        }
         if reading.opens_file(line) {
             continue;
         }

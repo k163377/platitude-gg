@@ -319,6 +319,21 @@ pub enum DiffTarget {
         /// Source path where the file list reported a rename/copy.
         orig_path: Option<String>,
     },
+    /// One file as each of several chosen commits changed it, one patch
+    /// after another in walk order — what a choice of three or more reads
+    /// (デザイン規約 §複数のコミットを選ぶ).
+    ///
+    /// **Not one diff of two states.** The file list above it is what
+    /// these commits did, so the patches behind a row of it are theirs
+    /// too: a comparison across the span would carry whatever unchosen
+    /// commits stand in between, and this is the reading a cherry-pick of
+    /// the same choice would actually apply.
+    Choice {
+        /// Newest first, the order the graph stands in.
+        oids: Vec<Oid>,
+        path: String,
+        orig_path: Option<String>,
+    },
     /// Index vs HEAD for one file.
     Staged {
         path: String,
@@ -380,6 +395,17 @@ pub fn fingerprint(raw: &[u8]) -> u64 {
     hasher.finish()
 }
 
+/// Closes a diff command with the file it is of: the pathspec end every
+/// one of them takes, and the source name as well where the file list
+/// reported a rename — git is told both, or it has no pair to match.
+fn for_paths(cmd: GitCommand, path: &str, orig_path: Option<&str>) -> GitCommand {
+    let cmd = cmd.arg("--").arg(literal_pathspec(path));
+    match orig_path {
+        Some(orig) => cmd.arg(literal_pathspec(orig)),
+        None => cmd,
+    }
+}
+
 /// Same diff as [`file_diff`], returned unparsed.
 ///
 /// Partial staging rebuilds patches from these bytes (see [`crate::patch`]),
@@ -411,11 +437,7 @@ pub async fn file_diff_raw(
                 Some(p1) => c.args([p1.to_hex(), oid.to_hex()]),
                 None => c.args(["--root".to_string(), oid.to_hex()]),
             };
-            c = c.arg("--").arg(literal_pathspec(path));
-            if let Some(orig) = orig_path {
-                c = c.arg(literal_pathspec(orig));
-            }
-            c
+            for_paths(c, path, orig_path.as_deref())
         }
         DiffTarget::Range {
             from,
@@ -423,7 +445,7 @@ pub async fn file_diff_raw(
             path,
             orig_path,
         } => {
-            let mut c = base
+            let c = base
                 .args([
                     "diff-tree",
                     "-r",
@@ -433,20 +455,35 @@ pub async fn file_diff_raw(
                     "--find-renames",
                 ])
                 .args([from.to_hex(), to.to_hex()]);
-            c = c.arg("--").arg(literal_pathspec(path));
-            if let Some(orig) = orig_path {
-                c = c.arg(literal_pathspec(orig));
-            }
-            c
+            for_paths(c, path, orig_path.as_deref())
         }
-        DiffTarget::Staged { path, orig_path } => {
-            let mut c = base.args(["diff", "--cached", "--no-ext-diff", "--find-renames", "--"]);
-            c = c.arg(literal_pathspec(path));
-            if let Some(orig) = orig_path {
-                c = c.arg(literal_pathspec(orig));
-            }
-            c
+        DiffTarget::Choice {
+            oids,
+            path,
+            orig_path,
+        } => {
+            // Each patch is named before it, so the pane can say which
+            // commit it is of (`FilePatch::from_commit`). Oldest first —
+            // stacked patches read the way the history ran, and the way a
+            // cherry-pick would apply them.
+            let c = base
+                .args([
+                    "log",
+                    "--no-walk=unsorted",
+                    "-p",
+                    "--no-ext-diff",
+                    "--find-renames",
+                    "--diff-merges=first-parent",
+                    "--format=%x01%h %s",
+                ])
+                .args(oids.iter().rev().map(Oid::to_hex));
+            for_paths(c, path, orig_path.as_deref())
         }
+        DiffTarget::Staged { path, orig_path } => for_paths(
+            base.args(["diff", "--cached", "--no-ext-diff", "--find-renames"]),
+            path,
+            orig_path.as_deref(),
+        ),
         DiffTarget::Unstaged { path } => base
             .args(["diff", "--no-ext-diff", "--"])
             .arg(literal_pathspec(path)),
