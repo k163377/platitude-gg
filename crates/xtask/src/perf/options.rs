@@ -24,6 +24,12 @@ pub(super) struct Options {
     /// finishes and the harness ends in the same breath, so without this
     /// the two look identical.
     pub(super) settle_ms: u64,
+    /// Read the settled process from outside it at the end of that wait:
+    /// private / mapped / image, what is resident by file, and the
+    /// process heaps block by block (`perf::attribution`). What it is
+    /// for: the Rust counter (`breakdown`) cannot see the C++ side, and
+    /// that is where the excess over the budget sits.
+    pub(super) attribute: bool,
     pub(super) scroll: bool,
     pub(super) select: bool,
     pub(super) selection: String,
@@ -99,6 +105,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         retries: 3,
         watchdog_ms: 300_000,
         settle_ms: 0,
+        attribute: false,
         scroll: true,
         select: true,
         selection: "first".into(),
@@ -154,6 +161,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                         .into(),
                 );
             }
+            "--attribute" => opts.attribute = true,
             "--no-scroll" => opts.scroll = false,
             "--no-select" => opts.selection = "none".into(),
             "--selection" => opts.selection = value()?,
@@ -241,6 +249,21 @@ fn settle(mut opts: Options) -> Result<Options, String> {
     }
     if opts.runs == 0 || opts.watchdog_ms == 0 {
         return Err("--runs and --watchdog-ms must be positive".into());
+    }
+    // The attribution is of a process that has stopped working, and the
+    // settle wait is what makes it one; without it the walk would read a
+    // process still busy letting go of the bench.
+    if opts.attribute && opts.settle_ms == 0 {
+        return Err(
+            "--attribute reads the process once it has settled, so it needs --settle-ms".into(),
+        );
+    }
+    if opts.attribute && !cfg!(windows) {
+        return Err(
+            "--attribute is implemented for Windows only: VirtualQueryEx, QueryWorkingSetEx and \
+             the process heap walk have no Linux form here"
+                .into(),
+        );
     }
     if opts.repo.as_os_str().is_empty() && opts.open {
         return Err("--repo <path> is required (or --no-open for the bare window)".into());
@@ -337,6 +360,36 @@ mod tests {
             options(&["--repo", "C:/r", "--at"])
                 .unwrap_err()
                 .contains("needs a value")
+        );
+    }
+
+    /// The attribution is of a settled process, and only the settle wait
+    /// makes it one; it is also a Windows walk, refused where the
+    /// sampling is the only thing implemented.
+    #[test]
+    fn an_attribution_needs_a_settled_process() {
+        let refused = options(&["--repo", "C:/r", "--attribute"]).unwrap_err();
+        assert!(refused.contains("--settle-ms"), "{refused}");
+        let asked = options(&["--repo", "C:/r", "--attribute", "--settle-ms", "8000"]);
+        if cfg!(windows) {
+            assert!(asked.expect("a Windows attribution").attribute);
+        } else {
+            assert!(asked.unwrap_err().contains("Windows only"));
+        }
+        assert!(!options(&["--repo", "C:/r"]).unwrap().attribute);
+        // The shipped build can be attributed: the walk asks the process
+        // nothing, so the harness is not needed for it.
+        assert!(
+            options(&[
+                "--repo",
+                "C:/r",
+                "--shipped",
+                "--attribute",
+                "--settle-ms",
+                "1"
+            ])
+            .map(|o| o.attribute)
+            .unwrap_or(!cfg!(windows))
         );
     }
 

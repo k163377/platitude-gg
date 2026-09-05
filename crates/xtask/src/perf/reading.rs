@@ -71,6 +71,9 @@ pub(super) struct Reading {
     /// The `mem report` line with the largest `rust_live`, verbatim.
     pub(super) breakdown: Option<String>,
     pub(super) breakdown_live: u64,
+    /// What the settled process held, read from outside it under
+    /// `--attribute`; the whole text is `attribution.txt` in the run.
+    pub(super) attribution: Option<super::attribution::Attribution>,
     pub(super) perf_done: bool,
 }
 
@@ -173,6 +176,10 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     let mut gaps = Vec::new();
     if reading.peak_working_set == 0 || reading.peak_private == 0 {
         gaps.push("nonzero process memory samples");
+    }
+    // Asked of both builds alike: the walk needs nothing from the process.
+    if opts.attribute && reading.attribution.is_none() {
+        gaps.push("the memory attribution (attribution.txt in the run says what the walk said)");
     }
     if !opts.harness {
         // The whole of what a build with no harness can be asked for.

@@ -52,6 +52,35 @@ fn watchdog_is_the_outer_ceiling_and_quit_is_rejected() {
     assert!(err.contains("--watchdog-ms"));
 }
 
+/// The attribution is a number the run was asked to take, of either
+/// build, and a run that lost it is not a whole reading. Asked by the
+/// field rather than the flag, which `parse` refuses off Windows.
+#[test]
+fn an_attribution_that_was_asked_for_is_required() {
+    let mut opts = parse(&["--no-open".into()]).expect("bare window options should parse");
+    opts.attribute = true;
+    let mut reading = Reading {
+        peak_working_set: 1,
+        peak_private: 1,
+        perf_done: true,
+        ..Reading::default()
+    };
+    let err = missing(&reading, &opts).expect_err("the attribution is mandatory once asked");
+    assert!(err.contains("attribution.txt"), "{err}");
+    reading.attribution = Some(crate::perf::attribution::Attribution::default());
+    missing(&reading, &opts).expect("a reading with its attribution in it");
+    opts.harness = false;
+    let shipped = missing(
+        &Reading {
+            attribution: None,
+            ..reading.clone()
+        },
+        &opts,
+    )
+    .expect_err("the shipped build is asked the same");
+    assert!(shipped.contains("attribution.txt"), "{shipped}");
+}
+
 #[test]
 fn perf_done_is_absorbed_and_required() {
     let mut found = Reading::default();

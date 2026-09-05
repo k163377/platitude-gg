@@ -471,9 +471,10 @@ pub(super) struct Armed {
     lines: Lines,
 }
 
-/// The script's output, read a line at a time.
+/// The script's output, read a line at a time. The attribution script
+/// speaks the same way (`perf::attribution`).
 #[cfg(windows)]
-type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
+pub(super) type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
 
 /// The process creation flag that starts a process with its primary
 /// thread suspended: a pid with nothing executed yet, which the sampler
@@ -601,7 +602,7 @@ impl Armed {
 /// of its own and the ceiling is kept here; a script that never answers
 /// leaves that thread on the pipe until the script is ended.
 #[cfg(windows)]
-fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
+pub(super) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         loop {
@@ -613,10 +614,10 @@ fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
                     }
                     continue;
                 }
-                Some(Err(error)) => Err(format!("the memory sampler's output failed: {error}")),
-                None => Err(format!(
-                    "the memory sampler ended before it said `{wanted}`"
-                )),
+                // Said of "it": every caller names which script this
+                // was, and the attribution script waits here too.
+                Some(Err(error)) => Err(format!("its output failed: {error}")),
+                None => Err(format!("it ended before it said `{wanted}`")),
             };
             // A receiver that gave up on the ceiling is gone; nothing
             // else is left to tell.
@@ -627,7 +628,7 @@ fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
     match rx.recv_timeout(SCRIPT_CEILING) {
         Ok(answer) => answer,
         Err(_) => Err(format!(
-            "the memory sampler did not say `{wanted}` within {}s",
+            "it did not say `{wanted}` within {}s",
             SCRIPT_CEILING.as_secs()
         )),
     }
@@ -636,7 +637,7 @@ fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
 /// Ends a script that will not be read any further, and says so when it
 /// would not end.
 #[cfg(windows)]
-fn end(child: &mut std::process::Child, what: &str) {
+pub(super) fn end(child: &mut std::process::Child, what: &str) {
     if let Err(error) = child.kill() {
         println!("  note: could not end {what}: {error}");
     }

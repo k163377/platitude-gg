@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use super::display::Screen;
 use super::reading::{Reading, missing, read_app};
-use super::{Options, SAMPLE_MS, artifacts, sampler};
+use super::{Options, SAMPLE_MS, artifacts, attribution, sampler};
 
 /// How long the app is left alone after `perf_done` even when the run
 /// asked for no settling: enough for at least one more sample, so the
@@ -183,9 +183,17 @@ pub(super) fn measure(
     let (config_dir, log, samples) = artifacts::open_run(run_dir, opts, screen)?;
     let mut cmd = command(exe, path, root, opts, &config_dir);
     // Armed before the clock starts: the sampler's compile stays out of
-    // the timed window (`sampler::Armed`). The sum cannot overflow —
-    // `options::settle` holds the two under a day.
-    let window = Duration::from_millis(opts.watchdog_ms + opts.settle_ms + AFTER_DONE_MS);
+    // the timed window (`sampler::Armed`), and so does the attribution
+    // script's, for the same reason. The sum cannot overflow —
+    // `options::settle` holds the two under a day, and the attribution's
+    // ceiling is what keeps the sampler watching through the walk.
+    let mut window = Duration::from_millis(opts.watchdog_ms + opts.settle_ms + AFTER_DONE_MS);
+    let attributing = if opts.attribute {
+        window += attribution::CEILING;
+        Some(attribution::arm()?)
+    } else {
+        None
+    };
     let armed = sampler::arm(window, samples)?;
     // Started with nothing executed yet: the sampler puts the process in
     // its job object and only then lets it run, so the first git the app
@@ -264,10 +272,24 @@ pub(super) fn measure(
         std::thread::sleep(Duration::from_millis(opts.settle_ms.max(AFTER_DONE_MS)));
     }
     let held = sampler.read();
+    // After the settled reading and before the kill: of the process the
+    // reading was read from, without the walk's own thread and page
+    // touches in that reading. A run that never settled has nothing to
+    // attribute, and dropping the armed script ends it.
+    let walked = done && attributing.is_some();
+    let attributed = match attributing {
+        Some(armed) if done => attribution::record(armed, child.id(), run_dir),
+        _ => None,
+    };
     let _ = child.kill();
     let _ = child.wait();
     let mut reading = reader.join().unwrap_or_default();
-    let series = sampler.finish()?;
+    let finished = sampler.finish()?;
+    // The walk is instrumentation, not the application: where one ran,
+    // the peak and the conditions are read off the series as it stood
+    // before it, and memory.csv keeps what the walk itself did.
+    let series = if walked { &held } else { &finished };
+    reading.attribution = attributed;
     reading.perf_done |= done;
     reading.peak_working_set = series.peak_working_set;
     reading.peak_private = series.peak_private;
@@ -276,7 +298,7 @@ pub(super) fn measure(
     } else {
         0
     };
-    reading.conditions = series.conditions;
+    reading.conditions = series.conditions.clone();
     // Written before the verdict, because the verdict may be that this
     // is not a reading — and a run refused for the state of the machine
     // is exactly the one whose numbers a later reader wants to see.

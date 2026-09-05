@@ -217,6 +217,20 @@ const TAIL: &str = "  shipped [--no-build]
                           cost while it ran; the difference says how much
                           of that the process handed back once it had
                           nothing to do (default 0 = read at once)
+        --attribute       at the end of that wait, read the settled
+                          process from outside it, into attribution.txt in
+                          each run and a summary at the end of the report:
+                          VirtualQueryEx for what is committed as private
+                          / mapped / image and the private allocations by
+                          size class (where the heap segments line up),
+                          QueryWorkingSetEx for what is resident by file
+                          (the fonts summed on one line — a CJK fallback
+                          font costs its resident pages, not its size),
+                          and the process heaps block by block, busy and
+                          free by size class (RtlQueryProcessDebugInformation).
+                          This is the side the Rust counter of --breakdown
+                          cannot see: the C++ objects QML builds and
+                          tree-sitter's trees. Needs --settle-ms; Windows only
         --no-scroll       leave the scroll benchmark out
         --no-select       do not select a row or open a diff
         --selection <s>   none, first (default), or head

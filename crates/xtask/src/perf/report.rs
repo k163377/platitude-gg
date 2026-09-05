@@ -35,6 +35,86 @@ pub(super) fn report(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     interaction(kept);
     host(kept);
     tail(kept);
+    attribution(kept);
+}
+
+/// What the settled process was holding, by kind, read from outside it
+/// (`perf::attribution`). Last, because it is the reading of the
+/// reading: which side of the process the working set above is on.
+fn attribution(kept: &[Reading]) {
+    for line in attribution_lines(kept) {
+        println!("{line}");
+    }
+}
+
+/// The lines of that block, over the kept runs that have an attribution;
+/// none where none has. Counts are spread as counts, bytes as MiB.
+fn attribution_lines(kept: &[Reading]) -> Vec<String> {
+    let taken: Vec<&super::attribution::Attribution> =
+        kept.iter().filter_map(|r| r.attribution.as_ref()).collect();
+    if taken.is_empty() {
+        return Vec::new();
+    }
+    let of = |pick: fn(&super::attribution::Attribution) -> u64| -> Vec<f64> {
+        taken.iter().map(|a| mb(pick(a))).collect()
+    };
+    let mut lines = vec![
+        format!(
+            "\n  resident    : private {} | mapped {} | image {} MiB (settled, read from outside \
+             the process)",
+            spread(&of(|a| a.resident_private)),
+            spread(&of(|a| a.resident_mapped)),
+            spread(&of(|a| a.resident_image))
+        ),
+        format!(
+            "  of which fonts: {} MiB in {} files (.ttf/.ttc/.otf, StaticCache.dat, FontCache)",
+            spread(&of(|a| a.fonts_resident)),
+            count_spread(&taken.iter().map(|a| a.fonts_files).collect::<Vec<_>>())
+        ),
+    ];
+    let heaps: Vec<&super::attribution::Heap> =
+        taken.iter().filter_map(|a| a.heap.as_ref()).collect();
+    if heaps.is_empty() {
+        lines.push(format!(
+            "  process heap: not walked — {}",
+            taken
+                .iter()
+                .find_map(|a| a.heap_error.as_deref())
+                .unwrap_or("the script gave no heap line")
+        ));
+    } else {
+        let heap = |pick: fn(&super::attribution::Heap) -> u64| -> Vec<u64> {
+            heaps.iter().map(|h| pick(h)).collect()
+        };
+        lines.push(format!(
+            "  process heap: busy {} MiB in {} blocks, free {} MiB in {} blocks{}",
+            spread(&heap(|h| h.busy).iter().map(|v| mb(*v)).collect::<Vec<_>>()),
+            count_spread(&heap(|h| h.busy_blocks)),
+            spread(&heap(|h| h.free).iter().map(|v| mb(*v)).collect::<Vec<_>>()),
+            count_spread(&heap(|h| h.free_blocks)),
+            if heaps.len() < taken.len() {
+                " (not every kept run's walk answered)"
+            } else {
+                ""
+            }
+        ));
+    }
+    lines.push(
+        "  attribution : attribution.txt in each run — private by allocation size class, resident \
+         by file, heap blocks by size class"
+            .to_string(),
+    );
+    lines
+}
+
+/// `min–max` over counts, or the one count when they agree: a block
+/// count has no tenths, and no middle worth a third number.
+fn count_spread(values: &[u64]) -> String {
+    match (values.iter().min(), values.iter().max()) {
+        (Some(lo), Some(hi)) if lo == hi => lo.to_string(),
+        (Some(lo), Some(hi)) => format!("{lo}–{hi}"),
+        _ => "-".into(),
+    }
 }
 
 /// What the run weighed, and the conditions the weight is only readable
@@ -298,12 +378,70 @@ fn median(sorted: &[f64]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{median, spread};
+    use super::{Reading, attribution_lines, count_spread, median, spread};
+    use crate::perf::attribution::{Attribution, Heap};
 
     #[test]
     fn a_spread_of_one_value_is_printed_once() {
         assert_eq!(spread(&[3.0, 3.0]), "3.0");
         assert_eq!(spread(&[]), "-");
+        assert_eq!(count_spread(&[7, 7]), "7");
+        assert_eq!(count_spread(&[9, 7, 8]), "7–9");
+        assert_eq!(count_spread(&[]), "-");
+    }
+
+    /// The block at the end is a spread over the kept runs that had an
+    /// attribution, counts printed as counts, and says so when one
+    /// run's heap walk was refused.
+    #[test]
+    fn the_attribution_is_summarised_over_the_runs_that_had_one() {
+        let walked = Attribution {
+            resident_private: 200 << 20,
+            resident_mapped: 30 << 20,
+            resident_image: 70 << 20,
+            fonts_resident: 31 << 20,
+            fonts_files: 12,
+            heap: Some(Heap {
+                heaps: 12,
+                busy: 150 << 20,
+                busy_blocks: 700_000,
+                free: 12 << 20,
+                free_blocks: 4_000,
+                committed: 170 << 20,
+            }),
+            ..Attribution::default()
+        };
+        let refused = Attribution {
+            heap: None,
+            heap_error: Some("RtlQueryProcessDebugInformation returned 0xC0000017".into()),
+            ..walked.clone()
+        };
+        let with = |attribution: Attribution| Reading {
+            attribution: Some(attribution),
+            ..Reading::default()
+        };
+        assert!(attribution_lines(&[Reading::default()]).is_empty());
+        let text = attribution_lines(&[with(walked.clone()), with(walked)]).join("\n");
+        assert!(
+            text.contains("private 200.0 | mapped 30.0 | image 70.0 MiB"),
+            "{text}"
+        );
+        assert!(text.contains("31.0 MiB in 12 files"), "{text}");
+        assert!(
+            text.contains("busy 150.0 MiB in 700000 blocks, free 12.0 MiB in 4000 blocks\n"),
+            "{text}"
+        );
+        let text = attribution_lines(&[with(refused.clone()), Reading::default()]).join("\n");
+        assert!(text.contains("not walked — RtlQuery"), "{text}");
+        let text = attribution_lines(&[
+            with(Attribution {
+                fonts_files: 11,
+                ..refused.clone()
+            }),
+            with(refused),
+        ])
+        .join("\n");
+        assert!(text.contains("in 11–12 files"), "{text}");
     }
 
     /// Two runs have no middle worth printing; three do, and it is the

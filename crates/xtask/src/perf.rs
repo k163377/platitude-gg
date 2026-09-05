@@ -26,6 +26,14 @@
 //! are. That needs a binary built with the `memprobe` feature; without it
 //! the line still comes, with `counted=false` and no Rust-heap total.
 //!
+//! `--attribute` answers the other side of that line. The Rust counter
+//! sees nothing of the C++ objects QML builds, tree-sitter's trees or
+//! the fonts DirectWrite maps, so at the end of the `--settle-ms` wait
+//! the settled process is read from outside ([`attribution`]): private /
+//! mapped / image, what is resident by file, and the process heaps block
+//! by block, into `attribution.txt` in each run and a summary at the end
+//! of the report.
+//!
 //! `--shipped` measures the other build — `cargo build --release` with no
 //! features, which is what a person installs. It answers memory and the
 //! time to a finished graph and nothing else, because every `perf_*` line
@@ -38,6 +46,7 @@
 //! an A/B builds nothing the second time.
 
 mod artifacts;
+mod attribution;
 mod corpus;
 mod display;
 mod measure;
