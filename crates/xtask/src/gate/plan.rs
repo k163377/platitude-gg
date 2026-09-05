@@ -30,6 +30,10 @@ pub(crate) struct Step {
     /// built in this very invocation — never on the strength of a cached
     /// step, whose build may have happened in another tree.
     pub builds_app: bool,
+    /// Reads the release the side's verbs build — a verb, or `bare` — and
+    /// so runs in the side's built-app group, beside the checks that
+    /// build elsewhere (`gate::side`).
+    pub release: bool,
     pub command: Vec<String>,
     /// What the step reads, as workspace paths (a directory covers
     /// everything under it): the cache key is their object ids.
@@ -342,6 +346,7 @@ fn step<S: AsRef<str>>(
         side,
         always,
         builds_app: false,
+        release: false,
         command,
         inputs: inputs.iter().map(|s| s.as_ref().to_string()).collect(),
     }
@@ -734,6 +739,7 @@ fn binary_steps(
             &verb_inputs,
         );
         host_step.builds_app = true;
+        host_step.release = true;
         steps.push(host_step);
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(crate::verify::suite_words(line));
@@ -747,18 +753,23 @@ fn binary_steps(
             &linux_inputs,
         );
         linux_step.builds_app = true;
+        linux_step.release = true;
         steps.push(linux_step);
     }
     if binary_moved || changed.iter().any(|f| f == DOCKERFILE) {
         let mut bare_inputs = binary_inputs;
         bare_inputs.extend(["crates/xtask/src/linux", DOCKERFILE].map(String::from));
-        steps.push(step(
+        let mut bare = step(
             "bare",
             Side::Linux,
             false,
             xtask(&["linux", "bare"]),
             &bare_inputs,
-        ));
+        );
+        // Built in the container's release directory, after the verbs
+        // there have built it: the same group as they are.
+        bare.release = true;
+        steps.push(bare);
     }
     steps
 }

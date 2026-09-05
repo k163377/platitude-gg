@@ -228,11 +228,12 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
     dir.join("target").join("gate-running")
 }
 
-/// Runs what is not cached, one thread per side, and stamps the commit
-/// when both sides came back with nothing red. A side stops at its first
-/// red step — except among its verbs, which run to the end of their
-/// block `jobs` at a time ([`verbs`]) — and the other side finishes, so
-/// its green steps are stamped and need not run again.
+/// Runs what is not cached, one thread per side and two groups within a
+/// side ([`side`]), and stamps the commit when both sides came back with
+/// nothing red. A group stops at its first red step — except among its
+/// verbs, which run to the end of their block `jobs` at a time
+/// ([`verbs`]) — and everything else finishes, so its green steps are
+/// stamped and need not run again.
 fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     refuse_what_no_stamp_could_answer_for(plan)?;
     // Yesterday's runs go on their way out: a verb's repositories and
@@ -355,7 +356,10 @@ fn run_sides(
         count,
     };
     let started = std::time::Instant::now();
-    println!("gate: verbs {jobs} at a time per side, on the machine's {count} lanes");
+    println!(
+        "gate: verbs {jobs} at a time per side, on the machine's {count} lanes; a side's checks \
+         run beside its verbs"
+    );
     let host_ground = Ground {
         name: "host",
         dir: &plan.dir,
@@ -426,11 +430,22 @@ struct Ground<'a> {
     runner: Option<&'a Path>,
 }
 
-/// One side's steps in order: the ones that share the build tree one at
-/// a time, stopping at the first red (a build that failed makes every
-/// later step of the side noise), and the verify-ui verbs — which share
-/// nothing but the release the first of them builds — as one block
-/// through [`verbs`].
+/// One side's steps, as two groups that share no build directory and so
+/// run beside each other: the checks — clippy, the tests, shipped, deny,
+/// whatever else the plan owes — one at a time in the plan's order,
+/// stopping at the first red (a build that failed makes every later
+/// step of the group noise); and the built app — the verify-ui verbs as
+/// one block through [`verbs`], then `bare` — which alone read the
+/// release the first verb builds. Beside each other they slow each
+/// other — a verb costs half again as much at the median, and a cold
+/// checks chain can be the side's wall clock — and the side still ends
+/// a fifth sooner than the two would as a sum (the numbers are in
+/// internal-docs/反映前テストの機械化.md §実測).
+///
+/// The always-steps go first and alone. They are seconds, and a red
+/// among them is what a person fixes before anything else — a verb block
+/// started beside them would run its minutes to greens that fix takes
+/// away, the app being every verb's input.
 fn side(
     ground: &Ground<'_>,
     steps: &[&Required],
@@ -438,21 +453,65 @@ fn side(
     lanes: &crate::lanes::Lanes<'_>,
 ) -> Vec<String> {
     let mut at = 0;
+    while at < steps.len() && steps[at].step.always {
+        if let Err(why) = run_one(ground, at, steps[at], false) {
+            return vec![why];
+        }
+        at += 1;
+    }
+    let (built, checks): (Vec<_>, Vec<_>) = (at..steps.len())
+        .map(|i| (i, steps[i]))
+        .partition(|(_, r): &(usize, &Required)| r.step.release);
+    std::thread::scope(|scope| {
+        let checks = scope.spawn(|| in_order(ground, &checks));
+        let built = scope.spawn(|| against_the_build(ground, &built, jobs, lanes));
+        let mut failures = Vec::new();
+        for handle in [checks, built] {
+            match handle.join() {
+                Ok(mut group) => failures.append(&mut group),
+                Err(_) => failures.push(format!("a group of the {} side panicked", ground.name)),
+            }
+        }
+        failures
+    })
+}
+
+/// The checks group: one at a time, stopping at the first red.
+fn in_order(ground: &Ground<'_>, steps: &[(usize, &Required)]) -> Vec<String> {
+    for (index, required) in steps {
+        if let Err(why) = run_one(ground, *index, required, false) {
+            return vec![why];
+        }
+    }
+    Vec::new()
+}
+
+/// The built-app group: each run of verbs as one block ([`verbs`]) and
+/// the steps between them as they come, stopping after a block with a
+/// red in it or at a red step — `bare` after a red verb would be reading
+/// a build the verbs have already answered for.
+fn against_the_build(
+    ground: &Ground<'_>,
+    steps: &[(usize, &Required)],
+    jobs: usize,
+    lanes: &crate::lanes::Lanes<'_>,
+) -> Vec<String> {
+    let mut at = 0;
     while at < steps.len() {
-        if steps[at].step.builds_app {
+        if steps[at].1.step.builds_app {
             let end = steps[at..]
                 .iter()
-                .position(|r| !r.step.builds_app)
+                .position(|(_, r)| !r.step.builds_app)
                 .map_or(steps.len(), |n| at + n);
-            let block: Vec<(usize, &Required)> = (at..end).map(|i| (i, steps[i])).collect();
-            let failures = verbs(ground, &block, jobs, lanes);
+            let failures = verbs(ground, &steps[at..end], jobs, lanes);
             if !failures.is_empty() {
                 return failures;
             }
             at = end;
             continue;
         }
-        if let Err(why) = run_one(ground, at, steps[at], false) {
+        let (index, required) = steps[at];
+        if let Err(why) = run_one(ground, index, required, false) {
             return vec![why];
         }
         at += 1;
@@ -475,9 +534,9 @@ fn side(
 /// A building verb that went red because the app did not build ends the
 /// block: the next one alone would build the same sources to the same
 /// error, and a block of a hundred verbs would spend its minutes saying
-/// so a hundred times. The side's clippy usually fails first on a source
-/// that does not compile; what reaches here is a build that fails only
-/// in release, or only with the harness feature on.
+/// so a hundred times. The checks group's clippy fails on the same
+/// source beside this block rather than ahead of it, so the block has to
+/// stop itself.
 fn verbs(
     ground: &Ground<'_>,
     block: &[(usize, &Required)],
@@ -696,11 +755,11 @@ const RUNNER: &str = "xtask-runner-";
 ///
 /// A step that is one of xtask's own verbs is spelled `cargo run -p
 /// xtask -- …` in the plan, and cargo holds `target/debug` for the
-/// length of any build there — so eight launchers starting at once, with
-/// the container side's host launchers beside them, waited on each other
-/// (measured: a fifth of a gate's host verb logs showed the wait on the
-/// build directory and most of them the package-cache one; from the
-/// copy, none). Built with cargo all the same, so that it is the
+/// length of any build there — so beside the checks ([`side`]) every
+/// verb's launcher would wait out whatever `cargo test` was compiling,
+/// and even with nothing beside them but each other a fifth of a gate's
+/// host verb logs showed the wait on the build directory (none from the
+/// copy). Built with cargo all the same, so that it is the
 /// tree's code — under `land` the rebase has just brought sources in —
 /// and copied rather than run in place, because the landing has renamed
 /// the slot away from under this very process and the slot is what cargo

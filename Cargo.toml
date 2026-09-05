@@ -49,6 +49,17 @@ inherits = "dev"
 [profile.hooks.package.xtask]
 opt-level = 0
 
+# **The shipped build has a directory of its own too.** `cargo xtask
+# shipped` builds the app without the harness feature and the gate's
+# verbs build it with, and in one directory each build replaces the
+# other's binary: the verbs' release was relinked twice a gate, and a
+# verb starting while `shipped` links would read a binary being replaced.
+# In target/shipped the two never meet, so the gate runs `shipped` beside
+# its verbs instead of ahead of them. The release settings unchanged, at
+# the price of one more copy of the release build per tree.
+[profile.shipped]
+inherits = "release"
+
 [workspace.lints.rust]
 unsafe_code = "warn"
 
