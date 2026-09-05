@@ -60,6 +60,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "gone_row tag=v0.3-local row=-1 total=2 chips=true",
     },
+    // The delete row dressed with git's answer before any click. **The
+    // picture cannot answer this**: a row nobody asked about wears
+    // `branch --delete`, and so does one whose answer came back merged
+    // — the line is the only place the two are told apart, and without
+    // a row here the verb was judged on the shot alone (verify-ui
+    // §PG_AUTO_ACT 動詞表). It is also what fails the run that opened
+    // its card over a delete that was out, which is otherwise 120
+    // silent seconds of watchdog (`AutoActRefVerbs.earlyDeleteTimer`).
+    //
+    // `from=` is left outside the run on purpose: an in-window branch
+    // answers off the drawn rows and a tip off git, and which of the
+    // two a run gets is the refs' timing rather than the claim.
+    Verb {
+        name: "delete-branch-early",
+        when: &[(
+            Arg::Is("feature/topic-a"),
+            "merged=false code=branch -D held=true note=not merged",
+        )],
+        plain: "delete_early asked=true",
+    },
     // The delete table's greyed rows, each saying why it is out. **The
     // picture cannot answer this**: a tooltip is words, and a row that
     // greyed for the wrong reason frames exactly like one that greyed
