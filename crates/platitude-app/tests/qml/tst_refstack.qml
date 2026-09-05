@@ -45,14 +45,15 @@ Item {
         function test_the_front_card_s_own_colour_is_the_one_that_may_come_twice() {
             stack.records = [root.tagHere, root.tagHere2, "T00010v1.2", "T00010v1.3"]
             compare(stack.sheets, ["tag"])
-            compare(stack.layout[0].gap, stack.sameGap)
+            // And it stands out by the step every other sheet stands out by: the repeat is not spaced away from the
+            // card it repeats.
+            compare(stack.layout[0].x, stack.step)
         }
 
         // Every other colour is one sheet however many names wear it — only the sheet against the card may repeat it.
         function test_a_colour_behind_the_card_is_one_sheet_however_many_wear_it() {
             stack.records = [root.current, root.tagHere, root.tagHere2, "T00010v1.2"]
             compare(stack.sheets, ["tag"])
-            compare(stack.layout[0].gap, 0)
         }
 
         // Hue says the kind, lightness says where it is (デザイン規約 §ref の種別) — two colours, so two sheets.
@@ -65,7 +66,6 @@ Item {
         function test_a_held_branch_is_its_own_colour() {
             stack.records = [root.local2, root.held]
             compare(stack.sheets, ["held"])
-            compare(stack.layout[0].gap, 0)
             stack.records = [root.held, root.local2]
             compare(stack.sheets, ["local"])
         }
@@ -88,7 +88,10 @@ Item {
         function test_the_row_with_a_second_local_on_it() {
             stack.records = [root.current, root.local2, root.remote, root.tagHere]
             compare(stack.sheets, ["local", "remote", "tag"])
-            compare(stack.layout[0].gap, stack.sameGap)
+            // One step apiece, all the way back: the sheet of the card's own colour is not spaced any further out
+            // than the two behind it.
+            for (let i = 0; i < stack.layout.length; ++i)
+                compare(stack.layout[i].x, (i + 1) * stack.step)
         }
 
         // The slope flattens as the fan deepens and the card rises with it, and neither is allowed to reach a
@@ -114,9 +117,14 @@ Item {
             // Deeper every time, and never by more than the steep step.
             for (let j = 1; j < depths.length; ++j) {
                 verify(depths[j] > depths[j - 1], "depth " + j + " did not grow")
-                verify(depths[j] - depths[j - 1] <= stack.steepStep + stack.sameGap,
+                verify(depths[j] - depths[j - 1] <= stack.steepStep,
                        "depth " + j + " grew too fast")
             }
+            // A whole step for every sheet of every fan that has room for one: the flattening belongs to the deepest
+            // row alone, which stops on exactly what the row can hold.
+            for (let k = 0; k < depths.length - 1; ++k)
+                compare(depths[k], (k + 1) * stack.steepStep)
+            compare(depths[depths.length - 1], stack.maxDepth)
             // Nothing rises until the third sheet, and then it does.
             compare(lifts[0], 0)
             compare(lifts[1], 0)
