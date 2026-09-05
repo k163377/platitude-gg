@@ -76,8 +76,13 @@ commands:
         --fresh       ignore the stamps and run everything owed
         --dry-run     print the reach and the steps, run nothing
         --verb <l>    a verify-ui line to run besides the census's
-        --jobs <n>    verbs at a time per side (default: a third of
-                      the logical CPUs, 1 to 8)
+        --jobs <n>    this gate's verbs at a time per side (default: a
+                      third of the logical CPUs, 1 to 8). The lanes are
+                      the machine's: every gate on it shares that many
+                      per side, so two gates at once run that many verbs
+                      between them, not twice that. A tree holds one gate
+                      at a time — a second one there is refused with the
+                      first's pid (a dry run holds nothing)
         --dir <tree>  gate that tree instead of this one
       gate verdict <old> <new>   the hook's question (exit 0 = may move)
       gate install               copy .githooks/reference-transaction

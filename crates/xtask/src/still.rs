@@ -534,14 +534,14 @@ fn read_note(path: &Path) -> Option<Note> {
 
 /// One note, as a file records it: the process, when it began, and what
 /// it is doing.
-struct Note {
+pub(crate) struct Note {
     pid: u32,
     since: u64,
     what: String,
 }
 
 impl Note {
-    fn now(what: &str) -> Self {
+    pub(crate) fn now(what: &str) -> Self {
         Self {
             pid: std::process::id(),
             since: now_secs(),
@@ -551,7 +551,7 @@ impl Note {
 
     /// A lock somebody holds beside a note not yet written, or not
     /// written the way this reads it.
-    fn unreadable() -> Self {
+    pub(crate) fn unreadable() -> Self {
         Self {
             pid: 0,
             since: now_secs(),
@@ -559,14 +559,14 @@ impl Note {
         }
     }
 
-    fn text(&self) -> String {
+    pub(crate) fn text(&self) -> String {
         format!(
             "pid {}\nsince {}\nwhat {}\n",
             self.pid, self.since, self.what
         )
     }
 
-    fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         Some(Self {
             pid: field(text, "pid ")?.parse().ok()?,
             since: field(text, "since ")?.parse().ok()?,
@@ -575,7 +575,7 @@ impl Note {
     }
 
     /// The note as a person reads it: what, whose, for how long.
-    fn line(&self) -> String {
+    pub(crate) fn line(&self) -> String {
         let age = Duration::from_secs(now_secs().saturating_sub(self.since));
         format!(
             "{} (pid {}, for {})",

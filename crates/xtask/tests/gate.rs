@@ -1133,3 +1133,50 @@ fn a_source_change_owes_no_policy_check() {
     sb.gate_ok(&sb.seat, &[]);
     assert!(!sb.ran().contains("deny"));
 }
+
+/// One gate per tree: while one holds the tree a second is refused with
+/// the first's pid and runs nothing, a dry run is not held (it runs
+/// nothing either), and the tree is free again the moment the first is
+/// done — or gone.
+#[test]
+fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
+    let sb = Sandbox::new("one-gate");
+    sb.write_refs(&sb.seat, 17);
+    sb.commit_all(&sb.seat, "feat(core): seventeen", &[]);
+    let target = sb.seat.join("target");
+    std::fs::create_dir_all(&target).expect("the seat's target");
+    std::fs::write(
+        target.join("gate-running"),
+        "pid 424242\nsince 0\nwhat gate --all\n",
+    )
+    .expect("the first gate's note");
+    let held = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(target.join("gate-running.lock"))
+        .expect("the first gate's lock");
+    held.try_lock()
+        .expect("held from here, as the first gate holds it");
+
+    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
+    assert!(!ok, "a second gate ran beside the first:\n{text}");
+    assert!(
+        text.contains("already running") && text.contains("gate --all (pid 424242"),
+        "{text}"
+    );
+    assert!(sb.ran().is_empty(), "the refused gate ran a step");
+    let (ok, text) = sb.gate(&sb.seat, &["--dry-run"], &[]);
+    assert!(
+        ok,
+        "a dry run holds nothing and is held by nothing:\n{text}"
+    );
+
+    drop(held);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(
+        !target.join("gate-running").exists(),
+        "the note comes down with the gate that wrote it"
+    );
+}

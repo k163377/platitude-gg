@@ -15,6 +15,7 @@ mod gui;
 mod hook;
 mod keepsakes;
 mod land;
+mod lanes;
 mod linux;
 mod note;
 mod perf;

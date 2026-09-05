@@ -137,6 +137,18 @@ fn default_jobs() -> usize {
 
 fn gate(args: &[String]) -> Result<(), String> {
     let opts = options(args)?;
+    // The tree's one gate, taken before the graph is read: a plan is
+    // seconds of reading, and a second gate here has nothing to read. A
+    // dry run holds nothing, because it runs nothing.
+    let what = format!("gate {}", args.join(" "));
+    let _sole = if opts.dry_run {
+        None
+    } else {
+        Some(crate::lanes::sole(
+            &running_note(&opts.dir),
+            what.trim_end(),
+        )?)
+    };
     let plan = plan::make(
         &opts.dir,
         &plan::Ask {
@@ -156,6 +168,7 @@ fn gate(args: &[String]) -> Result<(), String> {
 
 /// The gate for `land`: the seat's tree, both sides, the census's verbs.
 pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
+    let _sole = crate::lanes::sole(&running_note(seat), "land's gate")?;
     let plan = plan::make(
         seat,
         &plan::Ask {
@@ -168,6 +181,13 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
     )?;
     print!("{}", plan::describe(&plan));
     execute(&plan, default_jobs())
+}
+
+/// Where a tree's running gate leaves its note (`lanes::sole`): under
+/// `target/`, which the tree's git does not read, so the note is not the
+/// uncommitted change the gate refuses to run over.
+fn running_note(dir: &Path) -> std::path::PathBuf {
+    dir.join("target").join("gate-running")
 }
 
 /// Runs what is not cached, one thread per side, and stamps the commit
@@ -191,11 +211,29 @@ fn execute(plan: &Plan, jobs: usize) -> Result<(), String> {
         .iter()
         .filter(|r| r.step.side == Side::Linux)
         .collect();
+    // The lanes are the machine's — beside the repository's `.git`,
+    // which every seat shares (`lanes`). `jobs` above the machine's
+    // count widens the pool, an explicit ask; below it, it narrows this
+    // gate's share of it.
+    let common = crate::subprocess::common_git_dir(&plan.dir.display().to_string())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| format!("{} is not a git repository", plan.dir.display()))?;
+    let count = jobs.max(default_jobs());
+    let host_lanes = crate::lanes::Lanes {
+        common: &common,
+        side: "host",
+        count,
+    };
+    let linux_lanes = crate::lanes::Lanes {
+        common: &common,
+        side: "linux",
+        count,
+    };
     let started = std::time::Instant::now();
-    println!("gate: verbs {jobs} at a time per side");
+    println!("gate: verbs {jobs} at a time per side, on the machine's {count} lanes");
     let failures: Vec<String> = std::thread::scope(|scope| {
-        let host = scope.spawn(|| side("host", &plan.dir, &store, &host, jobs));
-        let linux = scope.spawn(|| side("linux", &plan.dir, &store, &linux, jobs));
+        let host = scope.spawn(|| side("host", &plan.dir, &store, &host, jobs, &host_lanes));
+        let linux = scope.spawn(|| side("linux", &plan.dir, &store, &linux, jobs, &linux_lanes));
         let mut failures = Vec::new();
         for handle in [host, linux] {
             match handle.join() {
@@ -300,7 +338,14 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
 /// later step of the side noise), and the verify-ui verbs — which share
 /// nothing but the release the first of them builds — as one block
 /// through [`verbs`].
-fn side(name: &str, dir: &Path, store: &Store, steps: &[&Required], jobs: usize) -> Vec<String> {
+fn side(
+    name: &str,
+    dir: &Path,
+    store: &Store,
+    steps: &[&Required],
+    jobs: usize,
+    lanes: &crate::lanes::Lanes<'_>,
+) -> Vec<String> {
     let logs = dir.join("target").join("gate-logs");
     if let Err(e) = std::fs::create_dir_all(&logs) {
         return vec![format!("{}: {e}", logs.display())];
@@ -313,7 +358,7 @@ fn side(name: &str, dir: &Path, store: &Store, steps: &[&Required], jobs: usize)
                 .position(|r| !r.step.builds_app)
                 .map_or(steps.len(), |n| at + n);
             let block: Vec<(usize, &Required)> = (at..end).map(|i| (i, steps[i])).collect();
-            let failures = verbs(name, dir, store, &logs, &block, jobs);
+            let failures = verbs(name, dir, store, &logs, &block, jobs, lanes);
             if !failures.is_empty() {
                 return failures;
             }
@@ -335,6 +380,10 @@ fn side(name: &str, dir: &Path, store: &Store, steps: &[&Required], jobs: usize)
 /// Only a verb of this side that built in this very invocation earns the
 /// others their `--no-build`: a cached verb's build happened in whatever
 /// tree took the stamp, and the binary here may be older than the tree.
+///
+/// Every verb runs in a lane of the machine's (`lanes`), the first one
+/// included: what bounds the load is the count of apps running, and the
+/// building verb is one of them.
 fn verbs(
     name: &str,
     dir: &Path,
@@ -342,10 +391,28 @@ fn verbs(
     logs: &Path,
     block: &[(usize, &Required)],
     jobs: usize,
+    lanes: &crate::lanes::Lanes<'_>,
 ) -> Vec<String> {
     for (_, required) in block.iter().filter(|(_, r)| r.cached) {
         println!("[{name}] cached {}", required.step.id);
     }
+    // How many verbs waited for a lane held elsewhere, and for how long
+    // in all: the one line that says another gate was running beside
+    // this one, without a line per verb.
+    let waited = std::sync::Mutex::new((0usize, std::time::Duration::ZERO));
+    let in_a_lane = |index: usize, required: &Required, no_build: bool| -> Result<(), String> {
+        let lane = lanes
+            .take()
+            .map_err(|why| format!("{}: {why}", required.step.id))?;
+        if lane.waited > std::time::Duration::ZERO {
+            let mut tally = waited
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            tally.0 += 1;
+            tally.1 += lane.waited;
+        }
+        run_one(name, dir, store, logs, index, required, no_build)
+    };
     let mut queue = block.iter().filter(|(_, r)| !r.cached);
     let mut failures = Vec::new();
     // Alone until one is green: a red first verb may have left no build
@@ -355,7 +422,7 @@ fn verbs(
         let Some((index, required)) = queue.next() else {
             return failures;
         };
-        match run_one(name, dir, store, logs, *index, required, false) {
+        match in_a_lane(*index, required, false) {
             Ok(()) => built = true,
             Err(why) => failures.push(why),
         }
@@ -371,7 +438,7 @@ fn verbs(
                     let Some((index, required)) = rest.get(i) else {
                         break;
                     };
-                    if let Err(why) = run_one(name, dir, store, logs, *index, required, true) {
+                    if let Err(why) = in_a_lane(*index, required, true) {
                         failed
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -381,6 +448,15 @@ fn verbs(
             });
         }
     });
+    let (verbs_waited, in_all) = waited
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if verbs_waited > 0 {
+        println!(
+            "[{name}] lanes: {verbs_waited} verb(s) waited for a lane held elsewhere ({} in all)",
+            crate::seats::format_age(Some(in_all))
+        );
+    }
     failed
         .into_inner()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
