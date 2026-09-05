@@ -1398,7 +1398,7 @@ mod tests {
         // Spelled in pieces: whole paths here would be read as this very
         // file reading each of them.
         let pairs = [
-            ("xtask/tests", "gate.rs", "xtask/src", "main.rs"),
+            ("xtask/tests/gate", "support.rs", "xtask/src", "main.rs"),
             (
                 "platitude-core/tests/it/support",
                 "integrate.rs",
