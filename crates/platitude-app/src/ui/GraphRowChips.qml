@@ -36,11 +36,16 @@ Item {
     required property bool namingRefused
     required property string namingRefusedWhy
 
-    /// The chip itself — what a stacked one is unstacked under.
-    readonly property alias chipItem: rowChip
+    /// Whether the card this column's chip unfolds into is standing on it — the row's own answer
+    /// (`GraphRowDelegate.listOnThisChip`), handed down so the sheets behind the card are not left peeking out from
+    /// under its left edge.
+    required property bool listOpen
+
+    /// The front card itself — what a stacked one is unstacked under.
+    readonly property alias chipItem: rowStack.chipItem
     /// The mark as the chip is actually wearing it, for the run that photographs the wait (`RefChip.waiting`) — read
     /// off the chip rather than off what was asked of it, which would be green with the binding cut.
-    readonly property alias chipWaiting: rowChip.waiting
+    readonly property alias chipWaiting: rowStack.chipWaiting
     /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
     /// ground the box is standing on, and a headless run (`PG_AUTO_ACT=name-box`) to say which of the two it got.
     /// Zero while there is no box.
@@ -60,7 +65,7 @@ Item {
     /// **Every chip answers, stacked or not**: a chip with one name on it is cut to the column
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
     /// reason a single one does. What comes out is the same card either way.
-    readonly property bool hasChip: rowChip.visible
+    readonly property bool hasChip: rowStack.visible
 
     /// What the box opened holding, kept on the column so the box can be handed it whichever lands first — the ask,
     /// or the box itself (`focusBox`).
@@ -94,8 +99,8 @@ Item {
     // this column — so without this the strokes would be drawn over it.
     z: chipColumn.naming ? 1 : 0
 
-    RefChip {
-        id: rowChip
+    RefChipStack {
+        id: rowStack
         // Assigning `visible` here replaces the chip's own rule, so the "has anything to show" half has to be repeated:
         // without it a row with no refs draws an empty frame.
         //
@@ -108,8 +113,12 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
+        // The fan grows into the room under the card, and borrows a step from above it once that is used up
+        // (`RefChipStack.lift`) — so a deep stack keeps clear of the row below without the card leaving its row.
+        anchors.verticalCenterOffset: -rowStack.lift
         records: chipColumn.records
         waiting: chipColumn.waiting
+        unstacked: chipColumn.listOpen
         // The names the chip cannot fit are read in the card, not squeezed here.
         maxWidth: chipColumn.columnWidth - Theme.spaceSm
     }

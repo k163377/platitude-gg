@@ -9,10 +9,10 @@ import platitude.ui
 // room for. The branches are what can be moved to; the tags are read here and nowhere else.
 //
 // **It opens over the chip, not under it** (規約 §グラフ行のダブルクリック): the owner lands the first row on the chip's own
-// seat, so the name the chip was showing is not written out a second time, and the `+N` goes with it — a row carries
-// one record, and a chip with one record has no count to draw. What is left reads as the chip's own frame widening
-// into the graph, with the rest of the names stacked under it. **Always that way** — see the owner on why the side is
-// not chosen.
+// seat, so the name the chip was showing is not written out a second time, and the sheets behind it go with it — the
+// stack is what this card stands in for, so the row it stands on stops drawing one. What is left reads as the chip's
+// own frame widening into the graph, with the rest of the names stacked under it. **Always that way** — see the owner
+// on why the side is not chosen.
 //
 // Owned by the page, not by the delegate that raised it — delegates are recycled out from under an open popup, which is
 // why the context menus live there too. It is a popup rather than an item in the row for the same reason a menu is:
@@ -69,9 +69,9 @@ AppCard {
     property string rowOid: ""
     /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
     ///
-    /// **The card is never narrower than what it stands on.** Its own rows carry one record each and so draw no `+N`,
-    /// while the chip underneath may be wearing one: a card sized only to its own names can come out narrower than the
-    /// chip and leave a sliver of the frame it is replacing showing past its edge (measured at two pixels).
+    /// **The card is never narrower than what it stands on.** Its own rows are laid out to their own names, and a card
+    /// sized only to those can come out narrower than the chip it is covering and leave a sliver of the frame it is
+    /// replacing showing past its edge (measured at two pixels).
     property real minRowWidth: 0
 
     padding: Theme.spaceXs
@@ -158,9 +158,14 @@ AppCard {
                 readonly property bool current:
                     refRow.modelData[0] === "L"
                     && GitFacts.recordName(refRow.modelData) === refList.currentBranch
-                // The detached-HEAD marker is the one row that is only a marker: nowhere to go and no ref to read, so
-                // it mutes. A branch another working copy has out mutes for the other reason there is — git refuses
-                // the move outright (§無効 is for what is actually unavailable, and this one is).
+                // The detached-HEAD marker is the one row that is only a marker: nowhere to go and no ref to read. A
+                // branch another working copy has out is unavailable for the other reason there is — git refuses the
+                // move outright (§無効 is for what is actually unavailable, and this one is).
+                //
+                // **Neither is said in the chip's colour here.** The held one already says it in its own record (a
+                // dulled frame and the `tree` mark, wherever it is drawn), and the marker's colour is a state rather
+                // than a kind: muting it here would make the same marker amber on the row and grey in the card it
+                // unfolds into. What this answers is the hover wash and the click, below.
                 readonly property bool unavailable:
                     refRow.modelData[0] === "H" || refRow.modelData[5] === "1"
                 readonly property bool leadsNowhere:
@@ -184,7 +189,6 @@ AppCard {
                     // to hold still (規約 §グラフ列は最も広い所のレーンまで).
                     x: 0
                     records: [refRow.modelData]
-                    muted: refRow.unavailable
                     // The same wash the row's own chip wears while a second click waits out its window — this card is
                     // that chip, so the mark is on whichever of the two the reader is looking at (規約 §グラフ行のダブルクリック).
                     waiting: refList.rowClicks ? refList.rowClicks.rowRenameArmed(refRow.modelData) : false
@@ -197,7 +201,7 @@ AppCard {
                 // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a drifted
                 // one puts the same bare name on two rows — this card is where the two meet, so it is where the
                 // question gets answered. Meta about the row rather than part of the name, so it is written in the
-                // colour the `+N` is (§ref の種別).
+                // colour the row's other meta is (§ref の種別).
                 Label {
                     id: whose
                     visible: rowChip.recWhere !== ""

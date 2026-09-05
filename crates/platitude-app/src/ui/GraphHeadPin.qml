@@ -190,9 +190,10 @@ Rectangle {
 
     // The chip column, laid out as a row's is (`GraphRowChips`): the chip against the column's right edge, its names
     // cut to the column, and level with the row.
-    RefChip {
+    RefChipStack {
+        id: pinStack
         x: pin.labelWidth - width - Theme.spaceXs
-        y: pin.rowMidY - height / 2
+        y: pin.rowMidY - height / 2 - pinStack.lift
         records: pin.records
         maxWidth: pin.labelWidth - Theme.spaceSm
     }

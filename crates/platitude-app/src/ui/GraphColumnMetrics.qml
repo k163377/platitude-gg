@@ -56,10 +56,14 @@ QtObject {
         width: Theme.iconSm
         height: Theme.iconSm
     }
-    /// Everything a chip spends on what is not the name: the `+N` seat, the remote/PR badge and the gap before it, the
-    /// held mark and the gap after it, and its own padding on either side. **Each one is a term `RefChip` takes off the
-    /// name**, so each one is here, and a floor measured on the bare chip leaves the row that wears them with nothing
-    /// but the cut mark (measured).
+    /// The fan of sheets behind the card, asked of the stack itself the way the two marks are asked of icons: how many
+    /// sheets there can be is the number of colours a record can wear, which is the stack's own arithmetic and not a
+    /// number this file may keep a second copy of. It draws nothing — nothing is handed to it.
+    readonly property RefChipStack chipFan: RefChipStack {}
+    /// Everything a chip column spends on what is not the name: the fan of sheets behind the card, the remote/PR badge
+    /// and the gap before it, the held mark and the gap after it, and the card's own padding on either side. **Each one
+    /// is a term the card takes off the name**, so each one is here, and a floor measured on the bare chip leaves the
+    /// row that wears them with nothing but the cut mark (measured).
     ///
     /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
     /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
@@ -68,9 +72,9 @@ QtObject {
     /// `feature/topic-a` one character where three were promised (measured).
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
-    /// own padding. Each mark's term is its plain ink and the half gap that follows it; `spaceLg` is the `+N` with its
-    /// own half gap already in it.
-    readonly property real chipFurnitureW: Theme.spaceLg
+    /// own padding. Each mark's term is its plain ink and the half gap that follows it; the fan's is a step per sheet
+    /// and the one gap a sheet of the card's own colour takes (`RefChipStack.fanMaxW`).
+    readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipBadgeMark.inkWidth + Theme.spaceXs / 2
         + chipHeldMark.inkWidth + Theme.spaceXs / 2
         + 2 * Theme.spaceXs

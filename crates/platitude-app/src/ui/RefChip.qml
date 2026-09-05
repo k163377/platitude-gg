@@ -2,7 +2,9 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One aggregated chip: primary name + "+N". There are two things to read off it and they get one channel each — the
+// The front card of a commit's names: the first one, drawn whole. What else the commit carries is said behind it, one
+// sheet per colour, by the stack that seats this (`RefChipStack`) — this file draws the card and nothing else. There
+// are two things to read off it and they get one channel each — the
 // frame carries the kind (local = accent, remote = secondary grey, detached HEAD = warning, which is a state rather
 // than a kind, tag = refTag with a fill behind it), and the name carries where the ref is: ordinary text for one that
 // is in this repository, grey for one that is only on the remote (デザイン規約 §ref の種別). The sidebar already reads that way
@@ -15,18 +17,17 @@ Rectangle {
     id: chip
     property var records: []
     property real maxWidth: Metrics.labelColW
-    // Nowhere to go from here (the branch already under the working tree): §無効 — the words drop to the muted colour,
-    // frame included, since the frame is how a branch chip is read at all.
-    property bool muted: false
     /// Whether a name too long for `maxWidth` runs on to another line instead of being cut. Off everywhere the chip
     /// stands in a row of its own size — the graph row, the menus — and on in the list a chip unstacks into, which is
     /// the one place the name is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the
     /// lines are a single label inside a single border, so a wrapped name is one chip that got taller, not two chips.
     property bool wrapped: false
-    /// The same answer the record itself can carry: a branch another working copy has out is nowhere a move can go
-    /// either (git refuses it outright), so it reads the way the caller's own `muted` does. It carries a mark of its
-    /// own as well — the muting says a move cannot land here, the mark says where the branch went instead.
-    readonly property bool dulled: chip.muted || chip.recHeld
+    /// Nowhere a move can go: another working copy has this branch out and git refuses it outright (§無効). The words
+    /// drop to the muted colour, frame included, since the frame is how a branch chip is read at all — and the mark
+    /// beside them says where the branch went instead. **The record carries it**, so the chip reads the same wherever
+    /// it is drawn — nothing outside may dull one, or the same ref comes out in two colours on the two things that
+    /// draw it (the row and the card it unfolds into).
+    readonly property bool dulled: chip.recHeld
     /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
     /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
     /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
@@ -53,11 +54,11 @@ Rectangle {
     width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
-    /// Everything in the chip that is not the name: the `+N` seat, the badge with its gap, and the held mark with its
-    /// own. Each is counted only while it is drawn — the two marks come and go, and a name measured against room that
-    /// is not taken would be cut short of the frame.
-    readonly property real furnitureW: (chip.records.length > 1 ? Theme.spaceLg : 0)
-                                       + (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
+    /// Everything in the chip that is not the name: the badge with its gap, and the held mark with its own. Each is
+    /// counted only while it is drawn — the two marks come and go, and a name measured against room that is not taken
+    /// would be cut short of the frame. **What the row carries beyond the first name is not in here** — that is said
+    /// behind the card, outside the frame (`RefChipStack`).
+    readonly property real furnitureW: (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
                                        + (chip.recHeld ? chip.heldInk + Theme.spaceXs / 2 : 0)
     /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that rather than to their
     /// square**: the air a box holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白).
@@ -83,7 +84,6 @@ Rectangle {
     // rather than asked of a model: the record is rebuilt whenever the ref joins are, so the chip repaints with the
     // rest of them instead of hanging a binding off a slot (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
-    readonly property bool tagStyle: recKind === "T"
     // Name, and the remotes it was read from when it was not read here. The separator is absent whenever there are
     // none, so the name runs to the end of the record (see encode.rs).
     readonly property var recFields: rec.substring(6).split("\u001E")
@@ -91,14 +91,41 @@ Rectangle {
     readonly property string recWhere: chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR open (規約 §グラフ行のダブルクリック — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
-    // A tag this repository does not hold keeps the tag hue and only drops a step (§暗く落とした段): still a tag, read
-    // somewhere else. Only tags dim, because only tags need it — every other kind says where it is in its own frame
-    // colour (a remote branch is grey) or in its name (`origin/main` carries the remote in the name itself).
-    readonly property color kindColor: chip.dulled ? Theme.textMuted
-                                       : tagStyle ? (recHere ? Theme.refTag : Theme.refTagDim)
-                                       : recKind === "R" ? Theme.textSecondary
-                                       : recKind === "H" ? Theme.warning
-                                       : Theme.accent
+    /// Every colour a record can wear, which is how many cards one commit's names can ever come to
+    /// (`RefChipStack.maxSheets`). **The list, not a number** — a kind added below is counted here by adding it here.
+    readonly property var kindKeys: ["head", "local", "held", "remote", "tag", "tagdim"]
+    /// Which of the frame colours a record wears, as a name rather than the colour itself. **The stack behind the card
+    /// counts colours** (`RefChipStack`) and two colours cannot be told apart by comparing `color` values, so the rule
+    /// answers in words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with its
+    /// state rather than its kind: nothing can move onto it, and that is what the reader has to see first.
+    function kindKeyOf(rec) {
+        if (rec.length > 5 && rec[5] === "1")
+            return "held"
+        if (rec[0] === "T")
+            return rec.length > 4 && rec[4] === "1" ? "tag" : "tagdim"
+        if (rec[0] === "R")
+            return "remote"
+        if (rec[0] === "H")
+            return "head"
+        return "local"
+    }
+    /// A tag this repository does not hold keeps the tag hue and only drops a step (§暗く落とした段): still a tag, read
+    /// somewhere else. Only tags dim, because only tags need it — every other kind says where it is in its own frame
+    /// colour (a remote branch is grey) or in its name (`origin/main` carries the remote in the name itself).
+    function kindColourFor(key) {
+        return key === "held" ? Theme.textMuted
+             : key === "tag" ? Theme.refTag
+             : key === "tagdim" ? Theme.refTagDim
+             : key === "remote" ? Theme.textSecondary
+             : key === "head" ? Theme.warning
+             : Theme.accent
+    }
+    /// The ground a card of that kind stands on. Only tags carry one.
+    function kindGroundFor(key) {
+        return key === "tag" || key === "tagdim" ? Theme.bgElevated : "transparent"
+    }
+    readonly property string kindKey: chip.kindKeyOf(chip.rec)
+    readonly property color kindColor: chip.kindColourFor(chip.kindKey)
     // Where it is, not what it is. Grey is the name of something this repository does not hold — a remote branch, or a
     // tag only a remote has. Dropping further, to textMuted, would claim it cannot be reached, and a double-click on a
     // remote branch row goes there (§無効 is for what is actually unavailable). The detached HEAD marker keeps its state
@@ -110,7 +137,7 @@ Rectangle {
                                        : !recHere ? Theme.textSecondary
                                        : Theme.textPrimary
 
-    color: tagStyle ? Theme.bgElevated : "transparent"
+    color: chip.kindGroundFor(chip.kindKey)
     border.color: kindColor
     border.width: Theme.borderWidth
 
@@ -144,11 +171,6 @@ Rectangle {
         font: nameLabel.font
         text: "Hbxp"
     }
-    TextMetrics {
-        id: countInk
-        font: countLabel.font
-        text: "Hbxp"
-    }
     // How far apart the family sets its lines, for the height a wrapped name takes. `TextMetrics` cannot answer this
     // one — it measures a string, and line spacing is the family's.
     FontMetrics {
@@ -171,9 +193,9 @@ Rectangle {
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs
         // **A whole gap from the frame, half a gap between the things inside it**. Everything in
-        // here — the mark, the name, the count, the badge — is one phrase about one commit, and the frame's own padding
-        // is the only wide space in the box; at a whole gap throughout, the `+N` stood off from the name it counts for
-        // as far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
+        // here — the mark, the name, the badge — is one phrase about one commit, and the frame's own padding is the
+        // only wide space in the box; at a whole gap throughout, each mark stood off from the name it belongs to as
+        // far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
         // this spacing that is already the half gap their box-air would otherwise take out of a whole one.
         spacing: Theme.spaceXs / 2
         // Ahead of the name, and only when there is one to draw: another working copy has this branch out (observed
@@ -222,16 +244,6 @@ Rectangle {
             // The narrower of what the name wants and what it is given. **The same expression either way**: a wrapped
             // label handed its whole room would make every chip in a list as wide as the widest name.
             width: Math.min(implicitWidth, chip.nameRoom)
-        }
-        // How many more names the card has, which is meta about the row rather than one of the names — the colour the
-        // row's other meta (author, date) is written in.
-        Label {
-            id: countLabel
-            y: chip.inkY(countLabel, countInk)
-            visible: chip.records.length > 1
-            text: "+" + (chip.records.length - 1)
-            color: chip.dulled ? Theme.textMuted : Theme.textSecondary
-            font.pixelSize: Theme.fontSm
         }
         // Remote / PR badge: reserved width above, so it survives any elision.
         //

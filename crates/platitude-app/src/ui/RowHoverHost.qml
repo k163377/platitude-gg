@@ -135,8 +135,9 @@ Item {
     ///
     /// **The first row lands exactly on the chip** (規約 §グラフ行の
     /// ダブルクリック), so the name the chip was showing is not written
-    /// out again beside itself, and the `+N` is covered by the row that
-    /// takes its place. From there it always grows the one way, into the
+    /// out again beside itself. The sheets behind it go down as the card
+    /// comes up (`RefChipStack.unstacked`), which is what the card stands
+    /// in for. From there it always grows the one way, into the
     /// graph: a card that picked its side by how long the names were
     /// answered the same chip differently on different rows, and the
     /// reason was not on screen to be read (observed —
@@ -151,8 +152,7 @@ Item {
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
         refList.records = records
-        // Never narrower than the chip it is covering — the rows draw no
-        // `+N` and the chip may be wearing one (see the property).
+        // Never narrower than the chip it is covering (see the property).
         refList.minRowWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
         // what the card puts around a chip on its own edges (its

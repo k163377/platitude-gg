@@ -46,8 +46,9 @@ Item {
     // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
     // Chip records are separated by U+001F (see encode.rs), and arrive in the order the chip reads them out: HEAD →
-    // local → remote → tag. One chip for the row, so a commit that is both a branch tip and a release shows the branch
-    // — the tag is behind the "+N", where the hover card has it. A chip the window has already said is gone is left
+    // local → remote → tag. One card for the row, so a commit that is both a branch tip and a release shows the branch
+    // — the tag is a sheet behind it (`RefChipStack`), read whole in the hover card. A chip the window has already
+    // said is gone is left
     // out (`encode::labels_shown` applies the set): the row still carries it, because the ref only leaves the model
     // when the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す). Read off the model rather than
     // mirrored onto the view — the same list that hands out `labels` says which names the window stands in for.
@@ -141,6 +142,7 @@ Item {
             records: rowItem.labelRecords
             columnWidth: rowItem.labelsW
             waiting: rowItem.renameArmed
+            listOpen: rowItem.listOnThisChip
             naming: rowItem.naming
             namingMode: rowItem.ListView.view ? rowItem.ListView.view.namingMode : "branch"
             namingKind: rowItem.ListView.view ? rowItem.ListView.view.namingKind : ""
@@ -401,7 +403,7 @@ Item {
             // about this commit, and the cards at its foot are about the name the chip is drawing — which is what
             // `renameRecord` already is, the first record the chip reads out (デザイン規約 §グラフ行の右クリック).
             // The hover still reads the division (`partAt`), because the two things a rest opens are two different
-            // things; a right-click opens one, so it has nothing to divide. The stacked names under +N aim the same
+            // things; a right-click opens one, so it has nothing to divide. The names behind the card aim the same
             // menu at one of themselves, through the right-click on the list the chip unfolds into.
             if (!rowItem.isWip)
                 rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameRecord)

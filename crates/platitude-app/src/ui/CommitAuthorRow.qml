@@ -365,8 +365,8 @@ Item {
                     color: Theme.textSecondary
                     pixelSize: Theme.fontSm
                 }
-                // The face and name of the first co-author, then a count of the rest — the same "+N" the graph chips use,
-                // so the row's width never moves. One rule runs under the lot, the way the hash and its copy icon share
+                // The face and name of the first co-author, then a count of the rest — the same "+N" the co-author line
+                // uses, so the row's width never moves. One rule runs under the lot, the way the hash and its copy icon share
                 // one: the two are one target.
                 CoAuthorLine {
                     id: coBlock

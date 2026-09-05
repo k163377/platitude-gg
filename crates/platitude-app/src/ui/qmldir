@@ -140,6 +140,7 @@ PublishForm 1.0 PublishForm.qml
 QuitWaitDialog 1.0 QuitWaitDialog.qml
 WindowQuitGate 1.0 WindowQuitGate.qml
 RefChip 1.0 RefChip.qml
+RefChipStack 1.0 RefChipStack.qml
 RefListPopup 1.0 RefListPopup.qml
 RefBranchMenu 1.0 RefBranchMenu.qml
 RefRowMenu 1.0 RefRowMenu.qml

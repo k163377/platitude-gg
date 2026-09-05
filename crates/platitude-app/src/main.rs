@@ -209,6 +209,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/QuitWaitDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowQuitGate.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefChip.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RefChipStack.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefListPopup.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefBranchMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefRowMenu.qml", "qt/qml/platitude");

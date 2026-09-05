@@ -113,7 +113,7 @@ Item {
     /// the commit button's own ending, and no other button has one (デザイン規約 §アバターを与える).
     property int phraseFace: -1
     property string phraseFaceUrl: ""
-    /// How many more people the same action credits, as the `+N` the graph's chips and the co-author line already use.
+    /// How many more people the same action credits, as the `+N` the co-author line already uses.
     /// Zero says nothing: the ordinary case carries no mark.
     property int phraseMates: 0
     /// What is said about that person's signature, in the mark's own vocabulary (`SignatureMark.kind`), and the one

@@ -227,8 +227,8 @@ Flickable {
                 // **And whom it will be attributed to.** The face ends the sentence the button is: the command,
                 // what goes, where it lands, by whom — which is the whole of what a commit records, and the
                 // one question the editor no longer has a row of its own for (デザイン規約 §アバターを与える).
-                // `+N` when the message credits others, the same mark the graph's chips and the details pane's
-                // credit line use; it follows the text being typed, so it appears as the trailer is written.
+                // `+N` when the message credits others, the same mark the details pane's credit line uses; it follows
+                // the text being typed, so it appears as the trailer is written.
                 phraseFace: block.repoTab.authorAvatar
                 phraseFaceUrl: block.repoTab.authorAvatarUrl
                 phraseMates: block.mateCount
