@@ -36,7 +36,15 @@ pub fn run(args: &[String]) -> Result<PathBuf, String> {
         }
     }
     let preset = preset.ok_or("demo-repo needs a preset (see `cargo xtask`)")?;
-    create(preset, at)
+    let named = at.is_some();
+    let root = root_for(preset, at)?;
+    let work = build_or_copy_in(preset, &root, "repo", named)?;
+    // This door is the one a person types at, and what comes out of it is
+    // a tree to look at rather than a run's leavings — so it is marked,
+    // and the sweep that takes the runs of a day ago leaves it standing
+    // (`verify::keep`).
+    crate::verify::keep(&root)?;
+    Ok(work)
 }
 
 pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
@@ -93,10 +101,18 @@ pub(super) fn base() -> PathBuf {
 pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
     let named = at.is_some();
     let root = root_for(preset, at)?;
+    build_or_copy_in(preset, &root, name, named)
+}
+
+/// Builds `preset` in a root already resolved, so the command entry can
+/// hold that root and mark it. Unmarked is what a run's root stays: the
+/// verify-ui runs come through here too, and theirs is the litter the
+/// sweep exists for.
+fn build_or_copy_in(preset: &str, root: &Path, name: &str, named: bool) -> Result<PathBuf, String> {
     if named {
-        return build(preset, &root, name);
+        return build(preset, root, name);
     }
-    super::template::build_or_copy(&root, preset, name)
+    super::template::build_or_copy(root, preset, name)
 }
 
 /// The preset itself: git, as many times as the state takes.

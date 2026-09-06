@@ -110,6 +110,31 @@ const RUN_BASES: [&str; 4] = ["pg-verify", "pg-demo", "pg-linux", "pg-census"];
 /// later what is left under these is nobody's evidence.
 const RUN_LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
+/// The file that takes a directory out of every sweep, for good.
+const KEEP: &str = ".pg-keep";
+
+/// Marks `root` as a tree a person asked for rather than one a run left,
+/// which is the whole of what the sweep goes by.
+///
+/// **Whether the tree is open cannot be asked instead.** A repository
+/// this application is showing is held by nothing — git is a subprocess
+/// per operation and no directory is watched — so a handle would answer
+/// "nobody's" for the tab that is on screen; a tree built to be looked at
+/// later is nobody's by definition; and under `pg-linux` the only side
+/// that could hold one is across the mount.
+///
+/// A mark is forever: a floor of any length is a guess at how long a
+/// person keeps a tree, and nothing here can make that guess. Marked
+/// trees are the person's to remove.
+pub(crate) fn keep(root: &Path) -> Result<(), String> {
+    std::fs::write(
+        root.join(KEEP),
+        "Built by hand (`cargo xtask demo-repo`). No sweep takes a directory\n\
+         holding this file. Delete the directory when you are done with it.\n",
+    )
+    .map_err(|e| format!("could not mark {} as kept: {e}", root.display()))
+}
+
 /// Takes yesterday's run directories away, in the background. Nothing
 /// else ever does: every run claims a directory and leaves it, and the
 /// gate runs hundreds of them a day (measured: sixty thousand of them,
@@ -130,7 +155,9 @@ pub(crate) fn sweep_yesterdays_runs() {
 
 /// Removes the entries of `base` last written `age` or longer before
 /// `now`, and answers how many went. An entry whose age cannot be read
-/// stays: a date nobody can read is no grounds for deleting.
+/// stays: a date nobody can read is no grounds for deleting. An entry
+/// carrying [`KEEP`] stays whatever its date: age is what makes a run's
+/// directory litter, and a tree somebody asked for is not one.
 fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
     let Ok(entries) = std::fs::read_dir(base) else {
         return 0;
@@ -147,6 +174,11 @@ fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
             continue;
         }
         let path = entry.path();
+        // Only the old are asked, so the runs of a day pay nothing for
+        // the question and the marked pay one stat apiece.
+        if path.join(KEEP).exists() {
+            continue;
+        }
         let removed = if path.is_dir() {
             std::fs::remove_dir_all(&path)
         } else {
@@ -217,6 +249,29 @@ mod tests {
         assert!(!run.exists(), "yesterday's run went, picture and all");
         assert!(!base.join("stray").exists());
         std::fs::remove_dir(&base).expect("the base, empty now");
+    }
+
+    /// The mark is what the sweep goes by, and it does not expire: the
+    /// hand-built tree stands on the day its neighbour's run goes, and on
+    /// every day after.
+    #[test]
+    fn a_sweep_leaves_a_marked_tree_and_takes_the_run_beside_it() {
+        let base = super::claim_dir(&std::env::temp_dir().join("pg-census"), "sweep-keep")
+            .expect("a base of this test's own");
+        let run = super::claim_dir(&base, "run").expect("a run directory");
+        let kept = super::claim_dir(&base, "by-hand").expect("a hand-built directory");
+        super::keep(&kept).expect("the mark a hand-built tree carries");
+        std::fs::write(kept.join("repo"), b"the tree a person means to open").expect("a work tree");
+        let age = super::RUN_LITTER_AGE;
+        let now = std::time::SystemTime::now();
+        assert_eq!(super::sweep_older_than(&base, now + age * 2, age), 1);
+        assert!(!run.exists(), "the run beside it went");
+        assert!(kept.join("repo").is_file(), "the marked tree stands");
+        // Nothing is left for a later sweep to find: the mark has no
+        // floor to outlive, so a month buys the sweep no more than a day.
+        assert_eq!(super::sweep_older_than(&base, now + age * 30, age), 0);
+        assert!(kept.join("repo").is_file(), "and stands a month on");
+        std::fs::remove_dir_all(&base).expect("the base and the tree it kept");
     }
 
     #[test]
