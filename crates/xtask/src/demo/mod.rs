@@ -15,6 +15,7 @@ mod scale;
 mod signing;
 mod stack;
 mod tags;
+mod template;
 mod worktrees;
 
 pub(crate) use presets::claim_root;

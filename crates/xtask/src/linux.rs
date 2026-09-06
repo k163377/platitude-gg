@@ -62,6 +62,16 @@ const WORK: &str = "/work";
 const TARGET_MOUNT: &str = "/work/target";
 const REGISTRY_MOUNT: &str = "/usr/local/cargo/registry";
 const OUT_MOUNT: &str = "/out";
+/// Where the demo repositories a run builds itself go, and — the reason
+/// it is a volume rather than the container's own `/tmp` — where the
+/// template each of them is copied from stands (`demo::template`).
+///
+/// A container is one verb, so nothing built in it outlives it: without
+/// this, every run in here would build its template and then throw it
+/// away. One volume per checkout, as the build directory is, because a
+/// template is only good for the task runner that built it and two
+/// checkouts build their own.
+const DEMO_MOUNT: &str = "/tmp/pg-demo";
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is
 /// writing.
@@ -345,6 +355,8 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg(format!("{}:{TARGET_MOUNT}", volume(root, "target")))
         .arg("--volume")
         .arg(format!("{IMAGE}-registry:{REGISTRY_MOUNT}"))
+        .arg("--volume")
+        .arg(format!("{}:{DEMO_MOUNT}", volume(root, "demo")))
         .arg("--workdir")
         .arg(WORK)
         // The checkout is mounted, so anything in here writes the host's

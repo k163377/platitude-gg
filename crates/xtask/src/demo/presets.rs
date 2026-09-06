@@ -1,6 +1,6 @@
 //! The preset table and the command entry that drives it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
@@ -71,14 +71,37 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 /// concurrently, and two that share a root `git init` into each other.
 /// `claim_dir` makes `create_dir` say which run owns the answer.
 pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
-    crate::verify::claim_dir(&std::env::temp_dir().join("pg-demo"), stem)
+    crate::verify::claim_dir(&base(), stem)
+}
+
+/// The one directory the runs and the templates they copy share.
+///
+/// Sharing it is what makes a copy a rewrite of one path segment rather
+/// than of a whole path (`template`), and it puts the templates where the
+/// sweep that takes yesterday's runs already looks.
+pub(super) fn base() -> PathBuf {
+    std::env::temp_dir().join("pg-demo")
 }
 
 /// Builds `preset` with the work tree called `name` rather than `repo` —
 /// a tab is titled after its work-tree folder (`models::tab_name`).
+///
+/// A root of this run's own is a copy of the preset's template
+/// (`template`); a root somebody named is built in directly, because what
+/// a template holds are paths under the root the runs share and `--at`
+/// points anywhere on the machine.
 pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
+    let named = at.is_some();
     let root = root_for(preset, at)?;
-    let mut repo = DemoRepo::init(&root, name)?;
+    if named {
+        return build(preset, &root, name);
+    }
+    super::template::build_or_copy(&root, preset, name)
+}
+
+/// The preset itself: git, as many times as the state takes.
+pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, String> {
+    let mut repo = DemoRepo::init(root, name)?;
     match preset {
         "basic" => basic(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
