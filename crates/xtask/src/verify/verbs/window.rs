@@ -282,9 +282,11 @@ pub(super) const TABLE: &[Verb] = &[
     // A `!` on a button with no word after it has nowhere to stand but
     // the mark's own corner, and that corner is also where a signature
     // and an avatar's badge sit elsewhere — so what is judged is that
-    // the mark survived the fold at all. The refusal is the
-    // repository's own (an origin that is not there, `fetch-fail` の
-    // 仕込み): handed a remote it can reach, the run never reports.
+    // the mark survived the fold at all. The refusal is the far side's:
+    // a plain `push` into a remote that moved on (`--preset diverged`,
+    // the run carrying `--allow-write-failure`), which is turned down
+    // for not fast-forwarding. The reachable origin is the point — the
+    // go has to get far enough to be refused for a `!` to stand on.
     Verb {
         name: "band-actions-alert",
         when: &[],
