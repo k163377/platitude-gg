@@ -272,6 +272,13 @@ fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
 
 /// The one gate of a tree, for as long as this stands. The note comes
 /// down with it; the lock goes with the handle, and with the process.
+///
+/// The lock file stays where it is, and nothing collects there: it stands
+/// at one name per tree (`gate::running_note`), not one per run. Removing
+/// a lock file at a name every gate opens is what would stop it being one
+/// lock — a second gate that opened it first would go on holding a file
+/// no longer at that name while a third made a new one there
+/// (`still::Name`).
 #[derive(Debug)]
 pub(crate) struct Sole {
     note: PathBuf,
