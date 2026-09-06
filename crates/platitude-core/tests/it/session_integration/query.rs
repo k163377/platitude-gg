@@ -98,8 +98,8 @@ fn status_reads_at_once(sink: &CaptureSink) -> usize {
 /// the periodic tick, a write settling its own working tree, and the
 /// window asking again. Two of them reading at once is the whole of a
 /// `status --porcelain=v2 -uall` — every tracked and ignored file
-/// lstat'd — run twice for one answer, with the gate on the publish
-/// throwing the older one away after both have already been paid for.
+/// lstat'd — run twice for one answer, one of the two thrown away after
+/// both have already been paid for.
 // `worker_threads = 2` is the test's own premise: the hook below parks a
 // worker at the spawn it fires on, and the rest of the session has to
 // keep running on another (`CaptureSink::hook_once`).

@@ -106,10 +106,6 @@ impl RepoSession {
             auto_fetch_interval: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             open_fetch: Mutex::new(OpenFetchState::Unasked),
-            refs_gate: OpGate::default(),
-            status_gate: OpGate::default(),
-            stash_gate: OpGate::default(),
-            worktrees_gate: OpGate::default(),
         });
         // The handle is kept, not dropped: the application's shutdown
         // joins the loop so a local write in flight ends before the

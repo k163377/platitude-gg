@@ -288,19 +288,6 @@ impl<T: Clone> Derived<T> {
     }
 }
 
-/// Guards snapshot-replacing ops against out-of-order completion.
-#[derive(Default)]
-pub(super) struct OpGate(AtomicU64);
-
-impl OpGate {
-    pub(super) fn begin(&self) -> u64 {
-        self.0.fetch_add(1, Ordering::SeqCst) + 1
-    }
-    pub(super) fn is_current(&self, generation: u64) -> bool {
-        self.0.load(Ordering::SeqCst) == generation
-    }
-}
-
 /// What is known about a path's line endings before its patch is read.
 pub(super) enum EndingContext {
     /// git calls the path something other than text, so nothing is said

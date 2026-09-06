@@ -119,8 +119,7 @@ pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
 use state::{
-    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpGate, OpenFetchState, Shared,
-    WriteRequest,
+    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Shared, WriteRequest,
 };
 pub use write::{remote_paced, replays_history};
 

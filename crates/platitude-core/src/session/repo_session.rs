@@ -225,10 +225,6 @@ pub struct RepoSession {
     pub(super) auto_fetch_slot: Arc<tokio::sync::Semaphore>,
     /// Where the opening's own fetch stands (see [`OpenFetchState`]).
     pub(super) open_fetch: Mutex<OpenFetchState>,
-    pub(super) refs_gate: OpGate,
-    pub(super) status_gate: OpGate,
-    pub(super) stash_gate: OpGate,
-    pub(super) worktrees_gate: OpGate,
 }
 
 impl RepoSession {

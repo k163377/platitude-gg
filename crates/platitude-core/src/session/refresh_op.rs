@@ -131,7 +131,6 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return false;
         };
-        let op_gen = self.status_gate.begin();
         // Stamped before git is spawned, the way the refs read is: what
         // this status saw of HEAD is offered to the one record under it
         // (`Standing`).
@@ -209,9 +208,6 @@ impl RepoSession {
                     }
                     None => String::new(),
                 };
-                if !self.status_gate.is_current(op_gen) {
-                    return false;
-                }
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
                     return false;

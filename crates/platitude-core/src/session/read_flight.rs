@@ -8,10 +8,15 @@ use super::*;
 /// Nothing coordinates the places that ask for a re-read: the periodic
 /// tick, a write settling behind itself, the window becoming active, a
 /// dialog that wants one field of the answer. Letting each start its own
-/// read has [`OpGate`] throw the older answer away, but by then both
-/// processes have run — and a `status --porcelain=v2 -uall` over the
+/// read spends every one of those processes for the one answer they end
+/// up agreeing on — and a `status --porcelain=v2 -uall` over the
 /// benchmark corpus is 2.9 seconds of wall clock and 2.3 of CPU, spent
 /// twice, exactly where the reader is waiting.
+///
+/// **The ordering rides on the same gate**: a pass holds it from before
+/// it looks at the repository until after it has published, so there is
+/// no window in which an older answer can overtake a newer one and
+/// nothing downstream needs a generation of its own to throw one away.
 ///
 /// A caller that arrives while a pass is running neither starts its own
 /// nor loses its request. It waits for the gate, and then either

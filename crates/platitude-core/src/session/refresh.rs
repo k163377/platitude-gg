@@ -59,7 +59,6 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return false;
         };
-        let op_gen = self.refs_gate.begin();
         // Stamped before git is spawned: what the stamp orders is when
         // the repository was looked at, not when the answer came back
         // (`Standing`).
@@ -83,17 +82,13 @@ impl RepoSession {
         let remotes = self.remotes(&workdir, &cancel).await.unwrap_or_default();
         match (refs, head) {
             (Ok(refs), Ok(head)) => {
-                // Neither a read a newer one has overtaken nor one that
-                // looked before a write ended may speak for the
-                // repository (`Standing::current`). The fenced one is
-                // read again rather than lost: a write that touched only
+                // A read that looked before a write ended may not speak
+                // for the repository (`Standing::current`). The fenced one
+                // is read again rather than lost: a write that touched only
                 // the index reads no refs behind itself, and nothing else
                 // would until the next tick. Its place is taken here, in
                 // this pass, so the fence's own read — already waiting
                 // on the gate where the write reads refs — answers it.
-                if !self.refs_gate.is_current(op_gen) {
-                    return false;
-                }
                 if !self.standing.current(looked) {
                     self.read_refs_from(self.refs_read.stamp());
                     return false;
@@ -230,12 +225,13 @@ impl RepoSession {
         self.status_read.run(|| self.publish_status()).await
     }
 
-    /// One snapshot read behind its own flight ([`ReadFlight`]), and an
-    /// answer only from the pass that is still the current one
-    /// ([`OpGate`]).
+    /// One snapshot read behind its own flight ([`ReadFlight`]), which is
+    /// what orders the answers: a pass holds the flight from before it
+    /// looks until after it has published, so a second caller waits for
+    /// it rather than reading beside it and racing it to the sink.
     ///
-    /// The flight and the gate are reached through accessors because the
-    /// spawned task outlives this call and each snapshot has its own pair.
+    /// The flight is reached through an accessor because the spawned task
+    /// outlives this call and each snapshot has one of its own.
     ///
     /// Not what refs and status do: those publish through a shared path
     /// and answer their caller whether the graph has to be walked again,
@@ -244,7 +240,6 @@ impl RepoSession {
         self: &Arc<Self>,
         op: &'static str,
         flight: fn(&Self) -> &ReadFlight,
-        gate: fn(&Self) -> &OpGate,
         read: F,
     ) where
         F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
@@ -258,14 +253,9 @@ impl RepoSession {
             let session = Arc::clone(&s);
             flight(&s)
                 .run(move || async move {
-                    let op_gen = gate(&session).begin();
                     let cancel = session.root_cancel.clone();
                     match read(Arc::clone(&session), workdir, cancel).await {
-                        Ok(event) => {
-                            if gate(&session).is_current(op_gen) {
-                                session.sink.event(event);
-                            }
-                        }
+                        Ok(event) => session.sink.event(event),
                         Err(e) => session.fail(op, e),
                     }
                     // Nothing here rebuilds the graph, so there is nothing
@@ -280,7 +270,6 @@ impl RepoSession {
         self.refresh_gated(
             "stash",
             |s| &s.stash_read,
-            |s| &s.stash_gate,
             |s, workdir, cancel| async move {
                 let stashes = stash::load(&s.executor, &workdir, &cancel).await?;
                 Ok(SessionEvent::StashesLoaded { stashes })
@@ -292,7 +281,6 @@ impl RepoSession {
         self.refresh_gated(
             "worktrees",
             |s| &s.worktrees_read,
-            |s| &s.worktrees_gate,
             |s, workdir, cancel| async move {
                 let worktrees = crate::worktrees::load(&s.executor, &workdir, &cancel).await?;
                 // A working copy taken or given back moves no ref, so the
