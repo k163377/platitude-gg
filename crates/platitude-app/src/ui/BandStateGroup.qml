@@ -192,7 +192,23 @@ Item {
         stateGroup.cap = cap
     }
 
+    /// The stand-in pointer is down on a group that can answer it: standing, and placed.
+    ///
+    /// **The beat is a level, and `stateLit` alone is one edge too few for a pointer that cannot move.** A hand raises
+    /// the beat by arriving and drops it by leaving, so every answer it is owed comes with an edge of its own; the
+    /// stand-in is written once and stays. Written while the beat is already up — which is what the group standing
+    /// unplaced under the origin does (`placed` above) — it changes nothing anybody is watching, and neither does the
+    /// row placing the group a frame later. The card then waits out the watchdog with the pointer on it
+    /// (`badges-hover`).
+    ///
+    /// **The hand's own rule is not this one and is not repaired here**: a hover the group arrived under is answered
+    /// when it next moves, and until then there is deliberately no card (`placed`). So this watches the stand-in and
+    /// nothing else — the two roads to the card differ in exactly this, and the verbs that stand a pointer in
+    /// (`graph-stale` / `old-git-card` / `identity-tip`) all take this one.
+    readonly property bool standInAsking: stateGroup.pointedAt && stateGroup.placed && stateGroup.stateShown
+
     onStateLitChanged: stateGroup.settleStateCard()
+    onStandInAskingChanged: stateGroup.settleStateCard()
     onWidthChanged: stateGroup.settleCap()
     onTabRunAvailChanged: stateGroup.settleCap()
 

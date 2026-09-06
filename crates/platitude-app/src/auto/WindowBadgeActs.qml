@@ -215,9 +215,10 @@ Item {
                             : Math.round(window.width)
                               !== oldGitActTimer.requestedWidth)))
                 return
-            // The card decides whether it has any rows on the pointer edge. Pointing before the version badge exists
-            // would ask an empty group once and leave `pointedAt` true, so no later edge could reopen it when the badge
-            // arrives.
+            // The pointer goes down on a tick of its own, and whether the card came up is read on the next one — this
+            // verb's whole report is that reading. A pointer that went down before the version badge did is not a card
+            // that never opens: a stand-in pointer is answered again when the badge arrives and when the row places
+            // the group (`BandStateGroup.standInAsking`).
             if (Harness.autoAct === "old-git-card" && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true
