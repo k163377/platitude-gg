@@ -624,15 +624,22 @@ impl Note {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::{File, TryLockError};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use super::{
         BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_of, open_lock,
         stamps_ended_since,
     };
+
+    /// How long [`taken_once_free`] waits out a lock this process let go
+    /// of. Past this, a lock still held is one somebody means to hold,
+    /// and the wait was for nothing (`lanes::UNCLAIMED` is the same
+    /// number for the same window, on the gate's lock).
+    const CARRIED: Duration = Duration::from_secs(5);
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
@@ -654,6 +661,30 @@ mod tests {
 
     fn until_polled(count: &AtomicUsize) {
         while count.load(Ordering::SeqCst) == 0 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// `lock` taken, once whoever else has its open file description has
+    /// let go. A `flock` goes with the description rather than the
+    /// handle, and a fork copies every description, so a lock this
+    /// process drops is held on past the drop for as long as a child a
+    /// neighbouring test spawned in that instant has yet to `execve` —
+    /// this suite forks with a thread per core, and on Linux that window
+    /// reaches in here. The first answer is not what is being asked
+    /// about; the one that stands is.
+    fn taken_once_free(lock: &File) {
+        let asked = Instant::now();
+        loop {
+            match lock.try_lock() {
+                Ok(()) => return,
+                Err(TryLockError::WouldBlock) => assert!(
+                    asked.elapsed() < CARRIED,
+                    "the lock is still held {} seconds after this process let it go",
+                    CARRIED.as_secs()
+                ),
+                Err(TryLockError::Error(error)) => panic!("could not probe the lock: {error}"),
+            }
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -733,9 +764,55 @@ mod tests {
         // A waiter that opened the lock while the hold still stood.
         let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
         drop(hold);
-        waiter.try_lock().expect("the lock the hold let go of");
+        taken_once_free(&waiter);
         let refused = hold_in(&dir, "another perf", &|| {}).expect_err("a second measurement");
         assert!(refused.contains("another measurement"), "{refused}");
+        drop(waiter);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The window [`taken_once_free`] is for, held open on purpose. A
+    /// child handed the hold's lock description outright stands in for
+    /// one a fork hands over: the hold lets the lock go and its note
+    /// comes down, and the description is still held by somebody that
+    /// answers nothing about it. The waiter is refused by that child and
+    /// not by a hold, which is why the answer it takes is the one after
+    /// the child rather than the first.
+    ///
+    /// Linux, where `flock(2)` promises the inheritance and where the
+    /// carried lock is seen; the gate's own lock is netted for the same
+    /// window from inside (`lanes`) and from outside (`gate::stamps`).
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_lock_a_neighbour_s_fork_carries_is_waited_out() {
+        use std::process::{Command, Stdio};
+
+        let dir = common("carried");
+        let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
+        let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
+        // Handed the description as its stdin, the child holds the lock
+        // for as long as it lives — past the drop below.
+        let mut carrier = Command::new("sleep")
+            .arg("1")
+            .stdin(Stdio::from(
+                hold._held
+                    .as_ref()
+                    .expect("the hold's guard")
+                    ._lock
+                    .try_clone()
+                    .expect("a second handle on the description"),
+            ))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("a child handed the lock's description");
+        drop(hold);
+        assert!(
+            matches!(waiter.try_lock(), Err(TryLockError::WouldBlock)),
+            "the child carries the lock the hold let go of"
+        );
+        taken_once_free(&waiter);
+        carrier.wait().expect("the child that carried it");
         drop(waiter);
         let _ = std::fs::remove_dir_all(&dir);
     }
