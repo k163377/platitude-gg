@@ -62,7 +62,8 @@ impl Store {
 /// the process that wrote it.
 #[derive(Debug)]
 pub struct Lock {
-    /// Never read. Holding the handle open *is* the lock.
+    /// Nothing is ever read out of the file. Holding the handle open *is*
+    /// the lock.
     _file: Option<std::fs::File>,
 }
 
