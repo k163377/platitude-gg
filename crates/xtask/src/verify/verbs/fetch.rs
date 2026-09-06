@@ -96,10 +96,15 @@ pub(super) const TABLE: &[Verb] = &[
     // graph — and a graph that fetched and one that did not frame the
     // same way. `fails=0` is the other half: a run whose opening fetch
     // came back with something to say reached its rows some other way.
+    // The refs that fetch brought back land after its rows and in two
+    // places of their own: `behind=1` is the sidebar's word for them
+    // and `top=origin/main` the graph's, a pass later still. A run
+    // that says neither photographed a graph that had fetched beside a
+    // sidebar that had not.
     Verb {
         name: "open-fetches",
         when: &[],
-        plain: "open_fetch fails=0",
+        plain: "open_fetch fails=0 behind=1 top=origin/main",
     },
     // Intermediate communication is valid only after the real busy
     // edge was observed and latched for the asynchronous image grab.

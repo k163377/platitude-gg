@@ -24,6 +24,7 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
+    readonly property var branchesModel: driver.branchesModel
     readonly property var wipPane: driver.wipPane
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var fileMenu: driver.fileMenu
@@ -239,10 +240,24 @@ Item {
             // The tab's own word for "the fetch is over" is waited for as well, so the count read below is the settled
             // one and the picture holds a button at rest rather than one caught mid-absorption. Never having seen it
             // turn is allowed: the fetch can be over before this page exists (§通信中(リング)と起動直後の狙い方).
-            if (graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning)
+            //
+            // The refs the fetch brought back are a feed of their own and land after the rows do, so the count alone
+            // would picture a graph that has fetched beside a sidebar that has not. `headBehind` is the sidebar's end
+            // of that feed, and under `--preset behind` only the fetch can move it off zero.
+            if (graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
+                    || branchesModel.headBehind < 1)
+                return
+            // The graph is the other side of that same feed, and it is answered a pass later still: the walk that
+            // added the row the fetch brought in was drawn over the refs as they stood, so that row arrives wearing
+            // no chip at all and is given the remote name once the listing is in. Row zero is that row: the preset
+            // opens on a clean tree, so no working-tree row stands above what the fetch brought in.
+            const topChips = GitFacts.labelsShown(graphModel.labelsAt(0), graphModel.goneChips)
+            if (topChips === "")
                 return
             openFetchTimer.stop()
             Harness.report("open_fetch fails=" + repoTab.fetchFailures
+                              + " behind=" + branchesModel.headBehind
+                              + " top=" + GitFacts.recordName(topChips.split(String.fromCharCode(31))[0])
                               + " rows=" + graphModel.rowTotal
                               + " wanted=" + acts.openFetchRows)
             driver.complete()
