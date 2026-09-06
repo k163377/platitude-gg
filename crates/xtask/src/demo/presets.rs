@@ -11,7 +11,7 @@ use super::conflict::{
     conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
     rebase_empty, rebase_staged, revert_clashes,
 };
-use super::deep::{deep, deep_detached, replay};
+use super::deep::{deep, deep_detached, deep_parked, replay};
 use super::pictures::{bigpicture, pictures};
 use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished};
 use super::repo::DemoRepo;
@@ -170,6 +170,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
             )?;
         }
         "deep-detached" => deep_detached(&mut repo)?,
+        "deep-parked" => deep_parked(&mut repo)?,
         "replay" => replay(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,

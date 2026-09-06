@@ -131,7 +131,7 @@ QtObject {
                 "ask-over-notice",
                 // The write barrier is behind these, not in front of them: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
-                "switch-stopped-go", "switch-conflicted-go", "delete-branch-early",
+                "switch-stopped-go", "switch-conflicted-go", "delete-branch-early", "delete-branch-early-far",
                 // Deliberately not a write act: what it photographs is the moment before the answer.
                 "delete-gone",
                 // The list has to be up before one of its rows can be pressed, and the menu up before the report can

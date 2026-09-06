@@ -84,6 +84,11 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   deep, standing 800 commits down it: the only shape in
                   which the graph's HEAD stand-in rides the bottom edge,
                   and the only one where it is detached (graph-head-below)
+        deep-parked
+                  deep, with `parked` forked below the window's cut and
+                  left there: the only branch whose tip the drawn rows
+                  cannot answer for, so its delete row's early answer can
+                  only come from git (delete-branch-early-far)
         replay    300 commits on main and one on base that the fork never
                   saw: the only shape where a rebase stands for seconds,
                   so the screen has one to be photographed during

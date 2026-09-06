@@ -155,10 +155,16 @@ Item {
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
             Harness.report("menu_highlight index=" + refMenu.currentIndex)
-        } else if (act === "delete-branch-early") {
+        } else if (act === "delete-branch-early" || act === "delete-branch-early-far") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
             // **The card goes up from the sampler rather than from here** — what it is about has to be true at the
             // moment it opens, and this is the one tick nobody chose (`earlyDeleteTimer`).
+            //
+            // One branch for the two because which of the card's two roads answers is not this side's to arrange:
+            // it reads the same report off the same sampler either way. What separates them is the repository —
+            // `-far` is aimed at a branch whose tip the drawn rows cannot answer for (`--preset deep-parked`), so
+            // the question is git's every time it is run, where the plain one takes whichever road the refs' timing
+            // hands it.
             earlyDeleteTimer.start()
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),

@@ -1,7 +1,8 @@
 //! The one history longer than the graph's own window, and the shapes
-//! the window's cut and the stand-in for a scrolled-off HEAD have to be
-//! looked at against — and, built the same way, the one deep enough that
-//! rewriting it stands for seconds rather than an instant.
+//! the window's cut, the stand-in for a scrolled-off HEAD and a branch
+//! standing off the window altogether have to be looked at against — and,
+//! built the same way, the one deep enough that rewriting it stands for
+//! seconds rather than an instant.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -55,12 +56,25 @@ fn deep_first(now: u64) -> u64 {
 /// this preset is for is the *count*, and a tree that changed on every
 /// step would only make the import bigger.
 pub(super) fn deep(repo: &mut DemoRepo) -> Result<(), String> {
-    deep_history(repo, false)
+    deep_history(repo, SideLine::None)
 }
 
-/// The stream both deep presets are built from. `forked` adds the second
-/// line described on [`deep_detached`].
-fn deep_history(repo: &mut DemoRepo, forked: bool) -> Result<(), String> {
+/// The second line a deep history may carry beside `main`, which is the
+/// whole of what separates the three presets built from it.
+enum SideLine {
+    /// None: one lane, the whole way down (`deep`).
+    None,
+    /// Forked below the window's cut with its tip up among the newest
+    /// commits, so both lanes are live at both ends (`deep_detached`).
+    Live,
+    /// Forked below the cut and left down there, so the branch's own tip
+    /// is on no row the graph draws (`deep_parked`).
+    Parked,
+}
+
+/// The stream all three deep presets are built from; `side` picks the
+/// second line, if any.
+fn deep_history(repo: &mut DemoRepo, side: SideLine) -> Result<(), String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -79,25 +93,42 @@ fn deep_history(repo: &mut DemoRepo, forked: bool) -> Result<(), String> {
             &message,
         );
     }
-    if forked {
-        // Marks well clear of main's (2..=DEEP_COMMITS + 1), and dated
-        // against main's own march so the tip lands a little under the
-        // newest commits rather than at the far end of the window.
-        let fork = DEEP_COMMITS - DEEP_FORK_BACK;
-        for n in 1..=DEEP_SIDE_COMMITS {
-            let from = if n == 1 {
-                fork + 1
-            } else {
-                DEEP_SIDE_MARK + n - 1
-            };
-            let message = format!("feat: side work {n}");
+    match side {
+        SideLine::None => {}
+        SideLine::Live => {
+            // Marks well clear of main's (2..=DEEP_COMMITS + 1), and dated
+            // against main's own march so the tip lands a little under the
+            // newest commits rather than at the far end of the window.
+            let fork = DEEP_COMMITS - DEEP_FORK_BACK;
+            for n in 1..=DEEP_SIDE_COMMITS {
+                let from = if n == 1 {
+                    fork + 1
+                } else {
+                    DEEP_SIDE_MARK + n - 1
+                };
+                let message = format!("feat: side work {n}");
+                deep_commit(
+                    &mut stream,
+                    "side",
+                    DEEP_SIDE_MARK + n,
+                    Some(from),
+                    first + (DEEP_COMMITS - DEEP_SIDE_COMMITS - 4 + n) * DEEP_STEP_SECS,
+                    &message,
+                );
+            }
+        }
+        SideLine::Parked => {
+            // The same fork point, and dated down there with it: half a
+            // step past its parent, so it takes a place of its own in the
+            // date order rather than tying with a commit on main.
+            let fork = DEEP_COMMITS - DEEP_FORK_BACK;
             deep_commit(
                 &mut stream,
-                "side",
-                DEEP_SIDE_MARK + n,
-                Some(from),
-                first + (DEEP_COMMITS - DEEP_SIDE_COMMITS - 4 + n) * DEEP_STEP_SECS,
-                &message,
+                DEEP_PARKED_BRANCH,
+                DEEP_PARKED_MARK,
+                Some(fork + 1),
+                first + fork * DEEP_STEP_SECS + DEEP_STEP_SECS / 2,
+                "feat: work left below the window",
             );
         }
     }
@@ -114,11 +145,15 @@ fn deep_history(repo: &mut DemoRepo, forked: bool) -> Result<(), String> {
 /// newest one, whatever the window's height.
 const DEEP_DETACH_BACK: u64 = 800;
 
-/// Where the second line forks off, counted back from the newest commit.
+/// Where a second line forks off, counted back from the newest commit.
 /// **Older than the window's own cut** (`DEEP_COMMITS` less the limit),
-/// so the fork itself is never loaded: the two lanes then run the whole
-/// height of the graph and both are still going at the bottom, which is
-/// what puts more than one lane into the footer's fade.
+/// which is what both lines are put down here for, though they take
+/// different halves of it. The live one is loaded without its fork, so
+/// its two lanes run the whole height of the graph and both are still
+/// going at the bottom, which is what puts more than one lane into the
+/// footer's fade. The parked one is dated down here as well, so nothing
+/// of it is loaded at all — its own tip included, which is the whole of
+/// what [`deep_parked`] is for.
 const DEEP_FORK_BACK: u64 = 2080;
 
 /// Commits on that second line. Enough to be a line rather than a spur,
@@ -128,6 +163,30 @@ const DEEP_SIDE_COMMITS: u64 = 6;
 /// Where the second line's fast-import marks start — clear of main's,
 /// which run to `DEEP_COMMITS + 1`.
 const DEEP_SIDE_MARK: u64 = 100_000;
+
+/// What the parked line is called — the argument a verb aiming at this
+/// shape is given.
+const DEEP_PARKED_BRANCH: &str = "parked";
+
+/// The parked line's one mark — clear of main's and of the side line's.
+const DEEP_PARKED_MARK: u64 = 200_000;
+
+/// `deep`, with one branch parked below the window's cut: it forks off
+/// `DEEP_FORK_BACK` commits down and stops there, so its tip is on **no
+/// row the graph draws** and is not an ancestor of HEAD.
+///
+/// **The one shape where the delete row's early answer can only come from
+/// git.** Every branch the window draws is answered off the drawn rows in
+/// the frame the menu opens (`GraphModel::branch_delete_merged`), and a
+/// tip the window stopped short of is what sends the question to
+/// `merge-base` instead (`RepoSession::check_branch_delete`) — so which
+/// of the two answered is the refs' timing on every other preset, and
+/// settled here. Unmerged, because the answer that has anything to dress
+/// is the refusal: it is what turns the row into the held `-D`
+/// (`delete-branch-early-far`).
+pub(super) fn deep_parked(repo: &mut DemoRepo) -> Result<(), String> {
+    deep_history(repo, SideLine::Parked)
+}
 
 /// The same history in every shape the stand-in and the fades below it
 /// have to survive at once: the working tree standing a long way
@@ -143,7 +202,7 @@ const DEEP_SIDE_MARK: u64 = 100_000;
 ///   neighbouring lane running past under it, which is what shows that
 ///   it draws its own lanes rather than the ones it is covering
 pub(super) fn deep_detached(repo: &mut DemoRepo) -> Result<(), String> {
-    deep_history(repo, true)?;
+    deep_history(repo, SideLine::Live)?;
     repo.git(&["switch", "--detach", &format!("main~{DEEP_DETACH_BACK}")])?;
     Ok(())
 }

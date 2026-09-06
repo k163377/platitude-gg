@@ -83,6 +83,32 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "delete_early asked=true",
     },
+    // The same card, over the one branch whose tip the drawn rows cannot
+    // answer for — so `from=` is in the claim here, where the row above
+    // leaves it out: this run takes git's road every time. What settles
+    // it is the repository rather than the timing: `--preset deep-parked`
+    // forks `parked` below the window's cut and leaves it there, and a
+    // tip on no drawn row is what sends the question to `merge-base`
+    // (`GraphModel::branch_delete_merged` empty →
+    // `RepoSession::check_branch_delete`).
+    //
+    // **`merged=no` is the half nothing else reaches.** The string git's
+    // answer arrives as is compared in one place
+    // (`RefBranchMenu.refusedRow`), and that comparison is on this road
+    // alone: with no run that takes it, a wrong word there costs nothing
+    // that shows — the row would offer the plain delete, and every
+    // picture in the suite would frame the same. The rest of the line is
+    // the row it dresses, which is the whole point of asking early.
+    //
+    // The claim is `plain` rather than a row for the branch's name: the
+    // verb has one repository and one branch in it, so a run given
+    // anything else is a mistake that should fail on a line.
+    Verb {
+        name: "delete-branch-early-far",
+        when: &[],
+        plain: "delete_early asked=true from=git merged=no code=branch -D held=true \
+                note=not merged",
+    },
     // The three deletes asked of the left row's card, each judged first
     // on the press having left the page at all. **The picture cannot
     // answer that**: the page drops a delete asked while a write is
