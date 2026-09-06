@@ -79,10 +79,15 @@ impl Value<'_> {
     }
 }
 
-/// The roles a delegate reads a row by.
+/// The roles a delegate reads a row by — **this model's own table**, put
+/// on the wire by its `role_names()` and dispatched by its `data()`
+/// (`qmodel.rs`). Qt is never handed `NavItem`'s derived table, so
+/// `#[derive(QModelItem)]`'s fifteen fields are **not a ceiling on the
+/// roles**: that one binds what a folder row carries whole, and a role
+/// past the end of those fields is answered for a made row without one.
 ///
-/// The numbers are `NavItem`'s fields in order, which is what
-/// `#[derive(QModelItem)]` hands the view as names. The test at the foot
+/// The numbers are the order declared below, and `NavItem`'s fields come
+/// first so the derive covers the head of the table. The test at the foot
 /// of this file holds the two together: **a role answered under a name
 /// the delegate does not ask for draws nothing at all**, and says nothing
 /// about it — no warning, no error, an empty row.
@@ -107,8 +112,9 @@ pub(super) enum Role {
 
 impl Role {
     /// Every role the view is handed, in the order their numbers run —
-    /// the order `NavItem` declares its fields in, one for one (the test
-    /// at the foot of this file holds them together).
+    /// `NavItem`'s fields first, one for one, then the roles no folder
+    /// row carries a field for (the test at the foot of this file holds
+    /// that head of the table together).
     ///
     /// A branch's upstream is not a role: no delegate asks for it, and
     /// the menus that do ask by name (`upstream_of` / `upstream_drifted`)
@@ -167,10 +173,16 @@ mod tests {
     /// The names the delegate asks by and the numbers `data` is called
     /// with come from two places; a role that answers under the wrong one
     /// draws an empty row and reports nothing, so they are pinned here.
+    /// `NavItem` covers the head of the table rather than all of it — a
+    /// role no folder row has a field for is answered without one — so
+    /// the two are held together as far as the fields run.
     #[test]
-    fn every_role_the_view_is_handed_is_answered_by_the_same_name() {
+    fn every_field_of_a_made_row_is_the_role_of_the_same_number() {
         let handed = <NavItem as QModelItem>::role_names();
-        assert_eq!(handed.len(), 15, "the view is handed one role per field");
+        assert!(
+            handed.len() <= Role::ALL.len(),
+            "a field with no role of its own can never be asked for",
+        );
         for (number, name) in handed {
             let role = Role::of(number);
             assert!(
@@ -183,5 +195,17 @@ mod tests {
                 "role {number} is answered under another name",
             );
         }
+    }
+
+    /// Two roles spelled the same put one name on the wire twice, and the
+    /// delegate reads whichever `role_names()` kept — with nothing said
+    /// about the one it lost.
+    #[test]
+    fn no_two_roles_answer_under_one_name() {
+        let mut spellings: Vec<&str> = Role::ALL.iter().map(|role| role.spelling()).collect();
+        let declared = spellings.len();
+        spellings.sort_unstable();
+        spellings.dedup();
+        assert_eq!(spellings.len(), declared, "two roles share one name");
     }
 }

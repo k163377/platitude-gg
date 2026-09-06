@@ -1,11 +1,13 @@
 use super::*;
 
 // A folder row is the only row held whole — no section's data arrives as
-// one. Every other row is answered field by field out of `Source`; the
-// fields below are then only the declaration — `#[derive(QModelItem)]`
-// turns them into the role names the delegate resolves by, and `Role`
-// answers under those names (held to this list by the test at the foot of
-// `role.rs`).
+// one. Every other row is answered field by field out of `Source`.
+//
+// **The fifteen `#[derive(QModelItem)]` allows bind this struct, not the
+// role table** — Qt is handed `Role::ALL` (`qmodel.rs`), so a role a
+// folder row has no field for is answered without one. What the derive
+// buys here is the second spelling of the names: the test at the foot of
+// `role.rs` holds these fields to the roles of the same numbers.
 #[derive(QModelItem, Default)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
@@ -17,10 +19,10 @@ pub struct NavItem {
     pub(super) oid_hex: String,
     /// git's change code for a file row (`M`, `?`, `UU`). **A folder row
     /// carries its fold state here instead** (`FOLDED`, empty when open) —
-    /// qtbridge's `QModelItem` allows fifteen fields, so the slot is
-    /// shared. Reads are guarded by `folder`, as the other shared fields
-    /// are (`bucket` carries a branch on a worktree row, `full` a folder
-    /// key).
+    /// the derive allows this struct fifteen fields and they are all
+    /// spoken for, so the slot is shared. Reads are guarded by `folder`,
+    /// as the other shared fields are (`bucket` carries a branch on a
+    /// worktree row, `full` a folder key).
     pub(super) change: String,
     pub(super) bucket: String,
     /// Display grouping of worktree rows (GitKraken-style): untracked
@@ -34,9 +36,9 @@ pub struct NavItem {
     pub(super) orig_path: String,
     /// The same source written the way the row writes names — what a
     /// delegate shows (`encode::rename_source`). A made row never carries
-    /// one; the field is here because **the view's role table is one role
-    /// per field of this struct** (the test at the foot of `role.rs`), and
-    /// a role no field stands for cannot be asked for by name.
+    /// one; the field is here so the derive spells the name a second
+    /// time and the test at the foot of `role.rs` can hold the role of
+    /// this number to it.
     pub(super) orig_name: String,
     pub(super) is_head: bool,
     pub(super) has_remote: bool,
@@ -48,9 +50,9 @@ pub struct NavItem {
     /// matching); until then PG_FAKE_PR previews the look.
     pub(super) has_pr: bool,
     /// This file's pending change has something to say about its line
-    /// endings. A flag, not the sentence — a `QModelItem` holds fifteen
-    /// fields and this struct uses all fifteen, so the words for the row
-    /// the pointer is on are kept once on the model instead (`pointEol`).
+    /// endings. A flag, not the sentence — the words belong to the one
+    /// row the pointer is on rather than to every row, so they are kept
+    /// once on the model instead (`pointEol`).
     pub(super) eol_mark: bool,
     pub(super) depth: i32,
     pub(super) folder: bool,

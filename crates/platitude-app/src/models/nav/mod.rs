@@ -126,7 +126,7 @@ pub struct NavSectionModel {
     tree_view: bool,
     /// Which row the pointer is on; the notice follows, taken apart into
     /// the pieces its sentence needs. Kept once here rather than on every
-    /// row — a `QModelItem` has no fields left (see `NavItem::eol_mark`).
+    /// row — one row wears it at a time (see `NavItem::eol_mark`).
     /// Flat because `qproperty!` names one member, not a path through one.
     pointed_eol_path: String,
     pointed_eol_kind: String,
