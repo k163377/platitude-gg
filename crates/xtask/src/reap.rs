@@ -317,10 +317,37 @@ mod tests {
 
     use super::{Reaped, own_group, reap};
 
-    /// How long the ended processes are given to be gone. Generous: on
-    /// Windows the walk itself is a listing per look, and on unix the
-    /// machine reaps the step's orphans in its own time.
+    /// How long a wait here is given, and how many looks it takes
+    /// whatever the clock says. Generous on both counts: on unix the
+    /// machine reaps the step's orphans in its own time, and on Windows
+    /// a look is a listing of every process on the machine, taken by a
+    /// PowerShell of its own — beside a gate's eight verbs and a
+    /// container that one starts in seconds rather than in the tenths a
+    /// quiet machine takes. A wait held to the clock alone is a wait
+    /// that ends under load having asked once, which is what makes a
+    /// test red for the load rather than for the thing it tests
+    /// (.claude/rules-refs/core.md).
     const GONE_WITHIN: Duration = Duration::from_secs(30);
+    const LOOKS: usize = 5;
+
+    /// How long a wait here sleeps between looks.
+    const BETWEEN_LOOKS: Duration = Duration::from_millis(200);
+
+    /// Looks until `answered` is happy with what it sees, and hands back
+    /// the last look either way — for the assertion that says what was
+    /// missing. The clock ends a wait whose looks were cheap; the count
+    /// ends one whose looks were not.
+    fn looked<T>(mut look: impl FnMut() -> T, answered: impl Fn(&T) -> bool) -> T {
+        let deadline = Instant::now() + GONE_WITHIN;
+        let mut seen = look();
+        let mut looks = 1;
+        while !answered(&seen) && (looks < LOOKS || Instant::now() < deadline) {
+            std::thread::sleep(BETWEEN_LOOKS);
+            seen = look();
+            looks += 1;
+        }
+        seen
+    }
 
     #[test]
     fn what_was_reaped_is_said_whether_or_not_anything_was() {
@@ -390,7 +417,8 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .expect("a throwaway process tree");
-        let under = settled(child.id());
+        let root = child.id();
+        let under = looked(|| under_the_step(root), |under| under.len() >= 2);
         assert!(
             under.len() >= 2,
             "the tree never got two deep under the step: {under:?}"
@@ -403,12 +431,7 @@ mod tests {
         assert!(ended.is_some(), "the step itself was not reaped");
         // Asked until they are gone rather than at once: a process ended
         // this instant can still be in a listing taken the next.
-        let deadline = Instant::now() + GONE_WITHIN;
-        let mut standing = still_running(&under);
-        while !standing.is_empty() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(200));
-            standing = still_running(&under);
-        }
+        let standing = looked(|| still_running(&under), Vec::is_empty);
         assert!(
             standing.is_empty(),
             "still running under the step: {standing:?}"
@@ -454,38 +477,23 @@ mod tests {
         command
     }
 
-    /// What is under `root` once the tree has had time to grow, asked the
-    /// way the kill asks.
+    /// What is under `root` right now, asked the way the kill asks.
     #[cfg(windows)]
-    fn settled(root: u32) -> Vec<u32> {
-        let deadline = Instant::now() + GONE_WITHIN;
-        loop {
-            let listed = super::snapshot();
-            let born = listed
-                .iter()
-                .find(|process| process.pid == root)
-                .map(|process| process.born);
-            let under = born.map_or_else(Vec::new, |born| super::descendants(&listed, root, born));
-            if under.len() >= 2 || Instant::now() >= deadline {
-                return under;
-            }
-            std::thread::sleep(Duration::from_millis(200));
-        }
+    fn under_the_step(root: u32) -> Vec<u32> {
+        let listed = super::snapshot();
+        let born = listed
+            .iter()
+            .find(|process| process.pid == root)
+            .map(|process| process.born);
+        born.map_or_else(Vec::new, |born| super::descendants(&listed, root, born))
     }
 
     #[cfg(unix)]
-    fn settled(root: u32) -> Vec<u32> {
-        let deadline = Instant::now() + GONE_WITHIN;
-        loop {
-            let under: Vec<u32> = super::groups()
-                .iter()
-                .filter(|(pid, group)| *group == root && *pid != root)
-                .map(|(pid, _)| *pid)
-                .collect();
-            if under.len() >= 2 || Instant::now() >= deadline {
-                return under;
-            }
-            std::thread::sleep(Duration::from_millis(200));
-        }
+    fn under_the_step(root: u32) -> Vec<u32> {
+        super::groups()
+            .iter()
+            .filter(|(pid, group)| *group == root && *pid != root)
+            .map(|(pid, _)| *pid)
+            .collect()
     }
 }
