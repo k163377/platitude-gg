@@ -45,12 +45,17 @@ pub(super) struct Ran {
     pub(super) status: Option<std::process::ExitStatus>,
     pub(super) timed_out: bool,
     pub(super) elapsed: Duration,
+    /// How long the app had said nothing when the run ended. `None` where
+    /// it never said anything at all — the whole run is the silence then.
+    /// What a run reaped at the ceiling is read off ([`super::wedge`]).
+    pub(super) quiet_for: Option<Duration>,
 }
 
 /// Starts the app, waits it out, and answers with everything it said.
 pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut cmd = compose(start)?;
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
+    super::wedge::clear_any_account(start.shot_dir);
 
     let started = Instant::now();
     let mut child = cmd
@@ -74,15 +79,28 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         }
     };
 
-    let join = |h: Option<std::thread::JoinHandle<Vec<String>>>| {
-        h.and_then(|h| h.join().ok()).unwrap_or_default()
-    };
+    let join =
+        |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| h.and_then(|h| h.join().ok());
+    let (out, err) = (join(stdout), join(stderr));
+    let elapsed = started.elapsed();
+    // The later of the two streams: either counts as the app still having
+    // been there.
+    let spoke_at = [
+        out.as_ref().and_then(|s| s.last),
+        err.as_ref().and_then(|s| s.last),
+    ]
+    .into_iter()
+    .flatten()
+    .max();
+    let unwrap_lines =
+        |said: Option<crate::app_out::Said>| said.map(|s| s.lines).unwrap_or_default();
     Ok(Ran {
-        out_lines: join(stdout),
-        err_lines: join(stderr),
+        out_lines: unwrap_lines(out),
+        err_lines: unwrap_lines(err),
         status,
         timed_out,
-        elapsed: started.elapsed(),
+        elapsed,
+        quiet_for: spoke_at.map(|at| elapsed.saturating_sub(at)),
     })
 }
 

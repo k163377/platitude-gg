@@ -165,6 +165,15 @@ pub(super) fn announce(
         outcome.write_failures,
         if timed_out { ", TIMED OUT" } else { "" },
     );
+    // A run ended by a ceiling is the one that says nothing for itself:
+    // the app's own account of where it stood, and what only the parent
+    // can see about it, are the whole of what the next occurrence is read
+    // from ([`super::wedge`]).
+    if super::wedge::at_a_ceiling(ran) {
+        for line in super::wedge::account(shot_dir, ran, &shots) {
+            println!("{line}");
+        }
+    }
     if let Some(wanted) = outcome.must_say
         && !outcome.said
     {

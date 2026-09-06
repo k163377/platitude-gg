@@ -16,6 +16,7 @@ mod run;
 mod seed;
 mod shim;
 mod verbs;
+mod wedge;
 
 pub(crate) use options::suite_words;
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};

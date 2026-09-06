@@ -94,8 +94,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let _ = child.wait();
     }
 
-    let join = |h: Option<std::thread::JoinHandle<Vec<String>>>| {
-        h.and_then(|h| h.join().ok()).unwrap_or_default()
+    let join = |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| {
+        h.and_then(|h| h.join().ok())
+            .map(|said| said.lines)
+            .unwrap_or_default()
     };
     let lines: Vec<String> = join(err).into_iter().chain(join(out)).collect();
     for line in &lines {

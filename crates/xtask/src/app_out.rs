@@ -56,11 +56,37 @@ impl<R: Read> Iterator for Lines<R> {
     }
 }
 
+/// What one of the app's streams said, and when it last said anything.
+pub(crate) struct Said {
+    pub(crate) lines: Vec<String>,
+    /// How far into the read the last line arrived. `None` where the app
+    /// never wrote to this stream at all. A run reaped at a ceiling is
+    /// read off this: how long it had been silent is the difference
+    /// between a process going round and one that stopped
+    /// (`verify::wedge`).
+    pub(crate) last: Option<std::time::Duration>,
+}
+
 /// Drains a pipe on its own thread, so a chatty child never blocks on a
 /// full pipe while the parent waits for it to exit — and so the read end
 /// stays open for as long as the app has anything to say.
-pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Vec<String>> {
-    std::thread::spawn(move || lines(reader).collect())
+///
+/// The clock starts here rather than being passed in: this is within
+/// microseconds of the spawn, and a stream's own start is what the times
+/// off it are wanted against.
+pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
+    std::thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let mut said = Said {
+            lines: Vec::new(),
+            last: None,
+        };
+        for line in lines(reader) {
+            said.lines.push(line);
+            said.last = Some(started.elapsed());
+        }
+        said
+    })
 }
 
 #[cfg(test)]
