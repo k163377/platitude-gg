@@ -14,6 +14,12 @@ import platitude.ui
 // own frame widening into the graph, with the rest of the names stacked under it. **Always that way** — see the owner
 // on why the side is not chosen.
 //
+// **The rows scroll, and the card stops at the page.** A commit can wear more names than any window can seat at once
+// (`JetBrains/kotlin` deepest: 42, and a 900px page takes 36), and what a card taller than the page loses is the only
+// thing it was opened to give — the names below the fold, with no way to reach them. Scrolling costs the card the one
+// thing a `Column` gave it for free, which is knowing how wide its widest row is; what it is measured over instead is
+// the rows the page can seat (`layOutRows`).
+//
 // Owned by the page, not by the delegate that raised it — delegates are recycled out from under an open popup, which is
 // why the context menus live there too. It is a popup rather than an item in the row for the same reason a menu is:
 // anything declared inside the list is clipped by it and painted under the row below.
@@ -49,10 +55,21 @@ AppCard {
     /// edge to edge, and the remote may be as long as the tag.
     property real chipRoom: Metrics.labelColW
 
+    /// How tall the page can let this card stand — handed over by the owner, and the whole of what the list scrolls
+    /// inside. **A card is never taller than this.** One that ran past the page put its lower rows where nothing could
+    /// reach them: `JetBrains/kotlin` wears 42 refs on its deepest commit and a 900px page seats 36, so the chip said
+    /// `+41` and then showed 35 of them.
+    property real listRoom: 0
+
     /// The card's own size once the rows have been laid out, for an owner placing it against the chip. Read off the
     /// rows rather than off `width` / `height`, which a `Popup` only settles when it is shown.
-    readonly property real cardWidth: rows.rowWidth + 2 * refList.padding
-    readonly property real cardHeight: rows.implicitHeight + 2 * refList.padding
+    readonly property real cardWidth: Math.max(refList.minRowWidth, rows.rowsWidth + 2 * refList.padding)
+    readonly property real cardHeight:
+        refList.measuring ? refList.listRoom
+                          : Math.min(rows.rowsHeight + 2 * refList.padding, refList.listRoom)
+    /// True only for the turn [`layOutRows`] runs in, while the card is still down: the list is handed the whole page
+    /// so that it builds every row the page could seat, which is the set the card is measured over.
+    property bool measuring: false
     /// How far a chip stands off the top of its row — the room a `rowHeight` row leaves around a one-line chip, halved.
     /// A chip that wrapped keeps the same margin above and below and takes the extra height for itself.
     readonly property real chipInset:
@@ -67,14 +84,26 @@ AppCard {
     /// door.
     property var rowClicks: null
     property string rowOid: ""
-    /// The narrowest a row may be — the chip this card is covering, handed over by the owner.
+    /// The narrowest this card may come out — the chip it is covering, handed over by the owner.
     ///
-    /// **The card is never narrower than what it stands on.** Its own rows are laid out to their own names, and a card
+    /// **The card is never narrower than what it stands on.** Its rows are measured to their own names, and a card
     /// sized only to those can come out narrower than the chip it is covering and leave a sliver of the frame it is
     /// replacing showing past its edge (measured at two pixels).
     property real minRowWidth: 0
 
-    padding: Theme.spaceXs
+    // Sized here rather than left to the content: a recycling list has no implicit height of its own to hand a popup.
+    width: refList.cardWidth
+    height: refList.cardHeight
+    // **The rows run to the inside of the frame.** What a row wears while the pointer is on it is that row's own
+    // target painted whole, the way the toolbar's cells wear theirs (デザイン規約 §当たり判定 —「重ね色の方はセル全体を塗る
+    // = 的は隣と同じ」). The air around a chip is the row's own and stays there (see the rows), so nothing is left for
+    // the card to hold. **Not the menu's `spaceXs`**: that band is what keeps a highlighted first or last row clear of
+    // a rounded corner (`AppMenu`), and this card answers that with its corner instead.
+    padding: Theme.borderWidth
+    // The chip's own corner rather than the menu's. This card is the chip's frame widening into the graph
+    // (デザイン規約 §グラフ行のダブルクリック) and its rows reach that frame, so a corner rounder than a row's would be a
+    // curve the wash has to be cut by.
+    faceRadius: Theme.radiusSm
     // Nothing stands between the chip and this: the pointer has to be able to walk down into it without leaving both.
     margins: 0
     // The hand walks down off the chip into this and picks a row, so both halves of `AppCard.pointerInside` are wanted
@@ -82,11 +111,22 @@ AppCard {
     tracksPointer: true
     contentPointed: contentHover.hovered
 
+    /// The row holding the `i`th record, brought on screen first. **A recycling list has no item for a row that is not
+    /// shown** — `itemAtIndex` answers null for it — and a run that names a row means that row whether or not the list
+    /// happens to be standing on it, so this walks the list there the way an arrow key would.
+    function rowAt(i) {
+        if (i < 0 || i >= refList.records.length)
+            return null
+        rowsList.positionViewAtIndex(i, ListView.Contain)
+        rowsList.forceLayout()
+        return rowsList.itemAtIndex(i)
+    }
+
     /// The gesture put in at one of the rows, and what that row is holding — an automation-only exposure, the same one
     /// the sidebar's sections give (`NavList.clickRow` / `rowArmed` / `rowGuarded`): a run has no pointer to press
     /// with, and a copy of what the row would have decided would prove nothing about the row.
     function clickRow(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         if (!row)
             return false
         // Nothing was held down: a run with no pointer has no press to time (`ReclickGesture.click`).
@@ -94,7 +134,7 @@ AppCard {
         return true
     }
     function doubleClickRow(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         if (!row)
             return false
         row.doubleClick()
@@ -103,7 +143,7 @@ AppCard {
     /// The right-click on one of these rows, as the row answers one: the graph row's own menu, aimed at this name
     /// instead of the one the chip draws (デザイン規約 §グラフ行の右クリック).
     function menuRow(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         if (!row)
             return false
         row.rightClick()
@@ -113,64 +153,103 @@ AppCard {
     /// injected (verify-ui §hover の絵の撮り方), so a run writes the row's own `pointedAt` and reads the wash back off
     /// the row rather than off a copy of what the row would have decided (PG_AUTO_ACT=ref-list-lit).
     function pointRow(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         if (!row)
             return false
         row.pointedAt = true
         return true
     }
     function rowLit(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         return row ? row.lit : false
     }
     /// Which kind of row that was: a row with nowhere to go wears the same wash as one that leads somewhere, so a run
     /// that means to prove it has to say which it aimed at.
     function rowLeadsNowhere(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         return row ? row.leadsNowhere : false
     }
     function rowArmed(i) {
-        const row = rowsRepeater.itemAt(i)
+        const row = refList.rowAt(i)
         return row && refList.rowClicks ? refList.rowClicks.rowRenameArmed(row.modelData) : false
     }
     function rowGuarded(i) {
         return refList.rowClicks ? refList.rowClicks.rowClickGuarded : false
     }
 
-    /// Lays the rows out now, for an owner that is about to show this in the same turn it handed over the records. A
-    /// `Column` positions in the polish that runs after the turn, so without this the list is shown at the size it had
-    /// before the records arrived — measured at 8x8, its padding and nothing else, growing to the real 111x80 a frame
-    /// later. That matters because **Qt works out what is hovered from pointer events, not from geometry**: a list that
-    /// grows after it appears cannot tell that the hand is already inside it, and the hand that walked down off the
-    /// chip is exactly that hand (traced: the list took itself down under the pointer). The height is what
-    /// this buys, and the height is what matters: it is the edge the hand crosses. The width still settles a frame
-    /// later (measured 97, then 111) because the rows and their column size each other through bindings rather than
-    /// through layout — harmless, because it only ever grows, and growing to the right takes no ground away from a hand
-    /// that is already inside.
+    /// Lays the rows out and measures them now, for an owner that is about to show this in the same turn it handed
+    /// over the records. Without it the card is shown at the size it had before the records arrived — measured at 8x8,
+    /// its padding and nothing else, growing to the real 111x80 a frame later. That matters because **Qt works out
+    /// what is hovered from pointer events, not from geometry**: a card that grows after it appears cannot tell that
+    /// the hand is already inside it, and the hand that walked down off the chip is exactly that hand (traced: the
+    /// card took itself down under the pointer).
+    ///
+    /// **The rows it measures are the rows the list is going to show** — the card is given the page for the length of
+    /// this call, the list builds what fits in it, and those are read back. Nothing is built twice: a second set laid
+    /// out beside the list to be measured cost the deepest row of `JetBrains/kotlin` 109ms of the 100ms a hand is
+    /// answered in, for rows the list was about to build anyway.
+    ///
+    /// A card that fits is measured whole and comes out at exactly the width it always had. One that does not is
+    /// measured over the rows the reader has in front of them the moment it opens, and a longer name below the fold
+    /// wraps — which is what a name too long for the room does here anyway (規約 §グラフ行のダブルクリック「カードの中の名前は
+    /// 切らない」). **The odds are with it**: a commit stacked deep enough to scroll is rare to begin with, and the
+    /// branches that sort to the head of the list already take most of the width a tag further down would have asked
+    /// for. Rows past the fold are counted at a plain row apiece for the height — they can only ever be taller than
+    /// that, so a card they would have filled is one already standing at its cap.
     function layOutRows() {
-        rows.forceLayout()
+        refList.measuring = true
+        rowsList.forceLayout()
+        let widest = 0
+        let stacked = 0
+        let seen = 0
+        for (let i = 0; i < refList.records.length; i++) {
+            const row = rowsList.itemAtIndex(i)
+            if (!row)
+                break
+            widest = Math.max(widest, row.implicitWidth)
+            stacked += row.height
+            seen = i + 1
+        }
+        rows.rowsWidth = widest
+        rows.rowsHeight = stacked + Math.max(0, refList.records.length - seen) * Theme.rowHeight
+        refList.measuring = false
     }
 
-    contentItem: Column {
+    contentItem: Item {
         id: rows
         // The rows' half of `pointerInside`; the rows are its children, so their own hover leaves this one standing.
         HoverHandler {
             id: contentHover
         }
-        // A Column takes its width from the widest child, and the rows have to reach that width for their highlight to
-        // line up — and, now that the chips can stand flush against either edge, for them to line up as well.
-        readonly property real rowWidth: {
-            let widest = refList.minRowWidth
-            for (let i = 0; i < rows.children.length; i++)
-                widest = Math.max(widest, rows.children[i].implicitWidth)
-            return widest
-        }
-        Repeater {
-            id: rowsRepeater
+
+        /// What the rows came to, taken once by [`layOutRows`] and held: the widest of them, which is the width every
+        /// row is then laid out to (their highlights have to line up, and so do the chips now that they can stand
+        /// flush against either edge), and what they stack up to.
+        ///
+        /// **Held rather than derived, because the rows a recycling list has are not the rows it holds.** Left as a
+        /// binding these would be read off whatever the list had built at the time, and the card would breathe as the
+        /// reader scrolled.
+        property real rowsWidth: 0
+        property real rowsHeight: 0
+        /// How far along a row a press still belongs to the row. **The bar is drawn over these rows rather than beside
+        /// them** (`AppListView.barRoom`), so a row that took the press there would be a bar nobody could grab.
+        ///
+        /// **The names are not held back to it.** This bar takes no trough, which is the whole of why its thumb is
+        /// see-through (規約 §スクロールバー) — the rows run under it the way the combo's do, and a card kept a thumb's
+        /// width wider than its names would be paying for a trough it does not have.
+        readonly property real rowRoom: rows.width - rowsList.barRoom
+
+        AppListView {
+            id: rowsList
+            anchors.fill: parent
             model: refList.records
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
+                // The row now holds a different ref: whatever was resting on the one before it is not resting on this.
+                // A recycled delegate is the same object with new data (`AppListView.reuseItems`), and the wash is
+                // written rather than derived, so nothing else would take it off.
+                onModelDataChanged: refRow.pointedAt = false
                 /// The pointer resting on this row, for the runs that photograph the wash — hover cannot be injected
                 /// (verify-ui §hover の絵の撮り方), and the same property a real pointer writes is the only place a run
                 /// may write. Named for the sidebar's own (`NavItemDelegate.tipPointedAt`).
@@ -200,11 +279,14 @@ AppCard {
                 readonly property bool leadsNowhere:
                     refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
 
-                // The chip is the row: no margin of the row's own on either side, so that what stands between a chip's
-                // frame and the card's is the card's padding and nothing else (規約 §グラフ行のダブルクリック — the card lands on
-                // the chip column's own edge, and a wider one would reach past the divider into the lanes).
-                implicitWidth: rowChip.width + (whose.visible ? whose.width + Theme.spaceSm : 0)
-                width: rows.rowWidth
+                // **The row is the band; the chip stands in it.** The air on either side of the chip is the row's own,
+                // and the card's frame ends where the band begins, so the wash the pointer puts on a row covers the
+                // whole of what that row answers to (規約 §当たり判定). What stands between a chip's frame and the card's
+                // is that air and nothing else (規約 §グラフ行のダブルクリック — the card lands on the chip column's own edge,
+                // and a wider one would reach past the divider into the lanes).
+                implicitWidth: 2 * Theme.spaceXs + rowChip.width
+                               + (whose.visible ? whose.width + Theme.spaceSm : 0)
+                width: rows.width
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
                 radius: Theme.radiusSm
@@ -213,10 +295,11 @@ AppCard {
                 RefChip {
                     id: rowChip
                     y: refList.chipInset
-                    // Flush against the edge the card is anchored by, so every name in the list starts where the chip's
-                    // own name started — the head of a name is what it is told apart by, so that is the edge that has
-                    // to hold still (規約 §グラフ列は最も広い所のレーンまで).
-                    x: 0
+                    // One gap in from the band's own edge, and the card is placed so that puts this where the chip it
+                    // stands in for was: every name in the list starts where the chip's own name started — the head of
+                    // a name is what it is told apart by, so that is the edge that has to hold still
+                    // (規約 §グラフ列は最も広い所のレーンまで).
+                    x: Theme.spaceXs
                     records: [refRow.modelData]
                     // The same wash the row's own chip wears while a second click waits out its window — this card is
                     // that chip, so the mark is on whichever of the two the reader is looking at (規約 §グラフ行のダブルクリック).
@@ -234,9 +317,9 @@ AppCard {
                 Label {
                     id: whose
                     visible: rowChip.recWhere !== ""
-                    // At the far edge of the row, away from the names: put beside its own chip it would sit at a
+                    // At the far end of the row, away from the names: put beside its own chip it would sit at a
                     // different distance on every row, and the reading is meta rather than part of the name.
-                    x: refRow.width - whose.width
+                    x: refRow.width - whose.width - Theme.spaceXs
                     // Level with the chip's first line, not with the row: a wrapped name takes the row down with it and
                     // this is meta about the name's first line.
                     y: refList.chipInset + Theme.borderWidth
@@ -282,26 +365,35 @@ AppCard {
                 HoverHandler {
                     id: rowHover
                 }
-                TapHandler {
-                    id: rowTap
-                    /// When the button went down, for the gesture to take off the wait it has left (see the component).
-                    property real pressAt: 0
-                    onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
-                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
-                    onDoubleTapped: refRow.doubleClick()
+                // **The presses stop short of the bar.** It is drawn over these rows rather than beside them, so a row
+                // that answered a press there would be a bar nobody could grab (`AppListView.barRoom`). The hover is
+                // the row's own and stays whole: the wash says where the pointer is, and a see-through thumb over it
+                // takes nothing away from that.
+                Item {
+                    width: Math.max(0, rows.rowRoom)
+                    height: refRow.height
+                    TapHandler {
+                        id: rowTap
+                        /// When the button went down, for the gesture to take off the wait it has left (see the
+                        /// component).
+                        property real pressAt: 0
+                        onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
+                        onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
+                        onDoubleTapped: refRow.doubleClick()
+                    }
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        enabled: !refRow.unavailable
+                        // The list stays: the menu opens over it, and the owner keeps the list up for as long as the
+                        // menu stands (its settle checks the menu).
+                        onTapped: refRow.rightClick()
+                    }
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
                 /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the
                 /// row would have decided (PG_AUTO_ACT=list-menu).
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
-                }
-                TapHandler {
-                    acceptedButtons: Qt.RightButton
-                    enabled: !refRow.unavailable
-                    // The list stays: the menu opens over it, and the owner keeps the list up for as long as the menu
-                    // stands (its settle checks the menu).
-                    onTapped: refRow.rightClick()
                 }
             }
         }

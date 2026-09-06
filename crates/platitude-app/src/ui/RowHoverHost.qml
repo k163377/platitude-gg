@@ -175,17 +175,23 @@ Item {
         // Never narrower than the chip it is covering (see the property).
         refList.minRowWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
-        // what the card puts around a chip on its own edges (its
-        // padding, and nothing else — `RefListPopup`'s rows keep no
-        // margin) and the stop every floating card in the app shares:
+        // what stands outside a row's names on either side — the air the
+        // row keeps around its chip, and the frame the card draws around
+        // the rows — and the stop every floating card in the app shares:
         // `spaceXxl` short of the edge, the ceiling a menu's width has
         // (規約 §メニュー). Without it the longest name takes the card
         // flat against the window frame.
-        refList.chipRoom = host.width - Theme.spaceXxl - at.x - refList.padding
+        refList.chipRoom = host.width - Theme.spaceXxl - at.x
+                           - Theme.spaceXs - refList.padding
+        // And how far down it may run: the page, and no further. This is
+        // the one card whose rows scroll, and one that ran past the
+        // bottom would put its lower rows where nothing can reach them
+        // (see the property).
+        refList.listRoom = host.height
         // Sized before it is shown, so it does not grow under the hand
         // that is walking into it — see the function.
         refList.layOutRows()
-        refList.x = at.x - refList.padding
+        refList.x = at.x - Theme.spaceXs - refList.padding
         // Down from the chip, and kept inside the page: a card longer
         // than what is under the chip would otherwise be moved by
         // `Popup` itself, which knows nothing about the seat it is
