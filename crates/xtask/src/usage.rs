@@ -279,6 +279,18 @@ const TAIL: &str = "  shipped [--no-build]
                           taken again (default 3)
         --allow-noisy     publish what a busy, covered or locked machine
                           produced. The conditions are printed either way
+        --software        draw with the software scene graph, whose
+                          frames need no display: the display may be
+                          on, off, or turned on and off while the runs
+                          go, nothing holds it awake or pokes the input
+                          timer, and the window is not raised over
+                          whatever a person has in front. D3D presents
+                          nothing to a display that is off and its
+                          frames never swap, which is what this is for.
+                          The working set is that renderer's, read
+                          beside a D3D reading of the same commit, and
+                          every frame number is labelled as not the
+                          display path's
 
   still
       Whether a measurement is holding the machine still, and which

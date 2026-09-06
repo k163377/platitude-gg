@@ -7,6 +7,7 @@ fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
         display: "\\\\.\\DISPLAY2".into(),
         foreground: fg,
         interactive: true,
+        dark: Some(false),
         away_ms: 0,
         minimized: false,
         windowed: true,
@@ -23,9 +24,10 @@ fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
 #[test]
 fn a_sampler_line_parses_into_a_tick() {
     let line = "ws=123 pv=456 display=\\\\.\\DISPLAY1 win=1 fg=1 int=1 min=0 k=7 u=8 i=9 \
-                app=10 own=4 job=1";
+                app=10 own=4 job=1 dark=1";
     let parsed = parse_sample(line).expect("a whole line parses");
     assert!(parsed.job, "the children were counted");
+    assert_eq!(parsed.dark, Some(true), "the display was off");
     assert_eq!(parsed.own, 4);
     assert_eq!(parsed.working_set, 123);
     assert_eq!(parsed.private, 456);
@@ -35,10 +37,16 @@ fn a_sampler_line_parses_into_a_tick() {
         (parsed.kernel, parsed.user, parsed.idle, parsed.app),
         (7, 8, 9, 10)
     );
-    // Before the window exists the display is a dash, not a name.
-    let bare =
-        parse_sample("ws=1 pv=1 display=- win=0 fg=0 int=1 min=0 k=0 u=0 i=0 app=0").unwrap();
+    // Before the window exists the display is a dash, not a name; before
+    // the power broadcast answered, the screen's state is nothing.
+    let bare = parse_sample("ws=1 pv=1 display=- win=0 fg=0 int=1 min=0 k=0 u=0 i=0 app=0 dark=-")
+        .unwrap();
     assert!(bare.display.is_empty() && !bare.windowed && bare.interactive);
+    assert_eq!(bare.dark, None);
+    assert_eq!(
+        parse_sample("ws=1 pv=1 dark=0").map(|s| s.dark),
+        Some(Some(false))
+    );
     assert!(parse_sample("PowerShell said something else entirely").is_none());
 }
 
@@ -80,7 +88,7 @@ fn an_idle_machine_reads_as_no_foreign_load() {
     assert!(
         series
             .conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
 }
@@ -96,7 +104,7 @@ fn work_the_measured_process_did_is_not_foreign_load() {
     assert!(
         series
             .conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
 }
@@ -108,10 +116,15 @@ fn a_busy_machine_is_refused_and_names_the_share() {
     series.absorb(sample(100, true, 2, 0, 36_000_000), 0);
     let complaint = series
         .conditions
-        .complaint(&Limits::default(), None)
+        .complaint(&Limits::default(), None, false)
         .expect("half the machine went elsewhere");
     assert!(complaint.contains("50.0%"), "{complaint}");
-    assert!(series.conditions.complaint(&Limits::OPEN, None).is_none());
+    assert!(
+        series
+            .conditions
+            .complaint(&Limits::OPEN, None, false)
+            .is_none()
+    );
 }
 
 /// Losing the front is recorded and does not spoil the run: a window
@@ -127,7 +140,7 @@ fn a_window_that_lost_the_front_is_still_a_reading() {
     assert!(
         series
             .conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
     assert_eq!(series.conditions.foreground_share(), Some(0.7));
@@ -144,13 +157,18 @@ fn a_locked_session_is_refused() {
     }
     let complaint = series
         .conditions
-        .complaint(&Limits::default(), None)
+        .complaint(&Limits::default(), None, false)
         .expect("three ticks in a row with nobody able to look");
     assert!(
         complaint.contains("for 3 of 10 sampled ticks"),
         "{complaint}"
     );
-    assert!(series.conditions.complaint(&Limits::OPEN, None).is_none());
+    assert!(
+        series
+            .conditions
+            .complaint(&Limits::OPEN, None, false)
+            .is_none()
+    );
 }
 
 /// The secure desktop flashing past — a consent prompt, a focus
@@ -168,7 +186,7 @@ fn a_blink_of_the_secure_desktop_is_not() {
     assert!(
         series
             .conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
 }
@@ -188,7 +206,7 @@ fn scattered_blinks_do_not_add_up_to_a_lock() {
     assert!(
         series
             .conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
 }
@@ -208,13 +226,17 @@ fn a_window_that_changed_screens_after_settling_is_refused() {
     for _ in 0..12 {
         settling.absorb(&arrived, None);
     }
-    assert!(settling.complaint(&Limits::default(), None).is_none());
+    assert!(
+        settling
+            .complaint(&Limits::default(), None, false)
+            .is_none()
+    );
     assert_eq!(settling.displays, ["\\\\.\\DISPLAY2"]);
 
     let mut wandered = settling.clone();
     wandered.absorb(&elsewhere, None);
     let complaint = wandered
-        .complaint(&Limits::default(), None)
+        .complaint(&Limits::default(), None, false)
         .expect("a second screen once the window was placed");
     assert!(complaint.contains("moved between screens"), "{complaint}");
 }
@@ -228,7 +250,7 @@ fn a_minimised_window_is_refused_before_anything_else() {
     conditions.absorb(&down, None);
     assert!(
         conditions
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_some_and(|c| c.contains("minimised"))
     );
 }
@@ -251,15 +273,15 @@ fn a_wake_helper_that_stopped_is_refused() {
     // One interval and a bit is what a running helper leaves behind.
     assert!(
         alive(WAKE_SECS * 1_000 + 500)
-            .complaint(&Limits::default(), None)
+            .complaint(&Limits::default(), None, false)
             .is_none()
     );
     let stopped = alive(WAKE_SECS * 3_000);
     let complaint = stopped
-        .complaint(&Limits::default(), None)
+        .complaint(&Limits::default(), None, false)
         .expect("nothing has injected an input for three intervals");
     assert!(complaint.contains("wake helper"), "{complaint}");
-    assert!(stopped.complaint(&Limits::OPEN, None).is_none());
+    assert!(stopped.complaint(&Limits::OPEN, None, false).is_none());
 }
 
 /// Pinning a window asks; it does not decide. The report divides the
@@ -276,11 +298,11 @@ fn a_window_that_came_up_on_another_screen_is_refused() {
     assert_eq!(conditions.displays, ["\\\\.\\DISPLAY2"]);
     assert!(
         conditions
-            .complaint(&Limits::default(), Some("\\\\.\\DISPLAY2"))
+            .complaint(&Limits::default(), Some("\\\\.\\DISPLAY2"), false)
             .is_none()
     );
     let complaint = conditions
-        .complaint(&Limits::default(), Some("\\\\.\\DISPLAY1"))
+        .complaint(&Limits::default(), Some("\\\\.\\DISPLAY1"), false)
         .expect("the window is on DISPLAY2 and the frames would be read against DISPLAY1");
     assert!(
         complaint.contains("pinned to \\\\.\\DISPLAY1"),
@@ -300,7 +322,7 @@ fn the_children_of_the_watched_process_are_counted_as_its_own() {
     use std::time::Duration;
     let csv = std::env::temp_dir().join(format!("pg-sampler-{}.csv", std::process::id()));
     let file = std::fs::File::create(&csv).expect("a csv to write");
-    let armed = super::arm(Duration::from_secs(30), file).expect("an armed sampler");
+    let armed = super::arm(Duration::from_secs(30), file, false).expect("an armed sampler");
     let mut child = std::process::Command::new("cmd")
         .args([
             "/C",
@@ -329,4 +351,125 @@ fn the_children_of_the_watched_process_are_counted_as_its_own() {
         last.app,
         last.own
     );
+    // The power broadcast answers on registration, so every tick of a
+    // live sampler knows whether the display is off.
+    assert!(
+        last.dark.is_some(),
+        "the display's power state was read: {last:?}"
+    );
+}
+
+/// The screen is a condition of a D3D run alone. One dark tick refuses
+/// it: the display timer ran out under the run, and every frame after
+/// that went nowhere — said before the wake helper's own interval would
+/// say so. A software run's frames need no display, so the same ticks —
+/// lit, dark, flipping, or never answered — refuse nothing and stay
+/// evidence.
+#[test]
+fn the_screen_is_a_condition_of_a_d3d_run_alone() {
+    let with = |dark: Option<bool>| {
+        let mut tick_sample = sample(100, true, 1, 0, 24_000_000);
+        tick_sample.dark = dark;
+        tick_sample
+    };
+    let series = |ticks: &[Option<bool>]| {
+        let mut series = Series::default();
+        for dark in ticks {
+            series.absorb(with(*dark), 0);
+        }
+        series
+    };
+    let d3d = false;
+    let software = true;
+    let lit = series(&[Some(false), Some(false)]);
+    assert!(
+        lit.conditions
+            .complaint(&Limits::default(), None, d3d)
+            .is_none()
+    );
+    assert!(
+        lit.conditions
+            .complaint(&Limits::default(), None, software)
+            .is_none()
+    );
+    let dark = series(&[Some(true), Some(true)]);
+    let refused = dark
+        .conditions
+        .complaint(&Limits::default(), None, d3d)
+        .expect("a dark tick under a D3D run");
+    assert!(refused.contains("display was off for 2 of 2"), "{refused}");
+    assert!(refused.contains("--software"), "{refused}");
+    assert!(
+        dark.conditions
+            .complaint(&Limits::default(), None, software)
+            .is_none()
+    );
+    let flipping = series(&[Some(true), Some(false), Some(true)]);
+    assert!(
+        flipping
+            .conditions
+            .complaint(&Limits::default(), None, d3d)
+            .is_some()
+    );
+    assert!(
+        flipping
+            .conditions
+            .complaint(&Limits::default(), None, software)
+            .is_none()
+    );
+    assert_eq!((flipping.conditions.dark, flipping.conditions.lit), (2, 1));
+    let unread = series(&[None, None]);
+    assert!(
+        unread
+            .conditions
+            .complaint(&Limits::default(), None, d3d)
+            .is_none()
+    );
+    assert!(
+        unread
+            .conditions
+            .complaint(&Limits::default(), None, software)
+            .is_none()
+    );
+    assert_eq!((unread.conditions.dark, unread.conditions.lit), (0, 0));
+    // --allow-noisy opens this gate with every other.
+    assert!(
+        dark.conditions
+            .complaint(&Limits::OPEN, None, d3d)
+            .is_none()
+    );
+}
+
+/// A software run injects no input, so the interval since the last
+/// input is how long the person has been away — not a helper that
+/// died, which is what the same interval means to a D3D run.
+#[test]
+fn a_software_run_is_not_refused_for_the_wake_helper_it_never_had() {
+    let away = |dark: bool| {
+        let mut series = Series::default();
+        for _ in 0..2 {
+            let mut tick_sample = sample(100, true, 1, 0, 24_000_000);
+            tick_sample.dark = Some(dark);
+            tick_sample.away_ms = WAKE_SECS * 10_000;
+            series.absorb(tick_sample, 0);
+        }
+        series
+    };
+    assert!(
+        away(true)
+            .conditions
+            .complaint(&Limits::default(), None, true)
+            .is_none()
+    );
+    assert!(
+        away(false)
+            .conditions
+            .complaint(&Limits::default(), None, true)
+            .is_none()
+    );
+    let refused = away(false)
+        .conditions
+        .complaint(&Limits::default(), None, false)
+        .expect("a stopped helper under a D3D run");
+    assert!(refused.contains("wake helper"), "{refused}");
 }

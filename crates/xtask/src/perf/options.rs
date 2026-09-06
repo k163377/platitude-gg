@@ -74,6 +74,14 @@ pub(super) struct Options {
     /// How quiet the machine has to be. Opened by `--allow-noisy`, which
     /// publishes the numbers a busy machine produced.
     pub(super) limits: Limits,
+    /// Draw with the software scene graph (`--software`), whose frames
+    /// go through the backing store rather than to a display: the
+    /// reading does not depend on the display being on, off or turned
+    /// on and off while the runs go, nothing holds the screen awake or
+    /// pokes the input timer, and the window is not raised over whatever
+    /// a person has in front. What that renderer's numbers are is the
+    /// report's to say (`perf::report`).
+    pub(super) software: bool,
 }
 
 impl Options {
@@ -133,6 +141,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         corpus: String::new(),
         at: String::new(),
         limits: Limits::default(),
+        software: false,
     };
     let mut i = 0;
     while i < args.len() {
@@ -190,6 +199,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--corpus" => opts.corpus = value()?,
             "--at" => opts.at = value()?,
             "--allow-noisy" => opts.limits = Limits::OPEN,
+            "--software" => opts.software = true,
             other => return Err(format!("unknown option: {other}")),
         }
         i += 1;
@@ -422,6 +432,18 @@ mod tests {
             ])
             .map(|o| o.attribute)
             .unwrap_or(!cfg!(windows))
+        );
+    }
+
+    /// The software scene graph is asked for by name; a plain run draws
+    /// with whatever Qt would, which on this machine is D3D.
+    #[test]
+    fn the_software_scene_graph_is_asked_for_by_name() {
+        assert!(!options(&["--repo", "C:/r"]).unwrap().software);
+        assert!(
+            options(&["--repo", "C:/r", "--software"])
+                .expect("a software run")
+                .software
         );
     }
 

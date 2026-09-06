@@ -321,6 +321,11 @@ fn graphics_note(line: &str) -> bool {
         "Adapter ",
         "using this adapter",
         "using vsync:",
+        // The software scene graph, which `--software` draws with
+        // (`measure::command`): it names no adapter, and two runs that
+        // drew with different scene graphs are not each other's control
+        // either.
+        "Loading backend",
     ]
     .iter()
     .any(|mark| line.contains(mark))

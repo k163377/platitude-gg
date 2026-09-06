@@ -53,6 +53,20 @@
 //! tree's own ([`rig`]): the seat keeps its target/ and its edits, the
 //! number is of a commit anybody can name again, and the other side of
 //! an A/B builds nothing the second time.
+//!
+//! `--software` draws with the software scene graph, and so measures
+//! without needing the display at all: on, off, or a person turning it
+//! on and off while the runs go. The D3D swap chain presents nothing to
+//! a display that is off — its frames never swap, and the driver never
+//! gets past the first one — while the software adaptation's frames go
+//! through the backing store, which waits for no display. Nothing then
+//! holds the screen awake or pokes the input timer, the window is not
+//! raised over whatever a person has in front, and the display's state
+//! is sampled as evidence rather than as a condition. What that answers
+//! is the working set of a run that went the whole way — selection,
+//! diff, scroll, font walk — with a renderer of its own; what it cannot
+//! answer is anything about the display path, and the report says so
+//! beside every frame number ([`report`]).
 
 mod artifacts;
 mod attribution;
@@ -98,8 +112,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Held for the whole invocation rather than per run, and taken
     // before the build: the screen goes dark between runs as readily as
     // during one, and a release build is minutes of exactly the idle
-    // that darkens it (`sampler::keep_awake`).
-    let _awake = sampler::keep_awake();
+    // that darkens it (`sampler::keep_awake`). A software run holds
+    // only the machine: its frames need no display.
+    let _awake = sampler::keep_awake(!opts.software);
 
     // The build, announced as one: it waits for a measurement holding
     // the machine, a measurement waits for it, and the compiles inside it
@@ -145,13 +160,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         &corpus_line(corpus.as_ref()),
         &modes,
     )?;
-    println!("evidence: {}", output.display());
-    if let Some(corpus) = &corpus {
-        println!("corpus: {corpus}");
-    }
-    if let Some(screen) = &screen {
-        println!("screen: {} at {}Hz", screen.name, screen.hz);
-    }
+    announce(&output, corpus.as_ref(), screen.as_ref(), &opts);
 
     // After the build and before the runs: the build can share the
     // machine, the runs cannot (`still`). Every build here waits for this
@@ -201,6 +210,30 @@ pub fn run(args: &[String]) -> Result<(), String> {
         },
     );
     Ok(())
+}
+
+/// What the runs are about to be taken under, said before the first:
+/// where the evidence lands, which repository, which screen, and
+/// whether the screen is being held awake or left alone (`--software`).
+fn announce(
+    output: &std::path::Path,
+    corpus: Option<&corpus::Corpus>,
+    screen: Option<&display::Screen>,
+    opts: &Options,
+) {
+    println!("evidence: {}", output.display());
+    if let Some(corpus) = corpus {
+        println!("corpus: {corpus}");
+    }
+    if let Some(screen) = screen {
+        println!("screen: {} at {}Hz", screen.name, screen.hz);
+    }
+    if opts.software {
+        println!(
+            "software: the software scene graph draws, so the display may be on, off or \
+             flipping; nothing holds it awake"
+        );
+    }
 }
 
 /// The exe this invocation measures: the rig's build of the commit
@@ -325,6 +358,7 @@ impl Bench<'_> {
             self.screen.map(|screen| screen.hz),
             reading.fps,
             &self.opts.limits,
+            self.opts.software,
         )
     }
 
@@ -387,9 +421,19 @@ impl Bench<'_> {
 
 /// Whether the scroll bench was presented at all, read against what the
 /// screen it was on could have shown. `None` where there is nothing to
-/// read it against — a run with no scroll, or a screen whose mode table
-/// owned no refresh rate.
-fn frames_delivered(hz: Option<u32>, fps: Option<f64>, limits: &sampler::Limits) -> Option<String> {
+/// read it against — a run with no scroll, a screen whose mode table
+/// owned no refresh rate, or a software run, whose frames reach no
+/// screen and whose rate is the software scene graph's own
+/// (`measure::command`).
+fn frames_delivered(
+    hz: Option<u32>,
+    fps: Option<f64>,
+    limits: &sampler::Limits,
+    software: bool,
+) -> Option<String> {
+    if software {
+        return None;
+    }
     let hz = f64::from(hz.filter(|hz| *hz > 0)?);
     let fps = fps?;
     let floor = hz * limits.frame_share;
@@ -501,26 +545,28 @@ mod tests {
     #[test]
     fn a_scroll_nobody_could_have_seen_is_refused() {
         let limits = Limits::default();
-        assert!(frames_delivered(Some(180), Some(176.0), &limits).is_none());
-        assert!(frames_delivered(Some(180), Some(90.1), &limits).is_none());
-        let complaint =
-            frames_delivered(Some(180), Some(12.0), &limits).expect("12fps on a 180Hz screen");
+        assert!(frames_delivered(Some(180), Some(176.0), &limits, false).is_none());
+        assert!(frames_delivered(Some(180), Some(90.1), &limits, false).is_none());
+        let complaint = frames_delivered(Some(180), Some(12.0), &limits, false)
+            .expect("12fps on a 180Hz screen");
         assert!(complaint.contains("12 frames a second"), "{complaint}");
         assert!(complaint.contains("180Hz"), "{complaint}");
     }
 
     /// Nothing to read the frames against is not a spoiled run: a screen
-    /// whose mode table owned no rate, and a run that did not scroll.
+    /// whose mode table owned no rate, a run that did not scroll, and a
+    /// software run, whose frames reach no screen by design.
     #[test]
     fn a_run_with_nothing_to_compare_against_is_not_refused() {
         let limits = Limits::default();
-        assert!(frames_delivered(None, Some(1.0), &limits).is_none());
-        assert!(frames_delivered(Some(0), Some(1.0), &limits).is_none());
-        assert!(frames_delivered(Some(180), None, &limits).is_none());
+        assert!(frames_delivered(None, Some(1.0), &limits, false).is_none());
+        assert!(frames_delivered(Some(0), Some(1.0), &limits, false).is_none());
+        assert!(frames_delivered(Some(180), None, &limits, false).is_none());
+        assert!(frames_delivered(Some(180), Some(12.0), &limits, true).is_none());
         // --allow-noisy publishes the frames a covered window did
         // deliver. One that delivered none still dies at
         // `measure::SCROLL_CEILING`, where there is no reading to open.
-        assert!(frames_delivered(Some(180), Some(1.0), &Limits::OPEN).is_none());
+        assert!(frames_delivered(Some(180), Some(1.0), &Limits::OPEN, false).is_none());
     }
 
     #[test]

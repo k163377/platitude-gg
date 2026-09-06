@@ -142,6 +142,17 @@ fn command(
         .env_remove("QT_QPA_PLATFORM")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    // `--software` draws with the software scene graph, whose frames go
+    // through the backing store and so need no display: the D3D swap
+    // chain presents nothing to a display that is off — no frame ever
+    // swaps, and the driver never gets past the first one (measured:
+    // eighty seconds, a finished graph, not one `perf_graph_frame`) —
+    // where the software adaptation goes the whole way, lit or dark.
+    // What that renderer's numbers are is the report's to say
+    // (`report::memory`).
+    if opts.software {
+        cmd.env("QT_QUICK_BACKEND", "software");
+    }
     if !opts.harness {
         return cmd;
     }
@@ -195,7 +206,7 @@ pub(super) fn measure(
     } else {
         None
     };
-    let armed = sampler::arm(window, samples)?;
+    let armed = sampler::arm(window, samples, opts.software)?;
     // Started with nothing executed yet: the sampler puts the process in
     // its job object and only then lets it run, so the first git the app
     // spawns is inside the job with everything after it. The clock starts
@@ -353,7 +364,9 @@ fn verdict(
         Ended::Exited => Some("the app exited before reporting perf_done".into()),
         Ended::Done(_) | Ended::Covered => None,
     };
-    let host = reading.conditions.complaint(&opts.limits, pinned);
+    let host = reading
+        .conditions
+        .complaint(&opts.limits, pinned, opts.software);
     // A bench that stood still on a machine with nothing else to say
     // about itself: its own kind, because it is retried its own way.
     let stood = (host.is_none() && covered).then(|| stood_still(&reading.conditions));

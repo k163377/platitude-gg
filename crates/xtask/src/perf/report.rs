@@ -35,12 +35,22 @@ pub(super) fn report(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         return;
     }
     memory(opts, kept, context);
-    timings(kept);
-    scroll(kept, context);
-    interaction(kept);
+    timings(kept, opts.software);
+    scroll(kept, context, opts.software);
+    interaction(kept, opts.software);
     host(kept);
     tail(kept);
     attribution(kept);
+}
+
+/// What every frame number is read as under `--software`: the software
+/// scene graph's own rate, which reached no screen (`measure::command`).
+fn not_the_display(software: bool) -> &'static str {
+    if software {
+        " — the software scene graph, not the display path"
+    } else {
+        ""
+    }
 }
 
 /// What the settled process was holding, by kind, read from outside it
@@ -143,6 +153,13 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
             screen.name, screen.hz, screen.width, screen.height, screen.x, screen.y
         );
     }
+    if opts.software {
+        println!(
+            "  renderer    : the software scene graph (--software), whose frames need no display; \
+             read the working set beside a D3D reading of the same commit, not against the \
+             budget line"
+        );
+    }
     println!("  working set : {}", spread(&ws));
     println!("  private     : {}", spread(&private));
     if cfg!(target_os = "linux") {
@@ -217,12 +234,13 @@ fn font_walk_lines(kept: &[Reading], walk: &FontWalk, settle_ms: u64) -> Vec<Str
 
 /// How long a person waited: to a frame with the graph in it, and to the
 /// graph data being whole, which is the number both builds answer.
-fn timings(kept: &[Reading]) {
+fn timings(kept: &[Reading], software: bool) {
     let startups: Vec<f64> = kept.iter().filter_map(|r| r.startup_ms).map(f).collect();
     if !startups.is_empty() {
         println!(
-            "  startup     : {} ms (to a visible graph frame)",
-            spread(&startups)
+            "  startup     : {} ms (to a visible graph frame{})",
+            spread(&startups),
+            not_the_display(software)
         );
     }
     let graphs: Vec<f64> = kept.iter().filter_map(|r| r.graph_ms).map(f).collect();
@@ -245,17 +263,24 @@ fn timings(kept: &[Reading]) {
 /// The scroll bench, read three ways: the raw rate, that rate against
 /// what the screen could have delivered, and the frames a person would
 /// have seen as a stutter whatever the screen was.
-fn scroll(kept: &[Reading], context: &Context<'_>) {
+fn scroll(kept: &[Reading], context: &Context<'_>, software: bool) {
     let fps: Vec<f64> = kept.iter().filter_map(|r| r.fps).collect();
     if !fps.is_empty() {
         println!(
-            "  scroll      : {} fps (GUI-delivered frameSwapped)",
-            spread(&fps)
+            "  scroll      : {} fps (GUI-delivered frameSwapped{})",
+            spread(&fps),
+            not_the_display(software)
         );
         // What the screen could have delivered is the only thing that
         // makes two screens comparable: 176fps on a 180Hz monitor and
-        // 98fps on a 100Hz one are the same application.
-        if let Some(hz) = context.screen.map(|s| s.hz).filter(|hz| *hz > 0) {
+        // 98fps on a 100Hz one are the same application. The software
+        // scene graph delivered nothing to the screen, so it has no
+        // share of one.
+        if let Some(hz) = context
+            .screen
+            .map(|s| s.hz)
+            .filter(|hz| *hz > 0 && !software)
+        {
             let share: Vec<f64> = fps.iter().map(|v| v * 100.0 / f64::from(hz)).collect();
             println!("  of its screen: {}% of {hz}Hz", spread(&share));
         }
@@ -263,8 +288,9 @@ fn scroll(kept: &[Reading], context: &Context<'_>) {
     let stutters: Vec<f64> = kept.iter().filter_map(|r| r.over_16_ms).map(g).collect();
     if !stutters.is_empty() {
         println!(
-            "  over 16.7ms : {} frames (a stutter at any refresh rate)",
-            spread(&stutters)
+            "  over 16.7ms : {} frames (a stutter at any refresh rate{})",
+            spread(&stutters),
+            not_the_display(software)
         );
     }
     for (name, values) in [
@@ -285,7 +311,7 @@ fn scroll(kept: &[Reading], context: &Context<'_>) {
 
 /// One row selection and one diff, timed from the click to the frame
 /// that answered it.
-fn interaction(kept: &[Reading]) {
+fn interaction(kept: &[Reading], software: bool) {
     let details: Vec<f64> = kept
         .iter()
         .flat_map(|r| r.details_ms.clone())
@@ -300,8 +326,9 @@ fn interaction(kept: &[Reading]) {
         .collect();
     if !rendered.is_empty() {
         println!(
-            "  details frame: {} ms (handler to frame; excludes OS input delivery)",
-            spread(&rendered)
+            "  details frame: {} ms (handler to frame; excludes OS input delivery{})",
+            spread(&rendered),
+            not_the_display(software)
         );
     }
     let diff: Vec<f64> = kept
@@ -310,8 +337,9 @@ fn interaction(kept: &[Reading]) {
         .collect();
     if !diff.is_empty() {
         println!(
-            "  diff frame  : {} ms (raw diff; highlighting may follow)",
-            spread(&diff)
+            "  diff frame  : {} ms (raw diff; highlighting may follow{})",
+            spread(&diff),
+            not_the_display(software)
         );
     }
 }
@@ -370,6 +398,21 @@ fn host(kept: &[Reading]) {
         println!(
             "  window      : in front for {}% of the sampled ticks",
             spread(&front)
+        );
+    }
+    // Said only where a tick found the screen off: under a D3D run that
+    // is a refusal already, and under --software it is the one thing the
+    // record wants to know about the screen, which the reading did not
+    // depend on.
+    let dark: Vec<f64> = kept
+        .iter()
+        .filter(|r| r.conditions.dark > 0 && r.conditions.samples > 0)
+        .map(|r| r.conditions.dark as f64 * 100.0 / r.conditions.samples as f64)
+        .collect();
+    if !dark.is_empty() {
+        println!(
+            "  display     : off for {}% of the sampled ticks",
+            spread(&dark)
         );
     }
 }

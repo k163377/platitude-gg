@@ -69,6 +69,14 @@ pub(super) struct Sample {
     /// owns the display, so the frames stop there too — which is why
     /// this reads false rather than falling through to true.
     pub(super) interactive: bool,
+    /// Whether the display was off at this tick — `Some(true)` off,
+    /// `Some(false)` on or dimmed, `None` where the power broadcast had
+    /// not answered yet. Read off `GUID_CONSOLE_DISPLAY_STATE`, which is
+    /// what the display timer and the power button both drive; nothing
+    /// is composited to a display that is off, so a D3D swap chain
+    /// presents no frame while this is true, whatever the window itself
+    /// is doing — the software scene graph's frames need no display.
+    pub(super) dark: Option<bool>,
     pub(super) minimized: bool,
     pub(super) windowed: bool,
     /// Whole-machine processor time, in 100ns units, cumulative.
@@ -139,6 +147,15 @@ pub(super) struct Conditions {
     /// says nothing once the run is over.
     pub(super) blind: usize,
     pub(super) longest_blind: usize,
+    /// Ticks taken with the display off, and ticks taken with it on or
+    /// dimmed; short of `samples` together means the broadcast had not
+    /// answered. What they mean is the renderer's: a run drawing with
+    /// D3D must never see a dark tick — nothing is composited to a dark
+    /// display, and its frames stop — while a run drawing with the
+    /// software scene graph (`--software`) may see either, and they are
+    /// evidence of the conditions rather than a gate.
+    pub(super) dark: usize,
+    pub(super) lit: usize,
     /// Every screen the window was seen on, in the order first seen.
     pub(super) displays: Vec<String>,
     /// Whole-machine load over the sampled span, and the share of it that
@@ -172,6 +189,11 @@ impl Conditions {
         } else {
             self.blind += 1;
             self.longest_blind = self.longest_blind.max(self.blind);
+        }
+        match sample.dark {
+            Some(true) => self.dark += 1,
+            Some(false) => self.lit += 1,
+            None => {}
         }
         if sample.windowed {
             self.windowed += 1;
@@ -251,11 +273,19 @@ impl Conditions {
     }
 
     /// Why this run is not a reading of the application, or nothing.
+    /// `software` says the run drew with the software scene graph, whose
+    /// frames reach no display: the screen's state is then evidence
+    /// rather than a condition, and no helper injected input for it.
     ///
     /// Deliberately not a warning: a run taken while the machine was
     /// doing something else is not a slower application, and publishing
     /// it as one is the whole failure this exists to stop.
-    pub(super) fn complaint(&self, limits: &Limits, pinned: Option<&str>) -> Option<String> {
+    pub(super) fn complaint(
+        &self,
+        limits: &Limits,
+        pinned: Option<&str>,
+        software: bool,
+    ) -> Option<String> {
         if !self.watched() {
             // Nothing to say about the machine, so nothing is said. What
             // a run nobody watched is, is [`Self::unwatched`]'s answer.
@@ -282,7 +312,13 @@ impl Conditions {
                 self.samples
             ));
         }
-        if self.away_ms > WAKE_SECS * 2_000 {
+        if let Some(screen) = self.screen_complaint(software) {
+            return Some(screen);
+        }
+        // Nothing injects input under --software, so the interval since
+        // the last input says how long the person has been away, not
+        // whether a helper died.
+        if !software && self.away_ms > WAKE_SECS * 2_000 {
             return Some(format!(
                 "no input of any kind reached the machine for {:.0}s — the wake helper injects one \
                  every {WAKE_SECS}s, so it has stopped and nothing is holding the display timer \
@@ -331,6 +367,25 @@ impl Conditions {
             ));
         }
         None
+    }
+
+    /// Why the screen was not in the state the renderer needs, or
+    /// nothing. For D3D one dark tick is enough: the display timer ran
+    /// out under the run, and every frame after that went nowhere. The
+    /// software scene graph needs nothing of the screen, so a run
+    /// drawing with it has no complaint here whatever the display did.
+    fn screen_complaint(&self, software: bool) -> Option<String> {
+        if software {
+            return None;
+        }
+        (self.dark > 0).then(|| {
+            format!(
+                "the display was off for {} of {} sampled ticks — nothing is composited to a \
+                 display that is off, so no frame reached the window while it was; keep the \
+                 screen awake, or measure with --software, whose frames need no display",
+                self.dark, self.samples
+            )
+        })
     }
 }
 
@@ -502,11 +557,18 @@ pub(super) const CREATE_SUSPENDED: u32 = 0x0000_0004;
 #[cfg(windows)]
 const SCRIPT_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// Arms the sampler for a run of at most `window`.
-pub(super) fn arm(window: std::time::Duration, csv: std::fs::File) -> Result<Armed, String> {
+/// Arms the sampler for a run of at most `window`. `software` is the
+/// run's renderer: drawing with the software scene graph, the display
+/// is neither held on nor the window raised over whatever a person has
+/// in front (`windows_script`).
+pub(super) fn arm(
+    window: std::time::Duration,
+    csv: std::fs::File,
+    software: bool,
+) -> Result<Armed, String> {
     #[cfg(windows)]
     {
-        let (child, lines) = windows_arm(window.as_secs() + 5)?;
+        let (child, lines) = windows_arm(window.as_secs() + 5, software)?;
         Ok(Armed {
             csv,
             window,
@@ -516,6 +578,7 @@ pub(super) fn arm(window: std::time::Duration, csv: std::fs::File) -> Result<Arm
     }
     #[cfg(not(windows))]
     {
+        let _ = software;
         Ok(Armed { csv, window })
     }
 }
@@ -553,14 +616,14 @@ impl Armed {
                 csv,
                 "parent_elapsed_us,working_set_bytes,private_bytes,display_name,windowed,\
                  foreground,interactive,minimized,kernel_100ns,user_100ns,idle_100ns,\
-                 process_100ns,own_100ns,children_counted"
+                 process_100ns,own_100ns,children_counted,display_off"
             )
             .map_err(|e| e.to_string())?;
             let mut record = |sample: Sample| -> Result<(), String> {
                 let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
                 writeln!(
                     csv,
-                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
                     at_us,
                     sample.working_set,
                     sample.private,
@@ -579,6 +642,14 @@ impl Armed {
                     sample.app,
                     sample.own,
                     u8::from(sample.job),
+                    // The screen's power state as the tick read it: the
+                    // evidence of what the display did under the run
+                    // (`Conditions::dark`).
+                    match sample.dark {
+                        Some(true) => "1",
+                        Some(false) => "0",
+                        None => "-",
+                    },
                 )
                 .map_err(|e| e.to_string())?;
                 shared
@@ -674,6 +745,11 @@ fn parse_sample(line: &str) -> Option<Sample> {
         away_ms: number("away=").unwrap_or(0),
         foreground: field("fg=") == Some("1"),
         interactive: field("int=") == Some("1"),
+        dark: match field("dark=") {
+            Some("1") => Some(true),
+            Some("0") => Some(false),
+            _ => None,
+        },
         minimized: field("min=") == Some("1"),
         windowed: field("win=") == Some("1"),
         kernel: number("k=").unwrap_or(0),
@@ -690,9 +766,9 @@ fn parse_sample(line: &str) -> Option<Sample> {
 /// before that is PowerShell complaining, and a script that ends before
 /// saying it is a sampler that will never sample.
 #[cfg(windows)]
-fn windows_arm(seconds: u64) -> Result<(std::process::Child, Lines), String> {
+fn windows_arm(seconds: u64, software: bool) -> Result<(std::process::Child, Lines), String> {
     use std::io::BufRead;
-    let script = windows_script(seconds);
+    let script = windows_script(seconds, software);
     let mut child = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::piped())
@@ -753,8 +829,10 @@ fn windows_watch(
 }
 
 /// `SetThreadExecutionState` flags: `ES_CONTINUOUS | ES_SYSTEM_REQUIRED |
-/// ES_DISPLAY_REQUIRED` to hold the screen on, and `ES_CONTINUOUS` alone
-/// to let go of it again.
+/// ES_DISPLAY_REQUIRED` to hold the screen on, `ES_CONTINUOUS |
+/// ES_SYSTEM_REQUIRED` to hold only the machine awake while the screen
+/// is left to whoever is driving it (`--software`), and `ES_CONTINUOUS`
+/// alone to let go of both again.
 ///
 /// Spelled in decimal because PowerShell reads a hexadecimal literal with
 /// the top bit set as a negative `Int32` and then refuses to hand it to a
@@ -762,7 +840,86 @@ fn windows_watch(
 #[cfg(windows)]
 const AWAKE: u32 = 0x8000_0003;
 #[cfg(windows)]
+const SYSTEM_AWAKE: u32 = 0x8000_0001;
+#[cfg(windows)]
 const CONTINUOUS: u32 = 0x8000_0000;
+
+/// The Win32 the sampler script calls: who is in front, the input idle
+/// counter, the execution state, the whole-machine times, and the job
+/// object the measured process is put in and resumed under
+/// (`windows_script` says what each is for).
+#[cfg(windows)]
+const HOST_CLASS: &str = "public static class PerfHost {
+  [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();
+  [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsIconic(IntPtr h);
+  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+  [StructLayout(LayoutKind.Sequential)] public struct LASTINPUT { public uint size; public uint at; }
+  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetLastInputInfo(ref LASTINPUT info);
+  [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount();
+  public static uint IdleMs() {
+    var info = new LASTINPUT(); info.size = (uint)Marshal.SizeOf(typeof(LASTINPUT));
+    if (!GetLastInputInfo(ref info)) return 0;
+    return unchecked(GetTickCount() - info.at);
+  }
+  [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint flags);
+  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);
+  [StructLayout(LayoutKind.Sequential)] public struct JOBACCT { public long TotalUserTime; public long TotalKernelTime; public long ThisPeriodTotalUserTime; public long ThisPeriodTotalKernelTime; public uint TotalPageFaultCount; public uint TotalProcesses; public uint ActiveProcesses; public uint TotalTerminatedProcesses; }
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr CreateJobObject(IntPtr attrs, string name);
+  [DllImport(\"kernel32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool QueryInformationJobObject(IntPtr job, int cls, ref JOBACCT info, int size, IntPtr ret);
+  public static long JobTime(IntPtr job) {
+    var info = new JOBACCT();
+    if (!QueryInformationJobObject(job, 1, ref info, Marshal.SizeOf(typeof(JOBACCT)), IntPtr.Zero)) return -1;
+    return info.TotalUserTime + info.TotalKernelTime;
+  }
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr OpenThread(uint access, bool inherit, uint tid);
+  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern int ResumeThread(IntPtr thread);
+  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool CloseHandle(IntPtr handle);
+  public static int Resume(uint tid) {
+    var thread = OpenThread(2, false, tid);
+    if (thread == IntPtr.Zero) return -1;
+    var was = ResumeThread(thread);
+    CloseHandle(thread);
+    return was;
+  }
+}";
+
+/// The display's power state, kept current beside whichever script asks.
+/// A `NativeWindow` on a thread of its own pumps the power broadcast for
+/// `GUID_CONSOLE_DISPLAY_STATE` (0 off, 1 on, 2 dimmed), which Windows
+/// sends once on registration and again on every change; `Dark()` is
+/// `1` / `0` / `-` for off / on-or-dimmed / not answered yet. Spliced
+/// into the sampler script (`windows_script`). `Start()` waits up to a
+/// second for the first answer, which in practice arrives within the
+/// registration call.
+#[cfg(windows)]
+const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.NativeWindow {
+  [DllImport(\"user32.dll\")] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid guid, int flags);
+  [StructLayout(LayoutKind.Sequential, Pack=4)] struct PBS { public Guid PowerSetting; public uint DataLength; public byte Data; }
+  static Guid ConsoleDisplayState = new Guid(\"6fe69556-704a-47a0-8f24-c28d936fda47\");
+  static volatile int state = -1;
+  public static string Dark() { int s = state; return s < 0 ? \"-\" : (s == 0 ? \"1\" : \"0\"); }
+  protected override void WndProc(ref System.Windows.Forms.Message m) {
+    if (m.Msg == 0x0218 && (int)m.WParam == 0x8013) {
+      PBS s = (PBS)Marshal.PtrToStructure(m.LParam, typeof(PBS));
+      if (s.PowerSetting == ConsoleDisplayState) state = s.Data;
+    }
+    base.WndProc(ref m);
+  }
+  public static void Start() {
+    var pump = new System.Threading.Thread(() => {
+      var w = new PerfDisplay();
+      w.CreateHandle(new System.Windows.Forms.CreateParams());
+      RegisterPowerSettingNotification(w.Handle, ref ConsoleDisplayState, 0);
+      while (true) { System.Windows.Forms.Application.DoEvents(); System.Threading.Thread.Sleep(50); }
+    });
+    pump.IsBackground = true;
+    pump.SetApartmentState(System.Threading.ApartmentState.STA);
+    pump.Start();
+    for (int i = 0; i < 40 && state < 0; i++) System.Threading.Thread.Sleep(25);
+  }
+}";
 
 /// The whole of the Windows sampler, as one script held for the run.
 ///
@@ -804,54 +961,31 @@ const CONTINUOUS: u32 = 0x8000_0000;
 /// starting (`measure::SCROLL_CEILING`); raising it once only answers
 /// the things that were already in the way. **`HWND_TOP` does not beat
 /// a topmost window**, so a notification that sets `HWND_TOPMOST` stays
-/// in front however often this fires.
+/// in front however often this fires. A software run raises it not at
+/// all: its frames need no compositing, and a person at the machine
+/// would otherwise have the window in their face every second.
 #[cfg(windows)]
-fn windows_script(seconds: u64) -> String {
+fn windows_script(seconds: u64, software: bool) -> String {
+    // Drawing with the software scene graph the screen is left alone —
+    // its frames need no display, and `ES_DISPLAY_REQUIRED` would hold
+    // it on once a person lit it — so only the machine is kept from
+    // sleeping; nor is the window raised, which a person at the machine
+    // would otherwise have in their face every second.
+    let awake = if software { SYSTEM_AWAKE } else { AWAKE };
+    let raise = u8::from(!software);
     format!(
         "$ErrorActionPreference='Stop';\
          Add-Type -AssemblyName System.Windows.Forms;\
          Add-Type -TypeDefinition @'\n\
 using System;\n\
 using System.Runtime.InteropServices;\n\
-public static class PerfHost {{\n\
-  [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();\n\
-  [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);\n\
-  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsIconic(IntPtr h);\n\
-  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);\n\
-  [StructLayout(LayoutKind.Sequential)] public struct LASTINPUT {{ public uint size; public uint at; }}\n\
-  [DllImport(\"user32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetLastInputInfo(ref LASTINPUT info);\n\
-  [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount();\n\
-  public static uint IdleMs() {{\n\
-    var info = new LASTINPUT(); info.size = (uint)Marshal.SizeOf(typeof(LASTINPUT));\n\
-    if (!GetLastInputInfo(ref info)) return 0;\n\
-    return unchecked(GetTickCount() - info.at);\n\
-  }}\n\
-  [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint flags);\n\
-  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);\n\
-  [StructLayout(LayoutKind.Sequential)] public struct JOBACCT {{ public long TotalUserTime; public long TotalKernelTime; public long ThisPeriodTotalUserTime; public long ThisPeriodTotalKernelTime; public uint TotalPageFaultCount; public uint TotalProcesses; public uint ActiveProcesses; public uint TotalTerminatedProcesses; }}\n\
-  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr CreateJobObject(IntPtr attrs, string name);\n\
-  [DllImport(\"kernel32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);\n\
-  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool QueryInformationJobObject(IntPtr job, int cls, ref JOBACCT info, int size, IntPtr ret);\n\
-  public static long JobTime(IntPtr job) {{\n\
-    var info = new JOBACCT();\n\
-    if (!QueryInformationJobObject(job, 1, ref info, Marshal.SizeOf(typeof(JOBACCT)), IntPtr.Zero)) return -1;\n\
-    return info.TotalUserTime + info.TotalKernelTime;\n\
-  }}\n\
-  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr OpenThread(uint access, bool inherit, uint tid);\n\
-  [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern int ResumeThread(IntPtr thread);\n\
-  [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool CloseHandle(IntPtr handle);\n\
-  public static int Resume(uint tid) {{\n\
-    var thread = OpenThread(2, false, tid);\n\
-    if (thread == IntPtr.Zero) return -1;\n\
-    var was = ResumeThread(thread);\n\
-    CloseHandle(thread);\n\
-    return was;\n\
-  }}\n\
-}}\n\
-'@;\
+{HOST_CLASS}\n\
+{DISPLAY_CLASS}\n\
+'@ -ReferencedAssemblies System.Windows.Forms;\
+         [PerfDisplay]::Start();\
          $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);Write-Output 'ready';\
-         $target=[int][Console]::In.ReadLine();\
-         [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
+         $target=[int][Console]::In.ReadLine();$raise={raise};\
+         [void][PerfHost]::SetThreadExecutionState([uint32]{awake});\
          try {{\
          $p=Get-Process -Id $target -ErrorAction SilentlyContinue;\
          $jobok=0;\
@@ -870,7 +1004,7 @@ public static class PerfHost {{\n\
              $hwnd=$p.MainWindowHandle;\
              if($hwnd -ne [IntPtr]::Zero){{\
                $display=[System.Windows.Forms.Screen]::FromHandle($hwnd).DeviceName;\
-               [void][PerfHost]::SetWindowPos($hwnd,[IntPtr]0,0,0,0,0,0x0013);\
+               if($raise -eq 1){{[void][PerfHost]::SetWindowPos($hwnd,[IntPtr]0,0,0,0,0,0x0013)}};\
              }}\
            }} elseif($p.MainWindowHandle -eq [IntPtr]::Zero) {{\
              $hwnd=[IntPtr]::Zero;$display='-';\
@@ -892,16 +1026,16 @@ public static class PerfHost {{\n\
            if($hwnd -ne [IntPtr]::Zero){{\
              $win=1;\
              if([PerfHost]::IsIconic($hwnd)){{$min=1}};\
-             if($fg -eq 0 -and $min -eq 0 -and $ticks % 10 -eq 0){{\
+             if($raise -eq 1 -and $fg -eq 0 -and $min -eq 0 -and $ticks % 10 -eq 0){{\
                [void][PerfHost]::SetWindowPos($hwnd,[IntPtr]0,0,0,0,0,0x0013);\
              }};\
            }};\
            $idle=0;$kernel=0;$user=0;\
            [void][PerfHost]::GetSystemTimes([ref]$idle,[ref]$kernel,[ref]$user);\
-           [void][PerfHost]::SetThreadExecutionState([uint32]{AWAKE});\
+           [void][PerfHost]::SetThreadExecutionState([uint32]{awake});\
            $own=$p.TotalProcessorTime.Ticks;$app=$own;\
            if($jobok -eq 1){{$t=[PerfHost]::JobTime($job);if($t -ge 0){{$app=$t}}}};\
-           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs())\";\
+           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs()) dark=$([PerfDisplay]::Dark())\";\
            }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}\
@@ -957,13 +1091,15 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
     }
 }
 
-/// Keeps the screen awake for as long as it is alive.
+/// Keeps the machine awake for as long as it is alive, and — for a run
+/// whose frames need a display — the display too.
 ///
-/// **A dark screen is an unmeasurable machine.** Nothing is composited to
-/// a display that is off, so no frames arrive, so the animation the
-/// scroll bench is driven by never advances — the same standstill a
-/// locked session produces. A measurement nobody is sitting at is idle
-/// by definition, so whatever the display timer is set to, it runs out.
+/// **A dark screen is an unmeasurable machine, for a D3D run.** Nothing
+/// is composited to a display that is off, so no frames arrive, so the
+/// animation the scroll bench is driven by never advances — the same
+/// standstill a locked session produces. A measurement nobody is sitting
+/// at is idle by definition, so whatever the display timer is set to, it
+/// runs out.
 ///
 /// **`ES_DISPLAY_REQUIRED` is not enough**, twice over: it holds only
 /// while it is held, so a request that lives for the length of a run
@@ -973,13 +1109,23 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
 /// input, so this sends some: a mouse move of zero pixels, which moves
 /// no cursor and interrupts nobody's typing.
 ///
+/// **For a software run it is the opposite request.** Its frames need
+/// no display, and a person at the machine may be turning the screen
+/// on and off as they please — so that helper injects nothing and asks
+/// only for `ES_SYSTEM_REQUIRED`, which keeps the machine from sleeping
+/// (a build with the screen off and nobody typing is otherwise idle,
+/// and the sleep timer runs out on it) while leaving the display to
+/// whoever and whatever is driving it. It is held for the invocation for
+/// the same reason the other is: the machine must not sleep between the
+/// runs any more than during them.
+///
 /// **It has to die with its parent, and `Drop` is not enough.** A killed
 /// xtask never unwinds — `taskkill`, a stopped task, an abort — and a
-/// loop that only `Drop` stops would then hold the display awake and
-/// inject input for the rest of the machine's uptime, with nothing able
-/// to find it (`xtask kill` reaps `platitude-gg` images, and killing by
-/// image name is denied). So the loop asks whether its parent is still
-/// there on every pass: the leak is bounded by one interval.
+/// loop that only `Drop` stops would then hold the machine awake (and,
+/// lit, inject input) for the rest of the machine's uptime, with nothing
+/// able to find it (`xtask kill` reaps `platitude-gg` images, and
+/// killing by image name is denied). So the loop asks whether its parent
+/// is still there on every pass: the leak is bounded by one interval.
 ///
 /// **The parent is identified by when it started, not by its number.**
 /// A pid is reused, and a wake loop that only asked whether *something*
@@ -1002,7 +1148,18 @@ impl Drop for Awake {
 const WAKE_SECS: u64 = 20;
 
 #[cfg(windows)]
-pub(super) fn keep_awake() -> Awake {
+pub(super) fn keep_awake(display: bool) -> Awake {
+    // Holding the display pokes the input timer too, so an already-dark
+    // screen comes back; a software run holds only the machine and
+    // injects nothing.
+    let (flags, poke) = if display {
+        (
+            AWAKE,
+            "[PerfWake]::mouse_event(0x0001,0,0,0,[IntPtr]::Zero);",
+        )
+    } else {
+        (SYSTEM_AWAKE, "")
+    };
     let script = format!(
         "$ErrorActionPreference='Stop';\
          Add-Type -TypeDefinition @'\n\
@@ -1016,8 +1173,8 @@ public static class PerfWake {{\n\
          try {{\
          $born=(Get-Process -Id {pid} -ErrorAction SilentlyContinue).StartTime;\
          while($born -ne $null){{\
-           [void][PerfWake]::SetThreadExecutionState([uint32]{AWAKE});\
-           [PerfWake]::mouse_event(0x0001,0,0,0,[IntPtr]::Zero);\
+           [void][PerfWake]::SetThreadExecutionState([uint32]{flags});\
+           {poke}\
            Start-Sleep -Seconds {WAKE_SECS};\
            $now=(Get-Process -Id {pid} -ErrorAction SilentlyContinue).StartTime;\
            if($now -ne $born){{break}};\
@@ -1032,16 +1189,23 @@ public static class PerfWake {{\n\
         .spawn()
         .ok();
     // Said out loud, because the failure it causes names something else
-    // entirely: the screen goes dark mid-invocation and every run after
-    // it dies at `measure::SCROLL_CEILING` blaming a covered window.
+    // entirely: for D3D, the screen goes dark mid-invocation and every
+    // run after it dies at `measure::SCROLL_CEILING` blaming a covered
+    // window; for a software run, the machine can sleep out from under
+    // a long build.
     if child.is_none() {
-        println!("  note: could not start the screen-awake helper — a dark screen will spoil runs");
+        let consequence = if display {
+            "a dark screen will spoil runs"
+        } else {
+            "the machine may sleep during a build"
+        };
+        println!("  note: could not start the awake helper — {consequence}");
     }
     Awake(child)
 }
 
 #[cfg(not(windows))]
-pub(super) fn keep_awake() -> Awake {
+pub(super) fn keep_awake(_display: bool) -> Awake {
     Awake(None)
 }
 
