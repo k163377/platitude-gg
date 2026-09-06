@@ -75,6 +75,21 @@ QtObject {
         return widths.join(",")
     }
 
+    /// How many tabs are drawing none of their own name — the mark standing where the name was
+    /// (`TabItemDelegate.nameKept`). Nothing but zero is a layout the strip is allowed to reach: it hands the run out
+    /// down to a floor of three characters at each end and scrolls rather than cut past it
+    /// (`TabStrip.settleTitleCap`). Counted rather than looked at, because the picture of a crushed name and the
+    /// picture of a short one are the same narrow tab with a mark in it.
+    function tabNamesCrushed() {
+        let n = 0
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            if (tab && !tab.nameKept)
+                n++
+        }
+        return n
+    }
+
     /// The pointer, set down on the tab at `index` — the half no headless run can reach any other way
     /// (`PG_AUTO_ACT=tab-mark`).
     function pointAtTab(index) {

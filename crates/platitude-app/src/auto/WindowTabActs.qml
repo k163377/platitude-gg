@@ -335,15 +335,24 @@ Item {
     // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip that narrowed the wrong tabs comes out looking
     // like one that got it right. `widths=` is the answer, and `room=` says which of the two things the strip gives up
     // it is living on (the mark's room first, the names after).
+    //
+    // `crushed=` is what the widths cannot say: a tab is as wide as its name, so a name drawn away to the mark alone
+    // leaves the strip's own numbers looking exactly as they should (`TabProbe.tabNamesCrushed`). Said first, where
+    // the whole of what is judged here stands together (`verify/verbs.rs`).
     SampleTimer {
         id: tabWidthActTimer
         running: Harness.autoAct === "tab-widths"
         onTriggered: {
-            if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0)
+            // Every row standing in the strip, not merely open: both readings below walk the items the view built,
+            // and a row the model has only just gained has none until the next layout — `widths=` would carry a 0
+            // for it, and `crushed=` would answer for a strip it had not seen (規約 §UI 自動化の因果性).
+            if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0
+                    || tabProbe.tabItemCount() !== topBar.bandTabCount)
                 return
             stop()
             Harness.report(
-                "tab_widths tabs=" + topBar.bandTabCount
+                "tab_widths crushed=" + tabProbe.tabNamesCrushed()
+                + " tabs=" + topBar.bandTabCount
                 + " run=" + Math.round(topBar.bandTabRun)
                 + " cap=" + Math.round(topBar.tabTitleCap)
                 + " room=" + Math.round(topBar.tabMarkRoom)

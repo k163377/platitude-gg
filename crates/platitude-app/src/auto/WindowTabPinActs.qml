@@ -93,8 +93,15 @@ Item {
             // The two halves of the rule first and next to each other: the line is judged as a run of words, and a
             // reading put between them is a reading the table would have to spell out to get past
             // (`verify/verbs.rs`). Which edge it took comes after, because only the default argument fixes it.
+            //
+            // `kept=` stands in front of the pair rather than between them: the stand-in is dressed as the tab it
+            // stands for and drawn at that tab's width, so the one thing left for it to get wrong is what it says in
+            // that width — and a name cut away to the mark photographs as a short name would (`TabPin.nameKept`).
+            // `crushed=` is the same question asked of the rows behind it, which no picture of this verb holds at all.
             Harness.report(
-                "tab_pin stood=" + acts.topBar.tabPinShown
+                "tab_pin kept=" + acts.topBar.tabPinNameKept
+                + " crushed=" + acts.tabProbe.tabNamesCrushed()
+                + " stood=" + acts.topBar.tabPinShown
                 + " onScreen=" + acts.topBar.frontTabWhole
                 + " left=" + acts.topBar.tabPinRidesLeft
                 + " at=" + tabPinTimer.front
@@ -133,8 +140,12 @@ Item {
             if (acts.topBar.tabRunTravelling || !acts.topBar.frontTabWhole || acts.topBar.tabPinShown)
                 return
             stop()
+            // `crushed=` first, as `tab-pin` has it: this is the verb whose picture holds the tab in front at the
+            // width the crowded strip left it, and a name drawn away to the mark is the one thing in that picture
+            // that reads as a short name (`TabProbe.tabNamesCrushed`).
             Harness.report(
-                "tab_pin_go gone=" + !acts.topBar.tabPinShown
+                "tab_pin_go crushed=" + acts.tabProbe.tabNamesCrushed()
+                + " gone=" + !acts.topBar.tabPinShown
                 + " onScreen=" + acts.topBar.frontTabWhole
                 + " travelled=" + (acts.topBar.runOffset() !== tabPinGoTimer.from)
                 + " at=" + tabPinGoTimer.front

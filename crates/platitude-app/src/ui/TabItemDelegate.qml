@@ -54,6 +54,12 @@ Rectangle {
     /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it rather
     /// than off what was asked of it — the same reason `markShown` is read off the mark (`PG_AUTO_ACT=tab-hold`).
     readonly property real shiftShown: heldShift.x
+    /// Automation: whether any of this name is still drawn — read off the halves the label came out with rather than
+    /// off the name the tab was handed, which is whole however little of it reaches the strip. A tab cut down to the
+    /// mark alone is a tab whose box came out under its own name, and the picture of one is a narrow tab with a mark
+    /// in it — which is what a short name in a crowded strip looks like too (`TabProbe.tabNamesCrushed`).
+    readonly property bool nameKept:
+        tabItem.title === "" || tabTitle.headText !== "" || tabTitle.tailText !== ""
     /// Whether this is the tab in hand, and where the hand has carried its left edge to. Both settled by the strip
     /// (`TabStrip.carryTo`): the order changes underneath a drag, so which row is being carried is not something a row
     /// can remember about itself.

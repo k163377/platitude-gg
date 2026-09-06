@@ -56,6 +56,9 @@ Item {
     readonly property bool tabPinRidesLeft: tabPin.rideLeft
     readonly property bool frontTabWhole: tabPin.frontWhole
     readonly property bool runTravelling: tabRun.travelling
+    /// And whether the name it is standing there with says any of itself (`TabPin.nameKept`) — the one reading of the
+    /// stand-in a photograph of it cannot be told apart from a short name in a narrow tab.
+    readonly property bool tabPinNameKept: tabPin.nameKept
 
     /// The longest and shortest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
     readonly property int tabTitleMaxW: tabMetrics.titleMaxW

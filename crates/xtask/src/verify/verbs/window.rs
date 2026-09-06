@@ -117,12 +117,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_edge landed=true",
     },
+    // What the crowded strip made of the run it was handed. The widths
+    // are read by eye against the shape the verb's own notes give, and
+    // `crushed=0` is the one reading they cannot carry: a tab is drawn
+    // as wide as its name, so a name cut away to the mark alone leaves
+    // every number here exactly where it should be, and the picture of
+    // it is a narrow tab with a mark in it — which is what a short name
+    // in this strip looks like as well.
+    Verb {
+        name: "tab-widths",
+        when: &[],
+        plain: "tab_widths crushed=0",
+    },
     // The stand-in for the tab in front, and the press that takes it
     // away again — read as a pair. A strip whose front tab is genuinely
     // at the edge of the run frames exactly like one standing in for a
     // tab that is nowhere on it, so `onScreen=` carries both: the
     // stand-in is wanted exactly while its row is out of sight, and a
     // run where both halves agree has the rule backwards.
+    //
+    // `kept=true crushed=0` is in front of that pair: the stand-in is
+    // drawn at the width of the tab it stands for, so what is left for
+    // it to get wrong is what it says in that width — and the rows it
+    // stands in front of are off the run, where no picture reaches them
+    // at all.
     //
     // Which edge it took is judged only where the run said which tab to
     // stand behind — the first one, sent away to the far end, rides the
@@ -131,19 +149,21 @@ pub(super) const TABLE: &[Verb] = &[
         name: "tab-pin",
         when: &[(
             Arg::OneOf(&["", "0"]),
-            "tab_pin stood=true onScreen=false left=true",
+            "tab_pin kept=true crushed=0 stood=true onScreen=false left=true",
         )],
-        plain: "tab_pin stood=true onScreen=false",
+        plain: "tab_pin kept=true crushed=0 stood=true onScreen=false",
     },
     // And the travel, which no picture holds: a settled strip with its
     // front tab in view is the same photograph whether it travelled
     // there or was never sent away. `travelled=` is the strip having
     // moved under the press, `gone=` the stand-in's own answer to
-    // having arrived.
+    // having arrived. `crushed=0` is what this verb's picture does
+    // hold — the tab in front at the width the crowded strip left it —
+    // and cannot be read for.
     Verb {
         name: "tab-pin-go",
         when: &[],
-        plain: "tab_pin_go gone=true onScreen=true travelled=true",
+        plain: "tab_pin_go crushed=0 gone=true onScreen=true travelled=true",
     },
     // And the same arrival asked for by opening a repository rather than
     // by pressing the stand-in. No picture holds this one either: a strip

@@ -79,6 +79,11 @@ Rectangle {
     /// the rows settle them (`TabItemDelegate`).
     readonly property real easeRight: tabPin.metrics.easeRight(tabPin.titleEase, tabPin.markRoom)
     readonly property bool nameUnderMark: tabPin.markRoom + tabPin.easeRight < tabPin.metrics.markRoomFull
+    /// Automation: whether any of the name is still drawn, as the rows answer it (`TabItemDelegate.nameKept`). The
+    /// stand-in is the one tab a run photographs in close-up, and a name cut away to the mark is the one way it can
+    /// say something the tab it stands for is not saying while still being its width.
+    readonly property bool nameKept:
+        pinTitle.text === "" || pinTitle.headText !== "" || pinTitle.tailText !== ""
 
     /// The tab this stands for, closed. The whole of it is the target, the way the whole of a tab is
     /// (デザイン規約 §タブの所作「閉じる的はタブ全体」).

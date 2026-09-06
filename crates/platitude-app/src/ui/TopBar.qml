@@ -37,6 +37,7 @@ Rectangle {
     /// (`TabStrip.tabPinShown`).
     readonly property bool tabPinShown: tabStrip.tabPinShown
     readonly property bool tabPinRidesLeft: tabStrip.tabPinRidesLeft
+    readonly property bool tabPinNameKept: tabStrip.tabPinNameKept
     readonly property bool frontTabWhole: tabStrip.frontTabWhole
     readonly property bool tabRunTravelling: tabStrip.runTravelling
     /// Automation: the five things that can be the matter here. The group owns the conditions and the hidden
