@@ -69,6 +69,15 @@ const LANE_CEILING: Duration = if cfg!(test) {
 /// The extension of a lock file beside a note.
 const LOCK: &str = "lock";
 
+/// How many times a landing puts its mark up before the wait goes
+/// unmarked, and how long it waits between tries. It meets the file held
+/// only while a gate's verb is taking a dead landing's mark down under
+/// its lock ([`a_landing_waits`], the microseconds of two calls), or for
+/// as long as a child forked over that instant takes to reach its
+/// `execve` — 3.2ms at its worst (.claude/rules-refs/core.md).
+const MARK_TRIES: u32 = 8;
+const MARK_AGAIN: Duration = Duration::from_millis(5);
+
 /// How long [`sole`] waits on a held lock nobody has written a note
 /// beside. `flock` goes with the open file description, and a fork copies
 /// every one, so a child forked over the gate's lock carries it until its
@@ -214,24 +223,43 @@ impl Drop for Waiting<'_> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         waiting.0 = waiting.0.saturating_sub(1);
-        if waiting.0 == 0 && waiting.1.take().is_some() {
+        if waiting.0 == 0
+            && let Some(mark) = waiting.1.take()
+        {
+            // Taken down under its own lock, the way a gate's verb takes
+            // a dead landing's down: the name never stands unlocked.
             let _ = std::fs::remove_file(self.lanes.mark_path(&self.lanes.common.join(LANES)));
+            drop(mark);
         }
     }
 }
 
-/// Puts a landing's mark up at `path`: the file, locked. A gate's verb
-/// that finds the file unlocked takes it for a dead landing's and removes
-/// it, and can do so between this open and this lock — so a mark is only
-/// up once it is locked *and* still there, and is put up again otherwise.
+/// Puts a landing's mark up at `path`: the file, locked, at its name.
+/// A gate's verb that finds the file unlocked takes it for a dead
+/// landing's and removes it — under the lock ([`a_landing_waits`]), so
+/// the two answers a landing can get in that instant are the lock held
+/// by the sweep, and the lock granted on a file the sweep has already
+/// taken from the name (opened here before the sweep, locked here after
+/// it). Neither is a mark: a mark is up once it is locked *and* still
+/// there, and is put up again otherwise. One that could not be put up at
+/// all is a wait like a gate's, not an error — the lane comes all the
+/// same.
 fn mark(path: &Path) -> Option<File> {
-    for _ in 0..8 {
+    mark_polled(path, &|| {})
+}
+
+fn mark_polled(path: &Path, polled: &dyn Fn()) -> Option<File> {
+    for _ in 0..MARK_TRIES {
         let file = open_lock(path).ok()?;
         match file.try_lock() {
             Ok(()) if std::fs::metadata(path).is_ok() => return Some(file),
-            Ok(()) => drop(file),
-            Err(_) => return None,
+            // The name went while this held the file, or the sweep holds
+            // the lock it is removing under. Both pass in microseconds.
+            Ok(()) | Err(TryLockError::WouldBlock) => drop(file),
+            Err(TryLockError::Error(_)) => return None,
         }
+        polled();
+        std::thread::sleep(MARK_AGAIN);
     }
     None
 }
@@ -255,8 +283,17 @@ fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
         };
         match lock.try_lock() {
             Ok(()) => {
-                drop(lock);
+                // Taken down while this holds the lock, as `still::held`
+                // takes a note down: a landing putting its mark up at
+                // this name this instant is between its own open and its
+                // own lock, and a file removed from under it there is one
+                // it goes on holding under no name — every other gate
+                // reading an unmarked wait, and the landing's verbs
+                // behind theirs for the whole of it. It meets the lock
+                // instead, and puts its mark up once this is done
+                // ([`mark`]).
                 let _ = std::fs::remove_file(&path);
+                drop(lock);
             }
             Err(TryLockError::WouldBlock) => return Ok(true),
             Err(TryLockError::Error(error)) => {
@@ -365,11 +402,11 @@ fn open_lock(path: &Path) -> Result<File, String> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use super::{Lanes, open_lock, sole};
+    use super::{Lanes, mark_polled, open_lock, sole};
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
@@ -488,6 +525,35 @@ mod tests {
             .expect("a lane, the mark being nobody's");
         assert_eq!(lane.waited, Duration::ZERO, "the mark cost a wait");
         assert!(!mark.exists(), "the dead landing's mark stands");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The mark's own file, held for the instant a gate's verb takes a
+    /// dead landing's down under its lock. The landing puts its mark up
+    /// once that instant has passed: one that gave up there would wait
+    /// unmarked, its verbs behind every gate's for the whole of the wait.
+    #[test]
+    fn a_mark_is_put_up_once_the_file_is_let_go_of() {
+        let dir = common("mark-held");
+        let lanes = dir.join(super::LANES);
+        std::fs::create_dir_all(&lanes).expect("the lanes");
+        let path = lanes.join("host-landing-1.lock");
+        let sweeping = open_lock(&path).expect("the file a sweep removes under");
+        sweeping.try_lock().expect("held, as the sweep holds it");
+        let sweeping = Mutex::new(Some(sweeping));
+        let mark = mark_polled(&path, &|| {
+            // Let go of on the first look again, so what is under test is
+            // the try after it rather than a clock.
+            drop(
+                sweeping
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take(),
+            );
+        })
+        .expect("the mark, once the sweep let the file go");
+        assert!(path.exists(), "the mark stands at its own name");
+        drop(mark);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
