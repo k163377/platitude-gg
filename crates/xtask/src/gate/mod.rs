@@ -163,7 +163,7 @@ fn gate(args: &[String]) -> Result<(), String> {
     if opts.dry_run {
         return Ok(());
     }
-    match execute(&plan, opts.jobs)? {
+    match execute(&plan, opts.jobs, false)? {
         Gated::Stamped => Ok(()),
         // A tree left dirty without a word is the next gate refusing to
         // run over a change nobody made — which is the whole complaint
@@ -193,7 +193,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
         },
     )?;
     print!("{}", plan::describe(&plan));
-    execute(&plan, default_jobs())
+    execute(&plan, default_jobs(), true)
 }
 
 /// What a gate whose every step was green left behind.
@@ -233,8 +233,9 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// nothing red. A group stops at its first red step — except among its
 /// verbs, which run to the end of their block `jobs` at a time
 /// ([`verbs`]) — and everything else finishes, so its green steps are
-/// stamped and need not run again.
-fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
+/// stamped and need not run again. A `landing`'s verbs are handed the
+/// machine's lanes ahead of any other gate's (`lanes`).
+fn execute(plan: &Plan, jobs: usize, landing: bool) -> Result<Gated, String> {
     refuse_what_no_stamp_could_answer_for(plan)?;
     // Yesterday's runs go on their way out: a verb's repositories and
     // pictures are left where a person can look at them, and nothing
@@ -254,7 +255,7 @@ fn execute(plan: &Plan, jobs: usize) -> Result<Gated, String> {
     } else {
         Some(runner(&plan.dir, &logs)?)
     };
-    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs)?;
+    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs, landing)?;
     let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
     // step went red, so this is said on both roads out.
@@ -326,6 +327,7 @@ fn run_sides(
     logs: &Path,
     runner: Option<&Path>,
     jobs: usize,
+    landing: bool,
 ) -> Result<Vec<String>, String> {
     let host: Vec<&Required> = plan
         .required
@@ -345,20 +347,17 @@ fn run_sides(
         .map(std::path::PathBuf::from)
         .ok_or_else(|| format!("{} is not a git repository", plan.dir.display()))?;
     let count = jobs.max(default_jobs());
-    let host_lanes = crate::lanes::Lanes {
-        common: &common,
-        side: "host",
-        count,
-    };
-    let linux_lanes = crate::lanes::Lanes {
-        common: &common,
-        side: "linux",
-        count,
-    };
+    let host_lanes = crate::lanes::Lanes::new(&common, "host", count, landing);
+    let linux_lanes = crate::lanes::Lanes::new(&common, "linux", count, landing);
     let started = std::time::Instant::now();
     println!(
-        "gate: verbs {jobs} at a time per side, on the machine's {count} lanes; a side's checks \
-         run beside its verbs"
+        "gate: verbs {jobs} at a time per side, on the machine's {count} lanes{}; a side's \
+         checks run beside its verbs",
+        if landing {
+            " (a landing's verbs go ahead of the other gates')"
+        } else {
+            ""
+        }
     );
     let host_ground = Ground {
         name: "host",

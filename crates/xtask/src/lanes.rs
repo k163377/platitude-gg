@@ -12,6 +12,16 @@
 //! one for as long as it runs. Two gates at once run one machine's count
 //! of verbs between them, not two.
 //!
+//! A landing's verbs go ahead of every other gate's. `land` is the one
+//! thing that moves main, and in one line with the seats' own gates its
+//! verbs stand for minutes behind verbs whose branches rebase over what
+//! lands anyway (the minutes are in internal-docs/反映前テストの機械化.md
+//! §群の並走と動詞の並列). So while a landing's verb is waiting for a
+//! lane it holds a mark beside them, and a gate's verb that sees the
+//! mark leaves the next lane to free alone. Two landings share as gates
+//! do; a landing that stopped waiting, or died waiting, holds no mark,
+//! and the lanes are everybody's again.
+//!
 //! A tree holds one gate at a time for the same reason: a second gate in
 //! the same tree runs the same steps over the same build directory, and
 //! the two wait on each other's cargo for the whole of it. The first
@@ -23,12 +33,17 @@
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::still::Note;
 
 /// The lanes, beside `.git`: one lock file per lane and side.
 const LANES: &str = "pg-lanes";
+
+/// The mark a landing's verb holds beside the lanes while it waits for
+/// one: `<side>-landing-<pid>.lock`, one per landing and side.
+const LANDING: &str = "landing";
 
 /// How often a verb looks again for a free lane. Short under test, where
 /// the waits are measured in the tens of milliseconds.
@@ -54,9 +69,16 @@ const LOCK: &str = "lock";
 /// there are. Every gate names the same count, so however many gates run,
 /// that many verbs of the side run between them.
 pub(crate) struct Lanes<'a> {
-    pub(crate) common: &'a Path,
-    pub(crate) side: &'a str,
-    pub(crate) count: usize,
+    common: &'a Path,
+    side: &'a str,
+    count: usize,
+    /// A landing's verbs, handed the next lane to free before any other
+    /// gate's verb that waits for one.
+    landing: bool,
+    /// How many of this gate's verbs are waiting for a lane, and the mark
+    /// held for as long as any is — a landing's alone; a gate's verbs
+    /// wait unmarked.
+    waiting: Mutex<(usize, Option<File>)>,
 }
 
 /// A lane held for as long as this stands, and how long it took to get:
@@ -69,7 +91,19 @@ pub(crate) struct Lane {
     pub(crate) waited: Duration,
 }
 
-impl Lanes<'_> {
+impl<'a> Lanes<'a> {
+    /// The lanes of `side` beside `common` (the repository's `.git`),
+    /// `count` of them, for a gate's verbs or a landing's.
+    pub(crate) fn new(common: &'a Path, side: &'a str, count: usize, landing: bool) -> Self {
+        Self {
+            common,
+            side,
+            count,
+            landing,
+            waiting: Mutex::new((0, None)),
+        }
+    }
+
     /// Takes one of the lanes, waiting for one to free.
     pub(crate) fn take(&self) -> Result<Lane, String> {
         self.take_polled(&|| {})
@@ -81,26 +115,34 @@ impl Lanes<'_> {
             .map_err(|e| format!("could not make {}: {e}", lanes.display()))?;
         let started = Instant::now();
         let mut looked_again = false;
+        // A landing's verb that has looked once and found nothing is
+        // counted as waiting until it has a lane, this being the count.
+        let mut waiting: Option<Waiting<'_>> = None;
         loop {
-            for lane in 0..self.count.max(1) {
-                let lock = open_lock(&lanes.join(format!("{}-{lane}.{LOCK}", self.side)))?;
-                match lock.try_lock() {
-                    Ok(()) => {
-                        return Ok(Lane {
-                            _lock: lock,
-                            waited: if looked_again {
-                                started.elapsed()
-                            } else {
-                                Duration::ZERO
-                            },
-                        });
-                    }
-                    Err(TryLockError::WouldBlock) => {}
-                    Err(TryLockError::Error(error)) => {
-                        return Err(format!(
-                            "could not probe the {} lane {lane}: {error}",
-                            self.side
-                        ));
+            // A gate's verb leaves the lanes alone while a landing's is
+            // waiting: the next one to free is the landing's.
+            let aside = !self.landing && a_landing_waits(&lanes, self.side)?;
+            if !aside {
+                for lane in 0..self.count.max(1) {
+                    let lock = open_lock(&lanes.join(format!("{}-{lane}.{LOCK}", self.side)))?;
+                    match lock.try_lock() {
+                        Ok(()) => {
+                            return Ok(Lane {
+                                _lock: lock,
+                                waited: if looked_again {
+                                    started.elapsed()
+                                } else {
+                                    Duration::ZERO
+                                },
+                            });
+                        }
+                        Err(TryLockError::WouldBlock) => {}
+                        Err(TryLockError::Error(error)) => {
+                            return Err(format!(
+                                "could not probe the {} lane {lane}: {error}",
+                                self.side
+                            ));
+                        }
                     }
                 }
             }
@@ -112,11 +154,107 @@ impl Lanes<'_> {
                     LANE_CEILING.as_secs() / 60
                 ));
             }
+            if self.landing && waiting.is_none() {
+                waiting = Some(self.wait_marked(&lanes));
+            }
             polled();
             std::thread::sleep(POLL);
             looked_again = true;
         }
     }
+
+    /// Counts one more of this landing's verbs as waiting, and puts the
+    /// mark up when it is the first. A mark that could not be put up is
+    /// a wait like a gate's, not an error: the lane comes all the same.
+    fn wait_marked(&self, lanes: &Path) -> Waiting<'_> {
+        let mut waiting = self
+            .waiting
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if waiting.0 == 0 {
+            waiting.1 = mark(&self.mark_path(lanes));
+        }
+        waiting.0 += 1;
+        Waiting { lanes: self }
+    }
+
+    fn mark_path(&self, lanes: &Path) -> PathBuf {
+        lanes.join(format!(
+            "{}-{LANDING}-{}.{LOCK}",
+            self.side,
+            std::process::id()
+        ))
+    }
+}
+
+/// One waiting verb of a landing, counted for as long as this stands. The
+/// last one to stop waiting takes the mark down with it.
+struct Waiting<'a> {
+    lanes: &'a Lanes<'a>,
+}
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        let mut waiting = self
+            .lanes
+            .waiting
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        waiting.0 = waiting.0.saturating_sub(1);
+        if waiting.0 == 0 && waiting.1.take().is_some() {
+            let _ = std::fs::remove_file(self.lanes.mark_path(&self.lanes.common.join(LANES)));
+        }
+    }
+}
+
+/// Puts a landing's mark up at `path`: the file, locked. A gate's verb
+/// that finds the file unlocked takes it for a dead landing's and removes
+/// it, and can do so between this open and this lock — so a mark is only
+/// up once it is locked *and* still there, and is put up again otherwise.
+fn mark(path: &Path) -> Option<File> {
+    for _ in 0..8 {
+        let file = open_lock(path).ok()?;
+        match file.try_lock() {
+            Ok(()) if std::fs::metadata(path).is_ok() => return Some(file),
+            Ok(()) => drop(file),
+            Err(_) => return None,
+        }
+    }
+    None
+}
+
+/// Whether a landing's verb is waiting for a lane of `side`: a mark of
+/// the side's that somebody holds. One nobody holds was a landing's that
+/// is gone, and comes down here.
+fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
+    let prefix = format!("{side}-{LANDING}-");
+    let suffix = format!(".{LOCK}");
+    let entries = std::fs::read_dir(lanes).map_err(|e| format!("{}: {e}", lanes.display()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with(&prefix) || !name.ends_with(&suffix) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(lock) = File::options().read(true).write(true).open(&path) else {
+            continue;
+        };
+        match lock.try_lock() {
+            Ok(()) => {
+                drop(lock);
+                let _ = std::fs::remove_file(&path);
+            }
+            Err(TryLockError::WouldBlock) => return Ok(true),
+            Err(TryLockError::Error(error)) => {
+                return Err(format!(
+                    "could not probe the landing's mark {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+    Ok(false)
 }
 
 /// The one gate of a tree, for as long as this stands. The note comes
@@ -228,27 +366,15 @@ mod tests {
     #[test]
     fn a_third_verb_waits_for_one_of_two_lanes_to_free() {
         let dir = common("two-lanes");
-        let host = Lanes {
-            common: &dir,
-            side: "host",
-            count: 2,
-        };
+        let host = Lanes::new(&dir, "host", 2, false);
         let first = host.take().expect("the first lane");
         let _second = host.take().expect("the second lane");
-        let linux = Lanes {
-            common: &dir,
-            side: "linux",
-            count: 2,
-        };
+        let linux = Lanes::new(&dir, "linux", 2, false);
         let _elsewhere = linux.take().expect("the other side's lane is free");
         let (count, polled) = polls();
         let waiting_in = dir.clone();
         let third = std::thread::spawn(move || {
-            let host = Lanes {
-                common: &waiting_in,
-                side: "host",
-                count: 2,
-            };
+            let host = Lanes::new(&waiting_in, "host", 2, false);
             host.take_polled(&polled).map(|lane| lane.waited)
         });
         until_polled(&count);
@@ -259,6 +385,75 @@ mod tests {
             .expect("the third's thread")
             .expect("the third lane, once one freed");
         assert!(waited > Duration::ZERO, "the wait is reported");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// One lane, held, and two verbs waiting for it — a gate's and a
+    /// landing's: the landing's is handed it when it frees, and the
+    /// gate's only once the landing's is done with it.
+    #[test]
+    fn a_landing_s_verb_is_handed_the_lane_a_gate_s_verb_was_waiting_for() {
+        let dir = common("landing-first");
+        let first = Lanes::new(&dir, "host", 1, false).take().expect("the lane");
+        let (gate_polls, gate_polled) = polls();
+        let (landing_polls, landing_polled) = polls();
+        let waiting_in = dir.clone();
+        let behind = std::thread::spawn(move || {
+            let gate = Lanes::new(&waiting_in, "host", 1, false);
+            gate.take_polled(&gate_polled).map(|lane| lane.waited)
+        });
+        let (handed, taken) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let waiting_in = dir.clone();
+        let ahead = std::thread::spawn(move || {
+            let landing = Lanes::new(&waiting_in, "host", 1, true);
+            let lane = landing
+                .take_polled(&landing_polled)
+                .expect("the landing's lane");
+            handed.send(()).expect("say the lane was handed over");
+            released.recv().expect("the word to let it go");
+            drop(lane);
+        });
+        // Both have looked and found the lane held; the landing's mark is up.
+        until_polled(&gate_polls);
+        until_polled(&landing_polls);
+        drop(first);
+        taken
+            .recv()
+            .expect("the landing's verb was handed the lane that freed");
+        // The gate's verb goes on looking while the landing's holds it.
+        let looks = gate_polls.load(Ordering::SeqCst);
+        while gate_polls.load(Ordering::SeqCst) == looks {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            !behind.is_finished(),
+            "a gate's verb was handed the lane ahead of the landing's"
+        );
+        release.send(()).expect("let the landing's verb go");
+        ahead.join().expect("the landing's thread");
+        let waited = behind
+            .join()
+            .expect("the gate's thread")
+            .expect("the gate's lane, once the landing's verb was done");
+        assert!(waited > Duration::ZERO, "the wait is reported");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A landing's mark nobody holds is a dead landing's: a gate's verb
+    /// takes a lane at the first look, and the mark comes down.
+    #[test]
+    fn a_landing_s_mark_nobody_holds_is_litter() {
+        let dir = common("litter-mark");
+        let lanes = dir.join(super::LANES);
+        std::fs::create_dir_all(&lanes).expect("the lanes");
+        let mark = lanes.join("host-landing-1.lock");
+        std::fs::write(&mark, b"").expect("a dead landing's mark");
+        let lane = Lanes::new(&dir, "host", 1, false)
+            .take()
+            .expect("a lane, the mark being nobody's");
+        assert_eq!(lane.waited, Duration::ZERO, "the mark cost a wait");
+        assert!(!mark.exists(), "the dead landing's mark stands");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
