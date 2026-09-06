@@ -90,6 +90,15 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
   2 本目以降の run が毎回暗い画面から始まる)。起こすのは入力なので 0 ピクセルの
   マウス移動を注入する。**その結果 `away_ms` は「人が居たか」を答えない** —
   答えるのは「起こす側が動いているか」だけ(`perf::sampler::Awake`)
+- **表示に依らず撮るなら `--software`**(`PG_ALLOW_GUI=1 cargo xtask perf --software --at <commit>
+  --repo <corpus>`)。表示が点いていても消えていても、途中で人が付け消ししても同じ run で、
+  待ちも打ち切りも撮り直しも無い(表示の状態は `memory.csv` の `display_off` 列と report の
+  `display` 行に証跡として残るだけ)。入力を注入せず、窓を前面へ上げ直さない。
+  **表示が消えている間 D3D は 1 枚も present しない**(実窓・実フォント DB のまま 80 秒待っても
+  `perf_graph_frame` が出ず、ドライバは最初の段で止まる)ので software scene graph
+  (`QT_QUICK_BACKEND=software`)で描く。**読めるのはメモリだけ**で、それも D3D の床(§Qt の床)を
+  持たない別の量 — §判定 には使わず、同じ commit の D3D 値と並べて読む。fps / startup /
+  details / diff の行は表示経路の値ではない(report が注記する)。実測は §表示に依らない計測
 - 機材: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26200 / git 2.55.0 /
   Qt 6.10.3。GPU 3 系統のうち Qt が掴んだのは **Adapter 0 `NVIDIA GeForce RTX 3070`**
   (D3D11、`Animation Driver: using vsync: 5.56 ms`)。**kept run は全部同じ
@@ -149,6 +158,36 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
 - 数字が取れなかった run は `missing` として報告ごと落ちる(`xtask perf`)。
   前提はログが無色であること — 色コードが乗ると `key=value` が検索不能になる
   (`platitude_gg::init_tracing` は色を付けない)
+
+## 表示に依らない計測(`--software`)
+
+同じ `ea004354` を棚の exe のまま software scene graph で撮った 2 座り(2026-09-06。各 較正 run +
+捨て 1 + **2 run**、`--settle-ms 4000`)。片方は表示が消えたまま(kept run の全 tick で off、
+`--attribute` 付き)、もう片方は人が在席して表示が点いたまま(全 tick で on、窓は run ごとに前面
+0% と 96%、撮り直し 0)。**software scene graph の値なので、§判定 の予算行とは並べない** — 読むのは
+同じ commit の D3D 値との差と、2 座りが同じ帯に居ること:
+
+| | D3D(§判定、5 run、点灯) | software、消灯(2 run) | software、点灯・在席(2 run) |
+|---|---|---|---|
+| WorkingSet gross | 293.4–300.3–302.6 | 257.2–261.8 | 256.3–259.4 |
+| net(較正 run の歩きを引く) | 241.8–248.6–250.9 | 207.3–212.0 | 205.0–208.1 |
+| font walk(較正 run) | +51.6 / private +23.0 | +49.8 / private +21.8 | +51.3 / private +22.9 |
+| settled net(4 秒) | — | 200.3–205.0 | 198.8–203.2 |
+| フォントの常駐(`--attribute`) | — | 31.3–33.0 MiB / 165–166 ファイル | — |
+| scroll | 177.7–178.1 fps | 123.2–123.7 fps | 122.9–124.6 fps |
+| details frame | 77.9–85.3–108.8 ms | 109.3–134.7 ms | 86.4–99.9 ms |
+
+- **差は renderer の差**で、アプリの差ではない。software は D3D の床(§Qt の床の +25MB)も
+  描いた行のグリフ texture も持たない — その分だけ軽く出る。**歩き(font walk)は同じ大きさ**で、
+  フォント DB の populate は scene graph に依らない
+- **表示の状態は値を動かさない**: 消灯の座りと点灯・在席の座りの gross は互いに 1〜3MB の中に居て、
+  5 run で 7〜10MB 散る幅(§この記録の読み方 5)より小さい。scroll / details / diff の行は表示経路の
+  値ではない(software raster の速さ) — 読まない
+- **使い道は 2 つ**: 同じ renderer どうしで A/B を撮る(表示は付け消ししてよい —
+  `--software --at <対照>` と `--software --at <変更>`)、歩きの帰属を撮る。**§判定 の撮り直しは
+  できない** — 予算行は点灯した D3D の値で、それには表示が要る
+- fps / startup / details / diff は software raster の速さで、report が全行に「not the display path」と
+  付ける。frame gate(画面 Hz の半分)は software では効かせない
 
 ## メモリの段(各 5 run)
 
