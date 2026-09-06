@@ -25,7 +25,10 @@
 //! A tree holds one gate at a time for the same reason: a second gate in
 //! the same tree runs the same steps over the same build directory, and
 //! the two wait on each other's cargo for the whole of it. The first
-//! keeps the tree; the second is refused with the first's pid.
+//! keeps the tree; the second is refused with the first's pid. A gate
+//! writes that pid the instant it has the lock, so a lock held with
+//! nothing to read beside it names nobody, and is waited out rather than
+//! answered ([`UNCLAIMED`]).
 //!
 //! Liveness is the lock, as in `still`: a lock nobody holds is free
 //! whatever note stands beside it, so a gate killed mid-run leaves
@@ -45,8 +48,9 @@ const LANES: &str = "pg-lanes";
 /// one: `<side>-landing-<pid>.lock`, one per landing and side.
 const LANDING: &str = "landing";
 
-/// How often a verb looks again for a free lane. Short under test, where
-/// the waits are measured in the tens of milliseconds.
+/// How often a wait here looks again: a verb for a free lane, a gate for
+/// a tree. Short under test, where the waits are measured in the tens of
+/// milliseconds.
 const POLL: Duration = if cfg!(test) {
     Duration::from_millis(20)
 } else {
@@ -64,6 +68,15 @@ const LANE_CEILING: Duration = if cfg!(test) {
 
 /// The extension of a lock file beside a note.
 const LOCK: &str = "lock";
+
+/// How long [`sole`] waits on a held lock nobody has written a note
+/// beside. `flock` goes with the open file description, and a fork copies
+/// every one, so a child forked over the gate's lock carries it until its
+/// `execve` — after the gate here has let the lock go and taken its note
+/// down. The window is that child's scheduling, and reaches the next gate
+/// on a loaded container. Past this, a lock nobody names is a lock all
+/// the same, and the note is what it is.
+const UNCLAIMED: Duration = Duration::from_secs(5);
 
 /// The lanes of one side on this machine: where they stand and how many
 /// there are. Every gate names the same count, so however many gates run,
@@ -286,29 +299,43 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
             .map_err(|e| format!("could not make {}: {e}", parent.display()))?;
     }
     let lock = open_lock(&note.with_extension(LOCK))?;
-    match lock.try_lock() {
-        Ok(()) => {}
-        Err(TryLockError::WouldBlock) => {
-            let other = std::fs::read_to_string(note)
-                .ok()
-                .and_then(|text| Note::parse(&text))
-                .unwrap_or_else(Note::unreadable);
-            return Err(format!(
-                "a gate is already running in this tree: {} — one at a time: a second gate here \
-                 would run the same steps over the same build directory, and the two would wait \
-                 on each other's cargo. Wait for it — its verdict lands on the output of the \
-                 command that started it (a tool call that timed out is still running in the \
-                 background; read that output file). Only a process that is gone frees the \
-                 tree by itself.",
-                other.line()
-            ));
+    let asked = Instant::now();
+    // A gate writes its note the instant it has the lock, so a held lock
+    // with nothing readable beside it is not a gate holding the tree —
+    // it is the carried window, waited out here.
+    let other = loop {
+        match lock.try_lock() {
+            Ok(()) => break None,
+            Err(TryLockError::WouldBlock) => {
+                if let Some(other) = std::fs::read_to_string(note)
+                    .ok()
+                    .and_then(|text| Note::parse(&text))
+                {
+                    break Some(other);
+                }
+                if asked.elapsed() >= UNCLAIMED {
+                    break Some(Note::unreadable());
+                }
+                std::thread::sleep(POLL);
+            }
+            Err(TryLockError::Error(error)) => {
+                return Err(format!(
+                    "could not probe the gate lock at {}: {error}",
+                    note.display()
+                ));
+            }
         }
-        Err(TryLockError::Error(error)) => {
-            return Err(format!(
-                "could not probe the gate lock at {}: {error}",
-                note.display()
-            ));
-        }
+    };
+    if let Some(other) = other {
+        return Err(format!(
+            "a gate is already running in this tree: {} — one at a time: a second gate here \
+             would run the same steps over the same build directory, and the two would wait \
+             on each other's cargo. Wait for it — its verdict lands on the output of the \
+             command that started it (a tool call that timed out is still running in the \
+             background; read that output file). Only a process that is gone frees the \
+             tree by itself.",
+            other.line()
+        ));
     }
     std::fs::write(note, Note::now(what).text())
         .map_err(|e| format!("could not write {}: {e}", note.display()))?;
@@ -468,6 +495,46 @@ mod tests {
         drop(first);
         assert!(!note.exists(), "the note comes down with the gate");
         let _again = sole(&note, "gate").expect("the tree, once the first gate is done");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The window [`super::UNCLAIMED`] is for, held open on purpose. A
+    /// child handed the lock's open file description outright stands in
+    /// for one a fork hands over: the gate here lets the lock go and
+    /// takes its note down, and the description is still held by
+    /// somebody who writes no note. The gate that asks waits the child
+    /// out rather than naming a holder it cannot read.
+    ///
+    /// Linux, where `flock(2)` promises the inheritance and where the
+    /// carried lock is seen; the gate suite nets the same window from
+    /// outside (`gate::stamps`).
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_lock_a_forked_child_carries_is_waited_out() {
+        use std::process::{Command, Stdio};
+
+        let dir = common("carried");
+        let note = dir.join("target").join("gate-running");
+        let first = sole(&note, "gate --all").expect("the first gate");
+        let mut carrier = Command::new("sleep")
+            .arg("1")
+            .stdin(Stdio::from(
+                first
+                    ._lock
+                    .try_clone()
+                    .expect("a second handle on the description"),
+            ))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("a child handed the lock's description");
+        drop(first);
+        assert!(!note.exists(), "the note comes down with the gate");
+        let _again = sole(&note, "gate").expect("the tree, once the carried lock is gone");
+        assert!(
+            carrier.try_wait().expect("ask after the child").is_some(),
+            "the gate had the tree while the child still carried the lock"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
