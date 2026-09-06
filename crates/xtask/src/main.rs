@@ -23,6 +23,7 @@ mod perf;
 mod png;
 mod qmltest;
 mod qt;
+mod reap;
 mod seats;
 mod shipped;
 mod shots;

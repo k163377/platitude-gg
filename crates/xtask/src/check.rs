@@ -269,6 +269,9 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
     let mut command = Command::new(&step[0]);
     command.args(&step[1..]).current_dir(root);
     crate::still::step(&mut command);
+    // So that a step ended at a ceiling takes its cargo's rustc with it,
+    // rather than leaving one holding this side's build lock (`reap`).
+    crate::reap::own_group(&mut command);
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::from(out))
@@ -289,21 +292,17 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
         }
         let (quiet, whole) = (grew.elapsed(), started.elapsed());
         if quiet >= QUIET_CEILING || whole >= STEP_CEILING {
-            let _ = child.kill();
-            let _ = child.wait();
+            let reaped = crate::reap::kill_tree(&mut child);
             let ceiling = if quiet >= QUIET_CEILING {
                 format!("said nothing for {} minutes", quiet.as_secs() / 60)
             } else {
                 format!("ran for {} minutes", whole.as_secs() / 60)
             };
-            // Killing the immediate child cannot reach its survivors —
-            // grandchildren keep running and may hold this side's build
-            // lock, which the message owns up to rather than letting the
-            // next run's stall look unrelated.
             return Err(format!(
-                "killed at the ceiling: the step {ceiling} (its log has the tail; an \
-                 empty log usually means it never got past a build lock another cargo \
-                 holds; survivors of the killed command may still hold this side's own)"
+                "killed at the ceiling: the step {ceiling}, and {} (its log has the \
+                 tail; an empty log usually means it never got past a build lock \
+                 another cargo holds)",
+                reaped.line()
             ));
         }
         std::thread::sleep(Duration::from_millis(500));
