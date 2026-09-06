@@ -103,3 +103,48 @@ pub(super) fn config(config_dir: &Path, verb: &str, presets: &[String]) -> Resul
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    /// A directory of this run's own to seed into: two of these tests
+    /// write the same file name, and a shared path would let one read
+    /// what the other wrote.
+    fn config_dir(stem: &str) -> PathBuf {
+        crate::verify::claim_dir(&std::env::temp_dir().join("pg-verify"), stem)
+            .expect("a config directory nobody else has")
+    }
+
+    /// **The one seed that is the fixture's rather than the verb's.** A
+    /// run that opens `outrun` with the timer on fetches on its way in
+    /// and photographs `diverged` instead, so the settings have to follow
+    /// the preset through whatever verb asks for it — a verb nobody has
+    /// written yet included, since such a run PASSes on a picture of the
+    /// wrong fixture and says nothing about it.
+    #[test]
+    fn the_preset_that_must_not_fetch_is_seeded_under_any_verb() {
+        let dir = config_dir("seed-outrun");
+        super::config(&dir, "nav-tip", &["outrun".to_string()]).expect("the seed is written");
+        let settings = std::fs::read_to_string(dir.join("settings.toml"))
+            .expect("a preset that must not fetch is given settings of its own");
+        assert!(
+            settings.contains("auto_fetch_minutes = 0"),
+            "the seeded settings turn the fetching off, not something else: {settings}"
+        );
+    }
+
+    /// And no other fixture is quieted. A preset with nothing to lose to
+    /// an opening's fetch runs on the settings the application ships,
+    /// which is the half that says this is a fixture's requirement rather
+    /// than a blanket for every headless run.
+    #[test]
+    fn a_preset_with_nothing_to_lose_is_left_on_the_shipped_settings() {
+        let dir = config_dir("seed-basic");
+        super::config(&dir, "nav-tip", &["basic".to_string()]).expect("nothing to seed");
+        assert!(
+            !dir.join("settings.toml").exists(),
+            "a preset that does not care about the opening's fetch was given settings anyway"
+        );
+    }
+}
