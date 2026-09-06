@@ -56,7 +56,13 @@ impl Hub {
     pub fn shutdown() {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {
+            // The ending is past the event loop, so the run's own watchdog
+            // cannot reach any of it: these are what says which step a
+            // process that stopped answering here was on
+            // (`harness::deadline`).
+            crate::harness::station(crate::harness::Station::SettingsFlush);
             hub.flush_state();
+            crate::harness::station(crate::harness::Station::TabsClosing);
             let mut writes = std::mem::take(&mut hub.parked_writes);
             for (_, tab) in hub.tabs.drain() {
                 if let Some(session) = tab.session {
@@ -72,6 +78,7 @@ impl Hub {
                 // mid-write. Normally instant: the window does not close
                 // while one is pending (`Hub::writes_settled`), so what
                 // is joined here has already ended.
+                crate::harness::station(crate::harness::Station::WritesJoining);
                 rt.block_on(async {
                     for write in writes {
                         if let Err(error) = write.await {
@@ -79,11 +86,13 @@ impl Hub {
                         }
                     }
                 });
+                crate::harness::station(crate::harness::Station::RuntimeStopping);
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
             // Every session is gone with the runtime, and each took its
             // own picture files with it; this is the run's directory
             // itself, and whatever a read cut short left in it.
+            crate::harness::station(crate::harness::Station::RunDirClearing);
             platitude_core::preview::remove_run_dir();
         }
     }

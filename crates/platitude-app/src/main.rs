@@ -25,6 +25,11 @@ use qtbridge::QApp;
 fn main() {
     harness::start_clock();
     init_tracing();
+    // Before anything that can wedge, and only ever a thread in a run that
+    // was handed a ceiling: what a process that stops answering leaves
+    // behind, the QML watchdog being unable to fire once the event loop
+    // stops turning or is left (`harness::deadline`).
+    harness::watch_deadline();
     // Said once, before anything else can fail: a run whose window never
     // comes up, or whose stderr is all a verify-ui report keeps, still
     // names the tree it was built from (CLAUDE.md ビルド・テスト).
@@ -276,6 +281,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/Main.qml", "qt/qml/platitude");
     embed_harness_qml();
     harness::install(&mut app);
+    harness::station(harness::Station::EventLoop);
     let code = app
         .register::<AppBackend>()
         .register::<GitFacts>()
@@ -295,10 +301,12 @@ fn main() {
         .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
         .run();
 
+    harness::station(harness::Station::LeftEventLoop);
     // Asked before the hub is taken down, because taking it down is what
     // consumes it.
     let restart = Hub::with(|hub| hub.restart_wanted()).unwrap_or(false);
     Hub::shutdown();
+    harness::station(harness::Station::HubDown);
     if restart {
         // **The lock goes first, by name.** It is held for the length of
         // the run and `std::process::exit` runs no destructor, so a

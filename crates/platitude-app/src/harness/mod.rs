@@ -14,6 +14,7 @@
 //! that drives the app asks for the feature back (`crate::app_exe`), so
 //! the shipped binary is the only one that has to be remembered about.
 
+mod deadline;
 mod faults;
 mod knobs;
 pub(crate) mod memprobe;
@@ -22,6 +23,7 @@ mod perf_probe;
 #[cfg(feature = "automation")]
 mod singleton;
 
+pub(crate) use deadline::{Station, at as station, watch as watch_deadline};
 pub(crate) use faults::{fail_graph_pass, pass_hooks};
 pub(crate) use knobs::knobs;
 
@@ -60,4 +62,8 @@ pub(crate) fn install(_app: &mut qtbridge::QApp) {}
 #[cfg(feature = "automation")]
 pub(crate) fn report(message: &str) {
     tracing::info!(target: "bench", "{message}");
+    // Made from a slot, so this is also the latest moment the event loop
+    // is known to have turned — which is the whole of what a run that
+    // stops answering leaves behind ([`deadline`]).
+    deadline::heard(message);
 }
