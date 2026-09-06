@@ -105,7 +105,11 @@ const POLL: Duration = if cfg!(test) {
 /// How many times a hold tries its lock before calling the holder
 /// another measurement. A waiter probing the lock holds it for the
 /// microseconds between its `try_lock` and its `drop`, and a hold that
-/// met that instant is not a hold that met a measurement.
+/// met that instant is not a hold that met a measurement. The longer
+/// window is the one a fork carries: `flock` goes with the open file
+/// description, so a lock let go of stays held until every child forked
+/// over it has reached its `execve` — measured at 2ms at its worst,
+/// against the four hundred milliseconds these tries span.
 const HOLD_TRIES: u32 = 5;
 
 /// How long a stamp is kept: longer than any warm window it could answer
