@@ -112,20 +112,41 @@ const HOLD_TRIES: u32 = 5;
 /// (`perf::warmth`), shorter than a pid's turn to come round again.
 const STAMP_FOR: u64 = 24 * 60 * 60;
 
+/// Whose name a note's lock file stands at, which decides whether the
+/// file comes down with the note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Name {
+    /// One every process here opens: the hold. Removing a lock file at
+    /// such a name stops it being one lock — a waiter that opened it
+    /// before the removal goes on locking a file that is no longer at
+    /// that name, the next holder makes a second file there and locks
+    /// that, and the two hold nothing against each other. So it stays:
+    /// one file per repository, which nothing accumulates, and a lock
+    /// nobody holds beside a note that is gone reads as free anyway.
+    Shared,
+    /// One nothing else writes: an announcement, named for the process
+    /// and the announcement. It goes with the note, and a killed
+    /// process's is cleared by whoever next reads them ([`live_notes`]).
+    Own,
+}
+
 /// A note and its lock, held for as long as the note stands. Dropping it
-/// removes the note and the lock file; the lock itself goes with the
-/// handle, and a file removed while a probe holds it open goes when the
-/// probe lets go.
+/// removes the note, and the lock file where that name is this process's
+/// own ([`Name`]); the lock itself goes with the handle, and with the
+/// process.
 #[derive(Debug)]
 struct Held {
     note: PathBuf,
+    name: Name,
     _lock: File,
 }
 
 impl Drop for Held {
     fn drop(&mut self) {
         clear(&self.note);
-        clear(&lock_of(&self.note));
+        if self.name == Name::Own {
+            clear(&lock_of(&self.note));
+        }
     }
 }
 
@@ -333,7 +354,11 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
     // Dropped on the way out of a wait that failed, so a hold that never
     // got its quiet does not stand in everybody's way.
     let hold = Hold {
-        _held: Some(Held { note, _lock: lock }),
+        _held: Some(Held {
+            note,
+            name: Name::Shared,
+            _lock: lock,
+        }),
     };
     wait_for_builds(&common.join(BUSY), what, polled)?;
     Ok(hold)
@@ -405,7 +430,11 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
         }
         std::fs::write(&note, Note::now(what).text())
             .map_err(|e| format!("could not announce the build at {}: {e}", note.display()))?;
-        let mine = Held { note, _lock: lock };
+        let mine = Held {
+            note,
+            name: Name::Own,
+            _lock: lock,
+        };
         // A hold that came between the wait and the announcement wins:
         // the measurement is the one that cannot share.
         if held(&hold)?.is_none() {
@@ -594,7 +623,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, lock_of, stamps_ended_since,
+        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, lock_of, open_lock,
+        stamps_ended_since,
     };
 
     /// A `.git`-shaped directory of this test's own.
@@ -681,6 +711,25 @@ mod tests {
             (0, 0),
             "an announcement is withdrawn with its guard, lock file included"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The hold's lock file stands at a name every process opens, so it
+    /// outlives the hold that took it. Taken away instead, it would stop
+    /// being one lock: the waiter here would hold a file that is no
+    /// longer at that name while the next hold made a second one there,
+    /// and two measurements would run at once.
+    #[test]
+    fn the_lock_a_hold_frees_is_the_one_the_next_hold_is_refused_by() {
+        let dir = common("one-hold");
+        let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
+        // A waiter that opened the lock while the hold still stood.
+        let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
+        drop(hold);
+        waiter.try_lock().expect("the lock the hold let go of");
+        let refused = hold_in(&dir, "another perf", &|| {}).expect_err("a second measurement");
+        assert!(refused.contains("another measurement"), "{refused}");
+        drop(waiter);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
