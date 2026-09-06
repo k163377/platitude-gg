@@ -64,10 +64,14 @@ fn parse_chip(line: &str) -> Option<Chip> {
         .filter(|target| !target.is_empty())
         .map(str::to_string)
         .collect();
+    // Written last, so a ledger from before the mark existed reads as a
+    // set of chips that recommend work — which is what they were.
+    let optional = fields.next() == Some("1");
     Some(Chip {
         id,
         priority,
         body,
+        optional,
         targets,
     })
 }
@@ -88,7 +92,7 @@ pub(super) fn store(input: &str, live: &[Chip]) {
         .iter()
         .map(|chip| {
             format!(
-                "{}{SEP}{}{SEP}{}{SEP}{}\n",
+                "{}{SEP}{}{SEP}{}{SEP}{}{SEP}{}\n",
                 one_line(&chip.id),
                 chip.priority,
                 one_line(&chip.body),
@@ -96,7 +100,8 @@ pub(super) fn store(input: &str, live: &[Chip]) {
                     .iter()
                     .map(String::as_str)
                     .collect::<Vec<&str>>()
-                    .join(" ")
+                    .join(" "),
+                usize::from(chip.optional)
             )
         })
         .collect();

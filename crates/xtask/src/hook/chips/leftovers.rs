@@ -110,8 +110,9 @@ fn reason(found: &[String]) -> String {
          sentence at the end of a turn is read as it scrolls past and then gone; \
          the chip list is what the user comes back to. Stack each leftover as a \
          chip (mcp__ccd_session__spawn_task, title '<n>. …' with the live set \
-         renumbered around where it belongs, written in Japanese, its prompt \
-         naming the paths it will touch), and say in the reply which chips \
+         renumbered around where it belongs — or '<n>. [任意] …' when it asks the \
+         user to decide rather than recommending work — written in Japanese, its \
+         prompt naming the paths it will touch), and say in the reply which chips \
          you stacked. If one of these needs no chip — a live chip already holds \
          it, it is a question this conversation is waiting on the user to answer, \
          or it is not undone work at all — say which in one line instead: this is \

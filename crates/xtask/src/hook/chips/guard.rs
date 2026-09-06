@@ -7,6 +7,12 @@ use super::Chip;
 use super::ledger::{load, store};
 use crate::hook::payload::{deny, printable, string_field};
 
+/// The mark a chip wears when it is not a recommendation but a question:
+/// the user decides whether the work is wanted at all, and may decide it
+/// is not. It sits right after the number (`3. [任意] …`) and is spelled
+/// exactly this way, because what it buys is a list read at a glance.
+const OPTIONAL: &str = "[任意]";
+
 /// The directories a path is recognized by when it names no file at all:
 /// `crates/platitude-app/src/ui` is a claim, `Windows / macOS` is not.
 const ROOTS: [&str; 6] = [
@@ -18,15 +24,23 @@ const ROOTS: [&str; 6] = [
     "spike",
 ];
 
-/// PreToolUse(spawn_task): the two things a chip cannot be judged on
-/// alone — where it stands, and what it claims.
+/// PreToolUse(spawn_task): the three things a chip cannot be judged on
+/// alone — where it stands, what weight it carries, and what it claims.
 pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
     let asked = section(input, "\"tool_input\"");
     let title = string_field(asked, "title").unwrap_or_default();
-    let Some((priority, body)) = numbered(&title) else {
+    let Some((priority, body, optional)) = numbered(&title) else {
         deny(UNNUMBERED);
         return Ok(());
     };
+    if misspelt_mark(&body) {
+        deny(&format!("'{body}' {MISSPELT}"));
+        return Ok(());
+    }
+    if asks(&body) && !optional {
+        deny(&format!("'{body}' {UNMARKED}"));
+        return Ok(());
+    }
     let live = load(input);
     // A re-stack is the same chip under a new number, and it is how the
     // set is renumbered at all — nothing below applies to it. The
@@ -56,11 +70,12 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
             "This chip claims {}, which the live chip '{}' claims too. Chips run in \
              parallel sessions, so two of them over one path land conflicting edits \
              — and a chip waiting on the other's outcome (a user decision included) \
-             cannot run beside it at all. Make them one chip, or leave this work to \
-             the first chip and have its prompt end by stacking this follow-up \
-             itself, once its own answer is in.",
+             cannot run beside it at all. {} If this is that same chip re-weighed or \
+             reworded rather than a second one, the title is all the guard knows it \
+             by: dismiss_task the live one first, then stack this.",
             shared.join(", "),
-            chip.label()
+            chip.label(),
+            resolution(optional, chip.optional)
         ));
         return Ok(());
     }
@@ -112,13 +127,14 @@ pub(crate) fn stop(input: &str) -> Result<bool, String> {
 fn spawned(input: &str) {
     let asked = section(input, "\"tool_input\"");
     let title = string_field(asked, "title").unwrap_or_default();
-    let Some((priority, body)) = numbered(&title) else {
+    let Some((priority, body, optional)) = numbered(&title) else {
         return;
     };
     let chip = Chip {
         id: id_in(section(input, "\"tool_response\"")).unwrap_or_default(),
         priority,
         body,
+        optional,
         targets: targets(&words(asked)),
     };
     let mut live = load(input);
@@ -197,12 +213,63 @@ fn problems(live: &[Chip]) -> Vec<String> {
     problems
 }
 
-/// The number a title leads with, and the title without it.
-fn numbered(title: &str) -> Option<(usize, String)> {
+/// The number a title leads with, the title left after it, and whether
+/// it wears the weight mark.
+fn numbered(title: &str) -> Option<(usize, String, bool)> {
     let (number, rest) = title.split_once('.')?;
     let priority: usize = number.trim().parse().ok()?;
-    let body = rest.trim();
-    (priority >= 1 && !body.is_empty()).then(|| (priority, body.to_string()))
+    let rest = rest.trim();
+    let (optional, body) = rest
+        .strip_prefix(OPTIONAL)
+        .map_or((false, rest), |body| (true, body.trim()));
+    (priority >= 1 && !body.is_empty()).then(|| (priority, body.to_string(), optional))
+}
+
+/// What two chips over one path are told to do about it. There is no one
+/// answer: it turns on what each of them weighs, because a chip asking
+/// the user to decide and a chip proposing work can be neither folded
+/// together nor ordered the same way.
+fn resolution(claimed: bool, held: bool) -> &'static str {
+    match (claimed, held) {
+        (true, true) => {
+            "Both of them ask the user to decide, so they are one chip: ask both \
+             questions in it. Two chips put the same file in front of the user \
+             twice and let the answer come back two ways."
+        }
+        (false, false) => {
+            "Make them one chip, or leave this work to the first chip and have its \
+             prompt end by stacking this follow-up itself, once its own work is done."
+        }
+        _ => {
+            "One of the two asks the user to decide and the other proposes work on \
+             the same file, so the question leads: the '[任意]' chip is the one that \
+             stays live — a question is answered without touching anything — and its \
+             prompt ends by stacking the work chip once the answer is in. Not the \
+             other way round. A session that works the file first has already picked \
+             one of the answers, and a question folded into a work chip is not asked \
+             until somebody starts that work."
+        }
+    }
+}
+
+/// Whether a title spelled the weight mark some other way, or reached
+/// for a mark of its own — a tag nobody else writes is a column only
+/// this chip has. The right spelling is off the title by now, so a `[…]`
+/// still leading it is a second one; 任意 is looked for in the head
+/// alone, since a chip may use the word in its own sentence further on.
+fn misspelt_mark(body: &str) -> bool {
+    body.starts_with(['[', '［']) || body.chars().take(8).collect::<String>().contains("任意")
+}
+
+/// The shapes a title takes when it asks and does not end on the asking.
+const QUESTIONS: [&str; 4] = ["かどうか", "どちらが", "どちらを", "べきか"];
+
+/// Whether a title asks rather than proposes. The user answers a
+/// question and may answer no, which is the whole of what the mark
+/// carries — a chip nobody is recommending yet.
+fn asks(body: &str) -> bool {
+    let body = body.trim_end_matches(['?', '？', '。', '.', ' ']);
+    body.ends_with('か') || QUESTIONS.iter().any(|shape| body.contains(shape))
 }
 
 /// The paths a chip's words name. A chip prompt is written to stand
@@ -297,20 +364,41 @@ fn roster(live: &[Chip]) -> String {
 impl Chip {
     /// The chip as its title reads.
     fn label(&self) -> String {
-        format!("{}. {}", self.priority, self.body)
+        let mark = if self.optional {
+            format!("{OPTIONAL} ")
+        } else {
+            String::new()
+        };
+        format!("{}. {mark}{}", self.priority, self.body)
     }
 }
 
 const UNNUMBERED: &str = "A task chip's title must lead with its priority: '1. …', \
      1 being the most important chip live right now. The number is the whole order \
      of the list, and a chip stacked without one is read wherever it happens to \
-     land. Stack it again as '<n>. <title>', and if it outranks chips already live, \
-     renumber those first — spawn each one again under its new number, then dismiss \
-     its old task_id.";
+     land. Stack it again as '<n>. <title>' — or '<n>. [任意] <title>' when the chip \
+     asks the user to decide rather than recommending work — and if it outranks \
+     chips already live, renumber those first: spawn each one again under its new \
+     number, then dismiss its old task_id.";
+
+const MISSPELT: &str = "says 任意 where the weight mark goes and does not spell it \
+     '[任意]'. The mark is read at a glance, so a second spelling is invisible in \
+     the list rather than merely wrong in it: it is exactly '[任意]', right after \
+     the number ('3. [任意] …'), and it goes on a chip that asks the user to decide \
+     instead of recommending work. Stack it again with that spelling — or with no \
+     mark and the word out of the title's head, if the chip is a recommendation.";
+
+const UNMARKED: &str = "asks a question, and a question is not a recommendation: \
+     the user answers it and may answer no, so it does not carry the weight of a \
+     chip proposing work. Stack it again as '<n>. [任意] <title>', which is what \
+     the list is read by. If the chip really is recommending something, reword the \
+     title as the work itself rather than as the question behind it.";
 
 #[cfg(test)]
 mod tests {
-    use super::{Chip, covers, id_in, numbered, problems, shared, targets};
+    use super::{
+        Chip, asks, covers, id_in, misspelt_mark, numbered, problems, resolution, shared, targets,
+    };
     use std::collections::BTreeSet;
 
     fn chip(priority: usize, body: &str, targets: &[&str]) -> Chip {
@@ -318,6 +406,7 @@ mod tests {
             id: format!("t{priority}"),
             priority,
             body: body.to_string(),
+            optional: false,
             targets: targets.iter().map(|target| (*target).to_string()).collect(),
         }
     }
@@ -326,15 +415,67 @@ mod tests {
     fn reads_the_number_a_title_leads_with() {
         assert_eq!(
             numbered("2. サイドバーの余白を直す"),
-            Some((2, "サイドバーの余白を直す".to_string()))
+            Some((2, "サイドバーの余白を直す".to_string(), false))
         );
         assert_eq!(
             numbered("10.Fix v1.2 parsing"),
-            Some((10, "Fix v1.2 parsing".to_string()))
+            Some((10, "Fix v1.2 parsing".to_string(), false))
         );
         assert_eq!(numbered("Fix the badge"), None);
         assert_eq!(numbered("0. nothing outranks 1"), None);
         assert_eq!(numbered("3. "), None);
+    }
+
+    #[test]
+    fn takes_the_weight_mark_off_the_title_and_keeps_what_it_said() {
+        assert_eq!(
+            numbered("3. [任意] タグの並び順を日付にするか"),
+            Some((3, "タグの並び順を日付にするか".to_string(), true))
+        );
+        // The body is the chip's identity, so the same work re-stacked
+        // under the other weight is the same chip.
+        assert_eq!(
+            numbered("3. タグの並び順を日付にする").map(|(_, body, _)| body),
+            numbered("4. [任意] タグの並び順を日付にする").map(|(_, body, _)| body)
+        );
+        assert_eq!(numbered("3. [任意]"), None);
+    }
+
+    #[test]
+    fn holds_the_mark_to_one_spelling_and_asks_for_it_on_a_question() {
+        assert!(misspelt_mark("(任意) 余白を詰める"));
+        assert!(misspelt_mark("任意: 余白を詰める"));
+        // A tag of the chip's own invention is a column only it has.
+        assert!(misspelt_mark("[要判断] 余白を詰める"));
+        assert!(misspelt_mark("［任意］余白を詰める"));
+        // Stripped already when the spelling was right, and a chip may
+        // still say the word in its own sentence further along.
+        assert!(!misspelt_mark("余白を詰める"));
+        assert!(!misspelt_mark("並び順の既定を任意に変えられるようにする"));
+        // A parenthetical that is not reaching for a mark is left be.
+        assert!(!misspelt_mark("(macOS だけ) 余白を詰める"));
+
+        assert!(asks("タグの並び順を日付にするか"));
+        assert!(asks("アバターを縮めるか？"));
+        // A question that does not end on its own question word.
+        assert!(asks("タグを畳むかどうかを決める"));
+        assert!(asks("どちらを既定にするかを決める"));
+        assert!(asks("バッジを出すべきか決める"));
+        assert!(!asks("タグの並び順を日付にする"));
+        assert!(!asks("Sidebar.qml の余白を詰める"));
+    }
+
+    #[test]
+    fn tells_two_chips_over_one_path_what_to_do_by_what_they_weigh() {
+        // A question and a proposal are ordered, and the question leads.
+        assert!(resolution(true, false).contains("[任意]"));
+        assert!(resolution(false, true).contains("[任意]"));
+        assert_eq!(resolution(true, false), resolution(false, true));
+        // Two questions are one question; two proposals are merged or
+        // serialized. Neither borrows the other's answer.
+        assert!(resolution(true, true).contains("one chip"));
+        assert_ne!(resolution(true, true), resolution(false, false));
+        assert_ne!(resolution(false, false), resolution(true, false));
     }
 
     #[test]

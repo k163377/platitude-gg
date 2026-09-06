@@ -14,6 +14,9 @@
 //!
 //! * a title leads with its priority (`1. …`), 1 being the most
 //!   important chip live right now;
+//! * a chip that asks the user to decide wears `[任意]` after its number
+//!   — it weighs less than one recommending work, and the list is read
+//!   for which is which;
 //! * a chip may not claim a path a live chip already claims — the two
 //!   are one chip, or the first stacks the second itself once its own
 //!   work (or the decision it is waiting on) is done;
@@ -43,11 +46,14 @@ struct Chip {
     id: String,
     /// The number its title leads with; 1 is the most important.
     priority: usize,
-    /// The title with its number taken off: what the chip *is*, held
-    /// apart from where it stands. A re-stack keeps the body and changes
-    /// the number, which is how it is told from a second chip for the
-    /// same work.
+    /// The title with its number and its mark taken off: what the chip
+    /// *is*, held apart from where it stands and from what it weighs. A
+    /// re-stack keeps the body and changes the rest, which is how it is
+    /// told from a second chip for the same work.
     body: String,
+    /// Whether it wears the weight mark: a chip asking the user to
+    /// decide, rather than one recommending work.
+    optional: bool,
     /// The paths its words named — what the next chip may not claim too.
     targets: BTreeSet<String>,
 }
