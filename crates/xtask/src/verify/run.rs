@@ -122,7 +122,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         resource_claims.push(claim);
     }
     println!("config dir: {}", config_dir.display());
-    seed::config(&config_dir, &opts.verb)?;
+    seed::config(&config_dir, &opts.verb, &opts.preset)?;
 
     let arg = match opts.arg.is_empty() {
         true => match body_for(&opts.verb) {

@@ -1,4 +1,4 @@
-//! The configuration a verb needs standing before the window opens.
+//! The configuration a run needs standing before the window opens.
 //!
 //! Five verbs are about a window the app itself could never write: one
 //! under every floor the layout has, a pane wider than the row inside
@@ -8,10 +8,14 @@
 
 use std::path::Path;
 
-/// Writes what `verb` has to start from into the run's own config
-/// directory. Says what it seeded, because a picture of a seeded window
-/// and one of a window that came up that way read the same.
-pub(super) fn config(config_dir: &Path, verb: &str) -> Result<(), String> {
+/// Writes what the run has to start from into its own config directory.
+/// Says what it seeded, because a picture of a seeded window and one of a
+/// window that came up that way read the same.
+///
+/// Reads both halves of what a run is: a window shape is the verb's
+/// business, and an arrangement the opening would undo is the fixture's,
+/// so `presets` is asked as well as `verb`.
+pub(super) fn config(config_dir: &Path, verb: &str, presets: &[String]) -> Result<(), String> {
     // The verbs that need the configuration to say something before the
     // run starts: a window smaller than any floor the layout has. It is
     // what a file written before there was a floor looks like, and the
@@ -40,13 +44,27 @@ pub(super) fn config(config_dir: &Path, verb: &str) -> Result<(), String> {
         println!("seeded window: 320x240 (under every floor)");
     }
 
-    // The one verb whose arrangement the window would destroy on its way
-    // in: a push is only out of date while this end has not looked at the
-    // remote, and opening a tab fetches once (デザイン規約 §リモートから取り込む).
-    // Turning the timer off turns that one off with it, which is also
-    // what leaves the toolbar offering a plain `push` — an end that had
-    // fetched would know it was diverged and offer the overwrite instead.
-    if verb == "push-outdated" || verb == "perf" {
+    // The one arrangement the window would destroy on its way in, and it
+    // belongs to the fixture rather than to whoever opens it: `outrun`
+    // **is** "the remote moved and this end has not looked", and opening
+    // a tab fetches once (デザイン規約 §リモートから取り込む). Turning the timer
+    // off turns that one off with it (`session::fetch_on_open` asks the
+    // interval for its permission), which is also what leaves the toolbar
+    // offering a plain `push` — an end that had fetched would know it was
+    // diverged and offer the overwrite instead.
+    //
+    // **Keyed on the preset, not on a verb.** A run that fetches on the
+    // way in is not photographing `outrun` at all, it is photographing
+    // `demo::remote::diverged` — which is literally `behind`, a fetch,
+    // and the same commit on top. Named by verb, this reached the one
+    // that presses `push` and left every other run to picture the
+    // neighbouring preset under this preset's name (observed: `nav-tip
+    // branch:0 --preset outrun` framed an ahead 1 / behind 1 row and a
+    // `push -f`).
+    //
+    // `perf` is here for a reason of its own: a measurement is not to
+    // reach the network at all.
+    if verb == "perf" || presets.iter().any(|p| p == "outrun") {
         let settings = config_dir.join("settings.toml");
         std::fs::write(
             &settings,

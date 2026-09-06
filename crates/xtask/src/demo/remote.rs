@@ -124,11 +124,16 @@ pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {
 /// its own is sitting on a branch git will not send until the remote has
 /// been read again.
 ///
-/// [`behind`] with work of our own on top, and nothing fetched since. The
-/// window has to open without fetching for the arrangement to survive to
-/// the press (`verify::run` writes the settings that stop the timer), and
-/// that is also what makes the toolbar offer a plain `push`: an end that
-/// had fetched would know it was diverged and offer the overwrite instead.
+/// [`behind`] with work of our own on top, and nothing fetched since.
+///
+/// **Any window over this has to open without fetching**, or what is on
+/// screen is [`diverged`] — the preset next door, which is this one plus
+/// the fetch. `verify::seed` writes the settings that stop the timer, and
+/// it does it for the preset rather than for one verb, because the fetch
+/// an opening fires asks that same setting for its permission
+/// (`session::fetch_on_open`). That is also what makes the toolbar offer
+/// a plain `push`: an end that had fetched would know it was diverged and
+/// offer the overwrite instead.
 pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
     behind(repo)?;
     repo.commit("b.txt", "ours\n", "feat: work of our own")?;
