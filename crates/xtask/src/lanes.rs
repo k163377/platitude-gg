@@ -321,7 +321,7 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
                     break Some(other);
                 }
                 if asked.elapsed() >= UNCLAIMED {
-                    break Some(Note::unreadable());
+                    break Some(Note::unreadable("a gate"));
                 }
                 std::thread::sleep(POLL);
             }
@@ -369,7 +369,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    use super::{Lanes, sole};
+    use super::{Lanes, open_lock, sole};
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
@@ -556,6 +556,28 @@ mod tests {
         let _mine = sole(&note, "gate --host-only").expect("a dead gate holds nothing");
         let text = std::fs::read_to_string(&note).expect("the note");
         assert!(text.contains("what gate --host-only"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The refusal is worded by whoever asks. A gate that waited
+    /// [`super::UNCLAIMED`] out on a lock nobody wrote a note beside
+    /// names a gate — not the measurement `still` holds the machine for.
+    #[test]
+    fn a_lock_nobody_named_is_refused_in_the_gate_s_own_words() {
+        let dir = common("unnamed");
+        let note = dir.join("target").join("gate-running");
+        std::fs::create_dir_all(dir.join("target")).expect("target");
+        let held = open_lock(&note.with_extension(super::LOCK))
+            .expect("a lock beside a note nobody writes");
+        held.try_lock()
+            .expect("held from here, as a carried lock is");
+        let refused = sole(&note, "gate").expect_err("a lock held with nothing beside it");
+        assert!(refused.contains("already running"), "{refused}");
+        assert!(
+            refused.contains("a gate whose note is not written yet"),
+            "{refused}"
+        );
+        drop(held);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

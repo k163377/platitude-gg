@@ -284,7 +284,7 @@ fn stamps_ended_since(stamps: &Path, secs: u64) -> bool {
 /// hook's refusal, or nothing.
 pub(crate) fn standing(cwd: &str) -> Option<String> {
     let common = common_dir(Path::new(cwd))?;
-    held(&common.join(HOLD))
+    held(&common.join(HOLD), "a measurement")
         .ok()
         .flatten()
         .map(|note| note.line())
@@ -298,7 +298,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let common = common_dir(&crate::tree::workspace_root())
         .ok_or("not inside a repository — there is nothing to hold still")?;
-    match held(&common.join(HOLD))? {
+    match held(&common.join(HOLD), "a measurement")? {
         Some(note) => println!("held still by {}", note.line()),
         None => println!("nothing holds the machine still"),
     }
@@ -332,7 +332,8 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
             Err(TryLockError::WouldBlock) => {
                 tries += 1;
                 if tries >= HOLD_TRIES {
-                    let other = read_note(&note).unwrap_or_else(Note::unreadable);
+                    let other =
+                        read_note(&note).unwrap_or_else(|| Note::unreadable("a measurement"));
                     return Err(format!(
                         "another measurement holds the machine still: {} — one at a time, or \
                          the two spoil each other. `cargo xtask still` says when it is gone.",
@@ -437,7 +438,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
         };
         // A hold that came between the wait and the announcement wins:
         // the measurement is the one that cannot share.
-        if held(&hold)?.is_none() {
+        if held(&hold, "a measurement")?.is_none() {
             return Ok(Announced {
                 _held: mine,
                 stamp: common.join(BUILT).join(std::process::id().to_string()),
@@ -456,7 +457,7 @@ fn wait_for_hold(
     polled: &dyn Fn(),
 ) -> Result<(), String> {
     loop {
-        let Some(other) = held(hold)? else {
+        let Some(other) = held(hold, "a measurement")? else {
             return Ok(());
         };
         if !*said {
@@ -482,8 +483,10 @@ fn wait_for_hold(
 /// Who holds the lock beside `note`, or nobody. A note whose lock nobody
 /// holds is litter, and is taken down here — while this probe holds the
 /// lock, so a holder arriving this instant writes its note after the
-/// removal and not before.
-fn held(note: &Path) -> Result<Option<Note>, String> {
+/// removal and not before. `what` is what the asker knows the writer of
+/// this kind of note to be, for the window where the lock is held and
+/// the note is not written yet.
+fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
     if !note.exists() {
         return Ok(None);
     }
@@ -500,7 +503,9 @@ fn held(note: &Path) -> Result<Option<Note>, String> {
             }
             Ok(None)
         }
-        Err(TryLockError::WouldBlock) => Ok(Some(read_note(note).unwrap_or_else(Note::unreadable))),
+        Err(TryLockError::WouldBlock) => Ok(Some(
+            read_note(note).unwrap_or_else(|| Note::unreadable(what)),
+        )),
         Err(TryLockError::Error(error)) => Err(format!(
             "could not probe the lock at {}: {error}",
             note.display()
@@ -522,7 +527,7 @@ fn live_notes(busy: &Path) -> Vec<Note> {
             }
             continue;
         }
-        if let Ok(Some(note)) = held(&path) {
+        if let Ok(Some(note)) = held(&path, "a build") {
             live.push(note);
         }
     }
@@ -579,12 +584,14 @@ impl Note {
     }
 
     /// A lock somebody holds beside a note not yet written, or not
-    /// written the way this reads it.
-    pub(crate) fn unreadable() -> Self {
+    /// written the way this reads it. The note itself says nothing, so
+    /// `what` is the asker's own word for whoever writes this kind of
+    /// note: a measurement, a build, a gate.
+    pub(crate) fn unreadable(what: &str) -> Self {
         Self {
             pid: 0,
             since: now_secs(),
-            what: "a measurement whose note is not written yet".to_string(),
+            what: format!("{what} whose note is not written yet"),
         }
     }
 
@@ -623,7 +630,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, lock_of, open_lock,
+        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_of, open_lock,
         stamps_ended_since,
     };
 
@@ -755,6 +762,30 @@ mod tests {
         let _hold = hold_in(&dir, "perf", &|| {}).expect("a dead build is not waited for");
         assert!(!dir.join(BUSY).join("1-0").exists());
         assert!(!dir.join(BUSY).join("1-9.lock").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An announcement locked but not yet readable is read as what the
+    /// asker was looking for — a build under way, not the measurement a
+    /// hold refuses for.
+    #[test]
+    fn an_announcement_not_yet_readable_is_named_a_build() {
+        let dir = common("half-written");
+        std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
+        let note = dir.join(BUSY).join("1-0");
+        std::fs::write(&note, "half a note").expect("a note mid-write");
+        let held = open_lock(&lock_of(&note)).expect("the lock beside it");
+        held.try_lock().expect("held, as its announcer holds it");
+        let under_way = live_notes(&dir.join(BUSY));
+        assert_eq!(under_way.len(), 1, "the locked announcement was dropped");
+        assert!(
+            under_way[0]
+                .line()
+                .starts_with("a build whose note is not written yet"),
+            "{}",
+            under_way[0].line()
+        );
+        drop(held);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
