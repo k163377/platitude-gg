@@ -175,14 +175,17 @@ Item {
         // Never narrower than the chip it is covering (see the property).
         refList.minRowWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
-        // what stands outside a row's names on either side — the air the
-        // row keeps around its chip, and the frame the card draws around
-        // the rows — and the stop every floating card in the app shares:
-        // `spaceXxl` short of the edge, the ceiling a menu's width has
-        // (規約 §メニュー). Without it the longest name takes the card
-        // flat against the window frame.
+        // what stands outside a row's names on the far side — the bar's
+        // own gutter, which is the wider of the two a row can end with
+        // (`RefListPopup.rightInset`; which one it takes is not known
+        // until the rows are measured, and a ceiling guessed at the
+        // narrower one would let the longest name run past it) — and the
+        // frame the card draws around the rows, and the stop every
+        // floating card in the app shares: `spaceXxl` short of the edge,
+        // the ceiling a menu's width has (規約 §メニュー). Without it the
+        // longest name takes the card flat against the window frame.
         refList.chipRoom = host.width - Theme.spaceXxl - at.x
-                           - Theme.spaceXs - refList.padding
+                           - Theme.navBarGutter - refList.padding
         // And how far down it may run: the page, and no further. This is
         // the one card whose rows scroll, and one that ran past the
         // bottom would put its lower rows where nothing can reach them

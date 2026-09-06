@@ -210,8 +210,12 @@ AppCard {
             stacked += row.height
             seen = i + 1
         }
-        rows.rowsWidth = widest
         rows.rowsHeight = stacked + Math.max(0, refList.records.length - seen) * Theme.rowHeight
+        // In that order: whether the bar comes out is what the far side of a row is spaced by, and that is part of
+        // the width (規約 §QML 実装ルール のバーの選び方 — a trough is the bar's, not the row's).
+        rows.rightInset = rows.rowsHeight + 2 * refList.padding > refList.listRoom
+                            ? Theme.navBarGutter : Theme.spaceXs
+        rows.rowsWidth = widest + rows.rightInset
         refList.measuring = false
     }
 
@@ -231,18 +235,26 @@ AppCard {
         /// reader scrolled.
         property real rowsWidth: 0
         property real rowsHeight: 0
-        /// How far along a row a press still belongs to the row. **The bar is drawn over these rows rather than beside
-        /// them** (`AppListView.barRoom`), so a row that took the press there would be a bar nobody could grab.
+        /// What a row keeps between its far end and the card's frame, taken with the width above (a bar that comes out
+        /// wants its trough counted, and one that does not would leave the air standing empty).
         ///
-        /// **The names are not held back to it.** This bar takes no trough, which is the whole of why its thumb is
-        /// see-through (規約 §スクロールバー) — the rows run under it the way the combo's do, and a card kept a thumb's
-        /// width wider than its names would be paying for a trough it does not have.
-        readonly property real rowRoom: rows.width - rowsList.barRoom
+        /// **The bar this list wears takes a trough** (規約 §QML 実装ルール のバーの選び方) — the far end of a row is
+        /// where the reading's remote stands, and right-aligned ink is exactly what cannot be left under a
+        /// see-through thumb. So the ink stops at the pane's own gutter and the slab stands in it, the way it does
+        /// down the left menu and the file lists. Where no bar comes out there is no trough to keep, and the row ends
+        /// at the ordinary gap (規約 §QML 実装ルール「バーの出ない帯は右も `spaceXs`」).
+        property real rightInset: Theme.spaceXs
 
         AppListView {
             id: rowsList
             anchors.fill: parent
             model: refList.records
+            // The panels' slab rather than the style's floating thumb (above). Its idle step is counted from the
+            // ground it stands on, and this card's ground is `bgElevated` — the same one the settings screen hands
+            // this colour in for (規約 §ペインのスクロールバー).
+            verticalBar: PaneScrollBar {
+                idleColor: Theme.borderSubtle
+            }
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
@@ -284,7 +296,7 @@ AppCard {
                 // whole of what that row answers to (規約 §当たり判定). What stands between a chip's frame and the card's
                 // is that air and nothing else (規約 §グラフ行のダブルクリック — the card lands on the chip column's own edge,
                 // and a wider one would reach past the divider into the lanes).
-                implicitWidth: 2 * Theme.spaceXs + rowChip.width
+                implicitWidth: Theme.spaceXs + rowChip.width
                                + (whose.visible ? whose.width + Theme.spaceSm : 0)
                 width: rows.width
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
@@ -318,8 +330,9 @@ AppCard {
                     id: whose
                     visible: rowChip.recWhere !== ""
                     // At the far end of the row, away from the names: put beside its own chip it would sit at a
-                    // different distance on every row, and the reading is meta rather than part of the name.
-                    x: refRow.width - whose.width - Theme.spaceXs
+                    // different distance on every row, and the reading is meta rather than part of the name. It stops
+                    // at the bar's gutter, which is what that bar takes (`rows.rightInset`).
+                    x: refRow.width - whose.width - rows.rightInset
                     // Level with the chip's first line, not with the row: a wrapped name takes the row down with it and
                     // this is meta about the name's first line.
                     y: refList.chipInset + Theme.borderWidth
@@ -365,35 +378,29 @@ AppCard {
                 HoverHandler {
                     id: rowHover
                 }
-                // **The presses stop short of the bar.** It is drawn over these rows rather than beside them, so a row
-                // that answered a press there would be a bar nobody could grab (`AppListView.barRoom`). The hover is
-                // the row's own and stays whole: the wash says where the pointer is, and a see-through thumb over it
-                // takes nothing away from that.
-                Item {
-                    width: Math.max(0, rows.rowRoom)
-                    height: refRow.height
-                    TapHandler {
-                        id: rowTap
-                        /// When the button went down, for the gesture to take off the wait it has left (see the
-                        /// component).
-                        property real pressAt: 0
-                        onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
-                        onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
-                        onDoubleTapped: refRow.doubleClick()
-                    }
-                    TapHandler {
-                        acceptedButtons: Qt.RightButton
-                        enabled: !refRow.unavailable
-                        // The list stays: the menu opens over it, and the owner keeps the list up for as long as the
-                        // menu stands (its settle checks the menu).
-                        onTapped: refRow.rightClick()
-                    }
+                // The whole row answers, the bar's strip included: the bar is a child of the view rather than of these
+                // rows, so it is over them and takes its own presses first — the same as every row down the left menu
+                // (`NavItemDelegate`). What has to stop at the gutter is the ink, not the target.
+                TapHandler {
+                    id: rowTap
+                    /// When the button went down, for the gesture to take off the wait it has left (see the component).
+                    property real pressAt: 0
+                    onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
+                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
+                    onDoubleTapped: refRow.doubleClick()
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
                 /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the
                 /// row would have decided (PG_AUTO_ACT=list-menu).
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
+                }
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    enabled: !refRow.unavailable
+                    // The list stays: the menu opens over it, and the owner keeps the list up for as long as the menu
+                    // stands (its settle checks the menu).
+                    onTapped: refRow.rightClick()
                 }
             }
         }
