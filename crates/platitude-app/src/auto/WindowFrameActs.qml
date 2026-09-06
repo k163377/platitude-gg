@@ -88,15 +88,11 @@ Item {
             }
             // Everything below this is asked of the page a tab is showing, and until one is open that is not what
             // `window.floorPage` hands back — the blank page stands in for it, and a shape asked of that one is
-            // asked of nobody once the real page arrives (`WindowBody.floorPage`).
+            // asked of nobody once the real page arrives (`WindowBody.floorPage`). Its tree has to have been read
+            // as well, because the face is what this run photographs: over a tree nobody has read it stands at four
+            // zeroes, and `wipScrolls=` would then answer for a pane with nothing under the fold. Whether the face
+            // survives the statuses behind it is the page's own question (`RepoPage.leaveWipWhenDone`).
             if (window.curPage === null || !window.curPage.pageWt.loaded)
-                return
-            // The working-tree face is reached by pressing the row the tree stands in the graph, and the page takes
-            // the face back off a tree with nothing in it and no operation standing (`RepoPage.leaveWipWhenDone`) —
-            // so what the row stands on is waited for rather than raced. Without this the ask lands on a tree nobody
-            // has read yet, which reads as clean and idle: the very next status takes the face away again, and this
-            // sampler waits out the run for a `wipShown` that is never coming back.
-            if (Harness.autoActArg === "wip" && !window.curPage.pageWt.wipRowStands)
                 return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true
