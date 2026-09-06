@@ -113,8 +113,8 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
-        // The fan grows into the room under the card, and borrows a step from above it once that is used up
-        // (`RefChipStack.lift`) — so a deep stack keeps clear of the row below without the card leaving its row.
+        // What the row centres is the card and its fan together (`RefChipStack.lift`) — centred on the card alone, a
+        // deep stack hangs its whole fan into the room under it and sits on the row's floor.
         anchors.verticalCenterOffset: -rowStack.lift
         records: chipColumn.records
         waiting: chipColumn.waiting

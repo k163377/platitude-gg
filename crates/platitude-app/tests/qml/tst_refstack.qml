@@ -120,11 +120,10 @@ Item {
                 compare(stack.layout[i].x, (i + 1) * stack.step)
         }
 
-        // The slope flattens as the fan deepens and the card rises with it, and neither is allowed to reach a
-        // neighbouring row: the fan stops on this row's own floor, and the card keeps a border's worth above it.
-        function test_the_slope_flattens_and_the_card_rises_with_it() {
-            const depths = []
-            const lifts = []
+        // One slope for every row, at every depth: a sheet is a step right and a border down wherever it stands, the
+        // deepest fan a row can carry still fits the room under the card, and the row centres the card and the fan
+        // together rather than the card alone.
+        function test_every_sheet_takes_the_same_step_and_the_row_centres_the_stack() {
             const rows = [[root.current, root.tagHere],
                           [root.current, root.remote, root.tagHere],
                           [root.current, root.local2, root.remote, root.tagHere],
@@ -132,30 +131,22 @@ Item {
                           [root.current, root.local2, root.held, root.remote, root.tagHere, root.tagAway]]
             for (let i = 0; i < rows.length; ++i) {
                 stack.records = rows[i]
-                depths.push(stack.fanDepth)
-                lifts.push(stack.lift)
-                // The fan stays on this row: its deepest sheet stops on the floor, and the card keeps its head above
-                // the ceiling by a border.
-                verify(stack.fanRoom - stack.lift + stack.fanDepth <= 2 * stack.fanRoom,
-                       "sheet " + i + " reaches the row below")
-                verify(stack.fanRoom - stack.lift >= 1, "sheet " + i + " reaches the row above")
+                // A step and a drop apiece, all the way back.
+                for (let s = 0; s < stack.layout.length; ++s) {
+                    compare(stack.layout[s].x, (s + 1) * stack.step)
+                    compare(stack.layout[s].y, (s + 1) * stack.drop)
+                }
+                compare(stack.fanDepth, stack.sheets.length * stack.drop)
+                // The whole stack stands in this row and in the middle of it, with the row's odd pixel above it.
+                const above = stack.fanRoom - stack.lift
+                const below = stack.fanRoom + stack.lift - stack.fanDepth
+                verify(below >= 1, "row " + i + " reaches the row below")
+                verify(above >= 1, "row " + i + " reaches the row above")
+                compare(above - below, stack.fanDepth % 2)
             }
-            // Deeper every time, and never by more than the steep step.
-            for (let j = 1; j < depths.length; ++j) {
-                verify(depths[j] > depths[j - 1], "depth " + j + " did not grow")
-                verify(depths[j] - depths[j - 1] <= stack.steepStep,
-                       "depth " + j + " grew too fast")
-            }
-            // A whole step for every sheet of every fan that has room for one: the flattening belongs to the deepest
-            // row alone, which stops on exactly what the row can hold.
-            for (let k = 0; k < depths.length - 1; ++k)
-                compare(depths[k], (k + 1) * stack.steepStep)
-            compare(depths[depths.length - 1], stack.maxDepth)
-            // Nothing rises until the third sheet, and then it does.
-            compare(lifts[0], 0)
-            compare(lifts[1], 0)
-            verify(lifts[2] > 0, "the third sheet did not lift the card")
-            verify(lifts[4] > lifts[2], "the deepest row did not lift further")
+            // And the last row of them is the deepest one there is, so what the loop read of it is what the deepest
+            // fan there is comes to.
+            compare(stack.sheets.length, stack.maxSheets)
         }
 
         // The card standing on the chip is what the stack unfolded into: nothing may peek out from under it.

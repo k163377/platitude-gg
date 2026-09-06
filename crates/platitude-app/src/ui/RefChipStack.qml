@@ -19,6 +19,9 @@ import platitude.ui
 // stands where a bare chip's would, and the front card is pushed left by as many sheets as there are — a name's left
 // edge moving row to row is the price of it. The card the chip unfolds into opens at the front card's top-left and
 // grows the same way, so the ground the fan is on is ground that card takes (§グラフ行のダブルクリック).
+//
+// **One step and one drop for every sheet, and the row centres the fan with the card** — no depth has a slope of its
+// own and no depth pushes the card out of the middle of its row (デザイン規約 §重ね表示).
 Item {
     id: stack
 
@@ -38,34 +41,20 @@ Item {
     /// The mark as the card is actually wearing it, for the run that photographs the wait (`RefChip.waiting`).
     readonly property alias chipWaiting: frontChip.waiting
 
-    /// How far each sheet stands right of the one in front of it — **the half gap the fan also falls by**
-    /// (`steepStep`): a deep stack spends as little of the row's width as it spends of its height, and what shows of
-    /// each sheet is the edge of a card rather than a band of its colour.
-    ///
-    /// **One step for every sheet, the front card's own colour included.** The sheet that repeats it is told apart by
-    /// the same step as any other, so the fan opens at one rate all the way back.
+    /// How far each sheet stands right of the one in front of it — the half gap the card's own contents are spaced by,
+    /// so what shows of each sheet is the edge of a card rather than a band of its colour.
     readonly property real step: Theme.spaceXs / 2
-    /// The room the fan has under the card before the row's own floor: half of what the row is taller than a chip.
-    readonly property real fanRoom: (Theme.graphRowHeight - frontChip.height) / 2
-    /// The two slopes a sheet can take, and how far the card may rise to make room for them.
-    ///
-    /// **The slope flattens only where the row runs out, and the card rises to put that off.** Every sheet takes the
-    /// half gap the card's own contents are spaced by until the next one would carry the fan past [`maxDepth`]; from
-    /// there they take a border's worth instead. **The card keeps a border's worth of the row above it** — the fan
-    /// below reaches the row's own floor, so a card that rose to the ceiling would meet the row above's deepest sheet
-    /// with nothing in between.
-    readonly property real steepStep: Theme.spaceXs / 2
-    readonly property real shallowStep: Theme.borderWidth
-    readonly property real maxLift: stack.fanRoom - Theme.borderWidth
-    /// How deep the fan may come at all: the room under the card, and the room the card may take back out of the row
-    /// above by rising into it. **Both, not the first alone** — a slope flattened against the room under the card
-    /// spends the lift on dropping the card instead of on the sheets, and the deepest sheet of a fan that would have
-    /// fitted comes out a border thick while the ones in front of it are a step.
-    readonly property real maxDepth: stack.fanRoom + stack.maxLift
+    /// And how far it falls: **a border's worth, so the sheets meet**. At a deeper drop the row's own ground shows
+    /// between one edge and the next, and the deepest fan no longer fits the room under the card — which costs the
+    /// last sheet of the deepest row a slope of its own.
+    readonly property real drop: Theme.borderWidth
     /// How many sheets can ever stand behind one card: one per colour, less the card's own — the colour that repeats
     /// takes that one back (`sheets`). Read off the list of colours rather than written down, so a kind added to
     /// `RefChip.kindKeyOf` is counted here without anybody remembering to.
     readonly property int maxSheets: frontChip.kindKeys.length - 1
+    /// The room the fan has under the card before the row's own floor: half of what the row is taller than a chip.
+    /// **What the deepest fan may not outgrow** — five sheets at a border apiece come to exactly this.
+    readonly property real fanRoom: (Theme.graphRowHeight - frontChip.height) / 2
 
     /// One key per sheet behind the front card, in the row's own order: every colour on the row once, and the front
     /// card's own a second time when the row carries more than one of it.
@@ -91,33 +80,28 @@ Item {
             out.push(order[j])
         return out.slice(0, stack.maxSheets)
     }
-    /// Where each sheet stands, in whole pixels off the front card's own corner, and how wide the fan comes out.
-    /// **One pass**: the offsets accumulate, because the step a sheet takes down flattens once the ones before it have
-    /// used the room up.
+    /// Where each sheet stands, in whole pixels off the front card's own corner. **One step and one drop apiece, the
+    /// sheet that repeats the card's colour included** — the fan opens at one rate all the way back, so no row has a
+    /// slope its neighbours do not.
     readonly property var layout: {
         const out = []
-        let x = 0
-        let y = 0
-        for (let i = 0; i < stack.sheets.length; ++i) {
-            const steep = y + stack.steepStep <= stack.maxDepth
-            const down = steep ? stack.steepStep : stack.shallowStep
-            out.push({ key: stack.sheets[i], down: down, prevX: x, prevY: y,
-                       x: x + stack.step, y: y + down })
-            x += stack.step
-            y += down
-        }
+        for (let i = 0; i < stack.sheets.length; ++i)
+            out.push({ key: stack.sheets[i], x: (i + 1) * stack.step, y: (i + 1) * stack.drop })
         return out
     }
     /// What the fan spends beside the card, and how deep it goes.
     readonly property real fanW: stack.sheets.length * stack.step
-    readonly property real fanDepth: stack.layout.length > 0 ? stack.layout[stack.layout.length - 1].y : 0
+    readonly property real fanDepth: stack.sheets.length * stack.drop
     /// What the widest-dressed chip could ever spend, which is what the column's floor keeps back for it
     /// (`GraphColumnMetrics.chipFurnitureW`).
     readonly property real fanMaxW: stack.maxSheets * stack.step
-    /// How far the whole stack is lifted to keep the fan off the row below. **Only the deep ones lift**: a card sits
-    /// where a bare one would until the fan has used up the room under it, so an ordinary row's name stands exactly
-    /// where its neighbours' do, and the rise starts with the third sheet.
-    readonly property real lift: Math.min(Math.max(0, stack.fanDepth - stack.fanRoom), stack.maxLift)
+    /// How far the whole stack stands off the middle of the row. **The row centres the card and the fan together**:
+    /// centred on the card alone, a deep row hangs its whole fan into the space under it and the stack reads as
+    /// pinned to the floor. **The odd pixel of the row goes above**, the way a chip seats its own ink (§余白).
+    ///
+    /// A card rises by half of what its own fan is deep, so a name's height moves with the depth of its row — by two
+    /// pixels at the deepest, which is what a fan of borders costs.
+    readonly property real lift: Math.floor(stack.fanDepth / 2)
 
     implicitWidth: frontChip.width + stack.fanW
     implicitHeight: frontChip.height
@@ -142,7 +126,7 @@ Item {
 
             // The strip down the right edge, from where the card in front stops to the sheet's own edge.
             Item {
-                x: sheet.modelData.prevX + frontChip.width
+                x: sheet.modelData.x - stack.step + frontChip.width
                 y: sheet.modelData.y
                 width: stack.step
                 height: frontChip.height
@@ -161,9 +145,9 @@ Item {
             Item {
                 id: floorBand
                 x: sheet.modelData.x
-                y: sheet.modelData.prevY + frontChip.height
+                y: sheet.modelData.y - stack.drop + frontChip.height
                 width: frontChip.width - stack.step
-                height: sheet.modelData.down
+                height: stack.drop
                 clip: true
                 Rectangle {
                     y: -(frontChip.height - floorBand.height)
