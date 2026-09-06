@@ -4,7 +4,7 @@ const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const SHA_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const SHA_T: &str = "1111111111111111111111111111111111111111";
 
-fn line(fields: [&str; 7]) -> Vec<u8> {
+fn line(fields: [&str; 8]) -> Vec<u8> {
     let mut v = fields.join("\u{0}").into_bytes();
     v.push(b'\n');
     v
@@ -20,6 +20,7 @@ fn parses_the_three_namespaces() {
         "refs/remotes/origin/main",
         "*",
         "1700000100",
+        "",
     ]);
     bytes.extend(line([
         "refs/remotes/origin/main",
@@ -29,6 +30,7 @@ fn parses_the_three_namespaces() {
         "",
         "",
         "1700000100",
+        "",
     ]));
     bytes.extend(line([
         "refs/tags/v1.0",
@@ -38,6 +40,7 @@ fn parses_the_three_namespaces() {
         "",
         "",
         "1700000200",
+        "",
     ]));
 
     let refs = parse_refs(&bytes);
@@ -65,14 +68,32 @@ fn parses_the_three_namespaces() {
 
 #[test]
 fn skips_remote_head_symref() {
-    let bytes = line(["refs/remotes/origin/HEAD", "commit", SHA_A, "", "", "", "0"]);
+    let bytes = line([
+        "refs/remotes/origin/HEAD",
+        "commit",
+        SHA_A,
+        "",
+        "",
+        "",
+        "0",
+        "",
+    ]);
     assert!(parse_refs(&bytes).is_empty());
 }
 
 #[test]
 fn skips_malformed_lines_but_keeps_the_rest() {
     let mut bytes = b"garbage-without-fields\n".to_vec();
-    bytes.extend(line(["refs/heads/ok", "commit", SHA_A, "", "", "", "1"]));
+    bytes.extend(line([
+        "refs/heads/ok",
+        "commit",
+        SHA_A,
+        "",
+        "",
+        "",
+        "1",
+        "",
+    ]));
     let refs = parse_refs(&bytes);
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].short, "ok");
@@ -88,9 +109,46 @@ fn branch_with_slash_in_name_keeps_full_short_name() {
         "",
         "",
         "1",
+        "",
     ]);
     let refs = parse_refs(&bytes);
     assert_eq!(refs[0].short, "feature/deep/name");
+}
+
+/// The five shapes `%(upstream:track)` takes, spelled as git wrote them
+/// for a branch two ahead, one behind, one of each, one whose upstream
+/// was deleted, and one level with it (measured, 2.55).
+///
+/// **git leaves out the leg that counts zero** — `[ahead 2]`, never
+/// `[ahead 2, behind 0]` — so the halves are read one at a time. A gone
+/// upstream and a level one both count nothing, which is why the two are
+/// told apart by the upstream itself and not by these.
+#[test]
+fn a_branch_reads_how_far_it_stands_from_its_upstream() {
+    let fixture = |short: &str, track: &str| {
+        let name = format!("refs/heads/{short}");
+        line([
+            name.as_str(),
+            "commit",
+            SHA_A,
+            "",
+            "refs/remotes/origin/main",
+            "",
+            "1",
+            track,
+        ])
+    };
+    let mut bytes = fixture("ahead", "[ahead 2]");
+    bytes.extend(fixture("behind", "[behind 1]"));
+    bytes.extend(fixture("diverged", "[ahead 1, behind 1]"));
+    bytes.extend(fixture("gone", "[gone]"));
+    bytes.extend(fixture("level", ""));
+
+    let counts: Vec<(u32, u32)> = parse_refs(&bytes)
+        .iter()
+        .map(|entry| (entry.ahead, entry.behind))
+        .collect();
+    assert_eq!(counts, vec![(2, 0), (0, 1), (1, 1), (0, 0), (0, 0)]);
 }
 
 fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefEntry {
@@ -103,6 +161,8 @@ fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefE
         upstream: upstream.map(crate::Name::from),
         is_head: false,
         created_unix: 0,
+        ahead: 0,
+        behind: 0,
     }
 }
 

@@ -34,6 +34,8 @@ pub(super) fn remote(short: &str) -> platitude_core::session::BranchItem {
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
+        ahead: 0,
+        behind: 0,
     }
 }
 
@@ -48,6 +50,8 @@ pub(super) fn local(short: &str, is_head: bool) -> platitude_core::session::Bran
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
+        ahead: 0,
+        behind: 0,
     }
 }
 
@@ -115,6 +119,14 @@ pub(super) fn flags(model: &NavSectionModel, row: usize, role: Role) -> bool {
     model
         .row_at(row)
         .is_some_and(|row| model.field(row, role).flag())
+}
+
+/// A number role's answer. `-1` where the row is not there at all, so a
+/// row a test looked for and missed cannot read as a count of nothing.
+pub(super) fn numbers(model: &NavSectionModel, row: usize, role: Role) -> i32 {
+    model
+        .row_at(row)
+        .map_or(-1, |row| model.field(row, role).number())
 }
 
 pub(super) fn depth_of(model: &NavSectionModel, row: usize) -> i32 {

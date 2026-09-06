@@ -28,6 +28,9 @@ impl NavSectionModel {
                     Role::EolMark => Value::Flag(item.eol_mark),
                     Role::Depth => Value::Number(item.depth),
                     Role::Folder => Value::Flag(item.folder),
+                    // A folder stands for the rows under it, and no two
+                    // of those are measured against one upstream.
+                    Role::Ahead | Role::Behind => Value::Number(0),
                 };
             }
             Row::Shown { of, depth, from } => (of, depth, from),
@@ -155,6 +158,24 @@ impl NavSectionModel {
             }),
             Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
                 if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
+            // **Only a local branch has an upstream of its own.** The
+            // pair drawn on a remote-tracking row would be the far side
+            // of somebody else's measurement, so that row draws none.
+            Role::Ahead => Value::Number(match of {
+                Entry::Local(branch) => counted(branch.ahead),
+                _ => 0,
+            }),
+            Role::Behind => Value::Number(match of {
+                Entry::Local(branch) => counted(branch.behind),
+                _ => 0,
+            }),
         }
     }
+}
+
+/// A count as the role table carries it. Roles are `i32`, so a branch
+/// standing further from its upstream than that draws the largest number
+/// there is rather than wrapping to a negative one.
+fn counted(commits: u32) -> i32 {
+    i32::try_from(commits).unwrap_or(i32::MAX)
 }

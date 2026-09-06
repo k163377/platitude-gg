@@ -217,9 +217,6 @@ AppCard {
             kindHint: peek.kind
             gestures: peek.gestures
             stretch: true
-            headTracks: peek.kind === "branch" && peek.workTree.upstream !== ""
-            headAhead: peek.workTree.ahead
-            headBehind: peek.workTree.behind
             remotesPacked: peek.repoTab.remoteNames
             markedRemote: peek.repoTab.pushDefault
             onRefActivated: oidHex => peek.refActivated(oidHex)

@@ -26,6 +26,10 @@ Item {
     required property int depth
     required property bool folder
     required property bool eol_mark
+    /// How far a local branch stands from its upstream, as of the last fetch. Zero on every other kind of row, and on
+    /// a branch that is level with its upstream or has none — the row draws the arrows itself (`HeadTrack`).
+    required property int ahead
+    required property int behind
     /// The pointed row's path, handed down by the pane — the model keeps the line-ending words once rather than on
     /// every row, and a row checks the answer is its own before reading them (`eolPointedAt`).
     property string pointedEolPath: ""
@@ -56,11 +60,6 @@ Item {
         navRow.kindHint === "remote" && navRow.folder && navRow.remoteNames.indexOf(navRow.fullName) >= 0
     /// Whether this row is the marked one.
     readonly property bool pushesHere: navRow.isRemoteRow && navRow.fullName === navRow.markedRemote
-    /// The current branch's ahead / behind. What travels is the two numbers — the row draws the arrows itself
-    /// (`HeadTrack`).
-    property bool headTracks: false
-    property int headAhead: 0
-    property int headBehind: 0
     property real listWidth: 200
     /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down because the left panel
     /// sets its rows in from the pane's edge by the room its own bar takes at the other one, so a row stands between

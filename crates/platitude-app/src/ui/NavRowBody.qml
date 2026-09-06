@@ -87,15 +87,20 @@ RowLayout {
             pixelSize: Theme.fontSm
         }
     }
-    // Current branch's ahead/behind, left of the state icon.
+    // How far this branch stands from its upstream, left of the state icon. **Every branch that has something to say
+    // says it, not only the one HEAD is on** — the counts ride each row out of the listing (`models::nav` の
+    // `Role::Ahead`), so a branch the remote moved past is legible without switching to it.
+    //
+    // The seat is empty wherever there is nothing to count: level with the upstream, or no upstream to measure
+    // against. Neither is a zero worth a column (デザイン規約 §左メニューの所作).
     Loader {
         id: trackSeat
-        active: !body.row.folder && body.row.kindHint === "branch" && body.row.is_head && body.row.headTracks
+        active: !body.row.folder && body.row.kindHint === "branch" && (body.row.ahead > 0 || body.row.behind > 0)
         visible: trackSeat.active
         Layout.alignment: Qt.AlignVCenter
         sourceComponent: HeadTrack {
-            ahead: body.row.headAhead
-            behind: body.row.headBehind
+            ahead: body.row.ahead
+            behind: body.row.behind
         }
     }
     // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase

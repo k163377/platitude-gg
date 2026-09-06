@@ -153,3 +153,61 @@ async fn empty_repository_has_unborn_head() {
     let refs_list = refs::load(&executor, &repo.path, &cancel).await.unwrap();
     assert!(refs_list.is_empty());
 }
+
+/// The counts a sidebar row draws, taken from real git rather than from
+/// the shape of the format string: a placeholder spelled wrong reads as
+/// an empty leg, and every branch would then look level with its
+/// upstream while the parser still passed.
+#[tokio::test]
+async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "initial");
+    for branch in ["level", "ahead", "behind", "diverged"] {
+        repo.git(&["branch", branch]);
+    }
+
+    let remote_path = repo.path.parent().expect("parent").join("origin.git");
+    let remote_str = remote_path.to_string_lossy().replace('\\', "/");
+    let repo_dir = repo.path.clone();
+    repo.git_in(
+        repo_dir.parent().expect("parent"),
+        &["clone", "--bare", "repo", "origin.git"],
+    );
+    repo.git(&["remote", "add", "origin", &remote_str]);
+    repo.git(&["fetch", "origin"]);
+    for branch in ["level", "ahead", "behind", "diverged"] {
+        repo.git(&["branch", "-u", &format!("origin/{branch}"), branch]);
+    }
+
+    // Two commits this side alone.
+    repo.git(&["switch", "ahead"]);
+    repo.commit_file("a.txt", "2\n", "ahead one");
+    repo.commit_file("a.txt", "3\n", "ahead two");
+
+    // One the far side alone: made here, sent, then dropped from under.
+    repo.git(&["switch", "behind"]);
+    repo.commit_file("a.txt", "4\n", "theirs");
+    repo.git(&["push", "origin", "behind"]);
+    repo.git(&["reset", "--hard", "HEAD~1"]);
+
+    // One each way: the sent commit is dropped and another put in its place.
+    repo.git(&["switch", "diverged"]);
+    repo.commit_file("a.txt", "5\n", "theirs");
+    repo.git(&["push", "origin", "diverged"]);
+    repo.git(&["reset", "--hard", "HEAD~1"]);
+    repo.commit_file("a.txt", "6\n", "ours");
+
+    let (executor, cancel) = env();
+    let refs = refs::load(&executor, &repo.path, &cancel).await.unwrap();
+    let counts = |short: &str| {
+        refs.iter()
+            .find(|r| r.kind == RefKind::LocalBranch && r.short == short)
+            .map(|entry| (entry.ahead, entry.behind))
+            .unwrap_or_else(|| panic!("missing branch {short}"))
+    };
+
+    assert_eq!(counts("level"), (0, 0), "level with its upstream");
+    assert_eq!(counts("ahead"), (2, 0), "two commits the remote has not");
+    assert_eq!(counts("behind"), (0, 1), "one commit this side has not");
+    assert_eq!(counts("diverged"), (1, 1), "one each way");
+}

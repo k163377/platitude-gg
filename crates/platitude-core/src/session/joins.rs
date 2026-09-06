@@ -305,6 +305,8 @@ pub(super) fn build_snapshot(
                     upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
                     held_elsewhere: joins.held_elsewhere(r),
+                    ahead: r.ahead,
+                    behind: r.behind,
                 });
             }
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
@@ -323,6 +325,10 @@ pub(super) fn build_snapshot(
                 // the menu's question, asked of the worktree list by the
                 // name it would take (`RefRowMenu`).
                 held_elsewhere: false,
+                // The measurement belongs to whichever local branch names
+                // this one as its upstream, and is drawn on that row.
+                ahead: 0,
+                behind: 0,
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),

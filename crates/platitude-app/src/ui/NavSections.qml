@@ -119,9 +119,6 @@ ColumnLayout {
         // appearing in it.
         topMargin: headPin.seated && branchList.count > 0 ? Theme.rowHeight : 0
         Layout.verticalStretchFactor: sections.sectionPull
-        headTracks: sections.workTree.upstream !== ""
-        headAhead: sections.workTree.ahead
-        headBehind: sections.workTree.behind
         onRefActivated: oidHex => sections.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
 

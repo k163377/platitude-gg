@@ -14,10 +14,10 @@ use crate::process::{GitCommand, GitExecutor};
 
 /// `--format=` for `for-each-ref`; keep in sync with [`parse_refs`].
 /// Fields: refname, objecttype, objectname, peeled objectname, upstream,
-/// HEAD marker, creator date (unix).
-pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objectname)%00%(*objectname)%00%(upstream)%00%(HEAD)%00%(creatordate:unix)";
+/// HEAD marker, creator date (unix), upstream tracking.
+pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objectname)%00%(*objectname)%00%(upstream)%00%(HEAD)%00%(creatordate:unix)%00%(upstream:track)";
 
-const REFS_FIELDS: usize = 7;
+const REFS_FIELDS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
@@ -46,6 +46,14 @@ pub struct RefEntry {
     /// Creator date (unix seconds); tag date for annotated tags, commit
     /// date otherwise.
     pub created_unix: i64,
+    /// Commits this branch has that its upstream has not, as of the last
+    /// fetch, and the other way round. **Both zero wherever there is
+    /// nothing to count**: level with the upstream, no upstream at all,
+    /// or one whose remote ref is gone. Which of the three it is comes
+    /// off `upstream` and [`RemoteBranches::has_counterpart`] — the
+    /// counts do not tell them apart.
+    pub ahead: u32,
+    pub behind: u32,
 }
 
 impl RefEntry {
@@ -117,6 +125,7 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
         .ok()
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
+    let (ahead, behind) = parse_track(fields[7]);
 
     Ok(Some(RefEntry {
         name,
@@ -127,7 +136,38 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
         upstream,
         is_head,
         created_unix,
+        ahead,
+        behind,
     }))
+}
+
+/// Reads `%(upstream:track)`: `[ahead 2]`, `[behind 1]`,
+/// `[ahead 1, behind 1]`, `[gone]`, or empty where the branch is level
+/// with its upstream or has none. **git omits the leg that counts zero**,
+/// so a missing half is a zero and not a silence.
+///
+/// **The words are safe to read because `for-each-ref` is plumbing**: it
+/// leaves ref-filter's messages at their untranslated literals, and only
+/// the porcelains (`git branch -vv`) swap in the localized ones — those
+/// are not parseable this way whatever the locale is pinned to.
+fn parse_track(field: &[u8]) -> (u32, u32) {
+    let Some(inside) = field
+        .strip_prefix(b"[")
+        .and_then(|rest| rest.strip_suffix(b"]"))
+    else {
+        return (0, 0);
+    };
+    let mut ahead = 0;
+    let mut behind = 0;
+    for leg in inside.split(|b| *b == b',') {
+        let leg = std::str::from_utf8(leg).unwrap_or_default().trim();
+        if let Some(count) = leg.strip_prefix("ahead ") {
+            ahead = count.parse().unwrap_or(0);
+        } else if let Some(count) = leg.strip_prefix("behind ") {
+            behind = count.parse().unwrap_or(0);
+        }
+    }
+    (ahead, behind)
 }
 
 /// The remote branches, by the refname an upstream names.

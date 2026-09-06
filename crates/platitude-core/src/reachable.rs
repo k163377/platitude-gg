@@ -102,6 +102,8 @@ mod tests {
             upstream: None,
             is_head,
             created_unix: 0,
+            ahead: 0,
+            behind: 0,
         }
     }
 

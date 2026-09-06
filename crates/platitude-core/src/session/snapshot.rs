@@ -133,6 +133,15 @@ pub struct BranchItem {
     /// the same name, and whether *that* one is held is a question the
     /// menu asks of the worktree list by name.
     pub held_elsewhere: bool,
+    /// How far this branch stands from its upstream, as of the last fetch
+    /// ([`crate::refs::RefEntry::ahead`]) — the pair the sidebar row
+    /// draws. **Both zero says nothing to draw**, whether the two are
+    /// level or there is no upstream to measure against.
+    ///
+    /// Local branches only. A remote-tracking ref is the far side of
+    /// somebody's measurement, never a side that has one of its own.
+    pub ahead: u32,
+    pub behind: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,17 +3,28 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-/// The current branch's ahead / behind, drawn rather than typed.
+/// A branch's ahead / behind against its upstream, drawn rather than typed.
 ///
 /// `↑` and `↓` are East Asian Ambiguous, so the CJK families this app names hold them in a full-width cell: the space
 /// between arrow and digit was that cell's leftover rather than a token of ours, and each family drew its own arrow
 /// inside it — Windows a thin long one, Ubuntu a heavy one with a small head (measured). Same reason the
 /// parent link's `←` is drawn (デザイン規約 §寸法「印はフォントの字に任せない」).
+///
+/// **A leg that counts nothing is not drawn** — git spells its own answer the same way (`[ahead 2]`, never
+/// `[ahead 2, behind 0]`), and whoever seats this leaves the seat empty when neither leg has anything to say
+/// (デザイン規約 §左メニューの所作). What is left is never a zero, so the numbers here are always the point.
 RowLayout {
     id: track
     property int ahead: 0
     property int behind: 0
     property color tint: Theme.textSecondary
+
+    /// **The pair is one expression, so one colour covers it.** Commits arrived on the far side are what the reader
+    /// has to do something about before this branch can be sent, which is the standing a state colour is for
+    /// (デザイン規約 §状態 —— 分岐しているは常設でよい); the toolbar paints the same fact the same way when it turns
+    /// `push` into `push -f`. Commits of one's own with nothing on top of them are the ordinary way to stand, and
+    /// wear no state at all.
+    readonly property color hue: track.behind > 0 ? Theme.warning : track.tint
 
     /// The only gap that should be visible: the one between the two legs. Inside a leg the mark and its number are one
     /// thing.
@@ -56,13 +67,15 @@ RowLayout {
     Leg {
         turn: -90
         count: track.ahead
-        hue: track.tint
+        hue: track.hue
+        visible: track.ahead > 0
         Layout.alignment: Qt.AlignVCenter
     }
     Leg {
         turn: 90
         count: track.behind
-        hue: track.tint
+        hue: track.hue
+        visible: track.behind > 0
         Layout.alignment: Qt.AlignVCenter
     }
 }

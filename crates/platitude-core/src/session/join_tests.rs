@@ -26,6 +26,8 @@ fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
         upstream: None,
         is_head: false,
         created_unix: 0,
+        ahead: 0,
+        behind: 0,
     }
 }
 
@@ -39,6 +41,8 @@ fn branch(name: &str, commit: Oid) -> RefEntry {
         upstream: None,
         is_head: false,
         created_unix: 0,
+        ahead: 0,
+        behind: 0,
     }
 }
 
@@ -77,6 +81,8 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
         upstream: None,
         is_head: false,
         created_unix: 0,
+        ahead: 0,
+        behind: 0,
     };
     let mut main = branch("main", oid(1));
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
@@ -117,6 +123,8 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
         upstream: None,
         is_head: false,
         created_unix: 0,
+        ahead: 0,
+        behind: 0,
     };
     let mut main = branch("main", oid(1));
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));

@@ -276,6 +276,28 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
     assert_eq!(says(&model, 4, Role::OrigPath), "release run");
 }
 
+/// The pair a branch row draws, and the row that draws none: a
+/// remote-tracking ref is the far side of somebody else's measurement,
+/// so it has no counts of its own to answer with.
+#[test]
+fn only_a_local_branch_answers_how_far_it_stands_from_its_upstream() {
+    let mut ours = local("main", true);
+    ours.ahead = 2;
+    ours.behind = 1;
+    let mut mine = section("branches", Source::Locals(locals(vec![ours])));
+    mine.arrange();
+    assert_eq!(numbers(&mine, 0, Role::Ahead), 2);
+    assert_eq!(numbers(&mine, 0, Role::Behind), 1);
+
+    let mut theirs = section(
+        "remotes",
+        Source::Remotes(snapshot(vec![remote("origin/main")], Vec::new())),
+    );
+    theirs.arrange();
+    assert_eq!(numbers(&theirs, 0, Role::Ahead), 0);
+    assert_eq!(numbers(&theirs, 0, Role::Behind), 0);
+}
+
 /// A branch row wears the state in the same slot the worktree rows
 /// use, so the seat draws one mark from one field whichever section
 /// the row is in (`item::HELD`).
@@ -291,6 +313,8 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: held,
+        ahead: 0,
+        behind: 0,
     };
     let mut snap = platitude_core::session::RefsSnapshot {
         locals: vec![local("main", false), local("feature/topic-a", true)],

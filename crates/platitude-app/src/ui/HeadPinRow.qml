@@ -83,8 +83,13 @@ Rectangle {
             weight: Font.DemiBold
             pixelSize: Theme.fontMd
         }
+        // Dressed as the row it stands for: nothing where there is nothing to count, and the same seat left empty
+        // when the branch is level with its upstream or has none. **The counts are the status read's** rather than
+        // the listing's, because this row is only ever HEAD (rules-refs/app-ui.md 「upstream / ahead / behind は
+        // `countsSettled` の間だけ」); the two agree on a quiet repository, and this one steps aside the moment the
+        // row itself is on screen, so they are never read side by side.
         HeadTrack {
-            visible: headPin.workTree.upstream !== ""
+            visible: headPin.workTree.ahead > 0 || headPin.workTree.behind > 0
             ahead: headPin.workTree.ahead
             behind: headPin.workTree.behind
             Layout.alignment: Qt.AlignVCenter

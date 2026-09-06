@@ -108,6 +108,11 @@ pub(super) enum Role {
     EolMark,
     Depth,
     Folder,
+    /// How far a local branch stands from its upstream. **Past the end of
+    /// `NavItem`**: no folder row is measured against anything, so these
+    /// two are the roles that carry no field (see the head of this file).
+    Ahead,
+    Behind,
 }
 
 impl Role {
@@ -119,7 +124,7 @@ impl Role {
     /// A branch's upstream is not a role: no delegate asks for it, and
     /// the menus that do ask by name (`upstream_of` / `upstream_drifted`)
     /// read the snapshot's own row through its index.
-    pub(super) const ALL: [Self; 15] = [
+    pub(super) const ALL: [Self; 17] = [
         Self::Name,
         Self::Full,
         Self::OidHex,
@@ -135,6 +140,8 @@ impl Role {
         Self::EolMark,
         Self::Depth,
         Self::Folder,
+        Self::Ahead,
+        Self::Behind,
     ];
 
     pub(super) fn of(role: i32) -> Option<Self> {
@@ -162,6 +169,8 @@ impl Role {
             Self::EolMark => "eol_mark",
             Self::Depth => "depth",
             Self::Folder => "folder",
+            Self::Ahead => "ahead",
+            Self::Behind => "behind",
         }
     }
 }
