@@ -426,7 +426,7 @@ const TAIL: &str = "  shipped [--no-build]
       long-still seat needs no guess and no `git worktree unlock` by
       hand. Ends with how to read the columns.
 
-  shots <add|prune|open [--again]|list|path>
+  shots <add|crop|prune|open [--again]|list|path>
       The shot board: pictures land on a page that opens in a window of
       its own at 1:1, magnifies to exact whole ratios without smoothing,
       and is still there after it is closed. A chat pane fits a picture to
@@ -448,6 +448,14 @@ const TAIL: &str = "  shipped [--no-build]
       windows of one board are six answers to which one is current, so
       the count is kept in the board rather than left to whoever
       remembers (shots/window.rs).
+
+      `crop <png> --at <x>:<y>:<width>:<height> [--scale <n>]` cuts a
+      region out and magnifies it a whole number of times (three by
+      default) without smoothing, beside the picture it came from. The
+      window does this for a person; this is for reading the file
+      itself, where there is nothing to zoom with. Both halves matter:
+      a fractional ratio has to interpolate, and what a crop is read for
+      is a pixel.
 
       A before/after goes on with `add --before <png> --after <png>`,
       which puts the two on one view side by side under one magnifier.

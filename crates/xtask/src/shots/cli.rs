@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use super::{board, sweep, window};
+use super::{board, crop, sweep, window};
 
 const USAGE: &str = "\
 cargo xtask shots <command>
@@ -24,6 +24,18 @@ cargo xtask shots <command>
       comparison — the reader carries the first picture in their head
       while looking at the second — so a before/after goes on the board
       this way and never as two runs.
+
+  crop <png> --at <x>:<y>:<width>:<height> [--scale <n>] [--out <png>]
+      Cut a region out of a picture and magnify it a whole number of
+      times without smoothing (three, unless --scale says otherwise).
+      The board magnifies the same way in a window, which is how a
+      person reads a shot; this is for reading the file itself, where
+      there is no window to zoom. Whole ratios and nearest neighbour
+      both matter: what a crop is read for is a pixel, and interpolating
+      invents the edge the question was about. The crop lands beside the
+      picture it came from, named for its region, unless --out says
+      where. Put one in front of the reader with `add`, same as any
+      other picture.
 
   prune [--seat <letter>]... [--label \"<label>\"]
       Take runs off the board — their pictures and all — and rebuild the
@@ -59,6 +71,7 @@ cargo xtask shots <command>
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("add") => add(&args[1..]),
+        Some("crop") => crop::run(&args[1..]),
         Some("prune") => prune(&args[1..]),
         Some("open") => open(&args[1..]),
         Some("list") => {

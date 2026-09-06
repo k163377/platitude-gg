@@ -304,9 +304,9 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
 }
 
 /// A PNG's pixel dimensions, straight out of the IHDR that every PNG
-/// opens with. Reading 24 bytes is the whole job — decoding one would
-/// mean a dependency, and the board only needs to know how big to say
-/// the picture is.
+/// opens with. Reading 24 bytes is the whole job — the board only needs
+/// to know how big to say the picture is, and `png::decode` would
+/// inflate every pixel of every shot to find out.
 fn png_size(path: &Path) -> Result<(u32, u32), String> {
     use std::io::Read;
     let mut bytes = [0_u8; 24];

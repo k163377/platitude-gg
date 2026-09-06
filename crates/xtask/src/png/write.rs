@@ -1,9 +1,12 @@
-//! A PNG written by hand, the way everything in this crate is: std only.
+//! A PNG written by hand.
 //!
 //! Stored (uncompressed) deflate blocks, so the file is as big as its
 //! pixels — nothing here needs to be small, it needs to decode. What it
 //! is for is fixtures: the picture an avatar verb files, the pictures a
-//! demo repository holds in every bucket the diff pane previews from.
+//! demo repository holds in every bucket the diff pane previews from,
+//! and the crop `shots crop` cuts out of a screenshot.
+
+use super::checksum::{adler32, crc32};
 
 /// An RGBA image of `width` × `height`, each pixel drawn by `pixel(x, y)`.
 pub(crate) fn rgba(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
@@ -30,7 +33,7 @@ pub(crate) fn rgba(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 4])
 }
 
 /// One chunk: length, type, body, and the CRC of type and body.
-fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
+pub(super) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
     out.extend_from_slice(&(body.len() as u32).to_be_bytes());
     let start = out.len();
     out.extend_from_slice(kind);
@@ -42,7 +45,7 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
 /// A zlib stream that compresses nothing: the header, the bytes in
 /// stored blocks of the largest size a block may have, and the Adler
 /// checksum the decoder checks them against.
-fn zlib_stored(raw: &[u8]) -> Vec<u8> {
+pub(super) fn zlib_stored(raw: &[u8]) -> Vec<u8> {
     const BLOCK: usize = 65_535;
     let mut out = Vec::with_capacity(raw.len() + raw.len() / BLOCK * 5 + 11);
     out.extend_from_slice(&[0x78, 0x01]);
@@ -63,60 +66,9 @@ fn zlib_stored(raw: &[u8]) -> Vec<u8> {
     out
 }
 
-fn adler32(bytes: &[u8]) -> u32 {
-    // Sums are reduced every so many bytes rather than at each one:
-    // 5552 is the most bytes the sums can take before either overflows.
-    const NMAX: usize = 5552;
-    let (mut a, mut b) = (1u32, 0u32);
-    for run in bytes.chunks(NMAX) {
-        for byte in run {
-            a += u32::from(*byte);
-            b += a;
-        }
-        a %= 65521;
-        b %= 65521;
-    }
-    (b << 16) | a
-}
-
-fn crc32(bytes: &[u8]) -> u32 {
-    let table = crc_table();
-    let mut crc = 0xffff_ffffu32;
-    for byte in bytes {
-        crc = table[((crc ^ u32::from(*byte)) & 0xff) as usize] ^ (crc >> 8);
-    }
-    !crc
-}
-
-fn crc_table() -> [u32; 256] {
-    let mut table = [0u32; 256];
-    for (n, slot) in table.iter_mut().enumerate() {
-        let mut c = n as u32;
-        for _ in 0..8 {
-            c = if c & 1 == 1 {
-                0xedb8_8320 ^ (c >> 1)
-            } else {
-                c >> 1
-            };
-        }
-        *slot = c;
-    }
-    table
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The reference implementation's own answer for the string the
-    /// PNG spec quotes, and the empty input.
-    #[test]
-    fn the_checksums_are_the_standard_ones() {
-        assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
-        assert_eq!(crc32(b""), 0);
-        assert_eq!(adler32(b"Wikipedia"), 0x11e6_0398);
-        assert_eq!(adler32(b""), 1);
-    }
 
     #[test]
     fn a_stored_stream_holds_the_bytes_whole_and_ends_on_the_last_block() {

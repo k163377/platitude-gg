@@ -24,6 +24,7 @@
 
 mod board;
 mod cli;
+mod crop;
 mod page;
 mod sweep;
 mod window;
