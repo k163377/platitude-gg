@@ -15,4 +15,4 @@ mod program;
 
 pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, literal_pathspec};
 pub use executor::{DEFAULT_TIMEOUT, GitExecutor};
-pub use program::{default_program_path, same_program};
+pub use program::{default_program_path, same_program, spawnable};

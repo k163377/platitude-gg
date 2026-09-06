@@ -114,10 +114,13 @@ impl GitExecutor {
         Self::of(super::program::default_program())
     }
 
-    /// Uses an explicit git binary (tests, portable installs). Taken as
-    /// given: nothing is looked behind.
+    /// Uses an explicit git binary (a settings path, a portable install,
+    /// the tests' stand-ins). One thing is looked behind, as for PATH: the
+    /// launcher Git for Windows installs is spawned as the git behind it
+    /// ([`super::program::spawnable`]); every other path is taken as given.
     pub fn with_program(program: impl Into<OsString>) -> Self {
-        Self::of(program.into())
+        let named = program.into();
+        Self::of(super::program::spawnable(std::path::Path::new(&named)).into_os_string())
     }
 
     fn of(program: OsString) -> Self {

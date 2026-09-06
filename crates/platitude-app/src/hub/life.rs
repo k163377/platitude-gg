@@ -186,14 +186,22 @@ fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     let cancel = tokio_util::sync::CancellationToken::new();
     let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));
     if probe.answered() {
+        // Recorded as what is spawned for the path, not as the path: a
+        // chooser opened on a Git for Windows install lands on the
+        // launcher, and the executor spawns the git behind it
+        // (`process::spawnable`), so the screen shows that one as the git
+        // this run is on.
+        let program = platitude_core::process::spawnable(std::path::Path::new(git_path));
+        let program = program.to_string_lossy().into_owned();
         tracing::info!(
             path = git_path,
+            program = %program,
             version = probe.version(),
             "git from settings"
         );
         return GitChoice {
-            executor: GitExecutor::with_program(git_path),
-            program: git_path.to_string(),
+            executor: GitExecutor::with_program(program.as_str()),
+            program,
         };
     }
     tracing::warn!(

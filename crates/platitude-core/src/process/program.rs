@@ -50,23 +50,79 @@ pub fn default_program_path() -> OsString {
         .map_or(named, PathBuf::into_os_string)
 }
 
-/// Whether two paths name the same program.
+/// Whether two paths name the same program — the same binary, not the
+/// same spelling. One of these comes from a settings file and the other
+/// from a chooser, and a reader who picked the git already running must
+/// not be told they picked a different one.
 ///
-/// Separators are levelled and, on Windows, case as well: one of these
-/// comes from a settings file and the other from a chooser, and a reader
-/// who picked the git already running must not be told they picked a
-/// different one. Nothing is resolved — a link and its target are two
-/// answers here, because they are two programs to spawn.
+/// Each side is read as what would be spawned for it ([`spawnable`]: the
+/// `.exe` a spawn adds, and the git behind the launcher) and then as the
+/// file itself where there is one to resolve — a link and its target, two
+/// spellings of one directory — and as its levelled text where there is
+/// not: a path that names nothing can only be compared as written.
 pub fn same_program(one: &Path, two: &Path) -> bool {
-    fn levelled(path: &Path) -> String {
-        let text = path.to_string_lossy().replace('\\', "/");
-        if cfg!(windows) {
-            text.to_lowercase()
-        } else {
-            text
+    identity(&spawnable(one)) == identity(&spawnable(two))
+}
+
+/// One spelling for one program: the resolved path of the file, or the
+/// levelled text of a path that names no file.
+fn identity(path: &Path) -> String {
+    match std::fs::canonicalize(path) {
+        Ok(real) => levelled(&real),
+        Err(_) => levelled(path),
+    }
+}
+
+/// Separators forward and, on Windows, case folded: the two things a
+/// spelling can differ in without naming another file.
+fn levelled(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    if cfg!(windows) {
+        text.to_lowercase()
+    } else {
+        text
+    }
+}
+
+/// The file a spawn opens for `path`: on Windows a name with no extension
+/// runs the `.exe` beside it, so the one with the extension is the file.
+/// `exists` answers whether a path is a file.
+fn as_spawned(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    if cfg!(windows) && path.extension().is_none() {
+        let exe = path.with_extension("exe");
+        if exists(&exe) {
+            return exe;
         }
     }
-    levelled(one) == levelled(two)
+    path.to_path_buf()
+}
+
+/// The program to spawn for a git a reader named: the path itself, unless
+/// it is the launcher Git for Windows puts on PATH and the git it launches
+/// stands beside it — then that one, for the reason [`default_program`]
+/// looks behind the launcher on PATH. A chooser opened on a Git for
+/// Windows install lands on `cmd\git.exe` as naturally as PATH does, and
+/// a path taken as given would put the launcher's second process back on
+/// every command.
+///
+/// **The launcher is looked for under the name a spawn opens**, not the
+/// one typed: `cmd\git` with no extension is the launcher as much as
+/// `cmd\git.exe` is, and taken as typed it would be spawned as itself.
+pub fn spawnable(named: &Path) -> PathBuf {
+    spawnable_among(named, Path::is_file)
+}
+
+/// [`spawnable`] against `exists`, so the launcher rule can be asked
+/// without a Git for Windows install to ask it of.
+fn spawnable_among(named: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    let named = as_spawned(named, &exists);
+    let is_git_exe = named
+        .file_name()
+        .is_some_and(|file| file.eq_ignore_ascii_case("git.exe"));
+    match named.parent() {
+        Some(dir) if is_git_exe => behind_launcher([dir.to_path_buf()], exists).unwrap_or(named),
+        _ => named,
+    }
 }
 
 /// The program [`super::GitExecutor::new`] spawns.
@@ -146,23 +202,116 @@ mod tests {
 
     /// Two spellings of one program are one program: the settings file and
     /// a chooser write paths differently, and a reader who picked the git
-    /// already running must not be told they picked another one.
+    /// already running must not be told they picked another one. Paths
+    /// that name no file — none of these exist — are compared as written.
     #[test]
     fn separators_and_windows_case_do_not_make_two_programs() {
-        let slashed = Path::new("C:/Program Files/Git/cmd/git.exe");
+        let slashed = Path::new("C:/Nowhere/Git/cmd/git.exe");
         assert!(same_program(
             slashed,
-            Path::new(r"C:\Program Files\Git\cmd\git.exe")
+            Path::new(r"C:\Nowhere\Git\cmd\git.exe")
         ));
         assert_eq!(
-            same_program(slashed, Path::new(r"c:\program files\git\cmd\GIT.EXE")),
+            same_program(slashed, Path::new(r"c:\nowhere\git\cmd\GIT.EXE")),
             cfg!(windows),
             "case is Windows's to ignore and nobody else's"
         );
+        // Two files that are not there to look behind stay two spellings.
         assert!(!same_program(
             slashed,
-            Path::new("C:/Program Files/Git/mingw64/bin/git.exe")
+            Path::new("C:/Nowhere/Git/mingw64/bin/git.exe")
         ));
+    }
+
+    /// A chooser opened on a Git for Windows install lands on the launcher
+    /// as naturally as PATH does, and the launcher is not the program: what
+    /// is spawned for it is the git behind it, and the two spellings name
+    /// one program.
+    #[test]
+    fn the_launcher_a_reader_names_spawns_the_git_behind_it() {
+        let launcher = Path::new("C:/Program Files/Git/cmd/git.exe");
+        let real = Path::new("C:/Program Files/Git/mingw64/bin/git.exe");
+        let install = among([
+            "C:/Program Files/Git/cmd/git.exe",
+            "C:/Program Files/Git/mingw64/bin/git.exe",
+        ]);
+        assert_eq!(spawnable_among(launcher, &install), real);
+        // Named outright, the real git is taken as it is; so is a git in a
+        // `cmd` directory with nothing behind it, and a program that is not
+        // spelled `git.exe` at all.
+        assert_eq!(spawnable_among(real, &install), real);
+        let lone = Path::new("D:/tools/cmd/git.exe");
+        assert_eq!(spawnable_among(lone, among(["D:/tools/cmd/git.exe"])), lone);
+        let other = Path::new("C:/Program Files/Git/cmd/git-bash.exe");
+        assert_eq!(spawnable_among(other, &install), other);
+    }
+
+    /// With the files there to resolve, the launcher and the git behind it
+    /// are one program however either is spelled.
+    #[test]
+    fn a_launcher_on_disk_and_the_git_behind_it_are_one_program() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let launcher = dir.path().join("cmd").join("git.exe");
+        let real = dir.path().join("mingw64").join("bin").join("git.exe");
+        for file in [&launcher, &real] {
+            std::fs::create_dir_all(file.parent().expect("a directory")).expect("mkdir");
+            std::fs::write(file, b"").expect("a file");
+        }
+        assert!(same_program(&launcher, &real));
+        assert!(same_program(&real, &launcher));
+        let elsewhere = dir.path().join("other").join("git.exe");
+        std::fs::create_dir_all(elsewhere.parent().expect("a directory")).expect("mkdir");
+        std::fs::write(&elsewhere, b"").expect("a file");
+        assert!(!same_program(&launcher, &elsewhere));
+    }
+
+    /// A link and its target run one binary, so a reader who picked either
+    /// picked the git already running.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_and_its_target_are_one_program() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target = dir.path().join("git-2.55");
+        std::fs::write(&target, b"").expect("a file");
+        let link = dir.path().join("git");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        assert!(same_program(&link, &target));
+    }
+
+    /// A name typed without its extension runs the `.exe` beside it, so
+    /// the two spellings are one program.
+    #[cfg(windows)]
+    #[test]
+    fn the_extension_a_spawn_adds_does_not_make_a_second_program() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let exe = dir.path().join("git.exe");
+        std::fs::write(&exe, b"").expect("a file");
+        assert!(same_program(&dir.path().join("git"), &exe));
+    }
+
+    /// The launcher typed without its extension is the launcher: what is
+    /// spawned for it is the git behind it, the same as for `cmd\git.exe`,
+    /// and the two are one program with the git already running.
+    #[cfg(windows)]
+    #[test]
+    fn the_launcher_typed_without_its_extension_is_looked_behind_too() {
+        let real = Path::new("C:/Program Files/Git/mingw64/bin/git.exe");
+        let install = among([
+            "C:/Program Files/Git/cmd/git.exe",
+            "C:/Program Files/Git/mingw64/bin/git.exe",
+        ]);
+        assert_eq!(
+            spawnable_among(Path::new("C:/Program Files/Git/cmd/git"), &install),
+            real
+        );
+        let dir = tempfile::tempdir().expect("tempdir");
+        let launcher = dir.path().join("cmd").join("git.exe");
+        let behind = dir.path().join("mingw64").join("bin").join("git.exe");
+        for file in [&launcher, &behind] {
+            std::fs::create_dir_all(file.parent().expect("a directory")).expect("mkdir");
+            std::fs::write(file, b"").expect("a file");
+        }
+        assert!(same_program(&dir.path().join("cmd").join("git"), &behind));
     }
 
     /// The one the settings screen shows behind an empty box: wherever the
