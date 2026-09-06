@@ -32,33 +32,102 @@ const TAB_NAMES: [&str; 16] = [
 
 /// The strip the `tab-widths` verb is run against: `count` repositories
 /// (default 8) named off the ladder above.
-///
-/// The last one carries a real history — the tab opened last is the one
-/// left in front, so that is the page under the strip in the picture.
-/// The rest are bare of commits: what is being looked at is above them,
-/// and building sixteen histories to photograph one band would be paying
-/// for the wrong thing.
 pub(super) fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
-    let count: usize = if arg.is_empty() {
-        8
-    } else {
-        arg.parse()
-            .map_err(|_| format!("tab-widths takes a number of tabs, not {arg:?}"))?
-    };
-    if count == 0 || count > TAB_NAMES.len() {
-        return Err(format!("tab-widths takes 1..={} tabs", TAB_NAMES.len()));
+    named_strip(strip_count("tab-widths", arg)?, "basic", "tab-widths")
+}
+
+/// How many tabs a strip verb was asked for. Eight where it named none,
+/// which is the count the ladder shows both halves of its rule at.
+fn strip_count(verb: &str, arg: &str) -> Result<usize, String> {
+    if arg.is_empty() {
+        return Ok(8);
     }
+    let count: usize = arg
+        .parse()
+        .map_err(|_| format!("{verb} takes a number of tabs, not {arg:?}"))?;
+    if count == 0 || count > TAB_NAMES.len() {
+        return Err(format!("{verb} takes 1..={} tabs", TAB_NAMES.len()));
+    }
+    Ok(count)
+}
+
+/// `count` repositories off the ladder, the last of them built to
+/// `front`.
+///
+/// That last one is the one carrying a real history — the tab opened
+/// last is the one left in front, so that is the page under the strip in
+/// the picture, and the only page the band is showing a state for
+/// (`BandStateGroup.stateWt` reads the tab in front and no other). The
+/// rest are bare of commits: what is being looked at is above them, and
+/// building sixteen histories to photograph one band would be paying for
+/// the wrong thing.
+fn named_strip(count: usize, front: &str, verb: &str) -> Result<Vec<PathBuf>, String> {
     let mut made = Vec::with_capacity(count);
     for (position, name) in TAB_NAMES.iter().take(count).enumerate() {
         let preset = if position + 1 == count {
-            "basic"
+            front
         } else {
             "empty"
         };
         let repo = crate::demo::create_named(preset, None, name)?;
         made.push(repo);
     }
-    println!("demo repos (tab-widths): {count} named after their length");
+    println!("demo repos ({verb}): {count} named after their length, {front} in front");
+    Ok(made)
+}
+
+/// How many tabs a `badges` run asked to stand its group beside, off the
+/// second half of its argument (`<width>:<tabs>`), or `None` where it
+/// named none and the ordinary one-repository fixture stands.
+///
+/// The band's shortfall is shared between the tab strip and the state
+/// group (規約 §ウィンドウの縁), so the width at which the group gives up
+/// its words moves with how many tabs are beside it and how long their
+/// names are. A run against one repository photographs none of that: the
+/// group there is narrowed by the window alone, and reaches the floor a
+/// hand can drag to still wearing its words.
+pub(super) fn band_tab_count(arg: &str) -> Result<Option<usize>, String> {
+    match arg.split_once(':') {
+        Some((_, tabs)) => Ok(Some(strip_count("badges", tabs)?)),
+        None => Ok(None),
+    }
+}
+
+/// The strip `badges` stands its group beside: `count` tabs off the same
+/// ladder, with the run's own preset on the one in front.
+///
+/// One preset, because the tab in front is the only one whose state the
+/// band shows — a second would name a fixture no picture here reaches.
+pub(super) fn band_state_repos(count: usize, presets: &[String]) -> Result<Vec<PathBuf>, String> {
+    let front = match presets {
+        [] => "basic",
+        [one] => one.as_str(),
+        _ => {
+            return Err(
+                "badges takes one --preset: the tab in front is the only one the band shows a \
+                 state for"
+                    .into(),
+            );
+        }
+    };
+    named_strip(count, front, "badges")
+}
+
+/// One fresh demo repository per preset, in the order they were asked
+/// for — which is the order the tabs come up in.
+fn preset_repos(presets: &[String]) -> Result<Vec<PathBuf>, String> {
+    let default = ["basic".to_string()];
+    let presets = if presets.is_empty() {
+        &default[..]
+    } else {
+        presets
+    };
+    let mut made = Vec::with_capacity(presets.len());
+    for preset in presets {
+        let repo = crate::demo::create(preset, None)?;
+        println!("demo repo ({preset}): {}", repo.display());
+        made.push(repo);
+    }
     Ok(made)
 }
 
@@ -286,6 +355,21 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     if !opts.repo.is_empty() && !opts.preset.is_empty() {
         return Err("--repo and --preset name different fixtures: pass one of them".into());
     }
+    let badges = opts.verb == "badges" || opts.verb == "badges-hover";
+    // And a named repository beside a tab count is the same contradiction
+    // with a worse ending: `--repo` wins the list below, so the strip
+    // comes up with the repositories that were named — while the act goes
+    // on waiting for the count it was given (`WindowBadgeActs` measures
+    // nothing until the band carries it). Nobody sees that: the run says
+    // nothing at all until the watchdog ends it two minutes later
+    // (measured).
+    if badges && !opts.repo.is_empty() && band_tab_count(&opts.arg)?.is_some() {
+        return Err(
+            "badges builds its own strip from the count in its argument: pass --repo or \
+             `<width>:<tabs>`, not both"
+                .into(),
+        );
+    }
     // Named repositories win outright; otherwise one fresh demo repository
     // per preset, in the order they were asked for — which is the order
     // the tabs come up in.
@@ -322,19 +406,19 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
         // [`folder_for`]: everything handed over here is opened at
         // startup, and a tab already in the strip cannot arrive in it.
         tab_width_repos("12")?
-    } else {
-        let presets: Vec<String> = if opts.preset.is_empty() {
-            vec!["basic".into()]
-        } else {
-            opts.preset.clone()
-        };
-        let mut made = Vec::with_capacity(presets.len());
-        for preset in &presets {
-            let repo = crate::demo::create(preset, None)?;
-            println!("demo repo ({preset}): {}", repo.display());
-            made.push(repo);
+    } else if badges {
+        // The one verb whose fixture is both at once: a strip of named
+        // tabs *and* a page with a state on it. Which of the group's
+        // three shapes the band lands in is what the two of them settle
+        // between them, so the count rides in the argument beside the
+        // width (`band_tab_count`) and a run that names none stands on
+        // the ordinary one repository.
+        match band_tab_count(&opts.arg)? {
+            Some(count) => band_state_repos(count, &opts.preset)?,
+            None => preset_repos(&opts.preset)?,
         }
-        made
+    } else {
+        preset_repos(&opts.preset)?
     };
     Ok(repos)
 }

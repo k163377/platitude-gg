@@ -21,8 +21,9 @@ Item {
     required property IdentityDialog identityDialog
 
     // PG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band ever asks for, and the
-    // floor is the only thing between that and a `>_` pushed off the end (デザイン規約 §ウィンドウの縁). The argument is the window
-    // width; `floor` puts it down on the floor the three badges leave.
+    // floor is the only thing between that and a `>_` pushed off the end (デザイン規約 §ウィンドウの縁). The argument is
+    // `<width>[:<tabs>]`: the window width, `floor` for the floor the three badges leave, and how many tabs the run
+    // built the strip out of (`verify::repos::band_tab_count`).
     SampleTimer {
         id: badgesActTimer
         running: Harness.autoAct === "badges"
@@ -36,7 +37,16 @@ Item {
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
-            const arg = Harness.autoActArg
+            // The strip is the other half of what the band is short of (デザイン規約 §ウィンドウの縁), so a run that named a
+            // count is not standing on its own fixture until the strip has every one of them: a group measured beside
+            // three of the six tabs asked for is a measurement of a band nobody ran. Read off the strip's own count
+            // rather than off the tabs having loaded — the pages come up in their own time, and the run the band
+            // shares out is settled by the rows.
+            const words = Harness.autoActArg.split(":")
+            const wantedTabs = parseInt(words[1])
+            if (!isNaN(wantedTabs) && topBar.bandTabCount !== wantedTabs)
+                return
+            const arg = words[0]
             const wantedW = parseInt(arg)
             const sized = arg === "floor" || (!isNaN(wantedW) && wantedW > 0)
             // The pointer, where headless cannot put one. Written to the same one property the real hover writes, so
@@ -94,6 +104,9 @@ Item {
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
             + " badgeMin=" + topBar.stateBadgeMinW
+            // What the strip was carrying while the group settled: the two of them share the band's shortfall, so a
+            // cap read without the count beside it says nothing that can be repeated.
+            + " tabs=" + topBar.bandTabCount
             + " tabCap=" + Math.round(topBar.tabTitleCap)
             + " tabMin=" + topBar.tabTitleMinW
             + " card=" + topBar.stateCardOpen
