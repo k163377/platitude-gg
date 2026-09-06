@@ -112,6 +112,16 @@ const POLL: Duration = if cfg!(test) {
 /// against the four hundred milliseconds these tries span.
 const HOLD_TRIES: u32 = 5;
 
+/// How many times an announcement takes the lock at its own name before
+/// the build that asked for it is refused, and how long it waits between
+/// tries. The name is this process's own, so the only holder it can meet
+/// is a reader taking a dead run's leavings down under the lock
+/// ([`announcing`]) — the microseconds of two calls, or the 3.2ms a fork
+/// carries that reader's lock past its drop
+/// (.claude/rules-refs/core.md).
+const ANNOUNCE_TRIES: u32 = 8;
+const ANNOUNCE_AGAIN: Duration = Duration::from_millis(5);
+
 /// How long a stamp is kept: longer than any warm window it could answer
 /// (`perf::warmth`), shorter than a pid's turn to come round again.
 const STAMP_FOR: u64 = 24 * 60 * 60;
@@ -426,13 +436,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
             std::process::id(),
             ANNOUNCEMENTS.fetch_add(1, Ordering::SeqCst)
         ));
-        let lock = open_lock(&lock_of(&note))?;
-        if let Err(error) = lock.try_lock() {
-            return Err(format!(
-                "could not lock the announcement at {}: {error}",
-                note.display()
-            ));
-        }
+        let lock = lock_beside(&note)?;
         std::fs::write(&note, Note::now(what).text())
             .map_err(|e| format!("could not announce the build at {}: {e}", note.display()))?;
         let mine = Held {
@@ -450,6 +454,45 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
         }
         drop(mine);
     }
+}
+
+/// The lock beside `note`, held and standing at its own name. Both,
+/// because the two are not one step. A lock file at this name can be a
+/// dead run's — a pid is handed out again, and the first announcement of
+/// every run is numbered the same — and the reader that sweeps one takes
+/// it down under its lock ([`announcing`]). So an announcement meets the
+/// file held, or comes to hold a file the reader has already taken from
+/// the name, and neither is the lock it needs: a note written beside the
+/// second stands with nothing beside it, which the next reader clears as
+/// a dead run's, and the build is gone from under a hold about to stand.
+/// Either way the name is opened again.
+fn lock_beside(note: &Path) -> Result<File, String> {
+    lock_beside_polled(note, &|| {})
+}
+
+fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<File, String> {
+    let path = lock_of(note);
+    for _ in 0..ANNOUNCE_TRIES {
+        let lock = open_lock(&path)?;
+        match lock.try_lock() {
+            Ok(()) if path.exists() => return Ok(lock),
+            Ok(()) | Err(TryLockError::WouldBlock) => drop(lock),
+            Err(TryLockError::Error(error)) => {
+                return Err(format!(
+                    "could not lock the announcement at {}: {error}",
+                    note.display()
+                ));
+            }
+        }
+        polled();
+        std::thread::sleep(ANNOUNCE_AGAIN);
+    }
+    Err(format!(
+        "could not announce the build at {}: the lock at that name went out from under it \
+         {ANNOUNCE_TRIES} times over — a reader is sweeping a dead run's leavings there, and \
+         is not letting go",
+        note.display()
+    ))
 }
 
 /// Waits until no live hold stands at `hold`, clearing a dead one.
@@ -526,8 +569,10 @@ fn live_notes(busy: &Path) -> Vec<Note> {
     let mut live = Vec::new();
     for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
         if path.extension().is_some() {
-            if !path.with_extension("").exists() {
-                clear(&path);
+            if !path.with_extension("").exists()
+                && let Some(note) = announcing(&path)
+            {
+                live.push(note);
             }
             continue;
         }
@@ -537,6 +582,34 @@ fn live_notes(busy: &Path) -> Vec<Note> {
     }
     live.sort_by_key(|note| (note.pid, note.since));
     live
+}
+
+/// A lock file whose note is not there: a build announcing itself this
+/// instant, or a killed process's leavings. [`announce`] takes its lock
+/// before it writes its note, so a lock somebody holds beside no note is
+/// the first of the two, and is a build under way — its note stands a
+/// moment later, and the hold that took this for nothing would already
+/// be standing beside it.
+///
+/// One nobody holds is litter, taken down here while this holds the lock
+/// — as [`held`] takes a note down. An announcer arriving at that name
+/// this instant is between its own open and its own lock, and a lock
+/// file removed from under it there is one it goes on holding under no
+/// name: the note it then writes stands with nothing beside it, the next
+/// reader takes that note for a dead process's and clears it, and the
+/// build is gone from under a hold about to stand.
+fn announcing(lock: &Path) -> Option<Note> {
+    let file = File::options().read(true).write(true).open(lock).ok()?;
+    match file.try_lock() {
+        Ok(()) => {
+            clear(lock);
+            None
+        }
+        Err(TryLockError::WouldBlock) => Some(Note::unreadable("a build")),
+        // Nothing could be read about it: left where it is, for the
+        // reader that can.
+        Err(TryLockError::Error(_)) => None,
+    }
 }
 
 /// Removes a file that may already be gone, and says so when it would
@@ -630,13 +703,13 @@ impl Note {
 mod tests {
     use std::fs::{File, TryLockError};
     use std::path::PathBuf;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     use super::{
-        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_of, open_lock,
-        stamps_ended_since,
+        BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_beside_polled,
+        lock_of, open_lock, stamps_ended_since,
     };
 
     /// How long [`taken_once_free`] waits out a lock this process let go
@@ -867,6 +940,74 @@ mod tests {
             under_way[0].line()
         );
         drop(held);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The instant before that one: the lock is taken and the note is
+    /// not written yet, so a lock file is all that stands. It is not the
+    /// litter a killed process leaves — a build is announcing itself
+    /// there, and a lock file taken from under it would leave the note
+    /// it writes next with nothing beside it, which the next reader
+    /// clears as a dead process's.
+    #[test]
+    fn a_lock_file_held_beside_no_note_is_a_build_announcing_itself() {
+        let dir = common("announcing");
+        std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
+        let lock = dir.join(BUSY).join("1-0.lock");
+        let held = open_lock(&lock).expect("the lock an announcer takes before its note");
+        held.try_lock().expect("held, as its announcer holds it");
+        let under_way = live_notes(&dir.join(BUSY));
+        assert_eq!(under_way.len(), 1, "the announcement was not counted");
+        assert!(
+            under_way[0]
+                .line()
+                .starts_with("a build whose note is not written yet"),
+            "{}",
+            under_way[0].line()
+        );
+        assert!(
+            lock.exists(),
+            "the lock file was taken from under the announcer"
+        );
+        drop(held);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The other side of that instant. A lock file at an announcement's
+    /// name can be a dead run's — a pid comes round again, and every
+    /// run's first announcement is numbered the same — and the reader
+    /// sweeping one holds it while it takes it down. The announcement
+    /// waits that out and takes the name: a build refused there would be
+    /// a build refused for the leavings of a run that is gone.
+    #[test]
+    fn an_announcement_waits_out_the_reader_sweeping_its_name() {
+        let dir = common("swept-name");
+        std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
+        let note = dir.join(BUSY).join("1-0");
+        let sweeping = open_lock(&lock_of(&note)).expect("a dead run's lock file");
+        sweeping
+            .try_lock()
+            .expect("held, as the reader sweeping it holds it");
+        let sweeping = Mutex::new(Some(sweeping));
+        let lock = lock_beside_polled(&note, &|| {
+            // Taken down under the lock and let go of, the way
+            // `announcing` sweeps it — on the first look again, so what
+            // is under test is the try after it rather than a clock.
+            if let Some(held) = sweeping
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .take()
+            {
+                let _ = std::fs::remove_file(lock_of(&note));
+                drop(held);
+            }
+        })
+        .expect("the lock at the announcement's own name");
+        assert!(
+            lock_of(&note).exists(),
+            "the announcement holds a lock that is not at its name"
+        );
+        drop(lock);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
