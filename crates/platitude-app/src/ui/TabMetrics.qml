@@ -35,8 +35,22 @@ QtObject {
     readonly property real markRoomFull: 2 * tabMetrics.markGap + tabMetrics.markSeat
     readonly property real markRoomMin: tabMetrics.tabPadL
 
-    /// The longest a tab's name is ever drawn (デザイン規約 レイアウト初期値).
-    readonly property int titleMaxW: 180
+    /// How many ways the run is cut for one name's ceiling (デザイン規約 レイアウト初期値). A share rather than a width
+    /// of its own: what makes one tab too wide is how much of the band it is holding, and the band is not one size —
+    /// a width written here is generous in a wide window and the whole strip in a narrow one.
+    readonly property int titleRunParts: 3
+    /// That share of the run the strip has — **cut no finer than there are tabs to cut it for**, so the last tab in a
+    /// narrow band is not held to a third of a run nobody else is standing in (which is the cut-with-run-to-spare
+    /// this ceiling exists to end). Never under the floor a name still says something at: in a window narrow enough
+    /// the two meet, and the floor is the one with letters behind it.
+    ///
+    /// Read off the run the tabs are handed rather than off what they ask for it — `TabStrip.tabsWantWidth` asks at
+    /// the names' full width for this reason, since a width asked for out of the run it is about to be given back is
+    /// one that moves every time it is read.
+    function titleCeilingW(run, tabs) {
+        const parts = Math.max(1, Math.min(tabMetrics.titleRunParts, tabs))
+        return Math.max(tabMetrics.titleMinW(), Math.floor(run / parts))
+    }
     /// The shortest, in characters rather than pixels (同表): the same count costs a different number of pixels in each
     /// platform's UI font and at every scaling, so the length comes out of the font. **Three at each end** — the cut is
     /// in the middle (デザイン規約 §タブの所作), so a name has two ends to say itself with and the floor has to hold
@@ -62,9 +76,8 @@ QtObject {
     /// Pushed rather than bound: `advanceWidth` is a method, so a binding on it never re-evaluates and freezes at the
     /// default font's answer (rules-refs/app-ui.md §FontMetrics). `TabStrip.settleTitleCap` is where it is called from,
     /// which is already the pushed form.
-    function titleEaseW() {
-        return Math.min(Math.ceil(tabMetrics.titleEaseChars * tabMetrics.titleFont.advanceWidth("n")),
-                        tabMetrics.titleMaxW)
+    function titleEaseW(ceiling) {
+        return Math.min(Math.ceil(tabMetrics.titleEaseChars * tabMetrics.titleFont.advanceWidth("n")), ceiling)
     }
     /// The air a name of this width is given on top of itself — half of what it falls short by, split evenly over its
     /// two sides. Never past the cap: a strip short of run is already cutting names, and air added there would be paid

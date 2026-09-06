@@ -60,8 +60,9 @@ Item {
     /// stand-in a photograph of it cannot be told apart from a short name in a narrow tab.
     readonly property bool tabPinNameKept: tabPin.nameKept
 
-    /// The longest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
-    readonly property int tabTitleMaxW: tabMetrics.titleMaxW
+    /// The longest a name is drawn at — a share of the run the tabs were handed, so it moves with the band
+    /// (`TabMetrics.titleCeilingW`). Pushed rather than bound, for `tabTitleMinW`'s reason.
+    property int tabTitleMaxW: 0
     /// The shortest it is cut down to, the length it stops being eased at, and the run it goes quiet over where the
     /// mark stands on it — all three measured off the font, and so all three pushed rather than bound
     /// (`TabMetrics.titleMinW` / `titleEaseW` / `fadeW`).
@@ -260,14 +261,19 @@ Item {
         for (let i = 0; i < titleMeasure.count; i++) {
             const label = titleMeasure.itemAt(i)
             if (label)
-                nat.push(Math.min(Math.ceil(label.implicitWidth), tabStrip.tabTitleMaxW))
+                nat.push(Math.ceil(label.implicitWidth))
         }
         // What the row is asked for, so the band's leftover is shared with the state group in proportion — asking for
         // the floor instead has the tabs down to three characters beside two whole badges. Measured off the same
         // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
         // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
+        //
+        // Asked for at the names' own width, nothing cut: the ceiling is a share of the run, so a width asked for
+        // with the ceiling in it would be read out of the run the ask is about to be answered with.
+        const run = Math.floor(tabs.runAvail)
         tabStrip.tabTitleMinW = tabMetrics.titleMinW()
-        tabStrip.tabTitleEaseW = tabMetrics.titleEaseW()
+        tabStrip.tabTitleMaxW = tabMetrics.titleCeilingW(run, nat.length)
+        tabStrip.tabTitleEaseW = tabMetrics.titleEaseW(tabStrip.tabTitleMaxW)
         tabStrip.tabTitleFadeW = tabMetrics.fadeW()
         const eased = nat.reduce(
             (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
@@ -282,27 +288,32 @@ Item {
         // The room the marks stand in is what a crowded strip takes back first, and **every tab gives up the same
         // amount of it** (デザイン規約 §ウィンドウの縁): taking it from the tabs that are short of run would stand the
         // marks at a different distance from each tab's edge, which is a row of marks nobody lined up.
-        const room = Math.floor(
-            (Math.floor(tabs.runAvail) - eased - names - nat.length * tabMetrics.tabPadL) / nat.length)
+        const capped = nat.reduce((sum, w) => sum + Math.min(w, tabStrip.tabTitleMaxW), 0)
+        const room = Math.floor((run - eased - capped - nat.length * tabMetrics.tabPadL) / nat.length)
         tabStrip.tabMarkRoom = Math.max(tabMetrics.markRoomMin, Math.min(tabMetrics.markRoomFull, room))
-        // No name is cut while that room still has something left to give.
-        if (room > tabMetrics.markRoomMin) {
-            tabStrip.tabTitleCap = tabStrip.tabTitleMaxW
-            return
-        }
+        // What is left over once the marks have stood down as far as this run makes them, shared out the one way a
+        // crowded strip shares anything (デザイン規約 §ウィンドウの縁 の譲る順). Against the room they actually got, never
+        // against the room they wanted: costed at the full room while standing in less, the strip leaves the
+        // difference on every tab unspent and cuts names it had the run for (measured).
         nat.sort((a, b) => a - b)
-        let left = Math.floor(tabs.runAvail) - eased
-            - nat.length * (tabMetrics.tabPadL + tabMetrics.markRoomMin)
-        let cap = tabStrip.tabTitleMaxW
+        const share = tabStrip.shareTitleRun(nat, eased, tabStrip.tabMarkRoom)
+        tabStrip.tabTitleCap = Math.max(tabStrip.tabTitleMinW, Math.min(share, tabStrip.tabTitleMaxW))
+    }
+
+    /// The widest every name may be drawn and still leave room for all of them: the max-min share of what the run has
+    /// left once each tab has its near step and `markRoom` for its mark. The longest names give way and come out
+    /// equal; the ones already under their share keep their own width (デザイン規約 §ウィンドウの縁). `nat` comes in
+    /// sorted ascending, and the ceiling is the answer when they all fit — a name is never the thing that caps the
+    /// strip, or a tab whose name happens to be short would cap the ones beside it.
+    function shareTitleRun(nat, eased, markRoom) {
+        let left = Math.floor(tabs.runAvail) - eased - nat.length * (tabMetrics.tabPadL + markRoom)
         for (let i = 0; i < nat.length; i++) {
             const share = Math.floor(left / (nat.length - i))
-            if (nat[i] > share) {
-                cap = share
-                break
-            }
+            if (nat[i] > share)
+                return share
             left -= nat[i]
         }
-        tabStrip.tabTitleCap = Math.max(tabStrip.tabTitleMinW, Math.min(cap, tabStrip.tabTitleMaxW))
+        return tabStrip.tabTitleMaxW
     }
 
     implicitWidth: tabStrip.tabsWantWidth
