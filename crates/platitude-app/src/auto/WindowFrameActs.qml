@@ -86,6 +86,18 @@ Item {
                 acts.reportFloor()
                 return
             }
+            // Everything below this is asked of the page a tab is showing, and until one is open that is not what
+            // `window.floorPage` hands back — the blank page stands in for it, and a shape asked of that one is
+            // asked of nobody once the real page arrives (`WindowBody.floorPage`).
+            if (window.curPage === null || !window.curPage.pageWt.loaded)
+                return
+            // The working-tree face is reached by pressing the row the tree stands in the graph, and the page takes
+            // the face back off a tree with nothing in it and no operation standing (`RepoPage.leaveWipWhenDone`) —
+            // so what the row stands on is waited for rather than raced. Without this the ask lands on a tree nobody
+            // has read yet, which reads as clean and idle: the very next status takes the face away again, and this
+            // sampler waits out the run for a `wipShown` that is never coming back.
+            if (Harness.autoActArg === "wip" && !window.curPage.pageWt.wipRowStands)
+                return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true
                 if (Harness.autoActArg === "fold")
@@ -168,8 +180,12 @@ Item {
             if (Harness.autoActArg === "log"
                     && !window.floorPage.commandsOpen)
                 return
+            // Both halves of what this arg is about: the face is up, and what it put below the fold is reachable. The
+            // block scrolls whether or not anybody is being shown it, so a face taken away behind this run
+            // (`RepoPage.leaveWipWhenDone`) is caught by nothing else.
             if (Harness.autoActArg === "wip"
-                    && !window.floorPage.wipBlockScrolls)
+                    && (!window.floorPage.wipShown
+                        || !window.floorPage.wipBlockScrolls))
                 return
             stop()
             acts.reportFloor()
@@ -199,6 +215,8 @@ Item {
             + " folded=" + (window.floorPage !== null
                             && window.floorPage.sidebarCollapsed)
             + " log=" + (window.floorPage !== null && window.floorPage.commandsOpen)
+            // Which face the right pane is showing, so the two numbers under it are read off the pane in the picture.
+            + " wip=" + (window.floorPage !== null && window.floorPage.wipShown)
             // What the right pane made of a height that cannot hold it: scrolling is the answer, and a scroll bar is
             // not something a headless run can see (`wip` shape).
             + " wipScrolls=" + (window.floorPage !== null
