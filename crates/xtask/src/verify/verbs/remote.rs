@@ -220,6 +220,80 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Ends(":marked"), "remote_url dialog=true box=true")],
         plain: "remote_url dialog=true box=false",
     },
+    // The surface a first push raises, read in the turn the button was
+    // pressed in.
+    //
+    // **The half worth judging cannot be keyed.** `dialog=` / `name=` is
+    // `true` / `origin` on a repository with no remote and `false` on one
+    // with two, and those two runs are told apart by their preset — which
+    // this verb's argument cannot carry the way `push-target`'s does,
+    // since here it is the branch to publish. What is left is the state
+    // the press was taken in, which is the one thing both runs say; it is
+    // a thin row, and the line above is why there is no thicker one.
+    Verb {
+        name: "publish",
+        when: &[],
+        plain: "publish state=publish",
+    },
+    // The first push against each of the three shapes a name on the far
+    // side can wear. **The picture tells none of them apart**: one bar,
+    // one pill, and three characters between `push` and `push -f` —
+    // while the frame and the `!` that mark the third are a colour and
+    // one glyph.
+    //
+    // **Read as a set of three.** `taken` is the refusal (a plain push
+    // cannot land, so the pill is held and leased against what the far
+    // side holds), `carried` the one that lands and moves somebody
+    // else's branch on, and `outsider` the one neither answer fits — the
+    // name is there and the commit under it is not in this repository.
+    // Any one of them alone passes for an implementation that always
+    // says the same thing.
+    //
+    // **`outsider` is the shape an opening's fetch answers away.** The
+    // commit lands here, the comparison then reads `refused` like any
+    // other diverged name, and the run photographs the wrong fixture and
+    // passes on the picture (measured, 10 runs of 10). `verify::seed` is
+    // what holds the fetch off; this row is what says so afterwards.
+    //
+    // `plain` claims only that the check answered at all — an argument
+    // nobody has measured must not be failed for saying something true.
+    Verb {
+        name: "publish-taken",
+        when: &[
+            (
+                Arg::Is("outsider"),
+                "publish settled far=unknown code=push hold=false alert=true lease=false theirs=0",
+            ),
+            (
+                Arg::Is("carried"),
+                "publish settled far=fast-forward code=push hold=false alert=false lease=false \
+                 theirs=0",
+            ),
+            (
+                Arg::OneOf(&["", "taken"]),
+                "publish settled far=refused code=push -f hold=true alert=false lease=true \
+                 theirs=1",
+            ),
+        ],
+        plain: "publish settled far=",
+    },
+    // The answer, given rather than merely offered — the line goes out in
+    // the same turn as the press.
+    //
+    // Plain, the branch this publishes is one no remote holds under that
+    // name, so `far=free` is the fixture pinned: the picture is a bar
+    // that has gone, which a repository already holding the name leaves
+    // behind just the same. Any other argument is asked only that a
+    // classification arrived at all, since the branch it names decides
+    // which one.
+    Verb {
+        name: "publish-go",
+        when: &[(
+            Arg::Is(""),
+            "publish answering far=free unsure=false answerable=true",
+        )],
+        plain: "publish answering far=",
+    },
     // The destination list with the mark in it. `marked=` is the field
     // the rows read, not a row of its own — a list drawn with no mark
     // and a list whose mark was never plumbed frame the same way, and
