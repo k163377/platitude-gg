@@ -20,6 +20,7 @@ AutoActTipVerbs 1.0 AutoActTipVerbs.qml
 AutoActWipVerbs 1.0 AutoActWipVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
 NavProbe 1.0 NavProbe.qml
+singleton PageSettled 1.0 PageSettled.qml
 PageAutoStart 1.0 PageAutoStart.qml
 PageHarness 1.0 PageHarness.qml
 PagePerfDriver 1.0 PagePerfDriver.qml

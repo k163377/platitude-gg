@@ -367,10 +367,12 @@ Item {
                     return
                 driver.claimed = true
             }
-            // `Opened` only means the path was accepted. Refs, the graph and where HEAD stands are the baseline every
-            // page verb is allowed to act on.
-            if (repoTab.state !== "open" || !workTree.loaded || !workTree.headKnown
-                    || !branchesModel.refsLoaded || graphModel.finishCount === 0)
+            // `Opened` only means the path was accepted. Where HEAD stands, and the page having stopped arriving
+            // (`PageSettled` — refs, status, the graph's rows agreeing with that status, the selected commit's read)
+            // are the baseline every page verb is allowed to act on. The rows agreeing with the status matters here:
+            // the opening walks the log before the first status is read, and a verb that names its rows by number
+            // (`3:5:6`) presses one row off if it presses before the working-tree row has landed.
+            if (repoTab.state !== "open" || !workTree.headKnown || !PageSettled.settled(page))
                 return
             autoActTimer.stop()
             driver.runAutoAct()

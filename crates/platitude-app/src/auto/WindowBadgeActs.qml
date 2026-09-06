@@ -168,11 +168,9 @@ Item {
                 // not touch a swap, so `graph-stopped`'s emptied column is walked full again, and the swap fault
                 // fails that rebuild, so `graph-stale` freezes the pass with no working-tree row on it. The picture
                 // is taken before either, so both verbs pass on a window the census then walks in the other state
-                // (rules-refs/app-ui.md の同項). The rows agreeing with the status is what says the rebuild has
-                // landed, off the one rule both sides ask (`graph::wip_row_stands`, as `WindowCensus.pageSettled`
-                // reads it).
-                if (!page.pageWt.loaded || !page.pageRefsLoaded
-                        || graph.wipRow !== page.pageWt.wipRowStands)
+                // (rules-refs/app-ui.md). So the arm waits for the page to have stopped arriving, asked of the one
+                // rule the census walks from (`PageSettled`): the two have to agree term for term.
+                if (!PageSettled.settled(page))
                     return
                 staleActTimer.faultArmed = true
                 graph.failGraphPass(Harness.autoAct === "graph-stale" ? "swapping" : "streaming")

@@ -137,42 +137,11 @@ Item {
     /// through `pageSettled()` as they would be inline).
     readonly property bool settled: census.pageSettled()
 
-    /// Whether the page this run photographed had stopped arriving. The page verbs ask a shorter version of this of
-    /// the act before they start (`AutoActDriver`); this one is what the census is walked from and so has to name
-    /// every read, not only the ones a verb needs standing before it presses anything.
-    ///
-    /// **Every read the page is still waiting on is named here, the selected commit's and the graph's second pass
-    /// included.** A predicate that stopped at the working tree, the refs and the graph called a run settled while the
-    /// changed-file list was on its way, and the verbs that finish on something else of their own then wrote and
-    /// unwrote one another's `FileRowDelegate` from run to run (measured: `ref-list 1 --preset tags` lost it in 2 runs
-    /// of 8 taken at once, and in none of 10 taken one after another — the window opens under load, which is exactly
-    /// where the gate runs).
-    ///
-    /// **`finishCount` counts passes, and the first one is not the last word.** The opening starts the log walk before
-    /// the first status has been read, so whether that walk carries the working-tree row is a race the status wins
-    /// about half the time; when it loses, the status asks for a rebuild and the row — with `WipTallyRow` on it —
-    /// arrives a pass later. What settles it is the rows agreeing with the status: the graph says what it holds
-    /// (`GraphModel.wipRow`) and the working tree says what should stand (`WorkTree.wipRowStands`), both off the one
-    /// rule the walk itself is built from (`platitude_core::graph::wip_row_stands`). A graph that could not be walked
-    /// is waiting for nothing and answers yes with whatever it holds — `graph-stopped` leaves an empty column, and a
-    /// swap that failed (`stale`) leaves the pass before it standing.
-    ///
-    /// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was
-    /// never given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing
-    /// is coming, so the run photographed the whole of what its verb shows and may write its line. Answering no for
-    /// those would hold the run open until the watchdog.
+    /// Whether the page this run photographed had stopped arriving — the one rule (`PageSettled`), asked of the page
+    /// the window is showing. The page verbs ask the same rule of the act before they start (`AutoActDriver`), and the
+    /// badge verbs before they arm their fault (`WindowBadgeActs`); what is walked here is what the rest waited for.
     function pageSettled() {
-        const page = census.window ? census.window.curPage : null
-        if (!page)
-            return true
-        const state = page.pageTab.state
-        if (state === "" || state === "error")
-            return true
-        // An accepted path is only the beginning: the rows arrive with the reads behind it.
-        const graph = page.pageGraph
-        return state === "open" && page.pageWt.loaded
-            && page.pageRefsLoaded && graph.finishCount > 0 && page.pageDetailsSettled
-            && (graph.failed || graph.stale || graph.wipRow === page.pageWt.wipRowStands)
+        return PageSettled.settled(census.window ? census.window.curPage : null)
     }
 
     /// The run is finishing: the walk once the window has settled, then the report lines. Held open by the shot

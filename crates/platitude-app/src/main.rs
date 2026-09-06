@@ -457,6 +457,7 @@ fn embed_harness_qml() {
     qtbridge::include_bytes_qml!("auto/PageHarness.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/PagePerfDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/PageReports.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/PageSettled.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/TabProbe.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowAutoActDriver.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/WindowBadgeActs.qml", "qt/qml/platitude");
