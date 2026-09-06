@@ -153,13 +153,26 @@ Item {
         running: Harness.autoAct === "graph-stale" || Harness.autoAct === "graph-stopped"
         property bool faultArmed: false
         onTriggered: {
-            if (window.curPage === null)
+            const page = window.curPage
+            if (page === null)
                 return
-            const graph = window.curPage.pageGraph
+            const graph = page.pageGraph
             if (!staleActTimer.faultArmed) {
                 // Not before a pass has landed: the fault has to be raised over a graph that was whole, or what the
                 // badge is standing for is the opening rather than the failure (規約 §前提条件を完了判定に混ぜない).
                 if (graph.loading || graph.finishCount <= 0 || graph.rowTotal <= 0)
+                    return
+                // **And whole means nothing is on its way to rebuild it.** The fault stands in time but not across
+                // pass kinds, so a status landing after the arm flips the working-tree row and asks for a rebuild —
+                // an off-screen *swap* pass — which undoes each verb in its own direction: the stream fault does
+                // not touch a swap, so `graph-stopped`'s emptied column is walked full again, and the swap fault
+                // fails that rebuild, so `graph-stale` freezes the pass with no working-tree row on it. The picture
+                // is taken before either, so both verbs pass on a window the census then walks in the other state
+                // (rules-refs/app-ui.md の同項). The rows agreeing with the status is what says the rebuild has
+                // landed, off the one rule both sides ask (`graph::wip_row_stands`, as `WindowCensus.pageSettled`
+                // reads it).
+                if (!page.pageWt.loaded || !page.pageRefsLoaded
+                        || graph.wipRow !== page.pageWt.wipRowStands)
                     return
                 staleActTimer.faultArmed = true
                 graph.failGraphPass(Harness.autoAct === "graph-stale" ? "swapping" : "streaming")
