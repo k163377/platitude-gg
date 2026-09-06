@@ -355,7 +355,8 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     if !opts.repo.is_empty() && !opts.preset.is_empty() {
         return Err("--repo and --preset name different fixtures: pass one of them".into());
     }
-    let badges = opts.verb == "badges" || opts.verb == "badges-hover";
+    let badges =
+        opts.verb == "badges" || opts.verb == "badges-hover" || opts.verb == "badges-hover-early";
     // And a named repository beside a tab count is the same contradiction
     // with a worse ending: `--repo` wins the list below, so the strip
     // comes up with the repositories that were named — while the act goes

@@ -113,14 +113,18 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       goes to the seat it lands in. It builds that repository itself when
       no argument names one — the twelve handed to the run are opened at
       startup, and a tab already in the strip cannot arrive in it.
-      `badges` and `badges-hover` take a window width — a number, or
-      `floor` — and may take a strip off that same ladder after it, as
-      `<width>:<tabs>`. The band's shortfall is shared between the tab
-      strip and the state group, so where the group gives its words up
-      moves with how many tabs stand beside it; a run against one
-      repository reaches the floor a hand can drag to with the words
-      still on. The `--preset` goes on the tab in front, which is the
-      only one the band shows a state for, so only one may be named.
+      `badges`, `badges-hover` and `badges-hover-early` take a window
+      width — a number, or `floor` — and may take a strip off that same
+      ladder after it, as `<width>:<tabs>`. The band's shortfall is
+      shared between the tab strip and the state group, so where the
+      group gives its words up moves with how many tabs stand beside it;
+      a run against one repository reaches the floor a hand can drag to
+      with the words still on. The `--preset` goes on the tab in front,
+      which is the only one the band shows a state for, so only one may
+      be named. The last of the three differs from the second in one
+      thing: it puts its stand-in pointer down before the band has
+      placed the group, which is the order the card is only reached in
+      by being asked for a second time.
       `tab-name` opens a strip of a different shape: four repositories
       called `repo` — two of them under a parent they also share — and
       one nobody shares at all, which is what a name that has to grow to

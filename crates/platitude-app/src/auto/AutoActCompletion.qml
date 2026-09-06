@@ -215,7 +215,7 @@ QtObject {
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
                 "tab-pin", "tab-pin-go", "tab-open-go",
                 "window-fill", "solo", "gate-sweep", "window-floor",
-                "badges", "badges-hover", "graph-stale", "graph-stopped",
+                "badges", "badges-hover", "badges-hover-early", "graph-stale", "graph-stopped",
                 "band-actions", "band-actions-none",
                 "band-actions-fold", "band-actions-alert", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",

@@ -91,6 +91,7 @@ Item {
     readonly property bool stateCardOpen: stateCard.opened
     readonly property string stateCardRows: stateCard.rowsLaidOut()
     readonly property string stateCardSize: stateCard.laidOutSize
+    readonly property bool stateCardLaidOut: stateCard.laidOut
 
     /// Which colour the mark takes once the words are gone. The two that stop work win whenever they are among them
     /// (規約 §状態): a conflict, and a graph that is not the history the repository has — **either way it came to be

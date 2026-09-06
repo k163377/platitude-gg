@@ -20,6 +20,20 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
+    // PG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has ever placed the group. A hand
+    // cannot be made to take that order — it arrives on a mark that is already somewhere — and it is the only order
+    // `BandStateGroup.standInAsking` is there for: a pointer that cannot move raises the beat once, so the card has to
+    // be asked for again when the row answers. `badges-hover` puts the pointer down on a group the band has long since
+    // placed and passes whether that second asking exists or not.
+    //
+    // Written in the completion handler rather than on a tick because that is what puts it early: this harness is
+    // built inside the window's own completion (`WindowHarness.screensUp`), and the row that places the group lays out
+    // after it. Nothing else about the run differs — the guards, the report and the judgement below are shared.
+    Component.onCompleted: {
+        if (Harness.autoAct === "badges-hover-early")
+            topBar.statePointedAt = true
+    }
+
     // PG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band ever asks for, and the
     // floor is the only thing between that and a `>_` pushed off the end (デザイン規約 §ウィンドウの縁). The argument is
     // `<width>[:<tabs>]`: the window width, `floor` for the floor the three badges leave, and how many tabs the run
@@ -28,6 +42,11 @@ Item {
         id: badgesActTimer
         running: Harness.autoAct === "badges"
                  || Harness.autoAct === "badges-hover"
+                 || Harness.autoAct === "badges-hover-early"
+        /// Whether this run's report is of the card rather than of the band behind it. The two hover verbs differ in
+        /// when the pointer goes down and in nothing after that.
+        readonly property bool wantsCard: Harness.autoAct === "badges-hover"
+                                          || Harness.autoAct === "badges-hover-early"
         property bool stateRequested: false
         property bool sizeRequested: false
         property int requestedWidth: -1
@@ -75,8 +94,11 @@ Item {
                         ? window.width < badgesActTimer.requestedWidth
                         : Math.round(window.width) !== badgesActTimer.requestedWidth)))
                 return
-            if (Harness.autoAct === "badges-hover") {
-                if (!topBar.stateCardOpen)
+            if (badgesActTimer.wantsCard) {
+                // Open, and holding what it says it holds. The card is measured after the fact — a `ColumnLayout`
+                // settles on polish and has no `forceLayout()` of its own — so a report written in the frame a row
+                // arrives in reads the card from before it (`BandStateCard.laidOut`).
+                if (!topBar.stateCardOpen || !topBar.stateCardLaidOut)
                     return
             }
             stop()

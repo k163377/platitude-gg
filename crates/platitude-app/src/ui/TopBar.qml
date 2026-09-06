@@ -59,6 +59,7 @@ Rectangle {
     readonly property bool stateCardOpen: stateGroup.stateCardOpen
     readonly property string stateCardRows: stateGroup.stateCardRows
     readonly property string stateCardSize: stateGroup.stateCardSize
+    readonly property bool stateCardLaidOut: stateGroup.stateCardLaidOut
     /// Whether the window is standing on its floor. Handed in, because the floor is the larger of this band's and the
     /// page's and only the body that seats both has it (`WindowBody`). The group gives up its words there whatever
     /// else is true.

@@ -65,9 +65,12 @@ AppCard {
                                                stateCard.staleShown ? staleBadge.implicitWidth : 0,
                                                stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
-    /// Automation: which rows the card actually laid out, in band order. Read off the rows themselves rather than off
-    /// the flags above — asking for a row and getting one are different things, and only one of them is what the
-    /// picture holds.
+    /// Automation: which rows are standing, in band order. Read off the rows rather than off the flags above, so a row
+    /// that is asked for and left out is not counted here.
+    ///
+    /// **Standing is not yet drawn**: the layout gives a row its place a frame later, and this says nothing about
+    /// that. `laidOut` is what says the card holds these — a reader who wants the picture's own answer waits for it
+    /// first (`badges-hover` の `rows=`).
     function rowsLaidOut() {
         let out = []
         if (opRow.visible)
@@ -91,6 +94,28 @@ AppCard {
     /// It holds here because of where this one opens: under the mark, with the hand still on the mark, and the grip is
     /// kept by `pointerInside` from either side of the gap.
     readonly property string laidOutSize: Math.round(width) + "x" + Math.round(height)
+
+    /// Automation: whether the two readings above are of the card or of a frame it is passing through. **"After the
+    /// fact" is a fact somebody has to wait for.** A `ColumnLayout` settles on polish, so a row that begins to stand
+    /// is in `rowsLaidOut()` in that same frame and in the picture only in the next one; in between, the card is the
+    /// one it was before, with every new row piled at the top of it (measured: all three rows standing at y=0 in a
+    /// card 36 tall, reported as a three-row card). A report written there says a card nobody could photograph.
+    ///
+    /// What is read is the rows agreeing with the card: each one that stands sits below the one before it, and
+    /// together they fill the content exactly. A row arriving breaks the first half, a row leaving the second.
+    readonly property bool laidOut: stateCard.rowsSettled()
+    function rowsSettled() {
+        const all = [opRow, conflictRow, identityRow, staleRow, oldGitRow]
+        let bottom = -1
+        for (let i = 0; i < all.length; i++) {
+            if (!all[i].visible)
+                continue
+            if (all[i].y < bottom)
+                return false
+            bottom = all[i].y + all[i].height
+        }
+        return bottom > 0 && Math.abs(rows.height - bottom) < 0.5
+    }
 
     // No `CloseOnPressOutside`: the pointer leaving is what closes this one (`BandStateGroup.settleStateCard`), and a
     // press outside is already on its way somewhere else.

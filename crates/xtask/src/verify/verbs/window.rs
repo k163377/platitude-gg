@@ -219,6 +219,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "card=true rows=op,conflicts,identity",
     },
+    // The same card judged the same way, opened from the other order:
+    // the stand-in pointer goes down before the band has placed the
+    // group, so the group arrives under a hand that is already there. A
+    // pointer that cannot move raises the beat once and never again, so
+    // the card is owed a second asking when the row answers — and
+    // nothing else photographs whether it gets one. `badges-hover` puts
+    // the pointer down on a group the band placed long before, and
+    // passes either way (measured: the group's second asking taken back
+    // out leaves that verb green and this one at the watchdog).
+    Verb {
+        name: "badges-hover-early",
+        when: &[],
+        plain: "card=true rows=op,conflicts,identity",
+    },
     // The badge for a graph that is not this repository's history, and
     // the card line that parts its two states. **Neither is a picture's
     // to judge**: a whole graph that has gone out of date is pixel for

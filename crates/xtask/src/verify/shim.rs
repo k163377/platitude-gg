@@ -132,7 +132,7 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
         // is the one state that raises it without a save having to fail
         // first, and the repository keeps its own `user.*` so everything
         // else on the page goes on working.
-        "identity" | "badges" | "badges-hover" => Some(""),
+        "identity" | "badges" | "badges-hover" | "badges-hover-early" => Some(""),
         // `identity-tip` walks the same half-landed save and then closes
         // the dialog on it: the badge the tooltip belongs to only stands
         // while the identity is half of what was asked for.
@@ -149,7 +149,7 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
 /// argument names the shape of the window rather than a person.
 pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
     match verb {
-        "badges" | "badges-hover" => "skip",
+        "badges" | "badges-hover" | "badges-hover-early" => "skip",
         _ if arg.is_empty() => IDENTITY_ASKED,
         _ => arg,
     }
