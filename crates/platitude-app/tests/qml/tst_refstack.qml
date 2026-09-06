@@ -213,7 +213,8 @@ Item {
 
         // Every term the frame spends beside the name is in `furnitureW`, so the contents of the worst-dressed card
         // come to exactly the room inside its frame — never past it. A forgotten term is a name handed room the frame
-        // does not have, and the frame clips its own right-hand end (the badge first).
+        // does not have, and the frame clips its own right-hand end — the count first, since it stands last, and a
+        // `+41` cut to `+4` is a wrong number rather than a missing one.
         function test_the_dressed_card_s_contents_stop_at_its_frame() {
             stack.records = [root.dressed].concat(tags(41))
             const chip = stack.chipItem
@@ -224,6 +225,21 @@ Item {
             waitForRendering(stack)
             fuzzyCompare(chip.contentW, chip.maxWidth - 2 * Theme.spaceXs, 0.01)
             compare(chip.width, chip.maxWidth)
+        }
+
+        // The badge is this ref's own state — it is on a remote, or it has a PR open — and the count is how many
+        // *others* the row carries behind it, so the badge stands with the name it describes and the count after both
+        // (デザイン規約 §重ね表示). **Nothing else holds this**: the frame's contents come to the same width either way,
+        // so the two can be swapped without a single sum in the card moving.
+        function test_the_badge_stands_with_the_name_and_the_count_behind_them() {
+            stack.records = [root.dressed].concat(tags(41))
+            const chip = stack.chipItem
+            verify(chip.hasBadge && chip.hasCount, "the card is not wearing both")
+            // The positioner answers in a pass of its own, and it skips what is not drawn: an x read before it has run
+            // is every seat's own default.
+            waitForRendering(stack)
+            verify(chip.badgeX < chip.countX,
+                   "the count at " + chip.countX + " is not behind the badge at " + chip.badgeX)
         }
 
         // The floor keeps room for a count the deepest real row can reach, measured off a label of its own: an

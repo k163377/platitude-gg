@@ -68,7 +68,8 @@ Rectangle {
     readonly property bool hasCount: chip.records.length > 1
     /// The count's own seat, measured off the label that draws it rather than off a token standing in for one. **A
     /// seat priced for a single digit is a seat the two-digit rows overrun**: what it does not cover is handed to the
-    /// name, and the frame clips its own right-hand end off the far side of the row — the badge first (measured on
+    /// name, and the frame clips its own right-hand end off the far side of the row — **the count itself first**, since
+    /// it stands last, and a `+41` cut to `+4` is a wrong number rather than a missing one (measured on
     /// `JetBrains/kotlin`: 20 commits carry ten or more refs, and the deepest wears 42).
     readonly property real countW: countLabel.implicitWidth
     /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that rather than to their
@@ -80,6 +81,12 @@ Rectangle {
     /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
     /// up.
     readonly property real badgeInk: badgeMark.inkWidth
+    /// Where the two things after the name stand. The badge is this ref's own state and belongs beside the name it
+    /// describes; the count is how many *others* the row carries and belongs after both (デザイン規約 §重ね表示).
+    /// **Read off the laid-out items**, since nothing in the frame's arithmetic moves when the two swap — the contents
+    /// come to the same width either way, so this is the only thing that can say they are in the drawn order.
+    readonly property real badgeX: badgeSeat.x
+    readonly property real countX: countLabel.x
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
@@ -204,6 +211,11 @@ Rectangle {
         color: Theme.bgHover
         visible: chip.waiting
     }
+    // **The mark, the name and the badge, and the count after them** (デザイン規約 §重ね表示). The first three are the
+    // one ref this card is showing — where it is checked out, what it is called, and whether it is on a remote or has
+    // a PR open — and the count is the only thing in the frame that is not about that ref at all: it is how many
+    // *others* the row is carrying behind it. So it stands after the phrase it is not part of rather than through the
+    // middle of it, and the card reads as a branch and its state, and then how many more are under it.
     Row {
         id: chipContent
         anchors.top: parent.top
@@ -263,6 +275,34 @@ Rectangle {
             // label handed its whole room would make every chip in a list as wide as the widest name.
             width: Math.min(implicitWidth, chip.nameRoom)
         }
+        // Remote / PR badge: reserved width above, so it survives any elision.
+        //
+        // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
+        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left.
+        // The gap before it would then read as the row's spacing **plus** that — the one place in the chip where two
+        // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白;
+        // observed).
+        Item {
+            id: badgeSeat
+            visible: chip.hasBadge
+            width: chip.badgeInk
+            height: Theme.iconSm
+            // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
+            // and a badge that centres itself on a three-line chip has left the name it belongs to.
+            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
+            NavIcon {
+                id: badgeMark
+                anchors.verticalCenter: parent.verticalCenter
+                // The ink's right edge on the seat's: the air the box holds past the ink comes off here rather than
+                // widening the gap after it, and the ink runs half a gap out the other side into the row's spacing.
+                anchors.right: parent.right
+                anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
+                kind: chip.recPr ? "pr" : "remote"
+                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
+                width: Theme.iconSm
+                height: Theme.iconSm
+            }
+        }
         // How many more names the row carries, which is meta about the row rather than one of the names — the colour
         // the row's other meta (author, date) is written in.
         //
@@ -277,34 +317,6 @@ Rectangle {
             text: "+" + (chip.records.length - 1)
             color: chip.dulled ? Theme.textMuted : Theme.textSecondary
             font.pixelSize: Theme.fontSm
-        }
-        // Remote / PR badge: reserved width above, so it survives any elision.
-        //
-        // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
-        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left.
-        // The gap before it would then read as the row's spacing **plus** that — the one place in the chip where two
-        // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白;
-        // observed).
-        Item {
-            visible: chip.hasBadge
-            width: chip.badgeInk
-            height: Theme.iconSm
-            // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
-            // and a badge that centres itself on a three-line chip has left the name it belongs to.
-            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
-            NavIcon {
-                id: badgeMark
-                anchors.verticalCenter: parent.verticalCenter
-                // The ink's right edge on the seat's, which is where the frame's own padding starts: the air the box
-                // holds past the ink comes off here rather than widening that padding, and the ink runs half a gap out
-                // the other side into the row's spacing.
-                anchors.right: parent.right
-                anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
-                kind: chip.recPr ? "pr" : "remote"
-                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
-                width: Theme.iconSm
-                height: Theme.iconSm
-            }
         }
     }
 }
