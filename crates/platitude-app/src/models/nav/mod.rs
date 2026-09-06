@@ -15,6 +15,8 @@ use super::qml_register;
 
 mod attach;
 mod drain;
+#[cfg(test)]
+mod drain_tests;
 mod field;
 #[cfg(test)]
 mod field_tests;
@@ -103,6 +105,14 @@ pub struct NavSectionModel {
     /// once both are in hand (`drain::settle_head_marks`).
     head_has_remote: bool,
     head_has_pr: bool,
+    /// How far that branch stands from its upstream, off the same lookup
+    /// — the pair the stand-in draws, so it and the row it stands for
+    /// cannot say different numbers. **Not the status read's pair**
+    /// (`WorkTreeModel.ahead`): those are held back while the counts are
+    /// not yet about the branch HEAD is on, which is the moment after a
+    /// switch when this stand-in is the one on screen.
+    head_ahead: i32,
+    head_behind: i32,
     /// Visible row of the current entry, or -1 when it has none (a
     /// filter or a collapsed folder hides it, or HEAD is detached). The
     /// sticky row needs it to tell whether the real row is on screen.

@@ -176,6 +176,6 @@ impl NavSectionModel {
 /// A count as the role table carries it. Roles are `i32`, so a branch
 /// standing further from its upstream than that draws the largest number
 /// there is rather than wrapping to a negative one.
-fn counted(commits: u32) -> i32 {
+pub(super) fn counted(commits: u32) -> i32 {
     i32::try_from(commits).unwrap_or(i32::MAX)
 }

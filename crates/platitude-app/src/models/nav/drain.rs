@@ -116,12 +116,18 @@ impl NavSectionModel {
         }
     }
 
-    /// What the current branch's own row wears — read off the snapshot
-    /// by name, so the stand-in draws what the row it stands for draws.
-    /// Nothing while the branch is not in the snapshot yet (a HEAD
-    /// reported ahead of the first listing, or a branch made since it).
-    /// Answers whether either mark moved.
-    fn settle_head_marks(&mut self) -> bool {
+    /// What the current branch's own row wears — the marks and the
+    /// counts, read off the snapshot by name so the stand-in draws what
+    /// the row it stands for draws. Nothing while the branch is not in
+    /// the snapshot yet (a HEAD reported ahead of the first listing, or a
+    /// branch made since it). Answers whether any of them moved.
+    ///
+    /// **The counts are read here rather than off the arranged row**
+    /// (`view::arrange`, where `head_depth` comes from): a filter or a
+    /// folded folder leaves the branch with no row at all, and that is
+    /// exactly when the stand-in takes a seat of its own
+    /// (`HeadPinRow.seated`) and still has its pair to draw.
+    pub(super) fn settle_head_marks(&mut self) -> bool {
         let branch = if self.head_name.is_empty() {
             None
         } else {
@@ -129,9 +135,19 @@ impl NavSectionModel {
         };
         let has_remote = branch.is_some_and(|b| b.has_remote);
         let has_pr = branch.is_some() && crate::encode::pr_set().contains(self.head_name.as_str());
-        let changed = (has_remote, has_pr) != (self.head_has_remote, self.head_has_pr);
+        let ahead = branch.map_or(0, |b| field::counted(b.ahead));
+        let behind = branch.map_or(0, |b| field::counted(b.behind));
+        let changed = (has_remote, has_pr, ahead, behind)
+            != (
+                self.head_has_remote,
+                self.head_has_pr,
+                self.head_ahead,
+                self.head_behind,
+            );
         self.head_has_remote = has_remote;
         self.head_has_pr = has_pr;
+        self.head_ahead = ahead;
+        self.head_behind = behind;
         changed
     }
 }

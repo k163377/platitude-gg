@@ -269,7 +269,6 @@ Rectangle {
         opacity: sidebar.frozen ? Metrics.dimFade : 1
         addHeld: sidebar.doorsHeld
         repoTab: sidebar.repoTab
-        workTree: sidebar.workTree
         branchesModel: sidebar.branchesModel
         remotesModel: sidebar.remotesModel
         worktreesModel: sidebar.worktreesModel

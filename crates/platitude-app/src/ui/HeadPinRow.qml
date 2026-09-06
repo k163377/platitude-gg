@@ -20,7 +20,6 @@ Rectangle {
     id: headPin
 
     required property var branchesModel
-    required property var workTree
     /// Where the list is standing and how tall it is — which edge this rides, and whether it is needed at all, is read
     /// off the two.
     required property real contentY
@@ -83,15 +82,16 @@ Rectangle {
             weight: Font.DemiBold
             pixelSize: Theme.fontMd
         }
-        // Dressed as the row it stands for: nothing where there is nothing to count, and the same seat left empty
-        // when the branch is level with its upstream or has none. **The counts are the status read's** rather than
-        // the listing's, because this row is only ever HEAD (rules-refs/app-ui.md 「upstream / ahead / behind は
-        // `countsSettled` の間だけ」); the two agree on a quiet repository, and this one steps aside the moment the
-        // row itself is on screen, so they are never read side by side.
+        // Dressed as the row it stands for, down to where the pair comes from: the same listing the row draws it
+        // out of, read off the snapshot by name (`drain::settle_head_marks`), so the stand-in and the row cannot
+        // say different numbers. **Not the status read's pair** (`workTree.ahead`) — those are held back until a
+        // status has been read on the branch HEAD is on (`WorkTreeModel.countsSettled`), which is the moment after
+        // a switch when this stand-in is the one on screen. The seat is empty wherever there is nothing to count:
+        // level with the upstream, or no upstream to measure against.
         HeadTrack {
-            visible: headPin.workTree.ahead > 0 || headPin.workTree.behind > 0
-            ahead: headPin.workTree.ahead
-            behind: headPin.workTree.behind
+            visible: headPin.branchesModel.headAhead > 0 || headPin.branchesModel.headBehind > 0
+            ahead: headPin.branchesModel.headAhead
+            behind: headPin.branchesModel.headBehind
             Layout.alignment: Qt.AlignVCenter
         }
         NavIcon {

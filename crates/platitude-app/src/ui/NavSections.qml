@@ -14,7 +14,6 @@ ColumnLayout {
     id: sections
 
     required property var repoTab
-    required property var workTree
     required property var branchesModel
     required property var remotesModel
     required property var worktreesModel
@@ -134,7 +133,6 @@ ColumnLayout {
                      || (branchList.pointedTipRow >= 0
                          && branchList.pointedTipRow === sections.branchesModel.headRow)
             branchesModel: sections.branchesModel
-            workTree: sections.workTree
             contentY: branchList.contentY
             viewHeight: branchList.height
             width: branchList.width
