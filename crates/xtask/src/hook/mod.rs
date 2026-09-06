@@ -80,12 +80,19 @@ fn stop(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// SessionEnd: everything a session leaves behind for itself alone —
-/// the seat it claimed, and the chip ledger its numbering was judged
-/// against.
+/// SessionEnd: the chip ledger goes with the session that wrote it.
+///
+/// The seat does not go with it. This event is handed to every open
+/// conversation when the machine sleeps, and each one goes on working at
+/// the next wake (shots/sweep.rs) — a claim released here comes off a
+/// seat its session is still sitting in, and the session meets its own
+/// tree as somebody else's on waking. A conversation that is really over
+/// is read off the claim's process instead: one whose Claude process is
+/// gone is litter the next `cargo xtask seat` lifts
+/// (`seats::claim_is_dead`), which asks rather than guesses.
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
-    seat::session_end(input)
+    Ok(())
 }
 
 /// PreToolUse(Bash|PowerShell): every shell line passes through here. One

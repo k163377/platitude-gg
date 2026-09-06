@@ -370,10 +370,10 @@ const TAIL: &str = "  shipped [--no-build]
       reference-transaction hook checks the stamp on the way. History
       stays linear and a landed seat stands at main's tip. Refuses a
       branch checked out nowhere, a dirty seat, and a seat that holds
-      main. Bare `land` from a seat lands the seat's own branch. A
-      landed branch's seat is handed back: its claude-seat claim is
-      released once the commits are on main, and the next edit there
-      claims it back (a lock written by hand stays).
+      main. Bare `land` from a seat lands the seat's own branch. The
+      seat's claim stays with whoever is behind it — the next stretch of
+      work begins in that same tree — and is handed back only when the
+      session that claimed it is gone (a lock written by hand stays).
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe
@@ -390,7 +390,7 @@ const TAIL: &str = "  shipped [--no-build]
       keeps a per-tree settings store on its own, so seats never fight
       over one instance lock.
 
-  seat
+  seat [release]
       Hands this session a worktree seat, and takes no argument: the
       letter is the answer, never the request (CLAUDE.md ビルド・テスト).
       Letters are tried until `git worktree lock` takes one, so the seat
@@ -404,7 +404,12 @@ const TAIL: &str = "  shipped [--no-build]
       and that is the only path the entry hook will let through, because
       the claim behind it is this session's. When every letter is held or
       holds unmerged work it fails and says so — seats are not added
-      past f.
+      past f. The seat is kept for as long as the session is: neither
+      landing the branch nor the SessionEnd the machine's sleep hands
+      out lifts the claim, because a session that is still working is
+      still using its tree. `seat release` is the way to hand it back
+      on purpose, and it names what the seat still carries; a claim
+      whose Claude process is gone the roster lifts by itself.
 
   seats
       Where the six worktree seats a-f stand right now, one line each:

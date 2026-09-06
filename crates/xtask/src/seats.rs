@@ -17,10 +17,12 @@ use std::time::{Duration, SystemTime};
 pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
 
 /// The mark a session's seat claim carries in `git worktree lock`'s
-/// reason, followed by the session id and the Claude process the claim was
-/// written from. The entry hooks and the post-write re-claim write it;
-/// `land` and the session-end hook release it. A lock without this mark is
-/// a person's, and nothing automatic touches it.
+/// reason, followed by the session id and the Claude process the claim
+/// was written from. The entry hooks and the post-write re-claim write
+/// it. Two things take it off, and neither of them guesses: `cargo xtask
+/// seat release`, and the roster meeting a claim whose Claude process is
+/// gone (`claim_is_dead`). A lock without this mark is a person's, and
+/// nothing automatic touches it.
 pub(crate) const SEAT_CLAIM: &str = "claude-seat";
 
 /// The directory every worktree of this repository sits under.
@@ -285,13 +287,65 @@ impl Assigned {
 /// tried until one is claimed, and the letter comes back as an answer
 /// rather than going in as a request (CLAUDE.md ビルド・テスト).
 pub fn take(args: &[String]) -> Result<(), String> {
-    if !args.is_empty() {
-        return Err(format!("seat takes no arguments (got {args:?})"));
+    let root = crate::tree::workspace_root().to_string_lossy().to_string();
+    let me = Identity::current(None);
+    match args.first().map(String::as_str) {
+        None => {
+            println!("{}", assign(&root, &me)?.report());
+            Ok(())
+        }
+        Some("release") if args.len() == 1 => release(&root, &me),
+        _ => Err(format!(
+            "seat takes no arguments, or `release` to hand this session's seat \
+             back (got {args:?})"
+        )),
     }
-    let root = crate::tree::workspace_root();
-    let assigned = assign(&root.to_string_lossy(), &Identity::current(None))?;
-    println!("{}", assigned.report());
+}
+
+/// `cargo xtask seat release`: the seat this session holds goes back to
+/// the roster.
+///
+/// The one way a claim comes off while its session is still here.
+/// Nothing else lifts it — not landing the branch, not the SessionEnd
+/// the machine's sleep hands out — because a session still working is
+/// still using its tree, and the letter it was given is where its
+/// target/ is warm (CLAUDE.md ビルド・テスト). What the seat still
+/// carries is named on the way out: the roster hands out no seat with
+/// work in it, so a release leaves that work for a reader to land or
+/// drop rather than for the next session to find.
+fn release(root: &str, me: &Identity) -> Result<(), String> {
+    let (primary, trees) = primary_checkout(root)?;
+    let Some(held) = held_seat(&seat_entries_of(trees), me) else {
+        return Err("this session holds no seat, so there is none to release".into());
+    };
+    if !unlock_seat(&primary, &held.path) {
+        return Err(format!(
+            "the claim on seat {} did not release — `git worktree unlock {}` by hand",
+            held.seat, held.path
+        ));
+    }
+    println!("seat {} released{}", held.seat, left_behind(&held.path));
     Ok(())
+}
+
+/// What a released seat still carries, said on the way out so that the
+/// roster's refusal to hand it to anybody is not a surprise later. A
+/// figure git could not answer for is reported as unknown rather than as
+/// nothing — the seat is released either way, and a silent zero would be
+/// the one reading that needs no reply.
+fn left_behind(path: &str) -> String {
+    let (Some(ahead), Some(dirty)) = (commits_in(path, "main..HEAD"), dirty_lines(path)) else {
+        return " — git could not say what it still carries; `cargo xtask seats` reads the roster"
+            .to_string();
+    };
+    if ahead == 0 && dirty == 0 {
+        return String::new();
+    }
+    format!(
+        " — it still carries {ahead} commit(s) main does not have and {dirty} \
+         uncommitted file(s), so the roster will not hand it to anybody until \
+         those land or go"
+    )
 }
 
 /// The seat this session holds, taking one if it holds none.

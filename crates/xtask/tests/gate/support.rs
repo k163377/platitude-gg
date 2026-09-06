@@ -179,15 +179,31 @@ impl Sandbox {
         self.land_from(Path::new(EXE), branch)
     }
 
+    /// The same landing under a session's own mark, for the claim on the
+    /// landed seat: whose it is decides whether it is handed back. The
+    /// marks are set rather than inherited — the run that started these
+    /// tests may be a session itself, and its id must not be the answer.
+    pub fn land_as(&self, branch: &str, session: &str) -> (bool, String) {
+        self.landing(Path::new(EXE), branch, Some(session))
+    }
+
     /// The same landing run from a given binary — a copy in a tree's own
     /// build slot, for the landing that has to write that slot.
     pub fn land_from(&self, exe: &Path, branch: &str) -> (bool, String) {
+        self.landing(exe, branch, None)
+    }
+
+    fn landing(&self, exe: &Path, branch: &str, session: Option<&str>) -> (bool, String) {
         let mut command = Command::new(exe);
         command
             .args(["land", branch, "--dir"])
             .arg(&self.repo)
             .current_dir(&self.repo);
         self.env(&mut command);
+        if let Some(session) = session {
+            command.env("CLAUDE_CODE_SESSION_ID", session);
+            command.env_remove("CLAUDE_PID");
+        }
         let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
         let text = format!(
             "{}{}",

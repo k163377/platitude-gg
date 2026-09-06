@@ -18,7 +18,7 @@
 //! and a landed seat already stands at main's tip.
 
 use crate::gate::Gated;
-use crate::seats::{SEAT_CLAIM, WorktreeBlock, worktree_blocks};
+use crate::seats::{Identity, SEAT_CLAIM, Standing, WorktreeBlock, standing, worktree_blocks};
 use crate::subprocess::git_query;
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -390,26 +390,69 @@ fn clear_the_board(listing: &str, branch: &str) {
     }
 }
 
-/// The claim's release point (CLAUDE.md ビルド・テスト): the reflection
-/// instruction ends a seat's stretch of work, so the landed branch's
-/// worktree is handed back the moment its commits are on main — whether
-/// the session that worked it is still around or not. Further work there
-/// claims the seat back at its first edit (the post-write hook). Only the
-/// hooks' own kind of lock is lifted; a lock a person wrote stays.
+/// The claim left by a session that is gone: its branch is on main and
+/// its tree is at main's tip, so the letter goes back to the roster.
+/// Only the hooks' own kind of lock is lifted; a lock a person wrote
+/// stays.
+///
+/// Every claim there is still somebody behind stays put, this session's
+/// and another's alike. Landing ends a stretch of work, not the
+/// conversation — the next stretch begins in the same tree, on the same
+/// warm target/, and a claim lifted out from under a session is what
+/// sent them to a fresh letter at their next edit (CLAUDE.md
+/// ビルド・テスト). `cargo xtask seat release` is the way to hand one
+/// back on purpose.
 fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
     };
-    if git_query(here, &["worktree", "unlock", &tree.path]).is_some() {
-        println!(
-            "released the seat claim on {} — the next edit there claims it back.",
+    match claim_on(tree, &Identity::current(None)) {
+        Claim::Ours => println!(
+            "the seat claim on {} stays with this session — the tree is at main's tip \
+             and ready for the next stretch (`cargo xtask seat release` hands it back).",
             tree.path
+        ),
+        Claim::Another => println!(
+            "the seat claim on {} is another session's and stays as it is: {}",
+            tree.path, tree.reason
+        ),
+        Claim::Litter => hand_back(here, &tree.path),
+    }
+}
+
+/// Whose a landed seat's claim is. Pure, so the line between a session
+/// that is gone and one that is merely elsewhere can be asserted rather
+/// than read out of a run.
+enum Claim {
+    /// Its session is gone: the letter goes back to the roster.
+    Litter,
+    /// This session's, which is still working in the tree.
+    Ours,
+    /// Somebody else's — or one written without a process to ask about,
+    /// which is left standing too: unjudgeable is not the same as gone
+    /// (`seats::claim_liveness`).
+    Another,
+}
+
+fn claim_on(tree: &WorktreeBlock, me: &Identity) -> Claim {
+    match standing(Some(tree.reason.clone()), me) {
+        Standing::Stale(_) => Claim::Litter,
+        Standing::Ours => Claim::Ours,
+        Standing::Free | Standing::Foreign(_) => Claim::Another,
+    }
+}
+
+/// The unlock itself, and what to do when git will not do it.
+fn hand_back(here: &str, path: &str) {
+    if git_query(here, &["worktree", "unlock", path]).is_some() {
+        println!(
+            "released the seat claim on {path} — the session that worked it is gone, \
+             and the roster can hand the letter out again."
         );
     } else {
         println!(
-            "note: the seat claim on {} did not release — \
-             `git worktree unlock {}` by hand.",
-            tree.path, tree.path
+            "note: the seat claim on {path} did not release — \
+             `git worktree unlock {path}` by hand."
         );
     }
 }
@@ -489,8 +532,11 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_slot_tree, clock, landed_claim, same_tree};
+    use super::{
+        Claim, Identity, WorktreeBlock, build_slot_tree, claim_on, clock, landed_claim, same_tree,
+    };
     use crate::seats::worktree_blocks;
+    use crate::subprocess::NO_SUCH_PID;
 
     /// A tree root spelled the way the running system spells one.
     fn tree() -> &'static str {
@@ -563,6 +609,49 @@ mod tests {
         assert!(
             landed_claim(&trees, "worktree-x").is_none(),
             "a branch checked out nowhere has no seat to hand back"
+        );
+    }
+
+    #[test]
+    fn a_landing_hands_back_only_a_seat_whose_session_is_gone() {
+        let seat = |reason: &str| WorktreeBlock {
+            path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
+            branch: "worktree-a".to_string(),
+            locked: true,
+            reason: reason.to_string(),
+        };
+        // Marked by its id alone, so that the one live process this test
+        // can name — its own — is free to stand for the other session.
+        let me = Identity {
+            session: "mine".to_string(),
+            pid: None,
+        };
+        assert!(
+            matches!(claim_on(&seat("claude-seat mine pid 1"), &me), Claim::Ours),
+            "landing ends a stretch of work, not the conversation: the next \
+             stretch begins in this same tree"
+        );
+        assert!(
+            matches!(
+                claim_on(
+                    &seat(&format!("claude-seat theirs pid {}", std::process::id())),
+                    &me
+                ),
+                Claim::Another
+            ),
+            "a session that is still running is still using its tree, whether \
+             or not its branch just landed"
+        );
+        assert!(
+            matches!(claim_on(&seat("claude-seat theirs"), &me), Claim::Another),
+            "a claim with no process to ask about is unjudgeable, not gone"
+        );
+        assert!(
+            matches!(
+                claim_on(&seat(&format!("claude-seat theirs pid {NO_SUCH_PID}")), &me),
+                Claim::Litter
+            ),
+            "the seat of a session that ended goes back to the roster"
         );
     }
 

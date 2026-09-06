@@ -208,3 +208,66 @@ fn land_commits_the_census_its_gate_rewrote() {
         "{census}"
     );
 }
+
+/// The claim on a landed seat is the session's own until it says
+/// otherwise. Landing ends a stretch of work, not the conversation: the
+/// next stretch begins in that same tree, and a claim lifted here comes
+/// off a seat its session is still sitting in — which is what sent
+/// sessions to a fresh letter at their next edit (CLAUDE.md
+/// ビルド・テスト). A claim naming somebody else is still handed back:
+/// landing their branch for them ends their stretch.
+#[test]
+fn a_landed_seat_keeps_its_own_sessions_claim() {
+    let sb = Sandbox::new("claim");
+    let seat = sb.seat.display().to_string().replace('\\', "/");
+    sb.write_refs(&sb.seat, 8);
+    sb.commit_all(&sb.seat, "feat(core): eight", &[]);
+    sb.git_ok(
+        &sb.repo,
+        &["worktree", "lock", "--reason", "claude-seat mine", &seat],
+    );
+
+    let (ok, text) = sb.land_as("worktree-a", "mine");
+    assert!(ok, "{text}");
+    assert!(text.contains("stays with this session"), "{text}");
+    assert!(
+        sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"])
+            .contains("locked claude-seat mine"),
+        "the session went on working in a tree it no longer held"
+    );
+
+    sb.write_refs(&sb.seat, 16);
+    sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
+    let (ok, text) = sb.land_as("worktree-a", "somebody-else");
+    assert!(ok, "{text}");
+    assert!(text.contains("is another session's and stays"), "{text}");
+    assert!(
+        sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"])
+            .contains("locked claude-seat mine"),
+        "a session that is still running is still using its tree"
+    );
+
+    // The number no process can have (`subprocess::NO_SUCH_PID`): odd,
+    // and above what either kernel hands out.
+    sb.git_ok(&sb.repo, &["worktree", "unlock", &seat]);
+    sb.git_ok(
+        &sb.repo,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "claude-seat gone pid 2147483645",
+            &seat,
+        ],
+    );
+    sb.write_refs(&sb.seat, 32);
+    sb.commit_all(&sb.seat, "feat(core): thirty-two", &[]);
+    let (ok, text) = sb.land_as("worktree-a", "mine");
+    assert!(ok, "{text}");
+    assert!(text.contains("released the seat claim"), "{text}");
+    assert!(
+        !sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"])
+            .contains("locked"),
+        "the seat of a session that ended goes back to the roster"
+    );
+}

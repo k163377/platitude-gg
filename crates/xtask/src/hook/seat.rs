@@ -1,12 +1,13 @@
 //! The seat roster guard: which worktrees a session may enter, the atomic
 //! claim that keeps two sessions out of one seat, and the re-claim that
-//! puts a claim back on a seat `land` set free.
+//! puts a claim back on a seat that lost one while its session worked in
+//! it.
 
 use super::launch::resolve;
 use super::payload::{deny, printable, string_field};
 use crate::seats::{
     self, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
-    lock_reason, same_tree, standing, take_seat, unlock_seat, worktree_blocks, worktree_root,
+    lock_reason, same_tree, standing, take_seat, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -55,7 +56,7 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     let entry = match target.as_deref() {
         Some(tree) if in_rig(tree) => Entry::Rig,
         Some(tree) if roster_seat(tree).is_some() => {
-            Entry::Seat(standing(lock_reason(tree), &me), tree.to_string())
+            Entry::Seat(standing_here(&cwd, tree, &me), tree.to_string())
         }
         Some(_) => Entry::OffRoster,
         None => Entry::Unresolved,
@@ -68,6 +69,35 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// Where a seat stands for the session asking to enter it: the plain
+/// standing, except that an unclaimed seat the session is already
+/// standing in is claimed again rather than refused.
+///
+/// A claim can go missing under a session that never left its tree, and
+/// the refusal that meets it on the way back in reads as somebody else's
+/// seat: one session met that, took a fresh letter and left its
+/// afternoon's commits behind in the old one (seat e, 2026-09-04).
+/// Re-entering the tree the session is already working in names no
+/// letter — it is the seat it already had — so the claim is written back
+/// instead of the door being shut on it.
+fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
+    let standing = standing(lock_reason(tree), me);
+    match reclaims_on_entry(cwd, tree, &standing) {
+        true => take_seat(tree, tree, me),
+        false => standing,
+    }
+}
+
+/// Whether this entry is a session going back into the tree it is already
+/// working in, and finding no claim on it. Pure, so the one exception to
+/// "seats are handed out, never chosen" can be asserted rather than
+/// probed: everywhere else, an unclaimed letter is still a letter picked
+/// out of a survey.
+fn reclaims_on_entry(cwd: &str, tree: &str, standing: &Standing) -> bool {
+    matches!(standing, Standing::Free)
+        && worktree_root(cwd).is_some_and(|here| same_tree(&here, tree))
 }
 
 /// Why nobody enters or edits the rig: it is the measurement's, and it
@@ -249,35 +279,6 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
         .map(|entry| entry.tree.path)
 }
 
-/// SessionEnd: a seat claimed by this session is handed back. A lock
-/// somebody else wrote stays — ending inside a seat that was never ours
-/// is the collision case, not a reason to free it.
-///
-/// The shot board is not touched here, and that is the point: this event
-/// fires when the machine goes to sleep as readily as when a
-/// conversation is over, and the pictures belong to the seat's work
-/// rather than to the session that took them (shots/sweep.rs).
-pub(super) fn session_end(input: &str) -> Result<(), String> {
-    let session = string_field(input, "session_id").unwrap_or_default();
-    if session.is_empty() {
-        return Ok(());
-    }
-    let cwd = string_field(input, "cwd").unwrap_or_default();
-    if roster_seat(&cwd).is_none() {
-        return Ok(());
-    }
-    // The unlock must name the worktree by its top-level path — git
-    // resolves the argument by exact real path, so a session that ended
-    // standing in a subdirectory would fail it silently.
-    let root = worktree_root(&cwd).unwrap_or(cwd);
-    let me = Identity::current(Some(&session));
-    if matches!(standing(lock_reason(&root), &me), Standing::Ours) && !unlock_seat(&root, &root) {
-        // Nobody is left to tell; the claim's dead pid is what the next
-        // session reads it by.
-    }
-    Ok(())
-}
-
 /// PreToolUse(Write|Edit): where a write would land decides whether it
 /// may. This is the door the whole seat mechanism hangs on — a session
 /// only ever needs a seat because a write of its own was held here, and
@@ -412,11 +413,12 @@ fn under(root: &str, path: &str) -> bool {
 }
 
 /// PostToolUse(Write|Edit): an edit inside a roster seat is work, and work
-/// holds a claim. Seats come free mid-session — `land` releases the claim
-/// the moment a seat's branch is on main (CLAUDE.md ビルド・テスト) — so
-/// the next stretch of work claims the seat back at its first edit. Quiet
-/// while the claim is already this session's; a note when the re-claim
-/// takes; a warning when the seat belongs to somebody else.
+/// holds a claim. A seat a session is working in should already carry
+/// one, so this is the net under the ways a claim can still be missing:
+/// released by hand, lifted as litter while the session's process was
+/// gone, or written before the roster had the claim at all. Quiet while
+/// the claim is already this session's; a note when the re-claim takes; a
+/// warning when the seat belongs to somebody else.
 pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
     let root = worktree_root(path)?;
     let name = root.rsplit('/').next()?.to_string();
@@ -429,8 +431,8 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
         Standing::Ours if held => None,
         Standing::Ours => Some(format!(
             "Seat {name} stood unclaimed and this edit re-claimed it for the \
-             session (a landed seat comes unlocked; further work claims it \
-             back at its first edit — CLAUDE.md ビルド・テスト). {}",
+             session — a seat being worked in carries its session's claim, \
+             and this one had come off (CLAUDE.md ビルド・テスト). {}",
             announce(&name)
         )),
         Standing::Foreign(reason) | Standing::Stale(reason) => {
@@ -481,8 +483,8 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 #[cfg(test)]
 mod tests {
     use super::{
-        Entry, Landing, entry_verdict, roster_seat, tree_named, under, worktree_objection,
-        write_verdict,
+        Entry, Landing, entry_verdict, reclaims_on_entry, roster_seat, tree_named, under,
+        worktree_objection, write_verdict,
     };
     use crate::hook::payload::printable;
     use crate::seats::{Identity, Standing, WorktreeBlock};
@@ -588,6 +590,36 @@ mod tests {
     }
 
     #[test]
+    fn the_seat_a_session_stands_in_is_claimed_back_rather_than_refused() {
+        let seat_e = "C:/x/platitude-gg/.claude/worktrees/e";
+        assert!(
+            reclaims_on_entry(seat_e, seat_e, &Standing::Free),
+            "a claim can come off under a session that never left its tree, and \
+             the refusal reads to it as somebody else's seat"
+        );
+        assert!(
+            reclaims_on_entry(&format!("{seat_e}/crates/xtask"), seat_e, &Standing::Free),
+            "the session stands wherever in the tree it was last working"
+        );
+        assert!(
+            !reclaims_on_entry(
+                "C:/x/platitude-gg/.claude/worktrees/a",
+                seat_e,
+                &Standing::Free
+            ),
+            "an unclaimed letter read from another seat is a letter chosen"
+        );
+        assert!(
+            !reclaims_on_entry(PRIMARY, seat_e, &Standing::Free),
+            "and so is one chosen from the primary checkout"
+        );
+        assert!(
+            !reclaims_on_entry(seat_e, seat_e, &theirs()),
+            "a claim somebody else holds is never written over"
+        );
+    }
+
+    #[test]
     fn a_write_is_held_where_it_would_land_in_somebody_elses_tree() {
         let decision =
             |landing: &Landing| write_verdict(landing, &me()).map(|(decision, _)| decision);
@@ -598,7 +630,8 @@ mod tests {
         assert_eq!(
             decision(&Landing::Seat("a", Standing::Free, NO_TREE.into())),
             None,
-            "a landed seat comes unlocked; the post-write re-claim takes it back"
+            "a seat whose claim came off is still this session's to write in; \
+             the post-write re-claim takes it back"
         );
         assert_eq!(
             decision(&Landing::Seat("b", theirs(), NO_TREE.into())),
