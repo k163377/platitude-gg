@@ -51,7 +51,6 @@ Item {
     /// Decide the cut and hand the two halves to the labels below.
     function relayout() {
         const whole = cut.text
-        const box = cut.width
         // The whole name goes onto `measure` here, imperatively — written before any branch so the ruler behind
         // `implicitWidth` never lags the text, and written by this handler rather than bound because a binding and
         // this handler answer the same `textChanged` in an order nobody has written down. Owning the write is also
@@ -60,6 +59,14 @@ Item {
         // TextMetrics does nothing for a value it already holds.
         measure.font = headLabel.font
         measure.text = whole
+        // The column, read **after** that write and never before it. `implicitWidth` is this ruler's answer, so a
+        // caller that sizes the box off the name's own width — a tab is drawn as wide as what it is called
+        // (`TabItemDelegate`) — moves the column from inside those two lines and re-enters this function on the way.
+        // The nested run settles the name against the column it now has; read first, this one would lay its own
+        // answer, worked out against the column that is gone, back over it. What that leaves is a name cut for a box
+        // narrower than the one it is drawn in — the mark standing alone where two letters fit (`TabProbe`,
+        // `PG_AUTO_ACT=tab-widths`).
+        const box = cut.width
         // No name, or no column yet — a delegate is built before the layout has given it one, and the labels below
         // are anchored to the item rather than elided into it, so a name drawn against a box of nothing would be
         // drawn in full over whatever the row keeps beside it.
