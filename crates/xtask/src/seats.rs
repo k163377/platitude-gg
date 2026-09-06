@@ -233,10 +233,10 @@ pub(crate) enum Standing {
 }
 
 /// Either mark matching is proof enough that the claim is this session's,
-/// and neither matching is not a reason to assume it: seat e was shared
-/// by two sessions for eight minutes because one of them read a lock it
-/// could not account for as its own anyway (2026-09-02). `held` is what
-/// the claim's pid is asked after when neither mark matches.
+/// and neither matching is not a reason to assume it: a session that
+/// reads a lock it cannot account for as its own ends up sharing the
+/// tree with whoever wrote it. `held` is what the claim's pid is asked
+/// after when neither mark matches.
 pub(crate) fn standing(reason: Option<String>, me: &Identity, held: Held) -> Standing {
     let Some(reason) = reason else {
         return Standing::Free;
@@ -463,7 +463,30 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     if let Some(held) = held_seat(&entries, me) {
         return Ok(held);
     }
-    for name in spread_order() {
+    // The tree the session is standing in comes first when it is free to
+    // take: a landed seat is empty at main's tip with its claim handed
+    // back (`land`), and a session that goes on working there wants that
+    // tree — its warm target/ — rather than a letter drawn at random. A
+    // tree somebody else holds is passed over like any other; the claim
+    // below is still what decides, and nothing here reads a survey.
+    let standing_in = worktree_root(cwd).and_then(|root| {
+        entries
+            .iter()
+            .find(|entry| same_tree(&entry.tree.path, &root))
+    });
+    if let Some(entry) = standing_in
+        && let Some(taken) = claim_existing(&primary, &entry.tree.path, entry.seat, me)
+    {
+        return Ok(taken);
+    }
+    // A tree that refused the claim above (ahead, or dirty) is not asked
+    // again on its turn: the answer would be the same, at the cost of a
+    // second lock and unlock on it.
+    let asked = standing_in.map(|entry| entry.seat);
+    for name in spread_order()
+        .into_iter()
+        .filter(|name| Some(*name) != asked)
+    {
         let taken = match entries.iter().find(|entry| entry.seat == name) {
             Some(entry) => claim_existing(&primary, &entry.tree.path, name, me),
             None => create_seat(&primary, name, me),
@@ -793,9 +816,16 @@ pub(crate) fn in_rig(path: &str) -> bool {
     worktree_root(path).is_some_and(|root| root.rsplit('/').next() == Some(RIG))
 }
 
-/// Whether two paths name one tree. Windows spells a path in whatever
-/// case the writer used, so the comparison there is case-blind.
+/// Whether two paths name one tree. The filesystem answers it, because
+/// the two are spelled by different mouths: git writes forward slashes
+/// and the long name, while a process is handed the spelling it was
+/// started with — an 8.3 short name, a junction, either case. A path the
+/// filesystem cannot resolve falls back to its text, with the separators
+/// levelled and, on Windows, the case.
 pub(crate) fn same_tree(left: &str, right: &str) -> bool {
+    if let (Ok(left), Ok(right)) = (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+        return left == right;
+    }
     let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
     let (left, right) = (trim(left), trim(right));
     if cfg!(windows) {

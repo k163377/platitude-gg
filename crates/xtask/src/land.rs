@@ -19,7 +19,7 @@
 
 use crate::gate::Gated;
 use crate::seats::{
-    Held, Identity, SEAT_CLAIM, Standing, WorktreeBlock, standing, worktree_blocks,
+    Held, Identity, SEAT_CLAIM, Standing, WorktreeBlock, same_tree, standing, worktree_blocks,
 };
 use crate::subprocess::git_query;
 
@@ -95,7 +95,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ));
     }
     let mut phases = Phases::start();
-    if let Some(word) = step_out_of_the_build_slot(&[&seat.path, &primary.path]) {
+    // The seat's slot alone: it is the one the gate rebuilds. The
+    // primary's is rebuilt by nothing this landing does — the verdict runs
+    // from `target/hooks` — so a landing run from the primary's runner
+    // stays where it is.
+    if let Some(word) = step_out_of_the_build_slot(&[&seat.path]) {
         println!("{word}");
     }
     // The hook that holds main to the stamp, in place before main moves.
@@ -184,23 +188,22 @@ const INFLIGHT: &str = "xtask-inflight-";
 /// Frees the cargo build slot this process occupies, when the slot is one
 /// of `trees`'.
 ///
-/// Everything past here runs cargo in a tree this landing moves: the
-/// gate builds the seat's task runner (`cargo build -p xtask`) over the
-/// sources the rebase brought in and starts its steps from a copy of it,
-/// and the hook's verdict builds the primary's over the ones the
-/// fast-forward checked out. `cargo xtask
-/// land` is itself `<tree>/target/<profile>/xtask`, so on Windows that
-/// build stops at `failed to remove file … (os error 5)` — a running
-/// image cannot be replaced — and the landing dies before its first step.
-/// Renaming one is allowed on both systems, so this process moves out of
-/// the name and runs on from the copy beside it — which usually goes at
-/// once, Windows included: cargo's slot is a hard link to the binary in
-/// `deps/`, and a link the loader is running can be unlinked while the
-/// other link stands. What is left standing where it cannot (a slot cargo
-/// copied rather than linked) waits for the next landing's sweep. Silent
-/// when this binary is
-/// in nobody's way; a move that fails says so rather than leaving the
-/// cargo error it was meant to explain to arrive unannounced.
+/// The gate builds the seat's task runner (`cargo build -p xtask`) over
+/// the sources the rebase brought in and starts its steps from a copy of
+/// it, and `cargo xtask land` is itself `<tree>/target/debug/xtask` — so
+/// a landing run from the seat's own runner would have that build stop
+/// on Windows at `failed to remove file … (os error 5)`, a running image
+/// being one that cannot be replaced, before its first step. (The hook's
+/// verdict builds nothing here: it runs from `target/hooks`, a slot of
+/// its own.) Renaming one is allowed on both systems, so this process
+/// moves out of the name and runs on from the copy beside it — which
+/// usually goes at once, Windows included: cargo's slot is a hard link
+/// to the binary in `deps/`, and a link the loader is running can be
+/// unlinked while the other link stands. What is left standing where it
+/// cannot (a slot cargo copied rather than linked) waits for the next
+/// landing's sweep. Silent when this binary is in nobody's way; a move
+/// that fails says so rather than leaving the cargo error it was meant to
+/// explain to arrive unannounced.
 fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let mine = build_slot_tree(&exe)?;
@@ -254,27 +257,6 @@ fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
         return None;
     }
     Some(target.parent()?.to_string_lossy().replace('\\', "/"))
-}
-
-/// Whether two paths name one tree. The filesystem answers it, because
-/// the two are spelled by different mouths: git writes forward slashes
-/// and the long name, while a process is handed the spelling it was
-/// started with — an 8.3 short name, a junction, either case. A path the
-/// filesystem cannot resolve falls back to its text.
-fn same_tree(one: &str, other: &str) -> bool {
-    match (std::fs::canonicalize(one), std::fs::canonicalize(other)) {
-        (Ok(one), Ok(other)) => one == other,
-        _ => tidy(one) == tidy(other),
-    }
-}
-
-fn tidy(path: &str) -> String {
-    let path = path.replace('\\', "/").trim_end_matches('/').to_string();
-    if cfg!(windows) {
-        path.to_lowercase()
-    } else {
-        path
-    }
 }
 
 /// The gate in the seat, and the census its verbs may move: a verb that
@@ -549,9 +531,7 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Claim, Identity, WorktreeBlock, build_slot_tree, claim_on, clock, landed_claim, same_tree,
-    };
+    use super::{Claim, Identity, WorktreeBlock, build_slot_tree, claim_on, clock, landed_claim};
     use crate::seats::worktree_blocks;
     use crate::subprocess::NO_SUCH_PID;
 
@@ -589,18 +569,6 @@ mod tests {
             build_slot_tree(&root.join("tools").join(binary("xtask"))),
             None,
             "a copy outside target/ is not what cargo writes"
-        );
-    }
-
-    #[test]
-    fn one_tree_is_one_tree_however_it_is_spelled() {
-        assert!(same_tree("C:/x/seat", "C:\\x\\seat"));
-        assert!(same_tree("C:/x/seat/", "C:/x/seat"));
-        assert!(!same_tree("C:/x/seat", "C:/x/seat-b"));
-        assert_eq!(
-            same_tree("C:/X/Seat", "C:/x/seat"),
-            cfg!(windows),
-            "the case is Windows' to ignore and nobody else's"
         );
     }
 

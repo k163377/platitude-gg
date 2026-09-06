@@ -77,11 +77,10 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
 ///
 /// A claim can go missing under a session that never left its tree, and
 /// the refusal that meets it on the way back in reads as somebody else's
-/// seat: one session met that, took a fresh letter and left its
-/// afternoon's commits behind in the old one (seat e, 2026-09-04).
-/// Re-entering the tree the session is already working in names no
-/// letter — it is the seat it already had — so the claim is written back
-/// instead of the door being shut on it.
+/// seat — a session that takes a fresh letter over it leaves its commits
+/// behind in the old one. Re-entering the tree the session is already
+/// working in names no letter — it is the seat it already had — so the
+/// claim is written back instead of the door being shut on it.
 fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
     let standing = standing(lock_reason(tree), me, Held::BySession);
     match reclaims_on_entry(cwd, tree, &standing) {
