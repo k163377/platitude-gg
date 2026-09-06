@@ -166,10 +166,13 @@ impl Claim {
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
-        // pid unparsed (`seats::standing`).
+        // pid unparsed (`seats::standing`). No image beside it: this
+        // claim's number is this program's, which `Held::ByRunner` may
+        // name outright, and older builds still read the pid it keeps.
         let me = Identity {
             session: format!("perf-{}", std::process::id()),
             pid: Some(std::process::id()),
+            image: None,
         };
         if !exists {
             git_query(
@@ -179,7 +182,7 @@ impl Claim {
                     "add",
                     "--lock",
                     "--reason",
-                    &me.reason(),
+                    &me.reason(Held::ByRunner),
                     "--detach",
                     rig,
                     commit,

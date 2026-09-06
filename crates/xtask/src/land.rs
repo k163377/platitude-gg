@@ -642,6 +642,7 @@ mod tests {
         let me = Identity {
             session: "mine".to_string(),
             pid: None,
+            image: None,
         };
         assert!(
             matches!(claim_on(&seat("claude-seat mine pid 1"), &me), Claim::Ours),
@@ -650,14 +651,17 @@ mod tests {
         assert!(
             matches!(
                 claim_on(
-                    &seat(&format!("claude-seat theirs pid {}", std::process::id())),
+                    &seat(&format!(
+                        "claude-seat theirs pid {} as claude.exe",
+                        std::process::id()
+                    )),
                     &me
                 ),
                 Claim::Litter
             ),
-            "a seat is held by the session behind the number, and this \
-             process is the runner: a number handed on to something that is \
-             not a session holds nothing"
+            "a seat is held by the program the claim recorded, and this \
+             process is the runner: a number handed on to something the \
+             claim did not name holds nothing"
         );
         assert!(
             matches!(claim_on(&seat("claude-seat theirs"), &me), Claim::Another),

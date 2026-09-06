@@ -17,9 +17,10 @@ use std::time::{Duration, SystemTime};
 pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
 
 /// The mark a session's seat claim carries in `git worktree lock`'s
-/// reason, followed by the session id and the Claude process the claim
-/// was written from. The entry hooks and the post-write re-claim write
-/// it. Three things take it off, and none of them guesses: landing the
+/// reason, followed by the session id, the Claude process the claim was
+/// written from, and the program that number was: `claude-seat <session>
+/// pid <pid> as <image>`. The entry hooks and the post-write re-claim
+/// write it. Three things take it off, and none of them guesses: landing the
 /// seat's branch (`land::release_claim`), `cargo xtask seat release`,
 /// and the roster meeting a claim whose Claude process is gone
 /// (`claim_is_dead`). A lock without this mark is a person's, and
@@ -41,6 +42,13 @@ const WORKTREES: &str = "/.claude/worktrees/";
 pub(crate) struct Identity {
     pub session: String,
     pub pid: Option<u32>,
+    /// The program `pid` was when the claim was written, as this machine
+    /// spells it. Filled only when a claim is read back (`holder`): a
+    /// session describing itself reads its own marks out of the
+    /// environment, which says nothing about how the machine names the
+    /// process, and the probe that answers for that runs where the claim
+    /// is written (`Identity::reason`).
+    pub image: Option<String>,
 }
 
 impl Identity {
@@ -57,14 +65,36 @@ impl Identity {
         let pid = std::env::var("CLAUDE_PID")
             .ok()
             .and_then(|pid| pid.trim().parse().ok());
-        Self { session, pid }
+        Self {
+            session,
+            pid,
+            image: None,
+        }
     }
 
     /// What this session writes into a lock's reason.
-    pub(crate) fn reason(&self) -> String {
-        match self.pid {
-            Some(pid) => format!("{SEAT_CLAIM} {} pid {pid}", self.session),
-            None => format!("{SEAT_CLAIM} {}", self.session),
+    ///
+    /// A session's claim records the program behind its pid, because a
+    /// number alone is handed back out the moment its process is gone
+    /// and nothing here may assume how a session is installed or spelled
+    /// — an image name in this source is a guess that hands a live
+    /// session's seat away the day it is wrong. The runner's own claims
+    /// record nothing extra: `Held::ByRunner` asks after this very
+    /// program, which it may name outright.
+    ///
+    /// Probed here rather than in [`Identity::current`] because that one
+    /// runs on every hook event, and this runs once per claim taken.
+    pub(crate) fn reason(&self, held: Held) -> String {
+        let Some(pid) = self.pid else {
+            return format!("{SEAT_CLAIM} {}", self.session);
+        };
+        let stem = format!("{SEAT_CLAIM} {} pid {pid}", self.session);
+        match held {
+            Held::ByRunner => stem,
+            Held::BySession => match crate::subprocess::image_of(pid) {
+                Some(image) => format!("{stem} as {image}"),
+                None => stem,
+            },
         }
     }
 
@@ -88,6 +118,7 @@ impl Identity {
 #[derive(Clone, Copy)]
 pub(crate) enum Held {
     /// By a Claude session, out of its `CLAUDE_PID`: every seat claim.
+    /// What program that is, only the claim says.
     BySession,
     /// By this task runner, out of its own pid: the perf rig's claim,
     /// which no session writes and the roster never hands out
@@ -97,10 +128,16 @@ pub(crate) enum Held {
 
 impl Held {
     /// Whether the process a claim of this kind named is still there.
-    fn still_running(self, pid: u32) -> bool {
-        match self {
-            Self::BySession => crate::subprocess::claude_session_exists(pid),
-            Self::ByRunner => crate::subprocess::task_runner_exists(pid),
+    /// `wrote_as` is the program the claim recorded, which is what a
+    /// session's is asked against; a claim from before that was recorded
+    /// can only be asked whether anybody at all is at the number, and
+    /// answers alive for whoever inherited it. That is the safe way to
+    /// be wrong, and it lasts until the seat is claimed again.
+    fn still_running(self, pid: u32, wrote_as: Option<&str>) -> bool {
+        match (self, wrote_as) {
+            (Self::ByRunner, _) => crate::subprocess::task_runner_exists(pid),
+            (Self::BySession, Some(image)) => crate::subprocess::image_still_at(pid, image),
+            (Self::BySession, None) => crate::subprocess::process_exists(pid),
         }
     }
 }
@@ -112,14 +149,22 @@ impl Held {
 /// own — so the answer is the claim's process, asked. Seat claims only,
 /// whose pid is a session's; the rig says its own piece (`perf::rig`).
 pub(crate) fn claim_liveness(reason: &str) -> &'static str {
-    match holder(reason).and_then(|holder| holder.pid) {
-        Some(pid) if Held::BySession.still_running(pid) => {
-            "That session is running, so the other session is live and both of you are in one tree."
+    let Some(holder) = holder(reason) else {
+        return "That lock carries no claim of ours, so a person wrote it.";
+    };
+    match (holder.pid, holder.image.as_deref()) {
+        (Some(pid), image) if Held::BySession.still_running(pid, image) => {
+            if image.is_some() {
+                "That session is running, so the other session is live and both of you are in one tree."
+            } else {
+                "A process holds that number, but the claim does not say which program it \
+                 was — so it cannot be told from a stranger that inherited the number."
+            }
         }
-        Some(_) => {
+        (Some(_), _) => {
             "No session is running under that number, so the claim is litter one left behind."
         }
-        None => {
+        (None, _) => {
             "The claim names no process, so it predates the mark that would answer — \
              `cargo xtask seats` says whether the seat is still being worked."
         }
@@ -127,26 +172,49 @@ pub(crate) fn claim_liveness(reason: &str) -> &'static str {
 }
 
 /// Whether a lock is a claim nobody is behind any more. Only a claim that
-/// names its process can answer; anything else is left standing. Seat
-/// claims only, as [`claim_liveness`] is.
+/// names its process can answer, and one that names the program too can
+/// tell a stranger that inherited the number from the session that wrote
+/// it; anything else is left standing. Seat claims only, as
+/// [`claim_liveness`] is.
 pub(crate) fn claim_is_dead(reason: &str) -> bool {
-    holder(reason)
-        .and_then(|holder| holder.pid)
-        .is_some_and(|pid| !Held::BySession.still_running(pid))
+    holder(reason).is_some_and(|holder| {
+        holder
+            .pid
+            .is_some_and(|pid| !Held::BySession.still_running(pid, holder.image.as_deref()))
+    })
 }
 
 /// Who a claim names, read back out of a lock's reason. None when the
 /// lock carries no claim of ours — a person's lock, which nothing
 /// automatic touches.
+///
+/// Every part after the mark is optional, because a claim an older build
+/// wrote has fewer of them, and a claim this build writes is read by
+/// those older builds too: the image goes last so that what they parse
+/// keeps its old meaning. What they lose is the pid — the trailing text
+/// no longer parses as a number — and a claim whose pid cannot be read
+/// is one they leave standing, which is the harmless way to lose it.
 fn holder(reason: &str) -> Option<Identity> {
     let rest = reason.strip_prefix(SEAT_CLAIM)?.trim_start();
-    let (session, pid) = match rest.split_once(" pid ") {
-        Some((session, pid)) => (session, pid.trim().parse().ok()),
+    let Some((session, rest)) = rest.split_once(" pid ") else {
+        return Some(Identity {
+            session: rest.trim().to_string(),
+            pid: None,
+            image: None,
+        });
+    };
+    // An image name may hold a space; a pid may not, and comes first.
+    let (pid, image) = match rest.split_once(" as ") {
+        Some((pid, image)) => (
+            pid,
+            Some(image.trim().to_string()).filter(|i| !i.is_empty()),
+        ),
         None => (rest, None),
     };
     Some(Identity {
         session: session.trim().to_string(),
-        pid,
+        pid: pid.trim().parse().ok(),
+        image,
     })
 }
 
@@ -182,7 +250,7 @@ pub(crate) fn standing(reason: Option<String>, me: &Identity, held: Held) -> Sta
         return Standing::Ours;
     }
     match holder.pid {
-        Some(pid) if !held.still_running(pid) => Standing::Stale(reason),
+        Some(pid) if !held.still_running(pid, holder.image.as_deref()) => Standing::Stale(reason),
         _ => Standing::Foreign(reason),
     }
 }
@@ -219,7 +287,7 @@ fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standi
         // translated one would read as no refusal at all. Pin the locale
         // so the claim keeps its teeth.
         .env("LC_ALL", "C")
-        .args(["worktree", "lock", "--reason", &me.reason(), seat_path]);
+        .args(["worktree", "lock", "--reason", &me.reason(held), seat_path]);
     if let Ok(output) = crate::subprocess::run_captured(&mut command)
         && !output.status.success()
         && let Some(rest) = String::from_utf8_lossy(&output.stderr)
@@ -507,7 +575,8 @@ fn create_seat(primary: &str, seat: &'static str, me: &Identity) -> Option<Assig
             "add",
             "--lock",
             "--reason",
-            &me.reason(),
+            // Only a session ever creates a letter; the rig has its own.
+            &me.reason(Held::BySession),
             "-B",
             &branch,
             &path,
@@ -876,11 +945,14 @@ mod tests {
     };
     use std::time::Duration;
 
-    /// A session's marks, as a claim would record them.
+    /// A session's marks, as a claim would record them. No image: what a
+    /// session knows of itself never carries one, and the claim it writes
+    /// gets it from the machine (`Identity::reason`).
     fn me(session: &str, pid: Option<u32>) -> Identity {
         Identity {
             session: session.to_string(),
             pid,
+            image: None,
         }
     }
 
@@ -942,15 +1014,17 @@ mod tests {
     }
 
     /// A number outlives the process it named, so the same claim on the
-    /// same live number stands or falls by which program is asked after.
-    /// This process is the runner's own test binary: it answers for the
-    /// rig's kind of claim and not for a seat's. Reading a seat's in the
-    /// runner's kind holds the seat for as long as whatever inherited the
-    /// number; reading the rig's in a session's takes the rig out from
-    /// under a measurement that is still running.
+    /// same live number stands or falls by which program is asked after
+    /// — and the two kinds ask differently. This process is the runner's
+    /// own test binary, so the rig's kind finds what it expects at this
+    /// number whatever a claim says; a session's kind believes the claim,
+    /// which here names a program this number is not.
     #[test]
     fn a_claim_stands_only_in_the_kind_of_process_that_wrote_it() {
-        let reason = format!("claude-seat theirs pid {}", std::process::id());
+        let reason = format!(
+            "claude-seat theirs pid {} as claude.exe",
+            std::process::id()
+        );
         let mine = me("mine", None);
         assert!(matches!(
             super::standing(Some(reason.clone()), &mine, super::Held::ByRunner),
@@ -960,6 +1034,59 @@ mod tests {
             super::standing(Some(reason), &mine, super::Held::BySession),
             Standing::Stale(_)
         ));
+    }
+
+    /// What a session's claim records about its own process, and what
+    /// reading it back settles. Nothing here — and nothing in the source
+    /// the claim is written by — knows what a session is installed as:
+    /// the claim asks the machine at the moment it is written, and a
+    /// reader asks the same machine the same way. A claim that named
+    /// some other program is litter however alive its number is, which
+    /// is the whole of the pid-reuse guard.
+    #[test]
+    fn a_session_claim_carries_the_program_its_number_was() {
+        let pid = std::process::id();
+        let image = crate::subprocess::image_of(pid).expect("this process is behind its own pid");
+        let written = me("s1", Some(pid)).reason(super::Held::BySession);
+        assert_eq!(written, format!("claude-seat s1 pid {pid} as {image}"));
+
+        let read = super::holder(&written).expect("the claim carries our mark");
+        assert_eq!(read.session, "s1");
+        assert_eq!(read.pid, Some(pid));
+        assert_eq!(read.image.as_deref(), Some(image.as_str()));
+        assert!(!super::claim_is_dead(&written));
+
+        let stranger = format!("claude-seat s1 pid {pid} as claude.exe");
+        assert!(super::claim_is_dead(&stranger));
+        // Somebody else's, and unjudgeable: nothing but the number, so
+        // whoever holds it now holds the seat too.
+        let numberless = format!("claude-seat s1 pid {pid}");
+        assert!(!super::claim_is_dead(&numberless));
+    }
+
+    /// The rig's claim keeps the spelling it had. Its number is this very
+    /// program's, which `Held::ByRunner` names outright, and the builds
+    /// in the other seats — each one its own — still read a pid there.
+    #[test]
+    fn the_runners_own_claim_records_no_program() {
+        let pid = std::process::id();
+        let written = me("perf-1", Some(pid)).reason(super::Held::ByRunner);
+        assert_eq!(written, format!("claude-seat perf-1 pid {pid}"));
+        assert!(matches!(
+            super::standing(Some(written), &me("mine", None), super::Held::ByRunner),
+            Standing::Foreign(_)
+        ));
+    }
+
+    /// An image name may hold spaces, and a claim is one line of text: a
+    /// reader that stopped at the first space would read a program this
+    /// machine has no such process for, and call a live session litter.
+    #[test]
+    fn a_program_whose_name_holds_spaces_survives_the_round_trip() {
+        let read = super::holder("claude-seat s1 pid 42 as My Claude.exe")
+            .expect("the claim carries our mark");
+        assert_eq!(read.pid, Some(42));
+        assert_eq!(read.image.as_deref(), Some("My Claude.exe"));
     }
 
     /// The rig is the one tree under the roster's directory the roster

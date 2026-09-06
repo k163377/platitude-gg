@@ -550,6 +550,7 @@ mod tests {
         Identity {
             session: "mine".to_string(),
             pid: Some(std::process::id()),
+            image: None,
         }
     }
 

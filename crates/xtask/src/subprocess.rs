@@ -65,75 +65,123 @@ pub(crate) fn process_exists(pid: u32) -> bool {
         .unwrap_or(true)
 }
 
-/// Whether the process `pid` names still exists **and is a program
-/// `is_wanted` accepts** — the shape every claim that records its writer
-/// is asked with. A pid is a name the machine hands out again the moment
+/// What is behind a pid right now, in the three answers a probe can
+/// honestly give. A pid is a name the machine hands out again the moment
 /// its process is gone, so a claim a killed process left behind would
 /// otherwise stand for as long as whatever inherited the number — a git,
 /// a browser tab — and hold what it claimed until that stranger exits.
-/// The image name tells the two apart. Answers "alive" when it could not
-/// ask, as [`process_exists`] does.
+/// The image name tells the two apart.
+enum Behind {
+    /// The program at that number, as this probe spells it.
+    Named(String),
+    /// The probe answered, and nobody is at that number.
+    Nobody,
+    /// The probe could not be asked at all.
+    Unanswerable,
+}
+
+/// Who holds `pid`, asked of `tasklist`.
 #[cfg(windows)]
-fn image_matches(pid: u32, is_wanted: fn(&str) -> bool) -> bool {
+fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
         .output()
     else {
-        return true;
+        return Behind::Unanswerable;
     };
     // `"xtask.exe","12345","Console","1","75,836 K"`: the image and the
     // pid are the first two fields, ahead of the one holding a comma.
-    String::from_utf8_lossy(&out.stdout).lines().any(|line| {
-        let mut fields = line.split(',').map(|field| field.trim().trim_matches('"'));
-        let image = fields.next().unwrap_or_default();
-        fields.next().unwrap_or_default() == pid.to_string() && is_wanted(image)
-    })
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|line| {
+            let mut fields = line.split(',').map(|field| field.trim().trim_matches('"'));
+            let image = fields.next().unwrap_or_default().to_string();
+            (fields.next().unwrap_or_default() == pid.to_string()).then_some(image)
+        })
+        .map_or(Behind::Nobody, Behind::Named)
 }
 
 /// The same, asking `ps` for the command name.
 #[cfg(not(windows))]
-fn image_matches(pid: u32, is_wanted: fn(&str) -> bool) -> bool {
+fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("ps")
         .args(["-o", "comm=", "-p", &pid.to_string()])
         .output()
     else {
-        return true;
+        return Behind::Unanswerable;
     };
     // A pid nobody has answers with nothing and a non-zero exit.
-    out.status.success() && is_wanted(String::from_utf8_lossy(&out.stdout).trim())
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        name if out.status.success() && !name.is_empty() => Behind::Named(name.to_string()),
+        _ => Behind::Nobody,
+    }
+}
+
+/// Whether the process `pid` names still exists **and is a program
+/// `is_wanted` accepts** — the shape every claim that records its writer
+/// is asked with. Answers "alive" when it could not ask, as
+/// [`process_exists`] does: every caller asks this to decide whether
+/// somebody else's claim may be broken.
+fn image_matches(pid: u32, is_wanted: impl Fn(&str) -> bool) -> bool {
+    match behind(pid) {
+        Behind::Named(image) => is_wanted(&image),
+        Behind::Nobody => false,
+        Behind::Unanswerable => true,
+    }
+}
+
+/// The program behind `pid`, for a claim to record beside the number it
+/// is claiming from. None when nothing could be read, which leaves the
+/// claim naming a bare number — the shape claims had before this, and
+/// the one [`process_exists`] is the whole answer for.
+///
+/// The recording and the reading go through the same probe on purpose:
+/// what a claim keeps is not the writer's idea of its own name but the
+/// string this machine will hand back at that number, so the two are
+/// comparable however the program was installed or spelled.
+pub(crate) fn image_of(pid: u32) -> Option<String> {
+    match behind(pid) {
+        Behind::Named(image) => Some(image),
+        Behind::Nobody | Behind::Unanswerable => None,
+    }
 }
 
 /// Whether `pid` still names this task runner — for the claims nothing
 /// but the runner ever writes (a verify-ui run's hold on a repository, a
-/// shot directory, a config directory).
+/// shot directory, a config directory). The runner is the one program
+/// this may name outright: it is asking after itself.
 pub(crate) fn task_runner_exists(pid: u32) -> bool {
     image_matches(pid, is_task_runner)
 }
 
-/// Whether `pid` still names a Claude session — for the seat claims a
-/// session writes out of its `CLAUDE_PID` (`seats::SEAT_CLAIM`), which
-/// no other program ever writes.
-pub(crate) fn claude_session_exists(pid: u32) -> bool {
-    image_matches(pid, is_claude_session)
+/// Whether the program a claim recorded is still the one at `pid` — for
+/// the claims written from somebody else's process, whose name this has
+/// no business knowing (`seats::SEAT_CLAIM`, out of a session's
+/// `CLAUDE_PID`). The claim carries the answer; this only compares.
+pub(crate) fn image_still_at(pid: u32, recorded: &str) -> bool {
+    image_matches(pid, |image| same_image(image, recorded))
+}
+
+/// Whether two spellings name one program. Both sides come from
+/// [`behind`], so this is the tolerance a probe's own drift needs —
+/// a path where a bare name was expected, and Windows' indifference to
+/// case — and not a guess at what any particular program is called.
+fn same_image(image: &str, recorded: &str) -> bool {
+    !recorded.is_empty() && basename(image).eq_ignore_ascii_case(basename(recorded))
 }
 
 /// Whether an image name is this runner's, however it is spelled: cargo's
 /// `xtask.exe`, a test binary's `xtask-<hash>`, a landing's
 /// `xtask-inflight-<pid>` (`land::step_out_of_the_build_slot`).
 fn is_task_runner(image: &str) -> bool {
-    let name = image.rsplit(['/', '\\']).next().unwrap_or(image);
-    name.get(..5)
+    basename(image)
+        .get(..5)
         .is_some_and(|head| head.eq_ignore_ascii_case("xtask"))
 }
 
-/// Whether an image name is a Claude session's. Claude Code runs as
-/// `claude.exe` here (measured against every claim on the roster) and as
-/// `claude` where `ps` gives the name back; a session hosted under some
-/// other image — an npm install's `node` among them — is not one this
-/// knows, and its claim would read as litter.
-fn is_claude_session(image: &str) -> bool {
-    let name = image.rsplit(['/', '\\']).next().unwrap_or(image);
-    name.eq_ignore_ascii_case("claude") || name.eq_ignore_ascii_case("claude.exe")
+/// An image name with whatever path a probe put in front of it taken off.
+fn basename(image: &str) -> &str {
+    image.rsplit(['/', '\\']).next().unwrap_or(image)
 }
 
 /// A pid no process on this machine can carry — for the tests that need a
@@ -149,7 +197,7 @@ pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
 #[cfg(test)]
 mod tests {
     use super::{
-        NO_SUCH_PID, claude_session_exists, is_claude_session, is_task_runner, process_exists,
+        NO_SUCH_PID, image_of, image_still_at, is_task_runner, process_exists, same_image,
         task_runner_exists,
     };
 
@@ -178,41 +226,50 @@ mod tests {
         }
     }
 
+    /// Two recordings of one program are one program, and nothing here
+    /// knows what any of them is called — which is the point: whatever a
+    /// session is installed as, its claim records that and this compares
+    /// it. An empty recording is not a match with anything, so a claim
+    /// that recorded nothing cannot be read as naming what it met.
     #[test]
-    fn a_session_is_known_by_its_image_name_on_either_platform() {
-        for image in [
-            "claude.exe",
-            "CLAUDE.EXE",
-            "claude",
-            "C:\\Users\\x\\AppData\\Local\\claude\\claude.exe",
-            "/usr/local/bin/claude",
+    fn one_program_is_known_by_the_name_the_claim_recorded() {
+        for (image, recorded) in [
+            ("claude.exe", "claude.exe"),
+            ("CLAUDE.EXE", "claude.exe"),
+            ("node", "node"),
+            ("node.exe", "C:\\Program Files\\nodejs\\node.exe"),
+            ("/usr/local/bin/claude", "claude"),
         ] {
-            assert!(is_claude_session(image), "{image}");
+            assert!(same_image(image, recorded), "{image} vs {recorded}");
         }
-        for image in [
-            "node.exe",
-            "git.exe",
-            "xtask.exe",
-            "",
-            "claud",
-            "claude-code.exe",
+        for (image, recorded) in [
+            ("node.exe", "claude.exe"),
+            ("git.exe", "claude.exe"),
+            ("claude.exe", ""),
+            ("", ""),
+            ("claude.exe", "claude-code.exe"),
         ] {
-            assert!(!is_claude_session(image), "{image}");
+            assert!(!same_image(image, recorded), "{image} vs {recorded}");
         }
     }
 
     /// This process is the runner's own test binary, and the pid no
-    /// process can have is nobody's — whichever probe is asked. The
-    /// runner is not a session, so a live number is not by itself an
-    /// answer either: that is the whole of what the image name adds.
+    /// process can have is nobody's — whichever probe is asked. A live
+    /// number is not by itself an answer: the runner reads as the runner
+    /// and not as whatever else a claim recorded, which is the whole of
+    /// what the image name adds.
     #[test]
     fn this_process_is_alive_and_the_pid_nobody_can_have_is_not() {
         let me = std::process::id();
+        let mine = image_of(me).expect("this process is behind its own pid");
+        assert!(is_task_runner(&mine), "{mine}");
         assert!(process_exists(me));
         assert!(task_runner_exists(me));
-        assert!(!claude_session_exists(me));
+        assert!(image_still_at(me, &mine));
+        assert!(!image_still_at(me, "claude.exe"));
         assert!(!process_exists(NO_SUCH_PID));
         assert!(!task_runner_exists(NO_SUCH_PID));
-        assert!(!claude_session_exists(NO_SUCH_PID));
+        assert!(!image_still_at(NO_SUCH_PID, &mine));
+        assert_eq!(image_of(NO_SUCH_PID), None);
     }
 }
