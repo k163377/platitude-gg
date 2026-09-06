@@ -22,11 +22,12 @@ cargo xtask <command>
 commands:
   check [--verb <v>]...
       Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
-      container running in parallel: structure, qmltest, fmt, clippy and
-      the workspace tests here, while the container runs test -p
-      platitude-core, qmltest, that same clippy for Linux, verify-ui for
-      each --verb, and bare. Clippy runs on both sides because the host's
-      cannot answer for the other one: a name reachable only under
+      container running in parallel: structure, waits, docs, qmltest,
+      fmt, clippy, the workspace tests and the shipped build here, while
+      the container runs test -p platitude-core, qmltest, that same
+      clippy for Linux, verify-ui for each --verb, and bare. Clippy runs
+      on both sides because the host's cannot answer for the other one: a
+      name reachable only under
       #[cfg(not(windows))] is not compiled here at all, so an unused
       import or an orphaned fn behind that cfg would reach CI unseen.
       The two sides write to different build trees (target/ vs the
@@ -38,7 +39,8 @@ commands:
       --verb the summary says the touched verbs still have to run — it
       never passes for the whole of stage 2 on its own.
 
-  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]... [--jobs <n>]
+  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]...
+       [--jobs <n>] [--dir <tree>] [--main <ref>]
       The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
       against main, follows every file that reads a changed file — a
@@ -84,6 +86,8 @@ commands:
                       at a time — a second one there is refused with the
                       first's pid (a dry run holds nothing)
         --dir <tree>  gate that tree instead of this one
+        --main <ref>  read the diff and the stamp against this ref
+                      instead of main (the tests' sandboxes)
       gate verdict <old> <new>   the hook's question (exit 0 = may move)
       gate install               copy .githooks/reference-transaction
                                  beside .git (pg-gate/hooks/), note the
@@ -364,7 +368,10 @@ const TAIL: &str = "  shipped [--no-build]
       the transcript records that the user asked). In the branch's own
       worktree: rebases it onto main when it is behind (a rebase that
       stops is walked back), runs `gate` there — cached steps are not
-      paid twice — and only then fast-forwards main, in the primary
+      paid twice, and a census the verbs rewrote is committed as
+      `chore(xtask): the verb census as the land's gate rewrote it` and
+      gated once more (a second rewrite stops the landing for a person
+      to read) — and only then fast-forwards main, in the primary
       checkout when it sits on main or on the bare ref (reattaching a
       detached primary) when main is checked out nowhere; the
       reference-transaction hook checks the stamp on the way. History

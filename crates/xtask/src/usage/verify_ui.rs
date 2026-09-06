@@ -5,8 +5,9 @@
 
 // No `"\` continuation on the opening line (see `demo_repo`).
 pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
-      perf none|details|diff|scroll|scroll-none --preset perf checks the
-      performance driver's visible state; offscreen timings are not benchmarks.
+      perf none|details|diff|scroll|scroll-none|font-walk --preset perf checks
+      the performance driver's visible state; offscreen timings are not
+      benchmarks.
       Build the app (release), run it headless (offscreen QPA) against a
       repository, fire PG_AUTO_ACT=<verb> / PG_AUTO_ACT_ARG=<arg>, and
       judge the run by its 'screenshot saved=true' stderr line and by
@@ -55,12 +56,14 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           it does not sink the run (delete-branch-refused,
                           delete-branch-go — whose first `--delete` is the
                           one git turns down —, commands-fail,
-                          commands-clear, fetch-fail,
+                          commands-fail-shut, commands-clear, fetch-fail,
                           fetch-recover, fetch-resume, push-retry,
                           remote-refused, tag-refused, push-outdated,
-                          commit-refused, notice-over-diff,
-                          band-actions-alert, and push / publish-new-go
-                          against an unreachable
+                          commit-refused, notice-over-diff, rename-taken,
+                          fold-across-merge, fold-off-branch,
+                          fold-first-commit, fold-unfetched-base,
+                          drop-last-commit, band-actions-alert, and
+                          push / publish-new-go against an unreachable
                           remote). A replay that stops part-way is not
                           among them any more: git left it standing,
                           which is a landing rather than a failed write.

@@ -114,7 +114,7 @@ Item {
     //
     // **A sheet is the card it stands for, cut down to its edge** — the same frame and the same ground that kind wears
     // when it is the one in front. **Not the kind's colour poured into the exposed four pixels**: a solid block reads
-    // as neither a frame nor a card beside an outlined one (tried, and taken back).
+    // as neither a frame nor a card beside an outlined one.
     Repeater {
         model: stack.layout
         Item {

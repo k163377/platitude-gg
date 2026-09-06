@@ -102,7 +102,7 @@ QtObject {
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
     /// own padding. Each mark's term is its plain ink and the half gap that follows it, and so is the count's; the
-    /// fan's is a step per sheet and the one gap a sheet of the card's own colour takes (`RefChipStack.fanMaxW`).
+    /// fan's is a step per sheet (`RefChipStack.fanMaxW`).
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
         + chipBadgeMark.inkWidth + Theme.spaceXs / 2
