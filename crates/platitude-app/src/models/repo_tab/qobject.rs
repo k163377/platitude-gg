@@ -773,8 +773,9 @@ impl RepoTab {
     /// Asks git whether `branch --delete` would refuse this branch (not
     /// merged into its upstream, or HEAD without one), so a menu's
     /// delete row can wear `-D` from the start. The answer arrives as
-    /// `branchDeleteAsked` / `branchDeleteMerged`; no answer arrives
-    /// where the reads fail, and the row stays on its plain form.
+    /// `branchDeleteAsked` / `branchDeleteMerged`, and it arrives even
+    /// where the reads fail — as `"unknown"`, which the row draws in its
+    /// plain form the way it draws a merged branch.
     ///
     /// **The slow way, for the names the rows cannot answer**: the menu
     /// asks the graph first (`GraphModel.reaches`), which answers in the

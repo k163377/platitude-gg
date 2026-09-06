@@ -46,7 +46,7 @@ impl RepoTab {
 
     pub(super) fn look_up_branch_delete(&mut self, branch: String) {
         self.branch_delete_asked = String::new();
-        self.branch_delete_merged = true;
+        self.branch_delete_merged = String::new();
         self.changed();
         self.with_session(|s| s.check_branch_delete(branch.clone()));
     }

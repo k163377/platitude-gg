@@ -51,8 +51,18 @@ impl RepoSession {
     /// configured name that resolves to nothing is not the measure), and
     /// the reachability is `merge-base`'s. A read, not a write, so it
     /// skips the queue the way the other checks do.
+    ///
+    /// **Every ask is answered**, a failed read included
+    /// ([`SessionEvent::BranchDeleteChecked::merged`]): the row draws the
+    /// same either way, and what the answer buys is that a run where the
+    /// reads fell over says so on a line instead of going quiet under a
+    /// harness waiting for the echo.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
+            self.sink.event(SessionEvent::BranchDeleteChecked {
+                branch,
+                merged: None,
+            });
             return;
         };
         let snapshot = self.published_snapshot();
@@ -65,12 +75,11 @@ impl RepoSession {
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
             let rev = format!("refs/heads/{branch}");
-            if let Ok(merged) =
-                branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel).await
-            {
-                s.sink
-                    .event(SessionEvent::BranchDeleteChecked { branch, merged });
-            }
+            let merged = branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel)
+                .await
+                .ok();
+            s.sink
+                .event(SessionEvent::BranchDeleteChecked { branch, merged });
         });
     }
 

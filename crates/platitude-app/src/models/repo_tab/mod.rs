@@ -93,8 +93,14 @@ pub struct RepoTab {
     /// (its upstream, or HEAD without one). Empty branch means nothing
     /// asked; the menu that reads it checks the echo, because it may be
     /// open over another row by now.
+    ///
+    /// The answer is `"yes"` / `"no"` / `"unknown"`, the same three the
+    /// rows give (`GraphModel::branch_delete_merged`), and empty until
+    /// one lands. **Only `"no"` dresses the row**: a delete nobody has
+    /// shown to be refused is offered plain, so unknown draws like merged
+    /// and git answers the press.
     branch_delete_asked: String,
-    branch_delete_merged: bool,
+    branch_delete_merged: String,
     /// The plain `branch --delete` out for git's answer — the one press
     /// that leaves its menu standing, because git may refuse it and the
     /// refusal has to land on the row that asked (`AppMenuItem.staysOpen`).

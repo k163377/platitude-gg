@@ -29,7 +29,7 @@ impl Default for RepoTab {
             remote_branch_tip: String::new(),
             remote_branch_theirs: 0,
             branch_delete_asked: String::new(),
-            branch_delete_merged: true,
+            branch_delete_merged: String::new(),
             branch_delete_out: String::new(),
             branch_delete_landed: String::new(),
             branch_delete_refused: String::new(),

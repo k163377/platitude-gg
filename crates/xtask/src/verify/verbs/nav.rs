@@ -72,11 +72,14 @@ pub(super) const TABLE: &[Verb] = &[
     // `from=` is left outside the run on purpose: an in-window branch
     // answers off the drawn rows and a tip off git, and which of the
     // two a run gets is the refs' timing rather than the claim.
+    // `merged=` is one word for both sides for the same reason — the
+    // third of them, `unknown`, is the reads having fallen over, and it
+    // fails this claim on a line instead of in silence.
     Verb {
         name: "delete-branch-early",
         when: &[(
             Arg::Is("feature/topic-a"),
-            "merged=false code=branch -D held=true note=not merged",
+            "merged=no code=branch -D held=true note=not merged",
         )],
         plain: "delete_early asked=true",
     },

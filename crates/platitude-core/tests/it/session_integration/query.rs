@@ -659,6 +659,56 @@ async fn a_plans_published_count_answers_through_the_session() {
     session.close();
 }
 
+/// Every ask about a delete is answered, the one whose read fell over
+/// included — that one as "cannot say", which the row draws the way it
+/// draws a merged branch.
+///
+/// **The two are not told apart by the picture**, so the answer is where
+/// they are told apart at all: a menu opened over a name git will not
+/// resolve leaves its delete row plain, exactly as a menu over a merged
+/// branch does, and a reader looking at the run afterwards has only this
+/// event to say which of the two it was watching.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ask_about_a_delete_is_answered_even_where_the_read_fails() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["branch", "topic"]);
+
+    let (sink, session) = opened(&repo).await;
+
+    session.check_branch_delete("topic".into());
+    assert_eq!(
+        branch_delete_answer(&sink, "topic").await,
+        Some(true),
+        "a branch its reference point reaches deletes quietly"
+    );
+
+    // git resolves no such name and leaves with 128, which is neither of
+    // the two answers `merge-base --is-ancestor` gives.
+    session.check_branch_delete("gone".into());
+    assert_eq!(
+        branch_delete_answer(&sink, "gone").await,
+        None,
+        "the failed read answered instead of going quiet"
+    );
+    session.close();
+}
+
+/// The answer to one `check_branch_delete`, waited for by the name it
+/// echoes.
+async fn branch_delete_answer(sink: &CaptureSink, branch: &str) -> Option<bool> {
+    sink.wait_for("BranchDeleteChecked", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::BranchDeleteChecked {
+                branch: named,
+                merged,
+            } if named == branch => Some(*merged),
+            _ => None,
+        })
+    })
+    .await
+}
+
 /// The fingerprints of every diff of the working-tree side of `path` in
 /// what the session has published, in order — what a re-read either adds
 /// to or leaves alone.

@@ -104,7 +104,10 @@ pub enum TabMsg {
     /// over another row by the time this lands.
     BranchDelete {
         branch: String,
-        merged: bool,
+        /// `"yes"` / `"no"` / `"unknown"` — the same three the rows answer
+        /// this with (`GraphModel::branch_delete_merged`), so a reader
+        /// need not know which side spoke.
+        merged: &'static str,
     },
     /// Merge tool names the settings field can offer. Empty is an answer.
     /// `settled` false is the fast half, with the slow read still out.

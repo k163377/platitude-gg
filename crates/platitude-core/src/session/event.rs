@@ -221,12 +221,17 @@ pub enum SessionEvent {
     /// is merged into the reference point `branch --delete` measures
     /// against (its upstream, or HEAD without one). The branch is echoed
     /// back because the menu that asked may be open over another row by
-    /// the time this lands. No event is sent where the reads fail —
-    /// silence leaves the delete row on its plain form, and a refusal,
-    /// if any, lands the way it always has.
+    /// the time this lands.
     BranchDeleteChecked {
         branch: String,
-        merged: bool,
+        /// `None` where the reads could not say. **Not the same as
+        /// merged**, though the row draws them alike: neither wears `-D`,
+        /// because a delete that has not been shown to be refused is
+        /// offered in its plain form and git gives the real answer to
+        /// the press. What the third state is for is the reader looking
+        /// at a run afterwards — every ask is answered, so a delete row
+        /// still bare is one whose answer said so.
+        merged: Option<bool>,
     },
     /// Answer to [`RepoSession::check_plan_published`]: how many commits
     /// of a plan's range a remote already has, as of now. The range is

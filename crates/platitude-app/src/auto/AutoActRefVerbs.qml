@@ -490,9 +490,12 @@ Item {
             if (!fromRows && repoTab.branchDeleteAsked !== arg)
                 return
             earlyDeleteTimer.stop()
+            // The two sides say the same three words, so a line can be read without knowing which one spoke —
+            // `unknown` is git's alone (the rows only answer where they can), and it is what a run whose reads fell
+            // over says instead of going quiet until the watchdog.
             Harness.report("delete_early asked=true"
                                        + " from=" + (fromRows ? "rows" : "git")
-                                       + " merged=" + (fromRows ? refBranchCard.deleteMerged
+                                       + " merged=" + (fromRows ? (refBranchCard.deleteMerged ? "yes" : "no")
                                                                 : repoTab.branchDeleteMerged)
                                        + " code=" + refDeleteItem.code
                                        + " held=" + (refDeleteItem.holdMs > 0)

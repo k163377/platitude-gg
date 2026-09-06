@@ -360,7 +360,14 @@ impl SessionSink for BridgeSink {
                 });
             }
             SessionEvent::BranchDeleteChecked { branch, merged } => {
-                self.feeds.tab.push(TabMsg::BranchDelete { branch, merged });
+                self.feeds.tab.push(TabMsg::BranchDelete {
+                    branch,
+                    merged: match merged {
+                        Some(true) => "yes",
+                        Some(false) => "no",
+                        None => "unknown",
+                    },
+                });
             }
             SessionEvent::SignatureChecked { oid, signature } => {
                 use platitude_core::identity::SignatureStatus;

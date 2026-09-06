@@ -104,7 +104,7 @@ impl RepoTab {
                 }
                 TabMsg::BranchDelete { branch, merged } => {
                     self.branch_delete_asked = branch;
-                    self.branch_delete_merged = merged;
+                    self.branch_delete_merged = merged.into();
                 }
                 TabMsg::HeadCommit {
                     message,

@@ -227,12 +227,14 @@ AppMenu {
         readonly property bool branchRow: state.kind === "branch"
         // git already refused `--delete` while this menu stood — or the check run at open came back unmerged, the same
         // answer a click ahead of time (§左メニューの所作): the rows' own where they could say, git's echo otherwise.
+        // **Only `"no"` dresses the row.** The echo also carries `"unknown"` for reads that fell over, and that is a
+        // delete nobody has shown to be refused — offered plain, with git answering the press.
         readonly property bool refusedRow:
             branchRow
             && (branchCard.forceDeleteBranch === state.refId
                 || (state.deleteAnswered ? !state.deleteMerged
                     : (branchCard.repoTab.branchDeleteAsked === state.refId
-                       && !branchCard.repoTab.branchDeleteMerged)))
+                       && branchCard.repoTab.branchDeleteMerged === "no")))
         readonly property bool heldRow: remoteRow || refusedRow
         code: refusedRow ? "branch -D"
             : branchRow ? "branch --delete"
