@@ -52,6 +52,13 @@ enum AppMsg {
     GitPathProbed {
         path: String,
         probe: version::Probe,
+        /// Whether the git asked is the one this run spawns — which
+        /// binary, not which spelling (`process::same_program`). Read
+        /// beside the probe rather than on the window's thread: the
+        /// compare reads the filesystem (the launcher looked behind, a
+        /// link resolved), and a path on a server that is not answering
+        /// takes as long to fail as the name does.
+        names_the_run: bool,
     },
     /// An identity write finished; `error` carries git's own message and
     /// the two flags say which half git now reports as what was asked for.
@@ -151,6 +158,10 @@ pub struct AppBackend {
     /// same three terms; written twice, a screen could offer a restart
     /// the press then refuses, or refuse one the screen was offering.
     git_path_offers_restart: bool,
+    /// The last answer's word on whether the box names the git already
+    /// running (`AppMsg::GitPathProbed::names_the_run`). Only read behind
+    /// a state the answer set: a box rewritten since is "checking" again.
+    git_path_names_the_run: bool,
     /// A git that answers has been chosen and it is not the one this run
     /// is on, so the window is to close and come back. Read by the window,
     /// which is where the one road out lives (`Main.qml`).

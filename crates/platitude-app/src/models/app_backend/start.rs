@@ -106,6 +106,7 @@ impl Default for AppBackend {
             git_path: Hub::with(|hub| hub.settings().defaults.git_path.clone()).unwrap_or_default(),
             git_path_on_path: Hub::with(|hub| hub.path_program()).unwrap_or_default(),
             git_path_offers_restart: false,
+            git_path_names_the_run: false,
             restart_wanted: false,
             // Nothing has been asked yet. The screen asks as it opens, so
             // the resting state is never on show for long — and a run

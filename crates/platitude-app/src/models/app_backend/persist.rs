@@ -83,20 +83,12 @@ impl AppBackend {
     /// the version coming back — because the offer is what both the
     /// button's shape and the warning beside it are drawn from.
     pub(super) fn settle_restart_offer(&mut self) {
-        // **Which binary, not which spelling.** An empty box means the git
-        // `PATH` resolves, and a reader who picks the very one this run
-        // spawns has picked no other — separators and Windows case say
-        // nothing about which program it is (`process::same_program`).
-        let wanted = if self.git_path.is_empty() {
-            &self.git_path_on_path
-        } else {
-            &self.git_path
-        };
+        // **Which binary, not which spelling** — the answer's own word on
+        // it (`AppMsg::GitPathProbed::names_the_run`), which is only as
+        // current as the state beside it: a box rewritten since is
+        // "checking", and offers nothing until its own answer is in.
         self.git_path_offers_restart = !self.restart_wanted
-            && !platitude_core::process::same_program(
-                std::path::Path::new(wanted),
-                std::path::Path::new(&self.git_path_in_use),
-            )
+            && !self.git_path_names_the_run
             && matches!(self.git_path_state.as_str(), "ok" | "old");
     }
 

@@ -54,6 +54,14 @@ impl AppBackend {
         self.settle_restart_offer();
         self.git_path_changed();
         let feed = Arc::clone(&self.check_feed);
+        // An empty box means the git `PATH` resolves, and a reader who
+        // picks the very one this run spawns has picked no other.
+        let wanted = if path.is_empty() {
+            self.git_path_on_path.clone()
+        } else {
+            path.clone()
+        };
+        let in_use = self.git_path_in_use.clone();
         let spawned = Hub::with(|hub| {
             let Some(handle) = hub.runtime_handle() else {
                 return false;
@@ -61,7 +69,22 @@ impl AppBackend {
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
                 let probe = version::probe(&path, &cancel).await;
-                feed.push(AppMsg::GitPathProbed { path, probe });
+                // Off the runtime's own threads as well: the compare is a
+                // handful of filesystem reads, and a name that resolves
+                // against a server blocks for as long as that takes.
+                let names_the_run = tokio::task::spawn_blocking(move || {
+                    platitude_core::process::same_program(
+                        std::path::Path::new(&wanted),
+                        std::path::Path::new(&in_use),
+                    )
+                })
+                .await
+                .unwrap_or(false);
+                feed.push(AppMsg::GitPathProbed {
+                    path,
+                    probe,
+                    names_the_run,
+                });
             });
             true
         })
@@ -207,7 +230,11 @@ impl AppBackend {
                     self.identity_state = "error".into();
                     self.identity_error = message;
                 }
-                AppMsg::GitPathProbed { path, probe } => {
+                AppMsg::GitPathProbed {
+                    path,
+                    probe,
+                    names_the_run,
+                } => {
                     // An answer about a path the box has moved past says
                     // nothing about the one it holds now, and the run
                     // that replaced it has its own answer coming.
@@ -215,6 +242,7 @@ impl AppBackend {
                         continue;
                     }
                     probed = true;
+                    self.git_path_names_the_run = names_the_run;
                     self.git_path_version = probe.version().to_string();
                     self.git_path_error.clear();
                     self.git_path_state = match probe {
