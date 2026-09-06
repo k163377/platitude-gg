@@ -371,9 +371,11 @@ const TAIL: &str = "  shipped [--no-build]
       stays linear and a landed seat stands at main's tip. Refuses a
       branch checked out nowhere, a dirty seat, and a seat that holds
       main. Bare `land` from a seat lands the seat's own branch. The
-      seat's claim stays with whoever is behind it — the next stretch of
-      work begins in that same tree — and is handed back only when the
-      session that claimed it is gone (a lock written by hand stays).
+      seat's claim goes back to the roster with it: the tree is empty
+      at main's tip, so the letter is free for whoever asks next, and a
+      session that goes on working there claims it back at its next
+      edit. A live claim of another session's stays, and so does a lock
+      written by hand.
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe
@@ -404,12 +406,14 @@ const TAIL: &str = "  shipped [--no-build]
       and that is the only path the entry hook will let through, because
       the claim behind it is this session's. When every letter is held or
       holds unmerged work it fails and says so — seats are not added
-      past f. The seat is kept for as long as the session is: neither
-      landing the branch nor the SessionEnd the machine's sleep hands
-      out lifts the claim, because a session that is still working is
-      still using its tree. `seat release` is the way to hand it back
-      on purpose, and it names what the seat still carries; a claim
-      whose Claude process is gone the roster lifts by itself.
+      past f. `land` hands the seat back when the branch reaches main:
+      a session that goes on working in the tree takes it again at its
+      next edit, and one that is never asked for anything more leaves
+      the letter free. `seat release` hands it back without landing,
+      and names what the seat still carries. The SessionEnd the
+      machine's sleep hands out lifts nothing — that event reaches
+      every open conversation — and a claim whose Claude process is
+      gone the roster lifts by itself.
 
   seats
       Where the six worktree seats a-f stand right now, one line each:

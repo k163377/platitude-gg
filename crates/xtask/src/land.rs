@@ -119,9 +119,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // leave the old copy answering until some later session start.
     println!("{}", crate::gate::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
-    release_claim(&here, &trees, &branch);
+    // The claim comes off last: from the moment it does, another session
+    // may take the letter, and the board this landing still has to clear
+    // is the one the next stretch there would be clearing for itself.
     clear_the_board(&listing, &branch);
-    phases.mark("hook, claim and board");
+    release_claim(&here, &trees, &branch);
+    phases.mark("hook, board and claim");
     println!("{}", phases.report());
     Ok(())
 }
@@ -390,33 +393,44 @@ fn clear_the_board(listing: &str, branch: &str) {
     }
 }
 
-/// The claim left by a session that is gone: its branch is on main and
-/// its tree is at main's tip, so the letter goes back to the roster.
+/// The claim's release point (CLAUDE.md ビルド・テスト): the landed
+/// branch is on main and the tree is at main's tip, so the letter goes
+/// back to the roster rather than waiting for somebody to say the words.
 /// Only the hooks' own kind of lock is lifted; a lock a person wrote
 /// stays.
 ///
-/// Every claim there is still somebody behind stays put, this session's
-/// and another's alike. Landing ends a stretch of work, not the
-/// conversation — the next stretch begins in the same tree, on the same
-/// warm target/, and a claim lifted out from under a session is what
-/// sent them to a fresh letter at their next edit (CLAUDE.md
-/// ビルド・テスト). `cargo xtask seat release` is the way to hand one
-/// back on purpose.
+/// Nothing here reads whether the conversation goes on, because nothing
+/// can: a session that lands and is never asked for anything more holds
+/// its letter for as long as its Claude process lives, and in the
+/// desktop app that is as long as the conversation is open at all — so
+/// the roster's own pickup of a claim whose process is gone never comes
+/// for it. A session that does go on working here takes the seat back
+/// at its next edit (the post-write hook), and if another session took
+/// the letter in between, `cargo xtask seat` hands out a fresh one.
+/// Only this session's claim and a dead one are handed back; a live
+/// claim of somebody else's stays where it is.
 fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
     };
     match claim_on(tree, &Identity::current(None)) {
-        Claim::Ours => println!(
-            "the seat claim on {} stays with this session — the tree is at main's tip \
-             and ready for the next stretch (`cargo xtask seat release` hands it back).",
-            tree.path
+        Claim::Ours => hand_back(
+            here,
+            &tree.path,
+            "this stretch of work landed, so the letter is back on the roster; \
+             going on in this tree claims it back at the next edit, and `cargo \
+             xtask seat` hands out another if somebody took the letter meanwhile.",
         ),
         Claim::Another => println!(
             "the seat claim on {} is another session's and stays as it is: {}",
             tree.path, tree.reason
         ),
-        Claim::Litter => hand_back(here, &tree.path),
+        Claim::Litter => hand_back(
+            here,
+            &tree.path,
+            "the session that worked it is gone, and the roster can hand the \
+             letter out again.",
+        ),
     }
 }
 
@@ -426,7 +440,8 @@ fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
 enum Claim {
     /// Its session is gone: the letter goes back to the roster.
     Litter,
-    /// This session's, which is still working in the tree.
+    /// This session's, which landed from the tree: the letter goes back
+    /// too, and going on working there takes it again.
     Ours,
     /// Somebody else's — or one written without a process to ask about,
     /// which is left standing too: unjudgeable is not the same as gone
@@ -442,13 +457,13 @@ fn claim_on(tree: &WorktreeBlock, me: &Identity) -> Claim {
     }
 }
 
-/// The unlock itself, and what to do when git will not do it.
-fn hand_back(here: &str, path: &str) {
+/// The unlock itself, and what to do when git will not do it. `why` says
+/// which kind of claim this was, because the two read differently to
+/// whoever meets the line: one seat is free again, the other is free
+/// again and this session may still be sitting in it.
+fn hand_back(here: &str, path: &str, why: &str) {
     if git_query(here, &["worktree", "unlock", path]).is_some() {
-        println!(
-            "released the seat claim on {path} — the session that worked it is gone, \
-             and the roster can hand the letter out again."
-        );
+        println!("released the seat claim on {path} — {why}");
     } else {
         println!(
             "note: the seat claim on {path} did not release — \
@@ -628,8 +643,7 @@ mod tests {
         };
         assert!(
             matches!(claim_on(&seat("claude-seat mine pid 1"), &me), Claim::Ours),
-            "landing ends a stretch of work, not the conversation: the next \
-             stretch begins in this same tree"
+            "the seat this session landed from goes back to the roster"
         );
         assert!(
             matches!(

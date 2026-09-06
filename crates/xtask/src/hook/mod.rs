@@ -86,10 +86,10 @@ fn stop(input: &str) -> Result<(), String> {
 /// conversation when the machine sleeps, and each one goes on working at
 /// the next wake (shots/sweep.rs) — a claim released here comes off a
 /// seat its session is still sitting in, and the session meets its own
-/// tree as somebody else's on waking. A conversation that is really over
-/// is read off the claim's process instead: one whose Claude process is
-/// gone is litter the next `cargo xtask seat` lifts
-/// (`seats::claim_is_dead`), which asks rather than guesses.
+/// tree as somebody else's on waking. The seat goes back where the work
+/// does instead: landing the branch hands the letter to the roster
+/// (`land::release_claim`), and a claim whose Claude process is gone is
+/// litter the next `cargo xtask seat` lifts (`seats::claim_is_dead`).
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
     Ok(())

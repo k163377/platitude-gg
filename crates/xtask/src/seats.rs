@@ -19,9 +19,10 @@ pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
 /// The mark a session's seat claim carries in `git worktree lock`'s
 /// reason, followed by the session id and the Claude process the claim
 /// was written from. The entry hooks and the post-write re-claim write
-/// it. Two things take it off, and neither of them guesses: `cargo xtask
-/// seat release`, and the roster meeting a claim whose Claude process is
-/// gone (`claim_is_dead`). A lock without this mark is a person's, and
+/// it. Three things take it off, and none of them guesses: landing the
+/// seat's branch (`land::release_claim`), `cargo xtask seat release`,
+/// and the roster meeting a claim whose Claude process is gone
+/// (`claim_is_dead`). A lock without this mark is a person's, and
 /// nothing automatic touches it.
 pub(crate) const SEAT_CLAIM: &str = "claude-seat";
 
@@ -305,14 +306,14 @@ pub fn take(args: &[String]) -> Result<(), String> {
 /// `cargo xtask seat release`: the seat this session holds goes back to
 /// the roster.
 ///
-/// The one way a claim comes off while its session is still here.
-/// Nothing else lifts it — not landing the branch, not the SessionEnd
-/// the machine's sleep hands out — because a session still working is
-/// still using its tree, and the letter it was given is where its
-/// target/ is warm (CLAUDE.md ビルド・テスト). What the seat still
-/// carries is named on the way out: the roster hands out no seat with
-/// work in it, so a release leaves that work for a reader to land or
-/// drop rather than for the next session to find.
+/// For handing a seat back without landing it — work abandoned, or a
+/// stretch that ends in a branch somebody else will merge. A landing
+/// hands its own seat back already (`land::release_claim`), and the
+/// SessionEnd the machine's sleep hands out lifts nothing, because that
+/// event reaches every open conversation (CLAUDE.md ビルド・テスト).
+/// What the seat still carries is named on the way out: the roster hands
+/// out no seat with work in it, so a release leaves that work for a
+/// reader to land or drop rather than for the next session to find.
 fn release(root: &str, me: &Identity) -> Result<(), String> {
     let (primary, trees) = primary_checkout(root)?;
     let Some(held) = held_seat(&seat_entries_of(trees), me) else {
