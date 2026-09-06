@@ -65,17 +65,16 @@ pub(crate) fn process_exists(pid: u32) -> bool {
         .unwrap_or(true)
 }
 
-/// Whether the process `pid` names still exists **and is this task
-/// runner** — for the claims nothing but the runner ever writes (a
-/// verify-ui run's hold on a repository, a shot directory, a config
-/// directory). A pid is a name the machine hands out again the moment its
-/// process is gone, so a lock a killed run left behind would otherwise
-/// stand for as long as whatever inherited the number — a git, a browser
-/// tab — and refuse the path until that stranger exits. The image name
-/// tells the two apart. Answers "alive" when it could not ask, as
-/// [`process_exists`] does.
+/// Whether the process `pid` names still exists **and is a program
+/// `is_wanted` accepts** — the shape every claim that records its writer
+/// is asked with. A pid is a name the machine hands out again the moment
+/// its process is gone, so a claim a killed process left behind would
+/// otherwise stand for as long as whatever inherited the number — a git,
+/// a browser tab — and hold what it claimed until that stranger exits.
+/// The image name tells the two apart. Answers "alive" when it could not
+/// ask, as [`process_exists`] does.
 #[cfg(windows)]
-pub(crate) fn task_runner_exists(pid: u32) -> bool {
+fn image_matches(pid: u32, is_wanted: fn(&str) -> bool) -> bool {
     let Ok(out) = std::process::Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
         .output()
@@ -87,13 +86,13 @@ pub(crate) fn task_runner_exists(pid: u32) -> bool {
     String::from_utf8_lossy(&out.stdout).lines().any(|line| {
         let mut fields = line.split(',').map(|field| field.trim().trim_matches('"'));
         let image = fields.next().unwrap_or_default();
-        fields.next().unwrap_or_default() == pid.to_string() && is_task_runner(image)
+        fields.next().unwrap_or_default() == pid.to_string() && is_wanted(image)
     })
 }
 
 /// The same, asking `ps` for the command name.
 #[cfg(not(windows))]
-pub(crate) fn task_runner_exists(pid: u32) -> bool {
+fn image_matches(pid: u32, is_wanted: fn(&str) -> bool) -> bool {
     let Ok(out) = std::process::Command::new("ps")
         .args(["-o", "comm=", "-p", &pid.to_string()])
         .output()
@@ -101,7 +100,21 @@ pub(crate) fn task_runner_exists(pid: u32) -> bool {
         return true;
     };
     // A pid nobody has answers with nothing and a non-zero exit.
-    out.status.success() && is_task_runner(String::from_utf8_lossy(&out.stdout).trim())
+    out.status.success() && is_wanted(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// Whether `pid` still names this task runner — for the claims nothing
+/// but the runner ever writes (a verify-ui run's hold on a repository, a
+/// shot directory, a config directory).
+pub(crate) fn task_runner_exists(pid: u32) -> bool {
+    image_matches(pid, is_task_runner)
+}
+
+/// Whether `pid` still names a Claude session — for the seat claims a
+/// session writes out of its `CLAUDE_PID` (`seats::SEAT_CLAIM`), which
+/// no other program ever writes.
+pub(crate) fn claude_session_exists(pid: u32) -> bool {
+    image_matches(pid, is_claude_session)
 }
 
 /// Whether an image name is this runner's, however it is spelled: cargo's
@@ -111,6 +124,16 @@ fn is_task_runner(image: &str) -> bool {
     let name = image.rsplit(['/', '\\']).next().unwrap_or(image);
     name.get(..5)
         .is_some_and(|head| head.eq_ignore_ascii_case("xtask"))
+}
+
+/// Whether an image name is a Claude session's. Claude Code runs as
+/// `claude.exe` here (measured against every claim on the roster) and as
+/// `claude` where `ps` gives the name back; a session hosted under some
+/// other image — an npm install's `node` among them — is not one this
+/// knows, and its claim would read as litter.
+fn is_claude_session(image: &str) -> bool {
+    let name = image.rsplit(['/', '\\']).next().unwrap_or(image);
+    name.eq_ignore_ascii_case("claude") || name.eq_ignore_ascii_case("claude.exe")
 }
 
 /// A pid no process on this machine can carry — for the tests that need a
@@ -125,7 +148,10 @@ pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
 
 #[cfg(test)]
 mod tests {
-    use super::{NO_SUCH_PID, is_task_runner, process_exists, task_runner_exists};
+    use super::{
+        NO_SUCH_PID, claude_session_exists, is_claude_session, is_task_runner, process_exists,
+        task_runner_exists,
+    };
 
     #[test]
     fn the_runner_is_known_by_its_image_name_however_cargo_spelled_it() {
@@ -152,14 +178,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_session_is_known_by_its_image_name_on_either_platform() {
+        for image in [
+            "claude.exe",
+            "CLAUDE.EXE",
+            "claude",
+            "C:\\Users\\x\\AppData\\Local\\claude\\claude.exe",
+            "/usr/local/bin/claude",
+        ] {
+            assert!(is_claude_session(image), "{image}");
+        }
+        for image in [
+            "node.exe",
+            "git.exe",
+            "xtask.exe",
+            "",
+            "claud",
+            "claude-code.exe",
+        ] {
+            assert!(!is_claude_session(image), "{image}");
+        }
+    }
+
     /// This process is the runner's own test binary, and the pid no
-    /// process can have is nobody's — whichever probe is asked.
+    /// process can have is nobody's — whichever probe is asked. The
+    /// runner is not a session, so a live number is not by itself an
+    /// answer either: that is the whole of what the image name adds.
     #[test]
     fn this_process_is_alive_and_the_pid_nobody_can_have_is_not() {
         let me = std::process::id();
         assert!(process_exists(me));
         assert!(task_runner_exists(me));
+        assert!(!claude_session_exists(me));
         assert!(!process_exists(NO_SUCH_PID));
         assert!(!task_runner_exists(NO_SUCH_PID));
+        assert!(!claude_session_exists(NO_SUCH_PID));
     }
 }

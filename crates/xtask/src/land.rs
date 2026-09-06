@@ -18,7 +18,9 @@
 //! and a landed seat already stands at main's tip.
 
 use crate::gate::Gated;
-use crate::seats::{Identity, SEAT_CLAIM, Standing, WorktreeBlock, standing, worktree_blocks};
+use crate::seats::{
+    Held, Identity, SEAT_CLAIM, Standing, WorktreeBlock, standing, worktree_blocks,
+};
 use crate::subprocess::git_query;
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -450,7 +452,7 @@ enum Claim {
 }
 
 fn claim_on(tree: &WorktreeBlock, me: &Identity) -> Claim {
-    match standing(Some(tree.reason.clone()), me) {
+    match standing(Some(tree.reason.clone()), me, Held::BySession) {
         Standing::Stale(_) => Claim::Litter,
         Standing::Ours => Claim::Ours,
         Standing::Free | Standing::Foreign(_) => Claim::Another,
@@ -636,7 +638,7 @@ mod tests {
             reason: reason.to_string(),
         };
         // Marked by its id alone, so that the one live process this test
-        // can name — its own — is free to stand for the other session.
+        // can name — its own — is free to stand for a claim's number.
         let me = Identity {
             session: "mine".to_string(),
             pid: None,
@@ -651,10 +653,11 @@ mod tests {
                     &seat(&format!("claude-seat theirs pid {}", std::process::id())),
                     &me
                 ),
-                Claim::Another
+                Claim::Litter
             ),
-            "a session that is still running is still using its tree, whether \
-             or not its branch just landed"
+            "a seat is held by the session behind the number, and this \
+             process is the runner: a number handed on to something that is \
+             not a session holds nothing"
         );
         assert!(
             matches!(claim_on(&seat("claude-seat theirs"), &me), Claim::Another),

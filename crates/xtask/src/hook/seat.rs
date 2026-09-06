@@ -6,7 +6,7 @@
 use super::launch::resolve;
 use super::payload::{deny, printable, string_field};
 use crate::seats::{
-    self, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
+    self, Held, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
     lock_reason, same_tree, standing, take_seat, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
@@ -83,9 +83,9 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
 /// letter — it is the seat it already had — so the claim is written back
 /// instead of the door being shut on it.
 fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
-    let standing = standing(lock_reason(tree), me);
+    let standing = standing(lock_reason(tree), me, Held::BySession);
     match reclaims_on_entry(cwd, tree, &standing) {
-        true => take_seat(tree, tree, me),
+        true => take_seat(tree, tree, me, Held::BySession),
         false => standing,
     }
 }
@@ -290,7 +290,11 @@ pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, 
     let landing = match worktree_root(path) {
         Some(root) if in_rig(&root) => Landing::Rig,
         Some(root) => match roster_seat(&root) {
-            Some(name) => Landing::Seat(name, standing(lock_reason(&root), &me), root),
+            Some(name) => Landing::Seat(
+                name,
+                standing(lock_reason(&root), &me, Held::BySession),
+                root,
+            ),
             // A worktree outside the roster is somebody's unfinished
             // branch, and the write door has nothing to say about it.
             None => Landing::Outside,
@@ -426,8 +430,11 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
         return None;
     }
     let me = Identity::current(string_field(input, "session_id").as_deref());
-    let held = matches!(standing(lock_reason(&root), &me), Standing::Ours);
-    match take_seat(&root, &root, &me) {
+    let held = matches!(
+        standing(lock_reason(&root), &me, Held::BySession),
+        Standing::Ours
+    );
+    match take_seat(&root, &root, &me, Held::BySession) {
         Standing::Ours if held => None,
         Standing::Ours => Some(format!(
             "Seat {name} stood unclaimed and this edit re-claimed it for the \

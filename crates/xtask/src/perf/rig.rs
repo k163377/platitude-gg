@@ -32,7 +32,8 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::seats::{
-    Identity, Standing, primary_checkout, rig_path, same_tree, slashed, take_seat, unlock_seat,
+    Held, Identity, Standing, primary_checkout, rig_path, same_tree, slashed, take_seat,
+    unlock_seat,
 };
 use crate::subprocess::git_query;
 
@@ -158,7 +159,10 @@ impl Claim {
     /// The claim names this process, never the session: a session runs
     /// one measurement at a time, and a claim left by a killed one is
     /// litter its dead pid gives away (`seats::standing`), whichever
-    /// terminal meets it next.
+    /// terminal meets it next. That is why this claim is read as
+    /// `Held::ByRunner` — a seat's number is a session's, and asking for
+    /// one where the other stands takes the rig out from under a
+    /// measurement that is still running.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
@@ -188,7 +192,7 @@ impl Claim {
                 rig: rig.to_string(),
             });
         }
-        match take_seat(primary, rig, &me) {
+        match take_seat(primary, rig, &me, Held::ByRunner) {
             Standing::Ours => Ok(Self {
                 primary: primary.to_string(),
                 rig: rig.to_string(),

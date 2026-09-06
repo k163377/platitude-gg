@@ -3,7 +3,7 @@
 
 use super::payload::string_field;
 use crate::seats::{
-    self, Identity, SEATS, Standing, claim_liveness, commits_in, take_seat, worktree_root,
+    self, Held, Identity, SEATS, Standing, claim_liveness, commits_in, take_seat, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -89,7 +89,7 @@ fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     // A claim that could not be written is a survey concern: the session
     // is already sitting here either way, and the greeting still says
     // where the seat stands.
-    match take_seat(&root, &root, &me) {
+    match take_seat(&root, &root, &me, Held::BySession) {
         Standing::Ours | Standing::Free => None,
         Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
             "This seat is held by another claim. The lock says: {reason}. This \

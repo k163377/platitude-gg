@@ -77,17 +77,48 @@ impl Identity {
     }
 }
 
+/// What kind of process a claim's pid names, which is the form its
+/// liveness has to be asked in: the number alone is handed back out the
+/// moment its process is gone, so only the image behind it tells a claim
+/// somebody is working from litter a killed one left.
+///
+/// Two kinds write claims through this module, and a reader that asks in
+/// the wrong one is wrong both ways — it breaks a live claim, or it keeps
+/// a dead one — so every reader names which it expects.
+#[derive(Clone, Copy)]
+pub(crate) enum Held {
+    /// By a Claude session, out of its `CLAUDE_PID`: every seat claim.
+    BySession,
+    /// By this task runner, out of its own pid: the perf rig's claim,
+    /// which no session writes and the roster never hands out
+    /// (`perf::rig`).
+    ByRunner,
+}
+
+impl Held {
+    /// Whether the process a claim of this kind named is still there.
+    fn still_running(self, pid: u32) -> bool {
+        match self {
+            Self::BySession => crate::subprocess::claude_session_exists(pid),
+            Self::ByRunner => crate::subprocess::task_runner_exists(pid),
+        }
+    }
+}
+
 /// What a claim's own marks settle for whoever meets it in somebody
 /// else's seat. A session cannot tell a real collision from a stale lock
 /// by when the lock was written — seat e was shared for eight minutes
 /// because a session read a matching mtime as proof the claim was its
-/// own — so the answer is the claim's process, asked.
+/// own — so the answer is the claim's process, asked. Seat claims only,
+/// whose pid is a session's; the rig says its own piece (`perf::rig`).
 pub(crate) fn claim_liveness(reason: &str) -> &'static str {
     match holder(reason).and_then(|holder| holder.pid) {
-        Some(pid) if crate::subprocess::process_exists(pid) => {
-            "That process is running, so the other session is live and both of you are in one tree."
+        Some(pid) if Held::BySession.still_running(pid) => {
+            "That session is running, so the other session is live and both of you are in one tree."
         }
-        Some(_) => "That process is gone, so the claim is litter a session left behind.",
+        Some(_) => {
+            "No session is running under that number, so the claim is litter one left behind."
+        }
         None => {
             "The claim names no process, so it predates the mark that would answer — \
              `cargo xtask seats` says whether the seat is still being worked."
@@ -96,11 +127,12 @@ pub(crate) fn claim_liveness(reason: &str) -> &'static str {
 }
 
 /// Whether a lock is a claim nobody is behind any more. Only a claim that
-/// names its process can answer; anything else is left standing.
+/// names its process can answer; anything else is left standing. Seat
+/// claims only, as [`claim_liveness`] is.
 pub(crate) fn claim_is_dead(reason: &str) -> bool {
     holder(reason)
         .and_then(|holder| holder.pid)
-        .is_some_and(|pid| !crate::subprocess::process_exists(pid))
+        .is_some_and(|pid| !Held::BySession.still_running(pid))
 }
 
 /// Who a claim names, read back out of a lock's reason. None when the
@@ -125,7 +157,8 @@ pub(crate) enum Standing {
     Free,
     /// This session's claim.
     Ours,
-    /// A claim whose Claude process is gone: litter the roster may clear.
+    /// A claim the process it names is no longer behind: litter whoever
+    /// meets it may clear.
     Stale(String),
     /// Somebody else's live claim, or a lock a person wrote by hand.
     Foreign(String),
@@ -134,8 +167,9 @@ pub(crate) enum Standing {
 /// Either mark matching is proof enough that the claim is this session's,
 /// and neither matching is not a reason to assume it: seat e was shared
 /// by two sessions for eight minutes because one of them read a lock it
-/// could not account for as its own anyway (2026-09-02).
-pub(crate) fn standing(reason: Option<String>, me: &Identity) -> Standing {
+/// could not account for as its own anyway (2026-09-02). `held` is what
+/// the claim's pid is asked after when neither mark matches.
+pub(crate) fn standing(reason: Option<String>, me: &Identity, held: Held) -> Standing {
     let Some(reason) = reason else {
         return Standing::Free;
     };
@@ -148,7 +182,7 @@ pub(crate) fn standing(reason: Option<String>, me: &Identity) -> Standing {
         return Standing::Ours;
     }
     match holder.pid {
-        Some(pid) if !crate::subprocess::process_exists(pid) => Standing::Stale(reason),
+        Some(pid) if !held.still_running(pid) => Standing::Stale(reason),
         _ => Standing::Foreign(reason),
     }
 }
@@ -158,8 +192,8 @@ pub(crate) fn standing(reason: Option<String>, me: &Identity) -> Standing {
 /// again, and a live claim somebody else holds is left where it is.
 /// Answers where the seat stood once this was done — only `Ours` means
 /// the session may work there.
-pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity) -> Standing {
-    match standing(lock_reason(seat_path), me) {
+pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
+    match standing(lock_reason(seat_path), me, held) {
         Standing::Ours => Standing::Ours,
         Standing::Foreign(reason) => Standing::Foreign(reason),
         // Two sessions can meet one dead claim in the same moment, and
@@ -167,16 +201,16 @@ pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity) -> Standing {
         // lock below is, because git refuses the second one.
         Standing::Stale(_) => {
             unlock_seat(cwd, seat_path);
-            lock_or_read(cwd, seat_path, me)
+            lock_or_read(cwd, seat_path, me, held)
         }
-        Standing::Free => lock_or_read(cwd, seat_path, me),
+        Standing::Free => lock_or_read(cwd, seat_path, me, held),
     }
 }
 
 /// One atomic claim, and what the seat looked like afterwards.
 /// `git worktree lock` refuses a second lock, so the loser of a race is
 /// told here rather than after settling in.
-fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity) -> Standing {
+fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
     let mut command = std::process::Command::new("git");
     command
         .arg("-C")
@@ -196,11 +230,11 @@ fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity) -> Standing {
             .split_once("reason:")
             .map(|(_, reason)| reason.trim().to_string())
             .unwrap_or_default();
-        return standing(Some(reason), me);
+        return standing(Some(reason), me, held);
     }
     // A lock git reported nothing about is not a claim yet: read the seat
     // back, so that only a reason naming this session counts as one.
-    standing(lock_reason(seat_path), me)
+    standing(lock_reason(seat_path), me, held)
 }
 
 /// Lifts whatever lock a seat carries. Callers check first whose it is.
@@ -384,7 +418,12 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
 fn held_seat(entries: &[SeatEntry], me: &Identity) -> Option<Assigned> {
     entries
         .iter()
-        .find(|entry| matches!(standing(lock_reason(&entry.tree.path), me), Standing::Ours))
+        .find(|entry| {
+            matches!(
+                standing(lock_reason(&entry.tree.path), me, Held::BySession),
+                Standing::Ours
+            )
+        })
         .map(|entry| Assigned {
             seat: entry.seat,
             path: entry.tree.path.clone(),
@@ -403,7 +442,10 @@ fn claim_existing(
     seat: &'static str,
     me: &Identity,
 ) -> Option<Assigned> {
-    if !matches!(take_seat(primary, path, me), Standing::Ours) {
+    if !matches!(
+        take_seat(primary, path, me, Held::BySession),
+        Standing::Ours
+    ) {
         return None;
     }
     let ahead = commits_in(path, "main..HEAD");
@@ -830,7 +872,7 @@ pub(crate) fn format_age(age: Option<Duration>) -> String {
 mod tests {
     use super::{
         Identity, Seat, SeatEntry, SeatState, Standing, WorktreeBlock, format_age, render,
-        seat_entries, standing,
+        seat_entries,
     };
     use std::time::Duration;
 
@@ -840,6 +882,12 @@ mod tests {
             session: session.to_string(),
             pid,
         }
+    }
+
+    /// Every claim these tests stand is a seat's, and a seat's pid is a
+    /// session's (`Held::BySession`).
+    fn stood(reason: Option<String>, me: &Identity) -> Standing {
+        super::standing(reason, me, super::Held::BySession)
     }
 
     /// A pid that certainly names no process — not a reaped child's,
@@ -852,9 +900,9 @@ mod tests {
     #[test]
     fn stands_a_lock_relative_to_the_session() {
         let mine = me("s1", Some(std::process::id()));
-        assert!(matches!(standing(None, &mine), Standing::Free));
+        assert!(matches!(stood(None, &mine), Standing::Free));
         assert!(matches!(
-            standing(
+            stood(
                 Some(format!("claude-seat s9 pid {}", std::process::id())),
                 &mine
             ),
@@ -863,21 +911,11 @@ mod tests {
         // The session id alone still answers for a claim written before
         // the pid was recorded, and for one this process did not write.
         assert!(matches!(
-            standing(Some("claude-seat s1".into()), &mine),
+            stood(Some("claude-seat s1".into()), &mine),
             Standing::Ours
         ));
-        // Another session, and its process is running: this test's own,
-        // which is the one pid it can be sure of. `mine` carries no pid
-        // of its own, so nothing but the ids is left to compare.
         assert!(matches!(
-            standing(
-                Some(format!("claude-seat s2 pid {}", std::process::id())),
-                &me("s1", None)
-            ),
-            Standing::Foreign(_)
-        ));
-        assert!(matches!(
-            standing(Some("parked by hand".into()), &mine),
+            stood(Some("parked by hand".into()), &mine),
             Standing::Foreign(_)
         ));
     }
@@ -886,20 +924,41 @@ mod tests {
     fn a_claim_whose_process_is_gone_is_litter() {
         let mine = me("s1", Some(std::process::id()));
         assert!(matches!(
-            standing(Some(format!("claude-seat s2 pid {}", dead_pid())), &mine),
+            stood(Some(format!("claude-seat s2 pid {}", dead_pid())), &mine),
             Standing::Stale(_)
         ));
         // A claim from before the pid was recorded cannot be asked, so it
         // stays somebody's until its session says otherwise.
         assert!(matches!(
-            standing(Some("claude-seat s2".into()), &mine),
+            stood(Some("claude-seat s2".into()), &mine),
             Standing::Foreign(_)
         ));
         // Nor may a session with no marks of its own read a claim as one
         // it wrote: that assumption is what put two sessions in seat e.
         assert!(matches!(
-            standing(Some("claude-seat s2".into()), &me("", None)),
+            stood(Some("claude-seat s2".into()), &me("", None)),
             Standing::Foreign(_)
+        ));
+    }
+
+    /// A number outlives the process it named, so the same claim on the
+    /// same live number stands or falls by which program is asked after.
+    /// This process is the runner's own test binary: it answers for the
+    /// rig's kind of claim and not for a seat's. Reading a seat's in the
+    /// runner's kind holds the seat for as long as whatever inherited the
+    /// number; reading the rig's in a session's takes the rig out from
+    /// under a measurement that is still running.
+    #[test]
+    fn a_claim_stands_only_in_the_kind_of_process_that_wrote_it() {
+        let reason = format!("claude-seat theirs pid {}", std::process::id());
+        let mine = me("mine", None);
+        assert!(matches!(
+            super::standing(Some(reason.clone()), &mine, super::Held::ByRunner),
+            Standing::Foreign(_)
+        ));
+        assert!(matches!(
+            super::standing(Some(reason), &mine, super::Held::BySession),
+            Standing::Stale(_)
         ));
     }
 
