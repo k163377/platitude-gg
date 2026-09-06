@@ -80,10 +80,21 @@ Item {
             if (window.floorPage === null)
                 return
             if (Harness.autoActArg === "") {
+                // The band's marks are put up off the page's tree (`BandStateGroup`), so a floor read before that
+                // tree arrives is an empty band's floor — one repository answering with a different number per
+                // machine, depending on which side of that race it came down on. A run that was given no
+                // repository to open (`--restore`) waits for nothing — with no tab open at all, the floor it
+                // reports is the blank page's.
+                if (Harness.autoOpen !== ""
+                        && (window.curPage === null || !window.curPage.pageWt.loaded))
+                    return
                 if (window.width < window.floorWidth || window.height < window.floorHeight)
                     return
+                // Reported from the same stage as the forms that take an argument, rather than here: the band's
+                // floor is `bandRow.Layout.minimumWidth`, which the layout writes in its own pass, so the mark
+                // that status just put up is not in the number until a pass has run under it.
                 stop()
-                acts.reportFloor()
+                floorReportTimer.start()
                 return
             }
             // Everything below this is asked of the page a tab is showing, and until one is open that is not what
