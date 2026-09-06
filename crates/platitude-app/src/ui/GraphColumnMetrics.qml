@@ -32,13 +32,24 @@ QtObject {
         font: metrics.chipFont.font
         text: "…"
     }
+    /// What one of the characters the floor keeps costs. A letter, measured, and never
+    /// `chipFont.averageCharacterWidth`: that is the **font's** average, and every family named for this UI carries
+    /// Japanese, so it answers with a full-width figure no ref name is written in — and a different one per platform
+    /// (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font rather than with the
+    /// letters: wide, it holds a column open past what it is keeping there; narrow, it hands out fewer characters than
+    /// it promised. The same `n` the tab titles' floor counts (`TabMetrics.titleMinW`), and a `TextMetrics` for the cut
+    /// mark's reason.
+    readonly property TextMetrics chipLetterInk: TextMetrics {
+        font: metrics.chipFont.font
+        text: "n"
+    }
     /// How much of a name the chip column keeps at its narrowest: the first characters and the mark that says the rest
     /// was cut. **Characters, not pixels**, for the reason the tab titles' floor is one (規約 §ウィンドウの縁) — the same
     /// count costs a different number of pixels in each platform's UI font and at every scaling, so the length comes
     /// out of the font. Three of them, the same count a tab keeps.
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
-        + labelMinChars * chipFont.averageCharacterWidth)
+        + labelMinChars * chipLetterInk.advanceWidth)
     /// The mark a chip wears when another working copy holds the branch, kept here only to be priced. **A seat is the
     /// mark's ink, not its box** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
     /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark rather than out of
@@ -86,7 +97,7 @@ QtObject {
     /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
     /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
     /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
-    /// held mark alone is 9.5 of the 28 the floor keeps for a name, so a floor that leaves it out gives
+    /// held mark alone is 9.5 of the 31 the floor keeps for a name, so a floor that leaves it out gives
     /// `feature/topic-a` one character where three were promised (measured).
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's

@@ -46,9 +46,15 @@ Item {
     /// The narrowest a badge is drawn with words in it. Settled by `settleMinW` rather than bound: `advanceWidth` is a
     /// method and takes no binding dependency, so a binding on it holds whatever the *default* font measured
     /// (app-ui.md 「FontMetrics.advanceWidth も同じ側」).
+    ///
+    /// Counted in `n`s, never in `averageCharacterWidth` (`TabMetrics.titleMinW` and `GraphColumnMetrics.chipNameMinW`
+    /// for the same reason): that is the **font's** average, and every family named for this UI carries Japanese, so it
+    /// answers with a full-width figure no operation is spelled in — and a different one per platform
+    /// (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font rather than with the
+    /// letters, and where it runs wide it folds the words away in a band that still had room for them.
     property real minW: 0
     function settleMinW() {
-        metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.averageCharacterWidth)
+        metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.advanceWidth("n"))
             + 2 * Theme.spaceXs
     }
 
