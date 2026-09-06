@@ -732,16 +732,11 @@ fn execute_step(
     }
     match crate::check::run_step(dir, &launched(command, runner), log) {
         Ok(true) => Ok(()),
-        Ok(false) => {
-            let text =
-                String::from_utf8_lossy(&std::fs::read(log).unwrap_or_default()).into_owned();
-            let tail: Vec<&str> = text.lines().rev().take(40).collect();
-            Err(format!(
-                "exited non-zero (log: {})\n{}",
-                log.display(),
-                tail.into_iter().rev().collect::<Vec<_>>().join("\n")
-            ))
-        }
+        Ok(false) => Err(format!(
+            "exited non-zero (log: {})\n{}",
+            log.display(),
+            crate::check::log_tail(log)
+        )),
         Err(why) => Err(why),
     }
 }
@@ -766,18 +761,28 @@ const RUNNER: &str = "xtask-runner-";
 /// process of theirs still holds stays, its name carrying their pid.
 fn runner(dir: &Path, logs: &Path) -> Result<std::path::PathBuf, String> {
     let exe = format!("xtask{}", std::env::consts::EXE_SUFFIX);
-    {
-        let _busy = crate::still::busy(dir, "cargo build -p xtask")?;
-        let output = std::process::Command::new("cargo")
-            .args(["build", "-p", "xtask"])
-            .current_dir(dir)
-            .output()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
-        if !output.status.success() {
+    // Through the same road every step takes (`check::run_step`): the
+    // announcement to a measurement, the ceiling, and the tree kill at it.
+    // A build with no ceiling would sit on a rustc holding this tree's
+    // build lock with the gate's own lock held, and the next gate here
+    // would be refused by a live pid saying nothing.
+    let build_log = logs.join(format!("{RUNNER}build-{}.log", std::process::id()));
+    let build = ["cargo", "build", "-p", "xtask"].map(String::from);
+    match crate::check::run_step(dir, &build, &build_log) {
+        Ok(true) => {}
+        Ok(false) => {
             return Err(format!(
                 "the task runner did not build in {}:\n{}",
                 dir.display(),
-                String::from_utf8_lossy(&output.stderr)
+                crate::check::log_tail(&build_log)
+            ));
+        }
+        // A ceiling, a cargo already announced on this tree, or a spawn
+        // that failed: the step's own words say which.
+        Err(why) => {
+            return Err(format!(
+                "the task runner's build in {} did not run to its end: {why}",
+                dir.display()
             ));
         }
     }

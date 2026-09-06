@@ -21,9 +21,10 @@ pub(crate) struct Keepsake {
 /// The arguments that send a run's pictures out to `mount`, and where
 /// they land on this side. None when the command leaves nothing.
 ///
-/// `--no-board` rides along: the board is the host's. /work is mounted
-/// read-only in there, so the container could not write one, and the
-/// seat these pictures belong to is the one out here — which is what
+/// `--no-board` rides along: the board is the host's. The run in there
+/// keeps its census and its board out of the tree by itself
+/// (`verify::options`, on `linux::IN_CONTAINER`), and the seat these
+/// pictures belong to is the one out here — which is what
 /// `onto_the_board` is for, once the run is done.
 ///
 /// **The claim is taken here rather than in there.** The run inside makes
@@ -73,8 +74,8 @@ pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
 /// Whether the run's pictures are filed on the board once it is over.
 ///
 /// **Only the line as it was typed can answer**: [`bridge`] says
-/// `--no-board` into the line it hands the container regardless, because
-/// /work is read-only in there. A suite's runs are typed with it
+/// `--no-board` into the line it hands the container regardless, the
+/// board being this side's to write. A suite's runs are typed with it
 /// (`verify::suite_words`) — their pictures still travel out to a
 /// directory a person can open, and nothing is filed.
 fn boarding(command: &[String]) -> bool {

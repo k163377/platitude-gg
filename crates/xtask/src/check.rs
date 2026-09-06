@@ -228,8 +228,7 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
             }
             Err(why) => {
                 println!("[{side}] FAIL {display} ({secs}s): {why}");
-                let tail: Vec<&str> = text.lines().rev().take(40).collect();
-                for line in tail.into_iter().rev() {
+                for line in tail_of(&text).lines() {
                     println!("[{side}]      {line}");
                 }
                 return vec![format!("{display}: {why}")];
@@ -252,6 +251,19 @@ pub(crate) fn print_shots(side: &str, log: &Path) {
             println!("[{side}]      {line}");
         }
     }
+}
+
+/// The end of a step's log, for a failure that has to say why in place: a
+/// build or a test that stopped says so in its last lines.
+pub(crate) fn log_tail(log: &Path) -> String {
+    tail_of(&std::fs::read_to_string(log).unwrap_or_default())
+}
+
+/// The last lines of a step's output, as [`log_tail`] reads them.
+pub(crate) fn tail_of(text: &str) -> String {
+    const LINES: usize = 40;
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(LINES)..].join("\n")
 }
 
 /// One step against its log file: spawned with both streams on the file,
@@ -292,7 +304,7 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
         }
         let (quiet, whole) = (grew.elapsed(), started.elapsed());
         if quiet >= QUIET_CEILING || whole >= STEP_CEILING {
-            let reaped = crate::reap::kill_tree(&mut child);
+            let (reaped, _ended) = crate::reap::reap(&mut child);
             let ceiling = if quiet >= QUIET_CEILING {
                 format!("said nothing for {} minutes", quiet.as_secs() / 60)
             } else {

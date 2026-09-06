@@ -93,15 +93,21 @@ pub(crate) fn own_group(command: &mut Command) {
 #[cfg(not(unix))]
 pub(crate) fn own_group(_command: &mut Command) {}
 
-/// Ends `child` and everything under it, and reaps the child itself.
-pub(crate) fn kill_tree(child: &mut Child) -> Reaped {
+/// Ends `child` and everything under it, and reaps the child itself:
+/// what went with it, and how the child itself ended, for a caller that
+/// reports the exit it was handed.
+pub(crate) fn reap(child: &mut Child) -> (Reaped, Option<std::process::ExitStatus>) {
     let reaped = end_tree(child);
     // Last, and after the walk on Windows: waiting is what hands the
     // child's number back to the machine.
-    if let Err(error) = child.wait() {
-        println!("  note: could not reap the step's own process ({error})");
-    }
-    reaped
+    let ended = match child.wait() {
+        Ok(status) => Some(status),
+        Err(error) => {
+            println!("  note: could not reap the step's own process ({error})");
+            None
+        }
+    };
+    (reaped, ended)
 }
 
 #[cfg(unix)]
@@ -309,7 +315,7 @@ mod tests {
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
 
-    use super::{Reaped, kill_tree, own_group};
+    use super::{Reaped, own_group, reap};
 
     /// How long the ended processes are given to be gone. Generous: on
     /// Windows the walk itself is a listing per look, and on unix the
@@ -389,11 +395,12 @@ mod tests {
             under.len() >= 2,
             "the tree never got two deep under the step: {under:?}"
         );
-        let reaped = kill_tree(&mut child);
+        let (reaped, ended) = reap(&mut child);
         assert!(
             reaped.under.as_ref().is_some_and(|under| under.len() >= 2),
             "the kill walked less of the tree than the look did: {reaped:?}"
         );
+        assert!(ended.is_some(), "the step itself was not reaped");
         // Asked until they are gone rather than at once: a process ended
         // this instant can still be in a listing taken the next.
         let deadline = Instant::now() + GONE_WITHIN;

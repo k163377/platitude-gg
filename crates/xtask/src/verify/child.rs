@@ -49,11 +49,24 @@ pub(super) struct Ran {
     /// it never said anything at all — the whole run is the silence then.
     /// What a run reaped at the ceiling is read off ([`super::wedge`]).
     pub(super) quiet_for: Option<Duration>,
+    /// What went with the app when the parent reaped it: the git it had
+    /// running, counted (`reap::Reaped::line`). `None` for a run that
+    /// ended itself.
+    pub(super) reaped: Option<String>,
 }
 
 /// Starts the app, waits it out, and answers with everything it said.
 pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut cmd = compose(start)?;
+    // So that an app reaped at the ceiling takes the git it was waiting
+    // on with it — a hook that never returns, a fetch to nowhere — rather
+    // than leaving that process to the step's own ceiling (`reap`). The
+    // group is the app's own, so on unix a signal that ends this runner
+    // from outside (Ctrl-C, the step's group kill) does not reach the
+    // app: it is left to its own ceiling, which its native watchdog holds
+    // it to (`--watchdog-ms` plus its grace) whether or not its event
+    // loop is turning.
+    crate::reap::own_group(&mut cmd);
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
 
@@ -67,13 +80,15 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     // Bounded wait with a kill guard — never an unbounded wait or poll.
     let deadline = Duration::from_millis(start.opts.watchdog_ms + GRACE_MS);
     let mut timed_out = false;
+    let mut reaped = None;
     let status = loop {
         match child.try_wait().map_err(|e| e.to_string())? {
             Some(status) => break Some(status),
             None if started.elapsed() > deadline => {
-                let _ = child.kill();
+                let (under, ended) = crate::reap::reap(&mut child);
+                reaped = Some(under.line());
                 timed_out = true;
-                break child.wait().ok();
+                break ended;
             }
             None => std::thread::sleep(Duration::from_millis(100)),
         }
@@ -101,6 +116,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         timed_out,
         elapsed,
         quiet_for: spoke_at.map(|at| elapsed.saturating_sub(at)),
+        reaped,
     })
 }
 

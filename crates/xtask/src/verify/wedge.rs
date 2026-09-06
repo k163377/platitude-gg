@@ -86,6 +86,11 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
     if ran.timed_out {
         lines.push(silence(ran));
     }
+    // What the reaping took with the app — the git it was waiting on,
+    // counted — or what could not be looked up and may still be running.
+    if let Some(under) = &ran.reaped {
+        lines.push(format!("  under the app: {under}"));
+    }
     lines.push(format!(
         "  pictures on disk: {}",
         match shots.is_empty() {
@@ -167,10 +172,12 @@ impl Counted {
         if self.landings > 0 {
             said.push(format!("{} landing mark(s) standing", self.landings));
         }
-        // Said rather than folded into the counts. A container mounts the
-        // repository read-only, so every lock file there fails to open —
-        // and a silent `0/8` would read as an idle machine, which is the
-        // one answer this line must never give wrongly.
+        // Said rather than folded into the counts. A container's runner may
+        // have no road to the lanes at all — a seat's `.git` is a file
+        // naming a directory outside the mount, so the lock files are not
+        // there to open — and a silent `0/8` would read as an idle
+        // machine, which is the one answer this line must never give
+        // wrongly.
         if self.unprobed > 0 {
             said.push(format!("{} could not be probed from here", self.unprobed));
         }
@@ -268,6 +275,7 @@ mod tests {
             timed_out,
             elapsed: Duration::from_secs(140),
             quiet_for: Some(Duration::from_secs(138)),
+            reaped: None,
         }
     }
 
@@ -320,9 +328,10 @@ mod tests {
         assert_eq!(Counted::default().line(), "none have ever been taken here");
     }
 
-    /// A container mounts the repository read-only, so its lock files
-    /// cannot be opened at all. **Silence there would read as an idle
-    /// machine** — the one answer this line must never give wrongly.
+    /// A container's runner may have no road to the lanes — a seat's
+    /// `.git` is a file naming a directory outside the mount — so its lock
+    /// files cannot be opened at all. **Silence there would read as an
+    /// idle machine** — the one answer this line must never give wrongly.
     #[test]
     fn lanes_that_could_not_be_probed_are_said_rather_than_called_free() {
         let counted = Counted {
