@@ -71,6 +71,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // Same reasoning, same cost: a naked wait is a hang the suite
         // cannot name, and this answers before anything compiles.
         xtask(&["waits"]),
+        // And again: a torn markdown block compiles nothing and shows
+        // nothing in the source, so it is worth a second before the ten
+        // minutes rather than after them.
+        xtask(&["docs"]),
         // The QtTest files, which compile nothing of the app either: the
         // product's QML is staged into an import tree and handed to Qt's
         // own runner, and a whole file answers in a fraction of a second.

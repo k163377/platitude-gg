@@ -54,6 +54,7 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
     let mut notes: Vec<String> = Vec::new();
     notes.extend(seat::reclaim(input, &path));
     notes.extend(qml_notes(&path)?);
+    notes.extend(doc_notes(&path));
     if !notes.is_empty() {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
@@ -62,6 +63,29 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// The blocks an edit to this tree's markdown just tore off the list they
+/// belonged to (`crate::docs`). Said here rather than left to the gate
+/// because nothing about one looks wrong in the source — every word is
+/// still there, in the order it was written — so the turn that made it is
+/// the only one that still knows what it meant to say.
+fn doc_notes(path: &str) -> Vec<String> {
+    if !crate::docs::covers(path) {
+        return Vec::new();
+    }
+    let Some(name) = path.rsplit('/').next() else {
+        return Vec::new();
+    };
+    // A file the edit left unreadable is the editor's problem, not this
+    // hook's: only judge what is actually there.
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    crate::docs::findings(&text)
+        .into_iter()
+        .map(|finding| format!("{name} {finding}"))
+        .collect()
 }
 
 /// Rules a QML change keeps missing by attention. A file absent from

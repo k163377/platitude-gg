@@ -10,6 +10,7 @@ mod check;
 mod corpus;
 mod demo;
 mod deny;
+mod docs;
 mod gate;
 mod gui;
 mod hook;
@@ -44,6 +45,7 @@ fn main() -> ExitCode {
         Some("check") => check::run(&args[1..]),
         Some("gate") => gate::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),
+        Some("docs") => docs::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),
         Some("qmltest") => qmltest::run(&args[1..]),
         Some("deny") => deny::run(&args[1..]),

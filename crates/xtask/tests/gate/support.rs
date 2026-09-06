@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 pub const EXE: &str = env!("CARGO_BIN_EXE_xtask");
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-/// The three steps every gate runs regardless of the diff.
-pub const ALWAYS: [&str; 3] = ["structure", "waits", "fmt"];
+/// The steps every gate runs regardless of the diff.
+pub const ALWAYS: [&str; 4] = ["structure", "waits", "docs", "fmt"];
 
 /// How long a run puts up with its own image being called busy. A ceiling
 /// for detecting failure, never for deciding it: the window belongs to

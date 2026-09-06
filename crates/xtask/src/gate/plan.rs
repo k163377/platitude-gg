@@ -95,6 +95,13 @@ const HARNESS: [&str; 2] = ["crates/xtask/src/verify", "crates/xtask/src/demo"];
 /// What a QML test run reads besides [`qml_dirs`]: the recipe that
 /// stages the module for it.
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
+/// The markdown this tree reads as rules (`crate::docs`).
+const DOCS: [&str; 4] = [
+    "internal-docs",
+    ".claude/rules",
+    ".claude/rules-refs",
+    "CLAUDE.md",
+];
 
 /// The app's QML: the module the product ships, and the QtTest files that
 /// read it. Spelled in pieces for the reason [`binary_steps`] gives — a
@@ -509,6 +516,7 @@ fn always_steps() -> Vec<Step> {
             &["crates", ".claude/rules-refs/structure.md"],
         ),
         step("waits", Side::Host, true, xtask(&["waits"]), &[CORE]),
+        step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
         step(
             "fmt",
             Side::Host,

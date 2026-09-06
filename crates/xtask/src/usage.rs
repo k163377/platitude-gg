@@ -51,8 +51,8 @@ commands:
       the app's QML or entry point
       moved, the verify-ui verbs whose census names a reached component
       (crates/xtask/verb-census.txt, written by the
-      runs themselves), bare when the app moved. structure, waits and
-      fmt run every time, and a build input that changed (Cargo.toml,
+      runs themselves), bare when the app moved. structure, waits, docs
+      and fmt run every time, and a build input that changed (Cargo.toml,
       Cargo.lock, the toolchain, the Dockerfile) makes the reach the
       whole tree. Host and container sides run in parallel;
       each step is stamped by the object ids of what it reads, so a
@@ -119,6 +119,28 @@ commands:
       step — must sit under support::wait::bounded or an explicit
       timeout, so a silent hang fails by test name instead of sitting
       until the CI kill. Second step of `check`; subsecond on its own.
+
+  docs
+      The three ways an edit to internal-docs, .claude/rules,
+      .claude/rules-refs or CLAUDE.md tears a block off the list it
+      belonged to: a line left at a bullet's indent under a block that
+      closed the list above it (ORPHAN-INDENT), a heading with no blank
+      line over it (HEAD-NO-BLANK), and a table written at column 0
+      inside a list, which ends the list and leaves the text after it
+      hanging (TABLE-IN-LIST). All three survive review because nothing
+      about them looks wrong in the source — every word is still there,
+      in the order it was written — and only the renderer knows a line
+      stopped belonging to the thing above it. A list opens on a bullet
+      at any indent and is closed only by a block at column 0, which is
+      what lets a table or a heading indented inside a list stay part of
+      it; fenced code and YAML front matter are skipped whole. Structure
+      only: how wide a line runs and how a sentence is built are the
+      writer's. Third step of `check` and an always-step of `gate` —
+      sixteen files in twenty milliseconds is under the cost of asking a
+      stamp whether it still answers. The Write hook says the same thing
+      about the one file an edit just landed in, which is where a tear is
+      cheapest to undo: the turn that made it is the only one that still
+      knows what the line meant to say.
 
   qmltest
       The QtTest files under crates/platitude-app/tests/qml, run through
