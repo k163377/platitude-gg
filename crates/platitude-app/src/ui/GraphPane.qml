@@ -59,6 +59,17 @@ Rectangle {
     function rowRenameArmed(record) {
         return graphList.renameArmed(record)
     }
+    /// A held click made in that card, put in at the row it stands on: the row's own `leftClick` is what decides
+    /// what Ctrl or Shift does with the choice, the name box and the keyboard — a copy of it beside the card moves
+    /// the choice and leaves the keyboard and the current item on the row read before. Answers whether the row was
+    /// there to press: one scrolled off has no delegate to take it.
+    function heldRowClick(oidHex, modifiers) {
+        const row = graphList.itemAtIndex(graphArea.graphModel.rowOf(oidHex))
+        if (!row)
+            return false
+        row.leftClick(0, modifiers)
+        return true
+    }
     readonly property alias rowClickGuarded: graphList.clickGuarded
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
     /// needs for its position and its fields — it must not hold on to it.

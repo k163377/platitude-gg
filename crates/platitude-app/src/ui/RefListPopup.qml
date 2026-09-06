@@ -37,8 +37,9 @@ AppCard {
     /// switches the working tree instead. These rows answer a click the
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
     signal picked(string record)
-    /// One was clicked once: the row it is on becomes the one being read. **The second click has no signal of its
-    /// own** — the wait it opens belongs to the graph, and so does the box it turns into (`rowClicks`).
+    /// One was clicked once, plainly: the row it is on becomes the one being read. **The second click has no signal
+    /// of its own** — the wait it opens belongs to the graph, and so does the box it turns into (`rowClicks`) — and
+    /// neither has a held click: that one goes in at the graph's own row (`rowClicks.heldRowClick`).
     signal chose(string record)
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
@@ -157,6 +158,16 @@ AppCard {
         if (!row)
             return false
         row.pointedAt = true
+        return true
+    }
+    /// A held click put in at one of these rows — the choice moving the way the graph's row moves it — an
+    /// automation-only exposure like `menuRow`: the press goes in at this row's own handler, which hands it to the
+    /// graph's, rather than at a copy of what either would decide.
+    function chooseRow(i, modifiers) {
+        const row = refList.rowAt(i)
+        if (!row)
+            return false
+        row.leftClick(0, modifiers)
         return true
     }
     function rowLit(i) {
@@ -355,7 +366,16 @@ AppCard {
                 ///
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
-                function leftClick(held) {
+                function leftClick(held, modifiers) {
+                    const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+                    // **A held click is the graph row's own** (デザイン規約 §複数のコミットを選ぶ): this card's rows are
+                    // that row, so the press goes in at the row's handler — what it does with the choice, the name
+                    // box and the keyboard is decided there and nowhere else.
+                    if (mods & (Qt.ControlModifier | Qt.ShiftModifier)) {
+                        if (refList.rowClicks)
+                            refList.rowClicks.heldRowClick(refList.rowOid, mods)
+                        return
+                    }
                     // Answered by the row this card is standing on — a name that leads nowhere is still a name, but
                     // the marker names no ref, so it goes in as a row with nothing on it.
                     if (refList.rowClicks
@@ -365,7 +385,13 @@ AppCard {
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)
                 }
-                function doubleClick() {
+                function doubleClick(modifiers) {
+                    const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+                    // **A held double-click is two selection presses, not a double-click** (デザイン規約 §複数のコミットを
+                    // 選ぶ) — the row's rule (`GraphRowDelegate.doubleClick`), and this card is a third way to the same
+                    // `switch`, which moves the working tree. The two presses have already done what they do.
+                    if (mods & (Qt.ControlModifier | Qt.ShiftModifier))
+                        return
                     // The second click came inside the window after all: the gesture was the double-click, and the box
                     // it was about to open is not what was meant.
                     if (refList.rowClicks)
@@ -386,8 +412,8 @@ AppCard {
                     /// When the button went down, for the gesture to take off the wait it has left (see the component).
                     property real pressAt: 0
                     onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
-                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt)
-                    onDoubleTapped: refRow.doubleClick()
+                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt, rowTap.point.modifiers)
+                    onDoubleTapped: refRow.doubleClick(rowTap.point.modifiers)
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
                 /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the

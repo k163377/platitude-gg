@@ -107,6 +107,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "list=true lit=true nowhere=true",
     },
+    // A held click in that list moves the choice and nothing else: the
+    // commit read stays, two rows draw themselves chosen, and the card
+    // stays up — a press that took the plain road would have closed it
+    // and read the row instead.
+    Verb {
+        name: "ref-list-choose",
+        when: &[],
+        plain: "chosen=2 lit=2 read=true list=true",
+    },
     // The pointer resting on the note a cut message puts out. `lit=`
     // alone is the rule that was always kept — the line under the words
     // is the words' own colour — so what pins this note's step down is

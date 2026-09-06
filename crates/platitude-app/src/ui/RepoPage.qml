@@ -1265,7 +1265,8 @@ Item {
         menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
-        // A click in the card is a click on the row it is standing on: every name in it is on that one commit.
+        // A plain click in the card is a click on the row it is standing on: every name in it is on that one commit
+        // (a held one never comes this way — the card hands it to the graph's row itself).
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
         // The note under a message the card had to cut: the row's own click, made from inside the card, and then the
         // pane that holds the whole of it says so — the reader was sent somewhere and the sentence they read is gone
@@ -1356,6 +1357,8 @@ Item {
             detailsModel.refreshAvatar()
             // The commit editor wears the identity's own face, which is reached by the same badge.
             repoTab.refreshAvatar()
+            // And the list of what is held, whose faces are packed off the rows.
+            page.refreshChosenRecords()
         }
     }
 
@@ -2119,8 +2122,10 @@ Item {
     /// Empty only where the working tree's row is what is shown — that row is not a commit.
     property var chosenOids: ({})
     property int chosenCount: 0
-    /// Where the last press landed, which is what a Shift click measures its range from. -1 before the first one.
-    property int chosenAnchorRow: -1
+    /// The commit the last press landed on, which is what a Shift click measures its range from. **A commit, not a
+    /// row**: a background pass rewrites the rows under the hand, and a row number kept across one would measure the
+    /// next range from whatever commit had moved into it (デザイン規約 §複数のコミットを選ぶ). Empty before the first press.
+    property string chosenAnchorOid: ""
     /// The choice as the models want it: the ids in walk order, and the rows that name them. Settled together, so the
     /// list on the right and the files under it can never be of different commits.
     property string chosenPacked: ""
@@ -2146,16 +2151,23 @@ Item {
             return
         }
         if (mods & Qt.ShiftModifier) {
-            page.chooseRange(page.chosenAnchorRow >= 0 ? page.chosenAnchorRow : page.selectedRow, atRow)
+            // The anchor is found again by its id: the rows may have moved since the press that set it, and an
+            // anchor the graph no longer draws leaves the range to measure from the row being read.
+            const anchorRow = page.chosenAnchorOid === "" ? -1 : graphModel.rowOf(page.chosenAnchorOid)
+            page.chooseRange(anchorRow >= 0 ? anchorRow : page.selectedRow, atRow)
             return
         }
-        page.chooseAlso(oidHex, atRow)
+        // A press on a row of the graph is where the next Shift click measures from — the one press that moves the
+        // anchor without moving what is read.
+        page.chosenAnchorOid = oidHex
+        page.chooseAlso(oidHex)
     }
-    /// Puts a commit into the choice, or takes it back out — a Ctrl click.
+    /// Puts a commit into the choice, or takes it back out — a Ctrl click. The anchor is left where it was: which
+    /// presses move it is the callers' to say.
     ///
     /// **The last one cannot be taken out.** An empty choice is the working tree's own state, and reaching it from a
     /// commit would leave the pane on the right describing something no row is drawn as holding.
-    function chooseAlso(oidHex, atRow) {
+    function chooseAlso(oidHex) {
         // A fresh object every time: the rows follow this property, and assigning the same one back changes nothing
         // for them to follow.
         const next = ({})
@@ -2168,17 +2180,22 @@ Item {
         } else {
             next[oidHex] = true
         }
-        page.chosenAnchorRow = atRow
         page.settleChoice(next)
     }
     /// The same Ctrl click, made in the list of what is held rather than in the graph (`ChosenCommitRow`). It takes a
     /// commit out and never puts one in — everything in that list is in the choice already.
     ///
-    /// **The anchor stays where the graph left it**: it is a row of the graph, and this press was not on one. A Shift
-    /// click after this one measures from the last row a hand actually landed on, which is what it would measure from
-    /// if the drop had been made in the graph.
+    /// **The anchor stays where the graph left it**: it is a commit of the graph, and this press was not on one. A
+    /// Shift click after this one measures from the last row a hand actually landed on, which is what it would
+    /// measure from if the drop had been made in the graph.
     function dropFromChoice(oidHex) {
-        page.chooseAlso(oidHex, page.chosenAnchorRow)
+        page.chooseAlso(oidHex)
+    }
+    /// Packs the rows of the chosen commits again for the list on the right: what it says about them (a subject, a
+    /// face) is read off the rows, so it is read again whenever the rows are.
+    function refreshChosenRecords() {
+        if (page.chosenPacked !== "")
+            page.chosenRecords = graphModel.chosenRows(page.chosenPacked)
     }
     /// Every commit row between two places, ends included — what a Shift click reaches. **The ones scrolled past are
     /// in it too**: the anchor and the click are on screen by definition, and what lies between them usually is not.
@@ -2236,8 +2253,17 @@ Item {
             return
         const packed = graphModel.presentOids(Object.keys(page.chosenOids).join(String.fromCharCode(31)))
         const kept = packed === "" ? [] : packed.split(String.fromCharCode(31))
-        if (kept.length === page.chosenCount)
+        if (kept.length === page.chosenCount) {
+            // The same commits, drawn again. In the same order, what the list on the right says about them is read
+            // again off the rows the pass brought (a subject reworded, a face assigned); in another order — a rewrite
+            // moved one past another — the choice is read again whole, since which of two commits is the older is
+            // what the pane compares from.
+            if (packed === page.chosenPacked)
+                page.refreshChosenRecords()
+            else
+                page.readChoice(kept)
             return
+        }
         // Everything the choice named is gone. What is being read answers for it — that one is followed by name
         // (`followVanishedCommit`), and the choice comes back as it.
         if (kept.length === 0) {
@@ -2448,7 +2474,7 @@ Item {
         if (row >= 0) {
             graphPane.setCurrentRow(row)
             page.selectedRow = row
-            page.chosenAnchorRow = row
+            page.chosenAnchorOid = oidHex
         }
         // **The working tree's row is not a hash**, so nothing below can be skipped for it the way it can for a
         // commit: what it shows is whatever the tree is now.
@@ -3095,6 +3121,9 @@ Item {
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)
             graphPane.jumpToRow(row)
+        // A jump is one commit, whatever was being held (デザイン規約 §複数のコミットを選ぶ): the pane on the right is
+        // about to describe this one, and rows lit for a choice that no longer stands would say otherwise.
+        page.chooseOnly(oidHex)
         // Details resolve even outside the window.
         page.rewordRow = -1
         page.wipShown = false

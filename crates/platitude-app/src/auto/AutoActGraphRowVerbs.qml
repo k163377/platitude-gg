@@ -35,6 +35,19 @@ Item {
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
 
+    /// How many rows draw themselves chosen — **the output side** of a press that moves the choice. Counted from the
+    /// top to past `last`, the last row the run pressed or stood on, so a row lit that should not be is counted with
+    /// the ones that should.
+    function litRowsTo(last) {
+        let lit = 0
+        for (let i = 0; i < Math.min(graphModel.rowTotal, last + 3); i++) {
+            const item = graphPane.view.itemAtIndex(i)
+            if (item && item.selected)
+                lit++
+        }
+        return lit
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
     function run(act, arg) {
@@ -73,6 +86,16 @@ Item {
             refListOpenTimer.row = lit[0] === "" ? 0 : Number(lit[0])
             refListOpenTimer.cards = false
             refListOpenTimer.litRow = lit.length > 1 ? Number(lit[1]) : 0
+            refListOpenTimer.start()
+        } else if (act === "ref-list-choose") {
+            // A held click put in at a row of that list: the card's rows are the graph's row, so Ctrl there moves the
+            // choice the way the row does and never reaches the name box or the switch (デザイン規約 §複数のコミットを
+            // 選ぶ). The argument is `<行>[:<カードの行>]`, the same shape `ref-list-lit` takes; the row has to be one
+            // that is not the commit already read — a held press on that one takes nothing out of a choice of one.
+            const held = arg.split(":")
+            refListOpenTimer.row = held[0] === "" ? 1 : Number(held[0])
+            refListOpenTimer.cards = false
+            refListOpenTimer.chooseRow = held.length > 1 ? Number(held[1]) : 0
             refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
             // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
@@ -229,19 +252,12 @@ Item {
                 return chooseTimer.rows.length
             return Math.abs(chooseTimer.rows[chooseTimer.rows.length - 1] - chooseTimer.rows[0]) + 1
         }
-        /// How many rows draw themselves chosen — **the output side**. Counted from the top to past the last row this
-        /// run pressed, so a row lit that should not be is counted with the ones that should.
+        /// How many rows draw themselves chosen, counted to past the last row this run pressed (`litRowsTo`).
         function litRows() {
             let last = 0
             for (const row of chooseTimer.rows)
                 last = Math.max(last, row)
-            let lit = 0
-            for (let i = 0; i < Math.min(graphModel.rowTotal, last + 3); i++) {
-                const item = graphPane.view.itemAtIndex(i)
-                if (item && item.selected)
-                    lit++
-            }
-            return lit
+            return acts.litRowsTo(last)
         }
         onTriggered: {
             if (chooseTimer.step < chooseTimer.rows.length) {
@@ -421,6 +437,8 @@ Item {
         property int menuRow: -1
         /// Which row of the list `ref-list-lit` rests the pointer on; -1 for the verbs that leave it off the card.
         property int litRow: -1
+        /// Which row of the list `ref-list-choose` presses with Ctrl held; -1 for the verbs that press none.
+        property int chooseRow: -1
         onTriggered: {
             const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
             if (!stacked)
@@ -438,8 +456,44 @@ Item {
                 listMenuTimer.start()
             else if (refListOpenTimer.litRow >= 0)
                 listLitTimer.start()
+            else if (refListOpenTimer.chooseRow >= 0)
+                listChooseTimer.start()
             else
                 refListShownTimer.start()
+        }
+    }
+    // The held click on a row of that list, put in once the list is actually up, and the choice read back once the
+    // rows draw it: the rows draw a choice a tick behind the press, the wait `graph-choose` takes.
+    SampleTimer {
+        id: listChooseTimer
+        property bool pressed: false
+        /// The commit that was being read before the press, so the report can say the held press left it alone.
+        property string readOid: ""
+        onTriggered: {
+            if (!refList.opened)
+                return
+            if (!listChooseTimer.pressed) {
+                listChooseTimer.readOid = page.selectedOid
+                if (!refList.chooseRow(refListOpenTimer.chooseRow, Qt.ControlModifier))
+                    return
+                listChooseTimer.pressed = true
+                return
+            }
+            // The choice and the highlight the rows drew of it, counted to past the row the card stands on, and the
+            // pane having answered for this choice (`selectionLoaded`, for the reason `graph-choose` gives).
+            const lit = acts.litRowsTo(refListOpenTimer.row)
+            if (page.chosenCount !== 2 || lit !== 2 || !detailsModel.selectionLoaded)
+                return
+            listChooseTimer.stop()
+            // `read=` is what is read having stayed where it was — the held press moved the choice and nothing else
+            // — and `list=` the card the press was made in still standing under the hand: a press that closed it
+            // would have been the plain one.
+            Harness.report("ref_list_choose chosen=" + page.chosenCount
+                              + " lit=" + lit
+                              + " read=" + (page.selectedOid === listChooseTimer.readOid)
+                              + " list=" + refList.opened
+                              + " row=" + refListOpenTimer.row)
+            driver.complete()
         }
     }
     // The right-click on a row of that list, put in once the list is actually up — the rows are the popup's own, and
