@@ -162,6 +162,121 @@ pub(crate) fn image_still_at(pid: u32, recorded: &str) -> bool {
     image_matches(pid, |image| same_image(image, recorded))
 }
 
+/// When the process at a pid began, in the three answers a probe can
+/// honestly give. A number and the program behind it still name two
+/// processes where the successor is installed as the same program, which
+/// is every claim on this machine: a Claude session's number goes to the
+/// next `claude.exe`, and the image name reads as a match. The instant
+/// the process began is what tells those apart.
+enum Born {
+    /// When the process at that number began, as this probe spells it.
+    At(String),
+    /// The probe answered, and nobody is at that number.
+    Nobody,
+    /// The probe could not be asked, or was not allowed to say.
+    Unanswerable,
+}
+
+/// When `pid` began, asked of PowerShell: `tasklist` carries no clock and
+/// `wmic` is on its way off the system (`reap::snapshot`). A number
+/// nobody holds says so; a process this user may not be told about
+/// throws, and that is not the same answer.
+#[cfg(windows)]
+fn born(pid: u32) -> Born {
+    let script = format!(
+        "$p=Get-Process -Id {pid} -ErrorAction SilentlyContinue;\
+         if($null -eq $p){{'none'}}else{{try{{$p.StartTime.Ticks}}catch{{''}}}}"
+    );
+    let mut command = std::process::Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    let Ok(out) = run_captured(&mut command) else {
+        return Born::Unanswerable;
+    };
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        "none" => Born::Nobody,
+        ticks if !ticks.is_empty() && ticks.bytes().all(|b| b.is_ascii_digit()) => {
+            Born::At(ticks.to_string())
+        }
+        _ => Born::Unanswerable,
+    }
+}
+
+/// The same, out of `/proc` where the machine keeps one and `ps` where it
+/// does not. A missing `/proc` entry is an answer only where `/proc` is
+/// the register of processes — on macOS there is none to be missing from,
+/// and reading its absence as a corpse would call every claim litter.
+#[cfg(not(windows))]
+fn born(pid: u32) -> Born {
+    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        Ok(stat) => started_field(&stat).map_or(Born::Unanswerable, Born::At),
+        Err(_) if std::path::Path::new("/proc/self/stat").exists() => Born::Nobody,
+        Err(_) => born_from_ps(pid),
+    }
+}
+
+/// Field 22 of `/proc/<pid>/stat`, the clock ticks since boot at which the
+/// process began. The command name is field 2 and may hold spaces and
+/// parentheses of its own, so the fields are counted from the last `)`.
+#[cfg(not(windows))]
+fn started_field(stat: &str) -> Option<String> {
+    let (_, after_command) = stat.rsplit_once(')')?;
+    after_command.split_whitespace().nth(19).map(str::to_string)
+}
+
+/// When `pid` began as `ps` renders it, for the machines with no `/proc`.
+/// The spacing is column padding, so it is collapsed: what a claim keeps
+/// has to compare equal to what a later read gets back.
+///
+/// A `ps` that has no `lstart` to give fails the same way a pid nobody
+/// holds does — nothing on stdout, and a non-zero exit — and reading that
+/// as a corpse would call every live claim on such a machine litter. What
+/// separates them is that a refused format says so on stderr.
+#[cfg(not(windows))]
+fn born_from_ps(pid: u32) -> Born {
+    let Ok(out) = std::process::Command::new("ps")
+        .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .output()
+    else {
+        return Born::Unanswerable;
+    };
+    if !out.stderr.is_empty() {
+        return Born::Unanswerable;
+    }
+    let rendered = String::from_utf8_lossy(&out.stdout);
+    let collapsed = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
+    match (out.status.success(), collapsed.is_empty()) {
+        (true, false) => Born::At(collapsed),
+        _ => Born::Nobody,
+    }
+}
+
+/// When the process behind `pid` began, for a claim to record beside the
+/// number and the program. None when nothing could be read, which leaves
+/// the claim naming what it named before — the shape claims had until
+/// this, and the one [`image_still_at`] is the whole answer for.
+pub(crate) fn born_of(pid: u32) -> Option<String> {
+    match born(pid) {
+        Born::At(when) => Some(when),
+        Born::Nobody | Born::Unanswerable => None,
+    }
+}
+
+/// Whether the process a claim was written from is still the one at
+/// `pid`: `Some(false)` for a stranger handed the number after it, one
+/// installed as the same program included, and None where the machine
+/// would not say — which leaves the caller the older, weaker question
+/// rather than an answer this did not have.
+pub(crate) fn born_still_at(pid: u32, recorded: &str) -> Option<bool> {
+    if recorded.is_empty() {
+        return None;
+    }
+    match born(pid) {
+        Born::At(when) => Some(when == recorded),
+        Born::Nobody => Some(false),
+        Born::Unanswerable => None,
+    }
+}
+
 /// Whether two spellings name one program. Both sides come from
 /// [`behind`], so this is the tolerance a probe's own drift needs —
 /// a path where a bare name was expected, and Windows' indifference to
@@ -197,8 +312,8 @@ pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
 #[cfg(test)]
 mod tests {
     use super::{
-        NO_SUCH_PID, image_of, image_still_at, is_task_runner, process_exists, same_image,
-        task_runner_exists,
+        NO_SUCH_PID, born_of, born_still_at, image_of, image_still_at, is_task_runner,
+        process_exists, same_image, task_runner_exists,
     };
 
     #[test]
@@ -271,5 +386,34 @@ mod tests {
         assert!(!task_runner_exists(NO_SUCH_PID));
         assert!(!image_still_at(NO_SUCH_PID, &mine));
         assert_eq!(image_of(NO_SUCH_PID), None);
+    }
+
+    /// This process is the one whose beginning this can ask after, and
+    /// the answer is what a claim written here would record. An instant
+    /// that is not the one at a live number belongs to the process that
+    /// held the number before — the case the image name cannot see, both
+    /// sides of it being one program. A claim that recorded nothing is
+    /// not answered with a guess: it is left unasked.
+    #[test]
+    fn a_process_is_told_from_its_successor_by_when_it_began() {
+        let me = std::process::id();
+        let born = born_of(me).expect("this process began at some point");
+        assert!(!born.is_empty());
+        assert_eq!(born_still_at(me, &born), Some(true));
+        assert_eq!(born_still_at(me, "1"), Some(false));
+        assert_eq!(born_still_at(me, ""), None);
+        assert_eq!(born_of(NO_SUCH_PID), None);
+        assert_eq!(born_still_at(NO_SUCH_PID, &born), Some(false));
+    }
+
+    /// The command name sits in parentheses and may hold spaces and
+    /// parentheses of its own, so a reader counting fields from the left
+    /// lands on the wrong one and dates the process from a page count.
+    #[cfg(not(windows))]
+    #[test]
+    fn reads_when_a_process_began_out_of_its_proc_line() {
+        let stat = "42 ((odd) name) S 1 42 42 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 987654 0 0";
+        assert_eq!(super::started_field(stat).as_deref(), Some("987654"));
+        assert_eq!(super::started_field("nothing of the sort"), None);
     }
 }

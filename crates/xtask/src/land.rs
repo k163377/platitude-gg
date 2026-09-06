@@ -611,6 +611,7 @@ mod tests {
             session: "mine".to_string(),
             pid: None,
             image: None,
+            born: None,
         };
         assert!(
             matches!(claim_on(&seat("claude-seat mine pid 1"), &me), Claim::Ours),
