@@ -43,14 +43,20 @@ QtObject {
     /// both. Below `titleEaseChars`, which is the ceiling on this: a floor above the length names stop being eased at
     /// would make the shortest name the strip allows longer than the ones it calls short.
     readonly property int titleMinChars: 6
-    readonly property int titleMinW: Math.ceil(tabMetrics.titleFont.advanceWidth("…")
-        + tabMetrics.titleMinChars * tabMetrics.titleFont.averageCharacterWidth)
+    /// Measured in `n`s, never in `averageCharacterWidth`: that is the **font's** average, and every family named for
+    /// this UI carries Japanese, so it answers with a full-width figure no repository name is written in — and a
+    /// different one per platform (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the
+    /// font rather than with the letters, and where it runs wide it takes letters off the name it stands there to keep.
+    ///
+    /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
+    function titleMinW() {
+        return Math.ceil(tabMetrics.titleFont.advanceWidth("…")
+                         + tabMetrics.titleMinChars * tabMetrics.titleFont.advanceWidth("n"))
+    }
     /// Where a name stops being helped along (同表). A tab drawn to `ui` comes out narrower than the marks either side
     /// of it, so below this length the tab still narrows — just at half the rate (`titleEaseShare`). **Not a floor**: a
     /// short name is meant to make a short tab, and a seat every one of them was padded out to made a row of equal
-    /// blanks. Counted in `n`s rather than in the average the floor above uses: that one cuts a
-    /// name down, where an average running wide only leaves more of the name standing, and this one hands out air
-    /// (rules-refs/app-ui.md carries the measurement).
+    /// blanks. Counted in `n`s, like the floor above and for its reason.
     readonly property int titleEaseChars: 8
     readonly property real titleEaseShare: 0.5
     /// Pushed rather than bound: `advanceWidth` is a method, so a binding on it never re-evaluates and freezes at the

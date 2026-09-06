@@ -60,11 +60,12 @@ Item {
     /// stand-in a photograph of it cannot be told apart from a short name in a narrow tab.
     readonly property bool tabPinNameKept: tabPin.nameKept
 
-    /// The longest and shortest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
+    /// The longest a name is drawn at (`TabMetrics`), aliased for the band, which reads the strip.
     readonly property int tabTitleMaxW: tabMetrics.titleMaxW
-    readonly property int tabTitleMinW: tabMetrics.titleMinW
-    /// The length a name stops being eased at, and the run a name goes quiet over where the mark stands on it — both
-    /// pushed rather than bound (`TabMetrics.titleEaseW` / `fadeW`).
+    /// The shortest it is cut down to, the length it stops being eased at, and the run it goes quiet over where the
+    /// mark stands on it — all three measured off the font, and so all three pushed rather than bound
+    /// (`TabMetrics.titleMinW` / `titleEaseW` / `fadeW`).
+    property int tabTitleMinW: 0
     property real tabTitleEaseW: 0
     property real tabTitleFadeW: 0
     /// What every tab's name is capped at right now, and the room every tab keeps for its mark — the strip's two
@@ -265,6 +266,7 @@ Item {
         // the floor instead has the tabs down to three characters beside two whole badges. Measured off the same
         // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
         // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
+        tabStrip.tabTitleMinW = tabMetrics.titleMinW()
         tabStrip.tabTitleEaseW = tabMetrics.titleEaseW()
         tabStrip.tabTitleFadeW = tabMetrics.fadeW()
         const eased = nat.reduce(
