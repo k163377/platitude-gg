@@ -66,7 +66,7 @@ pub(crate) fn app_exe(
             .status()
             .map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
-            return Err("cargo build --release failed".into());
+            return Err(format!("cargo build --release failed{}", held_by(root)));
         }
     }
     where_it_lands(root, "release")
@@ -107,6 +107,37 @@ pub(crate) fn shipped_exe(
         }
     }
     where_it_lands(root, SHIPPED_PROFILE)
+}
+
+/// What to add to a failed release build when a run of this tree is
+/// standing on the binary it links, and nothing when none is.
+///
+/// Windows holds a running image against every write to it, so a run
+/// left over from an earlier command turns the next `--release` step red
+/// with a linker error that names a path and no reason. **Whether that
+/// is what happened is the reader's to say**: the exit status is all
+/// this has of the build, and a compile error under a standing run is
+/// still a compile error. Who is standing is what cargo's lines cannot
+/// tell them; why the build failed is already above. The window a person
+/// opened is not the one to look at — `launch` stands it from a copy
+/// (`crate::gui::standing_copy`). Best effort: a listing that will not
+/// answer is not a reason to say less than cargo already did.
+fn held_by(root: &Path) -> String {
+    match crate::gui::standing_under(root) {
+        Ok(standing) if !standing.is_empty() => {
+            let who: Vec<String> = standing
+                .iter()
+                .map(|(pid, exe)| format!("{pid} ({exe})"))
+                .collect();
+            format!(
+                " — and a run of this tree is standing on the binary it links: {}. \
+                 If that is what the linker refused, `cargo xtask kill` reaps this \
+                 tree's runs and nothing else.",
+                who.join(", ")
+            )
+        }
+        _ => String::new(),
+    }
 }
 
 /// The app's file name on this platform.

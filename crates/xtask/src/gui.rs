@@ -9,12 +9,14 @@
 //! pre-shell hook points broad kills here.
 //!
 //! `launch` is the real-window start (the verify-ui skill's fast path):
-//! reap this tree's stale runs, build, start detached, and say whether
-//! it lived past the first second. The app separates its settings store
-//! by build tree on its own (a seat's build locks `dev-<seat>`, never
-//! another seat's), so no store juggling happens here.
+//! reap this tree's stale runs, build, start detached from a copy of the
+//! build ([`standing_copy`], so a window left standing is never what the
+//! next build runs into), and say whether it lived past the first
+//! second. The app separates its settings store by build tree on its own
+//! (a seat's build locks `dev-<seat>`, never another seat's), so no
+//! store juggling happens here.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// `cargo xtask kill`: reap this tree's app processes. Quiet success when
@@ -53,7 +55,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     for (pid, exe) in reap_under(&root)? {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
-    let exe = crate::tree::app_exe(&root, &path, build, &[])?;
+    let exe = stand_from_a_copy(&root, &crate::tree::app_exe(&root, &path, build, &[])?)?;
     let mut command = Command::new(&exe);
     command
         .current_dir(&root)
@@ -88,14 +90,64 @@ pub fn launch(args: &[String]) -> Result<(), String> {
 
 const APP_NAME: &str = "platitude-gg";
 
-/// Kills every app process whose executable sits under `root`, and
-/// answers who they were. Enumeration is per-OS; the path judgement is
-/// one place, here.
-pub(crate) fn reap_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
-    let mine: Vec<(u32, String)> = app_processes()?
+/// Where the window a person is looking at runs from: a copy of the
+/// build, in a directory cargo does not link into.
+///
+/// The slot `cargo build --release` writes is held by whoever is running
+/// it — on Windows that is the file itself, and the release binary is a
+/// hard link to the one in `deps/`, so a standing window fails the link
+/// as well as the uplift. A window is the one process here that outlives
+/// the command that started it, which made "launch, then gate" an order
+/// nobody could walk: the gate's first verb builds ([`crate::tree`]), and
+/// the user's own window is the one run a gate must never reap. So the
+/// copy is what stands and the slot stays free.
+///
+/// **The file name is the app's** — that is what [`app_processes`]
+/// enumerates by — and the directory is under this tree, which is what
+/// tells this seat's runs from another seat's ([`is_under`]). One copy
+/// per tree, which is both what it takes — `launch` reaps this tree's
+/// runs before it writes the copy, so nothing of ours is standing on it
+/// by then — and what it costs, 60MB beside a build of the same size.
+fn standing_copy(root: &Path) -> PathBuf {
+    root.join("target")
+        .join("window")
+        .join(crate::tree::exe_name())
+}
+
+/// The copy of `built` that a window stands from, refreshed from the
+/// build every launch.
+fn stand_from_a_copy(root: &Path, built: &Path) -> Result<PathBuf, String> {
+    let copy = standing_copy(root);
+    if let Some(dir) = copy.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    std::fs::copy(built, &copy).map_err(|e| {
+        format!(
+            "could not copy {} to {}: {e} — something is still standing on it \
+             (`cargo xtask kill` reaps this tree's runs)",
+            built.display(),
+            copy.display()
+        )
+    })?;
+    Ok(copy)
+}
+
+/// Every app process whose executable sits under `root`: what
+/// [`reap_under`] kills, and what a red release build asks for so it can
+/// name who might be holding the file it was linking
+/// (`crate::tree::app_exe`). Enumeration is per-OS; the path judgement
+/// is one place, here.
+pub(crate) fn standing_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
+    Ok(app_processes()?
         .into_iter()
         .filter(|(_, exe)| is_under(exe, root))
-        .collect();
+        .collect())
+}
+
+/// Kills every app process whose executable sits under `root`, and
+/// answers who they were.
+pub(crate) fn reap_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
+    let mine = standing_under(root)?;
     for (pid, _) in &mine {
         kill_pid(*pid)?;
     }
@@ -203,8 +255,28 @@ fn kill_pid(pid: u32) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_under, parse_pid_paths};
+    use super::{is_under, parse_pid_paths, standing_copy};
     use std::path::{Path, PathBuf};
+
+    /// The two things the copy a window stands from has to be: not the
+    /// slot cargo links into, and still this tree's own app — a name the
+    /// process listing does not know is a window `kill` walks past.
+    #[test]
+    fn the_window_stands_beside_the_slot_and_stays_reapable() {
+        let seat = PathBuf::from("C:/x/platitude-gg/.claude/worktrees/a");
+        let copy = standing_copy(&seat);
+        assert_ne!(
+            copy,
+            seat.join("target")
+                .join("release")
+                .join(crate::tree::exe_name())
+        );
+        assert_eq!(
+            copy.file_name(),
+            Some(std::ffi::OsStr::new(crate::tree::exe_name()))
+        );
+        assert!(is_under(&copy.to_string_lossy(), &seat));
+    }
 
     #[test]
     fn judges_the_tree_by_path_prefix_whatever_the_slashes() {
