@@ -53,6 +53,18 @@ pub(super) fn config(config_dir: &Path, verb: &str, presets: &[String]) -> Resul
     // offering a plain `push` — an end that had fetched would know it was
     // diverged and offer the overwrite instead.
     //
+    // `unpublished` is the same requirement from the other side: its
+    // `outsider` is a name put there by another clone and **never
+    // fetched here**, which is the whole of the third shape a first push
+    // can meet — neither answer can be given from this end, so the bar
+    // wears the frame and the `!` (`RemoteBranchState::Unknown` comes of
+    // `is_in_head_history` failing on a commit this repository does not
+    // hold). An opening that fetches puts that commit in the repository,
+    // and the comparison then answers `refused` like any other diverged
+    // name — on every run, there being no race here to win (measured: 10
+    // of 10 of `publish-taken outsider --preset unpublished` reported
+    // `far=refused code=push -f theirs=1`).
+    //
     // **Keyed on the preset, not on a verb.** A run that fetches on the
     // way in is not photographing `outrun` at all, it is photographing
     // `demo::remote::diverged` — which is literally `behind`, a fetch,
@@ -64,7 +76,7 @@ pub(super) fn config(config_dir: &Path, verb: &str, presets: &[String]) -> Resul
     //
     // `perf` is here for a reason of its own: a measurement is not to
     // reach the network at all.
-    if verb == "perf" || presets.iter().any(|p| p == "outrun") {
+    if verb == "perf" || presets.iter().any(|p| p == "outrun" || p == "unpublished") {
         let settings = config_dir.join("settings.toml");
         std::fs::write(
             &settings,
@@ -126,6 +138,25 @@ mod tests {
     fn the_preset_that_must_not_fetch_is_seeded_under_any_verb() {
         let dir = config_dir("seed-outrun");
         super::config(&dir, "nav-tip", &["outrun".to_string()]).expect("the seed is written");
+        let settings = std::fs::read_to_string(dir.join("settings.toml"))
+            .expect("a preset that must not fetch is given settings of its own");
+        assert!(
+            settings.contains("auto_fetch_minutes = 0"),
+            "the seeded settings turn the fetching off, not something else: {settings}"
+        );
+    }
+
+    /// The second fixture with a name on the far side it must not have
+    /// read: `unpublished`'s `outsider` is the only shape a first push
+    /// has that neither answer fits, and an opening that fetches hands
+    /// the comparison the commit it was supposed to be missing — the run
+    /// then photographs a diverged name (measured: `refused`, ten times
+    /// out of ten) under this preset's name and PASSes doing it.
+    #[test]
+    fn the_preset_whose_third_shape_a_fetch_would_answer_is_seeded_too() {
+        let dir = config_dir("seed-unpublished");
+        super::config(&dir, "publish-taken", &["unpublished".to_string()])
+            .expect("the seed is written");
         let settings = std::fs::read_to_string(dir.join("settings.toml"))
             .expect("a preset that must not fetch is given settings of its own");
         assert!(

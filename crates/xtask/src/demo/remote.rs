@@ -13,6 +13,12 @@ use super::repo::{DemoRepo, file_url};
 /// `outsider` was pushed from another clone and never fetched here, so
 /// **neither answer can be given from this end**. The checked-out branch
 /// has no upstream at all.
+///
+/// **"Never fetched here" is not this builder's to keep.** Opening a tab
+/// fetches once, and one that runs puts `outsider`'s commit in the
+/// repository — the comparison then answers `refused` like any other
+/// diverged name and the third shape is gone. What holds it is
+/// `verify::seed`, which turns the opening's fetch off for this preset.
 pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
