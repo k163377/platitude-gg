@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, opened_with, write_result};
 use platitude_core::details::DiffTarget;
-use platitude_core::session::{DiffRefreshOutcome, Recording, SessionEvent};
+use platitude_core::session::{DiffRefreshOutcome, Recording, RefreshOutcome, SessionEvent};
 
 /// Opening a repository asks for a read, and so does the window becoming
 /// active a moment later; on a large repository that pair would be two
@@ -151,6 +151,84 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
         status_reads_at_once(&sink),
         1,
         "two status reads overlapped: {:?}",
+        commands_of(&sink)
+    );
+    session.close();
+}
+
+/// The same pair under the one write the poll is **not** turned away
+/// from. A replay stands for as long as its range is deep, and skipping
+/// the tick through all of it would leave the window with no badge, no
+/// progress and no graph for the whole of a rewrite somebody asked for
+/// (`RepoSession::refresh_poll`) — so the tick and the read the write
+/// settles behind itself are aimed at the same repository on purpose.
+///
+/// **`stage_paths` cannot make this pair.** A write that does not replay
+/// turns the tick away before it reads anything, so the test above has
+/// the two asking from either side of the write rather than from inside
+/// it, and the way in that only a replay opens went unwalked.
+///
+/// The window is held open rather than raced for: the flags the tick
+/// reads are set around the whole request, refreshes included
+/// (`session::write::serve`), and git's answer to the write arrives
+/// before those refreshes — so a tick asked for on that answer is asked
+/// while the replay still owns the repository, every time.
+// `worker_threads = 2` is the test's own premise: the hook below parks a
+// worker at the spawn it fires on, and the rest of the session has to
+// keep running on another (`CaptureSink::hook_once`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["switch", "-c", "topic"]);
+    repo.commit_file("t.txt", "topic\n", "topic one");
+    repo.git(&["switch", "main"]);
+    repo.commit_file("m.txt", "main\n", "main moved");
+    repo.git(&["switch", "topic"]);
+
+    let (sink, session) = opened(&repo).await;
+    // The opening's own reads have to be done before recording starts, or
+    // the hook below fires on one of them instead.
+    sink.opened_graph(&session, 3).await;
+    session.set_recording(Recording::WithBackground);
+
+    // Park a read where its process is about to be spawned. It holds the
+    // status flight from here on, so everything asked below queues rather
+    // than reading — the replay's own settling included, which is what
+    // keeps the write inside its request while the tick is asked for.
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(is_status_spawn, move || {
+        held.recv().expect("the test releases the parked read");
+    });
+    let spawned = sink.count(is_status_spawn);
+    session.refresh_status();
+    sink.wait_for("the parked read reached its process", move |evs| {
+        (evs.iter().filter(|e| is_status_spawn(e)).count() > spawned).then_some(())
+    })
+    .await;
+
+    session.rebase("main".into(), Default::default());
+    // git's own answer to the replay, given before the reads that settle
+    // behind it — and those are stuck on the park, so the write still
+    // holds the repository at the line below.
+    assert_eq!(write_result(&sink, "rebase").await, None);
+
+    let poll = session.refresh_poll_tracked();
+    release.send(()).expect("let the parked read finish");
+    assert_ne!(
+        crate::support::wait::bounded("the tracked poll", poll.outcome()).await,
+        RefreshOutcome::WriteBusy,
+        "the tick was turned away, so nothing of it ever met the replay"
+    );
+    crate::support::wait::bounded(
+        "the readers left the flight",
+        session.wait_for_snapshot_reads(),
+    )
+    .await;
+    assert_eq!(
+        status_reads_at_once(&sink),
+        1,
+        "the tick read status beside the replay's own: {:?}",
         commands_of(&sink)
     );
     session.close();
