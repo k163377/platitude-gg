@@ -2321,6 +2321,12 @@ Item {
     /// walk a reader off the face on a poll that changed nothing under them — the message box emptied by hand is the
     /// one that would do it.
     function leaveWipWhenDone(edge) {
+        // **A tree nobody has read is not a tree with nothing in it.** The counts start at zero and `opText` starts
+        // empty, which is this question's own picture of a job that is done — so asked before the first status it
+        // answers yes about a repository it has never seen (規約 §UI 自動化の因果性). `loaded` latches on that first
+        // status and never goes back (`WorkTreeModel`), so this stands in front of a page's opening moment alone.
+        if (!workTree.loaded)
+            return
         if (!edge || !page.wipShown || workTree.opText !== "")
             return
         const clean = workTree.stagedCount === 0 && workTree.unstagedCount === 0
