@@ -268,8 +268,10 @@ Item {
         // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
         // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
         //
-        // Asked for at the names' own width, nothing cut: the ceiling is a share of the run, so a width asked for
-        // with the ceiling in it would be read out of the run the ask is about to be answered with.
+        // Asked for at the names' own width, nothing cut and nothing capping the air either: the ceiling is a share
+        // of the run, so an ask carrying it is read out of the run that ask is about to be answered with — and an ask
+        // that moves with the run it is handed closes a loop, this width being the strip's own `implicitWidth` and
+        // the band answering it with `Layout.fillWidth`.
         const run = Math.floor(tabs.runAvail)
         tabStrip.tabTitleMinW = tabMetrics.titleMinW()
         tabStrip.tabTitleMaxW = tabMetrics.titleCeilingW(run, nat.length)
@@ -278,7 +280,9 @@ Item {
         const eased = nat.reduce(
             (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
         const names = nat.reduce((sum, w) => sum + w, 0)
-        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + eased + names
+        const easeFull = tabMetrics.titleEaseFullW()
+        const wantEase = nat.reduce((sum, w) => sum + tabMetrics.titleEase(w, easeFull, easeFull), 0)
+        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + wantEase + names
             + nat.length * (tabMetrics.tabPadL + tabMetrics.markRoomFull)
         if (nat.length === 0) {
             tabStrip.tabMarkRoom = tabMetrics.markRoomFull

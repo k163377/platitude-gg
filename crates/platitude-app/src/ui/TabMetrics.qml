@@ -62,7 +62,7 @@ QtObject {
     /// different one per platform (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the
     /// font rather than with the letters, and where it runs wide it takes letters off the name it stands there to keep.
     ///
-    /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
+    /// Pushed rather than bound, for `titleEaseFullW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
     function titleMinW() {
         return Math.ceil(tabMetrics.titleFont.advanceWidth("…")
                          + tabMetrics.titleMinChars * tabMetrics.titleFont.advanceWidth("n"))
@@ -73,11 +73,20 @@ QtObject {
     /// blanks. Counted in `n`s, like the floor above and for its reason.
     readonly property int titleEaseChars: 8
     readonly property real titleEaseShare: 0.5
+    /// That length in pixels, with nothing over it — the width the strip **asks** at: the ask is made at the names'
+    /// own width, and the ceiling the form below is held under is cut out of the very run the ask is about to be
+    /// answered with.
+    ///
     /// Pushed rather than bound: `advanceWidth` is a method, so a binding on it never re-evaluates and freezes at the
-    /// default font's answer (rules-refs/app-ui.md §FontMetrics). `TabStrip.settleTitleCap` is where it is called from,
-    /// which is already the pushed form.
+    /// default font's answer (rules-refs/app-ui.md §FontMetrics). `TabStrip.settleTitleCap` is where both are called
+    /// from, which is already the pushed form.
+    function titleEaseFullW() {
+        return Math.ceil(tabMetrics.titleEaseChars * tabMetrics.titleFont.advanceWidth("n"))
+    }
+    /// And the same length held under the ceiling, which is what a tab being laid out is eased by: air added past the
+    /// width a name is cut at would be paid for in that name's own letters.
     function titleEaseW(ceiling) {
-        return Math.min(Math.ceil(tabMetrics.titleEaseChars * tabMetrics.titleFont.advanceWidth("n")), ceiling)
+        return Math.min(tabMetrics.titleEaseFullW(), ceiling)
     }
     /// The air a name of this width is given on top of itself — half of what it falls short by, split evenly over its
     /// two sides. Never past the cap: a strip short of run is already cutting names, and air added there would be paid
@@ -114,7 +123,7 @@ QtObject {
     /// rather than stopping at a line. What the two hide is different — this tab's tail, against the tabs behind it —
     /// but one band holding two dissolve lengths reads as two materials, so there is one number for both.
     ///
-    /// Pushed rather than bound, for `titleEaseW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
+    /// Pushed rather than bound, for `titleEaseFullW`'s reason (`TabStrip.settleTitleCap` is where it is called from).
     readonly property int fadeChars: 3
     function fadeW() {
         return Math.ceil(tabMetrics.fadeChars * tabMetrics.titleFont.advanceWidth("n"))
