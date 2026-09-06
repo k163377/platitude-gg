@@ -59,8 +59,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           commands-fail-shut, commands-clear, fetch-fail,
                           fetch-recover, fetch-resume, push-retry,
                           remote-refused, tag-refused, push-outdated,
-                          commit-refused, notice-over-diff, rename-taken,
-                          fold-across-merge, fold-off-branch,
+                          commit-refused, notice-over-diff, stale-part —
+                          which refuses a write of its own, without git —,
+                          rename-taken, fold-across-merge, fold-off-branch,
                           fold-first-commit, fold-unfetched-base,
                           drop-last-commit, band-actions-alert, and
                           push / publish-new-go against an unreachable

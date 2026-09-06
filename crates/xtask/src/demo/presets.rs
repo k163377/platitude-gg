@@ -13,12 +13,14 @@ use super::conflict::{
 };
 use super::deep::{deep, deep_detached, deep_parked, replay};
 use super::pictures::{bigpicture, pictures};
-use super::remote::{behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished};
+use super::remote::{
+    behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished, unreachable,
+};
 use super::repo::DemoRepo;
 use super::scale::{edges, long, longpaths, manyhunks, spread, widechars, widelines};
 use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
-use super::tags::{manytags, tags};
+use super::tags::{manytags, tagonly, tags};
 use super::worktrees::worktrees;
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
@@ -151,6 +153,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "hooked" => hooked(&mut repo)?,
         "slowhook" => slowhook(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
+        "unreachable" => unreachable(&mut repo)?,
         "plan" => plan(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "errsig" => errsig(&mut repo)?,
@@ -158,6 +161,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
+        "tagonly" => tagonly(&mut repo)?,
         "stack" => stack(&mut repo)?,
         "stack-max" => stack_max(&mut repo)?,
         "deep" => deep(&mut repo)?,

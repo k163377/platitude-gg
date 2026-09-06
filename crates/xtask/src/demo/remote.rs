@@ -223,6 +223,34 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A remote nothing can reach: `origin` is pushed to and tracked, and
+/// its URL then names a directory that was never made.
+///
+/// **The only shape a fetch fails in without a network.** Every other
+/// preset's `origin` is a `file://` beside the work tree and answers
+/// every time, so a verb about a run of failed fetches (`fetch-fail`,
+/// `fetch-resume`) says `fetch_fail reachable=true` there and is left to
+/// the watchdog. A fetch here is refused before a byte moves, which is a
+/// failed write — the runs carry `--allow-write-failure`.
+///
+/// The push comes first, so the branch has an upstream and the remote's
+/// ref is on record: what the failures are about is a remote that went
+/// away, not a repository that never had one.
+///
+/// **The URL is absolute**, which is what lets a copy of this preset's
+/// template be rebound to its own root along with the rest of git's
+/// metadata (`template::rebind`) — a copy is then unreachable in the
+/// copy's own words rather than in the template's.
+pub(super) fn unreachable(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    let gone = file_url(&repo.root.join("gone.git"));
+    repo.git(&["config", "remote.origin.url", &gone])?;
+    Ok(())
+}
+
 /// A remote that keeps what it holds: every push to it is turned away by a
 /// `pre-receive` hook, in the words a forge writes over a protected branch.
 ///

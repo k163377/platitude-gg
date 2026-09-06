@@ -64,6 +64,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         slowhook  a pre-commit hook that takes its time, over something
                   staged — a write provably in flight (quit-waits, quit-locked)
         noremote  commits and no remote at all: the first push writes one down
+        unreachable  a tracked origin whose URL names a directory that was
+                  never made: the only shape a fetch fails in offline, so
+                  the only one a run of failed fetches can be had on
+                  (fetch-fail, fetch-resume)
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,
@@ -75,6 +79,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
         manytags  basic, with more tags than any pane can show at once
+        tagonly   a commit no branch reaches, held by v1.1-kept alone, with
+                  v1.0 on the trunk beside it: the only shape where taking
+                  the tags out of the graph takes a row with them
+                  (tags-eye)
         stack     every colour a chip column stacks, three rows a shape
         stack-max detached HEAD on the deepest row there is: all six,
                   three rows of them and the marker on the newest

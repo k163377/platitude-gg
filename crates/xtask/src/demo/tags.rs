@@ -78,3 +78,40 @@ pub(super) fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git_stdin(&["update-ref", "--stdin"], &batch)?;
     Ok(())
 }
+
+/// A commit no branch reaches, held by a tag alone.
+///
+/// **The one shape in which taking the tags out of the graph takes a row
+/// with them**, which is what `tags-eye` is judged on: the walk reaches
+/// `v1.1-kept`'s commit through `refs/tags` and through nothing else, so
+/// its row goes on the press and comes back on the second one. A tag a
+/// branch also reaches keeps its row through both, and a picture of that
+/// frames exactly like a switch that never answered.
+///
+/// `v1.0` is the other half of that pair — a tag on the trunk, whose row
+/// stays — and it is annotated, so the name index has one tag of each
+/// kind to peel (`refs::REFS_FORMAT_ARG`).
+///
+/// No remote: nothing here is about one, and the fetch an opening fires
+/// would be the only write in a run that is about a graph.
+pub(super) fn tagonly(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# tags\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["tag", "-a", "v1.0", "-m", "first release"])?;
+
+    // Written on a detached HEAD and named by the tag alone, so `main`
+    // never carries it.
+    repo.git(&["switch", "--detach"])?;
+    repo.commit(
+        "src/kept.txt",
+        "kept by a tag\n",
+        "feat: keep this by a tag alone",
+    )?;
+    repo.git(&["tag", "v1.1-kept"])?;
+
+    // The trunk goes on past it, so the row the eye takes out sits
+    // inside the graph rather than on the end of it.
+    repo.git(&["switch", "main"])?;
+    repo.commit("src/lib.txt", "lib v1\n", "feat: add the library")?;
+    Ok(())
+}
