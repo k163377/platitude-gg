@@ -60,12 +60,8 @@ pub(crate) fn claim_resource(
     };
     let mut file = match open_new() {
         Ok(file) => file,
-        // A lock whose writer is gone is litter, not ownership: the temp
-        // directory outlives every killed run, and without this one
-        // taskkill would refuse the path until a reboot.
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && !holder_alive(&lock) => {
-            let _ = std::fs::remove_file(&lock);
-            open_new().map_err(|e| refused(&e))?
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            reclaim(&lock, &locks, key, open_new).map_err(|e| refused(&e))?
         }
         Err(e) => return Err(refused(&e)),
     };
@@ -75,17 +71,72 @@ pub(crate) fn claim_resource(
     Ok(Some(ResourceClaim { lock }))
 }
 
-/// Whether the process that wrote `lock` still exists — and is a task
+/// The file this run writes its claim to when a lock is already standing.
+/// A lock whose writer is gone is litter, not ownership: the temp
+/// directory outlives every killed run, and without this a run the
+/// machine took down would refuse the path until a reboot.
+///
+/// **Moving the dead lock aside is the ownership edge, and the bytes it
+/// carries are what say the move was owed.** Two runs read one dead lock
+/// in the same moment; removing it by name lets the second take the
+/// first's fresh lock away and both go on holding the path. Only one
+/// process can move a given file, and the mover reads what it moved:
+/// bytes that are not the dead ones it saw are a claim written in
+/// between, and it goes back to the name its owner will remove it by.
+fn reclaim(
+    lock: &Path,
+    locks: &Path,
+    key: u64,
+    open_new: impl Fn() -> std::io::Result<std::fs::File>,
+) -> std::io::Result<std::fs::File> {
+    let dead = std::fs::read_to_string(lock).unwrap_or_default();
+    if holder_alive(&dead) {
+        return Err(standing("its writer is still running"));
+    }
+    // A name of this attempt's own — the pid for the machine, the serial
+    // for the threads of one run. Two attempts aiming at one name would
+    // be moving each other's file instead of the dead one.
+    let serial = ASIDE_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let aside = locks.join(format!("{key:016x}-{}-{serial}.dead", std::process::id()));
+    std::fs::rename(lock, &aside)?;
+    let moved = std::fs::read_to_string(&aside).unwrap_or_default();
+    if moved != dead {
+        // Not the dead lock this attempt read: a claim written in
+        // between, or one that could not be read, which `holder_alive`
+        // answers the same way. Moving it back is what returns it whole
+        // to the name its owner removes it by — writing a copy would put
+        // an unreadable claim back empty, and an empty lock is one
+        // nothing reclaims.
+        if std::fs::rename(&aside, lock).is_err() {
+            let _ = std::fs::remove_file(&aside);
+        }
+        return Err(standing("a live claim replaced the dead lock"));
+    }
+    let _ = std::fs::remove_file(&aside);
+    open_new()
+}
+
+/// Tells the moves of one process apart, which its pid cannot: a run
+/// claims from several threads at once.
+static ASIDE_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The refusal a lock somebody else holds is. What is held, and on whose
+/// account, is [`claim_resource`]'s to say; this is the reason.
+fn standing(reason: &str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::AlreadyExists, reason)
+}
+
+/// Whether the process that wrote a lock still exists — and is a task
 /// runner, which is the only thing that ever writes one: a pid that a
 /// killed run left behind is a name the machine gives out again, and a
 /// stranger under it must not hold the path (`subprocess::task_runner_exists`).
 /// Unreadable or half-written locks answer "alive": refusing is the safe
 /// side, and the writer may be between create and write.
-fn holder_alive(lock: &Path) -> bool {
-    let Some(pid) = std::fs::read_to_string(lock).ok().and_then(|text| {
-        text.lines()
-            .find_map(|line| line.strip_prefix("pid=")?.trim().parse::<u32>().ok())
-    }) else {
+fn holder_alive(lock: &str) -> bool {
+    let Some(pid) = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("pid=")?.trim().parse::<u32>().ok())
+    else {
         return true;
     };
     crate::subprocess::task_runner_exists(pid)
@@ -387,6 +438,60 @@ mod tests {
         super::claim_resource(&target, "test resource", &mut second_set)
             .expect("the path can be reused sequentially")
             .expect("new claim after release");
+        std::fs::remove_dir(target).expect("remove empty target directory");
+    }
+
+    /// One dead lock, read by four runs in the same moment: the lock is
+    /// the resource's only owner, so exactly one of them takes it over
+    /// and the rest are refused. Reclaiming by name lets more than one —
+    /// the second's remove takes the first's fresh lock away, and the
+    /// path is held twice with nothing said.
+    #[test]
+    fn one_run_of_several_racing_one_dead_lock_reclaims_it() {
+        let target = super::fresh_shot_dir("racing-claim").expect("target directory");
+        let mut owner = BTreeSet::new();
+        let first = super::claim_resource(&target, "test resource", &mut owner)
+            .expect("first claim")
+            .expect("new claim");
+        let lock = first.lock.clone();
+        std::mem::forget(first);
+        let dead_pid = crate::subprocess::NO_SUCH_PID;
+        std::fs::write(&lock, format!("pid={dead_pid}\npath=doctored\n")).expect("doctor the lock");
+
+        let racers = 4;
+        let start = std::sync::Arc::new(std::sync::Barrier::new(racers));
+        let threads: Vec<_> = (0..racers)
+            .map(|_| {
+                let start = start.clone();
+                let target = target.clone();
+                std::thread::spawn(move || {
+                    let mut claimed = BTreeSet::new();
+                    start.wait();
+                    super::claim_resource(&target, "test resource", &mut claimed)
+                })
+            })
+            .collect();
+        let outcomes: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().expect("racing claim"))
+            .collect();
+
+        let taken = outcomes
+            .iter()
+            .filter(|outcome| matches!(outcome, Ok(Some(_))))
+            .count();
+        assert_eq!(taken, 1, "one run owns the resource: {outcomes:?}");
+        let refusals: Vec<_> = outcomes
+            .iter()
+            .filter_map(|outcome| outcome.as_ref().err())
+            .collect();
+        assert_eq!(refusals.len(), racers - 1);
+        for refusal in refusals {
+            assert!(refusal.contains("already owned"), "{refusal}");
+        }
+
+        drop(outcomes);
+        assert!(!lock.exists(), "the winner's claim goes when it does");
         std::fs::remove_dir(target).expect("remove empty target directory");
     }
 }
