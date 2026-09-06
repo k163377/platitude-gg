@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use super::Chip;
 use super::ledger::{load, store};
-use crate::hook::payload::{bool_field, deny, printable, string_field};
+use crate::hook::payload::{deny, printable, string_field};
 
 /// The directories a path is recognized by when it names no file at all:
 /// `crates/platitude-app/src/ui` is a claim, `Windows / macOS` is not.
@@ -86,11 +86,6 @@ pub(crate) fn post_chip(input: &str) -> Result<(), String> {
 /// stacked before the chip it replaces is dismissed, so the set is
 /// briefly two of everything. What matters is where it comes to rest.
 pub(crate) fn stop(input: &str) -> Result<bool, String> {
-    // A block already asked once. Asking again on the answer to it is
-    // how a session is wedged rather than corrected.
-    if bool_field(input, "stop_hook_active") == Some(true) {
-        return Ok(false);
-    }
     let live = load(input);
     let problems = problems(&live);
     if problems.is_empty() {
