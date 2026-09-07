@@ -58,15 +58,6 @@ pub(super) struct Ran {
 /// Starts the app, waits it out, and answers with everything it said.
 pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut cmd = compose(start)?;
-    // So that an app reaped at the ceiling takes the git it was waiting
-    // on with it — a hook that never returns, a fetch to nowhere — rather
-    // than leaving that process to the step's own ceiling (`reap`). The
-    // group is the app's own, so on unix a signal that ends this runner
-    // from outside (Ctrl-C, the step's group kill) does not reach the
-    // app: it is left to its own ceiling, which its native watchdog holds
-    // it to (`--watchdog-ms` plus its grace) whether or not its event
-    // loop is turning.
-    crate::reap::own_group(&mut cmd);
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
 
@@ -85,6 +76,14 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         match child.try_wait().map_err(|e| e.to_string())? {
             Some(status) => break Some(status),
             None if started.elapsed() > deadline => {
+                // The app takes the git it was waiting on with it — a
+                // hook that never returns, a fetch to nowhere — which
+                // `reap` reaches by walking from the app rather than
+                // leaving it to the step's own ceiling. The app is left
+                // in this runner's own group, so that a signal aimed at
+                // the runner from outside (a Ctrl-C, the step's group
+                // kill) ends it here instead of leaving it holding this
+                // run's store lock until its own watchdog fires.
                 let (under, ended) = crate::reap::reap(&mut child);
                 reaped = Some(under.line());
                 timed_out = true;

@@ -10,15 +10,19 @@
 //! The two systems are asked differently, because only one of them keeps
 //! a tree that can be trusted:
 //!
-//! * **unix** — the step is started in a process group of its own
-//!   ([`own_group`]), and the group is what is ended. A group is a kernel
-//!   object rather than a number written on a child, so nothing under the
-//!   step escapes it, nothing outside it can be caught by it, and SIGKILL
-//!   to the group cannot be refused. What it costs is the terminal's own
-//!   signals: a step in a group of its own does not take the Ctrl-C typed
-//!   at this runner, and is ended by the ceiling instead. A step that
-//!   puts *itself* in a third group is out of reach either way; nothing
-//!   run here does.
+//! * **unix** — a step that leads a group of its own ([`own_group`]) is
+//!   ended by that group. A group is a kernel object rather than a number
+//!   written on a child, so nothing under such a step escapes it, nothing
+//!   outside it can be caught by it, and SIGKILL to the group cannot be
+//!   refused. What a group of its own costs is every signal aimed at this
+//!   runner: a Ctrl-C goes to the terminal's foreground group and a
+//!   ceiling above this one kills a group, so a step in a group of its
+//!   own takes neither and is left to whatever ceiling it holds itself
+//!   to. A step left in this runner's group is reached instead by walking
+//!   the parent each process names, and that walk needs no start time to
+//!   trust what it reads: the kernel re-points an orphan at init the
+//!   moment its parent goes, so no living process names a number that has
+//!   been handed out again, and one that names the step was made by it.
 //! * **windows** — there is no group to take, and no job object to take
 //!   either: the calls that make one are Win32, this crate's dependencies
 //!   are std alone (CLAUDE.md 技術スタック), and the one job object here
@@ -37,7 +41,10 @@
 //! The root goes first either way, so that what is being walked can start
 //! nothing more, and on Windows the walk is taken again after it: a child
 //! started between the first look and the kill still names the root's
-//! number, which stays this runner's to read until it waits on the handle.
+//! number, which stays this runner's to read until it waits on the
+//! handle. On unix there is no second walk to take, because the kill that
+//! ends the root is what re-points its children at init: a child started
+//! between the look and that kill is left to its own end.
 
 use std::process::{Child, Command};
 
@@ -48,8 +55,8 @@ pub(crate) struct Reaped {
     /// counted — None where that could not be found out at all, which is
     /// the one outcome that leaves the step's own children running.
     pub(crate) under: Option<Vec<u32>>,
-    /// The ones still there afterwards — always empty where the group
-    /// answers for them.
+    /// The ones still there afterwards — always empty on unix, where a
+    /// signal that has been sent cannot be refused.
     pub(crate) left: Vec<u32>,
 }
 
@@ -81,8 +88,11 @@ impl Reaped {
     }
 }
 
-/// Starts what `command` runs where it can be ended with everything it
-/// starts. A no-op where the tree is walked instead of grouped.
+/// Starts what `command` runs in a group of its own, which [`reap`] ends
+/// whole instead of walking. The group is out of reach of every signal
+/// aimed at this runner — the terminal's Ctrl-C, a ceiling above this one
+/// — so what is put in one is left to [`reap`]'s ceiling alone. A no-op
+/// where the tree is walked instead of grouped.
 #[cfg(unix)]
 pub(crate) fn own_group(command: &mut Command) {
     use std::os::unix::process::CommandExt;
@@ -92,6 +102,13 @@ pub(crate) fn own_group(command: &mut Command) {
 
 #[cfg(not(unix))]
 pub(crate) fn own_group(_command: &mut Command) {}
+
+/// Ends the step itself, which [`reap`] waits on afterwards either way.
+fn end_step(child: &mut Child) {
+    if let Err(error) = child.kill() {
+        println!("  note: could not end the step ({error})");
+    }
+}
 
 /// Ends `child` and everything under it, and reaps the child itself:
 /// what went with it, and how the child itself ended, for a caller that
@@ -113,32 +130,46 @@ pub(crate) fn reap(child: &mut Child) -> (Reaped, Option<std::process::ExitStatu
 #[cfg(unix)]
 fn end_tree(child: &mut Child) -> Reaped {
     let root = child.id();
-    let groups = groups();
+    let listing = processes();
+    // A root the listing does not have is a step already gone, or a
+    // listing that could not be taken. Either way what was under it is
+    // not this runner's to read.
+    let Some(leads) = listing
+        .iter()
+        .find(|process| process.pid == root)
+        .map(|process| process.group == root)
+    else {
+        end_step(child);
+        return Reaped::default();
+    };
     // Only a step that leads a group of its own may be ended by group:
     // `kill -<n>` with any other number names a group this runner is in,
     // and would end the run doing the killing.
-    let leads = groups
-        .iter()
-        .any(|(pid, group)| (*pid, *group) == (root, root));
-    let under: Vec<u32> = groups
-        .iter()
-        .filter(|(pid, group)| *group == root && *pid != root)
-        .map(|(pid, _)| *pid)
-        .collect();
-    if leads {
+    let under = if leads {
+        let under: Vec<u32> = listing
+            .iter()
+            .filter(|process| process.group == root && process.pid != root)
+            .map(|process| process.pid)
+            .collect();
         end_group(root);
-    }
-    // Always, and not only where there was no group to end: a group kill
-    // that did not land would otherwise leave the step running, and the
-    // wait after this would never come back.
-    if let Err(error) = child.kill() {
-        println!("  note: could not end the step ({error})");
-    }
-    // Nothing is asked about afterwards: a SIGKILL to the group cannot be
-    // refused, and a child of the step that is ended but not yet reaped
-    // by the machine still answers a liveness probe.
+        // Always, and not only where there was no group to end: a group
+        // kill that did not land would otherwise leave the step running,
+        // and the wait after this would never come back.
+        end_step(child);
+        under
+    } else {
+        let under = descendants(&listing, root);
+        end_step(child);
+        // After the step itself, which can start nothing more once it is
+        // gone.
+        end(&under);
+        under
+    };
+    // Nothing is asked about afterwards: a SIGKILL cannot be refused, and
+    // a child of the step that is ended but not yet reaped by the machine
+    // still answers a liveness probe.
     Reaped {
-        under: leads.then_some(under),
+        under: Some(under),
         left: Vec::new(),
     }
 }
@@ -161,29 +192,88 @@ fn end_group(root: u32) {
     }
 }
 
-/// Every process still running and the group it is in. A process the
-/// machine has yet to reap is left out: it is in every listing until
-/// whoever inherited it collects it, and under a container's pid 1 that
-/// can be for as long as the run lasts — but it runs no code and holds no
-/// lock, which is all anything here asks.
+/// Ends the walked processes, each by its own number: a `-<pid>` here
+/// would name a process group this runner is in.
 #[cfg(unix)]
-fn groups() -> Vec<(u32, u32)> {
+fn end(pids: &[u32]) {
+    if pids.is_empty() {
+        return;
+    }
+    let mut command = Command::new("kill");
+    command.arg("-9");
+    command.args(pids.iter().map(u32::to_string));
+    // The status is not read: one of the walked processes ending on its
+    // own between the walk and this makes `kill` exit non-zero over a
+    // number nobody was waiting on any more.
+    if let Err(error) = crate::subprocess::run_captured(&mut command) {
+        println!("  note: could not end what was under the step ({error})");
+    }
+}
+
+/// One process as the listing gives it.
+#[cfg(unix)]
+struct Process {
+    pid: u32,
+    group: u32,
+    parent: u32,
+}
+
+/// Every process still running, the group it is in, and the parent it
+/// names. A process the machine has yet to reap is left out: it is in
+/// every listing until whoever inherited it collects it, and under a
+/// container's pid 1 that can be for as long as the run lasts — but it
+/// runs no code and holds no lock, which is all anything here asks.
+#[cfg(unix)]
+fn processes() -> Vec<Process> {
     let mut command = Command::new("ps");
     // One `-o` per field: a comma-joined list with empty headings is read
     // differently by the two `ps` this has to run under.
-    command.args(["-A", "-o", "pid=", "-o", "pgid=", "-o", "stat="]);
+    command.args([
+        "-A", "-o", "pid=", "-o", "pgid=", "-o", "ppid=", "-o", "stat=",
+    ]);
     let Ok(out) = crate::subprocess::run_captured(&mut command) else {
         return Vec::new();
     };
-    String::from_utf8_lossy(&out.stdout)
+    listed(&String::from_utf8_lossy(&out.stdout))
+}
+
+#[cfg(unix)]
+fn listed(listing: &str) -> Vec<Process> {
+    listing
         .lines()
         .filter_map(|line| {
             let mut fields = line.split_whitespace();
-            let process = (fields.next()?.parse().ok()?, fields.next()?.parse().ok()?);
+            let process = Process {
+                pid: fields.next()?.parse().ok()?,
+                group: fields.next()?.parse().ok()?,
+                parent: fields.next()?.parse().ok()?,
+            };
             let reaped = fields.next()?.starts_with('Z');
             (!reaped).then_some(process)
         })
         .collect()
+}
+
+/// What is under `root`: the processes reachable from it by the parent
+/// each of them names. Sharing `root`'s group is not descent — this
+/// runner's own group is full of processes it did not start.
+#[cfg(unix)]
+fn descendants(processes: &[Process], root: u32) -> Vec<u32> {
+    let mut under: Vec<u32> = Vec::new();
+    let mut growing = true;
+    while growing {
+        growing = false;
+        for process in processes {
+            if process.pid == root || under.contains(&process.pid) {
+                continue;
+            }
+            if process.parent == root || under.contains(&process.parent) {
+                under.push(process.pid);
+                growing = true;
+            }
+        }
+    }
+    under
 }
 
 #[cfg(windows)]
@@ -198,15 +288,11 @@ fn end_tree(child: &mut Child) -> Reaped {
         .find(|process| process.pid == root)
         .map(|process| process.born)
     else {
-        if let Err(error) = child.kill() {
-            println!("  note: could not end the step ({error})");
-        }
+        end_step(child);
         return Reaped::default();
     };
     let mut under = descendants(&before, root, born);
-    if let Err(error) = child.kill() {
-        println!("  note: could not end the step ({error})");
-    }
+    end_step(child);
     for pid in descendants(&snapshot(), root, born) {
         if !under.contains(&pid) {
             under.push(pid);
@@ -404,6 +490,26 @@ mod tests {
         assert!(super::listed("100 4\n200 100 \n300 100 x\n\n").is_empty());
     }
 
+    /// What the walk takes and what it leaves where the step is in this
+    /// runner's group: the step's own tree however deep, none of the
+    /// processes that merely share that group with it — which on this
+    /// path is every other thing the runner started — and not the
+    /// zombie under it, which runs no code and holds no lock.
+    #[cfg(unix)]
+    #[test]
+    fn the_walk_takes_the_steps_tree_and_not_the_group_it_shares() {
+        let listed = super::listed(
+            "100 900 4 Ss\n\
+             200 900 100 S\n\
+             300 900 200 S\n\
+             400 900 100 Z\n\
+             500 900 4 S\n",
+        );
+        let mut under = super::descendants(&listed, 100);
+        under.sort_unstable();
+        assert_eq!(under, vec![200, 300], "not the tree the walk names");
+    }
+
     /// A throwaway tree three deep: the step's own child and the child's
     /// child both go with it. The grandchild is the one `Child::kill`
     /// cannot reach, and it is the shape that holds a build lock.
@@ -438,6 +544,43 @@ mod tests {
         );
     }
 
+    /// The same tree, left in this runner's own group: what reaches it is
+    /// the walk, and what must not is the group — a kill by group here
+    /// would end the test that asked for it.
+    #[cfg(unix)]
+    #[test]
+    fn a_grandchild_of_a_step_in_this_runners_group_goes_with_the_step() {
+        let mut command = tree_three_deep();
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("a throwaway process tree");
+        let root = child.id();
+        let under = looked(|| under_by_parent(root), |under| under.len() >= 2);
+        assert!(
+            under.len() >= 2,
+            "the tree never got two deep under the step: {under:?}"
+        );
+        let (reaped, ended) = reap(&mut child);
+        let walked = reaped.under.clone().unwrap_or_default();
+        assert!(
+            under.iter().all(|pid| walked.contains(pid)),
+            "the kill walked less of the tree than the look did: {reaped:?}"
+        );
+        assert!(
+            !walked.contains(&std::process::id()),
+            "the walk followed the group as far as this runner: {reaped:?}"
+        );
+        assert!(ended.is_some(), "the step itself was not reaped");
+        let standing = looked(|| still_running(&under), Vec::is_empty);
+        assert!(
+            standing.is_empty(),
+            "still running under the step: {standing:?}"
+        );
+    }
+
     /// Which of `pids` are still running — the machine's leftovers left
     /// out on unix, where the step's orphans stay in the listing until
     /// whoever inherited them collects them.
@@ -451,10 +594,10 @@ mod tests {
 
     #[cfg(unix)]
     fn still_running(pids: &[u32]) -> Vec<u32> {
-        let listing = super::groups();
+        let listing = super::processes();
         pids.iter()
             .copied()
-            .filter(|pid| listing.iter().any(|(other, _)| other == pid))
+            .filter(|pid| listing.iter().any(|process| process.pid == *pid))
             .collect()
     }
 
@@ -490,10 +633,17 @@ mod tests {
 
     #[cfg(unix)]
     fn under_the_step(root: u32) -> Vec<u32> {
-        super::groups()
+        super::processes()
             .iter()
-            .filter(|(pid, group)| *group == root && *pid != root)
-            .map(|(pid, _)| *pid)
+            .filter(|process| process.group == root && process.pid != root)
+            .map(|process| process.pid)
             .collect()
+    }
+
+    /// What is under `root` by the parent each process names, asked the
+    /// way the walk asks.
+    #[cfg(unix)]
+    fn under_by_parent(root: u32) -> Vec<u32> {
+        super::descendants(&super::processes(), root)
     }
 }
