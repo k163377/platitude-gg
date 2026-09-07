@@ -1,6 +1,13 @@
-// Design tokens — a verbatim mirror of internal-docs/デザイン規約.md. Edit the document first, then reflect changes here.
-// Never introduce values that are not in the document's tables. The mirror is complete on purpose: a token no code uses
-// yet still belongs here — do not prune it, and do not read its presence as "the default to pick".
+// Design tokens — the values themselves, and beside each one the reason it is that value.
+//
+// This file is where a value lives. internal-docs/デザイン規約.md says which token a place uses and why that one rather
+// than its neighbour, and its 値 cells are generated from here (`cargo xtask docs --sync`, checked by `cargo xtask
+// docs`), so a value is changed here and quoted there — never written down twice. What the document still decides is
+// everything a number cannot say, and adding or changing a token needs a person either way (CLAUDE.md 絶対制約).
+//
+// A number that is not a token here does not belong in a component: add it here with its reason rather than writing it
+// where it is used. The set is complete on purpose: a token no code uses yet still belongs here — do not prune it, and
+// do not read its presence as "the default to pick".
 //
 // Three tiers, in this order (規約 §トークンの三層):
 //   1. 基礎     — ink and rhythm: colour, type, the spacing step, radii, icon squares. No screen in them; anyone reads them.
@@ -159,19 +166,36 @@ QtObject {
     ]
 
     // ---- the window's own structure ----
+    // A constant, not a number derived from font metrics: rows of different families would otherwise stand at
+    // different heights in the same list.
     readonly property int rowHeight: 24
+    // `nodeIcon` with `spaceXs` over and under it.
     readonly property int graphRowHeight: 28
     readonly property int headerHeight: 32
+    // The collapsed left rail's width, and the width of the band's end cells with it, so this one number sets both
+    // edges of the window. Being wider than a pane's inset (`spaceXs`) is right: this is the window's outer rim, not
+    // a step inside a pane.
     readonly property int railWidth: 36
+    // Also the height of a collapsed rail cell: ☰ stands in a cell of the band's full height and the five cells under
+    // it must answer to the same depth, or the height that can be pressed changes partway down one column.
     readonly property int toolbarHeight: 40
     readonly property int controlHeight: 28
+    // A floor for buttons that draw a frame, and only those — a button without one is a word rather than a box, and a
+    // floor under it puts the hover wash and the hold fill wider than the word.
     readonly property int buttonMinWidth: 80
     readonly property int splitterWidth: 4
+    // The groove left on an edge a floating bar rides, **not the bar's own width** — the style's box is 10 and its
+    // thumb 6, so the groove is narrower than the box. Anything laid over a bar takes its width from the bar itself
+    // (`ScrollBar.vertical.width`).
     readonly property int scrollBarGutter: 9
     // The left panel's own bar, which is a slab held against the pane's edge rather than the style's floating pill:
     // how thick it is, and the room a row of that panel leaves for it.
     readonly property int navBarReach: 5
     readonly property int navBarGutter: 8
+    // `fontMdLine` five times plus `spaceSm`. **All four message boxes read this one value** — git puts no ceiling on
+    // a message (1MB is accepted), so a box that grows with its content pushes the file list out of the pane and the
+    // author row under the window's footer. It is a resting height rather than a hard stop: the grip at the bottom
+    // right raises it, up to where that same accident begins.
     readonly property int messageMaxHeight: 108
 
     // ================================================================
