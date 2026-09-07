@@ -96,6 +96,85 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     );
 }
 
+/// A verb is owed for what its run showed, never for what merely reaches
+/// it. `Main` reads every pane and every census line names `Main`, so a
+/// pane's own leaf used to owe every verb in the file — of which only the
+/// ones that built a pane can have taken a different picture.
+#[test]
+fn a_qml_leaf_owes_the_verbs_that_showed_it_and_not_the_ones_showing_its_readers() {
+    let sb = Sandbox::new("qml-shown");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n\
+         window --preset basic\tDriver Main\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(text.contains("verbs: 1 of the 2"), "{text}");
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    assert_eq!(
+        ran,
+        set(&[
+            "qmltest",
+            "qmltest-linux",
+            "shipped",
+            "verify stash --preset basic",
+            "verify-linux stash --preset basic",
+            "bare"
+        ]),
+        "{ran:?}"
+    );
+}
+
+/// What no census can name is owed by every verb. A singleton stands in
+/// no item tree, so no run ever reports it and the file that changed
+/// cannot be matched against a line; the same for the app's own Rust,
+/// which is the binary every verb runs.
+#[test]
+fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
+    let sb = Sandbox::new("qml-unnameable");
+    let census = "# census\nstash --preset basic\tDriver Main StashPane\n\
+                  window --preset basic\tDriver Main\n";
+    let both = [
+        "verify stash --preset basic",
+        "verify window --preset basic",
+        "verify-linux stash --preset basic",
+        "verify-linux window --preset basic",
+    ];
+    sb.write(&sb.seat, "crates/xtask/verb-census.txt", census);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Theme.qml",
+        "pragma Singleton\nQtObject {\n    property int gap: 4\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): a gap", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    for verb in both {
+        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
+    }
+
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/models.rs",
+        "use platitude_core::stash;\npub struct StashModel;\n#[qobject]\nimpl StashModel {}\n\
+         #[cfg(test)]\nmod tests {\n    #[test]\n    fn m() { let _ = 2; }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app): a model", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    for verb in both {
+        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
+    }
+}
+
 /// The verbs of a side share nothing but the release the first one
 /// builds, so a red one stops none of the others: every verb the change
 /// owes runs, the greens are stamped, and the run after the fix owes the

@@ -292,8 +292,11 @@ impl Sandbox {
                 "use platitude_core::stash;\npub struct StashModel;\n#[qobject]\nimpl StashModel {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn m() {}\n}\n",
             ),
             (
+                // Reading the singleton, as the product's components all
+                // do: it is what puts a singleton in the reach of
+                // anything, since no run can ever name one.
                 "crates/platitude-app/src/ui/Main.qml",
-                "Item {\n    StashPane {}\n}\n",
+                "Item {\n    spacing: Theme.gap\n    StashPane {}\n}\n",
             ),
             (
                 "crates/platitude-app/src/ui/StashPane.qml",

@@ -77,6 +77,11 @@ pub(crate) struct Plan {
     /// selection short by whatever that edge carried, so no run over this
     /// tree can be stamped.
     pub complaints: Vec<String>,
+    /// How many verify-ui lines the whole reach names, against the ones
+    /// actually chosen — the two counts side by side, so a narrowing
+    /// that dropped a verb it should have kept is read off every run
+    /// rather than found later ([`verbs_owed`]).
+    pub verbs_in_reach: usize,
 }
 
 pub(crate) struct Ask<'a> {
@@ -130,9 +135,6 @@ fn qml_dirs() -> (String, String) {
     (format!("{app}/src/ui"), format!("{app}/tests/qml"))
 }
 
-/// The plan, with every phase of the making of it timed into `spent`:
-/// the graph off the sources, the one listing of the tree the cache keys
-/// are made of, the census, and the rest.
 /// Where the branch stands against main, and what it changed getting
 /// there.
 struct Standing {
@@ -193,6 +195,9 @@ fn standing(here: &str, main_ref: &str) -> Result<Standing, String> {
     })
 }
 
+/// The plan, with every phase of the making of it timed into `spent`:
+/// the graph off the sources, the one listing of the tree the cache keys
+/// are made of, the census, and the rest.
 pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan, String> {
     let started = std::time::Instant::now();
     let here = dir.display().to_string();
@@ -242,15 +247,13 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     let census = Census::load(dir);
     let worn = census::worn_by(dir);
     spent.census = at.elapsed();
-    let steps = select(
-        &g,
-        &census,
-        &reach,
-        &changed,
-        ask,
-        everything.is_some(),
-        &worn,
-    );
+    let read = Reading {
+        dir,
+        census: &census,
+        worn: &worn,
+        whole: everything.is_some(),
+    };
+    let (steps, verbs_in_reach) = select(&g, &read, &reach, &changed, ask);
     let store = Store::open(dir)?;
     let required = owed(&here, &head, &store, steps, ask, spent)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
@@ -280,6 +283,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         uncovered,
         unclaimed,
         complaints: graph::complaints(&g),
+        verbs_in_reach,
     })
 }
 
@@ -549,24 +553,33 @@ fn sort(
 
 /// The steps the reach selects, host first: the always-steps, clippy per
 /// crate entered, the tests in the reach, and the app as a built thing.
+/// What a selection reads off the tree besides the reach: the tree
+/// itself, the census of what each verb shows, who wears whom
+/// (`census::worn_by`), and whether the reach is everything.
+struct Reading<'a> {
+    dir: &'a Path,
+    census: &'a Census,
+    worn: &'a BTreeMap<String, BTreeSet<String>>,
+    whole: bool,
+}
+
 fn select(
     g: &Graph,
-    census: &Census,
+    read: &Reading<'_>,
     reach: &BTreeSet<String>,
     changed: &[String],
     ask: &Ask<'_>,
-    whole: bool,
-    worn: &BTreeMap<String, BTreeSet<String>>,
-) -> Vec<Step> {
-    let sorted = sort(g, reach, whole, worn);
+) -> (Vec<Step>, usize) {
+    let sorted = sort(g, reach, read.whole, read.worn);
     let mut steps = always_steps();
-    steps.extend(deny_steps(g, changed, whole));
-    steps.extend(qmltest_steps(reach, whole));
+    steps.extend(deny_steps(g, changed, read.whole));
+    steps.extend(qmltest_steps(reach, read.whole));
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
-    steps.extend(binary_steps(census, &sorted, reach, changed, ask));
-    steps
+    let (binary, would_have) = binary_steps(read, &sorted, reach, changed, ask);
+    steps.extend(binary);
+    (steps, would_have)
 }
 
 fn always_steps() -> Vec<Step> {
@@ -752,18 +765,69 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     steps
 }
 
+/// Which components a verb has to have shown to owe a run — the changed
+/// components themselves, under every name a run could have met them
+/// (`census::worn_by`) — or `None` when every recorded line is owed.
+///
+/// **A verb's picture can only have moved through something the run put
+/// on the screen.** A component in the reach that did not itself change
+/// is a *reader* of the change: `SettingsAppPane` moving puts
+/// `SettingsDialog`, `WindowDialogSeat` and `Main` in the reach, and
+/// `Main` is in every line of the census, so the leaf of a settings pane
+/// used to owe all 353 verbs — of which five show the pane. What binds a
+/// reader to the change is instantiation, and a run that instantiates
+/// `SettingsDialog` instantiates the pane inside it, so the census names
+/// both. Nothing else in QML reads a component without building one: a
+/// singleton is the exception, and it is one of the ones below.
+///
+/// Every line is owed unless the whole change is components a run could
+/// have shown. That is: a changed file which a verb reads at all
+/// (`verb_inputs` — the app, the core, the harness, the manifests) and
+/// which is not a product component standing in the item tree sends the
+/// answer back to all of them — the app's Rust, a singleton (`Theme`,
+/// `Metrics`: named by no census and read by everything), a `qmldir`, an
+/// asset, the harness the runs go through. A changed file no verb reads
+/// at all — a document, a CI file — leaves the answer where it was.
+fn verbs_owed(read: &Reading<'_>, changed: &[String]) -> Option<BTreeSet<String>> {
+    if read.whole {
+        return None;
+    }
+    let (ui, _) = qml_dirs();
+    let mut shown = BTreeSet::new();
+    for file in changed {
+        let read_by_a_verb = verb_inputs().iter().any(|input| under(file, input));
+        if !read_by_a_verb {
+            continue;
+        }
+        if !(file.ends_with(".qml") && under(file, &ui) && census::instantiable(read.dir, file)) {
+            return None;
+        }
+        census::through_wearers(&stem_of(file), read.worn, &mut shown);
+    }
+    Some(shown)
+}
+
+/// What the verify-ui verbs read besides the census: the app and the core
+/// they build, the harness they run through, and the manifests every
+/// build reads.
+fn verb_inputs() -> Vec<String> {
+    let mut inputs = cargo_inputs(&[&app(), &core()]);
+    inputs.extend(harness());
+    inputs
+}
+
 /// The app as a built thing: shipped when its QML or entry point moved,
-/// the verify-ui verbs whose census names a reached component (and the
-/// ones asked for), bare when the binary moved at all. The first verb of
-/// each side builds the release; the rest reuse it (`check` does the
-/// same).
+/// the verify-ui verbs that show a changed component (and the ones asked
+/// for), bare when the binary moved at all. The first verb of each side
+/// builds the release; the rest reuse it (`check` does the same).
 fn binary_steps(
-    census: &Census,
+    read: &Reading<'_>,
     sorted: &Sorted,
     reach: &BTreeSet<String>,
     changed: &[String],
     ask: &Ask<'_>,
-) -> Vec<Step> {
+) -> (Vec<Step>, usize) {
+    let census = read.census;
     let mut steps = Vec::new();
     // Spelled in pieces: a whole path in a string here would be read as
     // this file reading the app's entry point.
@@ -782,7 +846,14 @@ fn binary_steps(
             &binary_inputs,
         ));
     }
-    let mut lines: Vec<String> = census.verbs_touching(&sorted.qml);
+    // Both counts, always: what the reach would have owed is what this
+    // used to run, and a line saying both is what a narrowing gone wrong
+    // is seen in (`describe`).
+    let would_have = census.verbs_touching(&sorted.qml).len();
+    let mut lines: Vec<String> = match verbs_owed(read, changed) {
+        Some(shown) => census.verbs_touching(&shown),
+        None => census.verbs_touching(&sorted.qml),
+    };
     for extra in ask.extra_verbs {
         if !lines.contains(extra) {
             lines.push(extra.clone());
@@ -842,7 +913,7 @@ fn binary_steps(
         bare.release = true;
         steps.push(bare);
     }
-    steps
+    (steps, would_have)
 }
 
 /// QML components in the reach that stand in the item tree and no verb's
@@ -965,6 +1036,18 @@ pub(crate) fn describe(plan: &Plan) -> String {
         for line in &plan.complaints {
             out.push_str(&format!("  {line}\n"));
         }
+    }
+    let chosen = plan
+        .required
+        .iter()
+        .filter(|r| r.step.id.starts_with("verify ") && r.step.side == Side::Host)
+        .count();
+    if plan.verbs_in_reach > 0 || chosen > 0 {
+        out.push_str(&format!(
+            "verbs: {chosen} of the {} the reach names — the ones whose census shows a changed \
+             component\n",
+            plan.verbs_in_reach
+        ));
     }
     out.push_str(&format!("steps ({}):\n", plan.required.len()));
     for r in &plan.required {
