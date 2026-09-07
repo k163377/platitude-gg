@@ -31,7 +31,10 @@
 //! litter cleared by whoever meets it. A killed xtask never unwinds, but
 //! the operating system releases its locks, so nothing is ever waited for
 //! that is not there — and no pid is asked about, so a pid handed to
-//! somebody else cannot stand for a measurement that ended.
+//! somebody else cannot stand for a measurement that ended. Every lock
+//! here is let go of by unlocking it ([`crate::locks`]), so a note that
+//! is down is a lock that is free, whatever this process forked in the
+//! meantime.
 //!
 //! **A step a verb starts is under its parent's announcement**, and says
 //! nothing of its own ([`UNDER`], set by [`step`] on every child a verb
@@ -53,6 +56,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::locks::Locked;
 use crate::note::{field, now_secs};
 use crate::subprocess::common_git_dir;
 
@@ -103,22 +107,17 @@ const POLL: Duration = if cfg!(test) {
 };
 
 /// How many times a hold tries its lock before calling the holder
-/// another measurement. A waiter probing the lock holds it for the
-/// microseconds between its `try_lock` and its `drop`, and a hold that
-/// met that instant is not a hold that met a measurement. The longer
-/// window is the one a fork carries: `flock` goes with the open file
-/// description, so a lock let go of stays held until every child forked
-/// over it has reached its `execve` — measured at 2ms at its worst,
-/// against the four hundred milliseconds these tries span.
+/// another measurement. A reader taking a dead hold's note down holds
+/// the lock while it does ([`held`]) — the microseconds of two calls,
+/// against the four hundred milliseconds these tries span — and a hold
+/// that met that instant is not a hold that met a measurement.
 const HOLD_TRIES: u32 = 5;
 
 /// How many times an announcement takes the lock at its own name before
 /// the build that asked for it is refused, and how long it waits between
 /// tries. The name is this process's own, so the only holder it can meet
 /// is a reader taking a dead run's leavings down under the lock
-/// ([`announcing`]) — the microseconds of two calls, or the 3.2ms a fork
-/// carries that reader's lock past its drop
-/// (.claude/rules-refs/core.md).
+/// ([`announcing`]) — the microseconds of two calls.
 const ANNOUNCE_TRIES: u32 = 8;
 const ANNOUNCE_AGAIN: Duration = Duration::from_millis(5);
 
@@ -146,13 +145,15 @@ enum Name {
 
 /// A note and its lock, held for as long as the note stands. Dropping it
 /// removes the note, and the lock file where that name is this process's
-/// own ([`Name`]); the lock itself goes with the handle, and with the
-/// process.
+/// own ([`Name`]); the lock itself is let go of after them, and with the
+/// process however it ends.
 #[derive(Debug)]
 struct Held {
     note: PathBuf,
     name: Name,
-    _lock: File,
+    /// Last, so the names come down before the lock does: dropped after
+    /// the `Drop` below has run.
+    _lock: Locked,
 }
 
 impl Drop for Held {
@@ -372,7 +373,7 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
         _held: Some(Held {
             note,
             name: Name::Shared,
-            _lock: lock,
+            _lock: Locked::new(lock),
         }),
     };
     wait_for_builds(&common.join(BUSY), what, polled)?;
@@ -466,17 +467,24 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
 /// second stands with nothing beside it, which the next reader clears as
 /// a dead run's, and the build is gone from under a hold about to stand.
 /// Either way the name is opened again.
-fn lock_beside(note: &Path) -> Result<File, String> {
+fn lock_beside(note: &Path) -> Result<Locked, String> {
     lock_beside_polled(note, &|| {})
 }
 
-fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<File, String> {
+fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> {
     let path = lock_of(note);
     for _ in 0..ANNOUNCE_TRIES {
         let lock = open_lock(&path)?;
         match lock.try_lock() {
-            Ok(()) if path.exists() => return Ok(lock),
-            Ok(()) | Err(TryLockError::WouldBlock) => drop(lock),
+            Ok(()) => {
+                let lock = Locked::new(lock);
+                if path.exists() {
+                    return Ok(lock);
+                }
+                // The name went while this held the file: let go of and
+                // opened again, the sweep being microseconds long.
+            }
+            Err(TryLockError::WouldBlock) => {}
             Err(TryLockError::Error(error)) => {
                 return Err(format!(
                     "could not lock the announcement at {}: {error}",
@@ -540,6 +548,10 @@ fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
     let lock = open_lock(&lock_of(note))?;
     match lock.try_lock() {
         Ok(()) => {
+            // Let go of by unlocking at the end of this arm, so the
+            // instant somebody else has to wait out is these two calls
+            // and not a forked child's scheduling ([`HOLD_TRIES`]).
+            let _lock = Locked::new(lock);
             if let Err(error) = std::fs::remove_file(note)
                 && error.kind() != std::io::ErrorKind::NotFound
             {
@@ -602,6 +614,7 @@ fn announcing(lock: &Path) -> Option<Note> {
     let file = File::options().read(true).write(true).open(lock).ok()?;
     match file.try_lock() {
         Ok(()) => {
+            let _file = Locked::new(file);
             clear(lock);
             None
         }
@@ -701,22 +714,15 @@ impl Note {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{File, TryLockError};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use super::{
         BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_beside_polled,
         lock_of, open_lock, stamps_ended_since,
     };
-
-    /// How long [`taken_once_free`] waits out a lock this process let go
-    /// of. Past this, a lock still held is one somebody means to hold,
-    /// and the wait was for nothing (`lanes::UNCLAIMED` is the same
-    /// number for the same window, on the gate's lock).
-    const CARRIED: Duration = Duration::from_secs(5);
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
@@ -738,30 +744,6 @@ mod tests {
 
     fn until_polled(count: &AtomicUsize) {
         while count.load(Ordering::SeqCst) == 0 {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    }
-
-    /// `lock` taken, once whoever else has its open file description has
-    /// let go. A `flock` goes with the description rather than the
-    /// handle, and a fork copies every description, so a lock this
-    /// process drops is held on past the drop for as long as a child a
-    /// neighbouring test spawned in that instant has yet to `execve` —
-    /// this suite forks with a thread per core, and on Linux that window
-    /// reaches in here. The first answer is not what is being asked
-    /// about; the one that stands is.
-    fn taken_once_free(lock: &File) {
-        let asked = Instant::now();
-        loop {
-            match lock.try_lock() {
-                Ok(()) => return,
-                Err(TryLockError::WouldBlock) => assert!(
-                    asked.elapsed() < CARRIED,
-                    "the lock is still held {} seconds after this process let it go",
-                    CARRIED.as_secs()
-                ),
-                Err(TryLockError::Error(error)) => panic!("could not probe the lock: {error}"),
-            }
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -841,41 +823,45 @@ mod tests {
         // A waiter that opened the lock while the hold still stood.
         let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
         drop(hold);
-        taken_once_free(&waiter);
+        waiter
+            .try_lock()
+            .expect("the lock the lifted hold let go of");
         let refused = hold_in(&dir, "another perf", &|| {}).expect_err("a second measurement");
         assert!(refused.contains("another measurement"), "{refused}");
         drop(waiter);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The window [`taken_once_free`] is for, held open on purpose. A
-    /// child handed the hold's lock description outright stands in for
-    /// one a fork hands over: the hold lets the lock go and its note
-    /// comes down, and the description is still held by somebody that
-    /// answers nothing about it. The waiter is refused by that child and
-    /// not by a hold, which is why the answer it takes is the one after
-    /// the child rather than the first.
+    /// What the unlock is for. A child handed the hold's lock
+    /// description outright stands in for one a fork hands over: the
+    /// hold lets the lock go and its note comes down while that
+    /// description is still held by somebody that answers nothing about
+    /// it. The unlock reaches the description rather than this process's
+    /// handle on it, so the waiter has the lock at once — a close would
+    /// have left it refused by the child until the child was gone.
     ///
-    /// Linux, where `flock(2)` promises the inheritance and where the
-    /// carried lock is seen; the gate's own lock is netted for the same
-    /// window from inside (`lanes`) and from outside (`gate::stamps`).
+    /// Linux, where `flock(2)` promises the inheritance and where a
+    /// carried lock is seen at all; the gate's own lock is netted for
+    /// the same release from inside (`lanes`) and from outside
+    /// (`gate::stamps`).
     #[test]
     #[cfg(target_os = "linux")]
-    fn a_lock_a_neighbour_s_fork_carries_is_waited_out() {
+    fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
         use std::process::{Command, Stdio};
 
         let dir = common("carried");
         let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
         let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
-        // Handed the description as its stdin, the child holds the lock
-        // for as long as it lives — past the drop below.
+        // Handed the description as its stdin, the child holds a copy of
+        // it for as long as it lives — past the drop below.
         let mut carrier = Command::new("sleep")
-            .arg("1")
+            .arg("5")
             .stdin(Stdio::from(
                 hold._held
                     .as_ref()
                     .expect("the hold's guard")
                     ._lock
+                    .handle()
                     .try_clone()
                     .expect("a second handle on the description"),
             ))
@@ -884,11 +870,14 @@ mod tests {
             .spawn()
             .expect("a child handed the lock's description");
         drop(hold);
+        waiter
+            .try_lock()
+            .expect("the lock the lifted hold unlocked");
         assert!(
-            matches!(waiter.try_lock(), Err(TryLockError::WouldBlock)),
-            "the child carries the lock the hold let go of"
+            carrier.try_wait().expect("ask after the child").is_none(),
+            "the child let the description go before the lock was asked for"
         );
-        taken_once_free(&waiter);
+        carrier.kill().expect("the child that carried it");
         carrier.wait().expect("the child that carried it");
         drop(waiter);
         let _ = std::fs::remove_dir_all(&dir);

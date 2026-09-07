@@ -26,9 +26,10 @@
 //! the same tree runs the same steps over the same build directory, and
 //! the two wait on each other's cargo for the whole of it. The first
 //! keeps the tree; the second is refused with the first's pid. A gate
-//! writes that pid the instant it has the lock, so a lock held with
-//! nothing to read beside it names nobody, and is waited out rather than
-//! answered ([`UNCLAIMED`]).
+//! writes that pid the instant it has the lock and takes it down under
+//! the lock at the end, so a lock held with nothing to read beside it is
+//! a gate at one edge or the other, looked at again before it is named
+//! ([`UNNAMED_TRIES`]).
 //!
 //! Liveness is the lock, as in `still`: a lock nobody holds is free
 //! whatever note stands beside it, so a gate killed mid-run leaves
@@ -39,6 +40,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::locks::Locked;
 use crate::still::Note;
 
 /// The lanes, beside `.git`: one lock file per lane and side.
@@ -48,9 +50,8 @@ const LANES: &str = "pg-lanes";
 /// one: `<side>-landing-<pid>.lock`, one per landing and side.
 const LANDING: &str = "landing";
 
-/// How often a wait here looks again: a verb for a free lane, a gate for
-/// a tree. Short under test, where the waits are measured in the tens of
-/// milliseconds.
+/// How often a verb waiting for a lane looks again. Short under test,
+/// where the waits are measured in the tens of milliseconds.
 const POLL: Duration = if cfg!(test) {
     Duration::from_millis(20)
 } else {
@@ -72,20 +73,19 @@ const LOCK: &str = "lock";
 /// How many times a landing puts its mark up before the wait goes
 /// unmarked, and how long it waits between tries. It meets the file held
 /// only while a gate's verb is taking a dead landing's mark down under
-/// its lock ([`a_landing_waits`], the microseconds of two calls), or for
-/// as long as a child forked over that instant takes to reach its
-/// `execve` — 3.2ms at its worst (.claude/rules-refs/core.md).
+/// its lock ([`a_landing_waits`]) — the microseconds of two calls, which
+/// these tries span whatever the machine is doing.
 const MARK_TRIES: u32 = 8;
 const MARK_AGAIN: Duration = Duration::from_millis(5);
 
-/// How long [`sole`] waits on a held lock nobody has written a note
-/// beside. `flock` goes with the open file description, and a fork copies
-/// every one, so a child forked over the gate's lock carries it until its
-/// `execve` — after the gate here has let the lock go and taken its note
-/// down. The window is that child's scheduling, and reaches the next gate
-/// on a loaded container. Past this, a lock nobody names is a lock all
-/// the same, and the note is what it is.
-const UNCLAIMED: Duration = Duration::from_secs(5);
+/// How many times [`sole`] looks again at a held lock nobody has written
+/// a note beside, and how long it waits between looks. The window is the
+/// two calls at either edge of a gate's note — written the instant the
+/// lock is taken, taken down under the lock before it is let go
+/// ([`Sole`]) — so the same span the marks get covers it. Past it, a
+/// lock nobody names is a lock all the same, and the note is what it is.
+const UNNAMED_TRIES: u32 = MARK_TRIES;
+const UNNAMED_AGAIN: Duration = MARK_AGAIN;
 
 /// The lanes of one side on this machine: where they stand and how many
 /// there are. Every gate names the same count, so however many gates run,
@@ -100,7 +100,7 @@ pub(crate) struct Lanes<'a> {
     /// How many of this gate's verbs are waiting for a lane, and the mark
     /// held for as long as any is — a landing's alone; a gate's verbs
     /// wait unmarked.
-    waiting: Mutex<(usize, Option<File>)>,
+    waiting: Mutex<(usize, Option<Locked>)>,
 }
 
 /// A lane held for as long as this stands, and how long it took to get:
@@ -109,7 +109,7 @@ pub(crate) struct Lanes<'a> {
 /// are not a wait.
 #[derive(Debug)]
 pub(crate) struct Lane {
-    _lock: File,
+    _lock: Locked,
     pub(crate) waited: Duration,
 }
 
@@ -150,7 +150,7 @@ impl<'a> Lanes<'a> {
                     match lock.try_lock() {
                         Ok(()) => {
                             return Ok(Lane {
-                                _lock: lock,
+                                _lock: Locked::new(lock),
                                 waited: if looked_again {
                                     started.elapsed()
                                 } else {
@@ -244,18 +244,24 @@ impl Drop for Waiting<'_> {
 /// there, and is put up again otherwise. One that could not be put up at
 /// all is a wait like a gate's, not an error — the lane comes all the
 /// same.
-fn mark(path: &Path) -> Option<File> {
+fn mark(path: &Path) -> Option<Locked> {
     mark_polled(path, &|| {})
 }
 
-fn mark_polled(path: &Path, polled: &dyn Fn()) -> Option<File> {
+fn mark_polled(path: &Path, polled: &dyn Fn()) -> Option<Locked> {
     for _ in 0..MARK_TRIES {
         let file = open_lock(path).ok()?;
         match file.try_lock() {
-            Ok(()) if std::fs::metadata(path).is_ok() => return Some(file),
-            // The name went while this held the file, or the sweep holds
-            // the lock it is removing under. Both pass in microseconds.
-            Ok(()) | Err(TryLockError::WouldBlock) => drop(file),
+            Ok(()) => {
+                let file = Locked::new(file);
+                if std::fs::metadata(path).is_ok() {
+                    return Some(file);
+                }
+                // The name went while this held the file: let go of and
+                // opened again, the sweep being microseconds long.
+            }
+            // The sweep holds the lock it is removing under.
+            Err(TryLockError::WouldBlock) => {}
             Err(TryLockError::Error(_)) => return None,
         }
         polled();
@@ -292,6 +298,7 @@ fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
                 // behind theirs for the whole of it. It meets the lock
                 // instead, and puts its mark up once this is done
                 // ([`mark`]).
+                let lock = Locked::new(lock);
                 let _ = std::fs::remove_file(&path);
                 drop(lock);
             }
@@ -308,7 +315,8 @@ fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
 }
 
 /// The one gate of a tree, for as long as this stands. The note comes
-/// down with it; the lock goes with the handle, and with the process.
+/// down with it, and the lock after the note; a process that never
+/// unwinds leaves both to the operating system.
 ///
 /// The lock file stays where it is, and nothing collects there: it stands
 /// at one name per tree (`gate::running_note`), not one per run. Removing
@@ -319,7 +327,9 @@ fn a_landing_waits(lanes: &Path, side: &str) -> Result<bool, String> {
 #[derive(Debug)]
 pub(crate) struct Sole {
     note: PathBuf,
-    _lock: File,
+    /// Last, so the note comes down before the lock does: dropped after
+    /// the `Drop` below has run.
+    _lock: Locked,
 }
 
 impl Drop for Sole {
@@ -343,10 +353,11 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
             .map_err(|e| format!("could not make {}: {e}", parent.display()))?;
     }
     let lock = open_lock(&note.with_extension(LOCK))?;
-    let asked = Instant::now();
-    // A gate writes its note the instant it has the lock, so a held lock
-    // with nothing readable beside it is not a gate holding the tree —
-    // it is the carried window, waited out here.
+    // A gate writes its note the instant it has the lock and takes it
+    // down under the lock at the end, so a held lock with nothing
+    // readable beside it is a gate at one of those two edges: looked at
+    // again, and named only once the looks are spent.
+    let mut unnamed = 0;
     let other = loop {
         match lock.try_lock() {
             Ok(()) => break None,
@@ -357,10 +368,11 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
                 {
                     break Some(other);
                 }
-                if asked.elapsed() >= UNCLAIMED {
+                unnamed += 1;
+                if unnamed >= UNNAMED_TRIES {
                     break Some(Note::unreadable("a gate"));
                 }
-                std::thread::sleep(POLL);
+                std::thread::sleep(UNNAMED_AGAIN);
             }
             Err(TryLockError::Error(error)) => {
                 return Err(format!(
@@ -385,7 +397,7 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
         .map_err(|e| format!("could not write {}: {e}", note.display()))?;
     Ok(Sole {
         note: note.to_path_buf(),
-        _lock: lock,
+        _lock: Locked::new(lock),
     })
 }
 
@@ -571,29 +583,31 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The window [`super::UNCLAIMED`] is for, held open on purpose. A
-    /// child handed the lock's open file description outright stands in
-    /// for one a fork hands over: the gate here lets the lock go and
-    /// takes its note down, and the description is still held by
-    /// somebody who writes no note. The gate that asks waits the child
-    /// out rather than naming a holder it cannot read.
+    /// What the unlock is for. A child handed the lock's open file
+    /// description outright stands in for one a fork hands over: the
+    /// gate here lets the lock go and takes its note down while that
+    /// description is still held by somebody who writes no note. The
+    /// unlock reaches the description rather than this process's handle
+    /// on it, so the next gate has the tree at once — a close would
+    /// have left it refused until the child was gone.
     ///
-    /// Linux, where `flock(2)` promises the inheritance and where the
-    /// carried lock is seen; the gate suite nets the same window from
-    /// outside (`gate::stamps`).
+    /// Linux, where `flock(2)` promises the inheritance and where a
+    /// carried lock is seen at all; the gate suite nets the same release
+    /// from outside (`gate::stamps`).
     #[test]
     #[cfg(target_os = "linux")]
-    fn a_lock_a_forked_child_carries_is_waited_out() {
+    fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
         use std::process::{Command, Stdio};
 
         let dir = common("carried");
         let note = dir.join("target").join("gate-running");
         let first = sole(&note, "gate --all").expect("the first gate");
         let mut carrier = Command::new("sleep")
-            .arg("1")
+            .arg("5")
             .stdin(Stdio::from(
                 first
                     ._lock
+                    .handle()
                     .try_clone()
                     .expect("a second handle on the description"),
             ))
@@ -603,11 +617,13 @@ mod tests {
             .expect("a child handed the lock's description");
         drop(first);
         assert!(!note.exists(), "the note comes down with the gate");
-        let _again = sole(&note, "gate").expect("the tree, once the carried lock is gone");
+        let _again = sole(&note, "gate").expect("the tree, the lock having been unlocked");
         assert!(
-            carrier.try_wait().expect("ask after the child").is_some(),
-            "the gate had the tree while the child still carried the lock"
+            carrier.try_wait().expect("ask after the child").is_none(),
+            "the child let the description go before the tree was asked for"
         );
+        carrier.kill().expect("the child that carried it");
+        carrier.wait().expect("the child that carried it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -625,8 +641,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The refusal is worded by whoever asks. A gate that waited
-    /// [`super::UNCLAIMED`] out on a lock nobody wrote a note beside
+    /// The refusal is worded by whoever asks. A gate that spent its
+    /// [`super::UNNAMED_TRIES`] on a lock nobody wrote a note beside
     /// names a gate — not the measurement `still` holds the machine for.
     #[test]
     fn a_lock_nobody_named_is_refused_in_the_gate_s_own_words() {

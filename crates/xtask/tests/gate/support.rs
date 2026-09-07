@@ -152,27 +152,6 @@ impl Sandbox {
         text
     }
 
-    /// `gate_ok`, asked again while the answer is that another gate holds
-    /// the tree. A lock this process let go is not gone at once: `flock`
-    /// goes with the open file description, and a fork copies every one,
-    /// so a neighbour test's child carries the released lock until its
-    /// `execve` — a window that is that process's scheduling, and on a
-    /// loaded container reaches the gate spawned next (the busy-image
-    /// retry above answers the same window for a runner held open).
-    /// Bounded as that one is: a refusal at the end of the budget is the
-    /// failure it is.
-    pub fn gate_once_the_tree_is_free(&self, dir: &Path, args: &[&str]) -> String {
-        let deadline = Instant::now() + BUSY_CEILING;
-        loop {
-            let (ok, text) = self.gate(dir, args, &[]);
-            if ok || !text.contains("already running") || Instant::now() >= deadline {
-                assert!(ok, "gate {} failed:\n{text}", args.join(" "));
-                return text;
-            }
-            std::thread::sleep(Duration::from_millis(25));
-        }
-    }
-
     /// `cargo xtask land --branch <b>` run from the primary; answers
     /// (success, output).
     pub fn land(&self, branch: &str) -> (bool, String) {

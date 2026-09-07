@@ -18,6 +18,7 @@ mod keepsakes;
 mod land;
 mod lanes;
 mod linux;
+mod locks;
 mod note;
 mod perf;
 mod png;

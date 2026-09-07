@@ -29,7 +29,7 @@ impl Store {
             // overwrite — the ephemeral store `PG_*` automation without a
             // named `PG_CONFIG_DIR` gets. A run that names one holds the
             // real lock like anyone else (the `solo` verb relies on it).
-            return Claim::Ours(Lock { _file: None });
+            return Claim::Ours(Lock { file: None });
         };
         if let Some(dir) = path.parent()
             && let Err(error) = std::fs::create_dir_all(dir)
@@ -47,7 +47,7 @@ impl Store {
             Err(error) => return Claim::Unknown(error),
         };
         match file.try_lock() {
-            Ok(()) => Claim::Ours(Lock { _file: Some(file) }),
+            Ok(()) => Claim::Ours(Lock { file: Some(file) }),
             Err(std::fs::TryLockError::WouldBlock) => Claim::Taken,
             Err(std::fs::TryLockError::Error(error)) => Claim::Unknown(error),
         }
@@ -56,15 +56,34 @@ impl Store {
 
 /// Sole use of a store, for as long as this value is alive.
 ///
-/// The kernel owns it: dropping the handle releases it, and so does the
+/// The kernel owns it: dropping this releases it, and so does the
 /// process ending, however it ends. There is no stale file to clean up
 /// after a crash, and no identifier written anywhere that could outlive
 /// the process that wrote it.
 #[derive(Debug)]
 pub struct Lock {
-    /// Nothing is ever read out of the file. Holding the handle open *is*
-    /// the lock.
-    _file: Option<std::fs::File>,
+    /// Nothing is ever read out of the file. Holding the handle open
+    /// *is* the lock, and the `Drop` below reaches for it only to let
+    /// that lock go.
+    file: Option<std::fs::File>,
+}
+
+impl Drop for Lock {
+    /// Unlocked rather than merely closed. A `flock` goes with the open
+    /// file description, and a fork copies every description a process
+    /// has, so a lock let go of by closing the handle stands until the
+    /// last child forked over that instant reaches its `execve` — and
+    /// the next asker, told the store is taken, would be told it by a
+    /// child of its own rather than by a second application. `LOCK_UN`
+    /// reaches the description itself, whoever holds a copy of it.
+    fn drop(&mut self) {
+        if let Some(file) = &self.file {
+            // A lock that will not come off is one the close after this
+            // releases anyway, and no window opens or fails to open over
+            // the answer.
+            let _ = file.unlock();
+        }
+    }
 }
 
 /// What came back from [`Store::claim`].
@@ -81,41 +100,9 @@ pub enum Claim {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
-
     use super::*;
     use crate::settings::testkit::dir_store;
     use crate::settings::{Settings, State};
-
-    /// How long [`ours_once_free`] waits out a lock this process let go
-    /// of. Past this, a lock still held is one somebody means to hold,
-    /// and the wait was for nothing.
-    const CARRIED: Duration = Duration::from_secs(5);
-
-    /// The store claimed, once whoever else has this process's open file
-    /// description has let go of it. A `flock` goes with the description
-    /// rather than the handle, and a fork copies every description, so a
-    /// lock this process drops is held on past the drop for as long as a
-    /// child a neighbouring test spawned in that instant has yet to
-    /// `execve` — this suite forks with a thread per core, and on Linux
-    /// that window reaches in here. [`Claim::Taken`] is the right answer
-    /// to the question `claim` is asked; it is not the answer to the one
-    /// being asked here, so the answer that stands is the one taken.
-    fn ours_once_free(store: &Store) -> Lock {
-        let asked = Instant::now();
-        loop {
-            match store.claim() {
-                Claim::Ours(lock) => return lock,
-                Claim::Taken => assert!(
-                    asked.elapsed() < CARRIED,
-                    "the store is still held {} seconds after this process let it go",
-                    CARRIED.as_secs()
-                ),
-                Claim::Unknown(error) => panic!("the store could not be claimed: {error}"),
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    }
 
     #[test]
     fn only_one_process_at_a_time_holds_a_store() {
@@ -129,23 +116,27 @@ mod tests {
         );
 
         drop(first);
-        ours_once_free(&store);
+        assert!(
+            matches!(store.claim(), Claim::Ours(_)),
+            "a store let go of is free at once"
+        );
     }
 
-    /// The window [`ours_once_free`] is for, held open on purpose. A
-    /// child handed the claim's lock description outright stands in for
-    /// one a fork hands over: the claim lets the lock go, and the
-    /// description is still held by somebody that is not a second
-    /// application. The next asker is refused by that child rather than
-    /// by another window, which is why the answer it takes is the one
-    /// after the child rather than the first.
+    /// What the unlock in [`Lock`]'s `Drop` is for, held open on
+    /// purpose. A child handed the claim's lock description outright
+    /// stands in for one a fork hands over: the claim lets the lock go
+    /// while that description is still held by somebody that is not a
+    /// second application. The unlock reaches the description rather
+    /// than this process's handle on it, so the next asker has the store
+    /// at once — a close would have had it refused by the child until
+    /// the child was gone.
     ///
-    /// Linux, where `flock(2)` promises the inheritance and where the
-    /// carried lock is seen; the same window is netted on the gate's
-    /// locks in `xtask` (`still`, `lanes`).
+    /// Linux, where `flock(2)` promises the inheritance and where a
+    /// carried lock is seen at all; the same release is netted on the
+    /// gate's locks in `xtask` (`still`, `lanes`).
     #[test]
     #[cfg(target_os = "linux")]
-    fn a_lock_a_neighbour_s_fork_carries_is_waited_out() {
+    fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
         use std::process::{Command, Stdio};
 
         let dir = tempfile::tempdir().expect("tempdir");
@@ -154,9 +145,9 @@ mod tests {
             panic!("nobody else has it")
         };
         let mut carrier = Command::new("sleep")
-            .arg("1")
+            .arg("5")
             .stdin(Stdio::from(
-                held._file
+                held.file
                     .as_ref()
                     .expect("the claim's handle")
                     .try_clone()
@@ -168,10 +159,14 @@ mod tests {
             .expect("a child handed the lock's description");
         drop(held);
         assert!(
-            matches!(store.claim(), Claim::Taken),
-            "the child carries the lock this process let go of"
+            matches!(store.claim(), Claim::Ours(_)),
+            "the store the claim unlocked is free"
         );
-        ours_once_free(&store);
+        assert!(
+            carrier.try_wait().expect("ask after the child").is_none(),
+            "the child let the description go before the store was asked for"
+        );
+        carrier.kill().expect("the child that carried it");
         carrier.wait().expect("the child that carried it");
     }
 

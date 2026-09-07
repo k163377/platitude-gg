@@ -188,31 +188,31 @@ fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
         "a dry run holds nothing and is held by nothing:\n{text}"
     );
 
+    held.unlock().expect("let the first gate's lock go");
     drop(held);
-    // Asked again while refused: a neighbour test's forked child carries
-    // the lock just let go until its `execve` (the net below).
-    sb.gate_once_the_tree_is_free(&sb.seat, &[]);
+    sb.gate_ok(&sb.seat, &[]);
     assert!(
         !target.join("gate-running").exists(),
         "the note comes down with the gate that wrote it"
     );
 }
 
-/// What that retry is for, held open on purpose. `flock` goes with the
-/// open file description, and a fork hands a neighbour's child a copy of
-/// every one until that child's `execve`, so the gate spawned right after
-/// a lock was let go can still be told the tree is held — seen twice in
-/// the container, where this suite forks with a thread per core. A child
-/// handed the description outright stands in for that window: the gate
-/// asked while it lives is refused, and the one that keeps asking has
-/// the tree the moment the child is gone.
+/// Why every lock here is let go of by unlocking it rather than by
+/// closing the file, told as the difference between the two. `flock`
+/// goes with the open file description, and a fork hands a neighbour's
+/// child a copy of every one until that child's `execve`; a child handed
+/// the description outright stands in for that window. Closed, the lock
+/// is the child's until the child is gone, and the gate spawned next is
+/// refused a tree nobody means to hold — seen twice in the container,
+/// where this suite forks with a thread per core. Unlocked, the same
+/// child holding the same description, the tree is free at once.
 ///
 /// Linux, as the busy-image net is (`landing`): the description's
 /// inheritance is what `flock(2)` promises there, and the container is
 /// where it was seen.
 #[test]
 #[cfg(target_os = "linux")]
-fn a_lock_a_neighbour_s_child_carries_is_waited_out() {
+fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
     use std::process::{Command, Stdio};
 
     let sb = Sandbox::new("carried");
@@ -220,42 +220,61 @@ fn a_lock_a_neighbour_s_child_carries_is_waited_out() {
     sb.commit_all(&sb.seat, "feat(core): eighteen", &[]);
     let target = sb.seat.join("target");
     std::fs::create_dir_all(&target).expect("the seat's target");
-    std::fs::write(
-        target.join("gate-running"),
-        "pid 424242\nsince 0\nwhat gate --all\n",
-    )
-    .expect("the first gate's note");
-    let held = std::fs::File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(target.join("gate-running.lock"))
-        .expect("the first gate's lock");
-    held.try_lock().expect("held from here");
-    // Handed the description as its stdin, the child holds the lock for
-    // as long as it lives — after this process has let go of it.
-    let mut carrier = Command::new("sleep")
-        .arg("2")
-        .stdin(Stdio::from(
-            held.try_clone()
-                .expect("a second handle on the description"),
-        ))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("a child handed the lock's description");
-    drop(held);
+    let note = target.join("gate-running");
+    let lock = target.join("gate-running.lock");
+    let first_gate = || {
+        std::fs::write(&note, "pid 424242\nsince 0\nwhat gate --all\n")
+            .expect("the first gate's note");
+        let held = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock)
+            .expect("the first gate's lock");
+        held.try_lock().expect("held from here");
+        held
+    };
+    // Handed the description as its stdin, a child holds a copy of it
+    // for as long as it lives — past the release that follows.
+    let carry = |held: &std::fs::File| {
+        Command::new("sleep")
+            .arg("60")
+            .stdin(Stdio::from(
+                held.try_clone()
+                    .expect("a second handle on the description"),
+            ))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("a child handed the lock's description")
+    };
 
+    let held = first_gate();
+    let mut closing = carry(&held);
+    drop(held);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
     assert!(
         !ok && text.contains("already running"),
-        "the lock let go was not carried by the child:\n{text}"
+        "a lock let go of by closing it was not carried by the child:\n{text}"
     );
-    sb.gate_once_the_tree_is_free(&sb.seat, &[]);
+    closing.kill().expect("the child that carried it");
+    closing.wait().expect("the child that carried it");
+
+    let held = first_gate();
+    let mut unlocking = carry(&held);
+    held.unlock().expect("let the first gate's lock go");
+    drop(held);
+    sb.gate_ok(&sb.seat, &[]);
     assert!(
-        carrier.try_wait().expect("ask after the child").is_some(),
-        "the gate had the tree while the child still carried the lock"
+        unlocking.try_wait().expect("ask after the child").is_none(),
+        "the child let the description go before the tree was asked for"
+    );
+    unlocking.kill().expect("the child that carried it");
+    unlocking.wait().expect("the child that carried it");
+    assert!(
+        !note.exists(),
+        "the note comes down with the gate that wrote it"
     );
 }
 

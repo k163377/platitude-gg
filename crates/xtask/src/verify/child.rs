@@ -224,7 +224,7 @@ pub(super) fn stages_a_held_store(verb: &str) -> bool {
 /// `settings::LOCK_FILE`; xtask depends on std alone (CLAUDE.md), so it
 /// is spelled again here, and a drift shows up as the run reporting
 /// `blocked=false`.
-fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<std::fs::File>, String> {
+fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<crate::locks::Locked>, String> {
     if !stages_a_held_store(verb) {
         return Ok(None);
     }
@@ -239,5 +239,5 @@ fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<std::fs::File>
     file.try_lock()
         .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
     println!("holding: {}", path.display());
-    Ok(Some(file))
+    Ok(Some(crate::locks::Locked::new(file)))
 }

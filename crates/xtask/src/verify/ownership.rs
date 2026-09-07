@@ -15,10 +15,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[derive(Debug)]
 pub(crate) struct ResourceClaim {
     /// Never read: **holding the handle is the claim**. The lock under
-    /// it is the operating system's, and it is let go when this file
-    /// closes — including when the process ends without closing
-    /// anything, which is what a killed run does.
-    _lock: std::fs::File,
+    /// it is the operating system's, unlocked when this is dropped
+    /// ([`crate::locks`]) — and let go anyway when the process ends
+    /// without dropping anything, which is what a killed run does.
+    _lock: crate::locks::Locked,
 }
 
 /// Atomically reserve an explicitly shared path for this process. Claims
@@ -71,7 +71,9 @@ pub(crate) fn claim_resource(
     note(&mut file, &canonical)
         .map_err(|e| format!("could not record verify-ui ownership: {e}"))?;
     claimed.insert(key);
-    Ok(Some(ResourceClaim { _lock: file }))
+    Ok(Some(ResourceClaim {
+        _lock: crate::locks::Locked::new(file),
+    }))
 }
 
 /// Where the lock files live. **A claim never deletes the file it

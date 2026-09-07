@@ -234,7 +234,12 @@ fn held_in(lanes: &Path) -> Result<Counted, String> {
 fn is_held(path: &Path) -> Option<bool> {
     let file = File::options().read(true).write(true).open(path).ok()?;
     match file.try_lock() {
-        Ok(()) => Some(false),
+        // Let go of by unlocking, so a probe of an idle lane cannot hand
+        // it to a forked child and read it back busy ([`crate::locks`]).
+        Ok(()) => {
+            drop(crate::locks::Locked::new(file));
+            Some(false)
+        }
         Err(TryLockError::WouldBlock) => Some(true),
         Err(TryLockError::Error(_)) => None,
     }

@@ -144,13 +144,13 @@ pub(crate) fn record(
     Ok(count)
 }
 
-/// The file under one writer at a time, for as long as the handle lives.
+/// The file under one writer at a time, for as long as the guard lives.
 /// The gate runs the verbs several at once (`gate::verbs`), and a run
 /// reads the whole file, puts its own line in and writes the whole back
 /// — two of those at once would each lose the other's line. The lock
 /// lives under target/, which git ignores: a file beside the census
 /// would be a change in the tree the gate refuses to run over.
-fn one_writer(root: &Path) -> Result<std::fs::File, String> {
+fn one_writer(root: &Path) -> Result<crate::locks::Locked, String> {
     let dir = root.join("target");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join("verb-census.lock");
@@ -163,7 +163,7 @@ fn one_writer(root: &Path) -> Result<std::fs::File, String> {
         .map_err(|e| format!("{}: {e}", path.display()))?;
     file.lock()
         .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
-    Ok(file)
+    Ok(crate::locks::Locked::new(file))
 }
 
 /// The names of every QML component file of the app, product and
