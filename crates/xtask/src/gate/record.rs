@@ -59,8 +59,11 @@ impl Waited {
 pub(crate) struct Spent {
     /// Waiting for the tree's one gate (`lanes::sole`).
     pub sole: Duration,
-    /// Reading the dependency graph off the sources.
+    /// Reading the dependency graph off the sources, or off the shelf
+    /// (`super::reuse`).
     pub graph: Duration,
+    /// Whether that graph came off the shelf rather than the sources.
+    pub graph_reused: bool,
     /// The one `git ls-tree` the cache keys are made of.
     pub ids: Duration,
     /// The census, and the wearers the components are read through.
@@ -130,10 +133,11 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent) -> String {
         always + cached + to_run,
     ));
     out.push_str(&format!(
-        "  spent  gate lock {} / graph {} / tree ids {} / census {} / plan {} / prepare {} / \
+        "  spent  gate lock {} / graph {}{} / tree ids {} / census {} / plan {} / prepare {} / \
          runner {} / sides {} / census back {}\n",
         moment(spent.sole),
         moment(spent.graph),
+        if spent.graph_reused { " (kept)" } else { "" },
         moment(spent.ids),
         moment(spent.census),
         moment(spent.plan_rest),

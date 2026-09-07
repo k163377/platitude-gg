@@ -1197,7 +1197,11 @@ pub(crate) fn stem_of(file: &str) -> String {
 /// A directory node reads every file under it, so a reader of the
 /// directory is a reader of each.
 fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
-    let dirs: Vec<String> = g
+    // Each named directory once, however many files name it: the walk is
+    // of the whole subtree, and `crates/` alone is every source in the
+    // workspace. Walking per edge read the same trees dozens of times
+    // over for the same answer.
+    let dirs: BTreeSet<String> = g
         .deps
         .values()
         .flatten()

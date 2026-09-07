@@ -186,8 +186,9 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         changed,
     } = standing(&here, ask.main_ref)?;
     let at = std::time::Instant::now();
-    let g = graph::build(dir)?;
+    let (g, reused) = super::reuse::graph_of(dir)?;
     spent.graph = at.elapsed();
+    spent.graph_reused = reused;
     let everything = if ask.all {
         Some("--all".to_string())
     } else if let Some(input) = changed.iter().find(|f| moves_everything(f)) {

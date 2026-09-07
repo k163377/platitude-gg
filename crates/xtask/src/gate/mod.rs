@@ -27,6 +27,7 @@ mod graph;
 mod hooks;
 mod plan;
 mod record;
+mod reuse;
 mod stamp;
 
 use std::path::Path;
@@ -168,6 +169,14 @@ fn gate(args: &[String]) -> Result<(), String> {
     )?;
     print!("{}", plan::describe(&plan));
     if opts.dry_run {
+        // The plan's own cost, said the way a run's is: what a dry run
+        // is for is reading a selection, and how long the reading took
+        // is half of what is asked of it here. Nothing is kept — no run
+        // happened, and a record of one would be a run that did not.
+        spent.total = whole_run.elapsed();
+        let head = short(&plan.head);
+        let run = stood(&plan, what.trim_end(), &head, opts.jobs, false, "dry run");
+        print!("{}", record::render(&run, &spent));
         return Ok(());
     }
     let outcome = execute(&plan, opts.jobs, false, &mut spent);
@@ -215,6 +224,36 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
     outcome
 }
 
+/// What the plan chose, counted for the record.
+fn stood<'a>(
+    plan: &'a Plan,
+    what: &'a str,
+    head: &'a str,
+    jobs: usize,
+    landing: bool,
+    outcome: &'a str,
+) -> record::Run<'a> {
+    let counted = |kept: fn(&Required) -> bool| plan.required.iter().filter(|r| kept(r)).count();
+    record::Run {
+        what,
+        head,
+        jobs,
+        landing,
+        changed: plan.changed.len(),
+        reach: plan.reach.len(),
+        steps: (
+            counted(|r| r.step.always),
+            counted(|r| r.cached),
+            counted(|r| !r.step.always && !r.cached),
+        ),
+        verbs: (
+            counted(|r| r.step.id.starts_with("verify")),
+            counted(|r| r.step.id.starts_with("verify") && !r.cached),
+        ),
+        outcome,
+    }
+}
+
 /// The run's block, said and kept ([`record`]). Both roads out of a gate
 /// pass through here — a red run's phases are what a slow one is read
 /// from as much as a green one's.
@@ -226,30 +265,19 @@ fn report(
     spent: &Spent,
     outcome: &Result<Gated, String>,
 ) {
-    let counted = |kept: fn(&Required) -> bool| plan.required.iter().filter(|r| kept(r)).count();
-    let verbs = counted(|r| r.step.id.starts_with("verify"));
-    let run = record::Run {
+    let head = short(&plan.head);
+    let run = stood(
+        plan,
         what,
-        head: &short(&plan.head),
+        &head,
         jobs,
         landing,
-        changed: plan.changed.len(),
-        reach: plan.reach.len(),
-        steps: (
-            counted(|r| r.step.always),
-            counted(|r| r.cached),
-            counted(|r| !r.step.always && !r.cached),
-        ),
-        verbs: (
-            verbs,
-            counted(|r| r.step.id.starts_with("verify") && !r.cached),
-        ),
-        outcome: match outcome {
+        match outcome {
             Ok(Gated::Stamped) => "PASS",
             Ok(Gated::CensusMoved) => "census moved",
             Err(_) => "FAIL",
         },
-    };
+    );
     print!("{}", record::render(&run, spent));
     record::keep(&plan.dir, &run, spent);
 }
