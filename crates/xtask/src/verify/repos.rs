@@ -391,21 +391,27 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
         // is about, and four differently named tabs say an order a
         // picture can be read for. The argument names two of them.
         tab_width_repos("4")?
-    } else if opts.verb == "tab-edge" {
-        // A strip that has to overflow: eight of them, against a window
-        // the verb puts down on its floor.
-        tab_width_repos("8")?
-    } else if opts.verb == "tab-pin" || opts.verb == "tab-pin-go" || opts.verb == "tab-open-go" {
-        // The same floor, four tabs further: what these photograph is a
-        // stand-in with the strip running underneath it, and eight tabs
-        // leave a run of three pixels on the machine with the wider band
-        // (measured: Linux `run=3` against Windows `run=83`, because the
-        // Linux band carries neither a grab run nor window buttons). The
-        // stand-in stood either way — `must_say` says so — but the
-        // picture was of a strip that had not moved. `tab-open-go` opens
-        // one more on top of these, and that one is built by
-        // [`folder_for`]: everything handed over here is opened at
-        // startup, and a tab already in the strip cannot arrive in it.
+    } else if opts.verb == "tab-edge"
+        || opts.verb == "tab-pin"
+        || opts.verb == "tab-pin-go"
+        || opts.verb == "tab-open-go"
+    {
+        // A strip that has to overflow, against a window these put down
+        // on its floor. Twelve, because tabs give their names up only as
+        // far as their own floor and stand at whatever the run divides
+        // into until then: a count below the one that puts them on that
+        // floor fills the run exactly and overflows it by nothing at all
+        // (measured, eight tabs on the wider Linux band: `content=627`
+        // against `view=627`, where Windows was over by 65). The
+        // Linux band is the wider one because it carries neither a grab
+        // run nor window buttons. `tab-edge` has nowhere to travel to
+        // there, and what `tab-pin` photographs is a stand-in with the
+        // strip running underneath it — the stand-in stood either way,
+        // `must_say` says so, but the picture was of a strip that had
+        // not moved. `tab-open-go` opens one more on top of these, and
+        // that one is built by [`folder_for`]: everything handed over
+        // here is opened at startup, and a tab already in the strip
+        // cannot arrive in it.
         tab_width_repos("12")?
     } else if badges {
         // The one verb whose fixture is both at once: a strip of named

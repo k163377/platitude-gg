@@ -163,6 +163,8 @@ Item {
         id: tabEdgeTimer
         running: Harness.autoAct === "tab-edge"
         property bool sized: false
+        property bool settling: false
+        property bool told: false
         property bool requested: false
         property int from: 0
         onTriggered: {
@@ -181,8 +183,22 @@ Item {
                 // A strip that fits has no end to travel to. The resize is what makes one, and the strip itself says
                 // when that has taken — no width of its own is waited on, because which width crowds a strip is the
                 // thing this cannot assume.
-                if (!topBar.bandTabScrolls)
+                if (!topBar.bandTabScrolls) {
+                    // A strip still uncrowded a tick after the floor took is one this staging cannot carry: the wait
+                    // above has nothing left to wait for, and the watchdog that ends such a run names the verb rather
+                    // than the band it was handed. Said once, and a tick late so the resize has laid out — the numbers
+                    // the count has to be chosen against are the band's own, and they differ per OS (`tab-widths`).
+                    if (tabEdgeTimer.settling && !tabEdgeTimer.told) {
+                        tabEdgeTimer.told = true
+                        Harness.report("tab_edge crowded=false tabs=" + pageRepeater.count
+                                          + " content=" + Math.round(topBar.bandTabContent)
+                                          + " view=" + Math.round(topBar.bandTabsWidth)
+                                          + " windowW=" + Math.round(window.width)
+                                          + " floorW=" + Math.ceil(window.floorWidth))
+                    }
+                    tabEdgeTimer.settling = true
                     return
+                }
                 tabEdgeTimer.from = Number(Harness.autoActArg || 0)
                 tabEdgeTimer.requested = topBar.carryTabPastEnd(tabEdgeTimer.from)
                 return
@@ -195,6 +211,8 @@ Item {
             topBar.dropCarriedTab()
             Harness.report("tab_edge landed=true from=" + tabEdgeTimer.from
                               + " run=" + topBar.runOffset()
+                              + " content=" + Math.round(topBar.bandTabContent)
+                              + " view=" + Math.round(topBar.bandTabsWidth)
                               + " tabs=" + pageRepeater.count
                               + " active=" + tabsModel.currentIndex
                               + " open=" + tabProbe.tabPaths())

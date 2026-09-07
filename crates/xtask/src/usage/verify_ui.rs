@@ -102,18 +102,19 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       order the tabs came up in. `tab-hold` opens the same four and takes
       one up without setting it down (argument: which tab, default 0),
       because a tab drawn away from its own row is what the settled strip
-      cannot show. `tab-edge` opens eight, puts the window down on its
+      cannot show. `tab-edge` opens twelve, puts the window down on its
       floor so the strip has to overflow, and holds a tab past the end of
       it until the strip has travelled the whole way.
       `tab-pin` and `tab-pin-go` put the window on the same floor with
-      twelve tabs and are read as a pair: the first sends the strip to
-      the end furthest from the tab in front and photographs the stand-in
-      that rides the edge that tab went out of, the second presses that
-      stand-in and waits out the travel it starts. Their argument is
-      which tab is in front (default 0, which puts the stand-in on the
-      left edge). Twelve rather than eight because the run has to be
-      worth photographing on both machines — the wider Linux band leaves
-      eight tabs three pixels to travel in.
+      the same twelve tabs and are read as a pair: the first sends the
+      strip to the end furthest from the tab in front and photographs the
+      stand-in that rides the edge that tab went out of, the second
+      presses that stand-in and waits out the travel it starts. Their
+      argument is which tab is in front (default 0, which puts the
+      stand-in on the left edge). Twelve rather than eight because the
+      run has to exist at all on both machines — eight tabs stand at
+      whatever the run divides into and fill the wider Linux band
+      exactly, leaving nothing to travel in.
       `tab-open-go` stages that same strip and then opens a thirteenth
       repository into it, which is the other road the band travels by: a
       repository asked for is one the reader means to see, so the strip
