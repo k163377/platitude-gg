@@ -55,6 +55,7 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(値の隣に、なぜそ�
 - **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 を clean・空・完了と判定しない
 - **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。入力フラグを立てただけで出力状態を偽装しない
 - **描画境界は画像 callback が答える** — completion 後に `requestUpdate()` と event-loop turn を通し、app / overlay 両方の `grabToImage` callback が返ってから終了する。静止した offscreen scene は `frameSwapped` を出さないことがあるため、それ単独を完了条件にしない
+- **QML テストの待ちも `cargo xtask waits` が見る** — `wait(ms)` を使わない・`tryCompare` / `tryVerify` に独自 timeout を渡さない(message だけなら timeout の席は `undefined`)・`waitForRendering` / `waitForItemPolished` の戻り値は `verify()` で読む。残す理由は `// waits(<purpose>): <reason>`(core.md §非同期・並行テスト)
 - **並行 run は状態を共有しない** — preset repository・config・shot directory は run ごとに作り、明示した `--repo` / `--config-dir` / `--shot-dir` は原子的に所有権を取る。同じ明示リソースの同時利用は待って混線させず fail fast。build は一度済ませ、反復・並行実行は `--no-build` にする
 
 ## 配線済み操作の意匠と実装対応
