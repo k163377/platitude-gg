@@ -67,7 +67,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         unreachable  a tracked origin whose URL names a directory that was
                   never made: the only shape a fetch fails in offline, so
                   the only one a run of failed fetches can be had on
-                  (fetch-fail, fetch-resume)
+                  (fetch-fail, fetch-resume) — and the only one where a
+                  push is turned down by nothing being there rather than
+                  by what is (push)
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,

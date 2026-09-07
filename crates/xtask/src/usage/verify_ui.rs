@@ -63,9 +63,12 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           which refuses a write of its own, without git —,
                           rename-taken, fold-across-merge, fold-off-branch,
                           fold-first-commit, fold-unfetched-base,
-                          drop-last-commit, band-actions-alert, and
-                          push / publish-new-go against an unreachable
-                          remote). A replay that stops part-way is not
+                          drop-last-commit, band-actions-alert, push
+                          --preset unreachable, and publish-new-go given
+                          a URL nothing can reach — that preset cannot
+                          stand in for it, since a branch already pushed
+                          with an upstream has no first push left to
+                          publish). A replay that stops part-way is not
                           among them any more: git left it standing,
                           which is a landing rather than a failed write.
         --old-git <ver>   run the app against a git that answers --version
