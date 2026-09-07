@@ -29,6 +29,8 @@
 //! how a sentence is built are the writer's, and a machine that had an
 //! opinion on either would be answering a question nobody asked it.
 
+mod tokens;
+
 use std::path::{Path, PathBuf};
 
 /// The trees whose markdown is read, and the one file outside them.
@@ -36,10 +38,19 @@ const ROOTS: [&str; 3] = ["internal-docs", ".claude/rules", ".claude/rules-refs"
 const LOOSE: [&str; 1] = ["CLAUDE.md"];
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    if let Some(unknown) = args.first() {
-        return Err(format!("unknown option {unknown:?} (docs takes none)"));
+    let mut sync = false;
+    for arg in args {
+        match arg.as_str() {
+            "--sync" => sync = true,
+            other => {
+                return Err(format!(
+                    "unknown option {other:?} (docs takes --sync, or nothing to read only)"
+                ));
+            }
+        }
     }
     let root = crate::tree::workspace_root();
+    let quoted = quote(&root, sync)?;
     let mut files = Vec::new();
     for dir in ROOTS {
         collect(&root.join(dir), &mut files)?;
@@ -60,23 +71,71 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    if torn.is_empty() {
-        println!(
-            "docs: {} markdown files scanned, every block still in the list it belongs to — PASS",
-            files.len()
-        );
-        Ok(())
-    } else {
-        for finding in &torn {
-            println!("docs: {finding}");
-        }
-        Err(format!(
+    for finding in &torn {
+        println!("docs: {finding}");
+    }
+    for finding in &quoted.findings {
+        println!("docs: {}: {finding}", tokens::DOCUMENT);
+    }
+
+    let mut wrong: Vec<String> = Vec::new();
+    if !torn.is_empty() {
+        wrong.push(format!(
             "{} torn block(s): every word is still there and in the order it was written, which \
              is why these read as fine — so read each one where it stands and put it back into \
              the block it belongs to",
             torn.len()
-        ))
+        ));
     }
+    if !quoted.findings.is_empty() {
+        wrong.push(format!(
+            "{} value cell(s) that do not quote the source: the values live in Theme.qml and \
+             Metrics.qml, and the document prints what they say — change the value there and run \
+             `cargo xtask docs --sync`",
+            quoted.findings.len()
+        ));
+    }
+    if wrong.is_empty() {
+        println!(
+            "docs: {} markdown files scanned, every block still in the list it belongs to, {} \
+             value cell(s) quoting Theme.qml and Metrics.qml — PASS",
+            files.len(),
+            quoted.cells
+        );
+        Ok(())
+    } else {
+        Err(wrong.join("; and "))
+    }
+}
+
+/// Hold the design document's value cells to the sources, writing them
+/// when asked to.
+///
+/// The write happens before the findings are answered, not instead of
+/// them: `--sync` is how a value cell is corrected, and a run that
+/// corrects one still says which cell it was, so that the drift reaches
+/// the person who has to decide whether the source was the side that was
+/// wrong.
+fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
+    let quoted = tokens::quote(root)?;
+    if !sync {
+        return Ok(quoted);
+    }
+    let Some(rewritten) = &quoted.rewritten else {
+        return Ok(quoted);
+    };
+    let path = root.join(tokens::DOCUMENT);
+    std::fs::write(&path, rewritten).map_err(|e| format!("{}: {e}", tokens::DOCUMENT))?;
+    println!(
+        "docs: {} rewritten — {} value cell(s) now quote the source",
+        tokens::DOCUMENT,
+        quoted.findings.len()
+    );
+    Ok(tokens::Quoted {
+        findings: Vec::new(),
+        rewritten: None,
+        ..quoted
+    })
 }
 
 /// The torn blocks of one document, as the sentences a reader is given.
