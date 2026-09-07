@@ -83,7 +83,7 @@ Item {
             const editor = createTemporaryObject(pair, root)
             verify(editor !== null)
             editor.setMessage("alpha beta gamma delta", "body of the message")
-            waitForRendering(editor)
+            verify(waitForRendering(editor), "the pair was rendered")
             return editor
         }
 
@@ -95,7 +95,7 @@ Item {
             makePair()
             const frame = createTemporaryObject(box, root)
             verify(frame !== null)
-            waitForRendering(frame)
+            verify(waitForRendering(frame), "the box was rendered")
         }
 
         /// **The whole of the summary frame drops a caret in the summary** — the words, the band around them, and
@@ -163,7 +163,7 @@ Item {
             const frame = createTemporaryObject(box, root)
             verify(frame !== null)
             frame.field.text = "line one of the message\nline two of the message"
-            waitForRendering(frame)
+            verify(waitForRendering(frame), "the box was rendered")
             mouseClick(frame, Math.round(frame.width / 2), 1)
             compare(frame.field.cursorPosition, 0)
             mouseClick(frame, Math.round(frame.width / 2), frame.height - 2)
@@ -175,7 +175,7 @@ Item {
             const frame = createTemporaryObject(box, root)
             verify(frame !== null)
             frame.field.text = "line one of the message\nline two of the message"
-            waitForRendering(frame)
+            verify(waitForRendering(frame), "the box was rendered")
             mousePress(frame, 1, 1)
             mouseMove(frame, Math.round(frame.width / 2), Math.round(frame.height / 2))
             mouseRelease(frame, Math.round(frame.width / 2), Math.round(frame.height / 2))

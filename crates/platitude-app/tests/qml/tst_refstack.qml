@@ -246,7 +246,7 @@ Item {
             // The row inside the frame is a positioner and the name inside it elides: both answer their width in a
             // pass after the records land, not in the turn that assigns them. **Waited out, not sampled** — a read
             // taken at the first pass that answers anything at all catches the name at its unelided width.
-            waitForRendering(stack)
+            verify(waitForRendering(stack), "the stack was laid out and drawn")
             fuzzyCompare(chip.contentW, chip.maxWidth - 2 * Theme.spaceXs, 0.01)
             compare(chip.width, chip.maxWidth)
         }
@@ -261,7 +261,7 @@ Item {
             verify(chip.hasBadge && chip.hasCount, "the card is not wearing both")
             // The positioner answers in a pass of its own, and it skips what is not drawn: an x read before it has run
             // is every seat's own default.
-            waitForRendering(stack)
+            verify(waitForRendering(stack), "the stack was laid out and drawn")
             verify(chip.badgeX < chip.countX,
                    "the count at " + chip.countX + " is not behind the badge at " + chip.badgeX)
         }

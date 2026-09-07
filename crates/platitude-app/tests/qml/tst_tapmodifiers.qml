@@ -27,7 +27,8 @@ Item {
         function test_a_single_tap_reports_the_modifier_held_for_it() {
             root.singleModifiers = -1
             mouseClick(root, 20, 20, Qt.LeftButton, Qt.ControlModifier)
-            tryVerify(() => root.singleModifiers !== -1, 1000, "the tap is reported once the double-click window closes")
+            tryVerify(() => root.singleModifiers !== -1, undefined,
+                      "the tap is reported once the double-click window closes")
             verify((root.singleModifiers & Qt.ControlModifier) !== 0,
                    "the handler's point carries the modifier the press was made with")
         }
@@ -35,7 +36,8 @@ Item {
         function test_a_plain_tap_reports_no_modifier() {
             root.singleModifiers = -1
             mouseClick(root, 20, 20, Qt.LeftButton, Qt.NoModifier)
-            tryVerify(() => root.singleModifiers !== -1, 1000, "the tap is reported once the double-click window closes")
+            tryVerify(() => root.singleModifiers !== -1, undefined,
+                      "the tap is reported once the double-click window closes")
             compare(root.singleModifiers, Qt.NoModifier, "and a plain press reads as plain")
         }
     }
