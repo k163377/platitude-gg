@@ -589,7 +589,7 @@ fn always_steps() -> Vec<Step> {
             xtask(&["structure"]),
             &["crates", ".claude/rules-refs/structure.md"],
         ),
-        step("waits", Side::Host, true, xtask(&["waits"]), &[core()]),
+        step("waits", Side::Host, true, xtask(&["waits"]), &["crates"]),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
         step(
             "fmt",

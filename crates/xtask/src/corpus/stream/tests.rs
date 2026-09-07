@@ -285,6 +285,7 @@ fn time_the_generator_alone() {
         }
     }
     let tree = tree::build();
+    // waits(measured): printed for the record, judged by nothing
     let began = std::time::Instant::now();
     let mut sink = std::io::BufWriter::with_capacity(4 * 1024 * 1024, Count(0));
     let newest = super::write(&mut sink, &tree, &mut Inline::default())

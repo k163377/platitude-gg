@@ -386,6 +386,7 @@ fn refs_join_at_scale() {
             .collect(),
     );
 
+    // waits(measured): printed for the record, judged by nothing
     let started = Instant::now();
     let nobody = held_by_nobody();
     let joins = RefJoins::new(&refs, &nobody);

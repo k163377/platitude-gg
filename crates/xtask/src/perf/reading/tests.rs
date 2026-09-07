@@ -8,6 +8,7 @@ use crate::perf::options::parse;
 fn the_bench_clock_runs_only_between_its_two_lines() {
     use std::sync::atomic::Ordering::Relaxed;
     let scroll = Scroll::default();
+    // waits(measured): the clock is handed to the reading under test, which judges it against nothing here
     let since = Instant::now();
     assert!(scroll.stalled_for(since).is_none());
     scroll.began.store(true, Relaxed);

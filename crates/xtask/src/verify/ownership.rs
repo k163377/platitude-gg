@@ -267,6 +267,7 @@ mod tests {
         let run = super::claim_dir(&base, "run").expect("a run directory");
         std::fs::write(run.join("app.png"), b"picture").expect("a picture in it");
         std::fs::write(base.join("stray"), b"a file beside the runs").expect("a stray file");
+        // waits(measured): the clock is handed to the sweep under test, which reads no other
         let now = std::time::SystemTime::now();
         let age = super::RUN_LITTER_AGE;
         assert_eq!(super::sweep_older_than(&base, now, age), 0);
@@ -290,6 +291,7 @@ mod tests {
         super::keep(&kept).expect("the mark a hand-built tree carries");
         std::fs::write(kept.join("repo"), b"the tree a person means to open").expect("a work tree");
         let age = super::RUN_LITTER_AGE;
+        // waits(measured): the clock is handed to the sweep under test, which reads no other
         let now = std::time::SystemTime::now();
         assert_eq!(super::sweep_older_than(&base, now + age * 2, age), 1);
         assert!(!run.exists(), "the run beside it went");
@@ -352,8 +354,7 @@ mod tests {
             .expect("the claim this run was started to take")
             .expect("new claim");
         println!("{HELD}");
-        // Killed long before this. The wait is only so a run that has
-        // lost the process that started it does not sit here for good.
+        // waits(ceiling): killed long before this; the sleep is only so a holder that lost the run that started it does not stand for good
         std::thread::sleep(std::time::Duration::from_secs(300));
         drop(held);
     }
@@ -400,17 +401,19 @@ mod tests {
         assert!(lock.is_file(), "{} went with its owner", lock.display());
 
         // When the operating system lets the lock go is not this test's
-        // to assert; the deadline is here to fail rather than to hang.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        // to assert; the ceiling is here to fail rather than to hang.
+        // waits(ceiling): a dead process's lock is let go in the kernel's own time and can only be looked for; the ceiling names one it never let go
+        let started = std::time::Instant::now();
         let taken = loop {
             let mut next = BTreeSet::new();
             match super::claim_resource(&target, "test resource", &mut next) {
                 Ok(Some(claim)) => break claim,
                 outcome => {
                     assert!(
-                        std::time::Instant::now() < deadline,
+                        started.elapsed() < std::time::Duration::from_secs(30),
                         "the killed run's claim was never let go: {outcome:?}"
                     );
+                    // waits(paced): every attempt is the real claim and the claim ends the loop; the sleep only spaces the attempts
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             }

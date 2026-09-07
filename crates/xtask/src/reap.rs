@@ -424,10 +424,12 @@ mod tests {
     /// missing. The clock ends a wait whose looks were cheap; the count
     /// ends one whose looks were not.
     fn looked<T>(mut look: impl FnMut() -> T, answered: impl Fn(&T) -> bool) -> T {
-        let deadline = Instant::now() + GONE_WITHIN;
+        // waits(ceiling): the clock ends a wait whose looks were cheap and the count one whose looks were not; neither decides what was seen
+        let started = Instant::now();
         let mut seen = look();
         let mut looks = 1;
-        while !answered(&seen) && (looks < LOOKS || Instant::now() < deadline) {
+        while !answered(&seen) && (looks < LOOKS || started.elapsed() < GONE_WITHIN) {
+            // waits(paced): a process the machine reaps in its own time can only be looked for; the sleep spaces the looks
             std::thread::sleep(BETWEEN_LOOKS);
             seen = look();
             looks += 1;

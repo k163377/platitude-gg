@@ -334,6 +334,7 @@ mod tests {
         for (name, age) in [("old", 30), ("middle", 20), ("new", 10), ("newest", 0)] {
             let build = dir.join(name);
             std::fs::create_dir_all(&build).expect("a shelf entry");
+            // waits(measured): the clock is what the shelf's ages are written against, and the shelf reads no other
             let shelved = std::time::SystemTime::now() - std::time::Duration::from_secs(age);
             std::fs::File::create(build.join(crate::tree::exe_name()))
                 .and_then(|file| file.set_modified(shelved))

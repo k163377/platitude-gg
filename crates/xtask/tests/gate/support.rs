@@ -40,7 +40,8 @@ pub fn output_past_a_busy_image(
     command: &mut Command,
     on_busy: impl FnOnce(),
 ) -> std::io::Result<std::process::Output> {
-    let deadline = Instant::now() + BUSY_CEILING;
+    // waits(ceiling): a ceiling that names a failure — an image still called busy at the end of it is a defect, not slowness
+    let started = Instant::now();
     let mut on_busy = Some(on_busy);
     loop {
         let answer = command.output();
@@ -48,12 +49,13 @@ pub fn output_past_a_busy_image(
             &answer,
             Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy
         );
-        if !busy || Instant::now() >= deadline {
+        if !busy || started.elapsed() >= BUSY_CEILING {
             return answer;
         }
         if let Some(notify) = on_busy.take() {
             notify();
         }
+        // waits(paced): every attempt is the real run and its answer ends the loop; the sleep only spaces the attempts
         std::thread::sleep(Duration::from_millis(25));
     }
 }
