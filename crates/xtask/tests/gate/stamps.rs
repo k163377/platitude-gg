@@ -5,6 +5,33 @@
 use crate::support::{ALWAYS, Sandbox, set, without_always};
 
 #[test]
+fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
+    let sb = Sandbox::new("graph-reuse");
+    sb.gate_ok(&sb.seat, &["--dry-run"]);
+    let warm = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(warm.contains(" (kept)"), "{warm}");
+    let shelf = sb.repo.join(".git/pg-gate/graphs");
+    let cached: Vec<_> = std::fs::read_dir(&shelf)
+        .expect("graph shelf")
+        .map(|entry| entry.expect("entry").path())
+        .collect();
+    assert_eq!(cached.len(), 1);
+    let text = std::fs::read_to_string(&cached[0]).expect("cached graph");
+    let first_edge = text.find("\nD\t").expect("graph edges");
+    std::fs::write(&cached[0], &text[..first_edge + 1]).expect("truncate at record boundary");
+    let rebuilt = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!rebuilt.contains(" (kept)"), "{rebuilt}");
+    sb.git_ok(&sb.seat, &["config", "status.showUntrackedFiles", "no"]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Untracked.qml",
+        "Item {}\n",
+    );
+    let dirty = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!dirty.contains(" (kept)"), "{dirty}");
+}
+
+#[test]
 fn a_step_is_asked_again_only_when_what_it_reads_changed() {
     let sb = Sandbox::new("cache");
     sb.write(&sb.seat, "crates/platitude-core/src/stash.rs", "pub fn stash() { let _ = 3; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n");

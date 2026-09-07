@@ -96,12 +96,11 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     );
 }
 
-/// A verb is owed for what its run showed, never for what merely reaches
-/// it. `Main` reads every pane and every census line names `Main`, so a
-/// pane's own leaf used to owe every verb in the file — of which only the
-/// ones that built a pane can have taken a different picture.
+/// The final census does not contain a dialog a verb opened and closed.
+/// Narrowing by that snapshot is only a candidate, never permission to
+/// skip a verb reached through the dialog's owner.
 #[test]
-fn a_qml_leaf_owes_the_verbs_that_showed_it_and_not_the_ones_showing_its_readers() {
+fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
     let sb = Sandbox::new("qml-shown");
     sb.write(
         &sb.seat,
@@ -116,7 +115,10 @@ fn a_qml_leaf_owes_the_verbs_that_showed_it_and_not_the_ones_showing_its_readers
     );
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(text.contains("verbs: 1 of the 2"), "{text}");
+    assert!(
+        text.contains("verbs: 2 selected; shadow candidate: 1"),
+        "{text}"
+    );
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
     assert_eq!(
@@ -127,10 +129,82 @@ fn a_qml_leaf_owes_the_verbs_that_showed_it_and_not_the_ones_showing_its_readers
             "shipped",
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
+            "verify window --preset basic",
+            "verify-linux window --preset basic",
             "bare"
         ]),
         "{ran:?}"
     );
+}
+
+#[test]
+fn a_dialog_closed_before_the_census_still_owes_its_escape_verb() {
+    let sb = Sandbox::new("closed-dialog");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Main.qml",
+        "Item { SettingsDialog {} }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/SettingsDialog.qml",
+        "Item { function escapeOut() {} }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "settings\tMain SettingsDialog\nsettings-escape\tMain\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: dialog fixture", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/SettingsDialog.qml",
+        "Item { function escapeOut() { return false } }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(ui): broken escape handler", &[]);
+    let red = "verify settings-escape";
+    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PG_GATE_FAKE_FAIL", red)]);
+    assert!(!ok && text.contains("nothing stamped"), "{text}");
+    assert!(sb.ran().contains(red), "{text}");
+}
+
+#[test]
+fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
+    let sb = Sandbox::new("harness-no-qml");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/main.rs",
+        "mod qmltest;\nmod seats;\nmod verify;\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/verify/mod.rs",
+        "pub fn run() {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "stash --preset basic\tDriver Main StashPane\nwindow\tDriver Main\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: harness fixture", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/verify/mod.rs",
+        "pub fn run() { return; }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(verify): harness behavior", &[]);
+    let red = "verify window";
+    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PG_GATE_FAKE_FAIL", red)]);
+    assert!(!ok && text.contains("nothing stamped"), "{text}");
+    let ran = sb.ran();
+    for verb in [
+        red,
+        "verify-linux window",
+        "verify stash --preset basic",
+        "verify-linux stash --preset basic",
+    ] {
+        assert!(ran.contains(verb), "{verb} not run; {ran:?}");
+    }
 }
 
 /// What no census can name is owed by every verb. A singleton stands in

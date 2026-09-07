@@ -33,7 +33,7 @@ use crate::subprocess::{common_git_dir, git_query};
 
 /// The format the file is written in. A reader that does not know this
 /// number reads nothing rather than guessing.
-const VERSION: &str = "graph-cache 1";
+const VERSION: &str = "graph-cache 2";
 
 /// How many built graphs a repository keeps. One is a few hundred
 /// kilobytes, and what is ever reached for is the commit at hand and the
@@ -46,7 +46,7 @@ const KEEP: usize = 24;
 /// commit does not, in which case the tree is not what the key names.
 pub(crate) fn key(dir: &Path) -> Option<String> {
     let here = dir.display().to_string();
-    if !git_query(&here, &["status", "--porcelain"])?.is_empty() {
+    if !git_query(&here, &["status", "--porcelain", "--untracked-files=all"])?.is_empty() {
         return None;
     }
     let tree = git_query(&here, &["rev-parse", "HEAD^{tree}"])?;
@@ -163,13 +163,20 @@ fn write(graph: &Graph) -> String {
     for (file, path) in &graph.unresolved {
         out.push_str(&format!("U\t{file}\t{path}\n"));
     }
+    out.push_str(&format!("END\t{:016x}\n", fnv(&out)));
     out
 }
 
 /// The graph a [`write`] wrote, or `None` for anything else — a file from
 /// a version that spelled it differently, or one cut short.
 fn read(text: &str) -> Option<Graph> {
-    let mut lines = text.lines();
+    // A complete record boundary is still a truncated graph. Verify the
+    // entire payload before trusting any edges or absence of edges.
+    let (payload, digest) = text.strip_suffix('\n')?.rsplit_once("END\t")?;
+    if digest != format!("{:016x}", fnv(payload)) {
+        return None;
+    }
+    let mut lines = payload.lines();
     if lines.next()? != VERSION {
         return None;
     }
@@ -299,6 +306,22 @@ mod tests {
         assert!(read("graph-cache 0\n").is_none());
         assert!(read(&format!("{VERSION}\nM\tonly-a-file\n")).is_none());
         assert!(read(&format!("{VERSION}\nX\tsomething\n")).is_none());
-        assert!(read(&format!("{VERSION}\n")).is_some());
+        assert!(read(&format!("{VERSION}\n")).is_none());
+    }
+
+    #[test]
+    fn missing_or_damaged_edges_never_read_as_a_complete_graph() {
+        let mut graph = super::Graph::default();
+        graph.deps.insert("reader".into(), ["input".into()].into());
+        let text = write(&graph);
+        assert!(read(&text).is_some());
+        for (end, _) in text.char_indices() {
+            assert!(
+                read(&text[..end]).is_none(),
+                "accepted prefix {end}: {:?}",
+                &text[..end]
+            );
+        }
+        assert!(read(&text.replace("input", "other")).is_none());
     }
 }
