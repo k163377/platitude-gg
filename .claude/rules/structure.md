@@ -25,7 +25,7 @@ paths:
 - **割る単位は責務であって行数ではない**。**製品コードは責務で割る** / **ハーネス・統合テストは 1 主題なら長くてよい**(主題が 2 つ入った時に割る)
 - 挙動不変・**移動だけのコミット**(変更・リネームを混ぜない)。公開名は `pub use` / qmldir で不変に保つ
 - Rust: ディレクトリ化は **mod.rs 方式(既存踏襲)**。mod.rs は mod 宣言・re-export・共有型のみ(実装を置かない)。`#[cfg(test)]` は対象と同じファイルへ付いて行く(テストだけ巨大なら同ディレクトリの `#[cfg(test)]` 専用ファイルへ)
-- **クレート root(lib.rs / main.rs / tests/it/main.rs)は宣言と再エクスポートだけ** — ヘルパ関数・型・定数を置かない。root は全モジュールへ dispatch し、そこにヘルパがあると全モジュールが root を読む = gate の依存木でどの変更も全体へ届くハブになる。**機械化済み: `cargo test -p xtask`(`the_crate_roots_have_no_readers`)** — 置き場は責務名のモジュール(`tree` / `subprocess`、core は `model`)
+- **クレート root(lib.rs / main.rs / tests/it/main.rs)は宣言と再エクスポートだけ** — ヘルパ関数・型・定数を置かない。root は全モジュールへ dispatch し、そこにヘルパがあると全モジュールが root を読む = gate の依存木でどの変更も全体へ届くハブになる。**機械化済み: 毎回の `cargo xtask gate`(`gate::graph::complaints` — 走らせる前に拒む)と `cargo test -p xtask`(同じ関数)** — 置き場は責務名のモジュール(`tree` / `subprocess`、core は `model`)
 - 統合テストは tests/it/ 内のモジュール分割(1 バイナリ規約は core.md)
 - QML: **1 ファイル = 1 コンポーネント**(Qt の指針。ファイル名がそのまま型名で、粒度は qmldir と型システムが決める — 行数ではない)。子コンポーネント切り出し(ui/ フラット・登録 2 箇所は app-ui.md)。inline `component` は 2 ファイル目が使う時か親が閾値を超えた時に独立ファイル化
 - Qt: `#[qobject]` ブロック(`qproperty!` / `#[qsignal]` / `#[qslot]`)は QMetaInfo の一貫性で **1 型 1 ファイルから動かせない** — スロット本体を素の `impl` へ委譲して痩せさせる(委譲化は移動と別コミット)。それでも割れない分は §長さの閾値 の「分割不能と決めたファイルは理由を書く」へ
