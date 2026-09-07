@@ -197,6 +197,7 @@ fn standing(here: &str, main_ref: &str) -> Result<Standing, String> {
 /// the graph off the sources, the one listing of the tree the cache keys
 /// are made of, the census, and the rest.
 pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan, String> {
+    // waits(measured): the plan's cost, for the record
     let started = std::time::Instant::now();
     let here = dir.display().to_string();
     let Standing {
@@ -206,6 +207,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         onto_main,
         changed,
     } = standing(&here, ask.main_ref)?;
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let (g, reused) = super::reuse::graph_of(dir)?;
     spent.graph = at.elapsed();
@@ -241,6 +243,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     } else {
         touched.clone()
     };
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let census = Census::load(dir);
     let worn = census::worn_by(dir);
@@ -302,6 +305,7 @@ fn owed(
     ask: &Ask<'_>,
     spent: &mut Spent,
 ) -> Result<Vec<Required>, String> {
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let ids = tree_ids(here, head)?;
     spent.ids = at.elapsed();

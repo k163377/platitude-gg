@@ -67,6 +67,7 @@ pub(super) fn run(args: &[String]) -> Result<(), String> {
     let opts = options(args)?;
     let root = crate::tree::workspace_root();
     let here = root.display().to_string();
+    // waits(measured): the graph's build time, printed beside its size
     let started = std::time::Instant::now();
     let g = graph::build(&root)?;
     let edges: usize = g.deps.values().map(BTreeSet::len).sum();

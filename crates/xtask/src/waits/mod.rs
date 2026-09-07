@@ -1,5 +1,6 @@
 //! `cargo xtask waits` — no test in this workspace takes a stretch of
-//! clock for an answer.
+//! clock for an answer, and no verb of this runner takes a wait from
+//! anywhere but `crate::wait`.
 //!
 //! What it reads is every statement of test code — the integration
 //! suites with their support modules, the `#[cfg(test)]` blocks and
@@ -20,14 +21,24 @@
 //!   through channels no `Patience` watches, and a naked one hung a real
 //!   run until the CI kill with no failing test named.
 //!
-//! What a test may still do it says on the line: `// waits(<purpose>):
-//! <reason>` above or beside the statement, with a purpose of `paced`
-//! (a sleep spacing a retry whose completion is causal), `ceiling` (a
-//! wall-clock ceiling that only names a failure), `measured` (a clock
-//! read handed to the code under test or printed, judged by nothing) or
-//! `timed` (a real-time property of the product, judged as a bound no
-//! load can break). A marker that covers nothing is a finding of its
-//! own, so a rewritten test sheds its marker.
+//! Of this runner's own crate it reads the tool bodies too — every
+//! statement outside the test blocks — and names there what
+//! `crate::wait` is the one place for (.claude/rules-refs/core.md: xtask
+//! の待ちは `crate::wait` 1 本から取る): a `sleep`, in the code or in a
+//! PowerShell script the code writes, and a `deadline` — a read of the
+//! monotonic clock, or a receive under a budget of its own. A wait that
+//! goes through that module (`Wait`, `receive`, `stood`, its paces)
+//! names none of these. The product crates' bodies are not read: the
+//! product's clocks are the product's business.
+//!
+//! What a test — or a verb — may still do it says on the line:
+//! `// waits(<purpose>): <reason>` above or beside the statement, with a
+//! purpose of `paced` (a sleep spacing a retry whose completion is
+//! causal), `ceiling` (a wall-clock ceiling that only names a failure),
+//! `measured` (a clock read handed to the code under test or printed,
+//! judged by nothing) or `timed` (a real-time property of the product,
+//! judged as a bound no load can break). A marker that covers nothing is
+//! a finding of its own, so a rewritten wait sheds its marker.
 
 mod qml;
 mod rust;
@@ -38,7 +49,7 @@ use std::path::{Path, PathBuf};
 
 use source::Purpose;
 
-/// A statement of test code that breaks a rule.
+/// A statement that breaks a rule.
 #[derive(Debug)]
 struct Finding {
     file: String,
@@ -60,6 +71,9 @@ struct Exception {
 struct Candidate {
     first: usize,
     last: usize,
+    /// The line it is named at and quoted from: its first, or the line
+    /// of a script's sleep inside it.
+    shown: usize,
     rule: &'static str,
 }
 
@@ -74,11 +88,26 @@ const BUDGETS: [&str; 2] = ["/tests/it/support/wait.rs", "/src/wait.rs"];
 /// fixtures of the very shapes it looks for.
 const SELF: &str = "/src/waits/";
 
+/// How much was read: said beside the verdict, so that a PASS names the
+/// range it holds for.
+#[derive(Default)]
+struct Read {
+    rust_files: usize,
+    qml_files: usize,
+    /// Rust statements read as test code.
+    test_statements: usize,
+    /// The files of this runner's own crate whose tool bodies were read,
+    /// and the statements of those bodies.
+    tool_files: usize,
+    tool_statements: usize,
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
         return Err(format!("unknown option {unknown:?} (waits takes none)"));
     }
     let root = crate::tree::workspace_root();
+    let runner = runner_prefix(&root)?;
     let mut files = Vec::new();
     collect(&root.join("crates"), &mut files)?;
     files.sort();
@@ -100,23 +129,38 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let mut findings = Vec::new();
     let mut exceptions = Vec::new();
-    let (mut rust_files, mut qml_files) = (0usize, 0usize);
+    let mut read = Read::default();
     for (relative, lang, text) in &sources {
-        let (found, allowed) = match lang {
+        match lang {
             source::Lang::Rust => {
-                rust_files += 1;
-                let whole = whole_test_file(relative) || declared.contains(relative);
-                rust::scan(relative, text, whole)
+                read.rust_files += 1;
+                let scope = scope_of(relative, &declared, &runner);
+                if scope == rust::Scope::Tool {
+                    read.tool_files += 1;
+                }
+                let scanned = rust::scan(relative, text, scope);
+                read.test_statements += scanned.test_statements;
+                read.tool_statements += scanned.tool_statements;
+                findings.extend(scanned.findings);
+                exceptions.extend(scanned.exceptions);
             }
             source::Lang::Qml => {
-                qml_files += 1;
-                qml::scan(relative, text)
+                read.qml_files += 1;
+                let (found, allowed) = qml::scan(relative, text);
+                findings.extend(found);
+                exceptions.extend(allowed);
             }
-        };
-        findings.extend(found);
-        exceptions.extend(allowed);
+        }
     }
-    report(&findings, &exceptions, rust_files, qml_files)
+    // A runner whose own files were not among those read has a rule
+    // that names nothing, and would say PASS over it.
+    if read.tool_files == 0 {
+        return Err(format!(
+            "none of the files read is this runner's own ({runner}/src) — its tool bodies went \
+             unread"
+        ));
+    }
+    report(&findings, &exceptions, &read)
 }
 
 /// The files another file declares as test modules (`#[cfg(test)] mod
@@ -149,12 +193,7 @@ fn module_files(declaring: &str, name: &str) -> [String; 2] {
     [format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
 }
 
-fn report(
-    findings: &[Finding],
-    exceptions: &[Exception],
-    rust_files: usize,
-    qml_files: usize,
-) -> Result<(), String> {
+fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result<(), String> {
     for finding in findings {
         println!(
             "waits: {}:{}: [{}] {}",
@@ -181,8 +220,14 @@ fn report(
         .join(", ");
     if findings.is_empty() {
         println!(
-            "waits: {rust_files} Rust and {qml_files} QML test files read, {} statement(s) \
-             standing on a marker ({counted}) — PASS",
+            "waits: {} Rust and {} QML files read — {} statement(s) of test code, and the tool \
+             bodies of {} file(s) of this runner ({} statement(s)); {} statement(s) standing on \
+             a marker ({counted}) — PASS",
+            read.rust_files,
+            read.qml_files,
+            read.test_statements,
+            read.tool_files,
+            read.tool_statements,
             exceptions.len()
         );
         return Ok(());
@@ -190,8 +235,9 @@ fn report(
     Err(format!(
         "{} wait(s) that spend the clock or read no answer: end a wait on the answer \
          (a completion handle, an event, a hand-driven poll), take the budget from the suite \
-         (`bounded`), read what a wait answered — or say on the line why this one stands \
-         (`// waits(<purpose>): <reason>`, purposes paced / ceiling / measured / timed)",
+         (`bounded`) — or, in this runner's own body, the wait from `crate::wait` (`Wait`, \
+         `receive`, `stood`) — read what a wait answered, or say on the line why this one \
+         stands (`// waits(<purpose>): <reason>`, purposes paced / ceiling / measured / timed)",
         findings.len()
     ))
 }
@@ -216,6 +262,35 @@ fn language_of(relative: &str) -> Option<source::Lang> {
         return Some(source::Lang::Qml);
     }
     None
+}
+
+/// How much of a Rust file is read ([`rust::Scope`]): the whole of a
+/// test file, the test blocks of a product crate's source, and of this
+/// runner's own source (under `runner`, [`runner_prefix`]) the tool body
+/// too.
+fn scope_of(relative: &str, declared: &BTreeSet<String>, runner: &str) -> rust::Scope {
+    if whole_test_file(relative) || declared.contains(relative) {
+        rust::Scope::Whole
+    } else if relative.starts_with(&format!("{runner}/src/")) {
+        rust::Scope::Tool
+    } else {
+        rust::Scope::Tests
+    }
+}
+
+/// This runner's own crate, relative to `root` the way every file read
+/// here is — the crate this is compiled from, so that no path is spelled
+/// here.
+fn runner_prefix(root: &Path) -> Result<String, String> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let relative = manifest.strip_prefix(root).map_err(|_| {
+        format!(
+            "this runner is compiled from {}, outside the tree it reads ({})",
+            manifest.display(),
+            root.display()
+        )
+    })?;
+    Ok(relative.to_string_lossy().replace('\\', "/"))
 }
 
 /// Whether a Rust file is test code from top to bottom by where it stands
@@ -250,7 +325,12 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{language_of, module_files, source::Lang, whole_test_file};
+    use std::collections::BTreeSet;
+
+    use super::{
+        language_of, module_files, runner_prefix, rust::Scope, scope_of, source::Lang,
+        whole_test_file,
+    };
 
     // The paths below are fixtures under a crate that does not exist: a
     // real path in a string here is read by the gate's graph as this file
@@ -299,5 +379,46 @@ mod tests {
         assert!(whole_test_file("crates/x/src/session/state_tests.rs"));
         assert!(whole_test_file("crates/x/src/corpus/stream/tests.rs"));
         assert!(!whole_test_file("crates/x/src/session/read_flight.rs"));
+    }
+
+    #[test]
+    fn a_test_file_is_read_whole_a_products_source_for_its_tests_and_the_runners_for_its_body() {
+        let declared = BTreeSet::from(["crates/x/src/graph/testkit.rs".to_string()]);
+        let runner = "crates/x";
+        assert_eq!(
+            scope_of("crates/x/tests/gate/support.rs", &declared, runner),
+            Scope::Whole
+        );
+        assert_eq!(
+            scope_of("crates/x/src/graph/testkit.rs", &declared, runner),
+            Scope::Whole,
+            "a declared test file is test code and nothing else"
+        );
+        assert_eq!(
+            scope_of("crates/x/src/corpus/tests.rs", &declared, runner),
+            Scope::Whole
+        );
+        assert_eq!(
+            scope_of("crates/x/src/lanes.rs", &declared, runner),
+            Scope::Tool,
+            "the runner's source is read for its body too"
+        );
+        assert_eq!(
+            scope_of("crates/y/src/lanes.rs", &declared, runner),
+            Scope::Tests,
+            "a product crate's source is read for its tests alone"
+        );
+    }
+
+    #[test]
+    fn the_runner_is_named_relative_to_the_tree_it_reads() {
+        let root = crate::tree::workspace_root();
+        let prefix = runner_prefix(&root).expect("compiled inside the tree");
+        assert!(!prefix.is_empty() && !prefix.contains('\\'), "{prefix}");
+        assert!(
+            root.join(&prefix).is_dir(),
+            "{prefix} is a crate of the tree"
+        );
+        assert!(runner_prefix(&root.join("elsewhere")).is_err());
     }
 }

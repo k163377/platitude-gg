@@ -1,6 +1,8 @@
 //! The Rust rules: every statement of test code that reads the clock,
 //! sleeps, throws a wait's answer away, or awaits a silent completion
-//! with nothing under it.
+//! with nothing under it — and, of this runner's own body, every
+//! statement that sleeps, reads the monotonic clock or receives under a
+//! budget anywhere but `crate::wait` ([`tool_rule_of`]).
 
 use super::source::{self, Lang, has_token};
 use super::{Candidate, Exception, Finding};
@@ -23,9 +25,13 @@ const BACKSTOPS: [&str; 2] = ["bounded(", "timeout("];
 /// answer.
 const SLEEPS: [&str; 3] = ["sleep(", "sleep_until(", "yield_now("];
 
-/// A clock read — the start of a deadline of the test's own, or a
+/// The monotonic clock: the start of a deadline of the seat's own, or a
 /// measurement a verdict gets hung on.
-const CLOCKS: [&str; 2] = ["Instant::now()", "SystemTime::now()"];
+const MONOTONIC: &str = "Instant::now()";
+
+/// A clock read: [`MONOTONIC`], or the wall clock, which a test reads
+/// for the same two reasons.
+const CLOCKS: [&str; 2] = [MONOTONIC, "SystemTime::now()"];
 
 /// The waits that take a budget. The suite's budget is a named constant;
 /// a budget spelled out in the seat ([`OWN_BUDGETS`]) is the test's own.
@@ -36,6 +42,37 @@ const BUDGETED: [&str; 4] = [
     "park_timeout(",
 ];
 const OWN_BUDGETS: [&str; 2] = ["Duration::from_", "Duration::new("];
+
+/// PowerShell's sleep, in the scripts this runner writes for its
+/// samplers: the runner's own pace in another syntax, standing in a
+/// string the code view has blanked — so it is looked for in the strings
+/// view ([`source::strings_view`]), where a comment names nothing.
+const SCRIPT_SLEEP: &str = "Start-Sleep";
+
+/// How much of a Rust file is read, and by which rules.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Scope {
+    /// Test code from top to bottom: every statement, by the tests' rules
+    /// ([`rule_of`]).
+    Whole,
+    /// A product crate's source: its `#[cfg(test)]` blocks, by the tests'
+    /// rules. The product's own clocks are the product's business.
+    Tests,
+    /// This runner's own source: its test blocks by the tests' rules, and
+    /// the rest — the tool's body — by the runner's ([`tool_rule_of`]).
+    Tool,
+}
+
+/// What reading one file found, and how much of it was read.
+pub(super) struct Scanned {
+    pub findings: Vec<Finding>,
+    pub exceptions: Vec<Exception>,
+    /// Statements read as test code.
+    pub test_statements: usize,
+    /// Statements read as this runner's body: none of a test file's, and
+    /// none of a product crate's.
+    pub tool_statements: usize,
+}
 
 /// One statement of the code view: what sits between `;`, `{` and `}`.
 pub(super) struct Statement {
@@ -52,17 +89,20 @@ pub(super) struct Statement {
 /// one. What stays out of sight is a wait threaded through a closure or
 /// macro body (the `{` splits the statement) — this reads the shape the
 /// suites write in, not the language.
-pub(super) fn statements(code: &str) -> Vec<Statement> {
+///
+/// `said` is the same text with its strings kept
+/// ([`source::strings_view`]), or `code` itself where the strings are
+/// nobody's business; it says where a statement begins, so that one that
+/// is nothing but a string — a script handed back whole — is a statement
+/// all the same. A boundary with nothing before it (a closing brace on a
+/// line of its own) is none.
+pub(super) fn statements(code: &str, said: &str) -> Vec<Statement> {
     let mut found = Vec::new();
     let mut text = String::new();
     let mut first = 1;
     let mut line = 1;
     let mut fresh = true;
-    for ch in code.chars() {
-        if fresh && !ch.is_whitespace() {
-            first = line;
-            fresh = false;
-        }
+    for (ch, spoken) in code.chars().zip(said.chars()) {
         if matches!(ch, ';' | '{' | '}') {
             if !fresh {
                 found.push(Statement {
@@ -74,6 +114,10 @@ pub(super) fn statements(code: &str) -> Vec<Statement> {
             text.clear();
             fresh = true;
         } else {
+            if fresh && !spoken.is_whitespace() {
+                first = line;
+                fresh = false;
+            }
             text.push(ch);
         }
         if ch == '\n' {
@@ -90,9 +134,9 @@ pub(super) fn statements(code: &str) -> Vec<Statement> {
     found
 }
 
-/// The rule a statement breaks, if any. The most specific reading wins:
-/// a wait whose answer is thrown away is named for that before it is
-/// named for anything it also does.
+/// The rule a statement of test code breaks, if any. The most specific
+/// reading wins: a wait whose answer is thrown away is named for that
+/// before it is named for anything it also does.
 pub(super) fn rule_of(statement: &str) -> Option<&'static str> {
     let awaits = statement.contains(".await");
     let silent = SILENT_WAITS.iter().any(|t| has_token(statement, t));
@@ -114,36 +158,94 @@ pub(super) fn rule_of(statement: &str) -> Option<&'static str> {
     None
 }
 
-/// Judges one Rust file. `whole` says the file is test code from top to
-/// bottom; otherwise only its `#[cfg(test)] mod` blocks are read.
-pub(super) fn scan(file: &str, text: &str, whole: bool) -> (Vec<Finding>, Vec<Exception>) {
+/// The rule a statement of this runner's body breaks, if any, and where
+/// it is shown — which of the statement's lines, as an offset from its
+/// first. A verb's waits come from `crate::wait` (.claude/rules-refs/core.md:
+/// xtask の待ちは `crate::wait` 1 本から取る), so what is named is what that
+/// module is the one place for: a sleep, in the code or in a script the
+/// code writes ([`SCRIPT_SLEEP`], found in `said`, the statement's lines
+/// with their strings kept and their comments blanked, and shown where it
+/// stands); a read of the monotonic clock; a receive under a budget —
+/// any budget, since a verb has no suite's to take. The wall clock is a
+/// timestamp in a verb, not a wait; a `Duration` is a ceiling declared
+/// where its reason stands; and nothing here awaits, so the silent waits
+/// have no shape to take.
+pub(super) fn tool_rule_of(statement: &str, said: &[&str]) -> Option<(&'static str, usize)> {
+    if SLEEPS.iter().any(|t| has_token(statement, t)) {
+        return Some(("sleep", 0));
+    }
+    if let Some(at) = said.iter().position(|line| has_token(line, SCRIPT_SLEEP)) {
+        return Some(("sleep", at));
+    }
+    if has_token(statement, MONOTONIC) || BUDGETED.iter().any(|t| has_token(statement, t)) {
+        return Some(("deadline", 0));
+    }
+    None
+}
+
+/// Judges one Rust file, as much of it as `scope` says.
+pub(super) fn scan(file: &str, text: &str, scope: Scope) -> Scanned {
     let code = source::code_view(text, Lang::Rust);
-    let regions = if whole {
-        vec![1..=usize::MAX]
+    let regions = if scope == Scope::Whole {
+        Vec::new()
     } else {
         source::test_regions(&code)
     };
-    let candidates = statements(&code)
-        .into_iter()
-        .filter(|s| regions.iter().any(|r| r.contains(&s.first)))
-        .filter_map(|s| {
-            rule_of(&s.text).map(|rule| Candidate {
+    // What the strings say is read of a tool body alone, for the scripts
+    // this runner writes; a test's strings are nobody's business.
+    let said = (scope == Scope::Tool).then(|| source::strings_view(text, Lang::Rust));
+    let said_lines: Vec<&str> = said
+        .as_deref()
+        .map(|s| s.lines().collect())
+        .unwrap_or_default();
+    let (mut test_statements, mut tool_statements) = (0, 0);
+    let mut candidates = Vec::new();
+    for s in statements(&code, said.as_deref().unwrap_or(&code)) {
+        let of_tests = scope == Scope::Whole || regions.iter().any(|r| r.contains(&s.first));
+        let named = if of_tests {
+            test_statements += 1;
+            rule_of(&s.text).map(|rule| (rule, s.first))
+        } else if scope == Scope::Tool {
+            tool_statements += 1;
+            let lines = said_lines
+                .get(s.first.saturating_sub(1)..s.last.min(said_lines.len()))
+                .unwrap_or_default();
+            tool_rule_of(&s.text, lines).map(|(rule, at)| (rule, s.first + at))
+        } else {
+            None
+        };
+        if let Some((rule, shown)) = named {
+            candidates.push(Candidate {
                 first: s.first,
                 last: s.last,
+                shown,
                 rule,
-            })
-        })
-        .collect();
-    source::judged(file, text, &code, candidates)
+            });
+        }
+    }
+    let (findings, exceptions) = source::judged(file, text, &code, candidates);
+    Scanned {
+        findings,
+        exceptions,
+        test_statements,
+        tool_statements,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Statement, rule_of, scan, statements};
+    use super::{Scanned, Scope, Statement, rule_of, scan, statements};
+
+    fn named(text: &str, scope: Scope) -> Vec<(usize, &'static str)> {
+        scan("t.rs", text, scope)
+            .findings
+            .iter()
+            .map(|f| (f.line, f.rule))
+            .collect()
+    }
 
     fn naked(text: &str) -> Vec<(usize, &'static str)> {
-        let (findings, _) = scan("t.rs", text, true);
-        findings.iter().map(|f| (f.line, f.rule)).collect()
+        named(text, Scope::Whole)
     }
 
     #[test]
@@ -279,7 +381,11 @@ let held = pair.1.wait_timeout(guard, Duration::new(1, 0));
 std::thread::sleep(PACE);
 std::thread::sleep(PACE);
 ";
-        let (findings, exceptions) = scan("t.rs", text, true);
+        let Scanned {
+            findings,
+            exceptions,
+            ..
+        } = scan("t.rs", text, Scope::Whole);
         assert_eq!(
             findings.iter().map(|f| f.line).collect::<Vec<_>>(),
             vec![4],
@@ -295,7 +401,11 @@ std::thread::sleep(PACE);
 // waits(measured): nothing timed stands under this
 let a = 1;
 ";
-        let (findings, exceptions) = scan("t.rs", text, true);
+        let Scanned {
+            findings,
+            exceptions,
+            ..
+        } = scan("t.rs", text, Scope::Whole);
         assert!(exceptions.is_empty());
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule, "marker");
@@ -303,7 +413,7 @@ let a = 1;
     }
 
     #[test]
-    fn only_the_test_module_of_a_source_file_is_read() {
+    fn a_product_crates_source_is_read_for_its_tests_and_this_runners_for_its_body_too() {
         let text = "\
 fn production() {
     std::thread::sleep(POLL);
@@ -316,13 +426,112 @@ mod tests {
     }
 }
 ";
-        let (findings, _) = scan("src/x.rs", text, false);
-        assert_eq!(findings.iter().map(|f| f.line).collect::<Vec<_>>(), vec![8]);
+        let product = scan("src/x.rs", text, Scope::Tests);
+        assert_eq!(
+            product.findings.iter().map(|f| f.line).collect::<Vec<_>>(),
+            vec![8]
+        );
+        assert_eq!(
+            (product.test_statements, product.tool_statements),
+            (3, 0),
+            "the test block: its head, `fn t()` and the sleep"
+        );
+        let runner = scan("src/x.rs", text, Scope::Tool);
+        assert_eq!(
+            runner.findings.iter().map(|f| f.line).collect::<Vec<_>>(),
+            vec![2, 8]
+        );
+        assert_eq!(
+            (runner.test_statements, runner.tool_statements),
+            (3, 2),
+            "the body: `fn production()` and its sleep"
+        );
+    }
+
+    #[test]
+    fn the_runners_body_takes_its_waits_from_the_wait_module_and_is_named_for_any_other() {
+        let text = "\
+let mut wait = Wait::new(\"the gate\", Budget::whole(CEILING), LOOK_AGAIN);
+wait.look_again(\"a free lane\")?;
+let stood_for = crate::wait::stood(Duration::from_millis(STAND_MS), TRY_AGAIN, look);
+let answer = crate::wait::receive(\"its output\", \"a line\", &rx, Budget::whole(CEILING));
+const CEILING: Duration = Duration::from_secs(120);
+let stamp = SystemTime::now();
+let at = Instant::now();
+let got = rx.recv_timeout(CEILING);
+std::thread::sleep(PACE);
+";
+        assert_eq!(
+            named(text, Scope::Tool),
+            vec![(7, "deadline"), (8, "deadline"), (9, "sleep")],
+            "the wait module's own calls, a ceiling declared and a stamp read all pass"
+        );
+    }
+
+    #[test]
+    fn a_sleep_in_a_script_the_runner_writes_is_shown_where_it_stands_and_covered_at_its_statement()
+    {
+        let text = "\
+// waits(paced): the sampler's tick — one reading a beat, the loop ending on the process's exit
+let script = format!(
+    \"while($true){{ Write-Output 1;\\
+       Start-Sleep -Milliseconds {SAMPLE_MS};\\
+     }}\"
+);
+let wake = format!(
+    \"Start-Sleep -Seconds {WAKE_SECS};\"
+);
+";
+        let scanned = scan("t.rs", text, Scope::Tool);
+        assert_eq!(
+            scanned
+                .findings
+                .iter()
+                .map(|f| (f.line, f.rule))
+                .collect::<Vec<_>>(),
+            vec![(8, "sleep")],
+            "shown at the script's own line, not the statement's first"
+        );
+        assert_eq!(scanned.exceptions.len(), 1);
+        assert_eq!(scanned.exceptions[0].line, 1);
+        assert_eq!(
+            named(text, Scope::Whole),
+            vec![(1, "marker")],
+            "a test's strings are not read for one, so its marker covers nothing"
+        );
+    }
+
+    #[test]
+    fn a_scripts_sleep_is_read_off_the_strings_and_never_off_a_comment() {
+        let text = "\
+fn wake() -> &'static str {
+    \"Start-Sleep -Seconds 20\"
+}
+let pace = SAMPLE_MS; // the pace is the script's Start-Sleep, not this
+let script = build(
+    // a note beside the argument, naming Start-Sleep
+    mode,
+);
+";
+        assert_eq!(
+            named(text, Scope::Tool),
+            vec![(2, "sleep")],
+            "a statement that is nothing but the script is one, and a comment is no sleep"
+        );
+    }
+
+    #[test]
+    fn a_closing_brace_on_its_own_line_is_no_statement() {
+        let code = "fn f() {\n    g();\n}\n";
+        let found = statements(code, code);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[1].text.trim(), "g()");
     }
 
     #[test]
     fn a_statement_knows_the_lines_it_spans() {
-        let found: Vec<Statement> = statements("let a =\n  f();\n\nlet b = 1;");
+        let code = "let a =\n  f();\n\nlet b = 1;";
+        let found: Vec<Statement> = statements(code, code);
         assert_eq!(found.len(), 2);
         assert_eq!((found[0].first, found[0].last), (1, 2));
         assert_eq!((found[1].first, found[1].last), (4, 4));

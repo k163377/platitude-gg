@@ -53,6 +53,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let root = crate::tree::workspace_root();
+    // waits(measured): the run's wall clock, said at the end and judged by nothing
     let started = Instant::now();
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
@@ -211,6 +212,7 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
         let display = step.join(" ");
         let log = logs.join(format!("{side}-{index:02}.log"));
         println!("[{side}] {display} … (log: {})", log.display());
+        // waits(measured): the step's wall clock, said on its line and judged by nothing
         let at = Instant::now();
         let outcome = run_step(root, step, &log);
         // Lossy, never empty-on-error: one localized byte in a linker or

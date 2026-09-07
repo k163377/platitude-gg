@@ -205,8 +205,11 @@ fn upstream(at: &Path) -> Result<(), String> {
 /// here rather than trusted, because the answer is what everything
 /// measured against this corpus assumes.
 fn proven(at: &Path) -> Result<(), String> {
+    // waits(measured): the phase times this proof says beside its verdict, judged by
+    // nothing
     let mut began = std::time::Instant::now();
     let mut took = |what: &str| {
+        // waits(measured): the phase's end, for the same line
         let now = std::time::Instant::now();
         let seconds = (now - began).as_secs_f64();
         began = now;

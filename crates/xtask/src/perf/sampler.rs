@@ -606,6 +606,9 @@ impl Armed {
                 }
             }
         };
+        // waits(measured): the instant the samples are written against
+        // (`parent_elapsed_us`), and the run's own clock handed on to `measure` —
+        // read for nothing here
         let started = Instant::now();
         let window = self.window;
         let series = Arc::new(Mutex::new(Series::default()));
@@ -975,6 +978,8 @@ fn windows_script(seconds: u64, software: bool) -> String {
     // would otherwise have in their face every second.
     let awake = if software { SYSTEM_AWAKE } else { AWAKE };
     let raise = u8::from(!software);
+    // waits(paced): the sampler's tick — a reading every `SAMPLE_MS`, the loop
+    // ending when the process it watches is gone or the run's window has passed
     format!(
         "$ErrorActionPreference='Stop';\
          Add-Type -AssemblyName System.Windows.Forms;\
@@ -1167,6 +1172,8 @@ pub(super) fn keep_awake(display: bool) -> Awake {
     } else {
         (SYSTEM_AWAKE, "")
     };
+    // waits(paced): the wake loop's pass — `WAKE_SECS` between pokes, ending when
+    // the parent it watches is gone
     let script = format!(
         "$ErrorActionPreference='Stop';\
          Add-Type -TypeDefinition @'\n\

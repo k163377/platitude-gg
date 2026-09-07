@@ -141,11 +141,13 @@ fn default_jobs() -> usize {
 fn gate(args: &[String]) -> Result<(), String> {
     let opts = options(args)?;
     let mut spent = Spent::default();
+    // waits(measured): the run's whole, for the record (`Spent::total`)
     let whole_run = std::time::Instant::now();
     // The tree's one gate, taken before the graph is read: a plan is
     // seconds of reading, and a second gate here has nothing to read. A
     // dry run holds nothing, because it runs nothing.
     let what = format!("gate {}", args.join(" "));
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let _sole = if opts.dry_run {
         None
@@ -201,7 +203,9 @@ fn gate(args: &[String]) -> Result<(), String> {
 /// is committed there and gated again, rather than reported.
 pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> {
     let mut spent = Spent::default();
+    // waits(measured): the run's whole, for the record (`Spent::total`)
     let whole_run = std::time::Instant::now();
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let _sole = crate::lanes::sole(&running_note(seat), "land's gate")?;
     spent.sole = at.elapsed();
@@ -322,6 +326,7 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// stamped and need not run again. A `landing`'s verbs are handed the
 /// machine's lanes ahead of any other gate's (`lanes`).
 fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result<Gated, String> {
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     refuse_what_no_stamp_could_answer_for(plan)?;
     // Yesterday's runs go on their way out: a verb's repositories and
@@ -338,6 +343,7 @@ fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result
     spent.prepare = at.elapsed();
     // The faked steps of the tests run nothing, in a repository that has
     // no task runner to build.
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let runner = if std::env::var_os(FAKE_LOG).is_some() {
         None
@@ -345,12 +351,14 @@ fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result
         Some(runner(&plan.dir, &logs)?)
     };
     spent.runner = at.elapsed();
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs, landing, spent)?;
     spent.sides = at.elapsed();
     let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
     // step went red, so this is said on both roads out.
+    // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let rewrote = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before;
     spent.census_after = at.elapsed();
@@ -444,6 +452,7 @@ fn run_sides(
     let count = jobs.max(default_jobs());
     let host_lanes = crate::lanes::Lanes::new(&common, "host", count, landing);
     let linux_lanes = crate::lanes::Lanes::new(&common, "linux", count, landing);
+    // waits(measured): the sides' wall clock, said when both are in
     let started = std::time::Instant::now();
     println!(
         "gate: verbs {jobs} at a time per side, on the machine's {count} lanes{}; a side's \
@@ -756,6 +765,7 @@ fn run_one(
     }
     let log = log_of(ground, index);
     println!("[{name}] run    {id} … (log: {})", log.display());
+    // waits(measured): the step's wall clock, said on its line and judged by nothing
     let at = std::time::Instant::now();
     let mut command = required.step.command.clone();
     if no_build {

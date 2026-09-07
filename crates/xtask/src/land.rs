@@ -147,6 +147,7 @@ struct Phases {
 
 impl Phases {
     fn start() -> Self {
+        // waits(measured): the phase clock `land` says at the end, judged by nothing
         let now = std::time::Instant::now();
         Self {
             started: now,
@@ -157,6 +158,7 @@ impl Phases {
 
     /// Closes the phase called `what` at this moment.
     fn mark(&mut self, what: &str) {
+        // waits(measured): the phase's end, for the same line
         let now = std::time::Instant::now();
         self.marks
             .push(format!("{what} {}", clock(now.duration_since(self.last))));

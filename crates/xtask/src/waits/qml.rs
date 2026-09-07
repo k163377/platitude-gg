@@ -24,12 +24,14 @@ pub(super) fn scan(file: &str, text: &str) -> (Vec<Finding>, Vec<Exception>) {
             candidates.push(Candidate {
                 first: number,
                 last: number,
+                shown: number,
                 rule: "sleep",
             });
         } else if ANSWERED_WAITS.iter().any(|w| unread_call(trimmed, w)) {
             candidates.push(Candidate {
                 first: number,
                 last: number,
+                shown: number,
                 rule: "ignored",
             });
         }
@@ -46,6 +48,7 @@ pub(super) fn scan(file: &str, text: &str) -> (Vec<Finding>, Vec<Exception>) {
                 candidates.push(Candidate {
                     first,
                     last,
+                    shown: first,
                     rule: "deadline",
                 });
             }

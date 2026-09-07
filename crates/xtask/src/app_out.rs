@@ -76,6 +76,8 @@ pub(crate) struct Said {
 /// off it are wanted against.
 pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
     std::thread::spawn(move || {
+        // waits(measured): the stream's own clock, which the time of its last line is
+        // read off (`Said::last`) — worded into a verdict, never deciding one
         let started = std::time::Instant::now();
         let mut said = Said {
             lines: Vec::new(),

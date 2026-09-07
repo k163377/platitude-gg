@@ -290,6 +290,9 @@ pub(super) fn measure(
     // value readings of the same series rather than of two more processes
     // started beside the one being measured.
     if done {
+        // waits(measured): the settling stretch the last reading is taken after — the
+        // run is done and nothing is waited for; the stretch is a condition of the
+        // reading (`settle_ms`), not a wait for one
         std::thread::sleep(Duration::from_millis(opts.settle_ms.max(AFTER_DONE_MS)));
     }
     let held = sampler.read();

@@ -74,6 +74,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     println!("running the shipped build offscreen: {}", config.display());
 
+    // waits(measured): how long the build stood, for the verdict's wording — `stood`
+    // is what decides
     let started = Instant::now();
     let mut child = cmd
         .spawn()

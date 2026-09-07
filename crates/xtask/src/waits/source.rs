@@ -100,12 +100,24 @@ pub(super) enum Lang {
 /// string no longer reads as one. Rust char literals and raw strings are
 /// blanked too; a lifetime's `'` is kept, since it opens nothing.
 pub(super) fn code_view(text: &str, lang: Lang) -> String {
+    view(text, lang, false)
+}
+
+/// `text` with its comments blanked and its strings kept, character for
+/// character beside [`code_view`]: the code with what it says — where a
+/// script this runner writes stands, and where a comment names nothing.
+pub(super) fn strings_view(text: &str, lang: Lang) -> String {
+    view(text, lang, true)
+}
+
+fn view(text: &str, lang: Lang, keep_strings: bool) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         let next = chars.get(i + 1).copied();
+        let comment = c == '/' && matches!(next, Some('/' | '*'));
         let skipped = if c == '/' && next == Some('/') {
             line_comment_len(&chars, i)
         } else if c == '/' && next == Some('*') {
@@ -134,8 +146,12 @@ pub(super) fn code_view(text: &str, lang: Lang) -> String {
             i += 1;
             continue;
         }
-        for blanked in &chars[i..i + skipped] {
-            out.push(if *blanked == '\n' { '\n' } else { ' ' });
+        if comment || !keep_strings {
+            for blanked in &chars[i..i + skipped] {
+                out.push(if *blanked == '\n' { '\n' } else { ' ' });
+            }
+        } else {
+            out.extend(&chars[i..i + skipped]);
         }
         i += skipped;
     }
@@ -218,18 +234,18 @@ fn char_literal_len(chars: &[char], at: usize) -> usize {
 }
 
 /// The line ranges of a Rust file's `#[cfg(test)] mod … { … }` blocks,
-/// read off its code view. A `#[cfg(test)] mod x;` declares a file that
-/// is read on its own ([`declared_test_modules`]) and opens no region
-/// here.
+/// from the attribute to the closing brace, read off its code view. A
+/// `#[cfg(test)] mod x;` declares a file that is read on its own
+/// ([`declared_test_modules`]) and opens no region here.
 pub(super) fn test_regions(code: &str) -> Vec<RangeInclusive<usize>> {
     let chars: Vec<char> = code.chars().collect();
     let mut regions = Vec::new();
-    for (_, after) in test_mod_heads(code, &chars) {
-        if chars.get(after) != Some(&'{') {
+    for head in test_mod_heads(code, &chars) {
+        if chars.get(head.after) != Some(&'{') {
             continue;
         }
-        let close = matching_brace(&chars, after).unwrap_or(chars.len() - 1);
-        regions.push(line_of(&chars, after)..=line_of(&chars, close));
+        let close = matching_brace(&chars, head.after).unwrap_or(chars.len() - 1);
+        regions.push(line_of(&chars, head.attribute)..=line_of(&chars, close));
     }
     regions
 }
@@ -243,21 +259,36 @@ pub(super) fn declared_test_modules(code: &str) -> Vec<String> {
     let chars: Vec<char> = code.chars().collect();
     test_mod_heads(code, &chars)
         .into_iter()
-        .filter(|(_, after)| chars.get(*after) == Some(&';'))
-        .map(|(name, _)| name)
+        .filter(|head| chars.get(head.after) == Some(&';'))
+        .map(|head| head.name)
         .collect()
 }
 
-/// Every `mod` that a `#[cfg(test)]` in `code` applies to: its name, and
-/// the index of what follows it — `{` for a block, `;` for a declaration.
-fn test_mod_heads(code: &str, chars: &[char]) -> Vec<(String, usize)> {
+const CFG_TEST: &str = "#[cfg(test)]";
+
+/// A `mod` that a `#[cfg(test)]` applies to.
+struct TestModHead {
+    name: String,
+    /// The index of the attribute, where the module's lines begin.
+    attribute: usize,
+    /// The index of what follows the name — `{` for a block, `;` for a
+    /// declaration.
+    after: usize,
+}
+
+/// Every `mod` that a `#[cfg(test)]` in `code` applies to.
+fn test_mod_heads(code: &str, chars: &[char]) -> Vec<TestModHead> {
     let mut heads = Vec::new();
     let mut from = 0;
-    while let Some(found) = code[from..].find("#[cfg(test)]") {
+    while let Some(found) = code[from..].find(CFG_TEST) {
         let at = from + found;
-        from = at + "#[cfg(test)]".len();
-        if let Some(head) = test_mod_head(chars, code[..from].chars().count()) {
-            heads.push(head);
+        from = at + CFG_TEST.len();
+        if let Some((name, after)) = test_mod_head(chars, code[..from].chars().count()) {
+            heads.push(TestModHead {
+                name,
+                attribute: code[..at].chars().count(),
+                after,
+            });
         }
     }
     heads
@@ -395,10 +426,10 @@ pub(super) fn judged(
             }
             None => findings.push(Finding {
                 file: file.to_string(),
-                line: candidate.first,
+                line: candidate.shown,
                 rule: candidate.rule,
                 excerpt: raw
-                    .get(candidate.first - 1)
+                    .get(candidate.shown.saturating_sub(1))
                     .map(|l| l.trim().to_string())
                     .unwrap_or_default(),
             }),
@@ -440,6 +471,21 @@ mod tests {
             code.matches('{').count(),
             0,
             "a brace in a string is no brace: {code}"
+        );
+    }
+
+    #[test]
+    fn the_strings_view_keeps_what_the_strings_say_and_blanks_the_comments() {
+        let text = "let s = \"Start-Sleep 1; {\"; // the script's Start-Sleep\nlet b = 1;";
+        let said = super::strings_view(text, Lang::Rust);
+        assert_eq!(said.lines().count(), 2);
+        assert_eq!(said.matches("Start-Sleep").count(), 1, "{said}");
+        assert!(said.contains("\"Start-Sleep 1; {\""), "{said}");
+        assert!(!said.contains("script"), "{said}");
+        assert_eq!(
+            said.len(),
+            code_view(text, Lang::Rust).len(),
+            "the two views stand character for character"
         );
     }
 
@@ -520,11 +566,15 @@ pub(crate) mod tests {
 ";
         let code = code_view(text, Lang::Rust);
         assert_eq!(declared_test_modules(&code), vec!["testkit".to_string()]);
-        assert_eq!(test_regions(&code), vec![4..=6]);
+        assert_eq!(
+            test_regions(&code),
+            vec![3..=6],
+            "the region opens at the attribute"
+        );
     }
 
     #[test]
-    fn the_test_module_is_a_region_and_a_declaration_is_not() {
+    fn the_test_module_is_a_region_from_its_attribute_and_a_declaration_is_not() {
         let text = "\
 fn production() {}
 #[cfg(test)]
@@ -537,6 +587,6 @@ mod tests {
 fn more() {}
 ";
         let regions = test_regions(&code_view(text, Lang::Rust));
-        assert_eq!(regions, vec![6..=8]);
+        assert_eq!(regions, vec![4..=8]);
     }
 }

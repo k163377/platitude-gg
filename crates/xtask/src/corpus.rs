@@ -328,12 +328,14 @@ struct Clock {
 impl Clock {
     fn start() -> Self {
         Self {
+            // waits(measured): the phase clock this struct prints, judged by nothing
             began: std::time::Instant::now(),
             phases: Vec::new(),
         }
     }
 
     fn mark(&mut self, phase: &'static str) {
+        // waits(measured): the phase's end, for the same print
         let now = std::time::Instant::now();
         self.phases.push((phase, now - self.began));
         self.began = now;
@@ -708,6 +710,7 @@ fn worktree(at: &Path) -> Result<(), String> {
     let index = std::fs::metadata(at.join(".git").join("index"))
         .map(|meta| meta.len())
         .unwrap_or_default();
+    // waits(measured): the status's time, one of the readings the corpus is described by
     let began = std::time::Instant::now();
     // **`--no-optional-locks`, because the application never runs a
     // status without it** (`process::executor::FIXED_ARGS`), and
