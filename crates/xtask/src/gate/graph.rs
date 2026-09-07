@@ -193,7 +193,10 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
     for file in &files {
         let raw = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
         let code = strip_comments(&raw);
-        if file.starts_with("crates/platitude-app/") {
+        // Spelled in pieces: a whole path here would be read as this
+        // file reading everything under the app, which it does not — it
+        // asks which files a name is under.
+        if file.starts_with(&format!("crates/{}/", "platitude-app")) {
             for name in qobject_names(&code) {
                 g.app_types.entry(name).or_insert_with(|| file.clone());
             }
@@ -557,11 +560,22 @@ fn char_literal_end(bytes: &[u8], at: usize) -> usize {
 
 /// The string literal opening at `at`, if one does: (start of its body,
 /// index of its closing quote, hashes of a raw string).
+/// Whether the literal opening at `at` carries a byte string's `b` — the
+/// `b` of `b"…"` sits at `at - 1` and the `b` of `br"…"` at `at - 1` with
+/// the `r` at `at`. A `b` that is the tail of an identifier is not one.
+fn byte_prefix(bytes: &[u8], at: usize) -> bool {
+    at > 0
+        && bytes[at - 1] == b'b'
+        && at
+            .checked_sub(2)
+            .is_none_or(|i| !is_ident(bytes[i] as char))
+}
+
 fn string_literal(bytes: &[u8], at: usize) -> Option<(usize, usize, usize)> {
     let (body_start, hashes) = if bytes[at] == b'"' {
         (at + 1, 0)
     } else if bytes[at] == b'r'
-        && (at == 0 || !is_ident(bytes[at - 1] as char))
+        && (at == 0 || !is_ident(bytes[at - 1] as char) || byte_prefix(bytes, at))
         && bytes[at + 1..]
             .first()
             .is_some_and(|b| *b == b'"' || *b == b'#')
@@ -1010,8 +1024,27 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
             if name.starts_with("target") || name.is_empty() {
                 continue;
             }
+            // The census is the plan's input, never a step's: the gate
+            // reads it to pick the verbs and the verbs write it back, and
+            // no test opens the committed one (the sandboxes lay out
+            // their own). An edge here would put it in the cache key of
+            // every test the file that names it reaches, so a landing's
+            // commit of a census a verb rewrote would rerun them all to
+            // the same answer.
+            if name == super::census::FILE {
+                continue;
+            }
             if real.is_dir() {
                 name.push('/');
+                // A file does not read the directory it lives in. Such
+                // an edge says "this file reads everything beside it",
+                // which is the whole-tree answer and not a dependency —
+                // and it is what `../` resolves to against the reading
+                // file's own directory, and what a prefix test like
+                // `starts_with("crates/")` reads as.
+                if file.starts_with(&name) {
+                    continue;
+                }
             }
             out.push(name);
             break;
@@ -1070,7 +1103,15 @@ fn string_bodies(text: &str) -> Vec<String> {
         } else if bytes[i] == b'\'' {
             i = char_literal_end(bytes, i);
         } else if let Some((body_start, end, hashes)) = string_literal(bytes, i) {
-            out.push(text[body_start..end].to_string());
+            // A byte string is bytes, never a path: `b"../"` is content
+            // a generator writes into a repository it makes up, and
+            // nothing ever opens it (`corpus::shape::content_into`).
+            // Read as a path it resolved against the writing file's own
+            // directory and made that file a reader of every source
+            // beside it.
+            if !byte_prefix(bytes, i) {
+                out.push(text[body_start..end].to_string());
+            }
             i = end + 1 + hashes;
         } else {
             i += text[i..].chars().next().map_or(1, char::len_utf8);
@@ -1218,6 +1259,59 @@ fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
     Ok(())
 }
 
+/// What the graph says is wrong with the tree it was read from, as lines
+/// for whoever is looking: a path that resolves nowhere, and a crate root
+/// somebody reads.
+///
+/// Neither is a fault of the change at hand, and neither is anything a
+/// step could answer for — an unresolved path is an edge the graph did
+/// not draw, so every selection made through it is short by however much
+/// that edge carried, and a crate root with a reader is the hub every
+/// change reaches everything through (.claude/rules/structure.md
+/// §クレート root). So the gate reads this off the graph it already
+/// holds, on every run, rather than through a test that only some
+/// selections pick.
+pub(crate) fn complaints(g: &Graph) -> Vec<String> {
+    let mut out = Vec::new();
+    for (file, path) in g.unresolved.iter().take(10) {
+        out.push(format!("{file} names {path}, which resolves nowhere"));
+    }
+    // Spelled in pieces: a whole path in a string here would be read as
+    // this very file reading the root.
+    let roots = [
+        ("platitude-core", "src", "lib.rs"),
+        ("platitude-app", "src", "main.rs"),
+        ("xtask", "src", "main.rs"),
+        ("platitude-core", "tests/it", "main.rs"),
+    ];
+    for (package, dir, name) in roots {
+        let file = format!("crates/{package}/{dir}/{name}");
+        if !g.modules.contains_key(&file) {
+            out.push(format!("{file} is not in the graph"));
+            continue;
+        }
+        let readers: Vec<&String> = g
+            .rdeps
+            .get(&file)
+            .into_iter()
+            .flatten()
+            // A directory node reads everything under it, the
+            // `*_tests.rs` siblings a root declares read its scope with
+            // `use super::*`, and an integration binary names files in
+            // its fixtures — none is a helper on the root.
+            .filter(|r| !r.ends_with('/') && !r.ends_with("_tests.rs"))
+            .filter(|r| g.modules.get(*r).is_none_or(|m| m.test_binary.is_none()))
+            .collect();
+        if !readers.is_empty() {
+            out.push(format!(
+                "{file} is read by {readers:?}: a crate root holds declarations and re-exports \
+                 only, or every change reaches everything through it"
+            ));
+        }
+    }
+    out
+}
+
 /// Every file under `dir` with `extension` (any, when empty), as
 /// workspace-relative paths.
 pub(crate) fn collect(
@@ -1248,8 +1342,8 @@ pub(crate) fn collect(
 #[cfg(test)]
 mod tests {
     use super::{
-        bin_exe_names, build, defines_tests, mod_declaration, paths_in, reexports_in,
-        string_bodies, strip_comments,
+        bin_exe_names, build, defines_tests, literal_paths, mod_declaration, paths_in,
+        reexports_in, string_bodies, strip_comments,
     };
     use std::collections::BTreeMap;
 
@@ -1274,6 +1368,52 @@ mod tests {
             bodies,
             vec!["crates/x.rs", "two\\\"quotes", "raw \"inner\" path/y.rs"]
         );
+    }
+
+    /// A byte string is bytes a generator writes, not a path anything
+    /// opens: `b"../"` read as one made the file naming it a reader of
+    /// every source beside it (`corpus::shape::content_into`). The `b`
+    /// has to be its own word — `lib"x"` is not a byte string, and the
+    /// tokenizer must still walk past it whole either way.
+    #[test]
+    fn a_byte_string_is_bytes_and_not_a_path() {
+        assert_eq!(
+            string_bodies("let a = b\"../\";\nlet b = \"kept/y.rs\";\n"),
+            vec!["kept/y.rs"]
+        );
+        assert_eq!(
+            string_bodies("let a = br#\"../\"#;\nlet b = \"kept/y.rs\";\n"),
+            vec!["kept/y.rs"]
+        );
+        assert_eq!(
+            string_bodies("let a = lib\"../\";\n"),
+            vec!["../"],
+            "a b that is the tail of a word opens no byte string"
+        );
+    }
+
+    /// A file does not read the directory it lives in: the edge says
+    /// "everything beside me", which is the whole-tree answer and not a
+    /// dependency. It is what `../` and a `starts_with(\"crates/\")` both
+    /// resolve to. The census is the plan's input and no step's, so it is
+    /// no edge either — a landing's commit of a rewritten one would
+    /// otherwise rerun every test whose key names the file that reads it.
+    #[test]
+    fn a_literal_naming_an_ancestor_directory_or_the_census_is_no_edge() {
+        let root = crate::tree::workspace_root();
+        let named = |file: &str, literal: &str| literal_paths(&root, file, &[literal.to_string()]);
+        let plan = "crates/xtask/src/gate/plan.rs";
+        assert!(named(plan, "crates/").is_empty());
+        assert!(named(plan, "../").is_empty());
+        assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());
+        assert!(named(plan, crate::gate::census::FILE).is_empty());
+        // What the rule must not take away: a directory the file is not
+        // in, and a file of its own. Spelled in pieces, or naming them
+        // here would be this very file reading them.
+        let ui = format!("crates/{}/src/ui", "platitude-app");
+        assert_eq!(named(plan, &ui), vec![format!("{ui}/")]);
+        let baseline = format!("crates/xtask/{}", "structure-baseline.txt");
+        assert_eq!(named(plan, &baseline), vec![baseline.clone()]);
     }
 
     #[test]
@@ -1427,48 +1567,14 @@ mod tests {
         }
     }
 
-    /// The whole tree, as it stands: every path resolves, and the crate
-    /// roots are read by nobody — a root that defines a helper or a type
-    /// is the hub through which any change reaches everything, and this
-    /// is what keeps the roots to declarations and re-exports
-    /// (.claude/rules/structure.md §クレート root).
+    /// The whole tree, as it stands. The same reading every gate does
+    /// before it runs anything ([`complaints`]) — here so that
+    /// `cargo test -p xtask` says it too, and says it against a graph
+    /// read fresh off the sources rather than one off the shelf.
     #[test]
     fn the_crate_roots_have_no_readers_and_every_path_resolves() {
         let root = crate::tree::workspace_root();
         let g = build(&root).expect("the graph of this tree");
-        assert!(
-            g.unresolved.is_empty(),
-            "paths that resolve nowhere: {:?}",
-            &g.unresolved[..g.unresolved.len().min(10)]
-        );
-        // Spelled in pieces: a whole path in a string here would be read
-        // as this very file reading the root.
-        let roots = [
-            ("platitude-core", "src", "lib.rs"),
-            ("platitude-app", "src", "main.rs"),
-            ("xtask", "src", "main.rs"),
-            ("platitude-core", "tests/it", "main.rs"),
-        ];
-        for (package, dir, name) in roots {
-            let file = &format!("crates/{package}/{dir}/{name}");
-            assert!(g.modules.contains_key(file), "{file} is not in the graph");
-            let readers: Vec<&String> = g
-                .rdeps
-                .get(file)
-                .into_iter()
-                .flatten()
-                // A directory node reads everything under it, the
-                // `*_tests.rs` siblings a root declares read its scope
-                // with `use super::*`, and an integration binary names
-                // files in its fixtures — none is a helper on the root.
-                .filter(|r| !r.ends_with('/') && !r.ends_with("_tests.rs"))
-                .filter(|r| g.modules.get(*r).is_none_or(|m| m.test_binary.is_none()))
-                .collect();
-            assert!(
-                readers.is_empty(),
-                "{file} is read by {readers:?}: a crate root holds declarations and re-exports \
-                 only, or every change reaches everything through it"
-            );
-        }
+        assert_eq!(super::complaints(&g), Vec::<String>::new());
     }
 }

@@ -501,6 +501,20 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
              first:\n{dirty}"
         ));
     }
+    // Not the change's fault, and not a thing a step could answer for:
+    // an edge the graph failed to draw is one every selection through it
+    // is short by, so a stamp written over this tree would be saying more
+    // than the run knows (`graph::complaints`).
+    if !plan.complaints.is_empty() {
+        return Err(format!(
+            "the graph cannot read this tree whole, so no selection off it can be stamped:\n{}",
+            plan.complaints
+                .iter()
+                .map(|line| format!("  {line}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
     if !plan.uncovered.is_empty() {
         return Err(format!(
             "no verb shows these components, so the gate cannot pass them:\n{}\nRun a verb \

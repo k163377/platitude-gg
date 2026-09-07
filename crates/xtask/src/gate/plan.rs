@@ -72,6 +72,11 @@ pub(crate) struct Plan {
     /// so a kind of file nothing tests is visible rather than silently
     /// green.
     pub unclaimed: Vec<String>,
+    /// What the graph says is wrong with the tree itself
+    /// (`graph::complaints`): a path resolving nowhere leaves every
+    /// selection short by whatever that edge carried, so no run over this
+    /// tree can be stamped.
+    pub complaints: Vec<String>,
 }
 
 pub(crate) struct Ask<'a> {
@@ -83,16 +88,30 @@ pub(crate) struct Ask<'a> {
     pub extra_verbs: &'a [String],
 }
 
-const CORE: &str = "crates/platitude-core";
-const APP: &str = "crates/platitude-app";
+/// The two crates the built app is made of, and the harness directories
+/// its runs read. Spelled in pieces for the reason [`qml_dirs`] gives: a
+/// whole path in a string here would be an edge from this file to
+/// everything under it, and this file reads none of them — it names them
+/// as what a step's cache key has to cover, which is a different thing
+/// from reading them. Left whole, a change to any source of the core made
+/// this file its reader, and through it every test of the task runner.
+fn core() -> String {
+    format!("crates/{}", "platitude-core")
+}
+
+fn app() -> String {
+    format!("crates/{}", "platitude-app")
+}
+
+fn harness() -> [String; 2] {
+    ["verify", "demo"].map(|part| format!("crates/xtask/src/{part}"))
+}
+
 const DOCKERFILE: &str = "ci/linux/Dockerfile";
 /// The dependency policy, which nothing in the source graph reads.
 const DENY: &str = "deny.toml";
 /// What every cargo build reads.
 const CARGO: [&str; 3] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"];
-/// What the harness runs read besides the app: the runner and the demo
-/// repositories it builds.
-const HARNESS: [&str; 2] = ["crates/xtask/src/verify", "crates/xtask/src/demo"];
 /// What a QML test run reads besides [`qml_dirs`]: the recipe that
 /// stages the module for it.
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
@@ -105,11 +124,10 @@ const DOCS: [&str; 4] = [
 ];
 
 /// The app's QML: the module the product ships, and the QtTest files that
-/// read it. Spelled in pieces for the reason [`binary_steps`] gives — a
-/// whole path in a string here is an edge from this file to everything
-/// under it.
+/// read it. Spelled in pieces for the reason [`core`] gives.
 fn qml_dirs() -> (String, String) {
-    (format!("{APP}/src/ui"), format!("{APP}/tests/qml"))
+    let app = app();
+    (format!("{app}/src/ui"), format!("{app}/tests/qml"))
 }
 
 /// The plan, with every phase of the making of it timed into `spent`:
@@ -261,6 +279,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         required,
         uncovered,
         unclaimed,
+        complaints: graph::complaints(&g),
     })
 }
 
@@ -559,7 +578,7 @@ fn always_steps() -> Vec<Step> {
             xtask(&["structure"]),
             &["crates", ".claude/rules-refs/structure.md"],
         ),
-        step("waits", Side::Host, true, xtask(&["waits"]), &[CORE]),
+        step("waits", Side::Host, true, xtask(&["waits"]), &[core()]),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
         step(
             "fmt",
@@ -748,12 +767,12 @@ fn binary_steps(
     let mut steps = Vec::new();
     // Spelled in pieces: a whole path in a string here would be read as
     // this file reading the app's entry point.
-    let entry = format!("{APP}/src/main.rs");
+    let entry = format!("{}/src/main.rs", app());
     let qml_moved = !sorted.qml.is_empty() || reach.contains(&entry);
     let binary_moved = qml_moved
         || sorted.rust_in.contains_key("platitude-app")
         || sorted.rust_in.contains_key("platitude-core");
-    let binary_inputs = cargo_inputs(&[APP, CORE]);
+    let binary_inputs = cargo_inputs(&[&app(), &core()]);
     if qml_moved {
         steps.push(step(
             "shipped",
@@ -770,7 +789,7 @@ fn binary_steps(
         }
     }
     let mut verb_inputs = binary_inputs.clone();
-    verb_inputs.extend(HARNESS.iter().map(|s| (*s).to_string()));
+    verb_inputs.extend(harness());
     // The runs rewrite their own census lines — the container's does not
     // (`verify::options::census_line` refuses there), so the file stays
     // one machine's answer rather than a race between the two sides. That
@@ -939,6 +958,12 @@ pub(crate) fn describe(plan: &Plan) -> String {
         out.push_str("no verb's census names these — nothing headless shows them:\n");
         for file in &plan.uncovered {
             out.push_str(&format!("  {file}\n"));
+        }
+    }
+    if !plan.complaints.is_empty() {
+        out.push_str("the graph cannot read this tree whole:\n");
+        for line in &plan.complaints {
+            out.push_str(&format!("  {line}\n"));
         }
     }
     out.push_str(&format!("steps ({}):\n", plan.required.len()));
