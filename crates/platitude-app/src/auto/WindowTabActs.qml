@@ -48,8 +48,13 @@ Item {
                 return
             }
             // The strip is read back below, so it has to have caught up with the model before there is anything true to
-            // say about which repository went and which is still standing.
-            if (pageRepeater.count >= middleCloseTimer.beforeCount || tabProbe.tabItemCount() !== pageRepeater.count)
+            // say about which repository went and which is still standing — and caught up means laid out, not
+            // counted: until the strip has responded to the row leaving, its items still answer by their old indices,
+            // and index 0 is the closed tab's own item (`TabProbe.settleStrip`).
+            if (pageRepeater.count >= middleCloseTimer.beforeCount)
+                return
+            tabProbe.settleStrip()
+            if (tabProbe.tabItemCount() !== pageRepeater.count)
                 return
             // And the tab that stayed has to be showing its repository: "the neighbour is still there" is the half of
             // this verb the picture carries, and a page still opening photographs the same whether it survived the

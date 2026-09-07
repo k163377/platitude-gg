@@ -395,6 +395,14 @@ Item {
             // done with it.
             if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
                 return
+            // And the landing has reached the screen. The answer comes before the status it invalidated is read
+            // again (`session::write::run_write`), and this commit takes the working tree's row off the graph: a run
+            // that ended on the answer alone was walked with that row still standing as often as not, and
+            // `WipTallyRow` — the one component that stands with it — moved under the gate. So the run waits for the
+            // status that no longer stands the row, and for the page to have stopped arriving on it (`PageSettled`).
+            const page = window.curPage
+            if (page.pageWt.wipRowStands || !PageSettled.settled(page))
+                return
             stop()
             Harness.report("quit_lock dialog=" + quitWaitDialog.opened
                 + " window=" + window.visible

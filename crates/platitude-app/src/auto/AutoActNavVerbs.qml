@@ -31,6 +31,7 @@ Item {
     readonly property var stashesModel: driver.stashesModel
     readonly property var tagsModel: driver.tagsModel
     readonly property var sidebarPane: driver.sidebarPane
+    readonly property var diffPane: driver.diffPane
     readonly property var navProbe: driver.navProbe
     readonly property var remoteDialog: driver.remoteDialog
     readonly property var refSwitchItem: driver.refSwitchItem
@@ -164,11 +165,16 @@ Item {
         return true
     }
     // The splitter has to have handed the pane its new width before the width can be reported — the fold sets it, the
-    // layout takes it.
+    // layout takes it. And the diff these verbs open is a git subprocess away: `diff=true` is the verb's own word
+    // that a file is open in the middle, and a pane still reading it frames like one that has, so the run waits for
+    // the read to have landed — rows, a picture or a binary notice (`DiffPane.diffSettled`) — before the rail is read
+    // and the census walked.
     SampleTimer {
         id: navRailTimer
         onTriggered: {
             if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
+                return
+            if (page.diffShown && !diffPane.diffSettled())
                 return
             navRailTimer.stop()
             Harness.report(

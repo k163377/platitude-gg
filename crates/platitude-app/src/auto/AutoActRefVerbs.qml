@@ -82,8 +82,10 @@ Item {
         } else if (act === "delete-tag" || act === "delete-tag-go") {
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
+            // The hold's end is the press the write barrier is armed on (`holdToEnd`): armed at the dispatch, the
+            // barrier passes on the opening fetch's answer and photographs the card still up.
             if (act === "delete-tag-go")
-                refTagDeleteItem.completeHold()
+                driver.holdToEnd(refTagDeleteItem)
         } else if (act === "delete-stash" || act === "delete-stash-go") {
             const dropOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRefMenu("stash", stashesModel.nameAt(0),
@@ -104,8 +106,9 @@ Item {
             refMenu.openSub(refBranchCard)
             Harness.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)
+            // The hold's end is the press the write barrier is armed on (`holdToEnd`).
             if (act === "delete-remote-go" || act === "remote-refused")
-                refDeleteItem.completeHold()
+                driver.holdToEnd(refDeleteItem)
             // The far side keeps the branch (`--preset protected`): what comes back is a report rather than a
             // failure, and the bar it comes down in is what this one photographs.
             if (act === "remote-refused")
@@ -268,8 +271,8 @@ Item {
             forceDeleteTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.text
                               + " note=" + refDeleteItem.note)
-            driver.writeSeqBefore = repoTab.writeSeq
-            refDeleteItem.completeHold()
+            // The hold's end is the press the write barrier is armed on (`holdToEnd`).
+            driver.holdToEnd(refDeleteItem)
             writeBarrier.start()
         }
     }
@@ -420,15 +423,16 @@ Item {
                 // was and calls it the list as it is. What the run waits for is this name's own reading changing.
                 tagGoneTimer.was = tagsModel.tagSides(tagMenuTimer.tag)
                 tagGoneTimer.tag = tagMenuTimer.tag
-                if (tagMenuTimer.press === "remote-delete")
-                    refRemoteTagDeleteItem.completeHold()
-                else
-                    refTagBothDeleteItem.completeHold()
+                driver.holdToEnd(tagMenuTimer.press === "remote-delete" ? refRemoteTagDeleteItem
+                                                                         : refTagBothDeleteItem)
                 tagGoneTimer.start()
                 return
             }
+            // The forced push is a held row, and the hold's end is the press the barrier is armed on (`holdToEnd`):
+            // the fetch this run asked for answers during the hold, and a barrier armed here passed on that answer
+            // — with the two cards still up, the row part filled and nothing pushed.
             if (refPushTagItem.holdMs > 0)
-                refPushTagItem.completeHold()
+                driver.holdToEnd(refPushTagItem)
             else
                 refPushTagItem.triggered()
             writeBarrier.start()

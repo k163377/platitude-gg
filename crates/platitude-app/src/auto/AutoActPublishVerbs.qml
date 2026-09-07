@@ -454,10 +454,11 @@ Item {
                               + publishFlow.publishState
                               + " unsure=" + publishFlow.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
-            // The same gesture a person is given: a hold cannot be answered by a click here either.
+            // The same gesture a person is given: a hold cannot be answered by a click here either. The hold's end
+            // is the press the write barrier is armed on (`holdToEnd`), said by the pane when the pill confirms.
             driver.writeSeqBefore = repoTab.writeSeq
             if (publishFlow.publishRefused)
-                graphPane.completeHold()
+                driver.holdToEnd(graphPane, graphPane.askConfirmed)
             else
                 page.answerRowAsk()
             writeBarrier.start()

@@ -11,8 +11,18 @@ import QtQuick
 QtObject {
     id: probe
 
-    /// The strip's own list. This reads it and never lays anything out.
+    /// The strip's own list. This reads it, and lays it out only on being asked to (`settleStrip`).
     required property ListView view
+
+    /// Makes the strip answer for the model as it stands. A view responds to its model once per frame, so between a
+    /// row leaving the model and the next polish `itemAtIndex` still answers by the indices the items had: with row 0
+    /// gone, `count` is one and index 0 is still the item of the tab that was closed — which reads as the wrong tab
+    /// having gone, on a strip that only needed a frame (measured: `middle-close 0` on the container said
+    /// `gone=false` with the closed repository as the one still open). A reader that walks the items right after a
+    /// change asks for this first; the samplers that wait for the strip to change on its own (`tab-drag`) need not.
+    function settleStrip() {
+        probe.view.forceLayout()
+    }
 
     /// How many of the strip's rows have an item standing for them. `tabPaths`, `tabTitles` and `hasTabPath` walk
     /// those items, so this is what says whether their answer is the whole strip or only the part of it the layout has

@@ -226,6 +226,24 @@ Item {
     function pressedWrite() {
         driver.writeSeqBefore = repoTab.writeSeq
     }
+    /// Runs a hold to its end, with the write barrier armed on the end and not on the start. The end is
+    /// `Metrics.holdMs` of ticks away, and a write this run never pressed can answer in between — the fetch a
+    /// repository makes on the way open, or the one a verb asked for itself (`push-tag` on a drifted tag). A barrier
+    /// armed at the start passes on that answer and photographs the card still up, the row half filled and nothing
+    /// written; the census walked then holds the card, and the next run's — whose stray answer came sooner or later
+    /// — does not (measured: `push-tag v1.5:drift` finished 130ms into a 500ms hold with both cards up, and under the
+    /// gate's load with neither).
+    ///
+    /// `edge` is the signal the hold's end sends the write on: the row's own `held` unless the hold runs through a
+    /// pane — `DiffPane.completeHold` presses a row of its list and says so on `discardHunkRequested`,
+    /// `GraphPane.completeHold` the ask bar's pill on `askConfirmed`. The row's own handler runs first, so the
+    /// sequence is read after the press has gone out and before its answer can have moved it.
+    function holdToEnd(held, edge) {
+        driver.expectWriteAtPress()
+        const press = edge === undefined ? held.held : edge
+        press.connect(driver.pressedWrite)
+        held.completeHold()
+    }
     /// Past the end of any line these fixtures carry: `hit_byte` clamps, so a drag that means "to the end of the row"
     /// can say so without measuring the row.
     readonly property int pastLineEnd: 9999
@@ -271,6 +289,11 @@ Item {
         id: noticeBarrier
         onTriggered: {
             if (!page.noticeCard.settled)
+                return
+            // A diff the verb opened under the bar (`notice-over-diff`) is a git subprocess away, and the picture is
+            // of the whole window: a pane still reading frames like one that has, and a walk taken then records no
+            // row of it. So the bar is not the whole of the wait while the middle is a diff on its way.
+            if (page.diffShown && !diffPane.diffSettled())
                 return
             noticeBarrier.stop()
             // `log=` and `wrong=` are the other half of the claim, and the half no picture can make on its own: the

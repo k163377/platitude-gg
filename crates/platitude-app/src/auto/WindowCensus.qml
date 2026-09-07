@@ -29,6 +29,17 @@ import platitude
 /// before — but what it is recorded as showing is the whole of what it brought up, which is the same on every
 /// machine. A window that never settles is the watchdog's to report; there is no clock here that would let one pass.
 ///
+/// **And the walk is taken from a frame, never from the edge that made one due.** What the tree holds is what the
+/// views have built, and a view builds its rows when the window polishes its items for a frame — not when the model
+/// hands the rows over. Two nearer moments each record a list with no rows in it. The picture's callback comes as a
+/// posted event, so whatever was queued ahead of it runs first — a diff's rows arriving is a model reset, and a list
+/// met between its reset and the next polish holds no delegate at all. And the edge on which the window settles is a
+/// data edge: the refs land and the nav list has yet to build a row from them, so a walk taken in the same call as
+/// that edge records a sidebar with no rows in it (measured: `tab-hold 0` lost `NameCell NavItemDelegate NavRowBody`
+/// on the runs whose refs were the last read to land). So once the picture has been called for and the window has
+/// settled, a frame is asked for, and the walk is taken at `afterAnimating` — the window's word, on this thread, that
+/// every item has been polished for the frame about to be synced, with nothing able to run in between.
+///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
 /// the runner drops them. Popups stand under the window's overlay, which is a child of the root item, so one walk from
@@ -151,17 +162,42 @@ Item {
     /// The picture was called for before the window had settled, so the walk is from a later moment than the
     /// photograph. Held past `waiting`, which the walk clears before it says anything.
     property bool waited: false
+    /// A frame has been asked for, and the walk is taken at its `afterAnimating` — unless a read goes out first, in
+    /// which case the settled edge that follows arms the next one.
+    property bool armed: false
     function report() {
         if (Harness.autoAct === "")
             return
-        if (!census.settled) {
-            census.waiting = true
-            census.waited = true
-            return
-        }
-        census.take()
+        census.waiting = true
+        census.waited = !census.settled
+        census.arm()
     }
-    onSettledChanged: if (census.waiting && census.settled) census.take()
+    onSettledChanged: {
+        if (census.settled)
+            census.arm()
+        else
+            census.armed = false
+    }
+    function arm() {
+        if (!census.waiting || !census.settled)
+            return
+        census.armed = true
+        // A quiet scene renders no frame of its own; asked for one, the window polishes its items and says so.
+        census.window.requestUpdate()
+    }
+    Connections {
+        target: census.window
+        enabled: census.armed
+        function onAfterAnimating() {
+            // Still settled: a read that went out between the ask and the frame is a window arriving again, and the
+            // edge on which it stops is what arms the frame after.
+            if (!census.settled) {
+                census.armed = false
+                return
+            }
+            census.take()
+        }
+    }
 
     /// What the window answered `settled` with, beside the answer — so a census that moves says why on the run's own
     /// line rather than leaving the next reader to reproduce a machine.
@@ -189,11 +225,17 @@ Item {
     /// The walk and the two lines, taken once however many times the window settles.
     function take() {
         census.waiting = false
+        census.armed = false
         walk()
         // Said first, and on a line of its own: everything after `census=` is a name. The terms ride on the answer's
         // line, which is read one word at a time (`gate::census::page_settled_in`).
         Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms())
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
+        // Said from the event loop rather than from inside the frame's polish: the ending this releases may quit the
+        // application, and the frame is left to finish first.
+        Qt.callLater(census.done)
+    }
+    function done() {
         census.walked()
     }
 }

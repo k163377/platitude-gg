@@ -328,10 +328,10 @@ Item {
                 lineBackTimer.begin()
                 return
             }
-            // No line-level discard exists — a hunk is the smallest piece that can be thrown away.
+            // No line-level discard exists — a hunk is the smallest piece that can be thrown away. The hold's end is
+            // the press the write barrier is armed on (`holdToEnd`), said by the pane on the hunk's own signal.
             if (act === "discard-hunk-go") {
-                driver.writeSeqBefore = repoTab.writeSeq
-                diffPane.completeHold()
+                driver.holdToEnd(diffPane, diffPane.discardHunkRequested)
                 writeBarrier.start()
             } else {
                 renderedBarrier.begin()
@@ -398,13 +398,17 @@ Item {
             lineBackTimer.back = false
             lineBackTimer.start()
         }
-        /// Whether the write this step asked for has landed. The sequence is read immediately before asking, so its
-        /// moving is the whole of the evidence — waiting to *see* `busyCount` rise as well wedges on a write that
-        /// begins and ends inside one tick, which is what the container did while the host did not (measured,
-        /// `line-back` PASS on Windows, watchdog on Linux).
+        /// Whether the write this step asked for has landed, and the pane has stopped catching up with it. The
+        /// sequence is read immediately before asking, so its moving is the whole of the evidence — waiting to *see*
+        /// `busyCount` rise as well wedges on a write that begins and ends inside one tick, which is what the
+        /// container did while the host did not (measured, `line-back` PASS on Windows, watchdog on Linux). The
+        /// pane's own word (`RepoPage.diffSettling`) is the rest: the answer asks the file to be read again, and the
+        /// rows that read brings replace the ones on screen — a step that went on from the answer alone reads rows
+        /// about to be swapped, and the run ends with that swap still on its way.
         function wroteAndSettled() {
             return repoTab.busyCount === 0
                     && repoTab.writeSeq > driver.writeSeqBefore
+                    && !page.diffSettling
         }
         function expect() {
             driver.writeSeqBefore = repoTab.writeSeq
@@ -541,10 +545,12 @@ Item {
                 return
             }
             // The landing is the output: the pane has to have moved off the key it was on and settled somewhere with
-            // rows.
+            // rows — and stopped reading (`RepoPage.diffSettling`), so the rows it lands with are the rows the run
+            // ends on rather than ones a read still out is about to replace.
             const now = page.diffShown ? page.diffKind + ":" + page.diffPath : ""
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
-                    || now === followTimer.was || (page.diffShown && diffPane.view.count === 0))
+                    || now === followTimer.was || (page.diffShown && diffPane.view.count === 0)
+                    || page.diffSettling)
                 return
             followTimer.stop()
             followTimer.landed = now

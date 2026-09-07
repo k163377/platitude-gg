@@ -115,8 +115,10 @@ Item {
                 return true
             }
             sidebarPane.submitEdit(parts[1])
+            // The hold's end is the press the write barrier is armed on (`holdToEnd`), said by the pane when the
+            // pill confirms.
             if (act === "rename-remote-go")
-                graphPane.completeHold()
+                driver.holdToEnd(graphPane, graphPane.askConfirmed)
             else
                 renameAskTimer.start()
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {

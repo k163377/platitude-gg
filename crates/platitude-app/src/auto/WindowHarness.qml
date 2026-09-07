@@ -134,7 +134,8 @@ Item {
         sceneMirror: shotMirrors.sceneMirror
         mainUi: harness.mainUi
         gate: harness.gate
-        censusState: census.waiting ? "waiting" : census.settled ? "settled" : "arriving"
+        // `armed` is a frame asked for and not yet polished — a run that ends there had the window's word withheld.
+        censusState: census.armed ? "armed" : census.waiting ? "waiting" : census.settled ? "settled" : "arriving"
         onAppPictured: census.report()
     }
 
