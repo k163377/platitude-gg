@@ -25,6 +25,16 @@ cargo xtask shots <command>
       while looking at the second — so a before/after goes on the board
       this way and never as two runs.
 
+  add --label \"<what these show>\" --part <word> <png> [--part <word> <png>]...
+      The same again, for a set of pictures of one part in its several
+      states: they go on the board as a single view holding all of them
+      in a row under one magnifier, each with its word over it. What a
+      set is read for is the step from one state to the next, and read
+      one at a time there is no step to see — the reader is comparing
+      the picture in front of them with the one they remember. The word
+      comes before the picture it belongs to, so nothing is matched up
+      by counting.
+
   crop <png> --at <x>:<y>:<width>:<height> [--scale <n>] [--out <png>]
       Cut a region out of a picture and magnify it a whole number of
       times without smoothing (three, unless --scale says otherwise).
@@ -130,6 +140,7 @@ fn add(args: &[String]) -> Result<(), String> {
     let mut verb = String::new();
     let mut before: Option<PathBuf> = None;
     let mut after: Option<PathBuf> = None;
+    let mut parts: Vec<(String, PathBuf)> = Vec::new();
     let mut pngs: Vec<PathBuf> = Vec::new();
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
@@ -138,6 +149,22 @@ fn add(args: &[String]) -> Result<(), String> {
             "--verb" => verb = rest.next().cloned().unwrap_or_default(),
             "--before" => before = rest.next().map(PathBuf::from),
             "--after" => after = rest.next().map(PathBuf::from),
+            // The word and then the picture, taken in one step: a flag
+            // that only opened the word would leave the pictures in the
+            // catch-all below, and the two lists would be matched up by
+            // counting — which is wrong exactly when a picture is
+            // missing.
+            "--part" => match (rest.next(), rest.next()) {
+                (Some(word), Some(png)) if !word.is_empty() && !png.starts_with("--") => {
+                    parts.push((word.clone(), PathBuf::from(png)));
+                }
+                _ => {
+                    return Err(
+                        "shots add: --part wants a word and then the picture it goes over"
+                            .to_string(),
+                    );
+                }
+            },
             // Named rather than left to the catch-all, so the hand that
             // reaches for it is told where the board is read instead of
             // "unknown option".
@@ -158,13 +185,17 @@ fn add(args: &[String]) -> Result<(), String> {
     // two runs by accident: the whole point of the pair is that they are
     // looked at together.
     let (page, count) = match (before, after) {
-        (Some(before), Some(after)) if pngs.is_empty() => {
+        (Some(before), Some(after)) if pngs.is_empty() && parts.is_empty() => {
             (board::record_pair(&label, &verb, &before, &after)?, 2)
         }
-        (None, None) => (board::record(&label, &verb, &pngs)?, pngs.len()),
+        (None, None) if !parts.is_empty() && pngs.is_empty() => {
+            (board::record_abreast(&label, &verb, &parts)?, parts.len())
+        }
+        (None, None) if parts.is_empty() => (board::record(&label, &verb, &pngs)?, pngs.len()),
         _ => {
             return Err(
-                "shots add: --before and --after go together, and take no other pictures"
+                "shots add: a run is one of three — plain pictures, --before with --after, \
+                 or --part words with their pictures — and they do not mix"
                     .to_string(),
             );
         }

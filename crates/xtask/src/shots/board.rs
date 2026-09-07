@@ -123,6 +123,24 @@ pub(crate) fn record_pair(
     )
 }
 
+/// Several pictures of one thing under one name, read abreast, each with
+/// the word that says which it is: the states of a part laid out in a
+/// row the way a reader would put them on a desk.
+///
+/// **The same rule as [`record_pair`], for more than two.** A set read
+/// one at a time is a set nobody can compare — what a row of states is
+/// for is the step between one and the next, and that is on the screen
+/// only while they are beside each other.
+pub(crate) fn record_abreast(
+    label: &str,
+    verb: &str,
+    parts: &[(String, PathBuf)],
+) -> Result<PathBuf, String> {
+    let pngs: Vec<PathBuf> = parts.iter().map(|(_, png)| png.clone()).collect();
+    let captions: Vec<String> = parts.iter().map(|(cap, _)| cap.clone()).collect();
+    record_with(label, verb, &pngs, &captions, true)
+}
+
 fn record_with(
     label: &str,
     verb: &str,
