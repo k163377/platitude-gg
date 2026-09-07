@@ -5,7 +5,7 @@
 - **検証ハーネスは「切り出し」ではなく「別のビルド」で分ける** — テストのための仕組みをプロダクションから離す時、ファイルを動かすだけでは出荷物からは消えない。Rust は feature で読み手ごと消し(`harness::knobs` の `#[cfg(feature = "automation")] fn read`)、QML は**モジュールごと埋め込まない**(`src/auto` = `platitude.auto`)。**両方に共通する条件は「製品側がハーネスの名前を静的に持たないこと」** — Rust なら型・関数が `cfg` の内側に閉じていること、QML なら型名を書かずに URL で読むこと(`HarnessSeat`)。名前が残っている限り、消したビルドはリンクもロードもできない
 - **QML の `Component.onCompleted` は親が先、子が後**(実測: ページ自身のハンドラが、その子の席のハンドラより先に走った)。C++ の `componentComplete()` が子→親なので逆に思い込みやすい。**完了ハンドラの中で子の作った物に触る設計にしない** — 触るなら子側を「訊かれたらその場で作る」形にする(`HarnessSeat.ask()`)
 
-- **`session/mod.rs` の `use` ブロックは兄弟 15 ファイルの共有 prelude** — 各ファイルの `use super::*` が `Oid` / `GitError` / `Segment` 等をここ経由で引くので、mod.rs 自身が使わなくなった import も消せない(glob 経由の利用を rustc は「使用済み」と数えるため警告も出ない = 消すと一斉に壊れて初めて分かる)
+- **`session/mod.rs` の `use` ブロックは兄弟 15 ファイルの共有 prelude** — 各ファイルの `use super::*` が `Oid` / `GitError` / `Segment` 等をここ経由で引くので、mod.rs 自身が使っていない import も消せない(glob 経由の利用を rustc は「使用済み」と数えるため警告も出ない = 消すと一斉に壊れて初めて分かる)
 - **`session/repo.rs` は作れない** — `crate::repo`(RepoInfo / open)と名前が衝突する。`RepoSession` の置き場は `session/repo_session.rs`
 - **mod.rs から出す型の `pub(super)` は `pub(crate)` と書き写す** — session は crate 直下なので mod.rs の `pub(super)` = `pub(crate)`。移動先で `pub(super)` にすると session 内へ狭まる(逆に mod.rs で private だった型は移動先で `pub(super)` にすると元と同じ範囲)
 - **insta のスナップショットはソースファイル基準の `snapshots/` を見る** — `foo.rs` → `foo/bar.rs` へ動いたテストは置き場(`src/snapshots/` → `src/foo/snapshots/`)とファイル名(モジュールパス)の両方が変わる。中身は不変なので `INSTA_FORCE_UPDATE=1 cargo test` で `source:` 行だけ再生成する(手編集は禁止 — CLAUDE.md Rust 規約)
