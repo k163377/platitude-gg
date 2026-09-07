@@ -7,6 +7,14 @@
 use super::state::*;
 use super::*;
 
+/// Two callers miss at once: the second parks on the single-flight gate
+/// and is answered by the first's read, not by one of its own.
+///
+/// The second caller is driven by hand to the point where it has to
+/// wait ([`crate::wait::poll_once`]) — past the fast-path miss and onto
+/// the gate the first holds — so the race is set up at the one point it
+/// can happen, rather than left to a turn of the scheduler that may or
+/// may not have carried it there.
 #[tokio::test]
 async fn concurrent_callers_share_one_derived_read() {
     let derived = Arc::new(Derived::<u32>::default());
@@ -37,31 +45,23 @@ async fn concurrent_callers_share_one_derived_read() {
     };
     entered_rx.await.expect("the first read started");
 
-    let second = {
-        let derived = Arc::clone(&derived);
-        let calls = Arc::clone(&calls);
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let task = tokio::spawn(async move {
-            let _ = started_tx.send(());
-            derived
-                .get_or_try_init(|| {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    async { Ok::<u32, ()>(99) }
-                })
-                .await
-        });
-        started_rx
-            .await
-            .expect("the second caller reached the read");
-        // Let it run through the fast-path miss and park on the
-        // single-flight gate before the first answer is published.
-        tokio::task::yield_now().await;
-        task
-    };
-    release.notify_one();
+    let mut second = Box::pin(derived.get_or_try_init(|| {
+        calls.fetch_add(1, Ordering::SeqCst);
+        async { Ok::<u32, ()>(99) }
+    }));
+    assert!(
+        crate::wait::poll_once(&mut second).is_pending(),
+        "the second caller is parked on the single-flight gate"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "and read nothing on its way there"
+    );
 
+    release.notify_one();
     assert_eq!(first.await.expect("first caller finished"), Ok(42));
-    assert_eq!(second.await.expect("second caller finished"), Ok(42));
+    assert_eq!(second.await, Ok(42), "answered by the read in flight");
     assert_eq!(calls.load(Ordering::SeqCst), 1, "one shared read");
 }
 

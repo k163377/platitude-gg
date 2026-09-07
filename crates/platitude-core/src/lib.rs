@@ -56,6 +56,8 @@ mod status_tests;
 pub mod tag;
 pub mod trailers;
 pub mod version;
+#[cfg(test)]
+mod wait;
 pub mod worktrees;
 
 // Declarations and re-exports only. A type or a helper defined here would

@@ -257,29 +257,42 @@ mod tests {
 
     /// The reason the gate is here at all: however many callers pile up,
     /// two reads of the same snapshot never run at once.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    ///
+    /// The second caller is driven by hand onto the gate while the first
+    /// read stands open ([`crate::wait::poll_once`]), so the overlap is
+    /// asked for at the exact point it could happen — not left to a
+    /// scheduler that may never have put the two side by side.
+    #[tokio::test]
     async fn passes_of_one_flight_never_overlap() {
-        let flight = Arc::new(ReadFlight::default());
-        let ran = Arc::new(Ran::default());
-        let mut callers = Vec::new();
-        for _ in 0..8 {
-            let flight = Arc::clone(&flight);
-            let ran = Arc::clone(&ran);
-            callers.push(tokio::spawn(async move {
-                flight
-                    .run(move || async move {
-                        ran.enter();
-                        tokio::task::yield_now().await;
-                        ran.leave();
-                        false
-                    })
-                    .await
-            }));
-        }
-        for caller in callers {
-            caller.await.expect("the caller answered");
-        }
+        let flight = ReadFlight::default();
+        let ran = Ran::default();
+        let release = tokio::sync::Notify::new();
+        let mut first = Box::pin(flight.run(|| async {
+            ran.enter();
+            release.notified().await;
+            ran.leave();
+            false
+        }));
+        assert!(
+            crate::wait::poll_once(&mut first).is_pending(),
+            "the first read is in flight"
+        );
+        let mut second = Box::pin(flight.run(|| async {
+            ran.enter();
+            ran.leave();
+            true
+        }));
+        assert!(
+            crate::wait::poll_once(&mut second).is_pending(),
+            "the second caller is parked on the gate"
+        );
+        assert_eq!(ran.passes(), 1, "and did not read past the first");
+
+        release.notify_one();
+        assert!(!first.await);
+        assert!(second.await, "answered by the repeat behind the first");
         assert_eq!(ran.most(), 1, "two reads were in flight at once");
+        assert_eq!(ran.passes(), 2, "one read and one repeat");
     }
 
     /// Everyone who asked while one pass was running is answered by the
