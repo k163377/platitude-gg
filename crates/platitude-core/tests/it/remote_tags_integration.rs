@@ -373,6 +373,28 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     );
 }
 
+/// Asks for a tracked remote-tag read until one runs.
+///
+/// A `Busy` is a read of somebody else's holding the single-flight slot —
+/// the slot books no repeat, so the ask is dropped — and its ack is sent
+/// once that read has let the slot go (`RemoteTagRefreshOutcome::Busy`),
+/// so the ask after it finds the slot free unless another reader got
+/// there first. Only two can: the opening's catch-up and the interval's.
+/// A third refusal is a slot nobody lets go, and is said by name.
+async fn asked_past_busy(session: &Arc<RepoSession>) -> RemoteTagRefreshOutcome {
+    for _ in 0..3 {
+        let outcome = crate::support::wait::bounded(
+            "the tracked remote-tag read",
+            session.refresh_remote_tags_tracked().outcome(),
+        )
+        .await;
+        if outcome != RemoteTagRefreshOutcome::Busy {
+            return outcome;
+        }
+    }
+    panic!("the remote-tag slot was never let go: three asks in a row found it held");
+}
+
 /// Waits for the snapshot that causally carries the remote-tag answer.
 async fn tags_loaded(sink: &CaptureSink, pred: impl Fn(&[TagItem]) -> bool) {
     sink.wait_for("the remote-tag snapshot", |events| {
@@ -454,21 +476,9 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     // remote says it carries.
     let bare_path = bare.path.clone();
     bare.git_in(&bare_path, &["tag", "v-later", &root]);
-    // Asked through the tracked form, retried past `Busy`: the opening's
-    // own catch-up can still hold the single-flight slot here, a Busy is
-    // that read, and the slot books no repeat — an ask dropped into it
-    // would be nobody's to carry out (rules-refs/core.md).
-    loop {
-        let outcome = crate::support::wait::bounded(
-            "the remote-tag catch-up",
-            session.refresh_remote_tags_tracked().outcome(),
-        )
-        .await;
-        if outcome != RemoteTagRefreshOutcome::Busy {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    // Asked through the tracked form, past the opening's own catch-up
+    // where that still holds the single-flight slot.
+    asked_past_busy(&session).await;
     tags_loaded(&sink, named).await;
     // The chips have to arrive by their own event…
     sink.wait_for("the chips", move |evs| {
@@ -557,29 +567,11 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
     session.set_auto_fetch(Some(Duration::from_secs(600)));
 
     // `Opened` is delivered before its eager catch-up is started, so that
-    // untracked read is allowed to own the slot first.  Acquire this test's
-    // flight by its explicit Busy state, without guessing how long the
-    // opening work needs.  The assertion below deliberately does *not* use
-    // this loop: it is the ack whose ownership boundary we are testing.
-    let completed = tokio::time::timeout(crate::support::wait::OVERALL_BUDGET, async {
-        loop {
-            let outcome = crate::support::wait::bounded(
-                "one remote-tag ask",
-                session.refresh_remote_tags_tracked().outcome(),
-            )
-            .await;
-            if outcome != RemoteTagRefreshOutcome::Busy {
-                break outcome;
-            }
-            // A pause, not a yield: the opening read holds the slot for a
-            // whole `ls-remote`, and a bare yield spins a worker at full
-            // tilt for all of it — load this suite is not allowed to make.
-            // The completion stays causal; only the retry pace is timed.
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("the opening remote-tag flight returns its slot");
+    // untracked read is allowed to own the slot first. This test's own
+    // flight is the first ask past it. The assertion below deliberately
+    // does *not* ask past a `Busy`: it is the ack whose ownership
+    // boundary is under test.
+    let completed = asked_past_busy(&session).await;
     assert!(
         matches!(
             completed,

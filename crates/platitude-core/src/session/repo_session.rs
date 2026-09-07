@@ -205,8 +205,10 @@ pub struct RepoSession {
     /// ref to move.
     pub(super) worktree_gen: AtomicU64,
     /// One permit for the background read of the above, so a second
-    /// permission-granting call cannot stack another on top of it.
-    pub(super) remote_tags_slot: Arc<tokio::sync::Semaphore>,
+    /// permission-granting call cannot stack another on top of it — and
+    /// the word that it was let go, for the asks that call stacked
+    /// nothing for (`auto_fetch::RemoteTagSlot`).
+    pub(super) remote_tags_slot: super::auto_fetch::RemoteTagSlot,
     /// One permit: the walk is the only part of a refresh that scales with
     /// the history rather than the refs, and a tick arriving mid-walk is
     /// dropped rather than stacked.

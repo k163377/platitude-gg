@@ -138,6 +138,12 @@ pub enum RemoteTagRefreshOutcome {
     /// was off cannot see this either, since the permission it brings is
     /// what lets a read run at all. So the read that made this `Busy` is
     /// the answer, and it publishes one.
+    ///
+    /// **Said once that read has let the slot go.** The ask is dropped;
+    /// its completion is not: it is booked behind the read in flight, so
+    /// a caller waiting on it knows the answer it was told to read has
+    /// been published, and an ask it makes next is not turned away by
+    /// the same read.
     Busy,
     /// The repository is not open any more.
     Unavailable,

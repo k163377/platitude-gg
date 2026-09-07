@@ -2,6 +2,7 @@
 //! resume, hand-stepped ticks, the fetch an opening fires, and the
 //! remote-tag catch-up they permit.
 
+use super::state::AutoFetchTick;
 use super::*;
 
 /// What [`RepoSession::fetch_on_open`] did with the ask.
@@ -22,6 +23,128 @@ pub enum OpenFetch {
     NoRemote,
     /// This session has already had its opening fetch.
     Spent,
+}
+
+/// What wakes the timer between hand-stepped ticks: the interval clock
+/// in the product, and whatever a test hands it. A due tick is only ever
+/// *asked for* here — acting on it, and the stop that outranks it, are
+/// [`drive_auto_fetch`]'s.
+pub(super) trait AutoFetchClock: Send + 'static {
+    /// Resolves when the next tick is due.
+    fn due(&mut self) -> impl Future<Output = ()> + Send;
+}
+
+/// The product's clock: one tick per interval, the first a whole interval
+/// away. tokio would fire it at once; opening the repository has just
+/// read it, so that one is not owed.
+///
+/// **Built inside a task on the runtime.** An interval takes its time
+/// driver from the runtime it is created in, and off one it panics; the
+/// interval is set from the UI thread.
+struct IntervalClock(tokio::time::Interval);
+
+impl IntervalClock {
+    fn every(interval: std::time::Duration) -> Self {
+        let first = tokio::time::Instant::now() + interval;
+        Self(tokio::time::interval_at(first, interval))
+    }
+}
+
+impl AutoFetchClock for IntervalClock {
+    async fn due(&mut self) {
+        self.0.tick().await;
+    }
+}
+
+/// The timer's loop, apart from what it acts on. `act` runs one tick and
+/// answers whether the timer still runs: a `false` ends the loop, as
+/// does the stop.
+///
+/// Biased towards the stop: one that arrives while ticks are already
+/// overdue (a starved timer catches up in a burst) wins over them instead
+/// of being picked at random. A hand-stepped tick is answered only once
+/// it has been acted on, and never by a timer that has been stopped.
+pub(super) async fn drive_auto_fetch(
+    mut clock: impl AutoFetchClock,
+    stop: CancellationToken,
+    mut by_hand: tokio::sync::mpsc::UnboundedReceiver<AutoFetchTick>,
+    mut act: impl FnMut() -> bool + Send,
+) {
+    loop {
+        tokio::select! {
+            biased;
+            () = stop.cancelled() => return,
+            () = clock.due() => {
+                if !act() {
+                    return;
+                }
+            }
+            Some(ack) = by_hand.recv() => {
+                if !act() {
+                    return;
+                }
+                if ack.send(()).is_err() {
+                    tracing::debug!("auto fetch tick: nobody waiting for it");
+                }
+            }
+        }
+    }
+}
+
+/// The one remote-tag read at a time, and the word that it has let go.
+///
+/// A second ask while a read is in flight is dropped
+/// ([`RemoteTagRefreshOutcome::Busy`]), and what its ack waits for is
+/// the word — never the slot itself. A waiter that took the permit to
+/// learn of the release would hold it for an instant, and an ask arriving
+/// in that instant would be told the slot was taken when nothing was
+/// reading at all.
+pub(super) struct RemoteTagSlot {
+    permits: Arc<tokio::sync::Semaphore>,
+    freed: tokio::sync::watch::Sender<u64>,
+}
+
+impl Default for RemoteTagSlot {
+    fn default() -> Self {
+        Self {
+            permits: Arc::new(tokio::sync::Semaphore::new(1)),
+            freed: tokio::sync::watch::channel(0).0,
+        }
+    }
+}
+
+impl RemoteTagSlot {
+    /// Takes the slot, or hands back what to wait on for the read that
+    /// holds it to let it go. Subscribed before the slot is asked for, so
+    /// a release landing between the two is seen rather than waited for
+    /// a second time.
+    pub(super) fn take(&self) -> Result<SlotHeld, tokio::sync::watch::Receiver<u64>> {
+        let freed = self.freed.subscribe();
+        match Arc::clone(&self.permits).try_acquire_owned() {
+            Ok(permit) => Ok(SlotHeld {
+                permit: Some(permit),
+                freed: self.freed.clone(),
+            }),
+            Err(_) => Err(freed),
+        }
+    }
+}
+
+/// The slot, held: letting it go is what tells the asks booked behind it.
+#[derive(Debug)]
+pub(super) struct SlotHeld {
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    freed: tokio::sync::watch::Sender<u64>,
+}
+
+impl Drop for SlotHeld {
+    fn drop(&mut self) {
+        // The permit first, then the word: an ask made on the word must
+        // find the slot already free.
+        self.permit.take();
+        self.freed
+            .send_modify(|releases| *releases = releases.wrapping_add(1));
+    }
 }
 
 impl RepoSession {
@@ -187,7 +310,7 @@ impl RepoSession {
             return;
         };
         let cancel = self.root_cancel.child_token();
-        let (ticks, mut by_hand) = tokio::sync::mpsc::unbounded_channel();
+        let (ticks, by_hand) = tokio::sync::mpsc::unbounded_channel();
         *guard = Some(AutoFetch {
             cancel: cancel.clone(),
             ticks,
@@ -195,35 +318,15 @@ impl RepoSession {
         drop(guard);
 
         let s = Arc::clone(self);
+        let acting = cancel.clone();
+        // The clock is built on the runtime, not here: an interval takes
+        // its time driver from the runtime it is created in, and this is
+        // the thread that set the interval — the UI's, in the app.
         self.runtime.spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
-            // tokio fires the first tick immediately; opening the
-            // repository has just read it, so wait out a full interval.
-            ticker.tick().await;
-            loop {
-                tokio::select! {
-                    // Biased: a stop that arrives while ticks are already
-                    // overdue (a starved timer catches up in a burst) wins
-                    // over them instead of being picked at random.
-                    biased;
-                    _ = cancel.cancelled() => return,
-                    _ = ticker.tick() => {
-                        if !s.auto_fetch_tick(&cancel) {
-                            return;
-                        }
-                    }
-                    Some(ack) = by_hand.recv() => {
-                        // Answered only once the tick has been acted on,
-                        // and never by a timer that has been stopped.
-                        if !s.auto_fetch_tick(&cancel) {
-                            return;
-                        }
-                        if ack.send(()).is_err() {
-                            tracing::debug!("auto fetch tick: nobody waiting for it");
-                        }
-                    }
-                }
-            }
+            drive_auto_fetch(IntervalClock::every(interval), cancel, by_hand, move || {
+                s.auto_fetch_tick(&acting)
+            })
+            .await;
         });
         self.catch_up_remote_tags();
     }
@@ -276,16 +379,19 @@ impl RepoSession {
         // per collision would buy on the reference repository — 45,000
         // tags — is one badge round trip earlier, on the path whose whole
         // budget is a badge.
-        let Ok(permit) = Arc::clone(&self.remote_tags_slot).try_acquire_owned() else {
-            tracing::debug!("remote tags: the previous read has not finished");
-            return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Busy);
+        let held = match self.remote_tags_slot.take() {
+            Ok(held) => held,
+            Err(freed) => {
+                tracing::debug!("remote tags: the previous read has not finished");
+                return self.busy_once_the_slot_is_free(freed);
+            }
         };
         let s = Arc::clone(self);
         let timeout = self.network_timeout();
         let (finished, task) = RemoteTagRefreshTask::pending();
         self.runtime.spawn(async move {
             let Some(workdir) = s.workdir() else {
-                drop(permit);
+                drop(held);
                 if finished.send(RemoteTagRefreshOutcome::Unavailable).is_err() {
                     tracing::trace!("remote-tag refresh completion was not observed");
                 }
@@ -305,8 +411,31 @@ impl RepoSession {
             };
             // `outcome()` closes ownership as well as the read: an immediate
             // following request must not race the old permit's destructor.
-            drop(permit);
+            drop(held);
             if finished.send(outcome).is_err() {
+                tracing::trace!("remote-tag refresh completion was not observed");
+            }
+        });
+        task
+    }
+
+    /// The ack of an ask the slot turned away, booked behind the read
+    /// that holds it ([`RemoteTagRefreshOutcome::Busy`]): sent once that
+    /// read has let the slot go, with nothing read and nothing taken on
+    /// the way — the word of the release is waited for, never the slot,
+    /// so the ask that comes next finds it free. The app drops the task,
+    /// and what the booking costs it is a spawn per collision — one a
+    /// session at most, the opening's catch-up against the interval's.
+    fn busy_once_the_slot_is_free(
+        &self,
+        mut freed: tokio::sync::watch::Receiver<u64>,
+    ) -> RemoteTagRefreshTask {
+        let (finished, task) = RemoteTagRefreshTask::pending();
+        self.runtime.spawn(async move {
+            if freed.changed().await.is_err() {
+                tracing::debug!("remote tags: the slot went with the session under a waiting ack");
+            }
+            if finished.send(RemoteTagRefreshOutcome::Busy).is_err() {
                 tracing::trace!("remote-tag refresh completion was not observed");
             }
         });
@@ -380,10 +509,157 @@ mod tests {
             stopped: stopped.clone(),
         };
         stopped.cancel();
-        let refused = tokio::time::timeout(std::time::Duration::from_secs(5), ticker.tick())
-            .await
-            .expect("the refusal does not wait for a task that will never run");
+        let refused = crate::wait::bounded("the refusal of a stopped timer", ticker.tick()).await;
         assert!(!refused, "a stopped timer never takes a tick");
         drop(keep_open);
+    }
+
+    /// A clock stepped by hand: due when the test says so, and never on
+    /// its own. Once the test has dropped its end, never again.
+    struct HandClock(tokio::sync::mpsc::UnboundedReceiver<()>);
+
+    impl AutoFetchClock for HandClock {
+        async fn due(&mut self) {
+            if self.0.recv().await.is_none() {
+                std::future::pending::<()>().await;
+            }
+        }
+    }
+
+    /// The timer's loop over a hand clock, saying each act on a channel
+    /// as it happens — an act is proved by the word of it.
+    fn driven(
+        stop: &CancellationToken,
+    ) -> (
+        tokio::sync::mpsc::UnboundedSender<()>,
+        tokio::sync::mpsc::UnboundedSender<AutoFetchTick>,
+        tokio::sync::mpsc::UnboundedReceiver<()>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        let (due, clock) = tokio::sync::mpsc::unbounded_channel();
+        let (hand, by_hand) = tokio::sync::mpsc::unbounded_channel();
+        let (acted, acts) = tokio::sync::mpsc::unbounded_channel();
+        let timer = tokio::spawn(drive_auto_fetch(
+            HandClock(clock),
+            stop.clone(),
+            by_hand,
+            move || acted.send(()).is_ok(),
+        ));
+        (due, hand, acts, timer)
+    }
+
+    /// Each due tick is acted on once, and the stop ends the loop with
+    /// nothing acted on after it.
+    #[tokio::test]
+    async fn a_due_tick_is_acted_on_and_the_stop_ends_the_timer() {
+        let stop = CancellationToken::new();
+        let (due, _hand, mut acts, timer) = driven(&stop);
+        due.send(()).expect("the first due");
+        due.send(()).expect("the second due");
+        crate::wait::bounded("the first act", acts.recv()).await;
+        crate::wait::bounded("the second act", acts.recv()).await;
+        stop.cancel();
+        crate::wait::bounded("the stopped timer's task", timer)
+            .await
+            .expect("the timer's task ended cleanly");
+        assert!(
+            acts.try_recv().is_err(),
+            "nothing was acted on past the two ticks"
+        );
+    }
+
+    /// A stop that finds ticks already overdue wins over every one of
+    /// them: the loop is biased that way, so a starved timer catching up
+    /// in a burst does not fetch on the way out. Set up before the loop
+    /// is ever polled, so the first look sees both at once.
+    #[tokio::test]
+    async fn a_stop_wins_over_the_ticks_it_finds_overdue() {
+        let stop = CancellationToken::new();
+        stop.cancel();
+        let (due, clock) = tokio::sync::mpsc::unbounded_channel();
+        let (_hand, by_hand) = tokio::sync::mpsc::unbounded_channel();
+        for _ in 0..3 {
+            due.send(()).expect("an overdue tick");
+        }
+        let acts = std::sync::atomic::AtomicUsize::new(0);
+        crate::wait::bounded(
+            "the stopped timer's loop",
+            drive_auto_fetch(HandClock(clock), stop, by_hand, || {
+                acts.fetch_add(1, Ordering::SeqCst);
+                true
+            }),
+        )
+        .await;
+        assert_eq!(
+            acts.load(Ordering::SeqCst),
+            0,
+            "a stopped timer acts on none of the ticks it found overdue"
+        );
+    }
+
+    /// An act that answers "the timer has stopped" ends the loop by
+    /// itself, with no stop token needed.
+    #[tokio::test]
+    async fn an_act_that_reports_the_timer_stopped_ends_the_loop() {
+        let (due, clock) = tokio::sync::mpsc::unbounded_channel();
+        let (_hand, by_hand) = tokio::sync::mpsc::unbounded_channel();
+        due.send(()).expect("a due tick");
+        crate::wait::bounded(
+            "a loop whose act said stop",
+            drive_auto_fetch(HandClock(clock), CancellationToken::new(), by_hand, || {
+                false
+            }),
+        )
+        .await;
+    }
+
+    /// A hand-stepped tick is answered after it was acted on: the ack
+    /// that reaches the caller stands for a fetch already queued.
+    #[tokio::test]
+    async fn a_hand_stepped_tick_is_answered_once_it_was_acted_on() {
+        let stop = CancellationToken::new();
+        let (_due, hand, mut acts, timer) = driven(&stop);
+        let (ack, taken) = tokio::sync::oneshot::channel();
+        hand.send(ack).expect("the tick reaches the timer");
+        crate::wait::bounded("the tick's ack", taken)
+            .await
+            .expect("answered");
+        assert!(acts.try_recv().is_ok(), "the act came before the answer");
+        stop.cancel();
+        crate::wait::bounded("the stopped timer's task", timer)
+            .await
+            .expect("the timer's task ended cleanly");
+    }
+
+    /// The word of a release reaches the ask booked behind the read, and
+    /// the slot is free the instant it is said: nothing was taken to
+    /// learn of it.
+    #[tokio::test]
+    async fn a_release_is_told_to_the_ask_behind_it_and_the_slot_is_free_at_once() {
+        let slot = RemoteTagSlot::default();
+        let held = slot.take().expect("the slot was free");
+        let mut behind = slot.take().expect_err("the slot was held");
+        drop(held);
+        crate::wait::bounded("the word of the release", behind.changed())
+            .await
+            .expect("the slot outlives the ask");
+        assert!(slot.take().is_ok(), "free the instant it was let go");
+    }
+
+    /// The product's clock owes its first due a whole interval out, not
+    /// the tick tokio fires at once. Real time, judged as a floor: a
+    /// timer never fires early, so no load can make this red.
+    #[tokio::test]
+    async fn the_first_due_is_a_whole_interval_away() {
+        let interval = std::time::Duration::from_millis(30);
+        // waits(timed): the first firing is judged as a floor, which no load can break
+        let started = std::time::Instant::now();
+        let mut clock = IntervalClock::every(interval);
+        crate::wait::bounded("the first due", clock.due()).await;
+        assert!(
+            started.elapsed() >= interval,
+            "the first due came {:?} in, before the interval",
+            started.elapsed()
+        );
     }
 }

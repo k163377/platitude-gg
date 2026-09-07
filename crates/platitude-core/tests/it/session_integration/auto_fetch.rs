@@ -1,6 +1,7 @@
 //! The auto-fetch timer, the fetch an opening fires, and the fetch a
 //! refused push asks for.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
@@ -45,7 +46,10 @@ async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
 /// once stopped — rather than off a stretch of quiet clock: a fetch queued
 /// a moment before the stop starts whenever the write queue reaches it,
 /// which on a loaded machine is long after any margin worth waiting, so no
-/// amount of silence tells "stopped" from "slow".
+/// amount of silence tells "stopped" from "slow". Every tick here is
+/// stepped by hand; that the clock brings one round on its own is the
+/// timer's unit tests' to say (`session::auto_fetch`), not a wait for a
+/// real interval to elapse under whatever load the suite is under.
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_fetch_runs_on_its_interval_and_stops() {
     let mut origin = TestRepo::init();
@@ -73,24 +77,54 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
         origin.git(&["rev-parse", "main"]),
     );
 
-    // Now hand it to the clock. The hourly timer is replaced, so a second
-    // fetch can only be the new interval's.
-    session.set_auto_fetch(Some(Duration::from_millis(120)));
+    // Another interval replaces the hourly timer, so a second fetch can
+    // only be the new timer's.
+    session.set_auto_fetch(Some(Duration::from_secs(1800)));
     assert!(
         !stepped(&hourly, "the replaced timer's refusal").await,
         "setting an interval stops the timer it replaces"
     );
     let ticking = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(
+        stepped(&ticking, "the new timer's tick").await,
+        "the timer that replaced it takes the tick"
+    );
     assert_eq!(
         auto_fetch_done(&sink, 2).await,
         None,
-        "the interval came round and fetched on its own"
+        "and its tick fetched"
     );
 
     session.set_auto_fetch(None);
     assert!(
         !stepped(&ticking, "the stopped timer's refusal").await,
         "turning it off stops the timer, so no further fetch can start"
+    );
+    session.close();
+}
+
+/// The application sets the interval from the UI thread, which is no
+/// tokio context at all: the timer's clock has to be built on the
+/// runtime, not where the call is made. Asked the way the app asks —
+/// from a thread of its own — and read off the timer that results.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_interval_is_set_from_outside_the_runtime() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    let (_sink, session) = opened(&repo).await;
+
+    let from_the_ui = {
+        let session = Arc::clone(&session);
+        std::thread::spawn(move || session.set_auto_fetch(Some(Duration::from_secs(3600))))
+    };
+    from_the_ui
+        .join()
+        .expect("setting the interval off the runtime is not a panic");
+
+    let ticker = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(
+        stepped(&ticker, "a tick of the timer set from outside").await,
+        "the timer set from the UI thread runs"
     );
     session.close();
 }

@@ -99,7 +99,7 @@ impl RepoSession {
             remote_tag_gen: AtomicU64::new(0),
             worktree_holders: Mutex::new(Arc::new(super::joins::WorktreeHolders::default())),
             worktree_gen: AtomicU64::new(0),
-            remote_tags_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            remote_tags_slot: super::auto_fetch::RemoteTagSlot::default(),
             head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
