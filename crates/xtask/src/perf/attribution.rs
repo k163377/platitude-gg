@@ -273,14 +273,16 @@ impl Armed {
             }
             let _ = tx.send(Ok(text));
         });
-        let answer = match rx.recv_timeout(CEILING) {
+        let answer = match crate::wait::receive(
+            "the attribution script",
+            "its answer",
+            &rx,
+            crate::wait::Budget::whole(CEILING),
+        ) {
             Ok(answer) => answer,
-            Err(_) => {
+            Err(expired) => {
                 super::sampler::end(&mut child, "the attribution script");
-                Err(format!(
-                    "the attribution script said nothing within {}s",
-                    CEILING.as_secs()
-                ))
+                Err(expired.to_string())
             }
         };
         let status = child.wait().map_err(|e| e.to_string())?;
