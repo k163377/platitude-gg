@@ -414,8 +414,7 @@ fn open_lock(path: &Path) -> Result<File, String> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use super::{Lanes, mark_polled, open_lock, sole};
@@ -428,20 +427,19 @@ mod tests {
         dir
     }
 
-    /// A counter the waits under test bump on every poll, so a wait is
-    /// proved by the poll that happened rather than by a clock.
-    fn polls() -> (Arc<AtomicUsize>, impl Fn()) {
-        let count = Arc::new(AtomicUsize::new(0));
-        let bump = Arc::clone(&count);
-        (count, move || {
-            bump.fetch_add(1, Ordering::SeqCst);
+    /// The waits under test say every look they take on a channel, so a
+    /// look is proved by the word of it rather than by a clock.
+    fn polls() -> (std::sync::mpsc::Receiver<()>, impl Fn()) {
+        let (said, looks) = std::sync::mpsc::channel();
+        (looks, move || {
+            let _ = said.send(());
         })
     }
 
-    fn until_polled(count: &AtomicUsize) {
-        while count.load(Ordering::SeqCst) == 0 {
-            std::thread::sleep(Duration::from_millis(5));
-        }
+    /// Waits for the first look: a wait that has looked once is a wait
+    /// that found the lane held.
+    fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
+        looks.recv().expect("the wait under test took a look");
     }
 
     /// Two lanes, three verbs: the third waits until one of the first two
@@ -504,11 +502,13 @@ mod tests {
         taken
             .recv()
             .expect("the landing's verb was handed the lane that freed");
-        // The gate's verb goes on looking while the landing's holds it.
-        let looks = gate_polls.load(Ordering::SeqCst);
-        while gate_polls.load(Ordering::SeqCst) == looks {
-            std::thread::sleep(Duration::from_millis(5));
-        }
+        // The gate's verb goes on looking while the landing's holds it:
+        // a look taken after the lane changed hands, the earlier ones
+        // drained first.
+        while gate_polls.try_recv().is_ok() {}
+        gate_polls
+            .recv()
+            .expect("the gate's verb looked again while the landing's held the lane");
         assert!(
             !behind.is_finished(),
             "a gate's verb was handed the lane ahead of the landing's"

@@ -715,9 +715,7 @@ impl Note {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::sync::Mutex;
 
     use super::{
         BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_beside_polled,
@@ -732,20 +730,19 @@ mod tests {
         dir
     }
 
-    /// A counter the waits under test bump on every poll, so a wait is
-    /// proved by the poll that happened rather than by a clock.
-    fn polls() -> (Arc<AtomicUsize>, impl Fn()) {
-        let count = Arc::new(AtomicUsize::new(0));
-        let bump = Arc::clone(&count);
-        (count, move || {
-            bump.fetch_add(1, Ordering::SeqCst);
+    /// The waits under test say every look they take on a channel, so a
+    /// look is proved by the word of it rather than by a clock.
+    fn polls() -> (std::sync::mpsc::Receiver<()>, impl Fn()) {
+        let (said, looks) = std::sync::mpsc::channel();
+        (looks, move || {
+            let _ = said.send(());
         })
     }
 
-    fn until_polled(count: &AtomicUsize) {
-        while count.load(Ordering::SeqCst) == 0 {
-            std::thread::sleep(Duration::from_millis(10));
-        }
+    /// Waits for the first look: a wait that has looked once is a wait
+    /// that found the hold up.
+    fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
+        looks.recv().expect("the wait under test took a look");
     }
 
     /// The files standing under the announcements: notes, and lock files.
