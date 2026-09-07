@@ -153,7 +153,11 @@ Item {
     SampleTimer {
         id: graphStepWalk
         onTriggered: {
-            if (graphStepTimer.diffPath !== "" && !page.diffShown)
+            // The diff is what this walk is taken over, so the run waits for its rows the way `chosen_diff` does: a
+            // step taken the moment the pane arrived leaves the list still to build, and both the picture and the
+            // census then hold a diff with nothing under it.
+            if (graphStepTimer.diffPath !== ""
+                    && (!page.diffShown || !diffPane.diffSettled() || diffPane.view.count === 0))
                 return
             graphStepWalk.stop()
             if (graphStepTimer.away)
