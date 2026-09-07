@@ -4,15 +4,16 @@
 //! **Never an unbounded wait or poll.** The app has a watchdog of its
 //! own ([`crate::verify::run`] passes it in); this side allows it
 //! [`GRACE_MS`] beyond that and then reaps, so a wedged GUI cannot hold
-//! the run open.
+//! the run open. The ceiling is the run's, the wait is `crate::wait`'s.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::options::Options;
 use super::shim::{OTHER_GIT, SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git};
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// Grace after the app-side watchdog before the parent reaps a wedged GUI.
 const GRACE_MS: u64 = 20_000;
@@ -61,42 +62,46 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
 
-    let started = Instant::now();
+    // Bounded wait with a kill guard — never an unbounded wait or poll.
+    let mut wait = Wait::new(
+        format!("the app running {}", start.opts.verb),
+        Budget::whole(Duration::from_millis(start.opts.watchdog_ms + GRACE_MS)),
+        LOOK_AGAIN,
+    );
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
     let stdout = child.stdout.take().map(crate::app_out::collect);
     let stderr = child.stderr.take().map(crate::app_out::collect);
 
-    // Bounded wait with a kill guard — never an unbounded wait or poll.
-    let deadline = Duration::from_millis(start.opts.watchdog_ms + GRACE_MS);
     let mut timed_out = false;
     let mut reaped = None;
     let status = loop {
-        match child.try_wait().map_err(|e| e.to_string())? {
-            Some(status) => break Some(status),
-            None if started.elapsed() > deadline => {
-                // The app takes the git it was waiting on with it — a
-                // hook that never returns, a fetch to nowhere — which
-                // `reap` reaches by walking from the app rather than
-                // leaving it to the step's own ceiling. The app is left
-                // in this runner's own group, so that a signal aimed at
-                // the runner from outside (a Ctrl-C, the step's group
-                // kill) ends it here instead of leaving it holding this
-                // run's store lock until its own watchdog fires.
-                let (under, ended) = crate::reap::reap(&mut child);
-                reaped = Some(under.line());
-                timed_out = true;
-                break ended;
-            }
-            None => std::thread::sleep(Duration::from_millis(100)),
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break Some(status);
+        }
+        if wait.look_again("its exit").is_err() {
+            // The app takes the git it was waiting on with it — a hook
+            // that never returns, a fetch to nowhere — which `reap`
+            // reaches by walking from the app rather than leaving it to
+            // the step's own ceiling. The app is left in this runner's
+            // own group, so that a signal aimed at the runner from
+            // outside (a Ctrl-C, the step's group kill) ends it here
+            // instead of leaving it holding this run's store lock until
+            // its own watchdog fires. What ran out is reported off the
+            // run itself (`super::wedge`: the ceiling, the silence, what
+            // went with it), so the wait's own words are not repeated.
+            let (under, ended) = crate::reap::reap(&mut child);
+            reaped = Some(under.line());
+            timed_out = true;
+            break ended;
         }
     };
 
     let join =
         |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| h.and_then(|h| h.join().ok());
     let (out, err) = (join(stdout), join(stderr));
-    let elapsed = started.elapsed();
+    let elapsed = wait.elapsed();
     // The later of the two streams: either counts as the app still having
     // been there.
     let spoke_at = [

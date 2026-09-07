@@ -5,19 +5,14 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 pub const EXE: &str = env!("CARGO_BIN_EXE_xtask");
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The steps every gate runs regardless of the diff.
 pub const ALWAYS: [&str; 4] = ["structure", "waits", "docs", "fmt"];
-
-/// How long a run puts up with its own image being called busy. A ceiling
-/// for detecting failure, never for deciding it: the window belongs to
-/// another process's scheduling, and a fixed second of retries is a wall
-/// clock verdict a loaded machine can outlast.
-const BUSY_CEILING: Duration = Duration::from_secs(120);
 
 /// Runs a command, retrying while the kernel answers that somebody still
 /// holds its image open for writing (`ETXTBSY`).
@@ -33,30 +28,35 @@ const BUSY_CEILING: Duration = Duration::from_secs(120);
 ///
 /// Hence a retry on the error rather than a wait for the window: every
 /// attempt is the real run, and the first answer that is not "busy" is
-/// the answer — a busy one at the end of the budget included, which
-/// reaches the caller as the failure it is. (`run_published_helper` in
+/// the answer. The window belongs to another process's scheduling, so the
+/// retries run under the suite's budget rather than a second of their
+/// own, and an image still busy at the end of it reaches the caller as
+/// the failure it is — a defect, not slowness. (`run_published_helper` in
 /// platitude-core's suite carries the same loop over the todo helper.)
 pub fn output_past_a_busy_image(
     command: &mut Command,
     on_busy: impl FnOnce(),
 ) -> std::io::Result<std::process::Output> {
-    // waits(ceiling): a ceiling that names a failure — an image still called busy at the end of it is a defect, not slowness
-    let started = Instant::now();
+    let mut wait = Wait::new("the runner's image", Budget::SUITE, LOOK_AGAIN);
     let mut on_busy = Some(on_busy);
     loop {
         let answer = command.output();
-        let busy = matches!(
-            &answer,
-            Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy
-        );
-        if !busy || started.elapsed() >= BUSY_CEILING {
-            return answer;
-        }
+        let busy = match &answer {
+            Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                error.to_string()
+            }
+            _ => return answer,
+        };
         if let Some(notify) = on_busy.take() {
             notify();
         }
-        // waits(paced): every attempt is the real run and its answer ends the loop; the sleep only spaces the attempts
-        std::thread::sleep(Duration::from_millis(25));
+        wait.saw(busy);
+        if let Err(expired) = wait.look_again("the image to come free") {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ExecutableFileBusy,
+                expired.to_string(),
+            ));
+        }
     }
 }
 

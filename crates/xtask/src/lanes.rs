@@ -29,7 +29,7 @@
 //! writes that pid the instant it has the lock and takes it down under
 //! the lock at the end, so a lock held with nothing to read beside it is
 //! a gate at one edge or the other, looked at again before it is named
-//! ([`UNNAMED_TRIES`]).
+//! (`still::SWEEP`).
 //!
 //! Liveness is the lock, as in `still`: a lock nobody holds is free
 //! whatever note stands beside it, so a gate killed mid-run leaves
@@ -38,10 +38,11 @@
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::locks::Locked;
-use crate::still::Note;
+use crate::still::{Note, SWEEP};
+use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
 
 /// The lanes, beside `.git`: one lock file per lane and side.
 const LANES: &str = "pg-lanes";
@@ -50,17 +51,11 @@ const LANES: &str = "pg-lanes";
 /// one: `<side>-landing-<pid>.lock`, one per landing and side.
 const LANDING: &str = "landing";
 
-/// How often a verb waiting for a lane looks again. Short under test,
-/// where the waits are measured in the tens of milliseconds.
-const POLL: Duration = if cfg!(test) {
-    Duration::from_millis(20)
-} else {
-    Duration::from_millis(250)
-};
-
 /// How long a verb waits for a lane before the gate calls the holders
 /// hung: no verb holds one longer than its own ceilings — the app's
-/// watchdog, the step's silence ceiling (`check::run_step`).
+/// watchdog, the step's silence ceiling (`check::run_step`). A ceiling
+/// and nothing finer: a lane held changes in nothing until it frees
+/// (`crate::wait`).
 const LANE_CEILING: Duration = if cfg!(test) {
     Duration::from_secs(20)
 } else {
@@ -69,23 +64,6 @@ const LANE_CEILING: Duration = if cfg!(test) {
 
 /// The extension of a lock file beside a note.
 const LOCK: &str = "lock";
-
-/// How many times a landing puts its mark up before the wait goes
-/// unmarked, and how long it waits between tries. It meets the file held
-/// only while a gate's verb is taking a dead landing's mark down under
-/// its lock ([`a_landing_waits`]) — the microseconds of two calls, which
-/// these tries span whatever the machine is doing.
-const MARK_TRIES: u32 = 8;
-const MARK_AGAIN: Duration = Duration::from_millis(5);
-
-/// How many times [`sole`] looks again at a held lock nobody has written
-/// a note beside, and how long it waits between looks. The window is the
-/// two calls at either edge of a gate's note — written the instant the
-/// lock is taken, taken down under the lock before it is let go
-/// ([`Sole`]) — so the same span the marks get covers it. Past it, a
-/// lock nobody names is a lock all the same, and the note is what it is.
-const UNNAMED_TRIES: u32 = MARK_TRIES;
-const UNNAMED_AGAIN: Duration = MARK_AGAIN;
 
 /// The lanes of one side on this machine: where they stand and how many
 /// there are. Every gate names the same count, so however many gates run,
@@ -99,7 +77,8 @@ pub(crate) struct Lanes<'a> {
     landing: bool,
     /// How many of this gate's verbs are waiting for a lane, and the mark
     /// held for as long as any is — a landing's alone; a gate's verbs
-    /// wait unmarked.
+    /// wait unmarked. None between the last waiter letting go and the
+    /// next one putting the mark up.
     waiting: Mutex<(usize, Option<Locked>)>,
 }
 
@@ -135,8 +114,11 @@ impl<'a> Lanes<'a> {
         let lanes = self.common.join(LANES);
         std::fs::create_dir_all(&lanes)
             .map_err(|e| format!("could not make {}: {e}", lanes.display()))?;
-        let started = Instant::now();
-        let mut looked_again = false;
+        let mut wait = Wait::new(
+            format!("the {} lanes", self.side),
+            Budget::whole(LANE_CEILING),
+            LOOK_AGAIN,
+        );
         // A landing's verb that has looked once and found nothing is
         // counted as waiting until it has a lane, this being the count.
         let mut waiting: Option<Waiting<'_>> = None;
@@ -151,8 +133,8 @@ impl<'a> Lanes<'a> {
                         Ok(()) => {
                             return Ok(Lane {
                                 _lock: Locked::new(lock),
-                                waited: if looked_again {
-                                    started.elapsed()
+                                waited: if wait.looks() > 0 {
+                                    wait.elapsed()
                                 } else {
                                     Duration::ZERO
                                 },
@@ -168,36 +150,36 @@ impl<'a> Lanes<'a> {
                     }
                 }
             }
-            if started.elapsed() >= LANE_CEILING {
-                return Err(format!(
-                    "no {} lane freed in {} minutes — the verbs holding them are hung, or the \
-                     gates holding them are; `cargo xtask still` names what is under way",
-                    self.side,
-                    LANE_CEILING.as_secs() / 60
-                ));
-            }
             if self.landing && waiting.is_none() {
-                waiting = Some(self.wait_marked(&lanes));
+                waiting = Some(self.wait_marked(&lanes)?);
             }
+            wait.saw(if aside {
+                "a landing's verb waiting ahead"
+            } else {
+                "every lane held"
+            });
             polled();
-            std::thread::sleep(POLL);
-            looked_again = true;
+            wait.look_again("a free lane").map_err(|expired| {
+                format!(
+                    "{expired} — the verbs holding them are hung, or the gates holding them \
+                     are; `cargo xtask still` names what is under way"
+                )
+            })?;
         }
     }
 
     /// Counts one more of this landing's verbs as waiting, and puts the
-    /// mark up when it is the first. A mark that could not be put up is
-    /// a wait like a gate's, not an error: the lane comes all the same.
-    fn wait_marked(&self, lanes: &Path) -> Waiting<'_> {
+    /// mark up when it is the first.
+    fn wait_marked(&self, lanes: &Path) -> Result<Waiting<'_>, String> {
         let mut waiting = self
             .waiting
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if waiting.0 == 0 {
-            waiting.1 = mark(&self.mark_path(lanes));
+            waiting.1 = Some(mark(&self.mark_path(lanes))?);
         }
         waiting.0 += 1;
-        Waiting { lanes: self }
+        Ok(Waiting { lanes: self })
     }
 
     fn mark_path(&self, lanes: &Path) -> PathBuf {
@@ -241,33 +223,52 @@ impl Drop for Waiting<'_> {
 /// by the sweep, and the lock granted on a file the sweep has already
 /// taken from the name (opened here before the sweep, locked here after
 /// it). Neither is a mark: a mark is up once it is locked *and* still
-/// there, and is put up again otherwise. One that could not be put up at
-/// all is a wait like a gate's, not an error — the lane comes all the
-/// same.
-fn mark(path: &Path) -> Option<Locked> {
+/// there, and is put up again otherwise. The name is this process's own,
+/// so a sweep is the one holder it can meet, and a name still held past
+/// the sweep's span is refused as an announcement is
+/// (`still::lock_beside`) — not waited out unmarked, which would put the
+/// landing's verbs behind every gate's with nothing to say why.
+fn mark(path: &Path) -> Result<Locked, String> {
     mark_polled(path, &|| {})
 }
 
-fn mark_polled(path: &Path, polled: &dyn Fn()) -> Option<Locked> {
-    for _ in 0..MARK_TRIES {
-        let file = open_lock(path).ok()?;
+fn mark_polled(path: &Path, polled: &dyn Fn()) -> Result<Locked, String> {
+    let mut tries = Wait::new(
+        format!("the landing's mark at {}", path.display()),
+        Budget::whole(SWEEP),
+        TRY_AGAIN,
+    );
+    loop {
+        let file = open_lock(path)?;
         match file.try_lock() {
             Ok(()) => {
                 let file = Locked::new(file);
                 if std::fs::metadata(path).is_ok() {
-                    return Some(file);
+                    return Ok(file);
                 }
                 // The name went while this held the file: let go of and
                 // opened again, the sweep being microseconds long.
+                tries.saw("the lock granted on a file no longer at the name");
             }
             // The sweep holds the lock it is removing under.
-            Err(TryLockError::WouldBlock) => {}
-            Err(TryLockError::Error(_)) => return None,
+            Err(TryLockError::WouldBlock) => tries.saw("the lock held"),
+            Err(TryLockError::Error(error)) => {
+                return Err(format!(
+                    "could not put up the landing's mark at {}: {error}",
+                    path.display()
+                ));
+            }
         }
         polled();
-        std::thread::sleep(MARK_AGAIN);
+        tries
+            .look_again("the lock at its own name")
+            .map_err(|expired| {
+                format!(
+                    "could not put up the landing's mark: {expired} — a gate's verb is sweeping a \
+                 dead landing's mark there, and is not letting go"
+                )
+            })?;
     }
-    None
 }
 
 /// Whether a landing's verb is waiting for a lane of `side`: a mark of
@@ -356,8 +357,8 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
     // A gate writes its note the instant it has the lock and takes it
     // down under the lock at the end, so a held lock with nothing
     // readable beside it is a gate at one of those two edges: looked at
-    // again, and named only once the looks are spent.
-    let mut unnamed = 0;
+    // again for the span of a sweep, and named only once that is spent.
+    let mut unnamed = Wait::new("the gate", Budget::whole(SWEEP), TRY_AGAIN);
     let other = loop {
         match lock.try_lock() {
             Ok(()) => break None,
@@ -368,11 +369,9 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
                 {
                     break Some(other);
                 }
-                unnamed += 1;
-                if unnamed >= UNNAMED_TRIES {
+                if unnamed.look_again("the note beside the held lock").is_err() {
                     break Some(Note::unreadable("a gate"));
                 }
-                std::thread::sleep(UNNAMED_AGAIN);
             }
             Err(TryLockError::Error(error)) => {
                 return Err(format!(
@@ -437,9 +436,10 @@ mod tests {
     }
 
     /// Waits for the first look: a wait that has looked once is a wait
-    /// that found the lane held.
+    /// that found the lane held. Under the suite's budget, so a wait that
+    /// never looks is named rather than left to the harness's kill.
     fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
-        looks.recv().expect("the wait under test took a look");
+        crate::wait::heard("the wait under test", "a look", looks);
     }
 
     /// Two lanes, three verbs: the third waits until one of the first two
@@ -492,23 +492,23 @@ mod tests {
                 .take_polled(&landing_polled)
                 .expect("the landing's lane");
             handed.send(()).expect("say the lane was handed over");
-            released.recv().expect("the word to let it go");
+            crate::wait::heard("the test", "the word to let the lane go", &released);
             drop(lane);
         });
         // Both have looked and found the lane held; the landing's mark is up.
         until_polled(&gate_polls);
         until_polled(&landing_polls);
         drop(first);
-        taken
-            .recv()
-            .expect("the landing's verb was handed the lane that freed");
+        crate::wait::heard("the landing's verb", "the lane that freed", &taken);
         // The gate's verb goes on looking while the landing's holds it:
         // a look taken after the lane changed hands, the earlier ones
         // drained first.
         while gate_polls.try_recv().is_ok() {}
-        gate_polls
-            .recv()
-            .expect("the gate's verb looked again while the landing's held the lane");
+        crate::wait::heard(
+            "the gate's verb",
+            "another look while the landing's held the lane",
+            &gate_polls,
+        );
         assert!(
             !behind.is_finished(),
             "a gate's verb was handed the lane ahead of the landing's"
@@ -641,8 +641,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The refusal is worded by whoever asks. A gate that spent its
-    /// [`super::UNNAMED_TRIES`] on a lock nobody wrote a note beside
+    /// The refusal is worded by whoever asks. A gate that spent the span
+    /// of a sweep (`still::SWEEP`) on a lock nobody wrote a note beside
     /// names a gate — not the measurement `still` holds the machine for.
     #[test]
     fn a_lock_nobody_named_is_refused_in_the_gate_s_own_words() {

@@ -11,6 +11,17 @@
 
 mod support;
 
+/// The runner's own wait module, read in by path: this crate cannot `use`
+/// a binary crate's modules, and what the suite waits with has to be the
+/// one budget the runner's own tests wait with (`wait::Budget::SUITE`).
+/// What the suite does not call is the runner's, not dead.
+#[expect(
+    dead_code,
+    reason = "the runner's module whole; the suite calls a part of it"
+)]
+#[path = "../../src/wait.rs"]
+mod wait;
+
 mod hook;
 mod landing;
 mod selection;

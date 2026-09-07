@@ -22,7 +22,9 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// The tests, the module they import, and where both ends are staged.
 const TESTS: &str = "crates/platitude-app/tests/qml";
@@ -154,20 +156,22 @@ fn run_one(
         .stdin(Stdio::null())
         .spawn()
         .map_err(|e| format!("failed to run qmltestrunner (it ships in Qt's bin): {e}"))?;
-    let started = Instant::now();
+    let mut wait = Wait::new(
+        format!("qmltestrunner on {test}"),
+        Budget::whole(CEILING),
+        LOOK_AGAIN,
+    );
     let status = loop {
-        match child.try_wait().map_err(|e| e.to_string())? {
-            Some(status) => break status,
-            None if started.elapsed() >= CEILING => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!(
-                    "killed at the ceiling: it ran for {}s (a TestCase whose `when` never \
-                     came true waits forever)",
-                    CEILING.as_secs()
-                ));
-            }
-            None => std::thread::sleep(Duration::from_millis(50)),
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if let Err(expired) = wait.look_again("its exit") {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!(
+                "killed at the ceiling — {expired} (a TestCase whose `when` never came true \
+                 waits forever)"
+            ));
         }
     };
     let text = std::fs::read_to_string(root.join(&log)).unwrap_or_default();

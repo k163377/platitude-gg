@@ -12,11 +12,12 @@
 //! (`perf::display`).
 
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::display::Screen;
 use super::reading::{Reading, missing, read_app};
 use super::{Options, SAMPLE_MS, artifacts, attribution, sampler};
+use crate::wait::{Budget, Expired, Wait};
 
 /// How long the app is left alone after `perf_done` even when the run
 /// asked for no settling: enough for at least one more sample, so the
@@ -230,7 +231,14 @@ pub(super) fn measure(
             return Err(Spoiled::Run(said));
         }
     };
-    let deadline = started + Duration::from_millis(opts.watchdog_ms);
+    // Counted from the instant the sampler resumed the process, at the
+    // samplers' own pace: the looks here are what the wait comes round at.
+    let mut run = Wait::since(
+        started,
+        "the app",
+        Budget::whole(Duration::from_millis(opts.watchdog_ms)),
+        Duration::from_millis(SAMPLE_MS),
+    );
     let stderr = child.stderr.take();
     let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
     // `perf_done`, not elapsed time, is the success edge. The deadline is
@@ -241,9 +249,8 @@ pub(super) fn measure(
     // not finished — so an absolute ceiling refuses everything below
     // about a quarter of that rate. That is a slow machine, which is
     // the case `--allow-noisy` exists to publish rather than refuse.
-    let ceiling = (!opts.limits.quiet_percent.is_infinite()).then_some(SCROLL_CEILING);
-    let mut began = Instant::now();
-    let mut watching = false;
+    let bounded = !opts.limits.quiet_percent.is_infinite();
+    let mut bench: Option<Wait> = None;
     let ended = loop {
         if let Ok(success) = done_rx.try_recv() {
             break Ended::Done(success);
@@ -253,26 +260,28 @@ pub(super) fn measure(
             Ok(None) => {}
             Err(e) => break Ended::WaitFailed(format!("waiting on the app failed: {e}")),
         }
-        // The bench's own deadline. A window nothing is drawing advances
-        // no animation, so the bench that should end in twelve seconds
-        // ends never — and waiting the whole watchdog out to say so
-        // costs five minutes and names the wrong culprit.
-        match scroll.stalled_for(began) {
-            Some(_) if !watching => {
-                watching = true;
-                began = Instant::now();
-            }
-            Some(waited) if ceiling.is_some_and(|ceiling| waited > ceiling) => {
+        // The bench's own deadline, counted from the look that first saw
+        // it running and read inside this loop's looks. A window nothing
+        // is drawing advances no animation, so the bench that should end
+        // in twelve seconds ends never — and waiting the whole watchdog
+        // out to say so costs five minutes and names the wrong culprit.
+        if scroll.running() {
+            let bench = bench.get_or_insert_with(|| {
+                Wait::new(
+                    "the scroll bench",
+                    Budget::whole(SCROLL_CEILING),
+                    Duration::ZERO,
+                )
+            });
+            if bounded && bench.check("a frame").is_err() {
                 let _ = child.kill();
                 break Ended::Covered;
             }
-            _ => {}
         }
-        if Instant::now() >= deadline {
+        if let Err(expired) = run.look_again("perf_done") {
             let _ = child.kill();
-            break Ended::TimedOut;
+            break Ended::TimedOut(expired);
         }
-        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
     };
     let done = matches!(ended, Ended::Done(true));
     // Held idle first, so the last reading is taken of a process that has
@@ -336,7 +345,9 @@ enum Ended {
     Exited,
     /// The scroll bench stood still past [`SCROLL_CEILING`].
     Covered,
-    TimedOut,
+    /// The app reported no end within its watchdog and was killed: what
+    /// the wait says of it.
+    TimedOut(Expired),
     WaitFailed(String),
 }
 
@@ -357,10 +368,7 @@ fn verdict(
     let covered = matches!(ended, Ended::Covered);
     let ending = match ended {
         Ended::WaitFailed(said) => Some(said),
-        Ended::TimedOut => Some(format!(
-            "the run did not report perf_done within {}ms and was killed",
-            opts.watchdog_ms
-        )),
+        Ended::TimedOut(expired) => Some(format!("{expired}, and the run was killed")),
         Ended::Exited => Some("the app exited before reporting perf_done".into()),
         Ended::Done(_) | Ended::Covered => None,
     };
@@ -595,10 +603,19 @@ mod tests {
             },
             ..Reading::default()
         };
-        let spoiled = verdict(reading, &defaults(), Ended::TimedOut, None)
+        let spoiled = verdict(reading, &defaults(), Ended::TimedOut(spent()), None)
             .expect_err("a minimised window is not a reading");
         let (Spoiled::Host(said) | Spoiled::Run(said) | Spoiled::Covered(said)) = spoiled;
         assert!(said.starts_with("the window was minimised"), "{said}");
-        assert!(said.contains("did not report perf_done"), "{said}");
+        assert!(said.contains("still waiting for perf_done"), "{said}");
+        assert!(said.ends_with("and the run was killed"), "{said}");
+    }
+
+    /// What the run's wait says once its budget is gone: a budget of
+    /// nothing is spent at the first look.
+    fn spent() -> Expired {
+        Wait::new("the app", Budget::whole(Duration::ZERO), Duration::ZERO)
+            .check("perf_done")
+            .expect_err("a budget of nothing is spent at once")
     }
 }

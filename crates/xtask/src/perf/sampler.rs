@@ -602,12 +602,12 @@ impl Armed {
                 Ok(lines) => (child, lines),
                 Err(said) => {
                     end(&mut child, "the sampler");
-                    return Err(format!("the sampler did not resume the process: {said}"));
+                    return Err(format!("the sampler did not resume the process — {said}"));
                 }
             }
         };
         let started = Instant::now();
-        let deadline = started + self.window;
+        let window = self.window;
         let series = Arc::new(Mutex::new(Series::default()));
         let shared = Arc::clone(&series);
         let handle = std::thread::spawn(move || {
@@ -660,16 +660,16 @@ impl Armed {
             };
             #[cfg(windows)]
             {
-                let _ = (pid, deadline);
+                let _ = (pid, window);
                 windows_watch(child, lines, &mut record)
             }
             #[cfg(target_os = "linux")]
             {
-                linux_sampler(pid, deadline, &mut record)
+                linux_sampler(pid, started, window, &mut record)
             }
             #[cfg(not(any(windows, target_os = "linux")))]
             {
-                let _ = (pid, deadline);
+                let _ = (pid, window);
                 Err("memory sampling is not implemented for this OS".into())
             }
         });
@@ -708,12 +708,14 @@ pub(super) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines
             return;
         }
     });
-    match rx.recv_timeout(SCRIPT_CEILING) {
+    match crate::wait::receive(
+        "its output",
+        &format!("`{wanted}`"),
+        &rx,
+        crate::wait::Budget::whole(SCRIPT_CEILING),
+    ) {
         Ok(answer) => answer,
-        Err(_) => Err(format!(
-            "it did not say `{wanted}` within {}s",
-            SCRIPT_CEILING.as_secs()
-        )),
+        Err(expired) => Err(expired.to_string()),
     }
 }
 
@@ -781,7 +783,7 @@ fn windows_arm(seconds: u64, software: bool) -> Result<(std::process::Child, Lin
         Ok(lines) => Ok((child, lines)),
         Err(said) => {
             end(&mut child, "the sampler");
-            Err(format!("the memory sampler did not arm: {said}"))
+            Err(format!("the memory sampler did not arm — {said}"))
         }
     }
 }
@@ -1057,7 +1059,15 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
     if limits.quiet_percent.is_infinite() {
         return Ok(());
     }
-    let until = Instant::now() + ceiling;
+    // A look is a PowerShell of its own, and its own share of the load
+    // being read: spaced further apart than the runner's usual look, so
+    // the looking is not what keeps the machine busy.
+    const QUIET_LOOK: std::time::Duration = std::time::Duration::from_millis(500);
+    let mut wait = crate::wait::Wait::new(
+        "the measurement",
+        crate::wait::Budget::whole(ceiling),
+        QUIET_LOOK,
+    );
     let mut last: Option<Host> = None;
     let mut said = false;
     loop {
@@ -1067,27 +1077,24 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
             if now.interactive && busy <= limits.quiet_percent {
                 return Ok(());
             }
+            let state = if now.interactive {
+                "awake"
+            } else {
+                "session locked"
+            };
             if !said {
                 said = true;
-                println!(
-                    "  waiting for a quiet machine ({}, {busy:.1}% busy)…",
-                    if now.interactive {
-                        "awake"
-                    } else {
-                        "session locked"
-                    }
-                );
+                println!("  waiting for a quiet machine ({state}, {busy:.1}% busy)…");
             }
-        }
-        if Instant::now() >= until {
-            return Err(format!(
-                "the machine did not go quiet within {}s — measure it when nothing else is \
-                 running, or pass --allow-noisy to publish the numbers anyway",
-                ceiling.as_secs()
-            ));
+            wait.saw(format!("{state}, {busy:.1}% busy"));
         }
         last = Some(now);
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        wait.look_again("a quiet machine").map_err(|expired| {
+            format!(
+                "{expired} — measure it when nothing else is running, or pass --allow-noisy to \
+                 publish the numbers anyway"
+            )
+        })?;
     }
 }
 
@@ -1303,23 +1310,31 @@ fn parse_host(line: &str) -> Option<Host> {
     })
 }
 
+/// Samples `pid` at the samplers' pace for as long as the process stands,
+/// and for `window` past `started` at the most. The window's end is
+/// nobody's failure — `measure` ends the run at a deadline of its own
+/// inside it, and this only has to outlast that — so the sampling is a
+/// stand watched rather than a wait (`wait::stood`).
 #[cfg(target_os = "linux")]
 fn linux_sampler(
     pid: u32,
-    deadline: Instant,
+    started: Instant,
+    window: Duration,
     record: &mut dyn FnMut(Sample) -> Result<(), String>,
 ) -> Result<(), String> {
     let status = format!("/proc/{pid}/status");
-    while Instant::now() < deadline {
+    let stretch = window.saturating_sub(started.elapsed());
+    match crate::wait::stood(stretch, Duration::from_millis(SAMPLE_MS), || {
         let sample = linux_sample_once(pid);
         if sample.working_set == 0 && sample.private == 0 && !std::path::Path::new(&status).exists()
         {
-            break;
+            return Some(Ok(()));
         }
-        record(sample)?;
-        std::thread::sleep(Duration::from_millis(SAMPLE_MS));
+        record(sample).err().map(Err)
+    }) {
+        Err(ended) => ended,
+        Ok(_stood_for) => Ok(()),
     }
-    Ok(())
 }
 
 /// Memory and whole-machine processor time. There is no window question

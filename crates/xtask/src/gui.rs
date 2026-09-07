@@ -18,6 +18,17 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
+
+use crate::wait::{LOOK_AGAIN, stood};
+
+/// How long a window just started is watched before it is called
+/// launched: long enough for a Qt platform plugin failure to have ended
+/// the process (that death takes ~10ms; the margin is for a cold start).
+/// A stretch of the product's own standing, not a wait for anything
+/// (`wait::stood`) — a window nothing drives says nothing this could
+/// wait for.
+const FIRST_MOMENT: Duration = Duration::from_millis(900);
 
 /// `cargo xtask kill`: reap this tree's app processes. Quiet success when
 /// there is nothing to reap.
@@ -69,22 +80,18 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     // other app child started here, and the harness stays inert.
     crate::app_env::clear_automation(&mut command);
     command.env_remove(crate::gate::SESSION);
-    let child = command
+    let mut child = command
         .spawn()
         .map_err(|e| format!("failed to start {}: {e}", exe.display()))?;
-    // Long enough for a Qt platform plugin failure to have ended the
-    // process (that death takes ~10ms; the margin is for a cold start).
-    std::thread::sleep(std::time::Duration::from_millis(900));
-    let mut child = child;
-    match child.try_wait() {
-        Ok(None) => {
+    match stood(FIRST_MOMENT, LOOK_AGAIN, || child.try_wait().transpose()) {
+        Ok(_stood_for) => {
             println!("launched pid={} ({})", child.id(), exe.display());
             Ok(())
         }
-        Ok(Some(status)) => Err(format!(
+        Err(Ok(status)) => Err(format!(
             "the window exited at once ({status}) — is Qt's bin on PATH?"
         )),
-        Err(error) => Err(format!("could not read the run's state: {error}")),
+        Err(Err(error)) => Err(format!("could not read the run's state: {error}")),
     }
 }
 

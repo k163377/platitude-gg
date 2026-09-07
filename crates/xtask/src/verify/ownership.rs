@@ -354,8 +354,14 @@ mod tests {
             .expect("the claim this run was started to take")
             .expect("new claim");
         println!("{HELD}");
-        // waits(ceiling): killed long before this; the sleep is only so a holder that lost the run that started it does not stand for good
-        std::thread::sleep(std::time::Duration::from_secs(300));
+        // Held for as long as the run that started this one holds its
+        // end of the pipe: the read answers when that end closes, so a
+        // holder whose run is gone does not stand on — and one that is
+        // killed, as the test below kills it, never gets that far.
+        let mut word = String::new();
+        std::io::stdin()
+            .read_line(&mut word)
+            .expect("the pipe from the run that started this one");
         drop(held);
     }
 
@@ -368,10 +374,13 @@ mod tests {
     #[test]
     fn a_claim_a_killed_run_held_is_taken_by_the_next() {
         let target = super::fresh_shot_dir("killed-claim").expect("target directory");
+        // Its stdin is a pipe this run holds the other end of: what the
+        // holder stands on, and what lets it go if this run dies first.
         let mut holder =
             std::process::Command::new(std::env::current_exe().expect("this test binary"))
                 .args([HOLDER, "--ignored", "--nocapture"])
                 .env(HELD_FOR, &target)
+                .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::null())
                 .spawn()
@@ -401,23 +410,17 @@ mod tests {
         assert!(lock.is_file(), "{} went with its owner", lock.display());
 
         // When the operating system lets the lock go is not this test's
-        // to assert; the ceiling is here to fail rather than to hang.
-        // waits(ceiling): a dead process's lock is let go in the kernel's own time and can only be looked for; the ceiling names one it never let go
-        let started = std::time::Instant::now();
-        let taken = loop {
-            let mut next = BTreeSet::new();
-            match super::claim_resource(&target, "test resource", &mut next) {
-                Ok(Some(claim)) => break claim,
-                outcome => {
-                    assert!(
-                        started.elapsed() < std::time::Duration::from_secs(30),
-                        "the killed run's claim was never let go: {outcome:?}"
-                    );
-                    // waits(paced): every attempt is the real claim and the claim ends the loop; the sleep only spaces the attempts
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-            }
-        };
+        // to assert: the claim is tried under the suite's budget, every
+        // try the real claim, and a lock never let go fails by name with
+        // the last refusal in the message.
+        let taken = crate::wait::until(
+            "the killed run's claim let go",
+            || {
+                let mut next = BTreeSet::new();
+                super::claim_resource(&target, "test resource", &mut next)
+            },
+            |outcome| matches!(outcome, Ok(Some(_))),
+        );
 
         drop(taken);
         std::fs::remove_dir(target).expect("remove empty target directory");

@@ -34,6 +34,7 @@ mod subprocess;
 mod tree;
 mod usage;
 mod verify;
+mod wait;
 mod waits;
 
 use std::process::ExitCode;

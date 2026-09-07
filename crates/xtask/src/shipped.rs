@@ -13,18 +13,24 @@
 //! thing offscreen and reading what the QML engine says.
 //!
 //! **Bounded and reaped**, like every other app this runner starts: it
-//! waits a few seconds for the engine to have finished complaining, then
-//! kills. There is no watchdog inside a shipped build to do it — that is
-//! a harness knob, and this is the build without one.
+//! watches the window stand for a few seconds, long enough for the engine
+//! to have finished complaining, then kills. There is no watchdog inside
+//! a shipped build to do it — that is a harness knob, and this is the
+//! build without one. The stand is the one wait in this runner whose end
+//! is the answer rather than a failure (`wait::stood`): what is asked of
+//! the window is that it stays, and one still there at the end of the
+//! stretch stood for at least that long.
 
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::app_out::collect;
+use crate::wait::{LOOK_AGAIN, stood};
 
-/// How long the window is left standing. The engine reports a failed load
-/// during `load_qml_from_file`, which is before the event loop starts, so
-/// this only has to outlast the runtime, the store and the first paint.
+/// How long the window is watched standing. The engine reports a failed
+/// load during `load_qml_from_file`, which is before the event loop
+/// starts, so this only has to outlast the runtime, the store and the
+/// first paint.
 const STAND_MS: u64 = 8_000;
 
 /// What the engine says when a type would not resolve. Everything else it
@@ -75,24 +81,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let out = child.stdout.take().map(collect);
     let err = child.stderr.take().map(collect);
 
-    // Bounded wait with a kill guard. A shipped build has no watchdog of
-    // its own, so the deadline is the whole of what ends it — and an exit
-    // before then is itself the answer.
-    let deadline = Duration::from_millis(STAND_MS);
-    let mut left_early = None;
-    while started.elapsed() < deadline {
-        match child.try_wait().map_err(|e| e.to_string())? {
-            Some(status) => {
-                left_early = Some(status);
-                break;
-            }
-            None => std::thread::sleep(Duration::from_millis(100)),
+    // Watched standing, with a kill guard. A shipped build has no
+    // watchdog of its own, so the stretch is the whole of what ends it —
+    // and an exit before then is itself the answer.
+    let left_early = match stood(Duration::from_millis(STAND_MS), LOOK_AGAIN, || {
+        child.try_wait().map_err(|e| e.to_string()).transpose()
+    }) {
+        Ok(_stood_for) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            None
         }
-    }
-    if left_early.is_none() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
+        Err(ended) => Some(ended?),
+    };
 
     let join = |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| {
         h.and_then(|h| h.join().ok())

@@ -399,43 +399,9 @@ fn end(pids: &[u32]) {
 #[cfg(test)]
 mod tests {
     use std::process::{Command, Stdio};
-    use std::time::{Duration, Instant};
 
     use super::{Reaped, own_group, reap};
-
-    /// How long a wait here is given, and how many looks it takes
-    /// whatever the clock says. Generous on both counts: on unix the
-    /// machine reaps the step's orphans in its own time, and on Windows
-    /// a look is a listing of every process on the machine, taken by a
-    /// PowerShell of its own — beside a gate's eight verbs and a
-    /// container that one starts in seconds rather than in the tenths a
-    /// quiet machine takes. A wait held to the clock alone is a wait
-    /// that ends under load having asked once, which is what makes a
-    /// test red for the load rather than for the thing it tests
-    /// (.claude/rules-refs/core.md).
-    const GONE_WITHIN: Duration = Duration::from_secs(30);
-    const LOOKS: usize = 5;
-
-    /// How long a wait here sleeps between looks.
-    const BETWEEN_LOOKS: Duration = Duration::from_millis(200);
-
-    /// Looks until `answered` is happy with what it sees, and hands back
-    /// the last look either way — for the assertion that says what was
-    /// missing. The clock ends a wait whose looks were cheap; the count
-    /// ends one whose looks were not.
-    fn looked<T>(mut look: impl FnMut() -> T, answered: impl Fn(&T) -> bool) -> T {
-        // waits(ceiling): the clock ends a wait whose looks were cheap and the count one whose looks were not; neither decides what was seen
-        let started = Instant::now();
-        let mut seen = look();
-        let mut looks = 1;
-        while !answered(&seen) && (looks < LOOKS || started.elapsed() < GONE_WITHIN) {
-            // waits(paced): a process the machine reaps in its own time can only be looked for; the sleep spaces the looks
-            std::thread::sleep(BETWEEN_LOOKS);
-            seen = look();
-            looks += 1;
-        }
-        seen
-    }
+    use crate::wait::until;
 
     #[test]
     fn what_was_reaped_is_said_whether_or_not_anything_was() {
@@ -526,10 +492,13 @@ mod tests {
             .spawn()
             .expect("a throwaway process tree");
         let root = child.id();
-        let under = looked(|| under_the_step(root), |under| under.len() >= 2);
-        assert!(
-            under.len() >= 2,
-            "the tree never got two deep under the step: {under:?}"
+        // Looked for under the suite's budget: the tree grows in the
+        // shells' own time, and on Windows a look is a listing of every
+        // process on the machine, taken by a PowerShell of its own.
+        let under = until(
+            "two processes under the step",
+            || under_the_step(root),
+            |under| under.len() >= 2,
         );
         let (reaped, ended) = reap(&mut child);
         assert!(
@@ -539,10 +508,10 @@ mod tests {
         assert!(ended.is_some(), "the step itself was not reaped");
         // Asked until they are gone rather than at once: a process ended
         // this instant can still be in a listing taken the next.
-        let standing = looked(|| still_running(&under), Vec::is_empty);
-        assert!(
-            standing.is_empty(),
-            "still running under the step: {standing:?}"
+        until(
+            "nothing left under the step",
+            || still_running(&under),
+            Vec::is_empty,
         );
     }
 
@@ -560,10 +529,10 @@ mod tests {
             .spawn()
             .expect("a throwaway process tree");
         let root = child.id();
-        let under = looked(|| under_by_parent(root), |under| under.len() >= 2);
-        assert!(
-            under.len() >= 2,
-            "the tree never got two deep under the step: {under:?}"
+        let under = until(
+            "two processes under the step",
+            || under_by_parent(root),
+            |under| under.len() >= 2,
         );
         let (reaped, ended) = reap(&mut child);
         let walked = reaped.under.clone().unwrap_or_default();
@@ -576,10 +545,10 @@ mod tests {
             "the walk followed the group as far as this runner: {reaped:?}"
         );
         assert!(ended.is_some(), "the step itself was not reaped");
-        let standing = looked(|| still_running(&under), Vec::is_empty);
-        assert!(
-            standing.is_empty(),
-            "still running under the step: {standing:?}"
+        until(
+            "nothing left under the step",
+            || still_running(&under),
+            Vec::is_empty,
         );
     }
 

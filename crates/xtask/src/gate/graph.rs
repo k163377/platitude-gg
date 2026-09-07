@@ -440,7 +440,7 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
             continue;
         };
         let candidates: Vec<std::path::PathBuf> = match explicit.take() {
-            Some(named) => vec![parent.join(named)],
+            Some(named) => vec![lexical(&parent.join(named))],
             None => vec![
                 children_dir.join(format!("{child}.rs")),
                 children_dir.join(child).join("mod.rs"),
@@ -463,6 +463,24 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
         walk_modules(root, &found, sub, g)?;
     }
     Ok(())
+}
+
+/// `path` with its `.` and `..` components folded away, so a file two
+/// trees declare — the runner's `mod wait;` and the gate suite's
+/// `#[path = "../../src/wait.rs"]` — is one node under one name, and a
+/// change to it reaches both.
+fn lexical(path: &Path) -> std::path::PathBuf {
+    let mut folded = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                folded.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => folded.push(other),
+        }
+    }
+    folded
 }
 
 /// The name in `mod x;` / `pub mod x;` / `pub(crate) mod x;`, if the line
@@ -1576,5 +1594,23 @@ mod tests {
         let root = crate::tree::workspace_root();
         let g = build(&root).expect("the graph of this tree");
         assert_eq!(super::complaints(&g), Vec::<String>::new());
+        // A file read into a second crate by `#[path]` stands under its
+        // own name and no other: two names would be two nodes, and a
+        // change to the file would reach only one of them.
+        let doubled: Vec<&String> = g.modules.keys().filter(|f| f.contains("/../")).collect();
+        assert!(doubled.is_empty(), "{doubled:?}");
+    }
+
+    #[test]
+    fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
+        use std::path::{Path, PathBuf};
+        assert_eq!(
+            super::lexical(Path::new("crates/x/tests/gate/../../src/wait.rs")),
+            PathBuf::from("crates/x/src/wait.rs")
+        );
+        assert_eq!(
+            super::lexical(Path::new("crates/x/src/./y.rs")),
+            PathBuf::from("crates/x/src/y.rs")
+        );
     }
 }

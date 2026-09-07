@@ -54,11 +54,12 @@ use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::locks::Locked;
 use crate::note::{field, now_secs};
 use crate::subprocess::common_git_dir;
+use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
 
 /// Set on every child a verb here starts ([`step`]), so the child neither
 /// announces a build its parent already announced nor waits on a hold
@@ -83,7 +84,8 @@ const LOCK: &str = "lock";
 
 /// How long a build waits for a hold to lift. A measurement is minutes of
 /// runs, retries included; a hold this old is a run that stopped
-/// answering, and the message names its process.
+/// answering, and the failure names its process. A ceiling and nothing
+/// finer: a hold changes in nothing while it stands (`crate::wait`).
 const HOLD_CEILING: Duration = if cfg!(test) {
     Duration::from_secs(20)
 } else {
@@ -98,28 +100,16 @@ const BUSY_CEILING: Duration = if cfg!(test) {
     Duration::from_secs(30 * 60)
 };
 
-/// How often either side looks again. Short under test, where the waits
-/// are measured in the hundreds of milliseconds.
-const POLL: Duration = if cfg!(test) {
-    Duration::from_millis(50)
-} else {
-    Duration::from_secs(5)
-};
-
-/// How many times a hold tries its lock before calling the holder
-/// another measurement. A reader taking a dead hold's note down holds
-/// the lock while it does ([`held`]) — the microseconds of two calls,
-/// against the four hundred milliseconds these tries span — and a hold
-/// that met that instant is not a hold that met a measurement.
-const HOLD_TRIES: u32 = 5;
-
-/// How many times an announcement takes the lock at its own name before
-/// the build that asked for it is refused, and how long it waits between
-/// tries. The name is this process's own, so the only holder it can meet
-/// is a reader taking a dead run's leavings down under the lock
-/// ([`announcing`]) — the microseconds of two calls.
-const ANNOUNCE_TRIES: u32 = 8;
-const ANNOUNCE_AGAIN: Duration = Duration::from_millis(5);
+/// How long a name a reader is sweeping is given to come free. A reader
+/// takes a dead run's note or lock file down *under* the lock ([`held`],
+/// [`announcing`], `lanes::a_landing_waits`) — the microseconds of two
+/// calls — and that reader is the one holder a process can meet at a
+/// name of its own, or at the hold's name beside a note nobody has
+/// written. A name still held past this is a holder and not a sweep:
+/// another measurement at the hold's name, a refusal at one's own.
+/// Generous against the microseconds, because the alternative is a build
+/// refused for the leavings of a run that is gone.
+pub(crate) const SWEEP: Duration = Duration::from_millis(500);
 
 /// How long a stamp is kept: longer than any warm window it could answer
 /// (`perf::warmth`), shorter than a pid's turn to come round again.
@@ -340,13 +330,15 @@ fn common_dir(tree: &Path) -> Option<PathBuf> {
 fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String> {
     let note = common.join(HOLD);
     let lock = open_lock(&lock_of(&note))?;
-    let mut tries = 0;
+    // Tried past the instant a reader holds the lock while it takes a
+    // dead hold's note down ([`held`]): a lock still held past that is a
+    // measurement's, and the note beside it says whose.
+    let mut tries = Wait::new(what, Budget::whole(SWEEP), TRY_AGAIN);
     loop {
         match lock.try_lock() {
             Ok(()) => break,
             Err(TryLockError::WouldBlock) => {
-                tries += 1;
-                if tries >= HOLD_TRIES {
+                if tries.look_again("the hold's lock").is_err() {
                     let other =
                         read_note(&note).unwrap_or_else(|| Note::unreadable("a measurement"));
                     return Err(format!(
@@ -355,7 +347,6 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
                         other.line()
                     ));
                 }
-                std::thread::sleep(Duration::from_millis(100));
             }
             Err(TryLockError::Error(error)) => {
                 return Err(format!(
@@ -382,31 +373,38 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
 
 /// Waits until no announced build is still running.
 fn wait_for_builds(busy: &Path, what: &str, polled: &dyn Fn()) -> Result<(), String> {
-    let started = Instant::now();
-    let mut said: Vec<String> = Vec::new();
+    let mut wait = Wait::new(
+        format!("{what} holding the machine still"),
+        Budget::whole(BUSY_CEILING),
+        LOOK_AGAIN,
+    );
+    // Said when the set of builds changes — by which builds they are, not
+    // by their lines, which carry an age that moves on its own.
+    let mut said: Vec<(u32, u64)> = Vec::new();
     loop {
         let under_way = live_notes(busy);
         if under_way.is_empty() {
             return Ok(());
         }
         let lines: Vec<String> = under_way.iter().map(Note::line).collect();
-        if lines != said {
+        let builds: Vec<(u32, u64)> = under_way
+            .iter()
+            .map(|note| (note.pid, note.since))
+            .collect();
+        if builds != said {
             println!(
                 "  {what} holds the machine still, and waits for {} build(s) already under way: {}",
                 lines.len(),
                 lines.join(", ")
             );
-            said = lines;
+            said = builds;
         }
-        if started.elapsed() >= BUSY_CEILING {
-            return Err(format!(
-                "the builds under way did not finish within {} minutes — the hold is lifted; \
-                 `cargo xtask still` names them",
-                BUSY_CEILING.as_secs() / 60
-            ));
-        }
+        wait.saw(lines.join(", "));
         polled();
-        std::thread::sleep(POLL);
+        wait.look_again("the end of the builds under way")
+            .map_err(|expired| {
+                format!("{expired} — the hold is lifted; `cargo xtask still` names them")
+            })?;
     }
 }
 
@@ -426,10 +424,12 @@ fn busy_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Busy, String>
 fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, String> {
     let hold = common.join(HOLD);
     let busy = common.join(BUSY);
-    let started = Instant::now();
+    // One wait across the loop: a hold that came between the wait and
+    // the announcement is waited out on the same budget, not a new one.
+    let mut wait = Wait::new(what, Budget::whole(HOLD_CEILING), LOOK_AGAIN);
     let mut said = false;
     loop {
-        wait_for_hold(&hold, what, started, &mut said, polled)?;
+        wait_for_hold(&hold, what, &mut wait, &mut said, polled)?;
         std::fs::create_dir_all(&busy)
             .map_err(|e| format!("could not make {}: {e}", busy.display()))?;
         let note = busy.join(format!(
@@ -473,7 +473,12 @@ fn lock_beside(note: &Path) -> Result<Locked, String> {
 
 fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> {
     let path = lock_of(note);
-    for _ in 0..ANNOUNCE_TRIES {
+    let mut tries = Wait::new(
+        format!("the announcement at {}", note.display()),
+        Budget::whole(SWEEP),
+        TRY_AGAIN,
+    );
+    loop {
         let lock = open_lock(&path)?;
         match lock.try_lock() {
             Ok(()) => {
@@ -483,8 +488,9 @@ fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> 
                 }
                 // The name went while this held the file: let go of and
                 // opened again, the sweep being microseconds long.
+                tries.saw("the lock granted on a file no longer at the name");
             }
-            Err(TryLockError::WouldBlock) => {}
+            Err(TryLockError::WouldBlock) => tries.saw("the lock held"),
             Err(TryLockError::Error(error)) => {
                 return Err(format!(
                     "could not lock the announcement at {}: {error}",
@@ -493,21 +499,22 @@ fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> 
             }
         }
         polled();
-        std::thread::sleep(ANNOUNCE_AGAIN);
+        tries
+            .look_again("the lock at its own name")
+            .map_err(|expired| {
+                format!(
+                    "could not announce the build: {expired} — a reader is sweeping a dead run's \
+                 leavings there, and is not letting go"
+                )
+            })?;
     }
-    Err(format!(
-        "could not announce the build at {}: the lock at that name went out from under it \
-         {ANNOUNCE_TRIES} times over — a reader is sweeping a dead run's leavings there, and \
-         is not letting go",
-        note.display()
-    ))
 }
 
 /// Waits until no live hold stands at `hold`, clearing a dead one.
 fn wait_for_hold(
     hold: &Path,
     what: &str,
-    started: Instant,
+    wait: &mut Wait,
     said: &mut bool,
     polled: &dyn Fn(),
 ) -> Result<(), String> {
@@ -522,16 +529,10 @@ fn wait_for_hold(
             );
             *said = true;
         }
-        if started.elapsed() >= HOLD_CEILING {
-            return Err(format!(
-                "the measurement did not end within {} minutes ({}) — look at it before \
-                 building beside it",
-                HOLD_CEILING.as_secs() / 60,
-                other.line()
-            ));
-        }
+        wait.saw(other.line());
         polled();
-        std::thread::sleep(POLL);
+        wait.look_again("the end of the measurement holding the machine still")
+            .map_err(|expired| format!("{expired} — look at it before building beside it"))?;
     }
 }
 
@@ -550,7 +551,7 @@ fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
         Ok(()) => {
             // Let go of by unlocking at the end of this arm, so the
             // instant somebody else has to wait out is these two calls
-            // and not a forked child's scheduling ([`HOLD_TRIES`]).
+            // and not a forked child's scheduling ([`SWEEP`]).
             let _lock = Locked::new(lock);
             if let Err(error) = std::fs::remove_file(note)
                 && error.kind() != std::io::ErrorKind::NotFound
@@ -740,9 +741,10 @@ mod tests {
     }
 
     /// Waits for the first look: a wait that has looked once is a wait
-    /// that found the hold up.
+    /// that found the hold up. Under the suite's budget, so a wait that
+    /// never looks is named rather than left to the harness's kill.
     fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
-        looks.recv().expect("the wait under test took a look");
+        crate::wait::heard("the wait under test", "a look", looks);
     }
 
     /// The files standing under the announcements: notes, and lock files.

@@ -18,6 +18,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
+
 /// How long a step may say nothing before it is killed and named. Silence,
 /// not wall time: the long steps (a first container image build, a release
 /// link) all keep talking, while every hang this has to catch — a test
@@ -25,7 +27,8 @@ use std::time::{Duration, Instant};
 /// build lock, a docker CLI waiting out a wedged daemon — goes quiet first.
 /// Generous on purpose: the suite's own 900s backstop must fire before
 /// this one so the failure carries a test name, and a link is the longest
-/// legitimately silent stretch.
+/// legitimately silent stretch. The log growing is what renews it
+/// (`wait::Wait::saw`).
 const QUIET_CEILING: Duration = Duration::from_secs(20 * 60);
 
 /// The absolute ceiling per step, for a hang that keeps talking.
@@ -290,33 +293,24 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
         .stderr(Stdio::from(err))
         .spawn()
         .map_err(|e| e.to_string())?;
-    let started = Instant::now();
-    let mut grew = Instant::now();
-    let mut seen = 0u64;
+    let mut wait = Wait::new(
+        "the step",
+        Budget::of(QUIET_CEILING, STEP_CEILING),
+        LOOK_AGAIN,
+    );
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             return Ok(status.success());
         }
         let len = std::fs::metadata(log).map(|m| m.len()).unwrap_or(0);
-        if len != seen {
-            seen = len;
-            grew = Instant::now();
-        }
-        let (quiet, whole) = (grew.elapsed(), started.elapsed());
-        if quiet >= QUIET_CEILING || whole >= STEP_CEILING {
+        wait.saw(format!("{len} bytes of log"));
+        if let Err(expired) = wait.look_again("its exit") {
             let (reaped, _ended) = crate::reap::reap(&mut child);
-            let ceiling = if quiet >= QUIET_CEILING {
-                format!("said nothing for {} minutes", quiet.as_secs() / 60)
-            } else {
-                format!("ran for {} minutes", whole.as_secs() / 60)
-            };
             return Err(format!(
-                "killed at the ceiling: the step {ceiling}, and {} (its log has the \
-                 tail; an empty log usually means it never got past a build lock \
-                 another cargo holds)",
+                "killed at the ceiling — {expired}, and {} (its log has the tail; an empty \
+                 log usually means it never got past a build lock another cargo holds)",
                 reaped.line()
             ));
         }
-        std::thread::sleep(Duration::from_millis(500));
     }
 }

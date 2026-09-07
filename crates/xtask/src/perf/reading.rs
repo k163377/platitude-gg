@@ -98,11 +98,11 @@ pub(super) struct Scroll {
 }
 
 impl Scroll {
-    /// How long the bench has been running with nothing to show for it,
-    /// or `None` when it has not begun or has already ended.
-    pub(super) fn stalled_for(&self, since: Instant) -> Option<std::time::Duration> {
+    /// Whether the bench has begun and not yet ended: the stretch a frame
+    /// is owed in, under a deadline of the bench's own (`measure`).
+    pub(super) fn running(&self) -> bool {
         use std::sync::atomic::Ordering::Relaxed;
-        (self.began.load(Relaxed) && !self.ended.load(Relaxed)).then(|| since.elapsed())
+        self.began.load(Relaxed) && !self.ended.load(Relaxed)
     }
 }
 

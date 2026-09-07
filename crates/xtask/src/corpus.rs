@@ -266,7 +266,11 @@ fn sweep(at: &Path) -> Result<(), String> {
 /// destination says which of the two this is; anything else sitting
 /// there is not a corpus and is named at once.
 fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
-    let deadline = std::time::Instant::now() + RENAME_CEILING;
+    let mut wait = crate::wait::Wait::new(
+        "the finished corpus",
+        crate::wait::Budget::whole(RENAME_CEILING),
+        crate::wait::LOOK_AGAIN,
+    );
     loop {
         let Err(refused) = std::fs::rename(partial, at) else {
             return Ok(true);
@@ -295,17 +299,15 @@ fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
                 partial.display()
             ));
         }
-        if std::time::Instant::now() >= deadline {
-            return Err(format!(
-                "could not move the corpus into {} after {}s: {refused} — something is holding \
-                 the tree open. It is built and complete at {}; moving it by hand finishes the \
-                 job.",
-                at.display(),
-                RENAME_CEILING.as_secs(),
-                partial.display()
-            ));
-        }
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        wait.saw(&refused);
+        wait.look_again(&format!("its move into {}", at.display()))
+            .map_err(|expired| {
+                format!(
+                    "{expired} — something is holding the tree open. It is built and complete \
+                     at {}; moving it by hand finishes the job.",
+                    partial.display()
+                )
+            })?;
     }
 }
 
