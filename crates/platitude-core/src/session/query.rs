@@ -4,36 +4,41 @@
 use super::*;
 use crate::eol;
 
-/// What one re-read of the diff on screen established.
+/// What one read of the diff on screen established.
 ///
 /// A completion boundary rather than a convenience, because the ordinary
-/// answer is silence: a file nobody has touched sends no event at all, and
-/// waiting cannot tell "none yet" from "none coming"
-/// (core.md §非同期・並行テスト).
+/// answer is silence: a file nobody has touched sends no event at all, a
+/// read the pane has passed sends none either, and waiting cannot tell
+/// "none yet" from "none coming" (core.md §非同期・並行テスト).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiffRefreshOutcome {
+pub enum DiffReadOutcome {
     /// The repository is not open, so nothing was read.
     Unavailable,
     /// Reading the diff failed; the failure went out as one.
     Failed,
-    /// The file is byte for byte the one the pane already holds.
+    /// The file is byte for byte the one the pane already holds — the
+    /// re-read's own answer ([`RepoSession::refresh_diff`]), which a first
+    /// read never gives.
     Unchanged,
-    /// The file moved, and the diff of it went out.
+    /// The pane asked for a later read while this one ran, so nothing of
+    /// it went out (see [`RepoSession::diff_epoch`]).
+    Overtaken,
+    /// The diff went out.
     Sent,
     /// The session closed before the read could answer.
     Cancelled,
 }
 
 /// Completion of one explicitly tracked diff re-read.
-pub struct DiffRefreshTask(tokio::sync::oneshot::Receiver<DiffRefreshOutcome>);
+pub struct DiffRefreshTask(tokio::sync::oneshot::Receiver<DiffReadOutcome>);
 
 impl DiffRefreshTask {
-    fn pending() -> (tokio::sync::oneshot::Sender<DiffRefreshOutcome>, Self) {
+    fn pending() -> (tokio::sync::oneshot::Sender<DiffReadOutcome>, Self) {
         let (send, receive) = tokio::sync::oneshot::channel();
         (send, Self(receive))
     }
 
-    fn ready(outcome: DiffRefreshOutcome) -> Self {
+    fn ready(outcome: DiffReadOutcome) -> Self {
         let (send, task) = Self::pending();
         if send.send(outcome).is_err() {
             tracing::trace!("diff re-read completion was not observed");
@@ -44,8 +49,8 @@ impl DiffRefreshTask {
     /// Waits for the re-read itself to finish. A dropped runtime is the
     /// same observable result as cancellation: no later answer from this
     /// read can arrive.
-    pub async fn outcome(self) -> DiffRefreshOutcome {
-        self.0.await.unwrap_or(DiffRefreshOutcome::Cancelled)
+    pub async fn outcome(self) -> DiffReadOutcome {
+        self.0.await.unwrap_or(DiffReadOutcome::Cancelled)
     }
 }
 
@@ -96,16 +101,32 @@ impl RepoSession {
 
     /// Loads a unified diff for one file, and its colours behind it.
     pub fn load_diff(self: &Arc<Self>, target: DiffTarget) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
+        self.runtime.spawn(self.read_diff(target));
+    }
+
+    /// The same read as a future the caller drives, which is both its
+    /// completion boundary and the only way to hold one open: the read
+    /// this returns is the pane's newest from the moment it is asked for,
+    /// so a test can stop it inside its git and let the next one pass it
+    /// (core.md §非同期・並行テスト).
+    pub fn read_diff(
+        self: &Arc<Self>,
+        target: DiffTarget,
+    ) -> impl Future<Output = DiffReadOutcome> + Send + 'static + use<> {
+        // Claimed here rather than inside the read, so that asking for a
+        // read is what passes the one before it, whenever either of them
+        // runs — and only where there is something to read, so a repository
+        // nobody has opened passes nothing (see `diff_epoch`).
+        let started = self
+            .workdir()
+            .map(|workdir| (workdir, self.claim_diff_epoch()));
         let s = Arc::clone(self);
-        // Claimed before anything is read, so the colouring below can ask
-        // whether this is still the file being read (see `diff_epoch`).
-        let epoch = s.claim_diff_epoch();
-        self.runtime.spawn(async move {
-            s.publish_diff(workdir, target, None, epoch).await;
-        });
+        async move {
+            match started {
+                None => DiffReadOutcome::Unavailable,
+                Some((workdir, epoch)) => s.publish_diff(workdir, target, None, epoch).await,
+            }
+        }
     }
 
     /// Re-reads the diff the pane is holding and answers only if the bytes
@@ -133,7 +154,7 @@ impl RepoSession {
 
     fn start_refresh_diff(self: &Arc<Self>, target: DiffTarget) -> DiffRefreshTask {
         let Some(workdir) = self.workdir() else {
-            return DiffRefreshTask::ready(DiffRefreshOutcome::Unavailable);
+            return DiffRefreshTask::ready(DiffReadOutcome::Unavailable);
         };
         let s = Arc::clone(self);
         let (finished, task) = DiffRefreshTask::pending();
@@ -143,10 +164,10 @@ impl RepoSession {
                 match details::file_diff_raw(&s.executor, &workdir, &target, &cancel).await {
                     Err(e) => {
                         s.fail("diff", e);
-                        DiffRefreshOutcome::Failed
+                        DiffReadOutcome::Failed
                     }
                     Ok(raw) if s.diff_seen(&target) == Some(details::fingerprint(&raw)) => {
-                        DiffRefreshOutcome::Unchanged
+                        DiffReadOutcome::Unchanged
                     }
                     Ok(raw) => {
                         // Claimed only now, and not before the read above: a
@@ -154,10 +175,7 @@ impl RepoSession {
                         // take the epoch from the read a click has in flight
                         // (see `diff_epoch`).
                         let epoch = s.claim_diff_epoch();
-                        match s.publish_diff(workdir, target, Some(raw), epoch).await {
-                            true => DiffRefreshOutcome::Sent,
-                            false => DiffRefreshOutcome::Failed,
-                        }
+                        s.publish_diff(workdir, target, Some(raw), epoch).await
                     }
                 };
             if finished.send(outcome).is_err() {
@@ -167,17 +185,26 @@ impl RepoSession {
         task
     }
 
-    /// Sends one diff and starts the colours behind it, answering whether
-    /// it went out. `known` is the raw diff a caller has already read, so a
+    /// Sends one diff and starts the colours behind it, answering how it
+    /// ended. `known` is the raw diff a caller has already read, so a
     /// re-read that found it moved spends no second process on the same
     /// bytes.
+    ///
+    /// **A read the pane has passed publishes nothing.** Two reads of one
+    /// file overlap wherever a write answers and the status behind it
+    /// lands — both ask the pane to re-read what it holds — and they need
+    /// not finish in the order they were asked. The older landing last
+    /// would leave the pane holding rows and a fingerprint taken from
+    /// bytes that are no longer there, and the next partial stage is
+    /// refused against exactly that fingerprint
+    /// (`stage::refusal::verify_fingerprint`).
     async fn publish_diff(
         self: &Arc<Self>,
         workdir: PathBuf,
         target: DiffTarget,
         known: Option<Vec<u8>>,
         epoch: u64,
-    ) -> bool {
+    ) -> DiffReadOutcome {
         let cancel = self.root_cancel.clone();
         // What git's settings say, and the neighbours if they are the
         // only answer, are read **beside** the diff rather than after
@@ -208,6 +235,13 @@ impl RepoSession {
         );
         match diff {
             Ok(raw) => {
+                // Passed while the bytes were being read: everything below
+                // is spent for a pane that has moved — a picture written
+                // to disk, a file walked for its colours — and none of it
+                // is the read the pane is waiting for.
+                if !self.diff_is_current(epoch) {
+                    return DiffReadOutcome::Overtaken;
+                }
                 let patches = crate::parse::diff::parse_patch(&raw);
                 let fingerprint = details::fingerprint(&raw);
                 let endings = match endings {
@@ -228,6 +262,16 @@ impl RepoSession {
                     &cancel,
                 )
                 .await;
+                // Asked again, because the picture above is read out of
+                // git and the pane can be moved on across it.
+                if !self.diff_is_current(epoch) {
+                    // This read's own files go with the ones before it:
+                    // nothing will ever name them, and the read that
+                    // passed this one sweeps only below itself — which
+                    // it may already have done (`preview::PreviewFiles`).
+                    self.preview_files.sweep_before(epoch + 1);
+                    return DiffReadOutcome::Overtaken;
+                }
                 // The picture files of the reads before this one go now,
                 // whether or not this one wrote any: the pane is about
                 // to be handed this read, and what it still shows of the
@@ -245,11 +289,11 @@ impl RepoSession {
                     marks,
                 });
                 self.paint_diff(target, patches, source, epoch);
-                true
+                DiffReadOutcome::Sent
             }
             Err(e) => {
                 self.fail("diff", e);
-                false
+                DiffReadOutcome::Failed
             }
         }
     }

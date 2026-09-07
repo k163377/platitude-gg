@@ -5,7 +5,9 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, opened_with, write_result};
 use platitude_core::details::DiffTarget;
-use platitude_core::session::{DiffRefreshOutcome, Recording, RefreshOutcome, SessionEvent};
+use platitude_core::patch::HunkSelect;
+use platitude_core::session::{DiffReadOutcome, Recording, RefreshOutcome, SessionEvent};
+use platitude_core::stage;
 
 /// Opening a repository asks for a read, and so does the window becoming
 /// active a moment later; on a large repository that pair would be two
@@ -614,23 +616,36 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
 
     let head = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD"])).unwrap();
     let parent = platitude_core::Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD^"])).unwrap();
-    for path in ["a.txt", "b.txt"] {
-        session.load_diff(DiffTarget::Commit {
-            oid: head,
-            parent: Some(parent),
-            path: path.to_string(),
-            orig_path: None,
-        });
-    }
-    sink.wait_for("both concurrent diffs", |events| {
-        ["a.txt", "b.txt"]
+    let file = |path: &str| DiffTarget::Commit {
+        oid: head,
+        parent: Some(parent),
+        path: path.to_string(),
+        orig_path: None,
+    };
+
+    // The first read is held where it asks for the setting, so the second
+    // meets it in flight rather than probably meeting it
+    // (core.md §非同期・並行テスト). Reading is what shares the query, and
+    // both of these read: the row the reader has left is dropped after
+    // the setting has been asked for, not before
+    // (`RepoSession::diff_epoch`).
+    let mut first = Box::pin(session.read_diff(file("a.txt")));
+    assert!(
+        crate::support::wait::poll_once(&mut first).is_pending(),
+        "the first read is waiting on the reads it shares"
+    );
+    session.load_diff(file("b.txt"));
+    assert_eq!(
+        crate::support::wait::bounded("the row the reader left", first).await,
+        DiffReadOutcome::Overtaken
+    );
+    sink.wait_for("the diff the reader stayed on", |events| {
+        events
             .iter()
-            .all(|path| {
-                events.iter().any(|event| {
-                    matches!(event, SessionEvent::DiffLoaded { target, .. }
-                        if matches!(target, DiffTarget::Commit { path: seen, .. }
-                            if seen == path))
-                })
+            .any(|event| {
+                matches!(event, SessionEvent::DiffLoaded { target, .. }
+                    if matches!(target, DiffTarget::Commit { path: seen, .. }
+                        if seen == "b.txt"))
             })
             .then_some(())
     })
@@ -846,7 +861,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
             session.refresh_diff_tracked(target).outcome()
         )
         .await,
-        DiffRefreshOutcome::Unchanged
+        DiffReadOutcome::Unchanged
     );
     assert_eq!(
         diffs_of(&sink, "f.txt"),
@@ -891,7 +906,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
             session.refresh_diff_tracked(target).outcome()
         )
         .await,
-        DiffRefreshOutcome::Sent
+        DiffReadOutcome::Sent
     );
     diffs_reach(&sink, "f.txt", published.len() + 1).await;
     assert_ne!(
@@ -899,5 +914,101 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
         published.last(),
         "the file the pane is holding was read again as the file it now is"
     );
+    session.close();
+}
+
+/// Two reads of the same file, the older landing last: the pane keeps the
+/// newer one, and can still stage against it.
+///
+/// One partial stage asks for the file twice — once where the write
+/// answers, once where the status behind it lands — and the two reads
+/// need not finish in that order. The older one carries the file as it
+/// was before the stage, and publishing it would leave the pane holding
+/// the fingerprint of bytes that are no longer there — which is what the
+/// next partial stage of that file is refused against
+/// (`stage::refusal::verify_fingerprint`). measured: one
+/// `verify-ui line-run --preset manyhunks` in eight refused its third
+/// line that way, holding the rows of the read before the one it asked
+/// for.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+    repo.commit_file("notes.txt", &base, "root");
+    // Two well-separated edits, so the stage below can take one of them
+    // and leave the other unstaged.
+    repo.write_file(
+        "notes.txt",
+        &base
+            .replace("line 2\n", "line 2 EDITED\n")
+            .replace("line 18\n", "line 18 EDITED\n"),
+    );
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+
+    let target = DiffTarget::Unstaged {
+        path: "notes.txt".to_string(),
+    };
+    session.load_diff(target.clone());
+    diffs_reach(&sink, "notes.txt", 1).await;
+    let held = diffs_of(&sink, "notes.txt")[0];
+
+    // The first of the pair, held inside its own git: polled to where it
+    // waits and left there, so the stage happens while it is still in
+    // flight rather than probably still in flight
+    // (core.md §非同期・並行テスト).
+    let mut older = Box::pin(session.read_diff(target.clone()));
+    assert!(
+        crate::support::wait::poll_once(&mut older).is_pending(),
+        "the older read is waiting inside its own git"
+    );
+
+    // The stage those two reads are about, taking the second hunk: the
+    // file the pane is on is not the one the older read holds any more.
+    // Then the second ask, the one the status behind the write raises.
+    let (exec, cancel) = crate::support::exec::env();
+    let repo_info = crate::support::info(&repo).await;
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(1)],
+        held,
+        &cancel,
+    )
+    .await
+    .expect("the stage the two reads are about");
+    session.load_diff(target.clone());
+    diffs_reach(&sink, "notes.txt", 2).await;
+    let published = diffs_of(&sink, "notes.txt");
+    assert_ne!(
+        published[0], published[1],
+        "the stage moved the file between the two reads"
+    );
+
+    // Only now does the older one carry on, which is the whole case: it
+    // finds itself passed and ends there.
+    assert_eq!(
+        crate::support::wait::bounded("the older read", older).await,
+        DiffReadOutcome::Overtaken
+    );
+    assert_eq!(
+        diffs_of(&sink, "notes.txt"),
+        published,
+        "the older read published rows of its own"
+    );
+
+    // Which is the point of it: the fingerprint the pane is left holding
+    // is the file's own, so the next partial stage of it is not refused.
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        published[1],
+        &cancel,
+    )
+    .await
+    .expect("the stage after the pair is not refused as stale");
     session.close();
 }

@@ -6,7 +6,7 @@ use crate::support::session::opened;
 use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::identity::SignatureStatus;
-use platitude_core::session::SessionEvent;
+use platitude_core::session::{DiffReadOutcome, SessionEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn details_and_diff_round_trip_through_the_session() {
@@ -105,14 +105,16 @@ async fn a_diff_arrives_before_the_colours_for_it() {
     session.close();
 }
 
-/// A read nobody is waiting for any more does not pay for its colours.
+/// A read nobody is waiting for any more hands over nothing.
 ///
-/// Walking down a commit's file list starts a read per row. The rows of
-/// each are cheap and the pane throws away the ones it did not ask for,
-/// but colouring is not cheap: without the epoch check, a colouring per
-/// abandoned row is left running behind the reader.
+/// Walking down a commit's file list starts a read per row. Colouring is
+/// the expensive half — without the epoch check, a colouring per
+/// abandoned row is left running behind the reader — and the rows are the
+/// cheap half, but they carry the fingerprint the next partial stage is
+/// refused against (`RepoSession::diff_epoch`), so an abandoned read that
+/// lands last would hand the pane one taken from a file it has left.
 #[tokio::test(flavor = "multi_thread")]
-async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
+async fn a_read_the_reader_has_left_hands_over_nothing() {
     let mut repo = TestRepo::init();
     repo.commit_file("src/a.rs", "fn a() -> u32 {\n    1\n}\n", "add a");
     repo.commit_file("src/b.rs", "fn b() -> u32 {\n    1\n}\n", "add b");
@@ -121,33 +123,29 @@ async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
 
     let (sink, session) = opened(&repo).await;
 
-    // Two clicks, the second before the first has been answered.
-    session.load_diff(DiffTarget::Unstaged {
+    // The first click, held where the race is: polled once, so it runs to
+    // the point where it waits on its own git and stops there. The second
+    // click is then asked for while the first is demonstrably still in
+    // flight, rather than while it probably is
+    // (core.md §非同期・並行テスト).
+    let mut first = Box::pin(session.read_diff(DiffTarget::Unstaged {
         path: "src/a.rs".to_string(),
-    });
+    }));
+    assert!(
+        crate::support::wait::poll_once(&mut first).is_pending(),
+        "the first read is waiting inside its own git"
+    );
     session.load_diff(DiffTarget::Unstaged {
         path: "src/b.rs".to_string(),
     });
 
-    // Both waits are on events, not on time. The abandoned read still
-    // sends its rows — those are cheap, and it is the pane that decides
-    // they are stale — so waiting for them is what says the first read
-    // ran to the point where it would have coloured, rather than that
-    // enough time has gone by (see the note on `Patience`: under
-    // `--workspace` load this can arrive after the second read's
-    // colours, and a wait that assumes an order fails for the wrong
-    // reason).
-    sink.wait_for("DiffLoaded for a", |evs| {
-        evs.iter()
-            .any(|e| match e {
-                SessionEvent::DiffLoaded { target, .. } => {
-                    matches!(target, DiffTarget::Unstaged { path } if path == "src/a.rs")
-                }
-                _ => false,
-            })
-            .then_some(())
-    })
-    .await;
+    // Carried on from where it stopped, it finds itself passed and ends
+    // there. That is the completion boundary the counts below are read
+    // against: nothing of this read is still on its way.
+    assert_eq!(
+        crate::support::wait::bounded("the read the reader left", first).await,
+        DiffReadOutcome::Overtaken
+    );
     sink.wait_for("DiffColoured for b", |evs| {
         evs.iter()
             .any(|e| match e {
@@ -160,18 +158,18 @@ async fn colours_are_skipped_for_a_diff_the_reader_has_left() {
     })
     .await;
 
-    // Nothing else is coming for the first read: its task checks the
-    // epoch before colouring and returns, so this is not a race with a
-    // colouring still on its way.
-    let painted_a = sink.count(|e| match e {
-        SessionEvent::DiffColoured { target, .. } => {
-            matches!(target, DiffTarget::Unstaged { path } if path == "src/a.rs")
-        }
-        _ => false,
+    let about_a = sink.count(|e| {
+        let target = match e {
+            SessionEvent::DiffLoaded { target, .. } | SessionEvent::DiffColoured { target, .. } => {
+                target
+            }
+            _ => return false,
+        };
+        matches!(target, DiffTarget::Unstaged { path } if path == "src/a.rs")
     });
     assert_eq!(
-        painted_a, 0,
-        "the abandoned read should not have paid for its colours"
+        about_a, 0,
+        "the abandoned read should have published neither rows nor colours"
     );
 
     session.close();

@@ -2,7 +2,9 @@
 //! causal wait rather than establish correctness by elapsed time.
 
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Mutex;
+use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use platitude_core::session::SessionEvent;
@@ -30,6 +32,19 @@ pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
         Ok(answer) => answer,
         Err(_) => panic!("{what}: no answer within the overall budget ({OVERALL_BUDGET:?})"),
     }
+}
+
+/// Polls `future` once, by hand: it runs to the first point where it has
+/// to wait and stops there. This is how a test puts a competitor exactly
+/// where a race is — parked on a gate, inside a read — without a
+/// `yield_now` and a guess about what the scheduler did with it. `Ready`
+/// is the answer; `Pending` says the future now waits on whatever it
+/// reached, and awaiting it afterwards carries it on from there. The
+/// twin of the crate's own (`platitude_core::wait`), which a test in this
+/// binary cannot reach.
+pub fn poll_once<F: Future + Unpin>(future: &mut F) -> Poll<F::Output> {
+    let mut cx = Context::from_waker(Waker::noop());
+    Pin::new(future).poll(&mut cx)
 }
 
 /// What a wait spends while it waits.

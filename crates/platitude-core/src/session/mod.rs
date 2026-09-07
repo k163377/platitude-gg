@@ -111,7 +111,7 @@ use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
 use published::PublishMarks;
-pub use query::{DiffRefreshOutcome, DiffRefreshTask};
+pub use query::{DiffReadOutcome, DiffRefreshTask};
 use read_flight::{ReadFlight, Stamp};
 pub(crate) use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;

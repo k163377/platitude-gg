@@ -51,12 +51,18 @@ pub struct RepoSession {
     /// again" without every quiet pass saying anything.
     pub(super) graph_stale: std::sync::atomic::AtomicBool,
     /// Which diff read is the current one. Bumped by every
-    /// [`RepoSession::load_diff`], and read again just before the colours
-    /// for that diff would be worked out: a reader going down a commit's
-    /// file list starts a read per row, and colouring costs enough (see
-    /// [`SessionEvent::DiffColoured`]) that the ones nobody is waiting for
-    /// any more are worth not doing at all. The rows are unaffected —
-    /// those are cheap, and a stale one is dropped by the pane on arrival.
+    /// [`RepoSession::load_diff`], and read again at every point a read
+    /// would hand something over: a reader going down a commit's file
+    /// list starts a read per row, and two reads of one file overlap
+    /// wherever a write answers and the status behind it lands.
+    ///
+    /// **A read another has passed hands over nothing** — not its
+    /// colours, which cost enough (see [`SessionEvent::DiffColoured`])
+    /// that the ones nobody is waiting for are worth not doing at all,
+    /// and not its rows either: those are cheap, but the fingerprint that
+    /// rides with them is what the next partial stage is refused against
+    /// (`stage::refusal::verify_fingerprint`), so an older read landing
+    /// last leaves the pane unable to stage anything (`publish_diff`).
     pub(super) diff_epoch: AtomicU64,
     /// The diff last published and the fingerprint of the bytes it was
     /// read from — what [`RepoSession::refresh_diff`] compares against, so
