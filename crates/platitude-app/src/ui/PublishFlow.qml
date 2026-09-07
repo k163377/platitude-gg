@@ -78,7 +78,11 @@ Item {
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")
                                     && publishFlow.repoTab.busyCount === 0
+    /// `behind` is here for the same reason `diverged` is: the far side has commits this branch does not, and an
+    /// overwrite is the only send that reaches from there (デザイン規約 §リモートへ送る). Both hold a tracking ref for
+    /// the lease to pin to.
     readonly property bool canForcePush: (publishFlow.pushState === "ready"
+                                          || publishFlow.pushState === "behind"
                                           || publishFlow.pushState === "diverged")
                                          && publishFlow.repoTab.busyCount === 0
     /// The branch a push of this button's is out for, from the send until the answer. What comes back names the

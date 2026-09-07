@@ -16,20 +16,25 @@ ActionButton {
     /// The last go at sending this branch came back refused. No stopped step past it: nothing sends on its own
     /// to be stopped (デザイン規約 §リモートへ送る).
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
+    /// The standings where an overwrite is the only send there is, and so the shape the button takes. `behind` stands
+    /// here beside `diverged` for the reason that shape is allowed at all: a plain push does not stand in either, so
+    /// the one button never carries two meanings (デザイン規約 §相手の履歴を置き換える). Both have the tracking ref on
+    /// screen for the lease to pin to — `elsewhere`, which has no such read, keeps the plain shape.
+    readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
     /// The frame's warning colour, for either of the two things that call for it: what an overwrite would do,
     /// and what the last go did. The word takes it for only one of them (below).
-    readonly property bool warned: pushButton.mode === "diverged" || pushButton.failed
+    readonly property bool warned: pushButton.forceShape || pushButton.failed
 
     kind: "push"
     busy: pushButton.busyLatched
           || (pushButton.curPage !== null && pushButton.curPage.pageTab.busyOp === "push")
     // Two fixed wordings, no counts: a number here would make the button a different width for every value it
     // took (デザイン規約 §リモートへ送る).
-    text: mode === "diverged" ? "push -f" : "push"
+    text: pushButton.forceShape ? "push -f" : "push"
     code: true
     // The overwrite colours its word; the refusal does not — only one of them changes what the press costs
     // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
-    tone: pushButton.mode === "diverged" ? Theme.warning : Theme.textPrimary
+    tone: pushButton.forceShape ? Theme.warning : Theme.textPrimary
     // The ring and the frame keep the warning through the wait, a step down. The word does not follow them: it
     // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
     toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
@@ -38,11 +43,11 @@ ActionButton {
     // plainly" from "did not land".
     alert: pushButton.failed
     alertTone: Theme.warning
-    holdMs: mode === "diverged" ? Metrics.holdMs : 0
+    holdMs: pushButton.forceShape ? Metrics.holdMs : 0
     // Held down while a rebase plan is being composed, like the stash button: what a push moves is the remote's
     // story of the very commits the plan is about to rewrite.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
-             && (pushButton.curPage.canPush || (mode === "diverged" && pushButton.curPage.canForcePush))
+             && (pushButton.curPage.canPush || (pushButton.forceShape && pushButton.curPage.canForcePush))
     onHeld: pushButton.curPage.forcePush()
     tip: {
         if (pushButton.curPage === null)
@@ -64,9 +69,9 @@ ActionButton {
                      ? qsTr("Push %n commit(s) to %1", "", pushButton.curPage.pageWt.ahead).arg(to)
                    : pushButton.mode === "clean"
                      ? qsTr("Nothing to push — %1 is up to date").arg(to)
-                   : pushButton.mode === "behind"
-                     ? qsTr("Nothing to push — %1 has moved ahead").arg(to)
-                   : pushButton.mode === "diverged"
+                   // One sentence for both overwrite standings: what is lost is what the far side has either way,
+                   // and `behind` says the rest of itself by having no count of its own to send.
+                   : pushButton.forceShape
                      ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has (as of the last fetch)", "",
                             pushButton.curPage.pageWt.behind).arg(to)
                    : ""
