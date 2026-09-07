@@ -26,11 +26,13 @@ mod deps;
 mod graph;
 mod hooks;
 mod plan;
+mod record;
 mod stamp;
 
 use std::path::Path;
 
 use plan::{Plan, Required, Side};
+use record::{Spent, Waited};
 use stamp::{CommitStamp, Store};
 
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
@@ -137,10 +139,13 @@ fn default_jobs() -> usize {
 
 fn gate(args: &[String]) -> Result<(), String> {
     let opts = options(args)?;
+    let mut spent = Spent::default();
+    let whole_run = std::time::Instant::now();
     // The tree's one gate, taken before the graph is read: a plan is
     // seconds of reading, and a second gate here has nothing to read. A
     // dry run holds nothing, because it runs nothing.
     let what = format!("gate {}", args.join(" "));
+    let at = std::time::Instant::now();
     let _sole = if opts.dry_run {
         None
     } else {
@@ -149,6 +154,7 @@ fn gate(args: &[String]) -> Result<(), String> {
             what.trim_end(),
         )?)
     };
+    spent.sole = at.elapsed();
     let plan = plan::make(
         &opts.dir,
         &plan::Ask {
@@ -158,12 +164,16 @@ fn gate(args: &[String]) -> Result<(), String> {
             fresh: opts.fresh,
             extra_verbs: &opts.verbs,
         },
+        &mut spent,
     )?;
     print!("{}", plan::describe(&plan));
     if opts.dry_run {
         return Ok(());
     }
-    match execute(&plan, opts.jobs, false)? {
+    let outcome = execute(&plan, opts.jobs, false, &mut spent);
+    spent.total = whole_run.elapsed();
+    report(&plan, what.trim_end(), opts.jobs, false, &spent, &outcome);
+    match outcome? {
         Gated::Stamped => Ok(()),
         // A tree left dirty without a word is the next gate refusing to
         // run over a change nobody made — which is the whole complaint
@@ -181,7 +191,11 @@ fn gate(args: &[String]) -> Result<(), String> {
 /// What it answers is the landing's to act on — a census the verbs moved
 /// is committed there and gated again, rather than reported.
 pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> {
+    let mut spent = Spent::default();
+    let whole_run = std::time::Instant::now();
+    let at = std::time::Instant::now();
     let _sole = crate::lanes::sole(&running_note(seat), "land's gate")?;
+    spent.sole = at.elapsed();
     let plan = plan::make(
         seat,
         &plan::Ask {
@@ -191,9 +205,53 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
             fresh: false,
             extra_verbs: &[],
         },
+        &mut spent,
     )?;
     print!("{}", plan::describe(&plan));
-    execute(&plan, default_jobs(), true)
+    let jobs = default_jobs();
+    let outcome = execute(&plan, jobs, true, &mut spent);
+    spent.total = whole_run.elapsed();
+    report(&plan, "land's gate", jobs, true, &spent, &outcome);
+    outcome
+}
+
+/// The run's block, said and kept ([`record`]). Both roads out of a gate
+/// pass through here — a red run's phases are what a slow one is read
+/// from as much as a green one's.
+fn report(
+    plan: &Plan,
+    what: &str,
+    jobs: usize,
+    landing: bool,
+    spent: &Spent,
+    outcome: &Result<Gated, String>,
+) {
+    let counted = |kept: fn(&Required) -> bool| plan.required.iter().filter(|r| kept(r)).count();
+    let verbs = counted(|r| r.step.id.starts_with("verify"));
+    let run = record::Run {
+        what,
+        head: &short(&plan.head),
+        jobs,
+        landing,
+        changed: plan.changed.len(),
+        reach: plan.reach.len(),
+        steps: (
+            counted(|r| r.step.always),
+            counted(|r| r.cached),
+            counted(|r| !r.step.always && !r.cached),
+        ),
+        verbs: (
+            verbs,
+            counted(|r| r.step.id.starts_with("verify") && !r.cached),
+        ),
+        outcome: match outcome {
+            Ok(Gated::Stamped) => "PASS",
+            Ok(Gated::CensusMoved) => "census moved",
+            Err(_) => "FAIL",
+        },
+    };
+    print!("{}", record::render(&run, spent));
+    record::keep(&plan.dir, &run, spent);
 }
 
 /// What a gate whose every step was green left behind.
@@ -235,7 +293,8 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// ([`verbs`]) — and everything else finishes, so its green steps are
 /// stamped and need not run again. A `landing`'s verbs are handed the
 /// machine's lanes ahead of any other gate's (`lanes`).
-fn execute(plan: &Plan, jobs: usize, landing: bool) -> Result<Gated, String> {
+fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result<Gated, String> {
+    let at = std::time::Instant::now();
     refuse_what_no_stamp_could_answer_for(plan)?;
     // Yesterday's runs go on their way out: a verb's repositories and
     // pictures are left where a person can look at them, and nothing
@@ -248,18 +307,25 @@ fn execute(plan: &Plan, jobs: usize, landing: bool) -> Result<Gated, String> {
     let store = Store::open(&plan.dir)?;
     let logs = plan.dir.join("target").join("gate-logs");
     std::fs::create_dir_all(&logs).map_err(|e| format!("{}: {e}", logs.display()))?;
+    spent.prepare = at.elapsed();
     // The faked steps of the tests run nothing, in a repository that has
     // no task runner to build.
+    let at = std::time::Instant::now();
     let runner = if std::env::var_os(FAKE_LOG).is_some() {
         None
     } else {
         Some(runner(&plan.dir, &logs)?)
     };
-    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs, landing)?;
+    spent.runner = at.elapsed();
+    let at = std::time::Instant::now();
+    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs, landing, spent)?;
+    spent.sides = at.elapsed();
     let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
     // step went red, so this is said on both roads out.
+    let at = std::time::Instant::now();
     let rewrote = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before;
+    spent.census_after = at.elapsed();
     if !failures.is_empty() {
         return Err(format!(
             "gate failed: {} — nothing stamped for {head}.{}",
@@ -328,6 +394,7 @@ fn run_sides(
     runner: Option<&Path>,
     jobs: usize,
     landing: bool,
+    spent: &mut Spent,
 ) -> Result<Vec<String>, String> {
     let host: Vec<&Required> = plan
         .required
@@ -359,15 +426,19 @@ fn run_sides(
             ""
         }
     );
+    let host_waited = Waited::default();
+    let linux_waited = Waited::default();
     let host_ground = Ground {
         name: "host",
         dir: &plan.dir,
         store,
         logs,
         runner,
+        waited: &host_waited,
     };
     let linux_ground = Ground {
         name: "linux",
+        waited: &linux_waited,
         ..host_ground
     };
     let failures: Vec<String> = std::thread::scope(|scope| {
@@ -384,6 +455,8 @@ fn run_sides(
     });
     let secs = started.elapsed().as_secs();
     println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
+    spent.host_lanes = host_waited.read();
+    spent.linux_lanes = linux_waited.read();
     Ok(failures)
 }
 
@@ -427,6 +500,9 @@ struct Ground<'a> {
     store: &'a Store,
     logs: &'a Path,
     runner: Option<&'a Path>,
+    /// Where this side's verbs tally what they waited for a lane another
+    /// gate held — said in a line here and kept in the run's record.
+    waited: &'a Waited,
 }
 
 /// One side's steps, as two groups that share no build directory and so
@@ -546,21 +622,17 @@ fn verbs(
     for (_, required) in block.iter().filter(|(_, r)| r.cached) {
         println!("[{name}] cached {}", required.step.id);
     }
+    // What the side had waited before this block, so that the line below
+    // says this block's own wait rather than the side's running total.
+    let before = ground.waited.read();
     // How many verbs waited for a lane held elsewhere, and for how long
     // in all: the one line that says another gate was running beside
     // this one, without a line per verb.
-    let waited = std::sync::Mutex::new((0usize, std::time::Duration::ZERO));
     let in_a_lane = |index: usize, required: &Required, no_build: bool| -> Result<(), String> {
         let lane = lanes
             .take()
             .map_err(|why| format!("{}: {why}", required.step.id))?;
-        if lane.waited > std::time::Duration::ZERO {
-            let mut tally = waited
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            tally.0 += 1;
-            tally.1 += lane.waited;
-        }
+        ground.waited.add(lane.waited);
         run_one(ground, index, required, no_build)
     };
     let mut queue = block.iter().filter(|(_, r)| !r.cached);
@@ -606,9 +678,8 @@ fn verbs(
             });
         }
     });
-    let (verbs_waited, in_all) = waited
-        .into_inner()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let after = ground.waited.read();
+    let (verbs_waited, in_all) = (after.0 - before.0, after.1 - before.1);
     if verbs_waited > 0 {
         println!(
             "[{name}] lanes: {verbs_waited} verb(s) waited for a lane held elsewhere ({} in all)",

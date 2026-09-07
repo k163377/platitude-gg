@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::census::{self, Census};
 use super::graph::{self, Graph, stem_of};
+use super::record::Spent;
 use super::stamp::Store;
 use crate::subprocess::{git_query, run_captured};
 
@@ -111,11 +112,30 @@ fn qml_dirs() -> (String, String) {
     (format!("{APP}/src/ui"), format!("{APP}/tests/qml"))
 }
 
-pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
-    let here = dir.display().to_string();
+/// The plan, with every phase of the making of it timed into `spent`:
+/// the graph off the sources, the one listing of the tree the cache keys
+/// are made of, the census, and the rest.
+/// Where the branch stands against main, and what it changed getting
+/// there.
+struct Standing {
+    head: String,
+    main: String,
+    base: String,
+    onto_main: bool,
+    changed: Vec<String>,
+}
+
+/// The two commits, the base between them, and the diff.
+///
+/// quotepath off: a non-ASCII name would otherwise come back
+/// octal-escaped in quotes and match no file. Renames off: with them on,
+/// a file moved is listed under its new name alone, and the old one —
+/// the path every reader still names — is never seen to have gone
+/// ([`gone_source`]).
+fn standing(here: &str, main_ref: &str) -> Result<Standing, String> {
     let rev = |what: &str| {
         git_query(
-            &here,
+            here,
             &[
                 "rev-parse",
                 "--verify",
@@ -127,17 +147,10 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         .ok_or_else(|| format!("{what} names no commit in {here}"))
     };
     let head = rev("HEAD")?;
-    let main = rev(ask.main_ref)?;
-    let base = git_query(&here, &["merge-base", &main, &head]).ok_or("git merge-base failed")?;
-    let onto_main = base == main;
-    let g = graph::build(dir)?;
-    // quotepath off: a non-ASCII name would otherwise come back
-    // octal-escaped in quotes and match no file. Renames off: with them
-    // on, a file moved is listed under its new name alone, and the old
-    // one — the path every reader still names — is never seen to have
-    // gone (`gone_source`).
-    let changed: Vec<String> = git_query(
-        &here,
+    let main = rev(main_ref)?;
+    let base = git_query(here, &["merge-base", &main, &head]).ok_or("git merge-base failed")?;
+    let changed = git_query(
+        here,
         &[
             "-c",
             "core.quotepath=false",
@@ -153,6 +166,28 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
     .filter(|l| !l.is_empty())
     .map(str::to_string)
     .collect();
+    Ok(Standing {
+        onto_main: base == main,
+        head,
+        main,
+        base,
+        changed,
+    })
+}
+
+pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan, String> {
+    let started = std::time::Instant::now();
+    let here = dir.display().to_string();
+    let Standing {
+        head,
+        main,
+        base,
+        onto_main,
+        changed,
+    } = standing(&here, ask.main_ref)?;
+    let at = std::time::Instant::now();
+    let g = graph::build(dir)?;
+    spent.graph = at.elapsed();
     let everything = if ask.all {
         Some("--all".to_string())
     } else if let Some(input) = changed.iter().find(|f| moves_everything(f)) {
@@ -184,8 +219,10 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
     } else {
         touched.clone()
     };
+    let at = std::time::Instant::now();
     let census = Census::load(dir);
     let worn = census::worn_by(dir);
+    spent.census = at.elapsed();
     let steps = select(
         &g,
         &census,
@@ -196,7 +233,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         &worn,
     );
     let store = Store::open(dir)?;
-    let required = owed(&here, &head, &store, steps, ask)?;
+    let required = owed(&here, &head, &store, steps, ask, spent)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
     let unclaimed = changed
         .iter()
@@ -207,6 +244,9 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>) -> Result<Plan, String> {
         })
         .cloned()
         .collect();
+    spent.plan_rest = started
+        .elapsed()
+        .saturating_sub(spent.graph + spent.census + spent.ids);
     Ok(Plan {
         dir: dir.to_path_buf(),
         head,
@@ -238,8 +278,11 @@ fn owed(
     store: &Store,
     steps: Vec<Step>,
     ask: &Ask<'_>,
+    spent: &mut Spent,
 ) -> Result<Vec<Required>, String> {
+    let at = std::time::Instant::now();
     let ids = tree_ids(here, head)?;
+    spent.ids = at.elapsed();
     Ok(steps
         .into_iter()
         .filter(|step| !(ask.host_only && step.side == Side::Linux))
