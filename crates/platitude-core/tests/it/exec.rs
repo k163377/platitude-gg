@@ -269,3 +269,62 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
         ]
     );
 }
+
+/// **A read leaves `.git/index.lock` alone.** The lock a write takes is
+/// fatal rather than patient — `hold_locked_index` dies where it cannot
+/// create it — so a read that takes the same lock kills a write running
+/// beside it, and the reads run beside the writes: the queue orders the
+/// writes against each other, not against a poll already out
+/// (`session::write`). A `git diff` against the work tree refreshes the
+/// index, and locks it to do so, unless the fixed arguments say
+/// otherwise; `--no-optional-locks` is not that say-so, since `status`
+/// asks the flag before it locks and `diff` never asks.
+///
+/// The index a reader leaves behind is the whole of the evidence, so the
+/// stat has to be one a refresh would want to fix: over an index that
+/// already matches, a read with the fault and a read without it write the
+/// same nothing.
+#[tokio::test]
+async fn a_work_tree_read_leaves_the_index_untouched() {
+    let mut repo_dir = TestRepo::init();
+    repo_dir.commit_file("a.txt", "one\n", "add a");
+
+    // The same bytes under a stat the index has not seen — the entry a
+    // refresh exists to fix, and the file a reader has nothing to say
+    // about.
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(repo_dir.path.join("a.txt"))
+        .expect("open the tracked file");
+    // The epoch rather than a time worked out from this one: what the
+    // stat has to be is *not the recorded one*, and a fixed date says so
+    // without reading a clock.
+    file.set_times(std::fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
+        .expect("give it a stat the index has not seen");
+    drop(file);
+
+    let index = repo_dir.path.join(".git").join("index");
+    let before = std::fs::read(&index).expect("the index the reader starts on");
+
+    let (executor, cancel) = env();
+    let out = bounded(
+        "the work tree diff",
+        executor.run(
+            GitCommand::new()
+                .cwd(&repo_dir.path)
+                .args(["diff", "--no-ext-diff"]),
+            &cancel,
+        ),
+    )
+    .await
+    .expect("the diff answers");
+
+    assert_eq!(
+        std::fs::read(&index).expect("the index the reader left"),
+        before,
+        "a read rewrote the index, so it held the lock a write dies on"
+    );
+    // And it is still a reader: a file whose stat alone moved is compared
+    // by content, and comes out unchanged.
+    assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
+}

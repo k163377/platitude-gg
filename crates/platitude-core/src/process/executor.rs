@@ -33,7 +33,7 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Configuration arguments prepended to every invocation.
-const FIXED_ARGS: [&str; 7] = [
+const FIXED_ARGS: [&str; 9] = [
     "-c",
     "color.ui=false",
     "-c",
@@ -42,6 +42,26 @@ const FIXED_ARGS: [&str; 7] = [
     // machine-readable --format records; force it off.
     "-c",
     "log.showSignature=false",
+    // **A `git diff` against the work tree writes the index unless this
+    // says not to**, and `--no-optional-locks` below does not stop it:
+    // `git status` asks that flag before it locks, `git diff` never asks
+    // (measured — a stat-dirty index is rewritten by a diff carrying the
+    // flag, and left alone by one carrying this). What it takes to do so
+    // is `.git/index.lock`, the same lock a write dies on rather than
+    // waits for, so a poll's diff landing on a commit's own lock kills
+    // the commit (`fatal: Unable to create ... index.lock: File exists`).
+    // No answer changes: the refresh is git's own cache of "this stat
+    // matched", and a file whose stat alone moved is compared by content
+    // either way — the patch, `--name-only` and `--quiet` all say the
+    // same with it off (measured). What it costs is that cache going
+    // unmaintained, since nothing this end refreshes the index any more:
+    // a work tree whose stats all moved without its contents changing is
+    // re-hashed by every read rather than by the one after the first
+    // (measured: 780 files, `status` 72ms against 28ms once refreshed).
+    // Ordinary editing leaves a handful of such entries; a tree copied in
+    // from outside git leaves all of them.
+    "-c",
+    "diff.autoRefreshIndex=false",
     "--no-optional-locks",
 ];
 
@@ -51,6 +71,8 @@ const FIXED_ARGS: [&str; 7] = [
 /// - `GIT_TERMINAL_PROMPT=0`: never hang on a credential prompt (auth is
 ///   delegated to credential helpers)
 /// - `GIT_OPTIONAL_LOCKS=0`: belt-and-suspenders with `--no-optional-locks`
+///   — and, like it, only over the commands that ask (`diff` does not, so
+///   the index lock it would take is turned off by the argument above)
 /// - `GIT_EDITOR=true`: an accidentally editor-spawning command exits
 ///   immediately instead of hanging. Interactive rebase leaves it in
 ///   place and adds `GIT_SEQUENCE_EDITOR` on top — rewords rely on the
