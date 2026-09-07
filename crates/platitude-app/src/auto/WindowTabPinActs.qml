@@ -23,10 +23,13 @@ Item {
     /// The harness's own window onto the strip's laid-out tabs (`auto/TabProbe.qml`).
     required property TabProbe tabProbe
 
-    /// How far the staging below has got. Only one verb runs in a process, so the two timers share it.
+    /// How far the staging below has got. Only one verb runs in a process, so the timers below share it.
     property bool floorSet: false
     property bool frontSet: false
     property bool runSent: false
+    /// The crowding wait's own two: one tick spent with the floor in place, and the diagnostic for it said.
+    property bool settling: false
+    property bool told: false
 
     /// The strip, put where both verbs start from: the window down on its floor so the strip has to overflow, the tab
     /// the run named brought to the front, and the run sent to whichever end leaves that tab off screen. Answers true
@@ -39,7 +42,10 @@ Item {
     /// Every precondition here survives what the staging does to it, so all of them are read on every tick: nothing
     /// below closes a tab, empties the strip or takes the page down, and the one thing that does move — which tab is
     /// in front — is waited for by name rather than assumed (規約 §UI 自動化の因果性).
-    function staged(front) {
+    ///
+    /// `verb` is the prefix the caller reports under, wanted only for the diagnostic the crowding wait writes: the
+    /// three verbs staged here go quiet in the same place, and the line has to name which one did.
+    function staged(front, verb) {
         // Every row standing in the strip, not merely open: the stand-in is drawn off the item the view built for the
         // tab in front, and a row the model has only just gained has none until the next layout.
         if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count)
@@ -58,8 +64,22 @@ Item {
         // A strip that fits has no edge for a stand-in to ride. The resize is what makes one, and the strip itself
         // says when that has taken — no width of its own is waited on, because which width crowds a strip is the
         // thing this cannot assume.
-        if (!acts.topBar.bandTabScrolls)
+        if (!acts.topBar.bandTabScrolls) {
+            // A strip still uncrowded a tick after the floor took is one this staging cannot carry: the wait above has
+            // nothing left to wait for, and the watchdog that ends such a run names the verb rather than the band it
+            // was handed. Said once, and a tick late so the resize has laid out — the numbers the count has to be
+            // chosen against are the band's own, and they differ per OS (`tab-widths`).
+            if (acts.settling && !acts.told) {
+                acts.told = true
+                Harness.report(verb + " crowded=false tabs=" + acts.pageRepeater.count
+                                  + " content=" + Math.round(acts.topBar.bandTabContent)
+                                  + " view=" + Math.round(acts.topBar.bandTabsWidth)
+                                  + " windowW=" + Math.round(acts.window.width)
+                                  + " floorW=" + Math.ceil(acts.window.floorWidth))
+            }
+            acts.settling = true
             return false
+        }
         if (!acts.frontSet) {
             acts.frontSet = true
             acts.tabsModel.setCurrentIndex(front)
@@ -87,7 +107,7 @@ Item {
         running: Harness.autoAct === "tab-pin"
         readonly property int front: Number(Harness.autoActArg || 0)
         onTriggered: {
-            if (!acts.staged(tabPinTimer.front))
+            if (!acts.staged(tabPinTimer.front, "tab_pin"))
                 return
             stop()
             // The two halves of the rule first and next to each other: the line is judged as a run of words, and a
@@ -129,7 +149,7 @@ Item {
             // stand-in is up", which is the very thing this verb takes away — and a verb waiting on its own answer
             // being undone waits for the watchdog (規約 §UI 自動化の因果性; measured before this branch was written).
             if (!tabPinGoTimer.pressed) {
-                if (!acts.staged(tabPinGoTimer.front))
+                if (!acts.staged(tabPinGoTimer.front, "tab_pin_go"))
                     return
                 tabPinGoTimer.from = acts.topBar.runOffset()
                 tabPinGoTimer.pressed = acts.topBar.pressTabPin()
@@ -176,7 +196,7 @@ Item {
             if (!tabOpenGoTimer.opened) {
                 // The staging is the precondition of the opening and of nothing else (`tab-pin-go` above): read again
                 // afterwards it ends in "the stand-in is up", which this verb is here to take away.
-                if (!acts.staged(0) || Harness.autoActArg === "")
+                if (!acts.staged(0, "tab_open_go") || Harness.autoActArg === "")
                     return
                 tabOpenGoTimer.from = acts.topBar.runOffset()
                 tabOpenGoTimer.had = acts.pageRepeater.count
