@@ -120,15 +120,21 @@ Item {
                 compare(stack.layout[i].x, (i + 1) * stack.step)
         }
 
-        // One slope for every row, at every depth: a sheet is a step right and a border down wherever it stands, the
-        // deepest fan a row can carry still fits the room under the card, and the row centres the card and the fan
-        // together rather than the card alone.
+        /// One row of every depth there is, shallowest first: the fan behind these carries one sheet more each time,
+        /// up to the deepest a row can wear.
+        function depths() {
+            return [[root.current, root.tagHere],
+                    [root.current, root.remote, root.tagHere],
+                    [root.current, root.local2, root.remote, root.tagHere],
+                    [root.current, root.local2, root.held, root.remote, root.tagHere],
+                    [root.current, root.local2, root.held, root.remote, root.tagHere, root.tagAway]]
+        }
+
+        // One slope for every row, at every depth: a sheet is a step right and the row's own drop down wherever it
+        // stands, the fan fits the row it is drawn in, and the row centres the card and the fan together rather than
+        // the card alone.
         function test_every_sheet_takes_the_same_step_and_the_row_centres_the_stack() {
-            const rows = [[root.current, root.tagHere],
-                          [root.current, root.remote, root.tagHere],
-                          [root.current, root.local2, root.remote, root.tagHere],
-                          [root.current, root.local2, root.held, root.remote, root.tagHere],
-                          [root.current, root.local2, root.held, root.remote, root.tagHere, root.tagAway]]
+            const rows = depths()
             for (let i = 0; i < rows.length; ++i) {
                 stack.records = rows[i]
                 // A step and a drop apiece, all the way back.
@@ -147,6 +153,33 @@ Item {
             // And the last row of them is the deepest one there is, so what the loop read of it is what the deepest
             // fan there is comes to.
             compare(stack.sheets.length, stack.maxSheets)
+        }
+
+        // How far the fan falls is the row's own, and how many sheets it carries is what decides it: the steepest
+        // whole step that many of them fit the row at, never past the step they stand out by (デザイン規約 §重ね表示).
+        // **The rule rather than the pixels** — what is held here is that no row leaves a step it had the room for and
+        // no deeper row fans steeper than a shallower one, so a token that moves the row or the chip moves the
+        // answers without moving the test.
+        function test_the_count_decides_how_far_the_fan_falls() {
+            const rows = depths()
+            const drops = []
+            for (let i = 0; i < rows.length; ++i) {
+                stack.records = rows[i]
+                const n = stack.sheets.length
+                compare(n, i + 1, "the row of depth " + (i + 1) + " built " + n + " sheets")
+                verify(stack.drop >= Theme.borderWidth, "a fan of " + n + " fell short of an edge")
+                verify(stack.drop <= stack.step, "a fan of " + n + " fell further than it stepped out")
+                verify(n * stack.drop <= stack.fanDepthMax, "a fan of " + n + " outgrew its row")
+                verify(stack.drop === stack.step || n * (stack.drop + 1) > stack.fanDepthMax,
+                       "a fan of " + n + " left a whole step of room standing")
+                drops.push(stack.drop)
+            }
+            // And across the rows: a deeper fan never falls further than a shallower one. **A flat drop at every
+            // depth is already caught above** — a row that had the room for a whole step more and did not take it
+            // fails there — so what is left to say here is the shape the reader sees going down the column.
+            for (let d = 1; d < drops.length; ++d)
+                verify(drops[d] <= drops[d - 1],
+                       "a fan of " + (d + 1) + " fell further than one of " + d)
         }
 
         // The card standing on the chip is what the stack unfolded into: nothing may peek out from under it.
