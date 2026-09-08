@@ -58,7 +58,10 @@ pub(crate) struct Census {
 
 impl Census {
     pub(crate) fn load(root: &Path) -> Census {
-        let text = std::fs::read_to_string(root.join(FILE)).unwrap_or_default();
+        Census::parse(&std::fs::read_to_string(root.join(FILE)).unwrap_or_default())
+    }
+
+    pub(crate) fn parse(text: &str) -> Census {
         let mut census = Census::default();
         for line in text.lines() {
             if line.starts_with('#') || line.trim().is_empty() {
@@ -112,21 +115,232 @@ impl Census {
     }
 }
 
+/// How many verb lines a moved name is named by before the row counts
+/// them instead. A run that starts or stops meeting a component moves
+/// its own line, or the handful of lines whose verbs land the same way;
+/// a component the app gained or lost moves every line there is. The
+/// rows a reader is here for are the first kind, and past a handful the
+/// names stop being a row and become the file again.
+const NAMED_AT_MOST: usize = 6;
+
+/// What a write did to the census, read as sets rather than as a diff.
+///
+/// A component the app gained is a name every run meets, so the diff of
+/// the file is the whole file — hundreds of lines all saying the one
+/// thing, and the single line that gained a name by itself is a needle
+/// in them. That line is the one worth reading: it is a verb landing
+/// where it did not land before, and as text it looks exactly like the
+/// bulk around it. So the write says what it did by name: a name every
+/// line moved is one row that counts them, and a name a handful of lines
+/// moved is a row that says which verbs.
+#[derive(Default)]
+pub(crate) struct Shift {
+    /// name -> the verb lines whose run met it and had not before.
+    gained: BTreeMap<String, BTreeSet<String>>,
+    /// name -> the verb lines that had met it and did not this time.
+    lost: BTreeMap<String, BTreeSet<String>>,
+    /// Verb lines the write put in, against how many names each brought.
+    /// Their names are no row of their own: a line that was not there
+    /// gained all of them, which the line itself already says.
+    put_in: BTreeMap<String, usize>,
+    /// Verb lines the write took away, for the same reason.
+    took_away: BTreeSet<String>,
+    /// How many lines the census holds now, which the counts read against.
+    lines: usize,
+}
+
+impl Shift {
+    /// The sets one census holds against another's.
+    pub(crate) fn between(before: &Census, after: &Census) -> Shift {
+        let mut shift = Shift {
+            lines: after.lines.len(),
+            ..Shift::default()
+        };
+        for (line, names) in &after.lines {
+            let Some(held) = before.lines.get(line) else {
+                shift.put_in.insert(line.clone(), names.len());
+                continue;
+            };
+            for name in names.difference(held) {
+                shift
+                    .gained
+                    .entry(name.clone())
+                    .or_default()
+                    .insert(line.clone());
+            }
+            for name in held.difference(names) {
+                shift
+                    .lost
+                    .entry(name.clone())
+                    .or_default()
+                    .insert(line.clone());
+            }
+        }
+        for line in before.lines.keys() {
+            if !after.lines.contains_key(line) {
+                shift.took_away.insert(line.clone());
+            }
+        }
+        shift
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.gained.is_empty()
+            && self.lost.is_empty()
+            && self.put_in.is_empty()
+            && self.took_away.is_empty()
+    }
+
+    /// Every name that moved, as `(mark, name, the lines it moved on)`,
+    /// fewest lines first — the flutter reads before the bulk, because
+    /// the bulk is the row a reader can take on trust.
+    fn moves(&self) -> Vec<(char, &String, &BTreeSet<String>)> {
+        let mut moves: Vec<(char, &String, &BTreeSet<String>)> = self
+            .gained
+            .iter()
+            .map(|(name, lines)| ('+', name, lines))
+            .chain(self.lost.iter().map(|(name, lines)| ('-', name, lines)))
+            .collect();
+        moves.sort_by(|one, two| (one.2.len(), one.1, one.0).cmp(&(two.2.len(), two.1, two.0)));
+        moves
+    }
+
+    /// Where a name moved: the verbs when they are few enough to read,
+    /// and how many of the census's lines when they are not — with the
+    /// one that moved them all said as all, so a new component is told
+    /// from a partial move without counting.
+    fn spread(&self, lines: &BTreeSet<String>) -> Vec<String> {
+        if lines.len() <= NAMED_AT_MOST {
+            return lines.iter().cloned().collect();
+        }
+        if lines.len() == self.lines {
+            return vec![format!("all {} lines", self.lines)];
+        }
+        vec![format!("{} of {} lines", lines.len(), self.lines)]
+    }
+
+    /// The write as a block of the gate's record: one row per name that
+    /// moved, and one per line put in or taken away.
+    pub(crate) fn block(&self) -> String {
+        if self.is_empty() {
+            // No line and nothing moved is a run that never read the
+            // census — a dry run — and it has nothing to say of one.
+            if self.lines == 0 {
+                return String::new();
+            }
+            return format!("  census  no line moved ({} line(s))\n", self.lines);
+        }
+        let mut rows: Vec<(String, String)> = Vec::new();
+        // Lines are named the way a moved name's are, and past a handful
+        // the header's count is the whole answer: a tree with no census
+        // yet puts every line in at once, and naming them would print
+        // the file back.
+        if self.put_in.len() <= NAMED_AT_MOST {
+            for (line, names) in &self.put_in {
+                rows.push((String::from("+line"), format!("{line} ({names} name(s))")));
+            }
+        }
+        if self.took_away.len() <= NAMED_AT_MOST {
+            for line in &self.took_away {
+                rows.push((String::from("-line"), line.clone()));
+            }
+        }
+        for (mark, name, lines) in self.moves() {
+            let head = format!("{mark}{name}");
+            for (row, where_) in self.spread(lines).into_iter().enumerate() {
+                rows.push((
+                    if row == 0 {
+                        head.clone()
+                    } else {
+                        String::new()
+                    },
+                    where_,
+                ));
+            }
+        }
+        let width = rows.iter().map(|(head, _)| head.len()).max().unwrap_or(0);
+        let mut out = format!(
+            "  census  {} name(s) moved over {} line(s){}\n",
+            self.gained.len() + self.lost.len(),
+            self.lines,
+            self.lines_said(),
+        );
+        for (head, where_) in rows {
+            out.push_str(&format!("          {head:width$}  {where_}\n"));
+        }
+        out
+    }
+
+    /// What the header says of whole lines, when there were any.
+    fn lines_said(&self) -> String {
+        let mut said = String::new();
+        if !self.put_in.is_empty() {
+            said.push_str(&format!(", {} line(s) put in", self.put_in.len()));
+        }
+        if !self.took_away.is_empty() {
+            said.push_str(&format!(", {} taken away", self.took_away.len()));
+        }
+        said
+    }
+
+    /// What the write did to one verb's line, in a clause a run of that
+    /// verb can print beside its own count: `(+Theme)`, `(+A -B)`, and
+    /// nothing at all when the line came back the same.
+    ///
+    /// A name that moved on more lines than this one says how many, so
+    /// the one run can tell the two writes apart without the file: a verb
+    /// meeting a component it had not is its line alone, and a component
+    /// the app gained or lost is every line there is.
+    pub(crate) fn said_for(&self, line: &str) -> String {
+        let mut own: Vec<String> = Vec::new();
+        let mut beside: Vec<String> = Vec::new();
+        for (mark, name, lines) in self.moves() {
+            let others = lines.iter().filter(|held| *held != line).count();
+            if !lines.contains(line) {
+                beside.push(format!("{mark}{name} on {others} other line(s)"));
+            } else if others == 0 {
+                own.push(format!("{mark}{name}"));
+            } else {
+                own.push(format!("{mark}{name} on {} lines", lines.len()));
+            }
+        }
+        if own.is_empty() && beside.is_empty() {
+            return String::new();
+        }
+        let own = if own.is_empty() {
+            String::from("this line unchanged")
+        } else {
+            own.join(" ")
+        };
+        if beside.is_empty() {
+            return format!(" ({own})");
+        }
+        format!(" ({own}; {})", beside.join(", "))
+    }
+}
+
 /// Records what a passing run of `line` showed. Names that are no QML
 /// file of the app (C++ types, inline components, files since removed)
 /// are dropped; what is left is the line, in place of whatever an earlier
 /// run of it wrote — or, where the run photographed a page whose rows
 /// were still arriving (`page_settled` false), added to it, because such
 /// a run can say what it met and not that the rest is gone.
+///
+/// Answers with how many names the line holds and what the write moved
+/// ([`Shift`]), so the run can say which names it is that changed rather
+/// than leave a file for somebody to diff.
 pub(crate) fn record(
     root: &Path,
     line: &str,
     names: &[String],
     page_settled: bool,
-) -> Result<usize, String> {
+) -> Result<(usize, Shift), String> {
     let _turn = one_writer(root)?;
     let known = component_files(root)?;
-    let mut census = Census::load(root);
+    let before = Census::load(root);
+    let mut census = Census {
+        lines: before.lines.clone(),
+    };
     let mut shown: BTreeSet<String> = names
         .iter()
         .filter(|n| known.contains(*n))
@@ -141,7 +355,8 @@ pub(crate) fn record(
         names.retain(|name| known.contains(name));
     }
     census.save(root)?;
-    Ok(count)
+    let shift = Shift::between(&before, &census);
+    Ok((count, shift))
 }
 
 /// The file under one writer at a time, for as long as the guard lives.
@@ -285,9 +500,151 @@ pub(crate) fn names_in(lines: &[String]) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Census, names_in, page_settled_in, record};
+    use super::{Census, Shift, names_in, page_settled_in, record};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
+
+    /// A census of the lines given, written the way the file is.
+    fn census_of(lines: &[(&str, &[&str])]) -> Census {
+        let text: String = lines
+            .iter()
+            .map(|(line, names)| format!("{line}\t{}\n", names.join(" ")))
+            .collect();
+        Census::parse(&text)
+    }
+
+    /// Eight verbs showing the same two components — enough lines that a
+    /// name every one of them moved is past what the rows will name.
+    fn eight_lines() -> Census {
+        census_of(
+            &VERBS
+                .iter()
+                .map(|verb| (*verb, &["AppCard", "Main"][..]))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// The census those eight verbs make when each shows what `showing`
+    /// gives its place.
+    fn eight_showing(showing: impl Fn(usize) -> &'static [&'static str]) -> Census {
+        census_of(
+            &VERBS
+                .iter()
+                .enumerate()
+                .map(|(n, verb)| (*verb, showing(n)))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// A block's rows with the column padding taken out, so a test says
+    /// what a row holds and not how wide the widest name beside it was.
+    fn rows(block: &str) -> Vec<String> {
+        block
+            .lines()
+            .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
+            .collect()
+    }
+
+    const VERBS: [&str; 8] = [
+        "commit --preset basic",
+        "diff-file notes.txt",
+        "graph --preset tags",
+        "op-exit-go continue --preset rebase-staged",
+        "stash --preset basic",
+        "switch --preset branches",
+        "wip --preset dirty",
+        "zoom --preset wide",
+    ];
+
+    #[test]
+    fn a_name_every_line_moved_is_one_row_and_a_name_few_lines_moved_names_the_verbs() {
+        // A component the app gained, met by every run; one verb landing
+        // somewhere new, which is the flutter; and a component two verbs
+        // stopped showing.
+        let after = eight_showing(|n| match n {
+            3 => &["AppCard", "DiffReach", "FileRowDelegate", "Main"],
+            0 | 1 => &["DiffReach", "Main"],
+            _ => &["AppCard", "DiffReach", "Main"],
+        });
+        let block = Shift::between(&eight_lines(), &after).block();
+        assert_eq!(
+            rows(&block),
+            [
+                "census 3 name(s) moved over 8 line(s)",
+                // The flutter first: one verb landing where it did not
+                // before, which is the row a whole-file diff loses.
+                "+FileRowDelegate op-exit-go continue --preset rebase-staged",
+                "-AppCard commit --preset basic",
+                "diff-file notes.txt",
+                // And the bulk last, counted rather than named.
+                "+DiffReach all 8 lines",
+            ],
+            "{block}"
+        );
+    }
+
+    #[test]
+    fn a_name_a_subset_moved_is_counted_against_the_whole() {
+        let after = eight_showing(|n| {
+            if n < 7 {
+                &["Main"]
+            } else {
+                &["AppCard", "Main"]
+            }
+        });
+        let block = Shift::between(&eight_lines(), &after).block();
+        assert_eq!(
+            rows(&block),
+            [
+                "census 1 name(s) moved over 8 line(s)",
+                "-AppCard 7 of 8 lines",
+            ],
+            "past a handful the verbs are counted, and a subset is not all: {block}"
+        );
+    }
+
+    #[test]
+    fn every_line_put_in_at_once_is_the_headers_count_and_no_rows() {
+        // A tree with no census yet: every line arrives, and naming them
+        // would print the file back.
+        let block = Shift::between(&Census::default(), &eight_lines()).block();
+        assert_eq!(
+            rows(&block),
+            ["census 0 name(s) moved over 8 line(s), 8 line(s) put in"],
+            "{block}"
+        );
+    }
+
+    #[test]
+    fn a_line_put_in_or_taken_away_is_its_own_row_and_not_its_names() {
+        let before = census_of(&[("wip --preset dirty", &["AppCard", "Main"])]);
+        let after = census_of(&[("diff-file notes.txt", &["AppCard", "DiffPane", "Main"])]);
+        let block = Shift::between(&before, &after).block();
+        assert_eq!(
+            rows(&block),
+            [
+                "census 0 name(s) moved over 1 line(s), 1 line(s) put in, 1 taken away",
+                "+line diff-file notes.txt (3 name(s))",
+                "-line wip --preset dirty",
+            ],
+            "a line that was not there gained all of its names, which the line itself \
+             says: {block}"
+        );
+    }
+
+    #[test]
+    fn a_census_that_did_not_move_says_so_and_one_never_read_says_nothing() {
+        let held = eight_lines();
+        let still = Shift::between(&held, &held);
+        assert!(still.is_empty());
+        assert_eq!(still.block(), "  census  no line moved (8 line(s))\n");
+        assert_eq!(still.said_for("wip --preset dirty"), "");
+        assert_eq!(
+            Shift::default().block(),
+            "",
+            "a dry run read no census and has nothing to say of one"
+        );
+    }
 
     /// A root holding nothing but the QML files a census may name: a
     /// checkout of one test's own, with no census in it yet.
@@ -383,7 +740,7 @@ mod tests {
         .expect("first");
         // The verb stopped showing the graph and started showing the
         // diff: what it shows now is the whole of its line.
-        let count = record(
+        let (count, shift) = record(
             &root,
             "wip --preset dirty",
             &["DiffPane".into(), "WipPane".into(), "QQuickText".into()],
@@ -391,6 +748,11 @@ mod tests {
         )
         .expect("second");
         assert_eq!(count, 2, "a name that is no QML file of the app is dropped");
+        assert_eq!(
+            shift.said_for("wip --preset dirty"),
+            " (+DiffPane -GraphPane)",
+            "the run says which names moved, not that the file did"
+        );
         let census = Census::load(&root);
         assert_eq!(
             census.lines["wip --preset dirty"],
@@ -411,7 +773,7 @@ mod tests {
         .expect("settled");
         // The same verb again, finished before the reads landed: the two
         // it did not meet are still what the verb shows.
-        let count = record(
+        let (count, shift) = record(
             &root,
             "band --system-title-bar",
             &["GraphPane".into(), "WipPane".into()],
@@ -419,6 +781,11 @@ mod tests {
         )
         .expect("arriving");
         assert_eq!(count, 3);
+        assert_eq!(
+            shift.said_for("band --system-title-bar"),
+            " (+WipPane)",
+            "a run that only adds says what it added"
+        );
         let census = Census::load(&root);
         assert_eq!(
             census.lines["band --system-title-bar"],
@@ -440,7 +807,13 @@ mod tests {
         )
         .expect("diff");
         std::fs::remove_file(root.join("crates/platitude-app/src/ui/WipPane.qml")).expect("remove");
-        record(&root, "diff-file b.txt", &["DiffPane".into()], true).expect("again");
+        let (_, shift) =
+            record(&root, "diff-file b.txt", &["DiffPane".into()], true).expect("again");
+        assert_eq!(
+            shift.said_for("diff-file b.txt"),
+            " (-WipPane on 2 lines)",
+            "a name the pruning took off every line says so on the line that ran"
+        );
         let census = Census::load(&root);
         assert!(!census.covers("WipPane"));
         assert_eq!(

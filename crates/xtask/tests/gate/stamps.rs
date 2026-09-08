@@ -4,6 +4,12 @@
 
 use crate::support::{ALWAYS, Sandbox, set, without_always};
 
+/// A run's output with runs of spaces taken out, so a test says what a
+/// row holds and not how wide the column beside it was.
+fn squeezed(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[test]
 fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     let sb = Sandbox::new("graph-reuse");
@@ -327,6 +333,13 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
         text.contains("the tree moved with them") && text.contains("review the diff"),
         "{text}"
     );
+    // The rewrite said by name and by verb: a diff of the census is the
+    // whole file when a component comes or goes, and the one line a verb
+    // moved cannot be read out of it.
+    assert!(
+        squeezed(&text).contains("+Theme stash --preset basic"),
+        "the record names the verb whose line moved: {text}"
+    );
     assert_eq!(
         sb.git_ok(&sb.seat, &["status", "--porcelain"]),
         "M crates/xtask/verb-census.txt",
@@ -340,6 +353,10 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
     assert!(
         text.contains("cached verify stash --preset basic"),
         "{text}"
+    );
+    assert!(
+        text.contains("census  no line moved"),
+        "the run over the commit of it moved nothing: {text}"
     );
     assert_eq!(
         sb.ran(),

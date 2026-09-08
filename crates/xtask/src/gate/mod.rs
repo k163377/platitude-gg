@@ -36,6 +36,7 @@ use plan::{Plan, Required, Side};
 use record::{Spent, Waited};
 use stamp::{CommitStamp, Store};
 
+use census::{Census, Shift};
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
 pub(crate) use hooks::{SESSION, SKIP, install};
 
@@ -170,6 +171,7 @@ fn gate(args: &[String]) -> Result<(), String> {
         &mut spent,
     )?;
     print!("{}", plan::describe(&plan));
+    let mut shift = Shift::default();
     if opts.dry_run {
         // The plan's own cost, said the way a run's is: what a dry run
         // is for is reading a selection, and how long the reading took
@@ -178,12 +180,20 @@ fn gate(args: &[String]) -> Result<(), String> {
         spent.total = whole_run.elapsed();
         let head = short(&plan.head);
         let run = stood(&plan, what.trim_end(), &head, opts.jobs, false, "dry run");
-        print!("{}", record::render(&run, &spent));
+        print!("{}", record::render(&run, &spent, &shift));
         return Ok(());
     }
-    let outcome = execute(&plan, opts.jobs, false, &mut spent);
+    let outcome = execute(&plan, opts.jobs, false, &mut spent, &mut shift);
     spent.total = whole_run.elapsed();
-    report(&plan, what.trim_end(), opts.jobs, false, &spent, &outcome);
+    report(
+        &plan,
+        what.trim_end(),
+        opts.jobs,
+        false,
+        &spent,
+        &outcome,
+        &shift,
+    );
     match outcome? {
         Gated::Stamped => Ok(()),
         // A tree left dirty without a word is the next gate refusing to
@@ -222,9 +232,10 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
     )?;
     print!("{}", plan::describe(&plan));
     let jobs = default_jobs();
-    let outcome = execute(&plan, jobs, true, &mut spent);
+    let mut shift = Shift::default();
+    let outcome = execute(&plan, jobs, true, &mut spent, &mut shift);
     spent.total = whole_run.elapsed();
-    report(&plan, "land's gate", jobs, true, &spent, &outcome);
+    report(&plan, "land's gate", jobs, true, &spent, &outcome, &shift);
     outcome
 }
 
@@ -268,6 +279,7 @@ fn report(
     landing: bool,
     spent: &Spent,
     outcome: &Result<Gated, String>,
+    shift: &Shift,
 ) {
     let head = short(&plan.head);
     let run = stood(
@@ -282,8 +294,8 @@ fn report(
             Err(_) => "FAIL",
         },
     );
-    print!("{}", record::render(&run, spent));
-    record::keep(&plan.dir, &run, spent);
+    print!("{}", record::render(&run, spent, shift));
+    record::keep(&plan.dir, &run, spent, shift);
 }
 
 /// What a gate whose every step was green left behind.
@@ -325,7 +337,13 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 /// ([`verbs`]) — and everything else finishes, so its green steps are
 /// stamped and need not run again. A `landing`'s verbs are handed the
 /// machine's lanes ahead of any other gate's (`lanes`).
-fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result<Gated, String> {
+fn execute(
+    plan: &Plan,
+    jobs: usize,
+    landing: bool,
+    spent: &mut Spent,
+    shift: &mut Shift,
+) -> Result<Gated, String> {
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     refuse_what_no_stamp_could_answer_for(plan)?;
@@ -360,7 +378,16 @@ fn execute(plan: &Plan, jobs: usize, landing: bool, spent: &mut Spent) -> Result
     // step went red, so this is said on both roads out.
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
-    let rewrote = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default() != census_before;
+    let census_now = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
+    // The bytes answer whether the tree moved (a header the sources
+    // changed moves it too, and the next gate would refuse to run over
+    // that); the sets answer what moved, which is what a reader of a
+    // whole-file diff cannot get at.
+    let rewrote = census_now != census_before;
+    *shift = Shift::between(
+        &Census::parse(&String::from_utf8_lossy(&census_before)),
+        &Census::parse(&String::from_utf8_lossy(&census_now)),
+    );
     spent.census_after = at.elapsed();
     if !failures.is_empty() {
         return Err(format!(

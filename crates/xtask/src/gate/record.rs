@@ -113,7 +113,7 @@ fn moment(spent: Duration) -> String {
 }
 
 /// The block both the terminal and the record hold.
-pub(crate) fn render(run: &Run<'_>, spent: &Spent) -> String {
+pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> String {
     let (always, cached, to_run) = run.steps;
     let (verbs_selected, verbs_run) = run.verbs;
     let mut out = format!(
@@ -153,6 +153,11 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent) -> String {
         spent.linux_lanes.0,
         moment(spent.linux_lanes.1),
     ));
+    // What the run's verbs did to the census, by name rather than as a
+    // file: one name every line gained is the whole file's diff, and the
+    // row that says so is what keeps the one line that moved on its own
+    // readable beside it (`super::census::Shift`).
+    out.push_str(&shift.block());
     out
 }
 
@@ -160,7 +165,7 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent) -> String {
 /// ended and the process that ran it, and takes away all but the newest
 /// [`KEEP`]. A record nobody could write is not worth a red gate: the run
 /// itself has already answered, and this is the note beside it.
-pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent) {
+pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::Shift) {
     let records = dir.join("target").join(DIR);
     if std::fs::create_dir_all(&records).is_err() {
         return;
@@ -169,7 +174,7 @@ pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent) {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
     let path = records.join(format!("{at}-{}.txt", std::process::id()));
-    let _ = std::fs::write(&path, render(run, spent));
+    let _ = std::fs::write(&path, render(run, spent, shift));
     sweep(&records);
 }
 
@@ -236,7 +241,7 @@ mod tests {
             verbs: (353, 353),
             outcome: "PASS",
         };
-        let text = render(&run, &spent);
+        let text = render(&run, &spent, &crate::gate::Shift::default());
         for word in [
             "gate lock",
             "graph",

@@ -195,9 +195,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     {
         let page_settled = crate::gate::page_settled_in(&ran.err_lines);
         match crate::gate::record(&root, &line, &names, page_settled) {
-            Ok(count) if page_settled => println!("census: {line} — {count} component(s) recorded"),
-            Ok(count) => println!(
-                "census: {line} — {count} component(s), added to: the page was still arriving"
+            // The names the write moved, beside the count: the file's own
+            // diff is every line when a component came or went, and this
+            // is the run saying which name that was and whether the line
+            // it was about is the one that moved.
+            Ok((count, shift)) if page_settled => println!(
+                "census: {line} — {count} component(s) recorded{}",
+                shift.said_for(&line)
+            ),
+            Ok((count, shift)) => println!(
+                "census: {line} — {count} component(s), added to: the page was still arriving{}",
+                shift.said_for(&line)
             ),
             Err(why) => println!("census: not recorded ({why})"),
         }
