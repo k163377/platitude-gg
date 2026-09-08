@@ -49,6 +49,7 @@ impl Default for PerfProbe {
 
 impl PerfProbe {
     pub fn start_clock() {
+        // waits(measured): the instant every reading of a run is written against
         START.get_or_init(Instant::now);
     }
 }
@@ -63,6 +64,7 @@ impl PerfProbe {
 
     #[qslot]
     fn clock_ms(&self) -> f64 {
+        // waits(measured): the clock the drivers date their report lines by; no verdict is taken here
         START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
     }
 

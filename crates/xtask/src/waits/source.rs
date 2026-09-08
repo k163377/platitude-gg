@@ -628,20 +628,28 @@ pub(super) fn line_of(chars: &[char], at: usize) -> usize {
     chars[..at].iter().filter(|c| **c == '\n').count() + 1
 }
 
-/// Whether `token` occurs in `haystack` on a word boundary: `timeout(`
-/// must not be found inside `no_timeout(`, nor `bounded(` inside
-/// `unbounded(`. A token that opens with a non-word byte (`.outcome()`)
-/// matches anywhere.
+/// Whether `token` occurs in `haystack` on a word boundary at each end
+/// it has one: `timeout(` must not be found inside `no_timeout(`, nor
+/// `bounded(` inside `unbounded(`, nor `Instant::now` inside
+/// `Instant::nowhere`. An end that is not a word byte (`.outcome()`,
+/// `sleep(`) guards nothing and matches anywhere — which is what lets a
+/// name be looked for however the call spells it, `Instant::now()` and
+/// the `Instant::now` a `get_or_init` is handed alike.
 pub(super) fn has_token(haystack: &str, token: &str) -> bool {
     let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let guarded = token.as_bytes().first().copied().is_some_and(word);
+    let bytes = token.as_bytes();
+    let opens = bytes.first().copied().is_some_and(word);
+    let closes = bytes.last().copied().is_some_and(word);
     let mut from = 0;
     while let Some(found) = haystack[from..].find(token) {
         let at = from + found;
-        if !guarded || at == 0 || !word(haystack.as_bytes()[at - 1]) {
+        let end = at + token.len();
+        let before = !opens || at == 0 || !word(haystack.as_bytes()[at - 1]);
+        let after = !closes || haystack.as_bytes().get(end).is_none_or(|b| !word(*b));
+        if before && after {
             return true;
         }
-        from = at + token.len();
+        from = end;
     }
     false
 }
@@ -715,7 +723,25 @@ pub(super) fn judged(
 
 #[cfg(test)]
 mod tests {
-    use super::{Declared, Lang, Purpose, code_view, declared_test_modules, markers, test_regions};
+    use super::{
+        Declared, Lang, Purpose, code_view, declared_test_modules, has_token, markers, test_regions,
+    };
+
+    /// A token is guarded at each end that has a word byte on it, and
+    /// nowhere else: what the far guard buys is a name found however the
+    /// call spells it, without `Instant::nowhere` answering to it.
+    #[test]
+    fn a_token_is_bounded_at_the_ends_it_has_words_on() {
+        assert!(has_token("let t = Instant::now();", "Instant::now"));
+        assert!(has_token(
+            "*CELL.get_or_init(Instant::now);",
+            "Instant::now"
+        ));
+        assert!(!has_token("let t = Instant::nowhere();", "Instant::now"));
+        assert!(has_token("tokio::time::timeout(BUDGET, x)", "timeout("));
+        assert!(!has_token("no_timeout(x)", "timeout("));
+        assert!(has_token("let a = task.outcome().await;", ".outcome()"));
+    }
 
     /// The declared modules of `text`, each as the file it names or the
     /// name it is known by.

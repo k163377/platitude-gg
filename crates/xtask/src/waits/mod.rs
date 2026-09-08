@@ -32,13 +32,18 @@
 //! names none of these. The product crates' bodies are not read: the
 //! product's clocks are the product's business.
 //!
-//! The one part of a product crate that is read is the app's harness
-//! ([`HARNESS`]) — the driver `PG_AUTO_ACT` runs the product through,
-//! which is test code that happens to ship inside the window. It runs on
-//! beats rather than on QtTest calls, so it is named by rules of its own
-//! ([`qml::Kind::Harness`]): every span of time it spells for itself,
-//! and every count of milliseconds it keeps. The window beside it
-//! (`src/ui`) is the product and stays unread.
+//! The one part of a product crate that is read is the app's harness,
+//! which is test code that happens to be compiled inside the window, and
+//! it has two halves. The QML driver `PG_AUTO_ACT` runs the product
+//! through ([`HARNESS`]) runs on beats rather than on QtTest calls, so it
+//! is named by rules of its own ([`qml::Kind::Harness`]): every span of
+//! time it spells for itself, and every count of milliseconds it keeps.
+//! The Rust it is driven and read through ([`HARNESS_RUST`]) is named by
+//! the same rules as this runner's own body — the shapes are the same and
+//! so is the reason. Neither ships: both are behind the `automation`
+//! feature. The window beside them (`src/ui`) is the product and stays
+//! unread, the automation's own cadence (`ui/SampleTimer.qml`) included —
+//! it is a type of `platitude.ui` that the quit dialog waits on too.
 //!
 //! What a test — or a verb — may still do it says on the line:
 //! `// waits(<purpose>): <reason>` above or beside the statement, with a
@@ -101,6 +106,14 @@ const SELF: &str = "/src/waits/";
 /// harness, read as test code beside the window it drives.
 const HARNESS: &str = "auto";
 
+/// The Rust half of that same harness: the module a run is driven and
+/// read through — the `PG_*` record, the ceiling thread that says where
+/// a wedged process stood, the clock the drivers date their reports by.
+/// It is behind the same feature as [`HARNESS`] and ships in no window,
+/// so its body is read the way this runner's own is: what a run is
+/// driven through is test equipment wherever it is compiled.
+const HARNESS_RUST: &str = "harness";
+
 /// How much was read: said beside the verdict, so that a PASS names the
 /// range it holds for.
 #[derive(Default)]
@@ -110,13 +123,18 @@ struct Read {
     /// How many of the QML files were the app's harness rather than
     /// QtTest files: the two are read by different rules, and a count of
     /// them together would hide either going to zero.
-    harness_files: usize,
+    harness_qml_files: usize,
     /// Rust statements read as test code.
     test_statements: usize,
     /// The files of this runner's own crate whose tool bodies were read,
     /// and the statements of those bodies.
     tool_files: usize,
     tool_statements: usize,
+    /// The same, for the harness's Rust half ([`HARNESS_RUST`]): read by
+    /// the tool rules and counted apart, so that neither group's guard
+    /// can stand in for the other's.
+    harness_rust_files: usize,
+    harness_rust_statements: usize,
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -152,12 +170,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
             source::Lang::Rust => {
                 read.rust_files += 1;
                 let scope = scope_of(relative, &declared, &runner);
+                let scanned = rust::scan(relative, text, scope);
+                // The body statements land in whichever group the file's
+                // scope names, so a guard below counts only its own.
                 if scope == rust::Scope::Tool {
                     read.tool_files += 1;
+                    read.tool_statements += scanned.body_statements;
+                } else if scope == rust::Scope::Harness {
+                    read.harness_rust_files += 1;
+                    read.harness_rust_statements += scanned.body_statements;
                 }
-                let scanned = rust::scan(relative, text, scope);
                 read.test_statements += scanned.test_statements;
-                read.tool_statements += scanned.tool_statements;
                 findings.extend(scanned.findings);
                 exceptions.extend(scanned.exceptions);
             }
@@ -165,7 +188,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 read.qml_files += 1;
                 let kind = qml_kind(relative);
                 if kind == qml::Kind::Harness {
-                    read.harness_files += 1;
+                    read.harness_qml_files += 1;
                 }
                 let (found, allowed) = qml::scan(relative, text, kind);
                 findings.extend(found);
@@ -181,15 +204,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
              unread"
         ));
     }
-    // The same guard for the harness: its rules are the only ones that
-    // read a beat, so a harness directory that fell out of the scope
-    // above would leave every clock in the window unnamed and still say
-    // PASS.
-    if read.harness_files == 0 {
-        return Err(format!(
-            "none of the files read is an app harness (a crate's src/{HARNESS}) — the beats it \
-             spells went unread"
-        ));
+    // The same guard for each half of the harness: their rules are the
+    // only ones that read a beat and the only ones that read a clock
+    // outside this runner, so a directory that fell out of the scope
+    // above would leave those unnamed and still say PASS.
+    for (what, dir, found) in [
+        ("the beats it spells", HARNESS, read.harness_qml_files),
+        ("the clocks it keeps", HARNESS_RUST, read.harness_rust_files),
+    ] {
+        if found == 0 {
+            return Err(format!(
+                "none of the files read is an app harness (a crate's src/{dir}) — {what} went \
+                 unread"
+            ));
+        }
     }
     report(&findings, &exceptions, &read)
 }
@@ -276,14 +304,17 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
     if findings.is_empty() {
         println!(
             "waits: {} Rust and {} QML files read ({} of them the app's harness) — {} \
-             statement(s) of test code, and the tool bodies of {} file(s) of this runner ({} \
-             statement(s)); {} statement(s) standing on a marker ({counted}) — PASS",
+             statement(s) of test code, and the bodies of {} file(s) of this runner ({} \
+             statement(s)) and {} of the harness's Rust half ({} statement(s)); {} statement(s) \
+             standing on a marker ({counted}) — PASS",
             read.rust_files,
             read.qml_files,
-            read.harness_files,
+            read.harness_qml_files,
             read.test_statements,
             read.tool_files,
             read.tool_statements,
+            read.harness_rust_files,
+            read.harness_rust_statements,
             exceptions.len()
         );
         return Ok(());
@@ -335,8 +366,7 @@ fn language_of(relative: &str) -> Option<source::Lang> {
 /// read. Decided from the same two segments [`language_of`] admitted it
 /// on, so that a `tests/auto` of somebody's is still a QtTest file.
 fn qml_kind(relative: &str) -> qml::Kind {
-    let mut parts = relative.split('/').skip(2);
-    if (parts.next(), parts.next()) == (Some("src"), Some(HARNESS)) {
+    if in_src_dir(relative, HARNESS) {
         qml::Kind::Harness
     } else {
         qml::Kind::Test
@@ -344,17 +374,27 @@ fn qml_kind(relative: &str) -> qml::Kind {
 }
 
 /// How much of a Rust file is read ([`rust::Scope`]): the whole of a
-/// test file, the test blocks of a product crate's source, and of this
-/// runner's own source (under `runner`, [`runner_prefix`]) the tool body
-/// too.
+/// test file, the test blocks of a product crate's source, and — of this
+/// runner's own source (under `runner`, [`runner_prefix`]) and of the
+/// harness's Rust half ([`HARNESS_RUST`]) — the body too.
 fn scope_of(relative: &str, declared: &BTreeSet<String>, runner: &str) -> rust::Scope {
     if whole_test_file(relative) || declared.contains(relative) {
         rust::Scope::Whole
     } else if relative.starts_with(&format!("{runner}/src/")) {
         rust::Scope::Tool
+    } else if in_src_dir(relative, HARNESS_RUST) {
+        rust::Scope::Harness
     } else {
         rust::Scope::Tests
     }
+}
+
+/// Whether `relative` stands in `dir` of some crate's `src`, read off the
+/// same two segments [`language_of`] admits a file on — so that a
+/// `tests/harness` of somebody's is a test file and not this.
+fn in_src_dir(relative: &str, dir: &str) -> bool {
+    let mut parts = relative.split('/').skip(2);
+    (parts.next(), parts.next()) == (Some("src"), Some(dir))
 }
 
 /// This runner's own crate, relative to `root` the way every file read
@@ -553,6 +593,16 @@ mod tests {
             scope_of("crates/y/src/lanes.rs", &declared, runner),
             Scope::Tests,
             "a product crate's source is read for its tests alone"
+        );
+        assert_eq!(
+            scope_of("crates/y/src/harness/deadline.rs", &declared, runner),
+            Scope::Harness,
+            "the harness's Rust half is a body, in whichever crate carries it"
+        );
+        assert_eq!(
+            scope_of("crates/y/tests/harness/support.rs", &declared, runner),
+            Scope::Whole,
+            "a `tests/harness` of somebody's is a test file and not the app's"
         );
     }
 

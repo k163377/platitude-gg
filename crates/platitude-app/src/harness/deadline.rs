@@ -222,8 +222,8 @@ pub(crate) fn watch() {
     // The one clock here, a ceiling's: the limits are set by it and the
     // report is read off it, so a look and its account agree. Handed to
     // the thread by value, so the thread's own bound never rests on the
-    // record. (Not a `waits` marker: `cargo xtask waits` reads no product
-    // body, and a marker it cannot check is a finding.)
+    // record.
+    // waits(ceiling): the clock the diagnosis below is read off — it names a wedge, never a pass
     let clock = *CLOCK.get_or_init(Instant::now);
     let shot_dir = knobs.shot_dir.clone();
     let ceiling = Duration::from_millis(ceiling);
@@ -287,6 +287,8 @@ fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
     // A ceiling, and only a diagnosis: the run's own ceiling and the grace
     // past it, which names a run that has not ended — one that has takes
     // this thread with it.
+    // waits(ceiling): slept out rather than waited on, because a wedged process announces nothing —
+    // and what this reaches past the ceiling is only ever a failure
     std::thread::sleep(first_look.saturating_sub(clock.elapsed()));
     loop {
         let now = clock.elapsed();
@@ -296,6 +298,7 @@ fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
             // Paced, not judged: a station is announced by nothing this
             // thread can block on, so it is looked at again — never later
             // than the last look, and the look is what decides.
+            // waits(paced): the loop ends on what a look found ([`judge`]), never on a count of these
             Look::Again(pace) => std::thread::sleep(pace),
         }
     }

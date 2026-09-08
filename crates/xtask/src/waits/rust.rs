@@ -1,6 +1,7 @@
 //! The Rust rules: every statement of test code that reads the clock,
 //! sleeps, throws a wait's answer away, or awaits a silent completion
-//! with nothing under it — and, of this runner's own body, every
+//! with nothing under it — and, of a body read whole (this runner's own
+//! and the app harness's Rust half, [`Scope::reads_the_body`]), every
 //! statement that sleeps, reads the monotonic clock or receives under a
 //! budget anywhere but `crate::wait` ([`tool_rule_of`]).
 
@@ -26,12 +27,15 @@ const BACKSTOPS: [&str; 2] = ["bounded(", "timeout("];
 const SLEEPS: [&str; 3] = ["sleep(", "sleep_until(", "yield_now("];
 
 /// The monotonic clock: the start of a deadline of the seat's own, or a
-/// measurement a verdict gets hung on.
-const MONOTONIC: &str = "Instant::now()";
+/// measurement a verdict gets hung on. The name without its `()`, so
+/// that the call and the function a `get_or_init` is handed are the one
+/// clock read they both are — which is the spelling the harness starts
+/// its clocks with ([`source::has_token`] guards the far end).
+const MONOTONIC: &str = "Instant::now";
 
 /// A clock read: [`MONOTONIC`], or the wall clock, which a test reads
 /// for the same two reasons.
-const CLOCKS: [&str; 2] = [MONOTONIC, "SystemTime::now()"];
+const CLOCKS: [&str; 2] = [MONOTONIC, "SystemTime::now"];
 
 /// The waits that take a budget. The suite's budget is a named constant;
 /// a budget spelled out in the seat ([`OWN_BUDGETS`]) is the test's own.
@@ -61,6 +65,20 @@ pub(super) enum Scope {
     /// This runner's own source: its test blocks by the tests' rules, and
     /// the rest — the tool's body — by the runner's ([`tool_rule_of`]).
     Tool,
+    /// The app harness's Rust half, read the same way — the rules are the
+    /// same shapes and the reason is the same one, so the only thing this
+    /// arm changes is that its files are counted apart. What it does not
+    /// take is the strings: the scripts are this runner's habit, and a
+    /// `Start-Sleep` in the harness's text would be a string about
+    /// PowerShell, not a sleep the harness takes.
+    Harness,
+}
+
+impl Scope {
+    /// Whether the statements outside the test blocks are read too.
+    fn reads_the_body(self) -> bool {
+        matches!(self, Scope::Tool | Scope::Harness)
+    }
 }
 
 /// What reading one file found, and how much of it was read.
@@ -69,9 +87,10 @@ pub(super) struct Scanned {
     pub exceptions: Vec<Exception>,
     /// Statements read as test code.
     pub test_statements: usize,
-    /// Statements read as this runner's body: none of a test file's, and
-    /// none of a product crate's.
-    pub tool_statements: usize,
+    /// Statements read as a body ([`Scope::reads_the_body`]): none of a
+    /// test file's, and none of a product crate's. Which body it was is
+    /// the caller's to know, from the scope it asked for.
+    pub body_statements: usize,
 }
 
 /// One statement of the code view: what sits between `;`, `{` and `}`.
@@ -198,15 +217,15 @@ pub(super) fn scan(file: &str, text: &str, scope: Scope) -> Scanned {
         .as_deref()
         .map(|s| s.lines().collect())
         .unwrap_or_default();
-    let (mut test_statements, mut tool_statements) = (0, 0);
+    let (mut test_statements, mut body_statements) = (0, 0);
     let mut candidates = Vec::new();
     for s in statements(&code, said.as_deref().unwrap_or(&code)) {
         let of_tests = scope == Scope::Whole || regions.iter().any(|r| r.contains(&s.first));
         let named = if of_tests {
             test_statements += 1;
             rule_of(&s.text).map(|rule| (rule, s.first))
-        } else if scope == Scope::Tool {
-            tool_statements += 1;
+        } else if scope.reads_the_body() {
+            body_statements += 1;
             let lines = said_lines
                 .get(s.first.saturating_sub(1)..s.last.min(said_lines.len()))
                 .unwrap_or_default();
@@ -228,7 +247,7 @@ pub(super) fn scan(file: &str, text: &str, scope: Scope) -> Scanned {
         findings,
         exceptions,
         test_statements,
-        tool_statements,
+        body_statements,
     }
 }
 
@@ -432,20 +451,32 @@ mod tests {
             vec![8]
         );
         assert_eq!(
-            (product.test_statements, product.tool_statements),
+            (product.test_statements, product.body_statements),
             (3, 0),
             "the test block: its head, `fn t()` and the sleep"
         );
-        let runner = scan("src/x.rs", text, Scope::Tool);
-        assert_eq!(
-            runner.findings.iter().map(|f| f.line).collect::<Vec<_>>(),
-            vec![2, 8]
-        );
-        assert_eq!(
-            (runner.test_statements, runner.tool_statements),
-            (3, 2),
-            "the body: `fn production()` and its sleep"
-        );
+        for scope in [Scope::Tool, Scope::Harness] {
+            let body = scan("src/x.rs", text, scope);
+            assert_eq!(
+                body.findings.iter().map(|f| f.line).collect::<Vec<_>>(),
+                vec![2, 8],
+                "{scope:?}"
+            );
+            assert_eq!(
+                (body.test_statements, body.body_statements),
+                (3, 2),
+                "the body: `fn production()` and its sleep ({scope:?})"
+            );
+        }
+    }
+
+    /// The scripts are this runner's habit: a `Start-Sleep` in the
+    /// harness's text is a string about PowerShell, not a sleep it takes.
+    #[test]
+    fn a_script_sleep_is_the_runners_alone_and_not_the_harnesss() {
+        let text = "let wake = \"Start-Sleep -Seconds 20\";\n";
+        assert_eq!(named(text, Scope::Tool), vec![(1, "sleep")]);
+        assert_eq!(named(text, Scope::Harness), vec![]);
     }
 
     #[test]
