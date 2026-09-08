@@ -675,26 +675,58 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
 
-    fn old_files(events: &[SessionEvent]) -> Vec<std::path::PathBuf> {
+    /// What a picture read said about its old side. A side that came
+    /// without a file is not a read still on its way: the blob could not
+    /// be written, the side landed by size alone, and no later event
+    /// takes that back (`preview::blob_side`). Keeping the two apart is
+    /// what makes the defect a named failure — waiting for a file that
+    /// is never coming spends the whole silence budget and then reports
+    /// only that nothing was said.
+    enum OldSide {
+        File(std::path::PathBuf),
+        SizeOnly(u64),
+    }
+
+    fn old_sides(events: &[SessionEvent]) -> Vec<OldSide> {
         events
             .iter()
             .filter_map(|event| match event {
+                // `image_mime` is what asked for a file, so it is what
+                // makes the absence of one wrong: a binary that is no
+                // picture is reported by size on purpose.
                 SessionEvent::DiffLoaded {
                     preview: Some(preview),
                     ..
-                } => preview.old.as_ref().and_then(|side| side.file.clone()),
+                } if preview.image_mime.is_some() => preview.old.as_ref(),
                 _ => None,
             })
+            .map(|side| match &side.file {
+                Some(path) => OldSide::File(path.clone()),
+                None => OldSide::SizeOnly(side.size),
+            })
             .collect()
+    }
+
+    /// Outside the wait, so the failure does not poison the lock the
+    /// predicate is called under and take the sink's own thread with it.
+    fn file_of(side: OldSide) -> std::path::PathBuf {
+        match side {
+            OldSide::File(path) => path,
+            OldSide::SizeOnly(size) => panic!(
+                "the picture's old side arrived by size alone ({size} bytes), \
+                 with no file for the pane to show it from"
+            ),
+        }
     }
 
     let target = DiffTarget::Unstaged {
         path: "logo.png".to_string(),
     };
     session.load_diff(target.clone());
-    let first = sink
-        .wait_for("the picture's diff", |events| old_files(events).pop())
-        .await;
+    let first = file_of(
+        sink.wait_for("the picture's diff", |events| old_sides(events).pop())
+            .await,
+    );
     assert!(
         first.starts_with(platitude_core::preview::run_dir()),
         "written under the run's own directory: {}",
@@ -712,11 +744,14 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     // Read again: a new file under a new name, since the URL that names
     // it has to be a new one.
     session.load_diff(target);
-    let second = sink
-        .wait_for("the picture's second diff", |events| {
-            old_files(events).into_iter().find(|file| *file != first)
+    let second = file_of(
+        sink.wait_for("the picture's second diff", |events| {
+            old_sides(events)
+                .into_iter()
+                .find(|side| !matches!(side, OldSide::File(file) if *file == first))
         })
-        .await;
+        .await,
+    );
     assert!(second.is_file());
     assert_eq!(second.parent().unwrap(), dir);
 
