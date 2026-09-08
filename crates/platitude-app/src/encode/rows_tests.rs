@@ -27,10 +27,36 @@ diff --git a/src/a.rs b/src/a.rs
     assert!(
         rows.iter()
             .filter(|r| r.kind == "add" || r.kind == "del" || r.kind == "ctx")
-            .all(|r| r.rich && r.text.starts_with("<font")),
+            .all(|r| r.text.starts_with("<font")),
         "every line of a language the set knows is marked up: {rows:?}"
     );
-    assert!(rows.first().is_some_and(|r| r.kind == "hunk" && !r.rich));
+    assert!(rows.first().is_some_and(|r| r.kind == "hunk"));
+}
+
+#[test]
+fn a_row_is_markup_whether_or_not_the_theme_had_anything_to_say() {
+    // One format for every row (`markup::styled`): a row's format never
+    // changes under it, so it is never measured in one it is not drawn
+    // in, and its tabs stand in the columns every other walk of the line
+    // steps in. What the theme had to say only decides the colours.
+    let patch = "\
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,2 +1,2 @@ <heading>
+-a\tb & <c>
++kept
+";
+    let patches = parse_patch(patch.as_bytes());
+    let rows = flatten_patches(&patches, true, &DiffColors::default(), None);
+    let said: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
+    assert_eq!(
+        said,
+        [
+            "@@&nbsp;-1,2&nbsp;+1,2&nbsp;@@&nbsp;&lt;heading&gt;",
+            "a&nbsp;&nbsp;&nbsp;b&nbsp;&amp;&nbsp;&lt;c&gt;",
+            "kept",
+        ]
+    );
 }
 
 #[test]
@@ -50,7 +76,11 @@ fn flatten_produces_hunk_headers_and_numbers() {
         None,
     );
     assert_eq!(rows[0].kind, "hunk");
-    assert!(rows[0].text.contains("@@ -1,2 +1,2 @@ heading"));
+    assert!(
+        rows[0]
+            .text
+            .contains("@@&nbsp;-1,2&nbsp;+1,2&nbsp;@@&nbsp;heading")
+    );
     assert_eq!(rows[1].kind, "ctx");
     assert_eq!((rows[1].old_no, rows[1].new_no), (1, 1));
     assert_eq!(rows[2].kind, "del");
@@ -197,7 +227,10 @@ fn a_combined_diff_flattens_with_its_marker_columns() {
         None,
     );
     assert_eq!(rows[0].kind, "hunk");
-    assert_eq!(rows[0].text, "@@@ -1,3 -1,3 +1,7 @@@ heading");
+    assert_eq!(
+        rows[0].text,
+        "@@@&nbsp;-1,3&nbsp;-1,3&nbsp;+1,7&nbsp;@@@&nbsp;heading"
+    );
     assert_eq!(rows[0].markers, "", "a heading has no side of its own");
 
     let seen: Vec<(&str, &str, &str)> = rows[1..]
@@ -208,11 +241,11 @@ fn a_combined_diff_flattens_with_its_marker_columns() {
         seen,
         vec![
             ("ctx", "  ", "one"),
-            ("add", "++", "<<<<<<< HEAD"),
+            ("add", "++", "&lt;&lt;&lt;&lt;&lt;&lt;&lt;&nbsp;HEAD"),
             ("add", " +", "OURS"),
             ("add", "++", "======="),
             ("add", "+ ", "THEIRS"),
-            ("add", "++", ">>>>>>> topic"),
+            ("add", "++", "&gt;&gt;&gt;&gt;&gt;&gt;&gt;&nbsp;topic"),
             ("ctx", "  ", "three"),
         ]
     );
@@ -262,7 +295,7 @@ fn a_unified_hunk_heading_is_unchanged_by_the_combined_form() {
         &DiffColors::default(),
         None,
     );
-    assert_eq!(rows[0].text, "@@ -1,2 +1,2 @@");
+    assert_eq!(rows[0].text, "@@&nbsp;-1,2&nbsp;+1,2&nbsp;@@");
     assert!(rows.iter().all(|r| r.markers.is_empty()));
 }
 

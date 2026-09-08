@@ -207,6 +207,12 @@ Rectangle {
     /// moving it — a middle button cannot be injected any more than a hover can (verify-ui).
     readonly property alias codeAt: codeScroll.offset
     readonly property alias codeMax: codeScroll.maxOffset
+    /// What the pane measured the diff's longest line at (`DiffTextMetrics.codeW`). Read beside `codeMax` because the
+    /// two answer different questions — how far the lines reach, and how much of that is left once the room is taken.
+    readonly property alias codeMeasured: metrics.codeW
+    /// And what the rows themselves have come to (`DiffReach.rowsWidth`) — the two are read apart because they answer
+    /// different questions: whether the pick was any good, and whether a row wanted more than the pick knew about.
+    readonly property alias codeDrawn: reachTally.rowsWidth
     readonly property alias codeBarShown: codeScroll.barShown
     readonly property alias codeHandOn: codeScroll.handScrolling
     function sendCode(dx) { codeScroll.shift(dx) }
@@ -311,6 +317,18 @@ Rectangle {
         diffModel: diffPane.diffModel
         partial: diffPane.partial
     }
+    /// How far this diff reaches sideways: the lines the model picked, measured before any row exists, and the rows
+    /// themselves as they are laid out. A file of its own since it owns state the pane does not — a width per row,
+    /// and which reading of the rows they belong to.
+    DiffReach {
+        id: reachTally
+        rowsGen: diffPane.diffModel.rowsGen
+        measured: metrics.codeW
+        // A different file starts over: the place the reader was at goes with it (`DiffCodeScroll` sends the offset
+        // back to the left edge on the same word), so the width it was clamped against goes too. The same file read
+        // again keeps both — which is the whole of why the reach holds its answer through a reading.
+        file: diffPane.diffModel.title
+    }
 
     color: Theme.bgSurface
     ColumnLayout {
@@ -401,6 +419,8 @@ Rectangle {
             delegate: DiffRowDelegate {
                 id: diffRow
                 rowWidth: diffList.width
+                rowsGen: diffPane.diffModel.rowsGen
+                onRowDrawn: (row, drawn) => reachTally.noteRow(row, drawn)
                 codeX: codeScroll.offset
                 charW: metrics.charW
                 wideDelta: metrics.wideDelta
@@ -447,7 +467,9 @@ Rectangle {
         view: diffList
         paneHovered: panePointer.hovered
         file: diffPane.diffModel.title
-        codeWidth: metrics.codeW
+        // The ink the rows and the picked lines came to, plus the room this pane holds past the last character of the
+        // longest one — the one gap that is the pane's and not a line's.
+        codeWidth: reachTally.width > 0 ? reachTally.width + Theme.spaceSm : 0
         roomWidth: Math.max(0, diffList.width - metrics.gutterW)
     }
 }

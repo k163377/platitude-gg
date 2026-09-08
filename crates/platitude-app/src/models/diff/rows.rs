@@ -19,7 +19,7 @@ impl DiffModel {
         let Some(patches) = self.shown.clone() else {
             return;
         };
-        // `None` for the marks: this pass rewrites `text`/`rich` only,
+        // `None` for the marks: this pass rewrites `text` only,
         // so the emphasis columns it would compute go straight to waste.
         let painted = flatten_patches(&patches, !self.shown_has_preview, colors, None);
         if painted.len() != self.lines.len() {
@@ -36,7 +36,6 @@ impl DiffModel {
         }
         for (row, fresh) in self.lines.iter_mut().zip(painted) {
             row.text = fresh.text;
-            row.rich = fresh.rich;
         }
         self.rows_changed();
     }
@@ -79,7 +78,9 @@ impl DiffModel {
         // Read off the patches rather than the rows: a coloured row holds
         // markup, and the length of `<font color="#…">` is not the length
         // of anything on screen.
-        self.widest_columns = widest_columns(&patches);
+        self.widest_lines = widest_lines(&patches, colors);
+        // The rows on screen are of this reading now (`DiffReach`).
+        self.rows_gen = self.rows_gen.wrapping_add(1);
         // Read off the patches for the same reason: the wide glyph the
         // pane's ruler stands for is one of the file's own characters,
         // and a coloured row spells it inside markup.
@@ -123,7 +124,7 @@ impl DiffModel {
             self.is_combined = false;
             self.unmerged = false;
             self.widest_no = 0;
-            self.widest_columns = 0;
+            self.widest_lines = String::new();
             self.has_wide = false;
             self.forget_selection();
             self.shown_marks = Default::default();
@@ -211,7 +212,6 @@ pub(super) fn line_items(
             old_no: r.old_no,
             new_no: r.new_no,
             text: r.text,
-            rich: r.rich,
             emph: r.emph,
             fence: r.fence,
             no_newline: r.no_newline,

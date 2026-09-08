@@ -585,6 +585,8 @@ Item {
                               + " hand=" + diffPane.codeHandOn
                               + " at=" + Math.round(diffPane.codeAt)
                               + " max=" + Math.round(diffPane.codeMax)
+                              + " measured=" + Math.round(diffPane.codeMeasured)
+                              + " drawn=" + Math.round(diffPane.codeDrawn)
                               + " down=" + Math.round(diffPane.view.contentY))
         }
         onTriggered: {

@@ -12,7 +12,7 @@ mod words;
 #[cfg(test)]
 mod rows_tests;
 
-pub use columns::{any_wide, has_wide, widest_columns};
+pub use columns::{any_wide, has_wide, widest_lines};
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::pr_set;
 pub use labels::{

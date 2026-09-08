@@ -303,9 +303,14 @@ fn wide(word: &str) -> String {
 /// columns alone stands right of the characters it names (measured
 /// Measured on Windows: charW 8px against 13px, three of them a glyph).
 ///
-/// Three lines, because it takes three to say it: one with nothing wide in
-/// it, one whose change stands behind wide glyphs, and one whose change is
-/// wide glyphs standing behind more of them.
+/// Three short lines to say where the wash sits, because it takes three:
+/// one with nothing wide in it, one whose change stands behind wide
+/// glyphs, and one whose change is wide glyphs standing behind more of
+/// them. Then a block that runs far past the pane on wide glyphs alone,
+/// which is a different question — how far the diff reaches
+/// (`encode::widest_lines`), where a column is two of them and an advance
+/// is not, and the one thing `widelines` cannot ask because it is
+/// deliberately ASCII.
 pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -314,14 +319,55 @@ pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.commit(
         "columns.txt",
-        "plain kept plain\n日本語 kept 日本語\n日本語の中の日本語 kept\n",
+        &format!(
+            "plain kept plain\n日本語 kept 日本語\n日本語の中の日本語 kept\n{}",
+            wide_run("kept")
+        ),
         "docs: write the wide lines down",
     )?;
     repo.write(
         "columns.txt",
-        "plain torn plain\n日本語 torn 日本語\n日本語の中の英単語 kept\n",
+        &format!(
+            "plain torn plain\n日本語 torn 日本語\n日本語の中の英単語 kept\n{}",
+            wide_run("torn")
+        ),
     )?;
     Ok(())
+}
+
+/// How many full-width glyphs the wide lines of `widechars` stand on, and
+/// how many of those lines there are. Past any pane on any screen this app
+/// is built for even where the fallback draws each glyph at one em — and
+/// deep enough that the hand carrying the rows has somewhere down to go,
+/// which is what `code-send` is judged on.
+const WIDE_GLYPHS: usize = 300;
+const WIDE_ROWS: usize = 40;
+/// One line in every this many of them changed — often enough that the
+/// hunks run together into one block, so the rows on screen outnumber the
+/// pane and the hand has somewhere down to go.
+const WIDE_TORN: usize = 4;
+
+/// Those lines: the word that changes, and the glyphs behind it. The word
+/// stands at the front, so the diff says what it is about without being
+/// sent anywhere — what is out past the edge is the glyphs (the shape
+/// `wide` uses, for the same reason). Both sides carry the same glyphs, so
+/// neither reaches further than the other.
+fn wide_run(word: &str) -> String {
+    let mut out = String::new();
+    for i in 0..WIDE_ROWS {
+        let said = if i % WIDE_TORN == WIDE_TORN / 2 {
+            word
+        } else {
+            "kept"
+        };
+        let mut line = format!("{i:03}:{said}:");
+        while line.chars().count() < WIDE_GLYPHS {
+            line.push_str("日本語の中の日本語");
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
 }
 
 /// One file under a path wider than any pane, committed and then changed

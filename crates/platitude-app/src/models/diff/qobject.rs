@@ -9,7 +9,8 @@ use super::*;
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
-    qproperty!("widestColumns", Member = widest_columns, Notify = changed);
+    qproperty!("widestLines", Member = widest_lines, Notify = changed);
+    qproperty!("rowsGen", Member = rows_gen, Notify = changed);
     qproperty!("hasWide", Member = has_wide, Notify = changed);
     qproperty!("commitBands", Member = commit_bands, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
@@ -261,7 +262,7 @@ impl DiffModel {
     fn clear(&mut self) {
         self.current_key = String::new();
         self.widest_no = 0;
-        self.widest_columns = 0;
+        self.widest_lines = String::new();
         self.has_wide = false;
         self.title = String::new();
         self.is_binary = false;

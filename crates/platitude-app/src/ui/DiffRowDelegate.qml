@@ -20,10 +20,16 @@ Rectangle {
     required property string kind
     required property int old_no
     required property int new_no
+    /// What this row draws, as `Text.StyledText` reads it — every row, coloured or not (`encode::DiffRow`). One format
+    /// and not two: a row whose format arrived a moment after its text was measured with its own tags counted as
+    /// letters, and the width that came off it set how far the whole diff could be sent (`DiffReach`).
     required property string text
-    /// Whether `text` is markup rather than the line itself (`encode::DiffRow`). Read from the row rather than guessed
-    /// at: a line of C++ is full of `<` and `>`.
-    required property bool rich
+    /// Which row this is, for the width it reports back (`DiffReach.noteRow`).
+    required property int index
+    /// Which reading of the rows this row's text is from (`DiffModel.rowsGen`). A new one makes every row on screen
+    /// say its width again: the pane files widths per reading, and a row whose text came out the same width would
+    /// otherwise never speak for the new one.
+    required property int rowsGen
     /// Display columns of what changed inside this row — `"col:wides:width:wides,…"`, where each run says where it
     /// starts and how far it runs in columns, then how many wide glyphs stand in each of those (`encode::DiffRow.emph`).
     /// Empty for nothing. Drawn as the stronger wash under the text; the quiet parts of the row keep the line's own
@@ -80,6 +86,15 @@ Rectangle {
     required property int hoverHunk
     required property int hoverLine
 
+    /// How wide this row was laid out, as soon as that is known and again whenever it changes — a `Text` answers with
+    /// every glyph at the family's own advance until the fallback carrying the wide ones is resolved, so the first
+    /// number out of it is not the last (`DiffTextMetrics`). The pane files it under `index`, so a second answer
+    /// replaces the first rather than being added to a maximum (`DiffReach`).
+    ///
+    /// Headings do not send one: they stand at the pane's own left edge and never travel, so how wide their words are
+    /// is not how far there is to go.
+    signal rowDrawn(int row, real drawn)
+
     /// A press on the line's own mark: this line goes over to the other side now.
     signal lineStageRequested(int hunk, int line)
     signal discardRequested(int hunk)
@@ -91,6 +106,13 @@ Rectangle {
 
     width: diffRow.rowWidth
     height: Theme.rowHeight
+    onRowsGenChanged: diffRow.tellWidth()
+    /// Says what this row was laid out at. Guarded on the Label rather than assumed: a reading can turn over while
+    /// this row is still being built, and the parts of a delegate exist only once the whole of it does.
+    function tellWidth() {
+        if (!diffRow.banded && codeLine)
+            diffRow.rowDrawn(diffRow.index, codeLine.implicitWidth)
+    }
     /// A row that names something rather than showing a line of a file: the hunk's own heading, and — where several
     /// commits' patches of one file stand one after another — the commit each block is of
     /// (デザイン規約 §複数のコミットを選ぶ). Neither has a line number, a stage seat or a place in the gutter.
@@ -240,9 +262,9 @@ Rectangle {
             // stands at.
             leftPadding: diffRow.banded ? Theme.spaceXs : 0
             text: diffRow.text
-            // A coloured line arrives already marked up, and the plain ones must stay plain: `StyledText` on a line of
-            // source would read its `<T>` as a tag and drop it (規約 §シンタックスハイライト).
-            textFormat: diffRow.rich ? Text.StyledText : Text.PlainText
+            // Every row is markup, coloured or not (`markup::styled`), so a line of source full of `<T>` arrives
+            // escaped and this never changes under a row (規約 §シンタックスハイライト).
+            textFormat: Text.StyledText
             font.family: Theme.monoFamily
             // A changed line is bold (規約 §シンタックスハイライト) — the wash says which side it is, the weight is what
             // makes it stand off the context around it. Not the fences: git's scaffolding is not a change to read.
@@ -261,6 +283,9 @@ Rectangle {
             // A fence drops its voice: `<<<<<<<` is git's scaffolding round the two sides, not a line the file has
             // anything to say with, and painting it the added-line green puts the loudest thing in the pane on the part
             // nobody is reading (デザイン規約 §シンタックスハイライト). It keeps its background — it really is in the file.
+            // How far this row is drawn, filed under its own row number (`diffRow.rowDrawn`).
+            onImplicitWidthChanged: diffRow.tellWidth()
+            Component.onCompleted: diffRow.tellWidth()
             color: diffRow.fence ? Theme.textMuted
                    : diffRow.kind === "hunk" ? Theme.diffHunkHeaderFg
                    // The band's own voice, the one every heading in this window speaks in (`PaneHeader`).

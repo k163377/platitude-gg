@@ -120,7 +120,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   glyphs: the only shape in which a display column is not
                   one advance of the mono font, so the only one that says
                   whether the row's wash sits on its own characters
-                  (diff-file columns.txt)
+                  (diff-file columns.txt) and whether the diff stops
+                  sending where the longest of them ends (code-send
+                  columns.txt)
         widelines one unstaged file whose lines run far past the pane:
                   the only shape with anywhere sideways to go, so the
                   only one the diff's own bar comes out on (code-send)

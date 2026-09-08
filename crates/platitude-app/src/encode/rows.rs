@@ -14,14 +14,15 @@ pub struct DiffRow {
     /// -1 when the side has no line number.
     pub old_no: i32,
     pub new_no: i32,
-    /// What the row draws — plain text, or the same line marked up for
-    /// `Text.StyledText` when [`DiffRow::rich`]. Only one of the two is
-    /// ever held: keeping both doubles what a long diff costs.
+    /// What the row draws: the line marked up for `Text.StyledText`
+    /// (`markup::styled`), whatever the theme had to say about it — a
+    /// heading, a line of a language nobody has rules for and a coloured
+    /// line are all one format, so a row's format never changes under it
+    /// and every walk of the line stops in the same columns. The line
+    /// itself is not kept beside it: the source is where a copy comes
+    /// from (`models::diff::selection`), and holding both doubles what a
+    /// long diff costs.
     pub text: String,
-    /// Whether [`DiffRow::text`] is markup. False wherever the theme had
-    /// nothing to say — a language the set has never heard of, a hunk
-    /// heading, the binary note, a conflict marker.
-    pub rich: bool,
     /// Display columns of what changed inside this row —
     /// `"col:wides:width:wides,…"`: where each run starts and how far it
     /// runs, said in the mono font's columns and in the wide glyphs
@@ -128,8 +129,7 @@ pub fn flatten_patches(
                 kind: "commit",
                 old_no: -1,
                 new_no: -1,
-                text: patch.from_commit.clone(),
-                rich: false,
+                text: styled(&patch.from_commit, &[]),
                 emph: String::new(),
                 fence: false,
                 no_newline: false,
@@ -150,8 +150,7 @@ pub fn flatten_patches(
                     kind: "meta",
                     old_no: -1,
                     new_no: -1,
-                    text: String::from("(binary file)"),
-                    rich: false,
+                    text: styled("(binary file)", &[]),
                     emph: String::new(),
                     fence: false,
                     no_newline: false,
@@ -175,8 +174,7 @@ pub fn flatten_patches(
                 kind: "hunk",
                 old_no: -1,
                 new_no: -1,
-                text: hunk_header(hunk, &heading),
-                rich: false,
+                text: styled(&hunk_header(hunk, &heading), &[]),
                 emph: String::new(),
                 fence: false,
                 no_newline: false,
@@ -208,13 +206,13 @@ pub fn flatten_patches(
                 };
                 let read = colors.line(patch_index, hunk_index, line_index);
                 let markup = styled(&line.text, &read.spans);
-                let rich = !markup.is_empty();
+
                 rows.push(DiffRow {
                     kind,
                     old_no: line.old_no.map_or(-1, |n| n as i32),
                     new_no: line.new_no.map_or(-1, |n| n as i32),
-                    text: if rich { markup } else { line.text.clone() },
-                    rich,
+                    text: markup,
+
                     emph: marks.map_or_else(String::new, |marks| {
                         display_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
                     }),

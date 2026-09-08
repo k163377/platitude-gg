@@ -154,7 +154,10 @@ diff --git a/src/a.rs b/src/a.rs
         ),
         true,
     );
-    assert!(model.lines[3].rich, "the row under test is marked up");
+    assert!(
+        model.lines[3].text.starts_with("<font"),
+        "the row under test wears the theme's colours"
+    );
     assert!(!model.lines[3].text.contains(TAB), "and its tab is spelled");
     model.select_whole_row(3);
     assert_eq!(model.copied_new(), format!("{TAB}let a = 2;"));

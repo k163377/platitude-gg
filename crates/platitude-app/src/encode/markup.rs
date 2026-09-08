@@ -4,13 +4,20 @@
 use super::columns::{is_wide, step_of};
 use platitude_core::highlight::Span;
 
-/// Lays the theme's runs over one line and writes what `Text.StyledText`
-/// reads. Empty when there are no runs — the row then draws its own text
-/// in the colour its kind gives it.
+/// One line as `Text.StyledText` reads it: the theme's runs where there
+/// are any, and the line escaped either way.
+///
+/// **Every row goes through here, coloured or not** — the rows are set in
+/// one format, so nothing about a row changes when the colours arrive an
+/// instant later except which colour its letters are. Two things came of
+/// the rows being two formats: a row was measured with its own `<font …>`
+/// tags counted as text in the turn the markup landed and the format had
+/// not caught up (the widths that come off the rows are read by
+/// `DiffReach`), and an uncoloured row drew its tabs at Qt's own stop
+/// while every other walk of the line stepped them at
+/// [`super::columns::TAB_WIDTH`]. Neither can be spelled out of a single
+/// format.
 pub(super) fn styled(text: &str, spans: &[Span]) -> String {
-    if spans.is_empty() {
-        return String::new();
-    }
     let mut out = String::with_capacity(text.len() * 2);
     let mut at = 0;
     let mut col = 0usize;
@@ -38,9 +45,6 @@ pub(super) fn styled(text: &str, spans: &[Span]) -> String {
     out
 }
 
-/// Columns a tab stands for (デザイン規約 §シンタックスハイライト).
-const TAB_WIDTH: usize = 4;
-
 /// What `Text.StyledText` would otherwise read as markup, plus the
 /// whitespace it would otherwise fold away.
 ///
@@ -55,7 +59,7 @@ const TAB_WIDTH: usize = 4;
 /// as exactly the `&nbsp;` that reach its stop.
 fn push_escaped(out: &mut String, text: &str, col: &mut usize) {
     for ch in text.chars() {
-        let step = step_of(ch, *col, TAB_WIDTH);
+        let step = step_of(ch, *col);
         match ch {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
@@ -129,7 +133,7 @@ pub fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
                 }
             }
         }
-        here.col += step_of(ch, here.col, TAB_WIDTH);
+        here.col += step_of(ch, here.col);
         here.wide += usize::from(is_wide(ch));
     }
     // A range that runs to the line's end closes here.
@@ -162,7 +166,7 @@ fn push_run(out: &mut String, from: Stand, to: Stand) {
 /// The inverse of [`display_ranges`], and it has to be walked by the same
 /// rule: a hit worked out any other way would put the selection's edge
 /// beside the character the reader pressed on rather than on it. So this
-/// steps by [`step_of`] with `markup::TAB_WIDTH` and counts the wide
+/// steps by [`step_of`] and counts the wide
 /// glyphs the way [`Stand`] does — one column is `char_w`, and each wide
 /// glyph is worth `wide_delta` more than the two columns it is counted as
 /// (`DiffPane.wideDelta`, measured).
@@ -181,7 +185,7 @@ pub fn hit_byte(text: &str, x: f64, char_w: f64, wide_delta: f64) -> usize {
     let pixels = |at: Stand| at.col as f64 * char_w + at.wide as f64 * wide_delta;
     for (at, ch) in text.char_indices() {
         let next = Stand {
-            col: here.col + step_of(ch, here.col, TAB_WIDTH),
+            col: here.col + step_of(ch, here.col),
             wide: here.wide + usize::from(is_wide(ch)),
         };
         let (left, right) = (pixels(here), pixels(next));
@@ -209,8 +213,13 @@ mod tests {
     }
 
     #[test]
-    fn a_line_without_runs_stays_plain() {
-        assert!(styled("plain", &[]).is_empty());
+    fn a_line_without_runs_is_still_escaped() {
+        // Nothing to colour is still a row to draw: escaped, in the one
+        // format every row is read in (see the note above).
+        assert_eq!(
+            styled("a plain <line>", &[]),
+            "a&nbsp;plain&nbsp;&lt;line&gt;"
+        );
     }
 
     #[test]

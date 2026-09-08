@@ -10,7 +10,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
     DiffRow, diff_key, display_ranges, flatten_patches, has_wide, hit_byte, human_size,
-    is_combined, is_new_file, is_unmerged_only, widest_columns,
+    is_combined, is_new_file, is_unmerged_only, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -36,13 +36,11 @@ pub struct DiffLineItem {
     kind: String,
     old_no: i32,
     new_no: i32,
-    /// What the row draws: the line, or the same line marked up in the
-    /// theme's colours when `rich` (see `encode::DiffRow`).
+    /// What the row draws: the line marked up for `Text.StyledText`,
+    /// coloured or not (see `encode::DiffRow`). One format for every row,
+    /// so the pane never has to say which this one is — and so a row is
+    /// never measured in a format it is not about to be drawn in.
     text: String,
-    /// Whether `text` is markup. The pane reads the text format off this
-    /// rather than sniffing the string — a line of C++ full of `<>` is
-    /// not markup, and guessing would eventually decide it was.
-    rich: bool,
     /// Display columns of what changed inside this row —
     /// `"col:width,col:width"`, empty where nothing is emphasised
     /// (see `encode::DiffRow`).
@@ -102,10 +100,21 @@ pub struct DiffModel {
     /// is as wide as the widest number it will hold, so counting it is a
     /// fact about the rows rather than something QML works out.
     widest_no: i32,
-    /// How many columns of the mono font the longest line needs
-    /// (`encode::widest_columns`). The pane turns it into how far sideways
-    /// the code may be sent; 0 is a diff with nowhere to go.
-    widest_columns: i32,
+    /// The lines the pane measures for a first answer to how far sideways
+    /// the code may be sent, packed (`encode::widest_lines`). Lines and
+    /// not a number: the pane owns the font, and on the fallback a
+    /// Latin-only mono family hands a wide glyph to there is no arithmetic
+    /// over columns that arrives at what is drawn. Empty is a diff with
+    /// nowhere to go.
+    widest_lines: String,
+    /// Which reading of the rows the ones on screen are from — one up
+    /// every time they are laid out again. The pane files a width per row
+    /// as the rows are drawn (`DiffReach`), and a width measured on a
+    /// line that is gone is not an answer about this diff: this is how it
+    /// knows which reading it is holding. The rows changing in place —
+    /// the colours arriving, a mark going out — is not a new reading:
+    /// same lines, same widths.
+    rows_gen: i32,
     /// Whether any line carries a glyph the mono font draws two columns
     /// wide (`encode::has_wide`). The pane measures what one of those
     /// advances only where one is on screen: the ruler that measures it

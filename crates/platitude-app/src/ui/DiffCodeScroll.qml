@@ -35,6 +35,14 @@ Item {
     required property string file
 
     /// How far the code has been sent, and how far it can go.
+    ///
+    /// **The rows do not get a say in this.** The reach is what the pane measured off the lines the model picked
+    /// (`DiffTextMetrics.codeW`), and a floor taken from the rows as they are laid out — which would have covered a
+    /// line the pick missed — reads a width at a moment that is nobody's: the colours arrive a second after the rows
+    /// (`DiffModel.repaint_rows`), and in the turn the markup lands a row is briefly measured with its `<font …>`
+    /// tags counted as text. Holding the largest width ever seen latches that, and the bar then reaches the tags' own
+    /// width past the end of every coloured line (measured: 23,000px against the 15,710 the line is drawn at). A row's
+    /// own width is trustworthy only while the row is settled, and nothing here knows when that is.
     property real offset: 0
     readonly property real maxOffset: Math.max(0, codeScroll.codeWidth - codeScroll.roomWidth)
     readonly property bool canPan: codeScroll.maxOffset > 0
