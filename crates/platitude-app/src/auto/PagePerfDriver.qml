@@ -79,12 +79,9 @@ Item {
         if (oid !== "")
             row = graphModel.rowOf(oid)
         else if (PerfProbe.selection === "first") {
-            for (let i = 0; i < graphModel.rowTotal; i++) {
-                if (!GitFacts.wipOid(graphModel.oidAt(i))) {
-                    row = i
-                    break
-                }
-            }
+            // The newest commit, which is neither the working tree's row nor a stash written over the tip
+            // (`GraphModel.newestCommitRow` — the same rule the page's default and `PageAutoStart` ask).
+            row = graphModel.newestCommitRow()
         }
         if (row < 0) {
             driver.fail("selection-not-in-loaded-graph")

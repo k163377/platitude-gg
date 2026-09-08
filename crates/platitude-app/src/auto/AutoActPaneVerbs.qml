@@ -21,6 +21,7 @@ Item {
 
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
+    readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
@@ -77,6 +78,10 @@ Item {
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.begin()
         } else if (act === "pane-bar" || act === "pane-bar-away") {
+            // The bar this verb lights is the details pane's, and a page that opened on a dirty working tree is not
+            // showing that pane at all (`RepoPage.trySelectDefault`). HEAD's own commit is what `--preset long` puts
+            // the eighty files in, which is the only list here with anywhere to scroll.
+            page.activateRow(workTree.headOid)
             paneBarTimer.begin()
         } else if (act === "text-bar" || act === "text-bar-away") {
             // The argument picks a commit whose body runs past the box — one that fits has no bar to raise, which the
@@ -231,6 +236,12 @@ Item {
         /// there, so the ask is repeated until the stand-in itself says it arrived (measured — one ask, and the
         /// run waited out its watchdog at the top of the graph).
         property bool answered: false
+        /// Whether this run has been moved off HEAD's own row. The stand-in wears the selection's ground while HEAD
+        /// is the selected row (`picked=`), and a row wearing it does not light under the pointer — so the three runs
+        /// that photograph the stand-in standing for somebody who is reading elsewhere take the newest commit first,
+        /// the way a reader who clicked the top of the graph did. The page itself opens on the commit HEAD stands on
+        /// (`RepoPage.trySelectDefault`), which on `--preset deep-detached` is 806 rows down.
+        property bool stoodAside: false
         readonly property bool below: Harness.autoAct === "graph-head-below"
         function report() {
             const row = graphModel.headRow
@@ -263,6 +274,15 @@ Item {
                     || graphModel.headRow < 0 || graphModel.headLabels === "")
                 return
             const act = Harness.autoAct
+            if (!graphHeadTimer.stoodAside) {
+                graphHeadTimer.stoodAside = true
+                if (act === "graph-head-below" || act === "graph-head-go"
+                        || act === "graph-head-lit") {
+                    const top = graphModel.newestCommitRow()
+                    if (top >= 0 && top !== graphModel.headRow)
+                        page.activateRow(graphModel.oidAt(top), top)
+                }
+            }
             if (!graphHeadTimer.answered) {
                 // The stand-in has to have come up **on the edge this run is about** before anything is asked of it:
                 // the two runs below are about what takes it away again, and a run that never saw it would call an

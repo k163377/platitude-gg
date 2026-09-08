@@ -2502,34 +2502,49 @@ Item {
     /// wherever nobody wrote it, which is every window a person opens.
     property bool rowPickedElsewhere: false
 
-    // Selection policy: restore across the tag-swap reset, and default to the current branch's newest commit on first
-    // load so the details pane always shows something.
+    // Selection policy: restore across the tag-swap reset, and open on the working tree's own row where the tree has
+    // one and on the commit HEAD stands on where it does not, so the right pane always shows something.
     function trySelectDefault() {
         if (page.selectedOid !== "" || page.wipShown || page.pendingHeadSelect || page.rowPickedElsewhere
                 || graphModel.rowTotal === 0)
             return
-        // Where HEAD stands decides which commit is "current" — wait for the report instead of guessing the newest
-        // row too early (`WorkTreeModel.headKnown`). Detached, the newest row is the one to open on.
-        if (!workTree.headKnown)
+        // Where HEAD stands is the commit to open on, and whether the tree has a row of its own decides whether a
+        // commit is the landing at all — so both reads have to have answered. **Before the first status
+        // `wipRowStands` is false because nothing has been asked yet** (`WorkTreeModel.loaded`), and a graph pass that
+        // beat it would land on a commit and never come back: the first line above holds every later call off.
+        if (!workTree.headKnown || !workTree.loaded)
             return
-        let row = workTree.branchOid !== "" ? graphModel.rowOf(workTree.branchOid) : -1
-        if (row < 0) {
-            if (graphModel.loading)
-                return // the head row may still be streaming in
-            // Detached / head outside the window: the newest commit — **which is not row 0 on a tree that has a
-            // working-tree row of its own**, since that row stands above the walk and is no commit
-            // (デザイン規約 §グラフの検索「行 0 が WIP 行になり、WIP はコミットではない」). Whether the opening
-            // walk carries that row is a race between the first status and the walk's own start (`session::walk`),
-            // so a flat row 0 lands somewhere different from one run to the next. And landing on it is not merely
-            // the wrong row: `activateRow` shows the working tree and returns, asking for no details, so the
-            // changed-file list stays empty for the whole run. The two automation drivers walk past the same row
-            // for the same reason (`PageAutoStart`, `PagePerfDriver`). A repository whose only row is that one has
-            // no commit to open on, and the working tree is the landing.
-            row = graphModel.rowTotal > 1 && GitFacts.wipOid(graphModel.oidAt(0)) ? 1 : 0
+        let row = -1
+        if (workTree.wipRowStands) {
+            // **Uncommitted work is the landing, branch or no branch** (デザイン規約 §未コミット行が名乗るもの):
+            // the row stands while the tree is dirty or an operation is (`graph::wip_row_stands`), and it is what
+            // the reader came back to. Asked of the status rather than of row 0, because whether the opening walk
+            // carries that row is a race between the first status and the walk's own start (`session::walk`) — the
+            // two disagreeing is the graph saying it is one read behind, and until the pass that knows lands, row 0
+            // is still the commit that was on top (`tryPendingWipSelect` waits on the same word). Every pass calls
+            // this again.
+            if (!GitFacts.wipOid(graphModel.oidAt(0)))
+                return
+            row = 0
+        } else {
+            // **Where HEAD stands, branch or not** (`WorkTreeModel.headOid`, the record's own report — the same one
+            // a write's landing is paid off, `tryPendingHeadSelect`). A detached HEAD is still a commit somebody is
+            // standing on, and that is the one to open on.
+            row = workTree.headOid !== "" ? graphModel.rowOf(workTree.headOid) : -1
+            if (row < 0) {
+                if (graphModel.loading)
+                    return // the head row may still be streaming in
+                // HEAD outside the window: the newest commit, which is not the newest row where stashes stand over
+                // it (`GraphModel.newestCommitRow` — the rule, and the two automation drivers that ask it too). A
+                // repository whose rows are all stashes has no commit to open on.
+                row = graphModel.newestCommitRow()
+                if (row < 0)
+                    return
+            }
         }
         graphPane.setCurrentRow(row)
         graphPane.anchorSoon()
-        page.activateRow(graphModel.oidAt(row))
+        page.activateRow(graphModel.oidAt(row), row)
     }
     // Each finished pass bumps finishCount: re-resolve the selection by oid, since row numbers may have shifted. Only a
     // streaming restart bumps resetCount — that is the only case where the viewport lost its scroll position and needs

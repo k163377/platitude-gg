@@ -82,6 +82,7 @@ Item {
             // With nothing given, the row under HEAD's: a reset to where the branch already stands moves nothing, and
             // an empty name would reach git as `reset ''`.
             const backTo = acts.resetTarget(arg)
+            acts.readCommit(backTo)
             page.openRowMenu(backTo)
             const mode = act === "reset-soft" ? "soft" : "mixed"
             resetLandedTimer.begin(backTo, mode)
@@ -90,6 +91,7 @@ Item {
             // "-confirm" stops with the held row on screen; "reset-hard" runs the hold to its end. The row resolves as
             // reset-soft's.
             const wipeTo = acts.resetTarget(arg)
+            acts.readCommit(wipeTo)
             page.openRowMenu(wipeTo)
             resetMenu.offer()
             // What the held row is offering to take besides the commits. `tagged=` is the row's own tag read against
@@ -221,6 +223,16 @@ Item {
     function resetTarget(arg) {
         return arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
                           : driver.autoActOid(arg)
+    }
+
+    /// Opens the commit these verbs are about, the way a reader who is about to right-click a row opens it. The page
+    /// itself opens on the working tree's own row wherever the tree has one (`RepoPage.trySelectDefault`), so a
+    /// sampler that waits on the details card (`AutoActDriver.cardSettled`) has nothing to wait for until a run says
+    /// which commit it is reading.
+    function readCommit(oidHex) {
+        const row = graphModel.rowOf(oidHex)
+        if (row >= 0)
+            page.activateRow(oidHex, row)
     }
 
     // ---- the picture of a replay that is still replaying -----------------

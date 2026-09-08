@@ -63,6 +63,26 @@ impl platitude_core::mem::Footprint for GraphRowItem {
     }
 }
 
+/// The row "the newest commit" names: the first that is neither the
+/// working tree's own row nor a stash. `None` where the window holds no
+/// commit of the history at all.
+///
+/// **Written once for the three that ask it** (`GraphModel::newest_commit_row`):
+/// the page's default landing when it has only row numbers to go by, and
+/// the two automation drivers that pick a commit to photograph and to
+/// time. Three copies of "skip the working tree's row" is how all three
+/// came to keep the stash — a stash is no branch's history
+/// (デザイン規約 §変更を退避する), and its commit time is when it was
+/// written, so a fresh one stands above the branch's own tip.
+///
+/// A scan, but of the top: only the working tree's row and the stashes
+/// can stand over the first commit, and a repository with more stashes
+/// than commits is the whole of the walk either way (CLAUDE.md §性能予算).
+pub(super) fn newest_commit_row(rows: &[GraphRowItem]) -> Option<usize> {
+    rows.iter()
+        .position(|r| r.stash_ref.is_empty() && !Oid::hex_is_zero(&r.oid_hex))
+}
+
 pub(super) fn to_row_item(
     row: &LogRow,
     avatars: &crate::hub::AvatarUrls,
@@ -87,5 +107,52 @@ pub(super) fn to_row_item(
         // (`mark_incoming`), so a chunk arriving under a standing query
         // arrives already lit.
         matched: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn commit(oid_hex: &str) -> GraphRowItem {
+        GraphRowItem {
+            oid_hex: oid_hex.into(),
+            ..GraphRowItem::default()
+        }
+    }
+
+    fn stash(oid_hex: &str, stash_ref: &str) -> GraphRowItem {
+        GraphRowItem {
+            stash_ref: stash_ref.into(),
+            ..commit(oid_hex)
+        }
+    }
+
+    fn wip() -> GraphRowItem {
+        commit("0000000000000000000000000000000000000000")
+    }
+
+    #[test]
+    fn newest_commit_row_is_the_top_of_a_plain_walk() {
+        let rows = [commit("a1"), commit("b2")];
+        assert_eq!(newest_commit_row(&rows), Some(0));
+    }
+
+    #[test]
+    fn newest_commit_row_walks_past_the_working_tree_and_the_stashes() {
+        let rows = [
+            wip(),
+            stash("c3", "stash@{0}"),
+            stash("d4", "stash@{1}"),
+            commit("a1"),
+        ];
+        assert_eq!(newest_commit_row(&rows), Some(3));
+    }
+
+    #[test]
+    fn newest_commit_row_is_none_where_the_window_holds_no_commit() {
+        let rows = [wip(), stash("c3", "stash@{0}")];
+        assert_eq!(newest_commit_row(&rows), None);
+        assert_eq!(newest_commit_row(&[]), None);
     }
 }

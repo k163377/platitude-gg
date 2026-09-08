@@ -258,6 +258,18 @@ impl GraphModel {
             .join(&crate::encode::ROW_SEP.to_string())
     }
 
+    /// The row "the newest commit" names, or -1 where the window holds
+    /// none (`item::newest_commit_row` — the rule and why it is one).
+    ///
+    /// Asked by every reader that has only row numbers to go by: the
+    /// page opening on a detached HEAD or on one the window does not
+    /// reach, and the two automation drivers picking a commit to
+    /// photograph and to time.
+    #[qslot]
+    fn newest_commit_row(&self) -> i32 {
+        super::item::newest_commit_row(&self.rows).map_or(-1, |i| i as i32)
+    }
+
     /// Reflog selector when the commit is a stash row (empty otherwise).
     #[qslot]
     fn stash_ref_of(&self, oid_hex: String) -> String {

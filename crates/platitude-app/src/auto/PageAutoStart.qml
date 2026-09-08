@@ -82,15 +82,14 @@ Item {
             // **The newest commit, not the newest row.** A dirty working tree puts the WIP row on top, and selecting
             // that one shows the pending changes instead of a commit — no details are asked for, so a measurement that
             // reads the interaction budget off this hook measures nothing and says so (`xtask perf`'s `missing`). Every
-            // demo repository is dirty.
-            for (let row = 0; row < start.graphModel.rowTotal; row++) {
-                const oid = start.graphModel.oidAt(row)
-                if (oid !== "" && !GitFacts.wipOid(oid)) {
-                    start.selected = true
-                    start.graphPane.setCurrentRow(row)
-                    start.page.activateRow(oid)
-                    return
-                }
+            // demo repository is dirty, and a stash written after the tip stands over it in the same way without being
+            // a commit of the history to photograph. The rule is the model's, so the page's own default and the perf
+            // driver answer it the same way (`GraphModel.newestCommitRow`).
+            const row = start.graphModel.newestCommitRow()
+            if (row >= 0) {
+                start.selected = true
+                start.graphPane.setCurrentRow(row)
+                start.page.activateRow(start.graphModel.oidAt(row), row)
             }
         }
     }
