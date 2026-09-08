@@ -44,7 +44,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           also set PG_SYSTEM_TITLE_BAR=1: the window shape
                           mac and Linux come up in, asked for from a
                           machine that folds the band into the title bar
-        --watchdog-ms <n> maximum run time; never chooses the shot (default 120000)
+        --watchdog-ms <n> the backstop under a run whose completion never
+                          arrives; never chooses the shot, and never an
+                          assertion that a verb is quick (default 600000).
+                          Lower it only to diagnose the wait itself
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run

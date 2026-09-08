@@ -88,7 +88,7 @@ Item {
             // branch. Not `Number("")`, which is 0: row 0 is the working tree's wherever the tree is dirty, and
             // both presets this verb is pointed at are (`basic`, `edges`). Landing there puts the WIP pane in
             // front and empties the selection, so the card below can never settle and the run says nothing at all
-            // until the watchdog — 120s of `cardSettled=false` with no report of any kind, on both OSes
+            // until the watchdog — a whole ceiling of `cardSettled=false` with no report of any kind, on both OSes
             // (The verb had only ever been run with its row, so this had been red since it was
             // written).
             if (arg !== "")

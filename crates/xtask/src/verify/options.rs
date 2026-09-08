@@ -2,6 +2,27 @@
 
 use std::path::PathBuf;
 
+/// The run's ceiling, and the height every other one here is set from:
+/// the app's own watchdog is handed this (`PG_AUTO_WATCHDOG_MS`), the
+/// deadline thread looks past it, and the parent reaps behind them both
+/// (`super::child`).
+///
+/// **A backstop, not a verdict** (.claude/rules/core.md §非同期・並行
+/// テスト). Nothing here asserts that a verb finishes inside a number of
+/// seconds: a machine running several gates at once slows every verb
+/// down, and a ceiling low enough to be reached by that decides by load.
+/// The suite's own answer to the same question is
+/// `tests/it/support/wait::OVERALL_BUDGET`; this one is held under it
+/// because a red costs differently on this side — a verb that reaches
+/// the ceiling spends the whole of it in wall clock, and a block whose
+/// verbs are all red spends it one verb at a time (`gate::verbs` runs
+/// alone until one comes back green). What that buys and what it costs
+/// is in internal-docs/反映前テストの機械化.md §動詞の天井.
+///
+/// Lower it for one run with `--watchdog-ms` when the wait itself is
+/// what is being diagnosed; a suite never does.
+const WATCHDOG_MS: u64 = 600_000;
+
 pub(super) struct Options {
     pub(super) verb: String,
     pub(super) arg: String,
@@ -19,7 +40,8 @@ pub(super) struct Options {
     /// `PG_*` the parent shell carries from the runs xtask starts, so a
     /// headless run has no way to ask for it but this.
     pub(super) system_title_bar: bool,
-    /// Diagnostic ceiling for a run whose causal completion never arrives.
+    /// Diagnostic ceiling for a run whose causal completion never arrives
+    /// ([`WATCHDOG_MS`]).
     pub(super) watchdog_ms: u64,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
@@ -143,7 +165,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         build: true,
         select: false,
         system_title_bar: false,
-        watchdog_ms: 120_000,
+        watchdog_ms: WATCHDOG_MS,
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -307,10 +329,15 @@ mod tests {
         assert_eq!(asked.arg, "3");
     }
 
+    /// The ceiling is a backstop, so the default is set high enough that
+    /// a machine running several gates at once cannot reach it: a verb
+    /// whose own cost is seconds must not be judged by a number a busy
+    /// machine can spend on it. Held under the suite's own backstop
+    /// because a red here is paid in wall clock, one verb at a time.
     #[test]
     fn the_watchdog_is_the_only_time_ceiling() {
         let plain = parse(&["commit".to_string()]).expect("verb only");
-        assert_eq!(plain.watchdog_ms, 120_000);
+        assert_eq!(plain.watchdog_ms, 600_000);
 
         let asked = parse(&[
             "commit".to_string(),

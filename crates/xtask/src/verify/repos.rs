@@ -362,7 +362,7 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     // comes up with the repositories that were named — while the act goes
     // on waiting for the count it was given (`WindowBadgeActs` measures
     // nothing until the band carries it). Nobody sees that: the run says
-    // nothing at all until the watchdog ends it two minutes later
+    // nothing at all until the watchdog ends it a whole ceiling later
     // (measured).
     if badges && !opts.repo.is_empty() && band_tab_count(&opts.arg)?.is_some() {
         return Err(
