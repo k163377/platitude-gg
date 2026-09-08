@@ -288,6 +288,18 @@ Item {
     // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
     // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer, not the open dialog.
+    //
+    // **Three hops, and each says so as it is taken** (`step=`). The verb is three samplers in a row, and a run that
+    // stops answering leaves the same silence whichever of them it stopped in: no line at all is a question that was
+    // never asked or a save that never half-landed, `dismissed` alone is a dialog that would not go, `pointed` alone
+    // is a card that would not come up. They also move the clock the app's own account measures its silence against
+    // (`harness::report`), which is what a run at the ceiling is read by.
+    //
+    // **A field that can only print the guard it has just passed says nothing**, so no line echoes its own condition
+    // back: what each one carries is what could have come out the other way.
+    //
+    // **`step=` is not judged, and must not stand where the judged fields do**: `must_say` matches a run of the last
+    // line (verbs.md), so these are lines of their own and the four the table reads stay together in theirs.
     SampleTimer {
         running: Harness.autoAct === "identity-tip"
         onTriggered: {
@@ -295,6 +307,9 @@ Item {
                 return
             window.dismissIdentity()
             stop()
+            // Whether the answer took the dialog down in the same call, which is the one thing here that could have
+            // gone either way — the two the guard read cannot have changed since it read them.
+            Harness.report("identity_tip step=dismissed dialog=" + identityDialog.opened)
             identityTipTimer.start()
         }
     }
@@ -305,6 +320,11 @@ Item {
                 return
             topBar.statePointedAt = true
             stop()
+            // The other two thirds of what the card is waiting on, read where the pointer has just been stood in:
+            // the group is standing, and the row has placed it (`BandStateGroup.standInAsking`).
+            Harness.report("identity_tip step=pointed"
+                + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
+                + " placed=" + topBar.statePlaced)
             identityTipReport.start()
         }
     }
@@ -316,6 +336,11 @@ Item {
             if (!topBar.stateCardOpen)
                 return
             stop()
+            // `opened` is the guard, so what this one has to say is the other half of the card: whether its rows have
+            // settled into it yet. The line below reads `rows=` without waiting for that, which is the frame
+            // `badges-hover` does wait out (verbs.md) — one row cannot come out in the wrong order, so what is at
+            // stake here is only whether the picture has the card at its full height.
+            Harness.report("identity_tip step=carded laidOut=" + topBar.stateCardLaidOut)
             Harness.report(
                 "identity_tip unsaved=" + AppBackend.identityUnsaved
                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)

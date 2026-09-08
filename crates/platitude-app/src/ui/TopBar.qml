@@ -57,6 +57,10 @@ Rectangle {
     readonly property int stateCapW: stateGroup.stateCapW
     readonly property int stateGroupW: stateGroup.stateGroupW
     readonly property bool stateCardOpen: stateGroup.stateCardOpen
+    /// Whether the row has ever placed the group — the third of the three things the stand-in pointer needs before a
+    /// card can come up (`BandStateGroup.standInAsking`), and the only one of them a verb cannot otherwise read. A run
+    /// that stood the pointer in and never saw a card is two different faults depending on this.
+    readonly property bool statePlaced: stateGroup.placed
     readonly property string stateCardRows: stateGroup.stateCardRows
     readonly property string stateCardSize: stateGroup.stateCardSize
     readonly property bool stateCardLaidOut: stateGroup.stateCardLaidOut
