@@ -16,6 +16,7 @@
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// What a process its own deadline thread ended exits with, and the file
 /// it leaves beside the pictures. Spelled again rather than shared:
@@ -73,19 +74,21 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
             ran.elapsed.as_secs_f32()
         ),
     }];
-    lines.push(match self_account(shot_dir) {
+    let own = self_account(shot_dir);
+    lines.push(match &own {
         Some(said) => format!("  the app's own account: {said}"),
         None => format!(
             "  the app left no {REPORT_FILE}: it never reached its own deadline, so what ended \
              it is outside the process"
         ),
     });
-    // Only for a run the parent reaped. A process that ended itself spoke
-    // in the act of dying, so the seconds before that are its own
-    // account's to give — which they are, and against the right moment.
-    if ran.timed_out {
-        lines.push(silence(ran));
-    }
+    // For both ceilings. A process that ended itself named the station it
+    // stood in, but only a wedge's account is finished by that: a station
+    // reached late is `out of time` without saying whether it was a slow
+    // step or a wedge that began too late to stand the grace, and the
+    // seconds of silence before it are the only side that can tell them
+    // apart.
+    lines.push(silence(ran, own.as_deref()));
     // What the reaping took with the app — the git it was waiting on,
     // counted — or what could not be looked up and may still be running.
     if let Some(under) = &ran.reaped {
@@ -117,18 +120,85 @@ fn self_account(shot_dir: &Path) -> Option<String> {
 /// How long the app had been silent, and what it last said. **The last
 /// line, not the last report**: what a run says on its way past a wedge
 /// is as often a Qt warning as a report of its own.
-fn silence(ran: &super::child::Ran) -> String {
+///
+/// **Counted to the account, wherever there is one to count to.** The
+/// app's account goes to stderr as well as to [`REPORT_FILE`], and Qt's
+/// teardown writes after it, so the seconds at the end of a run that
+/// ended itself are the pause between two dying words: a tenth of a
+/// second for a process that had by then said nothing for eleven.
+fn silence(ran: &super::child::Ran, own: Option<&str>) -> String {
+    let Some(quiet) = ran.quiet_for else {
+        return "  it never said anything at all: the silence is the whole run".to_string();
+    };
+    if let Some((before_it, line)) = own.and_then(|said| quiet_before_the_account(ran, said)) {
+        return format!(
+            "  silent for the {:.1}s before it wrote that account; the line before it was {line}",
+            before_it.as_secs_f32()
+        );
+    }
     let last = ran
         .err_lines
         .last()
         .or_else(|| ran.out_lines.last())
-        .map_or_else(|| "-".to_string(), |line| format!("`{line}`"));
-    match ran.quiet_for {
-        Some(quiet) => format!(
-            "  silent for the last {:.1}s of it; the last line was {last}",
-            quiet.as_secs_f32()
-        ),
-        None => "  it never said anything at all: the silence is the whole run".to_string(),
+        .map_or_else(|| "-".to_string(), |line| format!("`{}`", clipped(line)));
+    format!(
+        "  silent for the last {:.1}s of it; the last line was {last}",
+        quiet.as_secs_f32()
+    )
+}
+
+/// The silence that ran up to the account, and what the app had said
+/// last before it.
+///
+/// `None` where the account is not among the lines this run left — a
+/// report that never reached stderr, a run whose stderr the parent could
+/// not read, or a ceiling the app never reached at all — and the end of
+/// the run is what the silence is counted to instead.
+fn quiet_before_the_account(ran: &super::child::Ran, said: &str) -> Option<(Duration, String)> {
+    // The report is one line. A longer one is joined with ` / ` by
+    // [`self_account`], which no line of the app's carries, so the piece
+    // before the first join is what a line can be found by.
+    let written = said.split(" / ").next()?;
+    let wrote = ran
+        .err_lines
+        .iter()
+        .rposition(|line| line.contains(written))?;
+    let wrote_at = *ran.err_at.get(wrote)?;
+    // Whichever stream spoke last before it. The app talks on stderr —
+    // tracing and Qt both — but nothing here may take the other half for
+    // empty.
+    let before = ran
+        .err_at
+        .iter()
+        .zip(&ran.err_lines)
+        .take(wrote)
+        .chain(
+            ran.out_at
+                .iter()
+                .zip(&ran.out_lines)
+                .filter(|(at, _)| **at < wrote_at),
+        )
+        .max_by_key(|(at, _)| **at);
+    Some(match before {
+        Some((at, line)) => (wrote_at.saturating_sub(*at), format!("`{}`", clipped(line))),
+        None => (wrote_at, "-".to_string()),
+    })
+}
+
+/// How much of a line the account quotes. The app clips its own quote to
+/// the same width (`harness::deadline`), and for the same reason: a run
+/// whose last word was the census names two hundred components, and four
+/// lines that answer the run are worth more than the whole of one of
+/// them.
+const KEEP: usize = 160;
+
+/// Cuts a line to [`KEEP`], on a character boundary. The mark is ASCII:
+/// a stream this could not spell reaches here as replacement characters
+/// already ([`crate::app_out`]), and the mark must not be one of them.
+fn clipped(line: &str) -> String {
+    match line.char_indices().nth(KEEP) {
+        Some((at, _)) => format!("{}...", &line[..at]),
+        None => line.to_owned(),
     }
 }
 
@@ -276,6 +346,8 @@ mod tests {
         super::super::child::Ran {
             out_lines: Vec::new(),
             err_lines: vec!["screenshot saved=true".into()],
+            out_at: Vec::new(),
+            err_at: vec![Duration::from_secs(2)],
             status: code.map(exit_status),
             timed_out,
             elapsed: Duration::from_secs(140),
@@ -381,6 +453,85 @@ mod tests {
         assert!(said.contains("the app ended itself"), "{said}");
         assert!(said.contains("joining the writes in flight"), "{said}");
         assert!(said.contains("pictures on disk: none"), "{said}");
+    }
+
+    /// A run that ended itself out of time leaves an account that does
+    /// not say whether the station was a slow step or a wedge that began
+    /// late, so the silence the parent watched is carried through for
+    /// that ceiling too — **counted to the account and not past it**.
+    /// The account is a line on stderr as much as a file, and Qt writes
+    /// more on the way down, so the end of such a run is the pause
+    /// between two dying words rather than the silence that says where
+    /// it stood.
+    #[test]
+    fn the_silence_of_a_run_that_ended_itself_is_counted_to_its_account() {
+        let dir = lanes("own-silence");
+        let report = "out of time in `joining the writes in flight` after 3.1s: reached past the \
+                      ceiling, stood less than the grace";
+        std::fs::write(dir.join("wedge.txt"), format!("{report}\n"))
+            .expect("a report to read back");
+        let mut ran = ran(false, Some(97));
+        ran.err_lines = vec![
+            "INFO bench: auto_act ran=app-menu".into(),
+            format!("ERROR bench: {report}"),
+            "QObject::~QObject: Timers cannot be stopped from another thread".into(),
+        ];
+        ran.err_at = [1_000, 12_000, 12_050].map(Duration::from_millis).to_vec();
+        ran.quiet_for = Some(Duration::from_millis(100));
+
+        let said = account(&dir, &ran, &[]).join("\n");
+
+        assert!(said.contains("silent for the 11.0s"), "{said}");
+        assert!(
+            said.contains("`INFO bench: auto_act ran=app-menu`"),
+            "{said}"
+        );
+        assert!(!said.contains("0.1s"), "{said}");
+    }
+
+    /// The line is quoted, not carried. A run whose last word was the
+    /// census names two hundred components, and the four lines that
+    /// answer the run have to stay readable under it.
+    #[test]
+    fn the_line_the_account_is_counted_to_is_quoted_at_a_width() {
+        let dir = lanes("own-silence-long");
+        let report = "wedged in `left the event loop` for 11.0s";
+        std::fs::write(dir.join("wedge.txt"), format!("{report}\n"))
+            .expect("a report to read back");
+        let mut ran = ran(false, Some(97));
+        ran.err_lines = vec![
+            format!("INFO bench: census={}", "AppMenuItem,".repeat(200)),
+            format!("ERROR bench: {report}"),
+        ];
+        ran.err_at = [1_000, 12_000].map(Duration::from_millis).to_vec();
+
+        let said = account(&dir, &ran, &[]).join("\n");
+
+        let quoted = said
+            .lines()
+            .find(|line| line.contains("silent for the 11.0s"))
+            .expect("the silence line");
+        assert!(quoted.chars().count() < 260, "{quoted}");
+        assert!(quoted.ends_with("...`"), "{quoted}");
+    }
+
+    /// The account reaches the file and the stream by two roads, and a
+    /// run can leave one without the other — a window whose stderr
+    /// nobody was holding open takes that road to `OutputDebugStringW`
+    /// (`platitude_gg::logsink`). The end of the run is what the silence
+    /// is counted to then, which is all there is to count to.
+    #[test]
+    fn an_account_that_never_reached_the_stream_is_counted_to_the_end() {
+        let dir = lanes("own-account-unheard");
+        std::fs::write(
+            dir.join("wedge.txt"),
+            "wedged in `the event loop` for 10.0s\n",
+        )
+        .expect("a report to read back");
+
+        let said = account(&dir, &ran(false, Some(97)), &[]).join("\n");
+
+        assert!(said.contains("silent for the last 138.0s"), "{said}");
     }
 
     /// A named `--shot-dir` outlives the run that made it, so an account

@@ -43,6 +43,14 @@ pub(super) struct Start<'a> {
 pub(super) struct Ran {
     pub(super) out_lines: Vec<String>,
     pub(super) err_lines: Vec<String>,
+    /// When each of the lines above arrived, at the same index as the
+    /// line it belongs to (`crate::app_out::Said::at`). What a run that
+    /// ended itself is read off: the account it wrote on the way out is
+    /// a line here like any other, so the silence that says where it
+    /// stood is the one before that line rather than the one after it
+    /// ([`super::wedge`]).
+    pub(super) out_at: Vec<Duration>,
+    pub(super) err_at: Vec<Duration>,
     pub(super) status: Option<std::process::ExitStatus>,
     pub(super) timed_out: bool,
     pub(super) elapsed: Duration,
@@ -105,17 +113,18 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     // The later of the two streams: either counts as the app still having
     // been there.
     let spoke_at = [
-        out.as_ref().and_then(|s| s.last),
-        err.as_ref().and_then(|s| s.last),
+        out.as_ref().and_then(crate::app_out::Said::last),
+        err.as_ref().and_then(crate::app_out::Said::last),
     ]
     .into_iter()
     .flatten()
     .max();
-    let unwrap_lines =
-        |said: Option<crate::app_out::Said>| said.map(|s| s.lines).unwrap_or_default();
+    let (out, err) = (out.unwrap_or_default(), err.unwrap_or_default());
     Ok(Ran {
-        out_lines: unwrap_lines(out),
-        err_lines: unwrap_lines(err),
+        out_at: out.at,
+        err_at: err.at,
+        out_lines: out.lines,
+        err_lines: err.lines,
         status,
         timed_out,
         elapsed,

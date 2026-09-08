@@ -56,15 +56,29 @@ impl<R: Read> Iterator for Lines<R> {
     }
 }
 
-/// What one of the app's streams said, and when it last said anything.
+/// What one of the app's streams said, and when each of it arrived. The
+/// default is the stream a run never had at all — a child spawned
+/// without the pipe, or one whose reader could not be joined.
+#[derive(Default)]
 pub(crate) struct Said {
     pub(crate) lines: Vec<String>,
-    /// How far into the read the last line arrived. `None` where the app
-    /// never wrote to this stream at all. A run reaped at a ceiling is
-    /// read off this: how long it had been silent is the difference
-    /// between a process going round and one that stopped
-    /// (`verify::wedge`).
-    pub(crate) last: Option<std::time::Duration>,
+    /// How far into the read each line arrived, at the index of the line
+    /// it belongs to — so the same length as [`Self::lines`], and empty
+    /// where the app never wrote to this stream at all. A run that
+    /// reached a ceiling is read off these: how long it had been silent
+    /// is the difference between a process going round and one that
+    /// stopped, and **which** line the silence is counted to is the whole
+    /// question for a run that ended itself, whose account is a line here
+    /// like any other (`verify::wedge`).
+    pub(crate) at: Vec<std::time::Duration>,
+}
+
+impl Said {
+    /// When the stream last carried anything, and `None` where it never
+    /// carried anything at all.
+    pub(crate) fn last(&self) -> Option<std::time::Duration> {
+        self.at.last().copied()
+    }
 }
 
 /// Drains a pipe on its own thread, so a chatty child never blocks on a
@@ -76,16 +90,16 @@ pub(crate) struct Said {
 /// off it are wanted against.
 pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
     std::thread::spawn(move || {
-        // waits(measured): the stream's own clock, which the time of its last line is
-        // read off (`Said::last`) — worded into a verdict, never deciding one
+        // waits(measured): the stream's own clock, which the time of every line is
+        // read off (`Said::at`) — worded into a verdict, never deciding one
         let started = std::time::Instant::now();
         let mut said = Said {
             lines: Vec::new(),
-            last: None,
+            at: Vec::new(),
         };
         for line in lines(reader) {
             said.lines.push(line);
-            said.last = Some(started.elapsed());
+            said.at.push(started.elapsed());
         }
         said
     })
@@ -93,6 +107,21 @@ pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinH
 
 #[cfg(test)]
 mod tests {
+    /// A moment for every line, at that line's own index. A ceiling reads
+    /// the silence that ran up to one named line off the pair
+    /// (`verify::wedge`), so a stream that timed only some of what it
+    /// carried would answer for the wrong one.
+    #[test]
+    fn every_line_is_timed_at_its_own_index() {
+        let said = super::collect(std::io::Cursor::new(b"one\ntwo\nthree".to_vec()))
+            .join()
+            .expect("the reader to finish");
+
+        assert_eq!(said.lines.len(), 3, "{:?}", said.lines);
+        assert_eq!(said.at.len(), said.lines.len());
+        assert_eq!(said.last(), said.at.last().copied());
+    }
+
     /// The line the strict reader stopped at, and the one it never
     /// reached: `qml: logprobe Create branch here…` as Qt writes it on a
     /// CP932 Windows, followed by the report the run is judged on.
