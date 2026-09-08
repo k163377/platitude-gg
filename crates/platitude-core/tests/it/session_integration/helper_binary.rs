@@ -5,56 +5,16 @@
 #[cfg(unix)]
 use crate::support::session::publish_helper;
 
-/// Runs a helper this suite published, retrying while the kernel answers
-/// that somebody still holds the file open for writing (`ETXTBSY`).
-///
-/// `rename` keeps the inode, so what gets published is the very file
-/// `fs::copy` had open for writing a moment earlier — and that write
-/// reference can outlive the copy. `i_writecount` is counted per open
-/// file description, and a thread that forks git mid-copy hands the child
-/// a reference to the same one; `CLOEXEC` closes it, but not before the
-/// child's `execve`. Until then the file cannot be executed at all. The
-/// forking thread never sees its own window — `spawn` returns when the
-/// child's `execve` closes the error pipe, so it is already past — but
-/// with a thread per core the suite is forking git constantly and every
-/// neighbour sees it. It belongs to another process's scheduling, and
-/// this one cannot time it (measured: a child made to sleep 300ms between
-/// fork and `execve` refuses a neighbour's exec for exactly that long).
-///
-/// Hence a retry on the error, not a wait for the window: every attempt
-/// is the real run, and the first answer that is not "busy" is the answer
-/// — a busy one at the end of the budget included, which reaches the
-/// caller as the failure it is. (cargo and rustup carry the same loop for
-/// the same reason, around the binaries they have just written.)
+/// Runs a helper this suite published, waiting out the window a
+/// neighbouring fork holds it open for writing in
+/// (`support::busy::run_once_it_is_not_busy`, which is also what installs
+/// a hook — the same window, over a file git is the one to execute).
 #[cfg(unix)]
 fn run_published_helper(
     path: &std::path::Path,
     on_busy: impl FnOnce(),
 ) -> std::io::Result<std::process::Output> {
-    // Paid only while it really is busy. The ceiling is the suite's
-    // failure-detection backstop (`QUIET_BUDGET`), not a guess at the
-    // window: the window belongs to another process's scheduling, and a
-    // fixed second of retries is a wall-clock verdict a loaded machine
-    // can outlast (.claude/rules/core.md: a ceiling is for detecting
-    // failure, never for deciding it).
-    // waits(ceiling): the suite's quiet budget, spent only on a kernel that keeps calling the image busy
-    let started = std::time::Instant::now();
-    let mut on_busy = Some(on_busy);
-    loop {
-        let answer = std::process::Command::new(path).output();
-        let busy = matches!(
-            &answer,
-            Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy
-        );
-        if !busy || started.elapsed() >= crate::support::wait::QUIET_BUDGET {
-            return answer;
-        }
-        if let Some(notify) = on_busy.take() {
-            notify();
-        }
-        // waits(paced): every attempt is the real run and its answer ends the loop; the sleep only spaces the attempts
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
+    crate::support::busy::run_once_it_is_not_busy(&mut std::process::Command::new(path), on_busy)
 }
 
 /// The install must replace the helper's directory entry, never write

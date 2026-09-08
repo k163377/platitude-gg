@@ -6,6 +6,7 @@
 // Applies to every module below it.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic, dead_code)]
 
+pub mod busy;
 pub mod exec;
 pub mod graph;
 pub mod integrate;
