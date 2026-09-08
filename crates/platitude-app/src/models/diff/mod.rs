@@ -9,8 +9,8 @@ use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
-    DiffRow, diff_key, display_ranges, flatten_patches, has_wide, hit_byte, human_size,
-    is_combined, is_new_file, is_unmerged_only, widest_lines,
+    DiffRow, diff_key, flatten_patches, human_size, is_combined, is_new_file, is_unmerged_only,
+    source_byte, spelled_ranges, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -115,12 +115,6 @@ pub struct DiffModel {
     /// the colours arriving, a mark going out — is not a new reading:
     /// same lines, same widths.
     rows_gen: i32,
-    /// Whether any line carries a glyph the mono font draws two columns
-    /// wide (`encode::has_wide`). The pane measures what one of those
-    /// advances only where one is on screen: the ruler that measures it
-    /// sets a wide glyph, and on a Latin-only mono family that loads a
-    /// fallback font this process otherwise has no reason to hold.
-    has_wide: bool,
     /// How many commits this reading stacked, each with a band of its own
     /// above its patch (デザイン規約 §複数のコミットを選ぶ). 0 for every
     /// diff that is of one thing, which is all the others.

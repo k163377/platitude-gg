@@ -532,15 +532,12 @@ fn folder(n: u64, level: u64) -> String {
 
 /// Author names that are not ASCII, and why they have to exist.
 ///
-/// **The graph pane has no gate of the kind the diff pane keeps.**
-/// `encode::has_wide` exists so that setting a wide glyph — and with it
-/// loading a fallback font, tens of megabytes of working set in every
-/// window, repository open or not (`DiffTextMetrics`, measured) —
-/// happens only where a diff carries one. Nothing asks that question
-/// before the graph draws a row's author or subject, so the first
-/// visible row holding a glyph the UI family cannot serve loads the
-/// fallback at startup. A corpus of pure ASCII never loads one and so
-/// never weighs one.
+/// **A glyph the UI family cannot serve loads a fallback font, and that
+/// font is tens of megabytes of working set in every window, repository
+/// open or not** (measured). The graph draws every row's author and
+/// subject, so the first visible row holding one pays it at startup —
+/// there is no asking first, and nothing to ask. A corpus of pure ASCII
+/// never loads one and so never weighs one.
 ///
 /// Four scripts, because they land on different fallbacks: Latin-1,
 /// Latin Extended-A, Cyrillic and CJK. The emoji is in [`subject`].
@@ -893,8 +890,7 @@ mod tests {
     }
 
     /// **The glyphs that load a fallback font.** The graph pane draws
-    /// every row's author and subject with no gate of the kind the diff
-    /// pane keeps (`encode::has_wide`), so the first visible row with a
+    /// every row's author and subject, so the first visible row with a
     /// glyph the UI family cannot serve loads the system fallback —
     /// tens of megabytes of working set, measured. A corpus of pure
     /// ASCII never loads one, and the reference repository loads two.

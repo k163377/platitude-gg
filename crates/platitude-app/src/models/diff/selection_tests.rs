@@ -70,8 +70,9 @@ fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
     model.start_select(1, 3);
     model.drag_select(3, 7);
     assert_eq!(model.copied_new(), "main() {\n    let");
-    // The far end is a run of columns rather than the whole line.
-    assert_eq!(model.lines[3].sel, "0:0:7:0");
+    // The far end is a run of places along the line rather than the whole
+    // of it.
+    assert_eq!(model.lines[3].sel, "0:7");
 }
 
 #[test]
@@ -163,4 +164,56 @@ diff --git a/src/a.rs b/src/a.rs
     assert_eq!(model.copied_new(), format!("{TAB}let a = 2;"));
     model.select_whole_row(2);
     assert_eq!(model.copied_removed(), format!("{TAB}let a = 1;"));
+}
+
+#[test]
+fn a_place_along_a_row_comes_back_as_a_byte_of_its_line() {
+    // What the pane brings back off the row's own layout, and what this
+    // side makes of it: the row spells the tab as the four spaces that
+    // reach its stop, so places 0..4 stand in it and the line's own bytes
+    // start after them.
+    let model = model(
+        &format!(
+            "\
+--- a/f
++++ b/f
+@@ -1,3 +1,3 @@
+ fn main() {{
+-{TAB}let a = 1;
++{TAB}let a = 2;
+ }}
+"
+        ),
+        false,
+    );
+    assert_eq!(model.byte_at(3, 0), 0);
+    assert_eq!(model.byte_at(3, 4), 1);
+    assert_eq!(model.byte_at(3, 5), 2);
+    // Past the end of the line is the end of the line, however far past —
+    // the answer the blank right of a row's last character has to give.
+    assert_eq!(model.byte_at(3, 9999), 11);
+    // A row that names no line of any file answers about none.
+    assert_eq!(model.byte_at(0, 4), 0);
+    assert_eq!(model.byte_at(-1, 4), 0);
+}
+
+#[test]
+fn a_wash_on_a_wide_line_names_places_and_not_columns() {
+    // 日 is one place and two columns. The run says where the change
+    // starts and how far it runs in places, because the row's layout is
+    // what turns a place into an x and no count of columns can.
+    let mut model = model(
+        "\
+--- a/f
++++ b/f
+@@ -1,1 +1,1 @@
+-日本語 kept
++日本語 torn
+",
+        false,
+    );
+    model.start_select(2, 10);
+    model.drag_select(2, 14);
+    assert_eq!(model.lines[2].sel, "4:4");
+    assert_eq!(model.copied_new(), "torn");
 }

@@ -4,14 +4,12 @@ import platitude.ui
 
 // The numbers a diff's rows are laid out from: how wide a line number is, how
 // wide the gutter that holds two of them is, how wide one column of the mono
-// font comes out, how far a wide glyph runs past the two columns it counts as,
-// and how far the longest line is drawn. Rulers that are never drawn, and the
-// numbers read off them.
+// font comes out, and how far the longest line is drawn. Rulers that are never
+// drawn, and the numbers read off them.
 //
-// **The wide glyph's is built only where one is on screen** — setting one is
-// what loads the fallback font, and that font is 52.6MB (`wideDelta`). The
-// reach's rulers cost no more than that: they hold lines of the diff, so they
-// call for that fallback only where the diff already does.
+// **Nothing here says where a character is.** That is a question for the line
+// that was laid out (`DiffLineRuler`), and the rulers below hold whole lines
+// or nothing to do with the text at all.
 //
 // An `Item`, not a `QtObject`: the rulers are Labels, and a `QtObject` has
 // nowhere to put a child (rules-refs/structure.md).
@@ -55,7 +53,7 @@ Item {
     /// whatever carries it — and the fallback a Latin-only mono family hands it to is not monospaced at all (measured
     /// on Windows at `fontCode`, against 8px for the font's own columns: `日` 13, `の` 11, `。` 9, `「` 7, an emoji
     /// 18). Columns times `charW` ran a diff of this repository's own documents nearly four screens past the end of
-    /// its longest line; `wideDelta` — one glyph's difference charged to all of them — still left a screenful.
+    /// its longest line; charging every wide glyph the one difference measured off `日` still left a screenful.
     ///
     /// Pushed by `settleReach` rather than bound: a width read off a laid-out item is a measurement, and a binding
     /// takes it once, before the font arrives (app-ui.md).
@@ -114,43 +112,20 @@ Item {
         }
     }
     /// One measured column of the mono font. The divisor is however many characters `charMeasure` holds, so the two
-    /// cannot drift apart; everything column-addressed — the code width above, the emphasis wash in the rows —
-    /// multiplies this one number. Measured at regular weight: changed rows draw bold, which JetBrains Mono advances
-    /// identically — a mono family whose bold face advances differently would drift the wash, so a swap of
-    /// `Theme.monoFamily` re-checks that.
+    /// cannot drift apart.
+    ///
+    /// **The rows draw nothing at it.** Where a line's characters are drawn is a question for that line's own layout
+    /// (`DiffLineRuler`), because a column is not a width and no arithmetic makes it one — the fallback a Latin-only
+    /// mono family hands a wide glyph to is not monospaced, and a combining mark takes a column and no room at all.
+    /// What is left for one column to be is the width of a wash on an **empty** line (`DiffRowDelegate`): the one
+    /// place a width is wanted where there are no characters to ask about.
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
     Label {
         id: charMeasure
         visible: false
-        // Ten of them, so a single advance's rounding does not multiply up over a two-hundred-column line.
+        // Ten of them, so a single advance's rounding does not multiply up.
         text: "0000000000"
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontCode
-    }
-    /// What a wide glyph costs on top of the two columns `encode::columns::step_of` counts it as. Zero wherever the
-    /// mono family carries the wide glyphs itself at two of its own advances; where it is Latin-only they arrive from a
-    /// fallback that advances one em instead (Windows, Cascadia Mono at `fontCode`: charW 8px against a wide advance of
-    /// 13px, so −3px a glyph, which slid the wash that far right of the characters it names). Measured rather than
-    /// assumed, because it is a property of whichever fallback this OS hands the glyphs to.
-    ///
-    /// **And measured only where a wide glyph is on screen** (`DiffModel.hasWide`, from `encode::has_wide`). Setting
-    /// one is what loads that fallback, and the font is tens of megabytes of working set — a third of what the whole
-    /// app is allowed, paid per window (measured). Zero is not a stand-in for the unmeasured number: every place this
-    /// is read multiplies it by a count of wide glyphs, so a diff that has none never asks what one would have cost.
-    readonly property real wideDelta: wideRuler.item
-        ? wideRuler.item.implicitWidth / wideRuler.item.text.length - 2 * metrics.charW
-        : 0
-    Loader {
-        id: wideRuler
-        active: metrics.diffModel.hasWide
-        sourceComponent: Label {
-            visible: false
-            // Ten U+65E5, for the same reason charMeasure holds ten. Built from the code point rather than written as
-            // the glyph: this is a ruler and not a word, and a line of Japanese sitting in a `text:` reads like the
-            // hardcoded wording the rules forbid (CLAUDE.md 絶対制約).
-            text: String.fromCharCode(0x65e5).repeat(10)
-            font.family: Theme.monoFamily
-            font.pixelSize: Theme.fontCode
-        }
     }
 }

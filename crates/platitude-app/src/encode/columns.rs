@@ -107,37 +107,21 @@ fn columns_of(text: &str) -> usize {
     cols
 }
 
-/// Whether any line of the diff carries a glyph the mono font draws two
-/// columns wide.
+/// Whether one line carries a glyph the mono font draws two columns wide.
 ///
-/// What it is for: the pane needs what such a glyph advances *past* the
-/// two columns [`step_of`] counts it as (`DiffTextMetrics.wideDelta`),
-/// and the only way to have that number is to set one and measure it —
-/// which, on a Latin-only mono family, hands the glyph to whatever
-/// fallback the system has and **loads that font: tens of megabytes of
-/// working set, in every window, repository open or not** (measured).
-/// The number it buys is multiplied by a count of wide glyphs at every
-/// place it is used — the wash's x and width in `DiffRowDelegate`, the
-/// stand in [`super::hit_byte`], the reach in [`widest_lines`] — so where
-/// a diff has none of them it is multiplied by zero. This is what the pane
+/// What it is for: the command log needs what such a glyph advances *past*
+/// the two columns [`step_of`] counts it as (`CommandsPane.wideDelta`), and
+/// the only way to have that number is to set one and measure it — which,
+/// on a Latin-only mono family, hands the glyph to whatever fallback the
+/// system has and **loads that font: tens of megabytes of working set, in
+/// every window, repository open or not** (measured). The number it buys is
+/// multiplied by a count of wide glyphs everywhere it is used, so where the
+/// log has none of them it is multiplied by zero. This is what the pane
 /// asks before it builds the ruler.
 ///
-/// A walk of its own rather than a second answer out of
-/// [`widest_lines`]: both are once per file opened, over text the
-/// encoder has already walked, and the two questions read better apart
-/// than as a pair nobody unpacks. They are not the same question either —
-/// a diff can carry a wide glyph on no line that anything reaches past.
-pub fn has_wide(patches: &[FilePatch]) -> bool {
-    patches
-        .iter()
-        .flat_map(|p| p.hunks.iter())
-        .flat_map(|h| h.lines.iter())
-        .any(|l| any_wide(&l.text))
-}
-
-/// Whether one piece of text carries such a glyph — [`has_wide`] for a
-/// line that arrives on its own, which is how the command log's rows
-/// come (`models::commands`).
+/// The diff asks nothing of the kind: its rows' own layout is what places
+/// its wash and reads its presses (`encode::markup::spelled_ranges`), and a
+/// layout needs no ruler to be built beside it.
 pub fn any_wide(text: &str) -> bool {
     text.chars().any(is_wide)
 }
@@ -146,14 +130,13 @@ pub fn any_wide(text: &str) -> bool {
 /// tab reaches the next stop, a glyph the East Asian blocks draw full
 /// width takes two columns, everything else takes one.
 ///
-/// The single rule for it, and it takes no stop of its own, because three
-/// walks of a line have to arrive at the same columns: [`columns_of`]
-/// measures how far sideways the pane may send the text,
-/// `markup::push_escaped` spells a tab as that many `&nbsp;`, and
-/// `markup::display_ranges` re-walks the row to lay the emphasis wash on
-/// the columns those `&nbsp;` and glyphs land on. A wash walked by any
-/// other rule would sit beside the characters it names rather than on
-/// them, and a reach walked by one would end where no line does.
+/// The single rule for it, and it takes no stop of its own, because every
+/// walk of a line has to arrive at the same columns: [`columns_of`] ranks
+/// the lines worth measuring, `markup::push_escaped` spells a tab as that
+/// many `&nbsp;`, `markup::spelled_ranges` counts the places those `&nbsp;`
+/// stand in, and `markup::display_ranges` lays the command log's wash on
+/// the columns they land on. A tab spelled by one rule and counted by
+/// another puts every place after it out by the difference.
 pub(super) fn step_of(ch: char, col: usize) -> usize {
     if ch == '\t' {
         TAB_WIDTH - (col % TAB_WIDTH)
@@ -170,9 +153,13 @@ pub(super) fn step_of(ch: char, col: usize) -> usize {
 /// `markup::display_ranges` asks this as well as [`step_of`], because two
 /// columns is not two of the mono font's advances: a Latin-only mono
 /// family hands these glyphs to a fallback that advances one em, so the
-/// pane has to know how many of them a run stands on before it can put the
-/// wash in pixels. `step_of(..) == 2` is a different question — a tab
-/// reaches its stop in two columns as well.
+/// command log has to know how many of them a run stands on before it can
+/// put its wash in pixels. `step_of(..) == 2` is a different question — a
+/// tab reaches its stop in two columns as well.
+///
+/// The diff asks only [`step_of`], and only about tab stops: where its own
+/// wash goes is a question for the row's layout, which needs no count of
+/// anything (`markup::spelled_ranges`).
 pub(super) fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
@@ -356,29 +343,6 @@ mod tests {
         // 日本語 stands on 0..6, so two columns are all the tab has left
         // to reach the stop at 8.
         assert_eq!(columns_of("日本語\t"), 2 * TAB_WIDTH);
-    }
-
-    #[test]
-    fn only_a_diff_with_a_wide_glyph_in_it_asks_for_the_ruler() {
-        let wide = "\
---- a/f
-+++ b/f
-@@ -1,2 +1,2 @@
--ascii only
-+日本語版
-";
-        // The heading is not a line of code, and neither is the file
-        // header: a wide glyph up there stands at the viewport's own edge
-        // and no wash is ever laid on it.
-        let heading_only = "\
---- a/f
-+++ b/f
-@@ -1,1 +1,1 @@ 日本語版
- ascii only
-";
-        assert!(has_wide(&parse_patch(wide.as_bytes())));
-        assert!(!has_wide(&parse_patch(heading_only.as_bytes())));
-        assert!(!has_wide(&[]));
     }
 
     #[test]

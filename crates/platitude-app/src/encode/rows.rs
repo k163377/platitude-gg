@@ -4,7 +4,7 @@ use platitude_core::highlight::DiffColors;
 use platitude_core::intraline::IntraMarks;
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 
-use super::markup::{display_ranges, styled};
+use super::markup::{spelled_ranges, styled};
 
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,15 +23,16 @@ pub struct DiffRow {
     /// from (`models::diff::selection`), and holding both doubles what a
     /// long diff costs.
     pub text: String,
-    /// Display columns of what changed inside this row —
-    /// `"col:wides:width:wides,…"`: where each run starts and how far it
-    /// runs, said in the mono font's columns and in the wide glyphs
-    /// standing in them. Empty where nothing is emphasised
-    /// (`platitude_core::intraline`, laid out by [`display_ranges`]). The
-    /// pane draws these as the stronger wash under the text
-    /// (デザイン規約 §シンタックスハイライト), and needs the second number
-    /// to place the first — a wide glyph is drawn from a fallback font
-    /// whose advance need not be two of the mono one's.
+    /// Where what changed inside this row falls in the line as the row
+    /// spells it — `"from:len,…"` in the UTF-16 units a place is counted
+    /// in, empty where nothing is emphasised
+    /// (`platitude_core::intraline`, laid out by [`spelled_ranges`]). The
+    /// pane asks the row's own layout where those places are drawn
+    /// (`DiffLineRuler`) and lays the stronger wash there
+    /// (デザイン規約 §シンタックスハイライト). **Places and not columns**: a
+    /// column is not a width — the fallback carrying a wide glyph is not
+    /// monospaced, and a combining mark is a place the layout counts and
+    /// draws nothing for.
     pub emph: String,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
@@ -214,7 +215,7 @@ pub fn flatten_patches(
                     text: markup,
 
                     emph: marks.map_or_else(String::new, |marks| {
-                        display_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
+                        spelled_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
                     }),
                     fence: read.fence,
                     no_newline: false,

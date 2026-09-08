@@ -41,10 +41,9 @@ Item {
     /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character under it,
     /// not on the one that would be there at rest.
     required property real codeX
-    /// One measured column of the mono font and what a wide glyph costs beyond its two (`DiffPane.charW` /
-    /// `wideDelta`). The same pair the emphasis wash is placed with, so the hit and the wash agree.
-    required property real charW
-    required property real wideDelta
+    /// The line's own layout, asked where the press landed in it (`DiffLineRuler`). The same ruler the wash is placed
+    /// with, so the hit and the wash cannot disagree.
+    required property var ruler
 
     /// A drag has reached past the frame and wants the rows (and the text) sent after it.
     signal scrollWanted(real dy, real dx)
@@ -140,9 +139,21 @@ Item {
         const last = first + pick.view.contentHeight - 1
         return Math.max(first, Math.min(y, last))
     }
-    /// Which byte of that row's line an x of this item lands on.
+    /// Which byte of that row's line an x of this item lands on, in two steps and never in one: the row's own layout
+    /// says which place of the line is under the pointer (`DiffLineRuler` — the only thing that knows where a line's
+    /// characters are drawn), and the model says which byte of the file that place is (`DiffModel.sourceByteAt`).
+    ///
+    /// **The blank right of a row's last character is that row's end.** A layout asked about a point past the line
+    /// answers with the line's length, so a press out there names the end and a drag inside it moves nothing — where
+    /// a walk of columns went on counting characters that were never drawn.
+    ///
+    /// A row that is not a line of a file has no place to land on: the heading's words are the pane's own, set in the
+    /// pane's own size, and the model answers about none of them either.
     function byteAt(row, x) {
-        return pick.diffModel.hitByteAt(row, pick.codeX + x, pick.charW, pick.wideDelta)
+        const item = pick.view.itemAtIndex(row)
+        if (!item || item.banded)
+            return 0
+        return pick.diffModel.sourceByteAt(row, pick.ruler.placeAt(item.text, item.codeBold, pick.codeX + x))
     }
     /// Whether this row is one the hand may take. A hunk heading is not: it is the pane's own words, and the press
     /// there belongs to the two that act on the hunk (デザイン規約 §diff の中のステージ).

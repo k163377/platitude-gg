@@ -317,6 +317,12 @@ Rectangle {
         diffModel: diffPane.diffModel
         partial: diffPane.partial
     }
+    /// Where a place in a row's line is drawn, and which place a point of it is over — asked of the line itself, laid
+    /// out. One for the pane and not one per row: the answer belongs to the line, so a ruler that has just been
+    /// handed one answers about it in the same statement (`DiffLineRuler`).
+    DiffLineRuler {
+        id: lineRuler
+    }
     /// How far this diff reaches sideways: the lines the model picked, measured before any row exists, and the rows
     /// themselves as they are laid out. A file of its own since it owns state the pane does not — a width per row,
     /// and which reading of the rows they belong to.
@@ -423,7 +429,7 @@ Rectangle {
                 onRowDrawn: (row, drawn) => reachTally.noteRow(row, drawn)
                 codeX: codeScroll.offset
                 charW: metrics.charW
-                wideDelta: metrics.wideDelta
+                ruler: lineRuler
                 seatW: metrics.seatW
                 partial: diffPane.partial
                 staged: diffPane.staged
@@ -449,8 +455,7 @@ Rectangle {
         gutterW: metrics.gutterW
         barRoom: diffList.barRoom
         codeX: codeScroll.offset
-        charW: metrics.charW
-        wideDelta: metrics.wideDelta
+        ruler: lineRuler
         // One clamp and one shift, the ones every other hand that sends this pane goes through
         // (デザイン規約 §diff を上下に送る / §diff を横へ送る).
         onScrollWanted: (dy, dx) => {

@@ -73,7 +73,6 @@ Item {
         id: diffModel
         property int widestNo: 1234
         property string widestLines: ""
-        property bool hasWide: true
     }
 
     DiffTextMetrics {

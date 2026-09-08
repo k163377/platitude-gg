@@ -11,7 +11,6 @@ impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
     qproperty!("widestLines", Member = widest_lines, Notify = changed);
     qproperty!("rowsGen", Member = rows_gen, Notify = changed);
-    qproperty!("hasWide", Member = has_wide, Notify = changed);
     qproperty!("commitBands", Member = commit_bands, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
@@ -190,13 +189,15 @@ impl DiffModel {
     // read off the patches, because the file's own bytes are here and not
     // there (`selection`).
 
-    /// Which byte of row `row`'s line a press `x` pixels along it lands
-    /// on. `char_w` and `wide_delta` are what the pane measured of the
-    /// mono font (`DiffPane.charW` / `wideDelta`) — the same two numbers
-    /// the emphasis wash is placed with.
+    /// Which byte of row `row`'s line the place `at` of it stands on —
+    /// `at` counted in the units the row's own layout counts a place in
+    /// (`DiffLineRuler`, which is what turned the reader's press into
+    /// one). Pixels stop at the pane: only the row that was laid out
+    /// knows where its characters are drawn, and only the file's own
+    /// bytes are here.
     #[qslot]
-    fn hit_byte_at(&self, row: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
-        self.hit_at(row, x, char_w, wide_delta)
+    fn source_byte_at(&self, row: i32, at: i32) -> i32 {
+        self.byte_at(row, at)
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
@@ -263,7 +264,6 @@ impl DiffModel {
         self.current_key = String::new();
         self.widest_no = 0;
         self.widest_lines = String::new();
-        self.has_wide = false;
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;

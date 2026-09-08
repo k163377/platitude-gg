@@ -30,10 +30,9 @@ Rectangle {
     /// say its width again: the pane files widths per reading, and a row whose text came out the same width would
     /// otherwise never speak for the new one.
     required property int rowsGen
-    /// Display columns of what changed inside this row — `"col:wides:width:wides,…"`, where each run says where it
-    /// starts and how far it runs in columns, then how many wide glyphs stand in each of those (`encode::DiffRow.emph`).
-    /// Empty for nothing. Drawn as the stronger wash under the text; the quiet parts of the row keep the line's own
-    /// background (デザイン規約 §シンタックスハイライト).
+    /// Where what changed inside this row falls in the line as this row spells it — `"from:len,…"` in the places a
+    /// layout counts, empty for nothing (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the
+    /// quiet parts of the row keep the line's own background (デザイン規約 §シンタックスハイライト).
     required property string emph
     /// One of git's conflict fences (`encode::DiffRow`).
     required property bool fence
@@ -42,8 +41,8 @@ Rectangle {
     /// (デザイン規約 §行末の改行が無いこと).
     required property bool no_newline
     /// Where the reader's own selection falls on this row (`DiffModel.sel`): `"*"` for a line taken end to end —
-    /// which is what almost every selected row is — and otherwise the same `col:wides:width:wides` runs `emph`
-    /// carries, for the one or two rows a drag cuts through.
+    /// which is what almost every selected row is — and otherwise the same `from:len` runs `emph` carries, for the
+    /// one or two rows a drag cuts through.
     ///
     /// Empty on every row the plain `Copy` does not take: outside the selection, and on the removed lines and hunk
     /// headings inside it. **The wash is the answer** — what is not washed is not copied
@@ -60,11 +59,12 @@ Rectangle {
     /// do not travel with it: the numbers, the mark and the pane's own words are about the row rather than in it
     /// (デザイン規約 §diff を横へ送る).
     required property real codeX
-    /// One measured column of the mono font (`DiffPane.charMeasure`), which is what turns `emph`'s columns into x.
+    /// One measured column of the mono font (`DiffPane.charMeasure`). The row draws nothing at it: it is how wide the
+    /// wash on an **empty** line is, and that is the only place a width without characters behind it is needed.
     required property real charW
-    /// What a wide glyph costs beyond the two columns it is counted as (`DiffPane.wideDelta`, measured — zero where
-    /// the mono family carries them itself). `emph` says how many stand in each run, and this is what those are worth.
-    required property real wideDelta
+    /// Where the two washes go: this row's own line, laid out, asked where each run of it is drawn
+    /// (`DiffLineRuler`). The same ruler the hand over the rows reads a press against (`DiffTextSelect`).
+    required property var ruler
     /// The room held between the two numbers for the mark, as the pane
     /// works it out once for every row (`DiffPane.seatW`).
     required property int seatW
@@ -117,6 +117,45 @@ Rectangle {
     /// commits' patches of one file stand one after another — the commit each block is of
     /// (デザイン規約 §複数のコミットを選ぶ). Neither has a line number, a stage seat or a place in the gutter.
     readonly property bool banded: diffRow.kind === "hunk" || diffRow.kind === "commit"
+    /// A changed line is bold (規約 §シンタックスハイライト) — the wash says which side it is, the weight is what makes
+    /// it stand off the context around it. Not the fences: git's scaffolding is not a change to read. Named here
+    /// rather than written on the Label alone, because **the ruler has to be set in the weight the row is drawn in**
+    /// — a family whose bold face advances differently would otherwise put every wash and every press out by the
+    /// difference (`DiffTextSelect` reads it off this row for the same reason).
+    readonly property bool codeBold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
+    /// Automation: how far this row's own line is drawn, which is where the blank right of it begins
+    /// (`PG_AUTO_ACT=diff-blank`). The same number the row files under `rowDrawn`, as a property — a run presses
+    /// beside one row rather than beside the widest, and no count of that row's characters can find this edge.
+    readonly property real codeInk: codeLine ? codeLine.implicitWidth : 0
+
+    /// Where this row's two washes are drawn, taken from this row's own line laid out — `[{ x, w }, …]` in the
+    /// code's own coordinates, before the send (`DiffLineRuler.rectsOf`). A line taken end to end says so with one
+    /// word and needs no ruler at all; a heading has neither wash.
+    ///
+    /// **Pushed, not bound** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting
+    /// this row's line on it, and a binding that writes while it is being evaluated is a binding loop — Qt says so
+    /// by name and then holds whatever it had, which is a wash left on the row before it. The four properties the
+    /// answer is made of say when to ask instead.
+    property var emphRects: []
+    property var selRects: []
+    function settleEmph() {
+        diffRow.emphRects = diffRow.ruler.rectsOf(diffRow.text, diffRow.codeBold, diffRow.emph)
+    }
+    function settleSel() {
+        diffRow.selRects = diffRow.sel === "*"
+                           ? [] : diffRow.ruler.rectsOf(diffRow.text, diffRow.codeBold, diffRow.sel)
+    }
+    function settleWashes() {
+        diffRow.settleEmph()
+        diffRow.settleSel()
+    }
+    // The line itself and the weight it is set in move both washes; each run moves its own. A delegate handed to
+    // another row (`reuseItems`) arrives through these same three.
+    onTextChanged: diffRow.settleWashes()
+    onCodeBoldChanged: diffRow.settleWashes()
+    onEmphChanged: diffRow.settleEmph()
+    onSelChanged: diffRow.settleSel()
+    Component.onCompleted: diffRow.settleWashes()
     color: kind === "add" ? Theme.diffAddedBg
            : kind === "del" ? Theme.diffRemovedBg
            : kind === "hunk" ? Theme.diffHunkHeaderBg
@@ -213,16 +252,11 @@ Rectangle {
         // line's own background — the strong/weak split is these rectangles, not the text
         // (デザイン規約 §シンタックスハイライト). Under the Label, travelling with the same send.
         Repeater {
-            model: diffRow.emph === "" ? [] : diffRow.emph.split(",")
+            model: diffRow.emphRects
             delegate: Rectangle {
-                required property string modelData
-                // `col:wides:width:wides`. A column is one advance of the mono font, and each wide glyph standing
-                // among them is worth `wideDelta` more than the two columns it was counted as — zero on a family
-                // that draws the wide glyphs itself. Laid on columns alone, the wash sat right of the characters it
-                // names by that much a glyph (measured, on Windows: −3px each).
-                readonly property var run: modelData.split(":")
-                x: -diffRow.codeX + Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta
-                width: Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
+                required property var modelData
+                x: -diffRow.codeX + modelData.x
+                width: modelData.w
                 height: codeRoom.height
                 color: diffRow.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
             }
@@ -231,17 +265,15 @@ Rectangle {
         // washes stand, and for the same reason: the strong/weak split of a diff is rectangles, not letters
         // (デザイン規約 §シンタックスハイライト), so a selected line keeps its syntax colours.
         Repeater {
-            model: diffRow.sel === "" ? [] : diffRow.sel === "*" ? [diffRow.sel] : diffRow.sel.split(",")
+            model: diffRow.sel === "*" ? [diffRow.sel] : diffRow.selRects
             delegate: Rectangle {
-                required property string modelData
+                required property var modelData
                 readonly property bool whole: modelData === "*"
-                readonly property var run: whole ? [] : modelData.split(":")
-                x: -diffRow.codeX
-                   + (whole ? 0 : Number(run[0]) * diffRow.charW + Number(run[1]) * diffRow.wideDelta)
-                // A line taken whole is washed to its own end — and never to nothing: an empty line is still a line
-                // the copy takes, and a wash of no width would leave a hole in the middle of a selection.
-                width: whole ? Math.max(codeLine.implicitWidth, diffRow.charW)
-                             : Number(run[2]) * diffRow.charW + Number(run[3]) * diffRow.wideDelta
+                x: -diffRow.codeX + (whole ? 0 : modelData.x)
+                // A line taken whole is washed to its own end — the ink it was drawn in, which is the one number no
+                // walk of it can produce — and never to nothing: an empty line is still a line the copy takes, and a
+                // wash of no width would leave a hole in the middle of a selection.
+                width: whole ? Math.max(codeLine.implicitWidth, diffRow.charW) : modelData.w
                 height: parent.height
                 color: Theme.bgSelected
             }
@@ -266,9 +298,9 @@ Rectangle {
             // escaped and this never changes under a row (規約 §シンタックスハイライト).
             textFormat: Text.StyledText
             font.family: Theme.monoFamily
-            // A changed line is bold (規約 §シンタックスハイライト) — the wash says which side it is, the weight is what
-            // makes it stand off the context around it. Not the fences: git's scaffolding is not a change to read.
-            font.bold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
+            // The weight this row is set in, said once for the Label and for the ruler both washes are placed with
+            // (`codeBold`).
+            font.bold: diffRow.codeBold
             // The size an editor puts source at rather than a step in the UI's scale — `fontCode`, matched to
             // IntelliJ's default (デザイン規約 §タイポグラフィ).
             //

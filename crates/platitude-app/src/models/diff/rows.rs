@@ -81,10 +81,6 @@ impl DiffModel {
         self.widest_lines = widest_lines(&patches, colors);
         // The rows on screen are of this reading now (`DiffReach`).
         self.rows_gen = self.rows_gen.wrapping_add(1);
-        // Read off the patches for the same reason: the wide glyph the
-        // pane's ruler stands for is one of the file's own characters,
-        // and a coloured row spells it inside markup.
-        self.has_wide = has_wide(&patches);
         // How many commits this reading stacked. Every other diff is of
         // one thing and answers 0 (デザイン規約 §複数のコミットを選ぶ).
         self.commit_bands = patches.iter().filter(|p| !p.from_commit.is_empty()).count() as i32;
@@ -125,7 +121,6 @@ impl DiffModel {
             self.unmerged = false;
             self.widest_no = 0;
             self.widest_lines = String::new();
-            self.has_wide = false;
             self.forget_selection();
             self.shown_marks = Default::default();
             self.apply_preview(None);

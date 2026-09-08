@@ -2,13 +2,20 @@
 //! each row draws of it, and what it hands the clipboard
 //! (デザイン規約 §diff の中身をコピーする).
 //!
-//! **It lives here rather than in the pane** for one reason: the pane only
-//! knows pixels. Which byte of a line a press landed on, and which bytes
-//! of it the clipboard should get, are questions about the file's own text
-//! — and the file's own text is here, on `shown`. The pane hands over a
-//! row and an x; everything after that is read off the patches.
+//! **It lives here rather than in the pane** for one reason: which bytes
+//! of a line the clipboard should get is a question about the file's own
+//! text — and the file's own text is here, on `shown`. The pane hands over
+//! a row and a place along it; everything after that is read off the
+//! patches.
 //!
-//! Two things follow from that and are worth saying once:
+//! **A place, not a pixel.** Where a line's characters are drawn is known
+//! only to the layout that drew them, so the pane asks the row itself
+//! (`DiffLineRuler`) and brings back a place in the line as the row spells
+//! it; this side turns that into a byte and back
+//! (`encode::markup::source_byte` / `spelled_ranges`). Nothing here
+//! measures a font, and no count of columns stands in for one.
+//!
+//! Two more things follow and are worth saying once:
 //!
 //!  - **the copy never comes from what is drawn.** A coloured row's `text`
 //!    is markup whose spaces are `&nbsp;` and whose tabs have already been
@@ -50,15 +57,17 @@ impl DiffModel {
         Some(&patch.hunks.get(hunk)?.lines.get(line)?.text)
     }
 
-    /// Which byte of a row's line a press `x` pixels along it lands on.
-    /// The pane measures the font, so it brings the two numbers that turn
-    /// columns into pixels with it (`DiffPane.charW` / `wideDelta`).
-    pub(super) fn hit_at(&self, row: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
-        let at = usize::try_from(row)
+    /// Which byte of a row's line the place `at` of it stands on. The pane
+    /// asks the row's own layout which place the pointer is over
+    /// (`DiffLineRuler`) and brings that here; nothing about pixels
+    /// crosses this line.
+    pub(super) fn byte_at(&self, row: i32, at: i32) -> i32 {
+        let at = usize::try_from(at).unwrap_or(0);
+        let byte = usize::try_from(row)
             .ok()
             .and_then(|row| self.source_line(row))
-            .map_or(0, |text| hit_byte(text, x, char_w, wide_delta));
-        i32::try_from(at).unwrap_or(0)
+            .map_or(0, |text| source_byte(text, at));
+        i32::try_from(byte).unwrap_or(0)
     }
 
     /// The two ends in reading order, or nothing where no selection
@@ -227,7 +236,7 @@ impl DiffModel {
             Wash::Whole => String::from("*"),
             Wash::Part(first, last) => self
                 .source_line(row)
-                .map(|text| display_ranges(text, &[(first, last - first)]))
+                .map(|text| spelled_ranges(text, &[(first, last - first)]))
                 .unwrap_or_default(),
         };
         let Some(item) = self.lines.get_mut(row) else {
