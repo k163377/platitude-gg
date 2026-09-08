@@ -16,10 +16,10 @@ const OWN_DEADLINES: [(&str, usize); 2] = [("tryCompare(", 4), ("tryVerify(", 2)
 /// Judges one QML test file.
 pub(super) fn scan(file: &str, text: &str) -> (Vec<Finding>, Vec<Exception>) {
     let code = source::code_view(text, Lang::Qml);
+    let chars: Vec<char> = code.chars().collect();
     let mut candidates = Vec::new();
     for (at, line) in code.lines().enumerate() {
         let number = at + 1;
-        let trimmed = line.trim_start();
         if has_token(line, "wait(") || has_token(line, "sleep(") {
             candidates.push(Candidate {
                 first: number,
@@ -27,28 +27,34 @@ pub(super) fn scan(file: &str, text: &str) -> (Vec<Finding>, Vec<Exception>) {
                 shown: number,
                 rule: "sleep",
             });
-        } else if ANSWERED_WAITS.iter().any(|w| unread_call(trimmed, w)) {
-            candidates.push(Candidate {
-                first: number,
-                last: number,
-                shown: number,
-                rule: "ignored",
-            });
+        }
+    }
+    for name in ANSWERED_WAITS {
+        for call in calls(&code, name) {
+            if unread_call(&chars, &call) {
+                candidates.push(Candidate {
+                    first: call.first,
+                    last: call.last,
+                    shown: call.first,
+                    rule: "ignored",
+                });
+            }
         }
     }
     for (name, position) in OWN_DEADLINES {
-        for (first, last, args) in calls(&code, name) {
+        for call in calls(&code, name) {
             // `undefined` in the timeout's seat is how a message is passed
             // without one: the runner's own budget stands.
-            let own = args
+            let own = call
+                .args
                 .get(position - 1)
                 .map(|arg| arg.trim())
                 .is_some_and(|arg| !arg.is_empty() && arg != "undefined");
             if own {
                 candidates.push(Candidate {
-                    first,
-                    last,
-                    shown: first,
+                    first: call.first,
+                    last: call.last,
+                    shown: call.first,
                     rule: "deadline",
                 });
             }
@@ -58,51 +64,92 @@ pub(super) fn scan(file: &str, text: &str) -> (Vec<Finding>, Vec<Exception>) {
     source::judged(file, text, &code, candidates)
 }
 
-/// Whether `line` is a bare call of `name`, its answer reaching nobody:
-/// nothing but a receiver (`case.`) before it, and nothing but a `;`
-/// after it. Under a `verify(`, an `=` or an `if (` the answer is read.
-fn unread_call(line: &str, name: &str) -> bool {
-    let Some(at) = line.find(name) else {
-        return false;
-    };
-    let receiver = &line[..at];
-    if !receiver.is_empty() && !receiver.ends_with('.') {
-        return false;
-    }
-    if !receiver
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
-    {
-        return false;
-    }
-    let chars: Vec<char> = line.chars().collect();
-    let open = line[..at + name.len()].chars().count() - 1;
-    match arguments(&chars, open) {
-        Some((close, _)) => chars[close + 1..]
-            .iter()
-            .all(|c| c.is_whitespace() || *c == ';'),
-        // A call left open on this line: nothing on the line reads it.
-        None => true,
-    }
+/// One call of a name looked for, read off the whole code view rather
+/// than off one line: rustfmt and a hand alike wrap a call across as
+/// many lines as they please, and what reads its answer stands wherever
+/// the expression around it stands.
+struct Call {
+    /// The index of the name's first character, and of its `(`.
+    start: usize,
+    /// The index of the `)`, absent for a call never closed.
+    close: Option<usize>,
+    /// The lines it opens and closes on.
+    first: usize,
+    last: usize,
+    /// Its arguments, split at the commas of its own level.
+    args: Vec<String>,
 }
 
-/// Every call of `name` in the code view: the lines it opens and closes
-/// on, and its arguments split at the commas of its own level.
-fn calls(code: &str, name: &str) -> Vec<(usize, usize, Vec<String>)> {
+/// Whether `call`'s answer reaches nobody: it stands as a statement of
+/// its own, with nothing but a receiver (`case.`) before it and nothing
+/// but a `;` or a closing brace after it. Under a `verify(`, an `=` or
+/// an `if (` — on its own line or the one it wrapped from — the answer
+/// is read.
+fn unread_call(chars: &[char], call: &Call) -> bool {
+    let mut at = call.start;
+    while at > 0 && (is_word(Some(chars[at - 1])) || chars[at - 1] == '.') {
+        at -= 1;
+    }
+    if !opens_a_statement(chars, at) {
+        return false;
+    }
+    // A call left open reads as one nobody closed around, either.
+    let Some(close) = call.close else {
+        return true;
+    };
+    let ends_the_line = chars[close + 1..]
+        .iter()
+        .take_while(|c| **c != '\n')
+        .all(|c| c.is_whitespace() || matches!(c, ';' | '}'));
+    // What continues an expression cannot begin a statement, so a line
+    // the call ends may still be a line the next one reads.
+    let continued = chars[close + 1..]
+        .iter()
+        .find(|c| !c.is_whitespace())
+        .is_some_and(|c| matches!(c, '.' | '?' | ':' | '&' | '|' | '='));
+    ends_the_line && !continued
+}
+
+/// Whether a statement begins at `at`: what stands before it ends one —
+/// a `;`, a brace, the start of the file, or a line that ended on a
+/// value, which QML closes for the author who left the `;` off.
+fn opens_a_statement(chars: &[char], at: usize) -> bool {
+    let Some(before) = chars[..at].iter().rposition(|c| !c.is_whitespace()) else {
+        return true;
+    };
+    matches!(chars[before], ';' | '{' | '}')
+        || (chars[before + 1..at].contains(&'\n') && !source::opens_a_value(chars, at))
+}
+
+/// Every call of `name` in the code view. A call that is never closed is
+/// the last one read: past an unclosed `(` nothing parses.
+fn calls(code: &str, name: &str) -> Vec<Call> {
     let chars: Vec<char> = code.chars().collect();
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(hit) = code[from..].find(name) {
         let at = from + hit;
         from = at + name.len();
-        if !has_token(&code[at..from], name) || at > 0 && is_word(code[..at].chars().last()) {
+        if at > 0 && is_word(code[..at].chars().last()) {
             continue;
         }
+        let start = code[..at].chars().count();
         let open = code[..from].chars().count() - 1;
-        let Some((close, args)) = arguments(&chars, open) else {
+        let closed = arguments(&chars, open);
+        let ends_at = closed
+            .as_ref()
+            .map_or(chars.len().saturating_sub(1), |(close, _)| *close);
+        let unclosed = closed.is_none();
+        found.push(Call {
+            start,
+            close: closed.as_ref().map(|(close, _)| *close),
+            first: line_of(&chars, open),
+            last: line_of(&chars, ends_at),
+            args: closed.map_or_else(Vec::new, |(_, args)| args),
+        });
+        if unclosed {
             break;
-        };
-        found.push((line_of(&chars, open), line_of(&chars, close), args));
+        }
     }
     found
 }
@@ -180,6 +227,52 @@ tryVerify(() => root.n !== -1,
 tryVerify(() => root.n !== -1, undefined, \"the runner's own budget\")
 ";
         assert_eq!(found(text), vec![(2, "deadline"), (3, "deadline")]);
+    }
+
+    #[test]
+    fn a_wrapped_answered_wait_is_read_across_the_lines_it_spans() {
+        let text = "\
+waitForRendering(
+    item,
+    500)
+const painted =
+    waitForRendering(item)
+verify(waitForRendering(
+    item), \"painted\")
+if (!waitForItemPolished(
+        item)) fail(\"no polish\")
+";
+        assert_eq!(
+            found(text),
+            vec![(1, "ignored")],
+            "the answer is read where the expression around it stands, however it wrapped"
+        );
+    }
+
+    #[test]
+    fn a_marker_above_a_wrapped_wait_covers_the_whole_call() {
+        let text = "\
+// waits(timed): the paint is the product's own, and the bound is a floor
+waitForRendering(
+    item,
+    500)
+";
+        let (findings, exceptions) = scan("tst_x.qml", text);
+        assert!(findings.is_empty(), "{findings:?}");
+        assert_eq!(exceptions.len(), 1);
+    }
+
+    #[test]
+    fn a_regex_literal_hides_nothing_behind_it() {
+        let text = "\
+const bare = /'/
+wait(50)
+";
+        assert_eq!(
+            found(text),
+            vec![(2, "sleep")],
+            "the quote in the pattern opens no string"
+        );
     }
 
     #[test]

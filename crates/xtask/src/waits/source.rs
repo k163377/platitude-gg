@@ -98,7 +98,9 @@ pub(super) enum Lang {
 /// `text` with every comment and string literal replaced by spaces, line
 /// for line: what is left is the code, and a `;` or a brace inside a
 /// string no longer reads as one. Rust char literals and raw strings are
-/// blanked too; a lifetime's `'` is kept, since it opens nothing.
+/// blanked too; a lifetime's `'` is kept, since it opens nothing. A QML
+/// regular expression is a literal like any other ([`regex_len`]) — the
+/// `'` of a `/'/` opens no string.
 pub(super) fn code_view(text: &str, lang: Lang) -> String {
     view(text, lang, false)
 }
@@ -122,6 +124,8 @@ fn view(text: &str, lang: Lang, keep_strings: bool) -> String {
             line_comment_len(&chars, i)
         } else if c == '/' && next == Some('*') {
             block_comment_len(&chars, i, lang)
+        } else if lang == Lang::Qml && c == '/' {
+            regex_len(&chars, i)
         } else if c == '"' || (lang == Lang::Qml && matches!(c, '\'' | '`')) {
             quoted_len(&chars, i, c)
         } else if lang == Lang::Rust && c == 'r' && !word_before(&chars, i) {
@@ -233,72 +237,243 @@ fn char_literal_len(chars: &[char], at: usize) -> usize {
     }
 }
 
-/// The line ranges of a Rust file's `#[cfg(test)] mod … { … }` blocks,
-/// from the attribute to the closing brace, read off its code view. A
-/// `#[cfg(test)] mod x;` declares a file that is read on its own
-/// ([`declared_test_modules`]) and opens no region here.
+/// The words a value may follow, which end in a word character the way
+/// a name does: after any other name the `/` of [`regex_len`] divides.
+const VALUE_WORDS: [&str; 8] = [
+    "return", "typeof", "case", "in", "of", "new", "delete", "void",
+];
+
+/// A JavaScript regular expression literal at `at`; 0 where the `/`
+/// divides instead. One stands only where a value may begin, and closes
+/// with an unescaped `/` on its own line — a `[…]` class holds a `/`
+/// without one. Blanked like a string, since `/'/` opens none.
+fn regex_len(chars: &[char], at: usize) -> usize {
+    if !opens_a_value(chars, at) {
+        return 0;
+    }
+    let mut i = at + 1;
+    let mut class = false;
+    while let Some(c) = chars.get(i) {
+        match c {
+            '\n' => return 0,
+            '\\' if chars.get(i + 1).is_some_and(|next| *next != '\n') => i += 1,
+            '[' => class = true,
+            ']' => class = false,
+            '/' if !class => return i + 1 - at,
+            _ => {}
+        }
+        i += 1;
+    }
+    0
+}
+
+/// Whether a value may begin at `at`: after a name, a number or a
+/// closing bracket what follows is an operator, and after anything else
+/// — a `(`, a `,`, a `:`, an operator, the start of a statement — it is
+/// a value. Read across a newline it says the other thing too: a line
+/// that ends where no value may begin is a statement QML has closed.
+pub(super) fn opens_a_value(chars: &[char], at: usize) -> bool {
+    let Some(before) = chars[..at].iter().rposition(|c| !c.is_whitespace()) else {
+        return true;
+    };
+    let c = chars[before];
+    if matches!(c, ')' | ']' | '"' | '\'' | '`') {
+        return false;
+    }
+    if !(c.is_alphanumeric() || c == '_') {
+        return true;
+    }
+    let start = chars[..before]
+        .iter()
+        .rposition(|c| !(c.is_alphanumeric() || *c == '_'))
+        .map_or(0, |i| i + 1);
+    let word: String = chars[start..=before].iter().collect();
+    VALUE_WORDS.contains(&word.as_str())
+}
+
+/// The line ranges of a Rust file's `#[cfg(test)]` blocks — a `mod`, a
+/// `fn` or an `impl` — from the item's first attribute to its closing
+/// brace, read off its code view. A test-only item is test code whatever
+/// shape it takes, and a helper `fn` beside the production code of a
+/// file is the shape a suite's fixture takes there. A `#[cfg(test)] mod
+/// x;` declares a file that is read on its own ([`declared_test_modules`])
+/// and opens no region here.
 pub(super) fn test_regions(code: &str) -> Vec<RangeInclusive<usize>> {
     let chars: Vec<char> = code.chars().collect();
     let mut regions = Vec::new();
-    for head in test_mod_heads(code, &chars) {
-        if chars.get(head.after) != Some(&'{') {
+    for item in test_items(code, &chars) {
+        if chars.get(item.after) != Some(&'{') {
             continue;
         }
-        let close = matching_brace(&chars, head.after).unwrap_or(chars.len() - 1);
-        regions.push(line_of(&chars, head.attribute)..=line_of(&chars, close));
+        let close = matching_brace(&chars, item.after).unwrap_or(chars.len() - 1);
+        regions.push(line_of(&chars, item.attribute)..=line_of(&chars, close));
     }
     regions
 }
 
-/// The names of the modules a file declares as test code — `#[cfg(test)]
-/// mod x;` — whose files are test code from top to bottom wherever they
-/// stand and whatever they are called. A `#[path]` is not followed: the
-/// files this tree declares that way are named `tests.rs` / `*_tests.rs`
-/// and are read as whole test files by that name.
-pub(super) fn declared_test_modules(code: &str) -> Vec<String> {
+/// A module a file declares as test code, and where its file stands.
+pub(super) enum Declared {
+    /// `mod x;`: the file is the one that name resolves to.
+    Named(String),
+    /// `#[path = "…"] mod x;`: the file is the one the attribute names,
+    /// relative to the declaring file's own directory.
+    Path(String),
+}
+
+/// The modules a file declares as test code — `#[cfg(test)] mod x;` —
+/// whose files are test code from top to bottom wherever they stand and
+/// whatever they are called.
+///
+/// `text` is the raw source the code view was taken from, character for
+/// character: a `#[path]`'s string is blanked in the view, so it is read
+/// there.
+pub(super) fn declared_test_modules(code: &str, text: &str) -> Vec<Declared> {
     let chars: Vec<char> = code.chars().collect();
-    test_mod_heads(code, &chars)
+    let raw: Vec<char> = text.chars().collect();
+    test_items(code, &chars)
         .into_iter()
-        .filter(|head| chars.get(head.after) == Some(&';'))
-        .map(|head| head.name)
+        .filter(|item| item.kind == Kind::Mod && chars.get(item.after) == Some(&';'))
+        .map(
+            |item| match module_path(&raw, item.attribute, item.keyword) {
+                Some(path) => Declared::Path(path),
+                None => Declared::Named(item.name),
+            },
+        )
         .collect()
 }
 
-const CFG_TEST: &str = "#[cfg(test)]";
+const CFG: &str = "#[cfg(";
 
-/// A `mod` that a `#[cfg(test)]` applies to.
-struct TestModHead {
+/// The item shapes a `#[cfg(test)]` opens a region on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    Mod,
+    Fn,
+    Impl,
+}
+
+/// An item that a `#[cfg(test)]` applies to.
+struct TestItem {
+    kind: Kind,
+    /// The item's own name, empty for an `impl`.
     name: String,
-    /// The index of the attribute, where the module's lines begin.
+    /// The index of the item's first attribute, where its lines begin.
     attribute: usize,
-    /// The index of what follows the name — `{` for a block, `;` for a
+    /// The index of the keyword, past the attributes and the modifiers.
+    keyword: usize,
+    /// The index of what follows the head — `{` for a block, `;` for a
     /// declaration.
     after: usize,
 }
 
-/// Every `mod` that a `#[cfg(test)]` in `code` applies to.
-fn test_mod_heads(code: &str, chars: &[char]) -> Vec<TestModHead> {
-    let mut heads = Vec::new();
+/// Every item that a `#[cfg(…)]` naming `test` in `code` applies to.
+fn test_items(code: &str, chars: &[char]) -> Vec<TestItem> {
+    let mut items = Vec::new();
     let mut from = 0;
-    while let Some(found) = code[from..].find(CFG_TEST) {
+    while let Some(found) = code[from..].find(CFG) {
         let at = from + found;
-        from = at + CFG_TEST.len();
-        if let Some((name, after)) = test_mod_head(chars, code[..from].chars().count()) {
-            heads.push(TestModHead {
-                name,
-                attribute: code[..at].chars().count(),
-                after,
-            });
+        from = at + CFG.len();
+        let attribute = code[..at].chars().count();
+        let open = attribute + CFG.chars().count() - 1;
+        let Some(close) = matching(chars, open, '(', ')') else {
+            continue;
+        };
+        if !cfg_names_test(chars, open) || chars.get(close + 1) != Some(&']') {
+            continue;
+        }
+        if let Some(item) = test_item(chars, close + 2, first_attribute(chars, attribute)) {
+            items.push(item);
         }
     }
-    heads
+    items
 }
 
-/// The `mod` head that follows a `#[cfg(test)]` at `at`, past whatever
-/// other attributes stand between them: its name, and the index just past
-/// the name and the whitespace after it. `pub` and `pub(…)` are stepped
-/// over — a test module is no less one for being reachable.
-fn test_mod_head(chars: &[char], mut at: usize) -> Option<(String, usize)> {
+/// Whether the `#[cfg(…)]` whose `(` stands at `open` holds under
+/// `cfg(test)`: `test` itself, or a `test` among the terms of an `all`
+/// / `any`, however deep. A `not(test)` names the opposite, and a
+/// `"test"` written as a value is blanked in the code view this reads,
+/// so only the bare word is ever found.
+fn cfg_names_test(chars: &[char], open: usize) -> bool {
+    let Some(close) = matching(chars, open, '(', ')') else {
+        return false;
+    };
+    // The depths at which a `not(` stands: what it holds says nothing.
+    let mut nots: Vec<usize> = Vec::new();
+    let mut depth = 0usize;
+    let mut at = open;
+    while at < close {
+        let c = chars[at];
+        if c == '(' {
+            depth += 1;
+            at += 1;
+        } else if c == ')' {
+            nots.retain(|d| *d < depth);
+            depth -= 1;
+            at += 1;
+        } else if c.is_alphanumeric() || c == '_' {
+            let word = word_at(chars, at);
+            at += word.chars().count();
+            if chars.get(past_whitespace(chars, at)) == Some(&'(') {
+                if word == "not" {
+                    nots.push(depth + 1);
+                }
+            } else if word == "test" && nots.is_empty() {
+                return true;
+            }
+        } else {
+            at += 1;
+        }
+    }
+    false
+}
+
+/// The index of the first attribute of the item whose `#[cfg(…)]` stands
+/// at `at`: attributes are written in any order, so a module's `#[path]`
+/// may stand above its `#[cfg(test)]`.
+fn first_attribute(chars: &[char], mut at: usize) -> usize {
+    loop {
+        let Some(close) = chars[..at]
+            .iter()
+            .rposition(|c| !c.is_whitespace())
+            .filter(|i| chars[*i] == ']')
+        else {
+            return at;
+        };
+        let Some(open) = matching_back(chars, close) else {
+            return at;
+        };
+        if open == 0 || chars[open - 1] != '#' {
+            return at;
+        }
+        at = open - 1;
+    }
+}
+
+/// The `[` that the `]` at `close` closes.
+fn matching_back(chars: &[char], close: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for i in (0..=close).rev() {
+        if chars[i] == ']' {
+            depth += 1;
+        } else if chars[i] == '[' {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+/// The modifiers an item wears between its visibility and its keyword.
+const MODIFIERS: [&str; 5] = ["async", "const", "default", "extern", "unsafe"];
+
+/// The item that follows a `#[cfg(test)]`'s `]` at `at`, past whatever
+/// other attributes and modifiers stand between them: its kind, its
+/// name, and the index of the `{` or `;` that follows its head. `pub`
+/// and `pub(…)` are stepped over — a test item is no less one for being
+/// reachable.
+fn test_item(chars: &[char], mut at: usize, attribute: usize) -> Option<TestItem> {
     loop {
         at = past_whitespace(chars, at);
         if chars.get(at) == Some(&'#') && chars.get(at + 1) == Some(&'[') {
@@ -315,16 +490,102 @@ fn test_mod_head(chars: &[char], mut at: usize) -> Option<(String, usize)> {
         }
         word = word_at(chars, at);
     }
-    if word != "mod" {
+    while MODIFIERS.contains(&word.as_str()) {
+        at = past_whitespace(chars, at + word.chars().count());
+        word = word_at(chars, at);
+    }
+    let kind = match word.as_str() {
+        "mod" => Kind::Mod,
+        "fn" => Kind::Fn,
+        "impl" => Kind::Impl,
+        _ => return None,
+    };
+    let keyword = at;
+    at = past_whitespace(chars, at + word.chars().count());
+    let name = if kind == Kind::Impl {
+        String::new()
+    } else {
+        word_at(chars, at)
+    };
+    if kind != Kind::Impl && name.is_empty() {
         return None;
     }
-    at = past_whitespace(chars, at + 3);
-    let name = word_at(chars, at);
-    if name.is_empty() {
+    // A `mod`'s head ends at its name; the rest carry a signature, whose
+    // own `;` — an array's length — closes nothing.
+    let after = if kind == Kind::Mod {
+        past_whitespace(chars, at + name.chars().count())
+    } else {
+        head_end(chars, at)
+    };
+    Some(TestItem {
+        kind,
+        name,
+        attribute,
+        keyword,
+        after,
+    })
+}
+
+/// Where the head that runs from `at` ends: the `{` that opens the body,
+/// or the `;` that stands in place of one, past whatever brackets the
+/// signature holds.
+fn head_end(chars: &[char], at: usize) -> usize {
+    let mut depth = 0usize;
+    for (i, c) in chars.iter().enumerate().skip(at) {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            '{' | ';' if depth == 0 => return i,
+            _ => {}
+        }
+    }
+    chars.len()
+}
+
+/// The file a `#[path = "…"]` among the attributes in `raw[from..to]`
+/// names. Read off the raw text, which the code view stands in step
+/// with character for character — in the view the string is blanked.
+fn module_path(raw: &[char], from: usize, to: usize) -> Option<String> {
+    let head = raw.get(from..to)?;
+    for at in 0..head.len() {
+        if word_before(head, at) || word_at(head, at) != "path" {
+            continue;
+        }
+        // Inside an attribute of its own and nowhere else: a comment
+        // between the attributes says `path` as freely as any prose.
+        if !head[..at]
+            .iter()
+            .rposition(|c| !c.is_whitespace())
+            .is_some_and(|i| head[i] == '[' && i > 0 && head[i - 1] == '#')
+        {
+            continue;
+        }
+        let mut i = past_whitespace(head, at + 4);
+        if head.get(i) != Some(&'=') {
+            continue;
+        }
+        i = past_whitespace(head, i + 1);
+        if head.get(i) != Some(&'"') {
+            continue;
+        }
+        let mut path = String::new();
+        i += 1;
+        while let Some(c) = head.get(i) {
+            match c {
+                '"' => return Some(path),
+                '\\' => {
+                    path.extend(head.get(i + 1));
+                    i += 2;
+                }
+                _ => {
+                    path.push(*c);
+                    i += 1;
+                }
+            }
+        }
         return None;
     }
-    at = past_whitespace(chars, at + name.chars().count());
-    Some((name, at))
+    None
 }
 
 fn past_whitespace(chars: &[char], mut at: usize) -> usize {
@@ -454,7 +715,19 @@ pub(super) fn judged(
 
 #[cfg(test)]
 mod tests {
-    use super::{Lang, Purpose, code_view, declared_test_modules, markers, test_regions};
+    use super::{Declared, Lang, Purpose, code_view, declared_test_modules, markers, test_regions};
+
+    /// The declared modules of `text`, each as the file it names or the
+    /// name it is known by.
+    fn declared(text: &str) -> Vec<String> {
+        declared_test_modules(&code_view(text, Lang::Rust), text)
+            .into_iter()
+            .map(|module| match module {
+                Declared::Named(name) => name,
+                Declared::Path(path) => format!("path {path}"),
+            })
+            .collect()
+    }
 
     #[test]
     fn strings_and_comments_are_blanked_line_for_line() {
@@ -564,10 +837,9 @@ pub(crate) mod tests {
     fn t() {}
 }
 ";
-        let code = code_view(text, Lang::Rust);
-        assert_eq!(declared_test_modules(&code), vec!["testkit".to_string()]);
+        assert_eq!(declared(text), vec!["testkit".to_string()]);
         assert_eq!(
-            test_regions(&code),
+            test_regions(&code_view(text, Lang::Rust)),
             vec![3..=6],
             "the region opens at the attribute"
         );
@@ -588,5 +860,136 @@ fn more() {}
 ";
         let regions = test_regions(&code_view(text, Lang::Rust));
         assert_eq!(regions, vec![4..=8]);
+    }
+
+    #[test]
+    fn a_cfg_holds_under_test_when_test_is_one_of_its_terms_and_never_under_a_not() {
+        let text = "\
+#[cfg(all(test, target_os = \"linux\"))]
+fn handle() {
+    let a = 1;
+}
+#[cfg(any(test, feature = \"kit\"))]
+mod kit {
+    fn t() {}
+}
+#[cfg(not(test))]
+fn production() {
+    let b = 2;
+}
+#[cfg(all(unix, not(test)))]
+fn on_unix() {
+    let c = 3;
+}
+#[cfg(feature = \"test\")]
+fn behind_a_feature() {
+    let d = 4;
+}
+";
+        assert_eq!(
+            test_regions(&code_view(text, Lang::Rust)),
+            vec![1..=4, 5..=8],
+            "a `test` among the terms opens a region; a negated or quoted one does not"
+        );
+    }
+
+    #[test]
+    fn a_test_only_fn_or_impl_is_a_region_and_a_use_is_not() {
+        let text = "\
+fn production() {
+    let a = 1;
+}
+#[cfg(test)]
+pub(crate) async fn helper() -> [u8; 2] {
+    [1, 2]
+}
+#[cfg(test)]
+impl<'a> Fixture<'a> {
+    fn new() {}
+}
+#[cfg(test)]
+use std::io;
+";
+        assert_eq!(
+            test_regions(&code_view(text, Lang::Rust)),
+            vec![4..=7, 8..=11],
+            "the `;` of an array in the signature closes no head, and a `use` opens no block"
+        );
+    }
+
+    #[test]
+    fn a_modules_own_path_is_read_off_the_raw_text_in_either_order() {
+        let text = "\
+#[cfg(test)]
+#[path = \"avatar_tests.rs\"]
+mod tests;
+#[path = \"kit/other.rs\"]
+#[cfg(test)]
+mod more;
+#[cfg(test)]
+// a note whose path = \"elsewhere.rs\" is prose and no attribute
+mod plain;
+#[cfg(test)]
+mod tests_in_a_block {
+    fn t() {}
+}
+";
+        assert_eq!(
+            declared(text),
+            vec![
+                "path avatar_tests.rs".to_string(),
+                "path kit/other.rs".to_string(),
+                "plain".to_string()
+            ],
+            "a block declares no file, and only a `#[path]` attribute names one"
+        );
+    }
+
+    #[test]
+    fn a_qml_regex_is_a_literal_and_a_division_is_not() {
+        let text = "\
+var re = /'/;
+var half = width / 2; var s = 'a; b';
+";
+        let code = code_view(text, Lang::Qml);
+        assert!(
+            !code.contains('\''),
+            "the regex opens no string, so the line after it is code: {code}"
+        );
+        assert!(
+            code.contains("width / 2"),
+            "a division is no literal: {code}"
+        );
+        assert_eq!(code.lines().count(), 2);
+        assert_eq!(
+            code.matches(';').count(),
+            3,
+            "the `;` inside the string is nobody's: {code}"
+        );
+    }
+
+    #[test]
+    fn a_regex_stands_where_a_value_may_begin_and_closes_on_its_own_line() {
+        // A `;` inside the literal is blanked with it and stands where
+        // the `/` only divides: what it counts is which reading won.
+        let semicolons = |text: &str| code_view(text, Lang::Qml).matches(';').count();
+        assert_eq!(semicolons("var re = /a;b/;"), 1, "a value follows a `=`");
+        assert_eq!(semicolons("return /a;b/.test(s);"), 1, "and a `return`");
+        assert_eq!(semicolons("f(x, /a;b/);"), 1, "and a comma");
+        assert_eq!(
+            semicolons("var x = a / b; var y = c / d;"),
+            2,
+            "after a name the `/` divides"
+        );
+        assert_eq!(
+            semicolons("var x = f() / b; var y = c / d;"),
+            2,
+            "after a `)` it divides too"
+        );
+        assert_eq!(
+            semicolons("f(x, /a;\n b/);"),
+            2,
+            "a literal closes on its own line or opens nothing"
+        );
     }
 }

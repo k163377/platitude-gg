@@ -3,8 +3,9 @@
 //! anywhere but `crate::wait`.
 //!
 //! What it reads is every statement of test code — the integration
-//! suites with their support modules, the `#[cfg(test)]` blocks and
-//! `*_tests.rs` files of every crate, and the QtTest files — and what it
+//! suites with their support modules, the `#[cfg(test)]` blocks (a
+//! `mod`, a `fn` or an `impl`) and `*_tests.rs` files of every crate,
+//! and the QtTest files — and what it
 //! names is four shapes (.claude/rules/core.md §非同期・並行テスト):
 //!
 //! - `sleep`: a sleep or a `yield_now` spent in place of an answer. A
@@ -172,25 +173,49 @@ fn declared_test_files(sources: &[(String, source::Lang, String)]) -> BTreeSet<S
             continue;
         }
         let code = source::code_view(text, source::Lang::Rust);
-        for name in source::declared_test_modules(&code) {
-            declared.extend(module_files(relative, &name));
+        for module in source::declared_test_modules(&code, text) {
+            declared.extend(module_files(relative, &module));
         }
     }
     declared
 }
 
-/// Where `mod name;` in `declaring` puts its file: beside a `mod.rs` /
-/// `lib.rs` / `main.rs`, and under a directory of the file's own stem
-/// otherwise — as `name.rs`, or as `name/mod.rs`.
-fn module_files(declaring: &str, name: &str) -> [String; 2] {
+/// Where a module declared in `declaring` puts its file: the one its
+/// `#[path]` names, relative to the declaring file's own directory — or,
+/// by its name alone, beside a `mod.rs` / `lib.rs` / `main.rs` and under
+/// a directory of the file's own stem otherwise, as `name.rs` or as
+/// `name/mod.rs`.
+fn module_files(declaring: &str, module: &source::Declared) -> Vec<String> {
     let (dir, file) = declaring.rsplit_once('/').unwrap_or(("", declaring));
-    let stem = file.strip_suffix(".rs").unwrap_or(file);
-    let base = if matches!(stem, "mod" | "lib" | "main") {
-        dir.to_string()
-    } else {
-        format!("{dir}/{stem}")
-    };
-    [format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
+    match module {
+        source::Declared::Path(path) => vec![joined(dir, path)],
+        source::Declared::Named(name) => {
+            let stem = file.strip_suffix(".rs").unwrap_or(file);
+            let base = if matches!(stem, "mod" | "lib" | "main") {
+                dir.to_string()
+            } else {
+                format!("{dir}/{stem}")
+            };
+            vec![format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
+        }
+    }
+}
+
+/// `path`, as the tree spells the file it names from `dir`: separators
+/// one way, and `.` and `..` walked off.
+fn joined(dir: &str, path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let mut parts: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    parts.join("/")
 }
 
 fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result<(), String> {
@@ -328,9 +353,16 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        language_of, module_files, runner_prefix, rust::Scope, scope_of, source::Lang,
+        language_of, module_files, runner_prefix,
+        rust::Scope,
+        scope_of,
+        source::{Declared, Lang},
         whole_test_file,
     };
+
+    fn named(declaring: &str, name: &str) -> Vec<String> {
+        module_files(declaring, &Declared::Named(name.to_string()))
+    }
 
     // The paths below are fixtures under a crate that does not exist: a
     // real path in a string here is read by the gate's graph as this file
@@ -339,19 +371,45 @@ mod tests {
     #[test]
     fn a_declared_module_resolves_beside_its_declaring_file() {
         assert_eq!(
-            module_files("crates/x/src/graph/mod.rs", "testkit")[0],
+            named("crates/x/src/graph/mod.rs", "testkit")[0],
             "crates/x/src/graph/testkit.rs"
         );
         assert_eq!(
-            module_files("crates/x/src/offers.rs", "tests")[0],
+            named("crates/x/src/offers.rs", "tests")[0],
             "crates/x/src/offers/tests.rs"
         );
         assert_eq!(
-            module_files("crates/x/src/lib.rs", "wait"),
+            named("crates/x/src/lib.rs", "wait"),
             [
                 "crates/x/src/wait.rs".to_string(),
                 "crates/x/src/wait/mod.rs".to_string()
             ]
+        );
+    }
+
+    #[test]
+    fn a_modules_own_path_stands_from_the_declaring_files_directory() {
+        let path = |declaring: &str, path: &str| {
+            module_files(declaring, &Declared::Path(path.to_string()))
+        };
+        assert_eq!(
+            path("crates/x/src/process/executor.rs", "tests.rs"),
+            ["crates/x/src/process/tests.rs".to_string()],
+            "beside the declaring file, not under a directory of its stem"
+        );
+        assert_eq!(
+            path("crates/x/src/avatar.rs", "avatar_tests.rs"),
+            ["crates/x/src/avatar_tests.rs".to_string()]
+        );
+        assert_eq!(
+            path("crates/x/tests/gate/main.rs", "../../src/wait.rs"),
+            ["crates/x/src/wait.rs".to_string()],
+            "`..` walks the declaring file's directory off"
+        );
+        assert_eq!(
+            path("crates/x/src/lib.rs", ".\\sub\\kit.rs"),
+            ["crates/x/src/sub/kit.rs".to_string()],
+            "a separator of the other kind names the same file"
         );
     }
 
