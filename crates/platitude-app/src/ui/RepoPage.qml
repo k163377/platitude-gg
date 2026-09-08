@@ -2516,7 +2516,16 @@ Item {
         if (row < 0) {
             if (graphModel.loading)
                 return // the head row may still be streaming in
-            row = 0 // detached / head outside the window: newest commit
+            // Detached / head outside the window: the newest commit — **which is not row 0 on a tree that has a
+            // working-tree row of its own**, since that row stands above the walk and is no commit
+            // (デザイン規約 §グラフの検索「行 0 が WIP 行になり、WIP はコミットではない」). Whether the opening
+            // walk carries that row is a race between the first status and the walk's own start (`session::walk`),
+            // so a flat row 0 lands somewhere different from one run to the next. And landing on it is not merely
+            // the wrong row: `activateRow` shows the working tree and returns, asking for no details, so the
+            // changed-file list stays empty for the whole run. The two automation drivers walk past the same row
+            // for the same reason (`PageAutoStart`, `PagePerfDriver`). A repository whose only row is that one has
+            // no commit to open on, and the working tree is the landing.
+            row = graphModel.rowTotal > 1 && GitFacts.wipOid(graphModel.oidAt(0)) ? 1 : 0
         }
         graphPane.setCurrentRow(row)
         graphPane.anchorSoon()
