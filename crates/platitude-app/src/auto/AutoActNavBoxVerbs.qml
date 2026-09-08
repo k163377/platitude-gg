@@ -223,9 +223,11 @@ Item {
         property string kind: "branch"
         property int row: 0
         property bool head: false
-        /// What the stand-in is put on screen by: a filter its own branch does not answer to. No section overflows its
-        /// rows in the sidebar proper (`NavList.Layout.maximumHeight`), so scrolling cannot take the current branch's
-        /// row off — the two ways it has no row are a filter and a folded folder (`HeadPinRow`).
+        /// What the stand-in is put on screen by: a filter its own branch does not answer to. **This is the half with
+        /// no row anywhere** (`HeadPinRow.seated`) — the two ways into it are a filter and a folded folder, and no
+        /// section in these repositories has more rows than it is given height for (`NavList.Layout.maximumHeight`),
+        /// so there is nothing here to scroll the row off with. The other half, where the row is in the list and the
+        /// list moved out from under it, is `nav-pin-edge`'s.
         property string hide: ""
         property bool lit: false
         function begin(arg) {

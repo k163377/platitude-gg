@@ -108,16 +108,28 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.rowNameAt(row) : ""
     }
+    /// Whether one section's row is on screen. Read off the list rather than off whatever is standing in for the row,
+    /// so a run can say the row left before it says what took its place.
+    function rowInView(kind, row) {
+        const list = probe.listOf(kind)
+        return !!list && list.rowInView(row)
+    }
     /// The current branch's sticky stand-in, under the same pointer: it rides the edge its own row went out of, so
     /// resting on that row is resting on this (`HeadPinRow`). What puts the pointer there is the pane's own
     /// `headPinPointed` — the row it stands for has no place in the list at all while a filter hides it, which is
     /// one of the two ways the stand-in is on screen.
     readonly property bool headPinLit: probe.sections.headPinLit
     readonly property string headPinWords: probe.sections.headPinWords
+    /// Whether it is standing, which edge it took, and where the layout put it (PG_AUTO_ACT=nav-pin-edge).
+    readonly property bool headPinShown: probe.sections.headPinShown
+    readonly property bool headPinAbove: probe.sections.headPinAbove
+    readonly property real headPinY: probe.sections.headPinY
 
-    /// PG_SCROLL_TO=nav-bottom: jump the branches list to its end. The current branch's sticky row only changes edges
-    /// under scroll, which a headless run cannot produce otherwise.
+    /// PG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, which is the other of the two ways the stand-in
+    /// comes on screen — its row scrolled off, rather than a filter leaving it no row at all (`nav-tip head`). Only
+    /// scroll changes which edge it rides, and a headless run has no other way to produce one. The scroll answers
+    /// where the list came to rest (`NavSections.scrollBranchesToEnd`).
     function scrollBranchesToEnd() {
-        probe.sections.scrollBranchesToEnd()
+        return probe.sections.scrollBranchesToEnd()
     }
 }

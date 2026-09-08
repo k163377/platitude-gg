@@ -85,7 +85,6 @@ Item {
         diffModel: harness.diffModel
         worktreeModel: harness.worktreeModel
         graphPane: harness.graphPane
-        sidebarPane: harness.sidebarPane
     }
 
     // Built only when a verb was given, so a run that is only being measured carries none of the verbs — and only

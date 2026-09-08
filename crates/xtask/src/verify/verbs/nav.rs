@@ -215,6 +215,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "lit=true wants=true tip=true",
     },
+    // The current branch's stand-in riding the edge its own row went out
+    // of, with the list scrolled out from under it. **The picture cannot
+    // answer this**: on the top edge the stand-in draws the same whether
+    // the row left upwards or was never in the list to begin with — the
+    // second is a filter's doing and the state `nav-tip head`
+    // photographs — and `rowshown=false` next to `above=true` is the only
+    // place the two are told apart. `y=0` fixes *where* the top edge is,
+    // which `above=true` does not: the stand-in's place is bound straight
+    // off that answer, so the number moves only if the binding is given a
+    // margin or an inset to start from, and that is the change it holds.
+    //
+    // `row=` and `rested=` are left outside the claim on purpose. They
+    // are the repository's numbers rather than the rule's — where the
+    // current branch happened to sort, and how tall the section came out
+    // — and a preset with one more branch in it would fail a claim that
+    // reached them while nothing about the stand-in had changed.
+    Verb {
+        name: "nav-pin-edge",
+        when: &[],
+        plain: "nav_pin_edge pin=true above=true rowshown=false name=main y=0",
+    },
     // The left menu's rename gesture, and the absence that is the
     // whole of its bug: a click landing in the folded list's section
     // after that section went away and came back is an ordinary

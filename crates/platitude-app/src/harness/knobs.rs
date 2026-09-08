@@ -69,10 +69,6 @@ pub(crate) struct Knobs {
     /// screen, and `PG_AUTO_IDENTITY_SAVE` submits it straight away.
     pub identity: String,
     pub identity_save: bool,
-    /// `PG_SCROLL_TO` — `top` / `bottom` jumps the graph once the page
-    /// has stopped arriving (`auto/PageSettled`); `nav-bottom` jumps the
-    /// sidebar's branch list instead.
-    pub scroll_to: String,
     /// `PG_MEM_REPORT` — file and print the memory breakdown. The walks
     /// it turns on are O(rows) per drain, so a run that did not ask for
     /// it pays nothing (`memprobe::enabled`).
@@ -152,7 +148,6 @@ fn read() -> Knobs {
         system_title_bar: on("PG_SYSTEM_TITLE_BAR"),
         identity: text("PG_AUTO_IDENTITY"),
         identity_save: on("PG_AUTO_IDENTITY_SAVE"),
-        scroll_to: text("PG_SCROLL_TO"),
         mem_report: on("PG_MEM_REPORT"),
         perf_selection: text("PG_PERF_SELECTION"),
         perf_oid: text("PG_PERF_OID"),
@@ -185,7 +180,7 @@ mod tests {
     fn assert_at_rest(knobs: &Knobs) {
         assert!(knobs.act.is_empty() && knobs.act_arg.is_empty());
         assert!(knobs.open.is_empty() && knobs.shot_dir.is_empty());
-        assert!(knobs.identity.is_empty() && knobs.scroll_to.is_empty());
+        assert!(knobs.identity.is_empty());
         assert!(!knobs.select && !knobs.scroll && !knobs.perf && !knobs.wip);
         assert!(!knobs.system_title_bar && !knobs.identity_save);
         assert!(!knobs.mem_report);

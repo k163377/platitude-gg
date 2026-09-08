@@ -131,6 +131,18 @@ Item {
             acts.heldBranch = arg
             repoTab.rebase(arg, "", true)
             navHeldTimer.start()
+        } else if (act === "nav-pin-edge") {
+            // The current branch's stand-in riding the edge its own row went out of (`HeadPinRow`): the branch list
+            // is taken to its end, which puts the row off above it. **The scroll is what this is for** — the other
+            // way the stand-in is on screen has no row anywhere to ride above and is answered off the model alone
+            // (`seated`, which `nav-tip head` produces with a filter), so without a list that moved under it the
+            // term this verb is about is never read.
+            //
+            // **The edge below it has no repository here that can make it.** It wants the current branch sorted
+            // past the last row the section can show, and every preset checks out a name that sorts early
+            // (`stack`, the deepest branch list there is, puts `main` on row 8 of 30 with 10 rows on screen) — so
+            // the row can only ever leave upwards, and an argument for the other edge would be one nothing runs.
+            pinEdgeTimer.start()
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.
@@ -163,6 +175,42 @@ Item {
             return false
         }
         return true
+    }
+    SampleTimer {
+        id: pinEdgeTimer
+        onTriggered: {
+            // A current branch with no row at all is the other state, and this one cannot read a row that is not in
+            // the list (`nav-tip head`).
+            if (branchesModel.headRow < 0)
+                return
+            // Re-applied rather than taken once: the list is handed its height by a layout pass of its own, and one
+            // asked for its end before that has nowhere to go. What comes back is where it came to rest, which is
+            // also what a repository too small for this says — a section showing every row it holds goes on
+            // answering 0 and the row never leaves, so the run waits its watchdog out. That is why the preset is
+            // named with the verb (verify-ui スキル) rather than left to whatever a run was pointed at.
+            const rested = navProbe.scrollBranchesToEnd()
+            // **The row leaving is what is waited for, not the stand-in arriving.** A stand-in that is up because
+            // something else took the row out of the list is a different state wearing the same picture, so the
+            // row's own place in the list is asked first and the stand-in only after.
+            if (navProbe.rowInView("branch", branchesModel.headRow))
+                return
+            if (!navProbe.headPinShown || !navProbe.headPinAbove)
+                return
+            pinEdgeTimer.stop()
+            Harness.report(
+            "nav_pin_edge pin=" + navProbe.headPinShown
+            + " above=" + navProbe.headPinAbove
+            + " rowshown=" + navProbe.rowInView("branch", branchesModel.headRow)
+            + " name=" + branchesModel.headName
+            // Where the layout put it, beside the edge it was asked for: riding above, that is the top of the list
+            // whatever the pane's height, so the drawn number can be claimed rather than only the answer about it.
+            + " y=" + Math.round(navProbe.headPinY)
+            // Last, and the repository's rather than the rule's: which row the current branch sorted to, and how
+            // far the list had to go to leave it behind.
+            + " row=" + branchesModel.headRow
+            + " rested=" + Math.round(rested))
+            driver.complete()
+        }
     }
     // The splitter has to have handed the pane its new width before the width can be reported — the fold sets it, the
     // layout takes it. And the diff these verbs open is a git subprocess away: `diff=true` is the verb's own word

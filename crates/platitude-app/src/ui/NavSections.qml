@@ -63,10 +63,19 @@ ColumnLayout {
     /// The sticky stand-in, as lit and as worded (`HeadPinRow`).
     readonly property bool headPinLit: headPin.visible && headPin.pointed
     readonly property string headPinWords: headPin.tipWords
-    /// Jump the branches list to its end (PG_SCROLL_TO=nav-bottom): the sticky row only changes edges under scroll,
-    /// which a headless run cannot produce otherwise.
+    /// Whether the stand-in is standing, which edge it took, and the coordinate that edge came out as
+    /// (PG_AUTO_ACT=nav-pin-edge). The third is not a second opinion on the second — the place is bound straight off
+    /// it — but it is where the edge itself is, which a run can hold to a number while the pane's height cannot.
+    readonly property bool headPinShown: headPin.visible
+    readonly property bool headPinAbove: headPin.rowAbove
+    readonly property real headPinY: headPin.y
+    /// Jump the branches list to its end (PG_AUTO_ACT=nav-pin-edge): the stand-in only changes edges under scroll,
+    /// which a headless run cannot produce otherwise. Answers where the list came to rest — a list with no more rows
+    /// than it can show has no end to go to, and a caller that could not tell that from a list still building would
+    /// wait out its watchdog on a scroll that was never going to happen.
     function scrollBranchesToEnd() {
         branchList.contentY = Math.max(0, branchList.contentHeight - branchList.height)
+        return branchList.contentY
     }
 
     // How the height nobody needs is handed out. Every section takes

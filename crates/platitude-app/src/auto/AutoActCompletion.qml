@@ -80,6 +80,9 @@ QtObject {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                // The scroll it is about is taken in its own sampler, a layout pass after the dispatch: without
+                // this the render barrier owns the completion and photographs the list where it opened.
+                "nav-pin-edge",
                 // The replay has to be under way before the doors can be tried, so the sampler that waits for it is
                 // the one owner; the render barrier behind it would otherwise photograph the panes before any of it.
                 "doors-held",

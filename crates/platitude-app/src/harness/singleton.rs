@@ -53,9 +53,6 @@ pub struct Harness {
     /// submits it straight away.
     auto_identity: String,
     auto_identity_save: bool,
-    /// `top` / `bottom` jumps the graph once the final pass settles;
-    /// `nav-bottom` jumps the sidebar's branch list instead.
-    scroll_to: String,
     /// The window drives the memory breakdown off a timer instead of
     /// leaving it to whoever remembers to ask.
     mem_report: bool,
@@ -85,7 +82,6 @@ impl Default for Harness {
             auto_wip: knobs.wip,
             auto_identity: knobs.identity.clone(),
             auto_identity_save: knobs.identity_save,
-            scroll_to: knobs.scroll_to.clone(),
             mem_report: super::memprobe::enabled(),
             perf_font_walk: knobs.perf_font_walk,
             automated: knobs.automated,
@@ -109,7 +105,6 @@ impl Harness {
     qproperty!("autoScroll", Member = auto_scroll, Constant);
     qproperty!("autoIdentity", Member = auto_identity, Constant);
     qproperty!("autoIdentitySave", Member = auto_identity_save, Constant);
-    qproperty!("scrollTo", Member = scroll_to, Constant);
     qproperty!("memReport", Member = mem_report, Constant);
     qproperty!("perfFontWalk", Member = perf_font_walk, Constant);
     qproperty!("automated", Member = automated, Constant);
