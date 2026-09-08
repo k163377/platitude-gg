@@ -28,7 +28,7 @@ pub struct DiffRow {
     /// in, empty where nothing is emphasised
     /// (`platitude_core::intraline`, laid out by [`spelled_ranges`]). The
     /// pane asks the row's own layout where those places are drawn
-    /// (`DiffLineRuler`) and lays the stronger wash there
+    /// (`LineRuler`) and lays the stronger wash there
     /// (デザイン規約 §シンタックスハイライト). **Places and not columns**: a
     /// column is not a width — the fallback carrying a wide glyph is not
     /// monospaced, and a combining mark is a place the layout counts and

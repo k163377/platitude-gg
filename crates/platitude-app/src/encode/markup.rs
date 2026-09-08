@@ -83,7 +83,7 @@ fn push_hex(out: &mut String, byte: u8) {
 }
 
 /// How many UTF-16 units one character is spelled in — the units the row's
-/// own layout counts a place in (`DiffLineRuler`). A tab is spelled as the
+/// own layout counts a place in (`LineRuler`). A tab is spelled as the
 /// `&nbsp;` that reach its stop, so it is worth as many units as the
 /// columns it takes; everything else is worth what the character itself is
 /// held as, which is two for an astral glyph.
@@ -103,7 +103,7 @@ fn spelled_units(ch: char, col: usize) -> usize {
 /// the row's own layout and only that — a column is not a width and no
 /// arithmetic makes it one (`DiffTextMetrics`), and a combining mark is a
 /// character this walk counts and a glyph the font draws nothing for. The
-/// pane asks the layout where these places are drawn (`DiffLineRuler`),
+/// pane asks the layout where these places are drawn (`LineRuler`),
 /// which is the same layout the reader's press is read against, so the
 /// wash and the hit cannot disagree.
 pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
@@ -158,7 +158,7 @@ fn push_span(out: &mut String, from: usize, to: usize) {
 /// Which byte of the source line the place `at` in the spelled line stands
 /// at — the inverse of [`spelled_ranges`], and the second half of reading a
 /// press: the layout says which place of the row the pointer is over
-/// (`DiffLineRuler`), and this says which byte of the file that is.
+/// (`LineRuler`), and this says which byte of the file that is.
 ///
 /// The answer is a **boundary** between two characters. A place inside what
 /// one character is spelled in — a tab's spaces, the two units an astral

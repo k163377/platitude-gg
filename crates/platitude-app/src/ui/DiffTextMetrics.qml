@@ -8,7 +8,7 @@ import platitude.ui
 // drawn, and the numbers read off them.
 //
 // **Nothing here says where a character is.** That is a question for the line
-// that was laid out (`DiffLineRuler`), and the rulers below hold whole lines
+// that was laid out (`LineRuler`), and the rulers below hold whole lines
 // or nothing to do with the text at all.
 //
 // An `Item`, not a `QtObject`: the rulers are Labels, and a `QtObject` has
@@ -115,7 +115,7 @@ Item {
     /// cannot drift apart.
     ///
     /// **The rows draw nothing at it.** Where a line's characters are drawn is a question for that line's own layout
-    /// (`DiffLineRuler`), because a column is not a width and no arithmetic makes it one — the fallback a Latin-only
+    /// (`LineRuler`), because a column is not a width and no arithmetic makes it one — the fallback a Latin-only
     /// mono family hands a wide glyph to is not monospaced, and a combining mark takes a column and no room at all.
     /// What is left for one column to be is the width of a wash on an **empty** line (`DiffRowDelegate`): the one
     /// place a width is wanted where there are no characters to ask about.

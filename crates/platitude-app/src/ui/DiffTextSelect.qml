@@ -41,7 +41,7 @@ Item {
     /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character under it,
     /// not on the one that would be there at rest.
     required property real codeX
-    /// The line's own layout, asked where the press landed in it (`DiffLineRuler`). The same ruler the wash is placed
+    /// The line's own layout, asked where the press landed in it (`LineRuler`). The same ruler the wash is placed
     /// with, so the hit and the wash cannot disagree.
     required property var ruler
 
@@ -140,7 +140,7 @@ Item {
         return Math.max(first, Math.min(y, last))
     }
     /// Which byte of that row's line an x of this item lands on, in two steps and never in one: the row's own layout
-    /// says which place of the line is under the pointer (`DiffLineRuler` — the only thing that knows where a line's
+    /// says which place of the line is under the pointer (`LineRuler` — the only thing that knows where a line's
     /// characters are drawn), and the model says which byte of the file that place is (`DiffModel.sourceByteAt`).
     ///
     /// **The blank right of a row's last character is that row's end.** A layout asked about a point past the line

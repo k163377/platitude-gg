@@ -63,7 +63,7 @@ Rectangle {
     /// wash on an **empty** line is, and that is the only place a width without characters behind it is needed.
     required property real charW
     /// Where the two washes go: this row's own line, laid out, asked where each run of it is drawn
-    /// (`DiffLineRuler`). The same ruler the hand over the rows reads a press against (`DiffTextSelect`).
+    /// (`LineRuler`). The same ruler the hand over the rows reads a press against (`DiffTextSelect`).
     required property var ruler
     /// The room held between the two numbers for the mark, as the pane
     /// works it out once for every row (`DiffPane.seatW`).
@@ -140,7 +140,7 @@ Rectangle {
     readonly property real codeInk: codeLine ? codeLine.implicitWidth : 0
 
     /// Where this row's two washes are drawn, taken from this row's own line laid out — `[{ x, w }, …]` in the
-    /// code's own coordinates, before the send (`DiffLineRuler.rectsOf`). A line taken end to end says so with one
+    /// code's own coordinates, before the send (`LineRuler.rectsOf`). A line taken end to end says so with one
     /// word and needs no ruler at all; a heading has neither wash.
     ///
     /// **Pushed, not bound** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting

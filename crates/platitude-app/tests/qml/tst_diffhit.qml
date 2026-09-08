@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// Where a press lands in a row's line, and where the washes on it go (`DiffLineRuler`).
+// Where a press lands in a row's line, and where the washes on it go (`LineRuler`).
 //
 // **Only a laid-out line can answer**: a column is not a width — the fallback a Latin-only mono family hands a wide
 // glyph to is not monospaced, and a combining mark is a character a walk counts and the font draws nothing for. No
@@ -82,9 +82,12 @@ Item {
         return out
     }
 
-    /// The one under test, wired the way `DiffPane` wires it.
-    DiffLineRuler {
+    /// The one under test, wired the way `DiffPane` wires it — the format and the size are the pane's to set, and a
+    /// ruler set in another of either is measuring a line the diff never draws.
+    LineRuler {
         id: ruler
+        textFormat: TextEdit.RichText
+        font.pixelSize: Theme.fontCode
     }
     /// The instrument its answers are held against: the characters themselves, in the family, size and weight the
     /// rows are set in, on Qt's other text path.

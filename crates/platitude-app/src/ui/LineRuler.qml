@@ -1,23 +1,28 @@
 import QtQuick
 import platitude.ui
 
-// Where a place in a row's line is drawn, and which place a point along it is over. One line at a time, laid out where
+// Where a place in a line is drawn, and which place a point along it is over. One line at a time, laid out where
 // nobody sees it.
 //
 // **It exists because a `Text` cannot be asked.** The rows draw their lines in a `Label`, and a `Text` publishes
 // `contentWidth`, `advance` and `linkAt` — nothing that maps an x to a place in the text (read off the item itself,
-// Qt 6.10). So the pane asked a count of columns instead, and **a column is not a width and no arithmetic makes it
+// Qt 6.10). So the panes asked a count of columns instead, and **a column is not a width and no arithmetic makes it
 // one**: the fallback a Latin-only mono family hands a wide glyph to is not monospaced (13px, 11, 9 and 7 for four
 // full-width glyphs against 8 for ASCII, Windows `Cascadia Mono` at `fontCode`), and a combining mark is a character
 // the count sees and the font draws nothing for. Four hundred combining pairs stand 800 columns and are drawn in
 // 3,200px, so a press at 3,600 came back as a byte in the middle of the line.
 //
-// **It reads the row's own markup**, so nothing here unescapes what `markup::styled` wrote: a `TextEdit` on
-// `RichText` counts its places in the text that markup stands for, which is the text the row draws. Measured against
-// the `Label` the rows are set in — same family, size and weight — on ASCII, combining marks, CJK, emoji,
-// indentation, trailing spaces and escaped tags: every one agrees to the pixel, and agrees **cold**, in the same
-// statement the line was put on it (`tests/qml/tst_diffhit.qml`). That is what lets one ruler serve every row: the
-// answer is a property of the line, not of when it was asked for.
+// **The pane that owns one sets the format and the size its own rows are drawn in** — a ruler reading the same line
+// in another format, family, size or weight is measuring a line that pane never draws (`DiffTextMetrics`, the same
+// rule), and neither of the two is right for both users: the diff's rows are the markup `markup::styled` writes, at
+// `fontCode` (`DiffPane`); the command log's three columns are the characters themselves, at `fontSm`
+// (`CommandsPane`). Whichever it is, **nothing here unescapes anything**: a `TextEdit` counts its places in the text
+// its format says the string stands for, which is the text the row draws.
+//
+// Measured against the `Label` the rows are set in — same family, size and weight — on ASCII, combining marks, CJK,
+// emoji, indentation, trailing spaces and escaped tags: every one agrees to the pixel, and agrees **cold**, in the
+// same statement the line was put on it (`tests/qml/tst_diffhit.qml`, `tst_commandshit.qml`). That is what lets one
+// ruler serve every row of a pane: the answer is a property of the line, not of when it was asked for.
 //
 // **Nobody binds to it** — every function below sets the line it is asking about first, so two callers in one frame
 // cannot read each other's answer.
@@ -29,27 +34,25 @@ TextEdit {
     readOnly: true
     activeFocusOnPress: false
     selectByMouse: false
-    // The row's own four (`DiffRowDelegate`). A ruler that read the same line in another format, family, size or
-    // weight is measuring a line this pane never draws (`DiffTextMetrics`, the same rule).
-    textFormat: TextEdit.RichText
+    // The one thing both users have in common. `textFormat` and `font.pixelSize` are the owner's to write, and are
+    // written at both call sites: there is no default here that could be right for both of them.
     font.family: Theme.monoFamily
-    font.pixelSize: Theme.fontCode
 
-    /// Puts one row's line on the ruler. A line already standing here is not laid out again.
-    function hold(markup, bold) {
+    /// Puts one line on the ruler. A line already standing here is not laid out again.
+    function hold(line, bold) {
         ruler.font.bold = bold
-        ruler.text = markup
+        ruler.text = line
     }
-    /// Which place of the line a point `x` along the code is over — a boundary between two characters, never inside
-    /// one (a surrogate pair and a combining sequence are each one place to stop at). Past the last character it is
-    /// the line's own end, which is what makes the blank right of a short row belong to that row's end and to no
-    /// place inside it.
-    function placeAt(markup, bold, x) {
-        ruler.hold(markup, bold)
+    /// Which place of the line a point `x` along it is over — a boundary between two characters, never inside one (a
+    /// surrogate pair and a combining sequence are each one place to stop at). Past the last character it is the
+    /// line's own end, which is what makes the blank right of a short row belong to that row's end and to no place
+    /// inside it.
+    function placeAt(line, bold, x) {
+        ruler.hold(line, bold)
         return ruler.positionAt(x, 0)
     }
     /// The rectangles the runs `"from:len,…"` cover, in the line's own coordinates — `[{ x, w }, …]`, and empty for
-    /// nothing (`encode::markup::spelled_ranges`).
+    /// nothing (`encode::markup::spelled_ranges` / `plain_ranges`).
     ///
     /// **A run is one rectangle only while the line reads one way.** Where a line carries a right-to-left run the
     /// places along it stop being in order (measured: three Latin letters, four of a right-to-left alphabet and
@@ -57,19 +60,19 @@ TextEdit {
     /// is between them — taken as a span they can even name the same x twice and wash **nothing at all**. So such a
     /// line is walked place by place, each step is a piece of the row wherever it was drawn, and the pieces that
     /// touch are merged. What that buys is the guarantee the wash needs: **every place the run names is inside a
-    /// piece**. Every other line — which is every line of source this pane has been handed — costs two questions a
-    /// run and is exact.
+    /// piece**. Every other line — which is every line of source and every command either pane has been handed —
+    /// costs two questions a run and is exact.
     ///
     /// **Known limit**: a run that begins or ends *inside* an opposite-direction run is covered approximately, and
     /// the approximation is on the generous side. A cursor sitting on a direction boundary has two places on screen
     /// and Qt's QML text API answers with one of them — `TextEdit` / `TextInput` publish `positionToRectangle` and
     /// `positionAt` and nothing that takes the direction the caller means, so there is no way from here to ask which
     /// (Qt 6.10). The pieces then reach past the characters the run names rather than falling short of them.
-    function rectsOf(markup, bold, runs) {
+    function rectsOf(line, bold, runs) {
         if (runs === "")
             return []
-        ruler.hold(markup, bold)
-        const twoWay = ruler.twoWay(markup)
+        ruler.hold(line, bold)
+        const twoWay = ruler.twoWay(line)
         let out = []
         for (const run of runs.split(",")) {
             const cut = run.split(":")
@@ -113,9 +116,9 @@ TextEdit {
     ///
     /// **Conservative on purpose**: a line this says yes about is walked, which is the right answer either way and
     /// costs only the walk.
-    function twoWay(markup) {
-        for (let i = 0; i < markup.length; i++) {
-            const code = markup.charCodeAt(i)
+    function twoWay(line) {
+        for (let i = 0; i < line.length; i++) {
+            const code = line.charCodeAt(i)
             if ((code >= 0x0590 && code <= 0x08ff)
                     || (code >= 0x200e && code <= 0x200f)
                     || (code >= 0x202a && code <= 0x202e)

@@ -128,6 +128,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/DetailsChangesBand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsMessageBlock.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DetailsPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/LineRuler.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/LineText.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SweepRoom.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/SweepPad.qml", "qt/qml/platitude");
@@ -137,7 +138,6 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/CutName.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffCodeScroll.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffFileNotices.qml", "qt/qml/platitude");
-    qtbridge::include_bytes_qml!("ui/DiffLineRuler.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffPaneHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/DiffReach.qml", "qt/qml/platitude");

@@ -191,7 +191,7 @@ impl DiffModel {
 
     /// Which byte of row `row`'s line the place `at` of it stands on —
     /// `at` counted in the units the row's own layout counts a place in
-    /// (`DiffLineRuler`, which is what turned the reader's press into
+    /// (`LineRuler`, which is what turned the reader's press into
     /// one). Pixels stop at the pane: only the row that was laid out
     /// knows where its characters are drawn, and only the file's own
     /// bytes are here.

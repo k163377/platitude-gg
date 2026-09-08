@@ -10,7 +10,7 @@
 //!
 //! **A place, not a pixel.** Where a line's characters are drawn is known
 //! only to the layout that drew them, so the pane asks the row itself
-//! (`DiffLineRuler`) and brings back a place in the line as the row spells
+//! (`LineRuler`) and brings back a place in the line as the row spells
 //! it; this side turns that into a byte and back
 //! (`encode::markup::source_byte` / `spelled_ranges`). Nothing here
 //! measures a font, and no count of columns stands in for one.
@@ -59,7 +59,7 @@ impl DiffModel {
 
     /// Which byte of a row's line the place `at` of it stands on. The pane
     /// asks the row's own layout which place the pointer is over
-    /// (`DiffLineRuler`) and brings that here; nothing about pixels
+    /// (`LineRuler`) and brings that here; nothing about pixels
     /// crosses this line.
     pub(super) fn byte_at(&self, row: i32, at: i32) -> i32 {
         let at = usize::try_from(at).unwrap_or(0);

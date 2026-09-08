@@ -338,9 +338,14 @@ Rectangle {
     }
     /// Where a place in a row's line is drawn, and which place a point of it is over — asked of the line itself, laid
     /// out. One for the pane and not one per row: the answer belongs to the line, so a ruler that has just been
-    /// handed one answers about it in the same statement (`DiffLineRuler`).
-    DiffLineRuler {
+    /// handed one answers about it in the same statement (`LineRuler`).
+    LineRuler {
         id: lineRuler
+        // The rows' own two. Every row of this pane is markup, coloured or not (`markup::styled`, `DiffRowDelegate`),
+        // and is set at the size an editor puts source at — a ruler reading the same line in another format or size
+        // is measuring a line this pane never draws.
+        textFormat: TextEdit.RichText
+        font.pixelSize: Theme.fontCode
     }
     /// How far this diff reaches sideways: the lines the model picked, measured before any row exists, and the rows
     /// themselves as they are laid out. A file of its own since it owns state the pane does not — a width per row,
