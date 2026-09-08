@@ -33,6 +33,13 @@ pub(super) struct Options {
     pub(super) preset: Vec<String>,
     pub(super) build: bool,
     pub(super) select: bool,
+    /// Park the view at one end once the page has stopped arriving
+    /// (`PG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`). Empty leaves the
+    /// view where the run puts it. Like [`Options::system_title_bar`],
+    /// the variable alone does not reach the app — `app_env` clears every
+    /// `PG_*` the parent shell carries — so this flag is the only way a
+    /// headless run reaches the parking at all.
+    pub(super) scroll_to: String,
     /// Ask for the window shape the two platforms that cannot fold the
     /// band into the title bar get (`PG_SYSTEM_TITLE_BAR`), so the layout
     /// they come up in can be photographed from a machine that merges.
@@ -108,6 +115,10 @@ impl Options {
         if self.select {
             words.push("--select".to_string());
         }
+        if !self.scroll_to.is_empty() {
+            words.push("--scroll-to".to_string());
+            words.push(self.scroll_to.clone());
+        }
         if self.system_title_bar {
             words.push("--system-title-bar".to_string());
         }
@@ -164,6 +175,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         preset: Vec::new(),
         build: true,
         select: false,
+        scroll_to: String::new(),
         system_title_bar: false,
         watchdog_ms: WATCHDOG_MS,
         shot_dir: None,
@@ -188,6 +200,15 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 .push(it.next().ok_or("--preset needs a name")?.clone()),
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
+            "--scroll-to" => {
+                let where_to = it.next().ok_or("--scroll-to needs top/bottom/nav-bottom")?;
+                if !matches!(where_to.as_str(), "top" | "bottom" | "nav-bottom") {
+                    return Err(format!(
+                        "--scroll-to takes top, bottom or nav-bottom, not {where_to:?}"
+                    ));
+                }
+                opts.scroll_to = where_to.clone();
+            }
             "--system-title-bar" => opts.system_title_bar = true,
             "--label" => opts.label = it.next().ok_or("--label needs a phrase")?.clone(),
             "--no-board" => opts.no_board = true,

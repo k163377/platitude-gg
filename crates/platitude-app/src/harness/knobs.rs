@@ -69,8 +69,9 @@ pub(crate) struct Knobs {
     /// screen, and `PG_AUTO_IDENTITY_SAVE` submits it straight away.
     pub identity: String,
     pub identity_save: bool,
-    /// `PG_SCROLL_TO` — `top` / `bottom` jumps the graph once the final
-    /// pass settles; `nav-bottom` jumps the sidebar's branch list instead.
+    /// `PG_SCROLL_TO` — `top` / `bottom` jumps the graph once the page
+    /// has stopped arriving (`auto/PageSettled`); `nav-bottom` jumps the
+    /// sidebar's branch list instead.
     pub scroll_to: String,
     /// `PG_MEM_REPORT` — file and print the memory breakdown. The walks
     /// it turns on are O(rows) per drain, so a run that did not ask for

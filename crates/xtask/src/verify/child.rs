@@ -205,6 +205,9 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.select {
         cmd.env("PG_AUTO_SELECT", "1");
     }
+    if !opts.scroll_to.is_empty() {
+        cmd.env("PG_SCROLL_TO", &opts.scroll_to);
+    }
     if opts.system_title_bar {
         cmd.env("PG_SYSTEM_TITLE_BAR", "1");
     }

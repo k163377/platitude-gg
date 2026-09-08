@@ -62,8 +62,8 @@ Item {
     ///
     /// **The rule stands before the knob, and the order is the whole point**: `&&` stops at the first false, so a
     /// `PG_SCROLL_TO` read first would leave `settled()` unevaluated in every run that did not ask to scroll — which
-    /// is every run the gate makes, since no verb sets that variable. A name that went wrong there would then be
-    /// found by nobody until someone scrolled by hand. Read first, it is exercised wherever a page opens, and the
+    /// is every run the gate makes, since no verb line carries `--scroll-to`. A name that went wrong there would then
+    /// be found by nobody until someone scrolled by hand. Read first, it is exercised wherever a page opens, and the
     /// answer is still false for the runs that asked for nothing.
     readonly property bool parkReady: PageSettled.settled(start.page) && start.graphModel.finishCount > 0
                                       && Harness.scrollTo !== ""

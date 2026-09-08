@@ -40,6 +40,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           Both repeat: one tab per repository, in order.
         --no-build        reuse the existing release binary
         --select          also set PG_AUTO_SELECT=1
+        --scroll-to <where>
+                          also set PG_SCROLL_TO=top|bottom|nav-bottom: park
+                          the graph — or the sidebar's branch list — at one
+                          end once the page has stopped arriving
         --system-title-bar
                           also set PG_SYSTEM_TITLE_BAR=1: the window shape
                           mac and Linux come up in, asked for from a
