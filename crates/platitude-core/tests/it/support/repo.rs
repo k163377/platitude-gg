@@ -8,6 +8,14 @@ use std::process::{Command, Output};
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
 const BASE_EPOCH: u64 = 1_700_000_000;
 
+/// The argument [`TestRepo::write_hook`] runs a freshly installed hook
+/// with to find out whether the kernel will let git run it at all. Every
+/// hook carries a line that exits on it, so that run does none of the
+/// hook's work: git hands `pre-receive` and `pre-commit` no arguments and
+/// `pre-push` the remote's name and URL, so nothing git runs is ever
+/// given this.
+const HOOK_PROBE_ARG: &str = "--test-repo-probe";
+
 pub struct TestRepo {
     // Kept alive for the lifetime of the repo; dropped last.
     _dir: tempfile::TempDir,
@@ -102,17 +110,63 @@ impl TestRepo {
     /// exec bit is the half that only matters on machines the author is
     /// not on, and a copy that forgot it passes everywhere but the
     /// container.
+    ///
+    /// **Runnable is waited for, not assumed.** The write above leaves the
+    /// hook exec-able by nobody for as long as a neighbouring fork holds
+    /// the descriptor it was written through (`ETXTBSY` —
+    /// `support::busy`), and git meeting that window declines the push
+    /// *silently*: `receive-pack` writes its own `cannot exec` to the
+    /// stderr it inherited rather than over the sideband, so the ref line's
+    /// generic `(pre-receive hook declined)` is all that reaches this end
+    /// and the report carries git's parenthetical where the hook's own
+    /// words belong (measured). Nothing downstream can tell that from a
+    /// hook that ran and said nothing, so the install is what waits: it
+    /// runs the hook once, with [`HOOK_PROBE_ARG`] to keep that run from
+    /// doing the hook's work, and returns when the kernel lets it.
     pub fn write_hook(&self, name: &str, body: &str) {
+        self.write_hook_watched(name, body, || {});
+    }
+
+    /// [`TestRepo::write_hook`], telling `on_busy` the first time the hook
+    /// it has just written cannot be executed yet — for the one test that
+    /// holds that window open on purpose and has to know the install
+    /// reached it before it lets go.
+    pub fn write_hook_watched(&self, name: &str, body: &str, on_busy: impl FnOnce()) {
         let hooks = self.path.join(".git").join("hooks");
         std::fs::create_dir_all(&hooks).expect("create hooks dir");
         let hook = hooks.join(name);
-        std::fs::write(&hook, format!("#!/bin/sh\n{body}")).expect("write the hook");
+        std::fs::write(
+            &hook,
+            format!("#!/bin/sh\nif [ \"$1\" = \"{HOOK_PROBE_ARG}\" ]; then exit 0; fi\n{body}"),
+        )
+        .expect("write the hook");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
                 .expect("make the hook executable");
+            let mut probe = Command::new(&hook);
+            probe
+                .arg(HOOK_PROBE_ARG)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            let ran = super::busy::run_once_it_is_not_busy(&mut probe, on_busy)
+                .expect("the hook never became runnable");
+            // The guard is the hook's first statement, so a probe that
+            // reaches the interpreter at all leaves 0. Anything else is an
+            // install nobody can run — said here, rather than as a refusal
+            // with no words downstream.
+            assert!(
+                ran.status.success(),
+                "the hook as installed does not run: {ran:?}"
+            );
         }
+        // Windows has no such window: the handle `fs::write` opened is
+        // not inheritable, and nothing there refuses to run a file over
+        // an open writer.
+        #[cfg(not(unix))]
+        drop(on_busy);
     }
 
     /// Runs git in the repo and panics on failure. Returns trimmed stdout.

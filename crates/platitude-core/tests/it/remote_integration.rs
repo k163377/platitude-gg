@@ -568,9 +568,16 @@ async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
 /// reach this end as the same `[remote rejected]`, and only the sentence
 /// underneath differs.
 fn decline_every_push(bare: &TestRepo, said: &str) {
-    bare.write_hook(
+    decline_every_push_watched(bare, said, || {});
+}
+
+/// The same hook, telling `on_busy` if the install has to wait out a
+/// neighbour holding the file open ([`TestRepo::write_hook_watched`]).
+fn decline_every_push_watched(bare: &TestRepo, said: &str, on_busy: impl FnOnce()) {
+    bare.write_hook_watched(
         "pre-receive",
         &format!("echo \"error: {said}\" >&2\nexit 1\n"),
+        on_busy,
     );
 }
 
@@ -687,6 +694,79 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
         !err.is_outdated(),
         "nothing about a tag is answered by fetching, whatever the refusal was"
     );
+}
+
+/// The same refusal, installed while a neighbour holds the hook open for
+/// writing — the window a `fork()` in another test opens over a file this
+/// one has just written, and the reason the test above used to lose the
+/// far side's words under a loaded run.
+///
+/// **A hook git cannot execute is still a refusal, and a silent one.**
+/// `receive-pack` writes its own `cannot exec` to the stderr it inherited
+/// rather than over the sideband, so nothing reaches this end under
+/// `remote:` and the ref line alone is left to speak — which is git's
+/// generic `(pre-receive hook declined)` and not the words the hook was
+/// written to say (measured). The report is right about a push the far
+/// side turned down and wrong about why, and no amount of reading the
+/// answer harder recovers it: the install is what has to wait
+/// (`TestRepo::write_hook`).
+///
+/// Linux rather than every unix, because POSIX only says `execve` *may*
+/// refuse a file open for writing — this leans on it doing so, which is a
+/// promise Linux makes and the container is the machine that keeps it.
+#[tokio::test]
+#[cfg(target_os = "linux")]
+async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["tag", "v1.0"]);
+    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
+        .await
+        .expect("the tag goes over while nothing is standing over it");
+    decline_every_push(&bare, "Tag protection rules prevent this.");
+
+    // Opened, not truncated: the hook stays the hook throughout, and the
+    // install below rewrites this same inode.
+    let hook = bare.path.join(".git").join("hooks").join("pre-receive");
+    let handle = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&hook)
+        .expect("hold the hook open for writing");
+
+    // Let go only once the install has said it is waiting, and inside the
+    // scope, since that is what the install is waiting for. An install
+    // that never looked finishes with the handle still held, and the push
+    // below is then the one that meets the busy hook — which is where the
+    // words used to go missing.
+    let (busy, saw_busy) = std::sync::mpsc::channel();
+    let mut held = Some(handle);
+    let installing = &bare;
+    std::thread::scope(|scope| {
+        // `move`, so the thread owns the sender: an install that never
+        // finds the hook busy has to end the wait below by dropping it.
+        scope.spawn(move || {
+            decline_every_push_watched(
+                installing,
+                "Tag protection rules prevent this.",
+                move || busy.send(()).expect("report ETXTBSY"),
+            );
+        });
+        if saw_busy.recv().is_ok() {
+            held = None;
+        }
+    });
+
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", NET, &cancel)
+        .await
+        .expect_err("the far side keeps the tag");
+    let Some(report) = err.report() else {
+        panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(
+        report.reason, "Tag protection rules prevent this.",
+        "the hook's own words, not git's parenthetical over a hook it could not run: {err}"
+    );
+    drop(held);
 }
 
 /// The refusal a fetch answers says so in git's own words, which is what
