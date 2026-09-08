@@ -59,6 +59,12 @@ pub struct PreviewSide {
     /// and only while the read that made it stands: the next read of the
     /// same pane takes it away again ([`PreviewFiles::sweep_before`]).
     pub file: Option<PathBuf>,
+    /// Why a wanted `file` is not there. A picture whose blob could not
+    /// be written out still reports its size, and this is the only place
+    /// what stopped it survives — nothing downstream can tell that side
+    /// from one no file was ever asked for. `None` for every side that
+    /// has its file, and for every side that was never to have one.
+    pub unwritten: Option<String>,
 }
 
 /// Old/new content of one diff target, loaded when the text diff is not
@@ -507,8 +513,11 @@ async fn load_side(
 ///
 /// An image side is written to `into` as it streams out of `cat-file`,
 /// and its size is what arrived; the bytes are never held whole. A side
-/// that could not be written is reported by size alone, the way a
-/// non-image binary is.
+/// that could not be written is reported by size, the way a non-image
+/// binary is, and carries what stopped it
+/// ([`PreviewSide::unwritten`]) — the size on its own reads exactly like
+/// a side no picture was ever wanted from, and a reader looking at the
+/// run afterwards would have nothing else to go on.
 async fn blob_side(
     executor: &GitExecutor,
     workdir: &Path,
@@ -519,16 +528,19 @@ async fn blob_side(
     if !blob_is_there(executor, workdir, spec, cancel).await {
         return None;
     }
+    let mut unwritten = None;
     if let Some(path) = into {
         match write_blob(executor, workdir, spec, &path, cancel).await {
             Ok(size) => {
                 return Some(PreviewSide {
                     size,
                     file: Some(path),
+                    unwritten: None,
                 });
             }
             Err(error) => {
                 tracing::debug!(spec, %error, "preview blob not written; size only");
+                unwritten = Some(error.to_string());
             }
         }
     }
@@ -541,7 +553,11 @@ async fn blob_side(
         return None;
     }
     let size: u64 = out.stdout_utf8().trim().parse().ok()?;
-    Some(PreviewSide { size, file: None })
+    Some(PreviewSide {
+        size,
+        file: None,
+        unwritten,
+    })
 }
 
 /// Streams `git cat-file blob <spec>` into `path`, answering how many
@@ -554,9 +570,11 @@ async fn write_blob(
     cancel: &CancellationToken,
 ) -> Result<u64, WriteBlobError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+        std::fs::create_dir_all(dir)
+            .map_err(|error| WriteBlobError::at(dir, "could not be made", error))?;
     }
-    let mut file = std::fs::File::create(path)?;
+    let mut file = std::fs::File::create(path)
+        .map_err(|error| WriteBlobError::at(path, "could not be opened", error))?;
     let mut written = 0u64;
     let mut failed: Option<std::io::Error> = None;
     let cmd = GitCommand::new()
@@ -577,7 +595,7 @@ async fn write_blob(
     drop(file);
     let outcome = match (ran, failed) {
         (Err(error), _) => Err(WriteBlobError::Git(error)),
-        (Ok(_), Some(error)) => Err(WriteBlobError::Io(error)),
+        (Ok(_), Some(error)) => Err(WriteBlobError::at(path, "could not be written to", error)),
         (Ok(_), None) => Ok(written),
     };
     if outcome.is_err()
@@ -590,10 +608,29 @@ async fn write_blob(
 
 #[derive(Debug, thiserror::Error)]
 enum WriteBlobError {
+    /// `cat-file` itself fell over.
     #[error("{0}")]
     Git(#[from] crate::error::GitError),
-    #[error("{0}")]
-    Io(#[from] std::io::Error),
+    /// A step of the write did. **Which path and which step is the whole
+    /// diagnosis**: a bare `NotFound` says nothing about whether the
+    /// session's directory, the file in it or the stream into it is what
+    /// went, and the side that comes back carries only this sentence.
+    #[error("{} {step}: {error}", path.display())]
+    Io {
+        path: PathBuf,
+        step: &'static str,
+        error: std::io::Error,
+    },
+}
+
+impl WriteBlobError {
+    fn at(path: &Path, step: &'static str, error: std::io::Error) -> Self {
+        Self::Io {
+            path: path.to_path_buf(),
+            step,
+            error,
+        }
+    }
 }
 
 /// Reads one side straight from the working tree: the file itself is the
@@ -606,6 +643,7 @@ async fn worktree_side(path: &Path, want_file: bool) -> Option<PreviewSide> {
     Some(PreviewSide {
         size: meta.len(),
         file: want_file.then(|| path.to_path_buf()),
+        unwritten: None,
     })
 }
 

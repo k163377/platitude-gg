@@ -306,9 +306,62 @@ async fn non_image_binary_reports_sizes_without_files() {
     assert!(old.file.is_none(), "non-images carry sizes only");
     assert!(new.file.is_none());
     assert!(
+        old.unwritten.is_none() && new.unwritten.is_none(),
+        "nothing was asked for, so nothing failed"
+    );
+    assert!(
         !dir.path().join("s").exists(),
         "nothing was written, so nothing was made to write into"
     );
+}
+
+/// A picture whose blob cannot be written out still reports its size —
+/// and says what stopped it, which is the only place that survives. Told
+/// apart from a side no file was ever wanted from
+/// (`non_image_binary_reports_sizes_without_files`) by exactly this: the
+/// two look the same otherwise, and a pane quietly missing its picture
+/// is what a reader is left to diagnose.
+#[tokio::test]
+async fn a_side_that_could_not_be_written_says_what_stopped_it() {
+    let mut repo = TestRepo::init();
+    write_bytes(&repo, "logo.png", TINY_PNG);
+    repo.git(&["add", "--", "logo.png"]);
+    repo.git(&["commit", "-m", "v1"]);
+    write_bytes(&repo, "logo.png", &tiny_png_v2());
+
+    // A file where the session's directory would go: nothing can be made
+    // under it, whatever the platform calls that.
+    let dir = tempfile::tempdir().unwrap();
+    let wall = dir.path().join("not-a-directory");
+    std::fs::write(&wall, b"x").unwrap();
+    let files = PreviewFiles::at(wall.join("s"));
+
+    let (executor, cancel) = env();
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "logo.png".to_string(),
+        },
+        true,
+        files.read(1),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let old = p.old.unwrap();
+    assert_eq!(old.size, TINY_PNG.len() as u64, "the size still arrives");
+    assert!(old.file.is_none());
+    let why = old.unwritten.expect("what stopped the write");
+    assert!(
+        why.contains("could not be made") && why.contains(&wall.join("s").display().to_string()),
+        "the step and the path it fell over on: {why}"
+    );
+    // The working-tree side is the file itself, so nothing was written
+    // for it and there is nothing to explain.
+    let new = p.new.unwrap();
+    assert!(new.file.is_some());
+    assert!(new.unwritten.is_none());
 }
 
 #[tokio::test]

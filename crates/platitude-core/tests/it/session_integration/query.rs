@@ -684,7 +684,12 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     /// only that nothing was said.
     enum OldSide {
         File(std::path::PathBuf),
-        SizeOnly(u64),
+        /// The size the side landed with, and what stopped the write
+        /// from reaching a file (`preview::PreviewSide::unwritten`). The
+        /// size says only how big the picture was, which is the one
+        /// thing that is never the matter; the reason is the whole of
+        /// what this failure has to say.
+        SizeOnly(u64, Option<String>),
     }
 
     fn old_sides(events: &[SessionEvent]) -> Vec<OldSide> {
@@ -702,7 +707,7 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
             })
             .map(|side| match &side.file {
                 Some(path) => OldSide::File(path.clone()),
-                None => OldSide::SizeOnly(side.size),
+                None => OldSide::SizeOnly(side.size, side.unwritten.clone()),
             })
             .collect()
     }
@@ -712,9 +717,10 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     fn file_of(side: OldSide) -> std::path::PathBuf {
         match side {
             OldSide::File(path) => path,
-            OldSide::SizeOnly(size) => panic!(
+            OldSide::SizeOnly(size, why) => panic!(
                 "the picture's old side arrived by size alone ({size} bytes), \
-                 with no file for the pane to show it from"
+                 with no file for the pane to show it from: {}",
+                why.unwrap_or_else(|| "nothing said why".to_string())
             ),
         }
     }
