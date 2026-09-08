@@ -31,8 +31,8 @@ pub(super) struct Outcome {
     /// reading left is that something else got hold of it, and the run
     /// goes on with an empty store and a window about *that*, which the
     /// verb's own waiting never comes back from. Said in the second it
-    /// happens rather than read off the top of the log after the
-    /// watchdog has spent two minutes.
+    /// happens rather than read off the top of the log once the watchdog
+    /// has spent the whole of its ceiling (`super::options`).
     pub(super) store_refused: bool,
     /// What a verb whose failure the camera cannot see has to be caught
     /// saying. `solo` photographs a perfectly good ordinary window if the
@@ -100,6 +100,20 @@ pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> 
                 .any(|l| l.contains(wanted))
         }),
     }
+}
+
+/// Which of the two reds this is: the one no ceiling ended.
+///
+/// The app's own watchdog is a QML `Timer` (`auto/AutoShotDriver.qml`),
+/// so a run it ended turned its event loop to the last second and
+/// answered for itself — the verb's completion is the only thing that
+/// never arrived. The other red is a process that stopped answering, and
+/// it is read off the ceiling instead (`super::wedge`), whose account
+/// already carries the machine's load. **Exclusive, so the load is said
+/// once**: a run whose watchdog fired and whose teardown then wedged is
+/// the ceiling's, and the account under it is the fuller reading.
+pub(super) fn loop_was_turning(outcome: &Outcome, ran: &super::child::Ran) -> bool {
+    outcome.watchdog_expired && !super::wedge::at_a_ceiling(ran)
 }
 
 /// Prints what the run said, files its pictures on the board, and gives
@@ -188,6 +202,20 @@ pub(super) fn announce(
              completion, and a run that wedged between the two grabs still leaves app.png \
              behind to pass on."
         );
+        // The other half of the reading, and the half a red under load is
+        // told from a red that is wrong by. This watchdog is a QML
+        // `Timer`, so its firing is proof the event loop was turning:
+        // whatever this run is, it is not a process that stopped
+        // answering — that one is the ceiling above, with the app's own
+        // account under it. What is left to ask is how much of the
+        // machine the run was sharing.
+        if loop_was_turning(outcome, ran) {
+            println!(
+                "  the loop was turning the whole time — the watchdog is a QML timer, so a \
+                 wedge is not what this is. {}",
+                super::wedge::lanes_line()
+            );
+        }
     }
     if outcome.write_sank_it() {
         println!(
@@ -213,7 +241,9 @@ pub(super) fn announce(
 
 #[cfg(test)]
 mod tests {
-    use super::Outcome;
+    use std::time::Duration;
+
+    use super::{Outcome, loop_was_turning};
 
     /// A run that reached the end and took its picture.
     const WELL: Outcome = Outcome {
@@ -231,8 +261,8 @@ mod tests {
     /// A run's settings are its own — nothing else knows the directory —
     /// so a store that came back held means two runs were handed one, and
     /// the picture is of a window about that. Waiting out the watchdog to
-    /// discover it costs two minutes and says only that the verb never
-    /// finished.
+    /// discover it costs the whole ceiling — the backstop's height, not a
+    /// verb's — and says only that the verb never finished.
     #[test]
     fn a_run_refused_its_own_settings_fails_where_it_stands() {
         let refused = Outcome {
@@ -302,6 +332,62 @@ mod tests {
         };
         assert!(!wedged.passed());
         assert!(!wedged.write_sank_it());
+    }
+
+    /// A run that said nothing and ended however this one says.
+    fn ran(timed_out: bool, code: Option<i32>) -> super::super::child::Ran {
+        super::super::child::Ran {
+            out_lines: Vec::new(),
+            err_lines: Vec::new(),
+            out_at: Vec::new(),
+            err_at: Vec::new(),
+            status: code.map(exit_status),
+            timed_out,
+            elapsed: Duration::from_secs(602),
+            quiet_for: None,
+            reaped: None,
+        }
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code.unsigned_abs())
+    }
+
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code << 8)
+    }
+
+    /// The two reds are read apart, and the load is said under one of
+    /// them: a QML timer can only fire from a loop that is turning, so a
+    /// run it ended is not a process that stopped answering — and how
+    /// full the machine was is what tells a verb that is wrong from a
+    /// verb that was starved.
+    #[test]
+    fn a_watchdog_red_is_told_from_a_process_that_stopped_answering() {
+        let wedged = Outcome {
+            watchdog_expired: true,
+            ..WELL
+        };
+        assert!(loop_was_turning(&wedged, &ran(false, Some(0))));
+        // Both ceilings are the other reading, whose account carries the
+        // load already: said twice, the two would disagree about which
+        // moment they were probed at.
+        assert!(!loop_was_turning(&wedged, &ran(true, None)));
+        assert!(!loop_was_turning(&wedged, &ran(false, Some(97))));
+        // Nothing to say about the load of a run that answered for
+        // itself in words anybody can read.
+        assert!(!loop_was_turning(&WELL, &ran(false, Some(0))));
+        assert!(!loop_was_turning(
+            &Outcome {
+                write_failures: 1,
+                ..WELL
+            },
+            &ran(false, Some(0))
+        ));
     }
 
     #[test]

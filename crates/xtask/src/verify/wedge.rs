@@ -205,7 +205,13 @@ fn clipped(line: &str) -> String {
 /// How full the machine was, in the lanes every gate on it shares. A run
 /// that stopped answering while the machine was full reads differently
 /// from one that stopped answering alone (`crate::lanes`).
-fn lanes_line() -> String {
+///
+/// Read by the ceiling above and by the one red that is not a ceiling at
+/// all: a run the app's own watchdog ended turned its loop the whole
+/// time and simply never reached the verb's completion, and how many
+/// verbs the machine was running is the difference between a verb that
+/// is wrong and a verb that was starved (`super::outcome`).
+pub(super) fn lanes_line() -> String {
     let Some(lanes) = lanes_dir() else {
         return "lanes: not read (no repository here to find them beside)".to_string();
     };
