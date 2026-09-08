@@ -213,6 +213,25 @@ Rectangle {
     /// And what the rows themselves have come to (`DiffReach.rowsWidth`) — the two are read apart because they answer
     /// different questions: whether the pick was any good, and whether a row wanted more than the pick knew about.
     readonly property alias codeDrawn: reachTally.rowsWidth
+    /// And which row that width was filed under (`DiffReach.widestRow`). Read beside the width because the two fail
+    /// apart: a delegate is reused for another row as the reader goes up and down, and a width filed under the wrong
+    /// row leaves the number looking right while nothing on screen is that wide.
+    readonly property alias codeWidestRow: reachTally.widestRow
+    /// Automation: how far right the ink of the rows the list has built stands, in the list's own coordinates — where
+    /// the text ends, as against the width the reach is keeping. **The one thing `codeMax` cannot be asked**: it is
+    /// worked out from that same width, so a reach measured past the end of every line agrees with itself all the way
+    /// down and shows only as room left over past the last character at the far end of a send (verify-ui,
+    /// `code-grow`). Rows the list has not built answer nothing, which is what makes this a question about the rows on
+    /// screen rather than about the file.
+    function codeInkRight() {
+        let right = 0
+        for (let i = 0; i < diffList.count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row)
+                right = Math.max(right, row.inkRightIn(diffList))
+        }
+        return right
+    }
     readonly property alias codeBarShown: codeScroll.barShown
     readonly property alias codeHandOn: codeScroll.handScrolling
     function sendCode(dx) { codeScroll.shift(dx) }

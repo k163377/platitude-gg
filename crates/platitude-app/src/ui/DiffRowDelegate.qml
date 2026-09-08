@@ -113,6 +113,17 @@ Rectangle {
         if (!diffRow.banded && codeLine)
             diffRow.rowDrawn(diffRow.index, codeLine.implicitWidth)
     }
+    /// Automation: how far right this row's ink stands inside `frame` — **not `codeInk` carried through the send**,
+    /// though the two describe the same edge. That arithmetic runs through the gutter and the offset, which is what
+    /// `codeMax` is built out of, so a run holding the result against `codeMax` would be checking a number against
+    /// itself. This asks the item where it was *placed*, which is the one reading of that edge owing the reach
+    /// nothing — and the far end of a send is the only place a reach measured past the end of every line can be seen
+    /// at all (verify-ui, `code-grow`). A heading does not travel, so it answers 0 rather than standing in for where
+    /// the file's own text ends.
+    function inkRightIn(frame) {
+        return diffRow.banded || !codeLine
+            ? 0 : codeLine.mapToItem(frame, codeLine.implicitWidth, 0).x
+    }
     /// A row that names something rather than showing a line of a file: the hunk's own heading, and — where several
     /// commits' patches of one file stand one after another — the commit each block is of
     /// (デザイン規約 §複数のコミットを選ぶ). Neither has a line number, a stage seat or a place in the gutter.

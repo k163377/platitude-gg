@@ -116,6 +116,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         manyhunks one unstaged file with 20 hunks in it: more diff than
                   window, which is the only shape that has a reading
                   place to keep through a rebuild (keep-place)
+        coloured  one unstaged .rs file of 1,200 lines: the only shape in
+                  which the colours arrive after the rows and rewrite
+                  every one of them, so the only one that says what that
+                  rewrite costs the reader (colour-place src/steps.rs)
         widechars two unstaged files of lines a display column is not one
                   advance of the mono font in: full-width glyphs, which
                   say whether the row's wash sits on its own characters
@@ -125,6 +129,13 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   combining mark and an astral glyph, which say where a
                   row's line ends and the blank right of it starts
                   (diff-blank marks.txt)
+        widelate  three unstaged files about where a diff's width comes
+                  from: one whose widest line by column count is not the
+                  one drawn furthest and sits at its foot (code-grow
+                  late.txt), one with a very wide line added at its head
+                  for a partial write to take away (code-shrink top.txt),
+                  and a narrower one beside them to read next (code-swap
+                  late.txt)
         widelines one unstaged file whose lines run far past the pane:
                   the only shape with anywhere sideways to go, so the
                   only one the diff's own bar comes out on (code-send)

@@ -41,7 +41,7 @@ QtObject {
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
                 "rebase-onto", "revert-commit", "op-exit-go", "op-exit-lands", "stage-hunk",
-                "stage-line", "keep-place", "discard-hunk-go", "line-back", "diff-follow",
+                "stage-line", "keep-place", "code-shrink", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
                 "stage-all", "unstage-all", "resolve-all",
                 "push", "push-outdated", "tag-refused",
@@ -73,7 +73,8 @@ QtObject {
                 // commit it just made.
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "merge-commit",
-                "code-send", "line-back", "diff-follow", "line-run",
+                "code-send", "code-grow", "code-shrink", "code-swap",
+                "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all", "resolve-all",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",

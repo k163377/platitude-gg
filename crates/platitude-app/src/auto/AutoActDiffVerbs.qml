@@ -38,6 +38,7 @@ Item {
             || act === "diff-file" || act === "conflict-sides" || act === "line-tools"
             || act === "hunk-tools" || act === "keep-place" || act === "diff-tick"
             || act === "code-send" || act === "line-back"
+            || act === "code-grow" || act === "code-shrink" || act === "code-swap"
             || act === "diff-select" || act === "diff-copy"
             || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
             || act === "diff-band-sweep" || act === "diff-bar" || act === "diff-blank"
@@ -323,6 +324,20 @@ Item {
                 codeSendTimer.begin()
                 return
             }
+            // The three about where that width comes from and what it belongs to: a row nothing picked arriving from
+            // below, the same file read again with its widest line taken out of it, and another file entirely.
+            if (act === "code-grow") {
+                codeGrowTimer.begin()
+                return
+            }
+            if (act === "code-shrink") {
+                codeShrinkTimer.begin(line)
+                return
+            }
+            if (act === "code-swap") {
+                codeSwapTimer.begin()
+                return
+            }
             if (act === "line-run") {
                 lineRunTimer.begin()
                 return
@@ -550,6 +565,13 @@ Item {
         }
         hand.releaseText()
     }
+    /// Rows the list has actually put down, as against rows it has been handed. Every verb that reads a place or a
+    /// width off the view waits for this first: `contentHeight` is zero until the list has laid the rows out, so
+    /// `maxY` reads as nothing to lose and `codeMax` as a width measured against a frame of nothing.
+    function viewLaidOut() {
+        return diffPane.view.count > 0 && diffPane.view.width > 0
+                && diffPane.view.height > 0 && diffPane.view.contentHeight > 0
+    }
     /// How far down a diff the reader is taken before the thing that could cost them their place happens — the rebuild
     /// a partial write asks for (`keep-place`), and the swap the colours arrive in (`colour-place`). One number for
     /// both, because both are judged on getting exactly it back, and a place nobody can name is not one either of them
@@ -759,10 +781,6 @@ Item {
             codeSendTimer.sent = false
             codeSendTimer.start()
         }
-        function laidOut() {
-            return diffPane.view.count > 0 && diffPane.view.width > 0
-                    && diffPane.view.contentHeight > 0
-        }
         function report() {
             Harness.report("code_send bar=" + diffPane.codeBarShown
                               + " hand=" + diffPane.codeHandOn
@@ -774,7 +792,7 @@ Item {
         }
         onTriggered: {
             if (!codeSendTimer.sent) {
-                if (!codeSendTimer.laidOut())
+                if (!acts.viewLaidOut())
                     return
                 if (diffPane.codeMax <= 0) {
                     codeSendTimer.stop()
@@ -800,6 +818,340 @@ Item {
             codeSendTimer.stop()
             codeSendTimer.report()
             renderedBarrier.begin()
+        }
+    }
+    // The reach as it stands, as one string — what the pane measured off the pick, what the rows came to, and which
+    // row is holding that. Compared with the look before to know the widths have stopped moving: a `ListView` builds
+    // its delegates on the layout after the jump that brought them into the frame, and a `Text` answers at the
+    // family's own advance until whatever fallback carries its glyphs is resolved, so the first number out of either
+    // is not the last (`DiffTextMetrics`). The row is in the string because a width that stayed while the row under it
+    // changed is a width filed under the wrong row.
+    function reachNow() {
+        return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
+                + "," + diffPane.codeWidestRow
+    }
+    // PG_AUTO_ACT=code-grow: a row nothing picked, arriving from below. The model hands over the longest few lines by
+    // column count and the pane measures those before any row exists (`DiffTextMetrics.codeW`); what settles how far
+    // there is to go is the rows themselves as they are laid out (`DiffReach`). This is the case where the two
+    // disagree — `--preset widelate`'s `late.txt` fills the pick with lines of combining pairs, which the walk counts
+    // a column for and the font draws nothing for, and the line really drawn furthest is plain ASCII at the foot of
+    // the file. Three claims, none of which the picture can carry (a diff sent to its end and one with nowhere to go
+    // frame alike):
+    //
+    //  - **`grew=`** the width the rows came to went up when that row was laid out, so a line no record named is
+    //    reachable to its end.
+    //  - **`past=`** it went past what the pick measured, which is the whole reason the rows are read at all.
+    //  - **`kept=`** and it is the same width under the same row after the reader has been back to the head and down
+    //    again — the trip a delegate is reused on, and where a width filed under the wrong row would show.
+    //  - **`ends=`** and, sent to the far end with that row on screen, what stands at the frame's right edge is the
+    //    end of the line. This is the one claim the other three cannot make between them: `codeMax` is worked out
+    //    from the same width the rows filed, so a reach that ran past the end of every line agrees with itself
+    //    everywhere except here, where it shows as room left over past the last character — which is exactly how the
+    //    fault this whole mechanism replaced was seen (several screens of nothing). Read off where the widest row's
+    //    Label was placed (`DiffPane.codeInkRight`), against the one gap the pane holds there itself.
+    //
+    // The send is the last thing done, so the picture is of the diff standing at its own end — the only frame in
+    // which room past the text would be visible at all.
+    SampleTimer {
+        id: codeGrowTimer
+        /// 0 reading the head, 1 sent to the foot, 2 back at the head, 3 at the foot again, 4 sent to the far end.
+        property int step: 0
+        property real measured: 0
+        property real drawn0: 0
+        property real drawn: 0
+        property real back: 0
+        property real again: 0
+        property int row: -1
+        property int rowAgain: -1
+        /// Where the text ends and where the frame does, once the diff has been sent to its far end.
+        property real ink: 0
+        property real room: 0
+        /// The reach at the previous look of this step (`acts.reachNow`).
+        property string lastReach: ""
+        function begin() {
+            codeGrowTimer.step = 0
+            codeGrowTimer.lastReach = ""
+            codeGrowTimer.start()
+        }
+        /// Whether the row the view was sent to has been built and the widths have stopped moving. Both halves: the
+        /// row is the output the jump was made for, and the widths are what is being read off it.
+        function arrived(atRow) {
+            if (!diffPane.view.itemAtIndex(atRow))
+                return false
+            const now = acts.reachNow()
+            if (now === codeGrowTimer.lastReach)
+                return true
+            codeGrowTimer.lastReach = now
+            return false
+        }
+        function goTo(y) {
+            codeGrowTimer.lastReach = ""
+            diffPane.scrollTo(y)
+        }
+        /// The gap between the end of the text and the right edge of the frame, once the diff is at its far end. The
+        /// pane holds exactly one there and nothing else does (`DiffPane`, `Theme.spaceSm`), so anything more is a
+        /// reach that ran past the end of every line and anything less is one that stopped short of it.
+        readonly property real tail: codeGrowTimer.room - codeGrowTimer.ink
+        function report() {
+            const grew = codeGrowTimer.drawn > codeGrowTimer.drawn0
+            const past = codeGrowTimer.drawn > codeGrowTimer.measured
+            const kept = codeGrowTimer.row >= 0
+                    && codeGrowTimer.back === codeGrowTimer.drawn
+                    && codeGrowTimer.again === codeGrowTimer.drawn
+                    && codeGrowTimer.rowAgain === codeGrowTimer.row
+            // A pixel of slack: the gutter the send is measured against and the gutter the row is built from are two
+            // items laid out from the same numbers, and neither rounds for the other.
+            const ends = codeGrowTimer.ink > 0
+                    && Math.abs(codeGrowTimer.tail - Theme.spaceSm) <= 1
+            Harness.report("code_grow grew=" + grew + " past=" + past + " kept=" + kept + " ends=" + ends
+                              + " measured=" + Math.round(codeGrowTimer.measured)
+                              + " drawn0=" + Math.round(codeGrowTimer.drawn0)
+                              + " drawn=" + Math.round(codeGrowTimer.drawn)
+                              + " back=" + Math.round(codeGrowTimer.back)
+                              + " again=" + Math.round(codeGrowTimer.again)
+                              + " row=" + codeGrowTimer.row
+                              + " rowAgain=" + codeGrowTimer.rowAgain
+                              + " at=" + Math.round(diffPane.codeAt)
+                              + " max=" + Math.round(diffPane.codeMax)
+                              + " ink=" + Math.round(codeGrowTimer.ink)
+                              + " room=" + Math.round(codeGrowTimer.room)
+                              + " tail=" + Math.round(codeGrowTimer.tail)
+                              + " want=" + Math.round(Theme.spaceSm)
+                              + " down=" + Math.round(diffPane.view.maxY))
+        }
+        function finish() {
+            codeGrowTimer.stop()
+            codeGrowTimer.report()
+            renderedBarrier.begin()
+        }
+        onTriggered: {
+            const foot = diffPane.view.count - 1
+            if (codeGrowTimer.step === 0) {
+                if (!acts.viewLaidOut())
+                    return
+                // A diff that fits its frame has no row below the fold to arrive from, so there is nothing here to
+                // see: said and stopped, rather than held to the watchdog over a fixture that stopped asking the
+                // question (app-ui.md §UI 自動化の因果性).
+                if (diffPane.view.maxY <= 0) {
+                    codeGrowTimer.finish()
+                    return
+                }
+                codeGrowTimer.measured = diffPane.codeMeasured
+                codeGrowTimer.drawn0 = diffPane.codeDrawn
+                codeGrowTimer.step = 1
+                codeGrowTimer.goTo(diffPane.view.maxY)
+                return
+            }
+            if (codeGrowTimer.step === 1) {
+                if (!codeGrowTimer.arrived(foot))
+                    return
+                codeGrowTimer.drawn = diffPane.codeDrawn
+                codeGrowTimer.row = diffPane.codeWidestRow
+                codeGrowTimer.step = 2
+                codeGrowTimer.goTo(0)
+                return
+            }
+            if (codeGrowTimer.step === 2) {
+                if (!codeGrowTimer.arrived(0))
+                    return
+                codeGrowTimer.back = diffPane.codeDrawn
+                codeGrowTimer.step = 3
+                codeGrowTimer.goTo(diffPane.view.maxY)
+                return
+            }
+            if (codeGrowTimer.step === 3) {
+                if (!codeGrowTimer.arrived(foot))
+                    return
+                codeGrowTimer.again = diffPane.codeDrawn
+                codeGrowTimer.rowAgain = diffPane.codeWidestRow
+                // All the way right, from a foot the widest row is standing on: the question is where *that* row's
+                // text ends against the frame, and a send made with it off screen would be answered by whichever
+                // short line happened to be in front of the reader.
+                codeGrowTimer.step = 4
+                codeGrowTimer.lastReach = ""
+                diffPane.sendCode(diffPane.codeMax)
+                return
+            }
+            // The send lands in the turn it is made — the clamp is arithmetic, not an animation — but where the rows
+            // are drawn after it is a layout away, so what is waited for is the ink standing still.
+            const ink = diffPane.codeInkRight()
+            const now = Math.round(diffPane.codeAt) + "," + Math.round(ink)
+            if (now !== codeGrowTimer.lastReach) {
+                codeGrowTimer.lastReach = now
+                return
+            }
+            codeGrowTimer.ink = ink
+            codeGrowTimer.room = diffPane.view.width
+            codeGrowTimer.finish()
+        }
+    }
+    // PG_AUTO_ACT=code-shrink: the same file read again with its widest line taken out of it — which is what a partial
+    // write leaves behind (`--preset widelate`'s `top.txt`, whose first hunk's first changed row is that line). The
+    // reading place along the row is the thing at risk: the width it is clamped against drops under it, and a reach
+    // that answered zero in the gap between the two readings — or one that never let go of the largest number it had
+    // seen — would take the reader either back to the left edge or nowhere at all.
+    //
+    // **`kept=`** the place along the line is where it was, **`shrank=`** there is less to go than there was, and
+    // **`narrower=`** both halves of the reach came down and not just the one. The picture cannot carry any of the
+    // three: a diff standing part way along reads the same either way.
+    SampleTimer {
+        id: codeShrinkTimer
+        /// The line of the first hunk that gets staged — the file's widest, so the reading left behind is a
+        /// genuinely shorter one.
+        property int line: -1
+        property bool wrote: false
+        property real at0: 0
+        property real max0: 0
+        property real measured0: 0
+        property real drawn0: 0
+        property int rows0: 0
+        property string lastReach: ""
+        function begin(atLine) {
+            codeShrinkTimer.line = atLine
+            codeShrinkTimer.wrote = false
+            codeShrinkTimer.lastReach = ""
+            codeShrinkTimer.start()
+        }
+        function report() {
+            const kept = codeShrinkTimer.at0 > 0
+                    && Math.round(diffPane.codeAt) === Math.round(codeShrinkTimer.at0)
+            const shrank = diffPane.codeMax < codeShrinkTimer.max0
+            const narrower = diffPane.codeMeasured < codeShrinkTimer.measured0
+                    && diffPane.codeDrawn < codeShrinkTimer.drawn0
+            Harness.report("code_shrink kept=" + kept + " shrank=" + shrank + " narrower=" + narrower
+                              + " at0=" + Math.round(codeShrinkTimer.at0)
+                              + " at=" + Math.round(diffPane.codeAt)
+                              + " max0=" + Math.round(codeShrinkTimer.max0)
+                              + " max=" + Math.round(diffPane.codeMax)
+                              + " measured0=" + Math.round(codeShrinkTimer.measured0)
+                              + " measured=" + Math.round(diffPane.codeMeasured)
+                              + " drawn0=" + Math.round(codeShrinkTimer.drawn0)
+                              + " drawn=" + Math.round(diffPane.codeDrawn)
+                              + " rows0=" + codeShrinkTimer.rows0
+                              + " rows=" + diffPane.view.count)
+        }
+        function finish() {
+            codeShrinkTimer.stop()
+            codeShrinkTimer.report()
+            renderedBarrier.begin()
+        }
+        onTriggered: {
+            if (!codeShrinkTimer.wrote) {
+                if (!acts.viewLaidOut())
+                    return
+                // Nowhere sideways to go is no place to keep (`code-send`, the same honesty).
+                if (diffPane.codeMax <= 0) {
+                    codeShrinkTimer.finish()
+                    return
+                }
+                // An eighth of the way along: far enough to be somewhere, and short of where the shorter reading of
+                // this file ends, so what is being claimed is that the place was kept and not that it was clamped.
+                diffPane.sendCode(diffPane.codeMax / 8)
+                codeShrinkTimer.at0 = diffPane.codeAt
+                codeShrinkTimer.max0 = diffPane.codeMax
+                codeShrinkTimer.measured0 = diffPane.codeMeasured
+                codeShrinkTimer.drawn0 = diffPane.codeDrawn
+                codeShrinkTimer.rows0 = diffPane.view.count
+                // The sequence is read immediately before the press, so its moving is the whole of the evidence
+                // (`lineBackTimer` says why waiting to see `busyCount` rise as well wedges).
+                driver.writeSeqBefore = repoTab.writeSeq
+                diffPane.stageLine(0, codeShrinkTimer.line)
+                codeShrinkTimer.wrote = true
+                return
+            }
+            // The write's own edges, the pane's word that it has stopped reading (`RepoPage.diffSettling`), and then
+            // the widths of the rows that reading brought — which are the output the whole verb is about.
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+                    || page.diffSettling || diffPane.view.count === 0)
+                return
+            const now = acts.reachNow()
+            if (now !== codeShrinkTimer.lastReach) {
+                codeShrinkTimer.lastReach = now
+                return
+            }
+            codeShrinkTimer.finish()
+        }
+    }
+    // PG_AUTO_ACT=code-swap: another file, and the place and the width both go with the last one. The argument names
+    // the file to read first; the second is the row beside it in the list (`NavSectionModel.beside_path`), the way a
+    // reader picks the next file, and the verb reports both.
+    //
+    // **`room=`** is what makes `dropped=` mean anything: a file with nowhere sideways to go would be at its left edge
+    // however the reach behaved, so the file read second has to have somewhere to be that it is not
+    // (`--preset widelate`'s `plain.txt`, narrower than the other two and still wider than the pane).
+    SampleTimer {
+        id: codeSwapTimer
+        property int step: 0
+        property string was: ""
+        property string landed: ""
+        property real at0: 0
+        property real max0: 0
+        property real drawn0: 0
+        property string lastReach: ""
+        function begin() {
+            codeSwapTimer.step = 0
+            codeSwapTimer.landed = ""
+            codeSwapTimer.lastReach = ""
+            codeSwapTimer.start()
+        }
+        function report() {
+            const dropped = codeSwapTimer.at0 > 0 && Math.round(diffPane.codeAt) === 0
+            const room = diffPane.codeMax > 0
+            const narrower = diffPane.codeDrawn > 0 && diffPane.codeDrawn < codeSwapTimer.drawn0
+            Harness.report("code_swap dropped=" + dropped + " room=" + room + " narrower=" + narrower
+                              + " at0=" + Math.round(codeSwapTimer.at0)
+                              + " at=" + Math.round(diffPane.codeAt)
+                              + " max0=" + Math.round(codeSwapTimer.max0)
+                              + " max=" + Math.round(diffPane.codeMax)
+                              + " drawn0=" + Math.round(codeSwapTimer.drawn0)
+                              + " measured=" + Math.round(diffPane.codeMeasured)
+                              + " drawn=" + Math.round(diffPane.codeDrawn)
+                              + " was=" + codeSwapTimer.was
+                              + " landed=" + codeSwapTimer.landed)
+        }
+        function finish() {
+            codeSwapTimer.stop()
+            codeSwapTimer.report()
+            renderedBarrier.begin()
+        }
+        onTriggered: {
+            if (codeSwapTimer.step === 0) {
+                if (!acts.viewLaidOut())
+                    return
+                if (diffPane.codeMax <= 0) {
+                    codeSwapTimer.finish()
+                    return
+                }
+                diffPane.sendCode(diffPane.codeMax / 2)
+                codeSwapTimer.at0 = diffPane.codeAt
+                codeSwapTimer.max0 = diffPane.codeMax
+                codeSwapTimer.drawn0 = diffPane.codeDrawn
+                codeSwapTimer.was = page.diffKind + ":" + page.diffPath
+                // The row beside this one under the same heading, as `<bucket>:<path>`. A fixture with nothing beside
+                // it says so here rather than at the watchdog.
+                const beside = worktreeModel.besidePath(page.diffKind, page.diffPath)
+                if (beside === "") {
+                    codeSwapTimer.finish()
+                    return
+                }
+                const cut = beside.indexOf(":")
+                const path = beside.substring(cut + 1)
+                codeSwapTimer.landed = beside
+                page.toggleDiff(beside.substring(0, cut), path, worktreeModel.origOf(path))
+                codeSwapTimer.step = 1
+                return
+            }
+            // The other file's own rows, and not the last one's on their way out: the pane has to be on it, to have
+            // stopped reading, and to have laid something down before the width it comes to is anybody's answer.
+            if (page.diffKind + ":" + page.diffPath !== codeSwapTimer.landed
+                    || page.diffSettling || !acts.viewLaidOut())
+                return
+            const now = acts.reachNow()
+            if (now !== codeSwapTimer.lastReach) {
+                codeSwapTimer.lastReach = now
+                return
+            }
+            codeSwapTimer.finish()
         }
     }
     // PG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file instead of from
@@ -874,15 +1226,9 @@ Item {
             keepPlaceTimer.wrote = false
             keepPlaceTimer.start()
         }
-        /// Rows the list has actually put down, as against rows it has been handed: `contentHeight` is still zero for
-        /// the first of those and `maxY` cannot be read before it.
-        function laidOut() {
-            return diffPane.view.count > 0 && diffPane.view.height > 0
-                    && diffPane.view.contentHeight > 0
-        }
         onTriggered: {
             if (!keepPlaceTimer.wrote) {
-                if (!keepPlaceTimer.laidOut())
+                if (!acts.viewLaidOut())
                     return
                 if (diffPane.view.maxY < acts.readY) {
                     keepPlaceTimer.stop()
@@ -907,18 +1253,41 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // A reader who scrolled before the colours landed: the whole list is swapped again when the colours turn up
-    // (`DiffModel::lay_out_rows`), and that swap must not cost the place being read.
+    // A reader who scrolled before the colours landed: the whole list is rewritten when the colours turn up
+    // (`DiffModel::repaint_rows`), and that rewrite must cost neither the place being read nor the width it is read
+    // against.
+    //
+    // **`held=`** is the width half. Every row is markup either way (`markup::styled`), so the tags the colours bring
+    // are markup a `StyledText` row does not draw and the rulers do not measure — the reach is the same number before
+    // and after, the rows are not of a new reading (`rows_gen` does not move), and nothing about the pick changes.
+    // Each of those is a way this went wrong: a row measured in one format and drawn in another read its own
+    // `<font …>` tags as letters, and a reading counted as new would have thrown away every width the rows had filed.
+    // The reading before is taken on the last look at which the colours had not landed, which is the last moment the
+    // question is about — the swap is a second away from the rows and this looks every 50ms.
     Timer {
         id: colourPlaceTimer
         interval: 50
         repeat: true
         property int waited: 0
         property bool scrolled: false
+        property real measuredWas: 0
+        property real drawnWas: 0
+        /// The reach at the previous look since the colours landed (`acts.reachNow`), so what is read is the rewritten
+        /// rows and not the ones being rewritten.
+        property string lastReach: ""
         function begin() {
             colourPlaceTimer.waited = 0
             colourPlaceTimer.scrolled = false
+            colourPlaceTimer.lastReach = ""
             colourPlaceTimer.start()
+        }
+        /// The reach as it stands, kept as the reading before. Taken at the scroll as well as at every look after it:
+        /// a small diff can be coloured inside one look, and then the width at the scroll is the only one this run
+        /// ever had that was measured before the tags. The rows are there by then — a row that answered
+        /// `firstChangedLine` has been built, and a built row has said what it was laid out at.
+        function look() {
+            colourPlaceTimer.measuredWas = diffPane.codeMeasured
+            colourPlaceTimer.drawnWas = diffPane.codeDrawn
         }
         onTriggered: {
             colourPlaceTimer.waited += colourPlaceTimer.interval
@@ -928,16 +1297,32 @@ Item {
                     return
                 diffPane.scrollTo(acts.readY)
                 colourPlaceTimer.scrolled = true
+                colourPlaceTimer.look()
                 return
             }
-            if (!diffPane.diffModel.coloured)
+            if (!diffPane.diffModel.coloured) {
+                colourPlaceTimer.look()
                 return
+            }
+            const now = acts.reachNow()
+            if (now !== colourPlaceTimer.lastReach) {
+                colourPlaceTimer.lastReach = now
+                return
+            }
             colourPlaceTimer.stop()
+            const held = colourPlaceTimer.drawnWas > 0
+                    && Math.round(diffPane.codeMeasured) === Math.round(colourPlaceTimer.measuredWas)
+                    && Math.round(diffPane.codeDrawn) === Math.round(colourPlaceTimer.drawnWas)
             Harness.report("colour_place coloured="
                               + diffPane.diffModel.coloured
                               + " at=" + Math.round(diffPane.view.contentY)
+                              + " held=" + held
                               + " rows=" + diffPane.view.count
-                              + " waited=" + colourPlaceTimer.waited)
+                              + " waited=" + colourPlaceTimer.waited
+                              + " measured0=" + Math.round(colourPlaceTimer.measuredWas)
+                              + " measured=" + Math.round(diffPane.codeMeasured)
+                              + " drawn0=" + Math.round(colourPlaceTimer.drawnWas)
+                              + " drawn=" + Math.round(diffPane.codeDrawn))
             driver.complete()
         }
     }

@@ -397,6 +397,200 @@ fn wide_run(word: &str) -> String {
     out
 }
 
+/// How long the coloured file is and how often it changes. Long enough
+/// that the colours are a read behind the rows rather than in with them —
+/// that gap is the whole of what `colour-place` is about, both for the
+/// place being read and for the width it is read against — and that there
+/// is more diff than window for a place to be lost in.
+const COLOURED_LINES: usize = 1200;
+const COLOURED_STEP: usize = 20;
+
+/// One unstaged file the highlighter has rules for: the only shape in
+/// which the colours arrive after the rows and rewrite every one of them
+/// (`DiffModel::repaint_rows`), which is what `colour-place` reads a
+/// place and a width across.
+///
+/// A `.rs` file rather than a `.txt` one, and that is the whole point:
+/// text the set has no rules for is never repainted, so a run over it
+/// asks nothing. Every line carries a keyword, a string and a number, so
+/// the rows that come back are markup and not the same characters again.
+pub(super) fn coloured(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nColours land a read behind the rows they are for.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/steps.rs", &steps("kept"), "feat: write the steps down")?;
+    repo.write("src/steps.rs", &steps("torn"))?;
+    Ok(())
+}
+
+/// Those lines. Demo-repo content only: the file is made up and stands in
+/// no checkout of this repository.
+fn steps(word: &str) -> String {
+    let mut out = String::from("//! Steps, one per line, for the colours to be laid over.\n\n");
+    for i in 0..COLOURED_LINES {
+        let said = if i % COLOURED_STEP == COLOURED_STEP / 2 {
+            word
+        } else {
+            "kept"
+        };
+        out.push_str(&format!(
+            "pub fn step_{i:04}(name: &str) -> usize {{ let {said} = \"step {i:04}\"; \
+             name.len() + {i} }}\n"
+        ));
+    }
+    out
+}
+
+/// A letter and the mark that stands over it. Two characters and two
+/// columns to a walk of the text, one advance to the font — the one shape
+/// in which the model's ranking by column count and the width a row is
+/// drawn at disagree with no fallback font in between (a wide glyph does
+/// too, but offscreen sets those at exactly the two advances the walk
+/// counts, so the disagreement never shows in a headless run).
+const OVER_COUNTED: &str = "e\u{0301}";
+
+/// The shape of `late.txt`: how many of its lines carry those marks and
+/// how many marks each, how wide the one line nothing picks runs, how
+/// long the file is and where that line sits in it.
+///
+/// Eight marked lines is what fills the pick: the model hands over the
+/// longest eight lines by column count (`encode::columns`), and a changed
+/// line puts both of its sides in the running, so eight is sixteen
+/// candidates and the ninth-longest line is never among them.
+const LATE_MARKED_LINES: usize = 8;
+const LATE_MARKS: usize = 400;
+const LATE_COLUMNS: usize = 700;
+const LATE_LINES: usize = 180;
+const LATE_DEEP: usize = 176;
+/// One line in every this many of the rest changed: enough hunks between
+/// the marked lines and the deep one that the deep one is well past the
+/// foot of the pane when the file opens.
+const LATE_STEP: usize = 8;
+
+/// Three unstaged files about where the width of a diff comes from, which
+/// is a different question from `widelines`' "is there anywhere to go at
+/// all".
+///
+/// `late.txt` is the one the pick gets wrong: its eight widest lines *by
+/// column count* are made of combining pairs, so they fill the pick and
+/// are drawn at half what the walk counted, and the line that is really
+/// drawn furthest is plain ASCII sitting at the foot of the file — named
+/// by no record and laid out by no row until the reader goes down to it
+/// (`code-grow`).
+///
+/// `top.txt` is the same file read twice: one very wide line added at the
+/// head, where a partial write can reach it without a pointer
+/// (`DiffPane.firstChangedLine`), over lines wide enough that taking it
+/// away leaves somewhere to go rather than nowhere (`code-shrink`).
+///
+/// `plain.txt` is the file beside them in the list: narrower than either
+/// and still not narrow enough to fit, so a reader sent to the middle of
+/// one of the others and then over to this one is put back at its left
+/// edge because the place was dropped, and not because there was nowhere
+/// to be (`code-swap`).
+pub(super) fn widelate(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nThe line drawn furthest is not the one a column count picks.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("late.txt", &late("kept"), "docs: write the late lines down")?;
+    repo.commit(
+        "plain.txt",
+        &plain("kept"),
+        "docs: write the plain lines down",
+    )?;
+    repo.commit("top.txt", &top(false), "docs: write the top lines down")?;
+    repo.write("late.txt", &late("torn"))?;
+    repo.write("plain.txt", &plain("torn"))?;
+    repo.write("top.txt", &top(true))?;
+    Ok(())
+}
+
+/// The marked lines at the head, the plain wide one at the foot, and
+/// notes in between. The word that changes stands at the front of every
+/// line, so each hunk says what it is about without being sent anywhere.
+fn late(word: &str) -> String {
+    let mut out = String::new();
+    for i in 0..LATE_LINES {
+        let marked = i < LATE_MARKED_LINES;
+        let deep = i == LATE_DEEP;
+        let said = if marked || deep || i % LATE_STEP == LATE_STEP / 2 {
+            word
+        } else {
+            "kept"
+        };
+        let line = if marked {
+            format!("{i:03}: {said} {}", OVER_COUNTED.repeat(LATE_MARKS))
+        } else if deep {
+            format!("{i:03}: {said} {}", "0".repeat(LATE_COLUMNS))
+        } else {
+            format!("{i:03}: {said} a line of notes nobody sends anywhere")
+        };
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
+/// How wide `top.txt` runs, what the one line added over it runs to, and
+/// how long it is. The wide line is several times the rest so that taking
+/// it away is a change anything can see; the rest is wide enough that
+/// what is left still runs past the pane, which is what makes "the place
+/// was kept" a claim rather than a clamp to zero.
+const TOP_COLUMNS: usize = 600;
+const TOP_ADDED: usize = 1600;
+const TOP_LINES: usize = 60;
+const TOP_STEP: usize = 8;
+
+/// `top.txt`, with the added line at the head when it is the working
+/// tree's copy. Written as an insertion rather than a rewrite of the
+/// first line: a rewrite puts the removal ahead of the addition, and the
+/// row a partial write can be aimed at without a pointer is the first
+/// changed row of the first hunk, whichever kind it is.
+fn top(changed: bool) -> String {
+    let mut out = String::new();
+    if changed {
+        out.push_str(&format!(
+            "the widest line here: {}\n",
+            "0".repeat(TOP_ADDED)
+        ));
+    }
+    for i in 0..TOP_LINES {
+        let said = if changed && i % TOP_STEP == TOP_STEP / 2 {
+            "torn"
+        } else {
+            "kept"
+        };
+        out.push_str(&format!("{i:03}: {said} {}\n", "0".repeat(TOP_COLUMNS)));
+    }
+    out
+}
+
+/// How wide `plain.txt` runs and how long it is: far short of the other
+/// two, and still past the pane by a margin that survives the narrower
+/// advance the container's own mono font draws at (measured, `code-swap`:
+/// 746px of room left over on Windows against 427 in the container, off
+/// 200 columns — this is that number with the difference put back).
+const PLAIN_COLUMNS: usize = 280;
+const PLAIN_LINES: usize = 40;
+const PLAIN_STEP: usize = 4;
+
+fn plain(word: &str) -> String {
+    let mut out = String::new();
+    for i in 0..PLAIN_LINES {
+        let said = if i % PLAIN_STEP == PLAIN_STEP / 2 {
+            word
+        } else {
+            "kept"
+        };
+        out.push_str(&format!("{i:03}: {said} {}\n", "0".repeat(PLAIN_COLUMNS)));
+    }
+    out
+}
+
 /// One file under a path wider than any pane, committed and then changed
 /// again: the flat paths views (the commit's file list and the working
 /// tree's) each hold a row that middle-elides at any sane width, and the

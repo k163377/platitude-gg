@@ -374,16 +374,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=discard-hunk-go ready=true",
     },
-    // The colours that land behind the rows, and the place they must
-    // not cost. Neither half is a picture: a diff whose colours never
+    // The colours that land behind the rows, and the two things they
+    // must not cost. Neither is a picture: a diff whose colours never
     // came frames as a language the set has no rules for, and a view
     // thrown back to the top frames as one nobody had scrolled. `at=`
     // is `scrollTo`'s own number read back after the swap — 400 or
-    // the reader lost their place.
+    // the reader lost their place. `held=` is how far the diff reaches,
+    // read on the last look before the colours and again after them:
+    // the rows are markup either way, so measuring one of them in the
+    // turn the tags land must come to the same number as measuring it
+    // before they did (`DiffReach`).
     Verb {
         name: "colour-place",
         when: &[],
-        plain: "colour_place coloured=true at=400",
+        plain: "colour_place coloured=true at=400 held=true",
     },
     // The picture cannot tell a diff sent to its end from one that had
     // nowhere to go: both frame as a pane of text with its left edge
@@ -396,6 +400,48 @@ pub(super) const TABLE: &[Verb] = &[
         name: "code-send",
         when: &[],
         plain: "code_send bar=true hand=true",
+    },
+    // Where that width comes from, in the one shape the picture is
+    // blind to: every one of these frames as a pane of text standing
+    // somewhere along its lines.
+    //
+    // `code-grow` is the pick being corrected — a line no record named,
+    // drawn further than the ones that were, reaching the width when
+    // its row is finally laid out (`grew=`, `past=`), and still the
+    // same width under the same row after a trip back to the head and
+    // down again, which is where a delegate reused for another row
+    // would have filed one under the wrong one (`kept=`).
+    //
+    // `ends=` is the one the other three cannot make between them, and
+    // the only one with a picture behind it: sent to its far end with
+    // that row on screen, what stands at the frame's right edge is the
+    // end of the line. Everything else here reads a width against
+    // another number worked out from it, so a reach running past the
+    // end of every line agrees with itself all the way down — and
+    // shows only there, as room left over past the last character.
+    Verb {
+        name: "code-grow",
+        when: &[],
+        plain: "code_grow grew=true past=true kept=true ends=true",
+    },
+    // `code-shrink` is the same file read again with its widest line
+    // written away: the place along the row is kept (`kept=`) while the
+    // width it is clamped against comes down (`shrank=`), and both
+    // halves of the reach come down with it rather than one of them
+    // latching the largest number it ever saw (`narrower=`).
+    Verb {
+        name: "code-shrink",
+        when: &[],
+        plain: "code_shrink kept=true shrank=true narrower=true",
+    },
+    // `code-swap` is another file: the place goes (`dropped=`) and so
+    // does the width (`narrower=`). `room=` is what makes the first of
+    // those mean anything — a file with nowhere sideways to go would
+    // stand at its left edge however the reach behaved.
+    Verb {
+        name: "code-swap",
+        when: &[],
+        plain: "code_swap dropped=true room=true narrower=true",
     },
     // A line staged from the diff, the file then moved from the list,
     // and the diff following both. The picture is the last frame of

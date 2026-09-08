@@ -17,7 +17,9 @@ use super::remote::{
     behind, diverged, forkmark, hooked, outrun, protected, slowhook, unpublished, unreachable,
 };
 use super::repo::DemoRepo;
-use super::scale::{edges, long, longpaths, manyhunks, spread, widechars, widelines};
+use super::scale::{
+    coloured, edges, long, longpaths, manyhunks, spread, widechars, widelate, widelines,
+};
 use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tags};
@@ -180,8 +182,10 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "long" => long(&mut repo)?,
         "spread" => spread(&mut repo)?,
         "longpaths" => longpaths(&mut repo)?,
+        "coloured" => coloured(&mut repo)?,
         "manyhunks" => manyhunks(&mut repo)?,
         "widechars" => widechars(&mut repo)?,
+        "widelate" => widelate(&mut repo)?,
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
         "pictures" => pictures(&mut repo)?,
