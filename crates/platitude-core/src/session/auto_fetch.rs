@@ -646,20 +646,31 @@ mod tests {
         assert!(slot.take().is_ok(), "free the instant it was let go");
     }
 
-    /// The product's clock owes its first due a whole interval out, not
-    /// the tick tokio fires at once. Real time, judged as a floor: a
-    /// timer never fires early, so no load can make this red.
-    #[tokio::test]
-    async fn the_first_due_is_a_whole_interval_away() {
-        let interval = std::time::Duration::from_millis(30);
-        // waits(timed): the first firing is judged as a floor, which no load can break
-        let started = std::time::Instant::now();
+    /// The product's clock owes its first due a whole interval out — not
+    /// the tick tokio fires at once — and one to every interval after it.
+    ///
+    /// On a paused clock, which is what lets both edges of the interval
+    /// be judged: the due is still owed one instant before the interval
+    /// is out, and owed no longer once it is. Real time can judge either
+    /// of those as a bound only, and a clock running at twice the
+    /// interval passes a floor.
+    #[tokio::test(start_paused = true)]
+    async fn a_due_falls_at_the_end_of_each_interval_and_the_first_is_a_whole_one_out() {
+        let interval = std::time::Duration::from_secs(30);
+        let an_instant = std::time::Duration::from_millis(1);
         let mut clock = IntervalClock::every(interval);
-        crate::wait::bounded("the first due", clock.due()).await;
-        assert!(
-            started.elapsed() >= interval,
-            "the first due came {:?} in, before the interval",
-            started.elapsed()
-        );
+        for nth in 1..=3 {
+            let mut due = Box::pin(clock.due());
+            tokio::time::advance(interval - an_instant).await;
+            assert!(
+                crate::wait::poll_once(&mut due).is_pending(),
+                "due {nth} came before its interval was out"
+            );
+            tokio::time::advance(an_instant).await;
+            assert!(
+                crate::wait::poll_once(&mut due).is_ready(),
+                "due {nth} was still owed with its interval out"
+            );
+        }
     }
 }

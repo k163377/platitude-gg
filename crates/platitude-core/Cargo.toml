@@ -87,6 +87,11 @@ two-face = { version = "0.5", default-features = false, features = [
 [dev-dependencies]
 insta = "1"
 tempfile = "3"
+# The paused clock the auto-fetch timer's tests judge the interval on
+# (`session::auto_fetch`). A feature of the tokio already depended on —
+# no crate of its own and no license to weigh — and a dev-dependency's
+# features do not reach a build that is not a test.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
