@@ -135,6 +135,18 @@ pub struct PreviewFiles {
     in_run_dir: bool,
 }
 
+/// How many sessions the run's directory belongs to.
+///
+/// **An empty directory is not an abandoned one.** A session that has
+/// not previewed a picture yet has left nothing in it, so emptiness says
+/// nothing about who still needs it — and taking it then costs the next
+/// write its file: `create_dir_all` makes the parent and the child in
+/// two steps, and a removal landing between them fails the write with
+/// `NotFound`, which lands the side by size alone. Counting is what says
+/// the directory is still somebody's; the lock is what keeps a session
+/// being made from racing the exit that read the count as zero.
+static SESSIONS: Mutex<usize> = Mutex::new(0);
+
 impl PreviewFiles {
     /// A directory of this run's own for one session. Made on first
     /// write, so a session that never previews a picture never touches
@@ -142,6 +154,7 @@ impl PreviewFiles {
     pub fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+        *crate::session::relock(&SESSIONS) += 1;
         Self {
             dir: run_dir().join(format!("s{serial}")),
             settled: Mutex::new(BTreeSet::new()),
@@ -225,10 +238,19 @@ impl Default for PreviewFiles {
 impl Drop for PreviewFiles {
     fn drop(&mut self) {
         self.remove_all();
-        // The last session out turns the light off: the run's directory
-        // goes when nothing is left in it, and stays when something is.
-        if self.in_run_dir
-            && let Err(error) = std::fs::remove_dir(run_dir())
+        if !self.in_run_dir {
+            return;
+        }
+        // The last session out turns the light off, and only that one:
+        // while the count is held down here, no session can be made that
+        // would want the directory back (see [`SESSIONS`]). What a read
+        // cut short left in it keeps it, the way it always did.
+        let mut sessions = crate::session::relock(&SESSIONS);
+        *sessions = sessions.saturating_sub(1);
+        if *sessions > 0 {
+            return;
+        }
+        if let Err(error) = std::fs::remove_dir(run_dir())
             && !matches!(
                 error.kind(),
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
@@ -667,6 +689,26 @@ mod tests {
             temp.path().exists(),
             "what is above the files is left alone"
         );
+    }
+
+    /// The run's directory is shared, so a session on its way out leaves
+    /// it to the sessions still holding it — including the ones that have
+    /// written nothing yet and so left it looking abandoned. Taking it
+    /// from them costs their next write its file ([`SESSIONS`]).
+    ///
+    /// Only this half is assertable from a test binary running its tests
+    /// side by side: whether the *last* session out removes the directory
+    /// depends on the sessions the other tests are holding.
+    #[test]
+    fn the_run_directory_stays_while_another_session_holds_it() {
+        let live = PreviewFiles::new();
+        std::fs::create_dir_all(run_dir()).expect("the run's directory");
+        drop(PreviewFiles::new());
+        assert!(
+            run_dir().exists(),
+            "a session's exit does not take the directory another one is about to write to"
+        );
+        drop(live);
     }
 
     #[test]
