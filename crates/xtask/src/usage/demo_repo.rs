@@ -116,13 +116,15 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         manyhunks one unstaged file with 20 hunks in it: more diff than
                   window, which is the only shape that has a reading
                   place to keep through a rebuild (keep-place)
-        widechars one unstaged file whose changed lines carry full-width
-                  glyphs: the only shape in which a display column is not
-                  one advance of the mono font, so the only one that says
-                  whether the row's wash sits on its own characters
+        widechars two unstaged files of lines a display column is not one
+                  advance of the mono font in: full-width glyphs, which
+                  say whether the row's wash sits on its own characters
                   (diff-file columns.txt) and whether the diff stops
                   sending where the longest of them ends (code-send
-                  columns.txt)
+                  columns.txt); and a tab, real trailing spaces, a
+                  combining mark and an astral glyph, which say where a
+                  row's line ends and the blank right of it starts
+                  (diff-blank marks.txt)
         widelines one unstaged file whose lines run far past the pane:
                   the only shape with anywhere sideways to go, so the
                   only one the diff's own bar comes out on (code-send)

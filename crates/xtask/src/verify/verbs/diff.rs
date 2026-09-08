@@ -246,6 +246,45 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_copy_removed holdsRemoved=true",
     },
+    // The blank right of a row's last character. Entered through the
+    // hand's own two functions with **pixels** — which is what the four
+    // above cannot reach, since they hand over byte offsets and would
+    // pass whatever the pane made of a point.
+    //
+    //  - `quiet=true` — a drag that starts and ends out there selects
+    //    nothing. This is the report: a walk of columns went on counting
+    //    characters past the end of the line and picked a place in the
+    //    middle of it (`e`+U+0301 four hundred times ends at 3,200px and
+    //    was answering about byte 675 at 3,600).
+    //  - `clamped=true` — and a drag that starts on the row and ends out
+    //    there takes the line and exactly the line, held against the same
+    //    row selected by number. Without it `quiet=` goes green on a hand
+    //    that stopped selecting at all.
+    //  - `backwards=true` — and the same drag made the other way, from
+    //    the blank back onto the row. The blank is a place to start from
+    //    as much as a place to stop at (規約 §diff の中身をコピーする),
+    //    and a fix that refused the press out there would pass `quiet=`
+    //    by taking the gesture away.
+    //  - `across=true` — a drag from one row's head down into the blank
+    //    beside a later one, held against those rows read one at a time.
+    //    The rows between the two ends are what a single-row drag cannot
+    //    ask about: the copy joins them and leaves the removed lines out.
+    //  - `sent=true` — `quiet=` again after the code has been sent
+    //    sideways, where an offset counted from the wrong place puts
+    //    every press somewhere else (`DiffCodeScroll.offset`).
+    //
+    // All four are read off the pad the copy goes through
+    // (`ClipboardHelper.lastCopied`) rather than off the model: the claim
+    // is what a reader ends up holding.
+    //
+    // `rows=` is the run's own honesty beside them: a fixture whose lines
+    // all run past the pane leaves no blank to press in, and five trues
+    // off none of them say nothing (`diff_sweep ground=`, the same rule).
+    Verb {
+        name: "diff-blank",
+        when: &[],
+        plain: "diff_blank quiet=true clamped=true backwards=true across=true sent=true",
+    },
     // The same text taken from the ground under the last row — every
     // place in the code column that nobody else takes is a start
     // (規約 §diff の中身をコピーする). Three claims, and each answers

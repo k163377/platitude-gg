@@ -40,7 +40,7 @@ Item {
             || act === "code-send" || act === "line-back"
             || act === "diff-select" || act === "diff-copy"
             || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
-            || act === "diff-band-sweep" || act === "diff-bar"
+            || act === "diff-band-sweep" || act === "diff-bar" || act === "diff-blank"
             || act === "diff-follow" || act === "line-run") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,
@@ -294,6 +294,13 @@ Item {
                 diffBarTimer.start()
                 return
             }
+            // The blank right of a row's last character, which is the row's end and no place inside it. The rows
+            // have arrived by here; where each of them was drawn to is known once the view has laid them out, which
+            // is what the timer waits for.
+            if (act === "diff-blank") {
+                diffBlankTimer.start()
+                return
+            }
             // Reading part way down a long diff and then writing: the rebuild has to come back to the same place.
             if (act === "keep-place") {
                 keepPlaceTimer.begin(line)
@@ -367,6 +374,182 @@ Item {
         }
     }
 
+    // The blank right of a row's last character, where a drag has to select nothing and a wash has to stop. The hand
+    // is entered through its own two functions with **pixels**, which is the half the four text verbs cannot reach —
+    // those hand over byte offsets and would pass with any answer at all to "which byte is under this point"
+    // (`pickDiffText`).
+    //
+    // Three claims, and each answers something the other two cannot:
+    //
+    //  - `quiet=` — a drag that starts and ends right of a row's ink selects nothing. The failure was here.
+    //  - `clamped=` — and a drag that starts on the row and ends out there takes the line and exactly the line. Said
+    //    against the same row selected by number (`DiffModel.selectRow`), so the two ways in have to agree; `quiet=`
+    //    alone would go green on a hand that had stopped selecting altogether.
+    //  - `sent=` — both again after the code has been sent sideways, where an offset counted from the wrong place
+    //    lands every press somewhere else (`DiffCodeScroll.offset`).
+    //
+    // `rows=` is the run's own honesty: a fixture whose lines all run past the pane leaves nowhere to press, and
+    // three trues off none of them say nothing (`diff_sweep ground=`, the same rule).
+    SampleTimer {
+        id: diffBlankTimer
+        /// What the view looked like at the previous sample, for the settle below.
+        property string lastGeom: ""
+        onTriggered: {
+            // The rows arrive a frame ahead of the view that lays them out, and a row that has not been laid out
+            // has not been drawn to any width (`diff-sweep`, the same wait).
+            if (diffPane.view.count <= 0)
+                return
+            const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
+            if (geom !== diffBlankTimer.lastGeom) {
+                diffBlankTimer.lastGeom = geom
+                return
+            }
+            diffBlankTimer.stop()
+            const before = acts.blankTally(true)
+            const across = acts.spanTakes()
+            // Half of the shortest line that was reachable, so every row this just pressed beside still ends inside
+            // the pane afterwards — sending as far as the longest line goes would carry all of them off the left and
+            // leave the second pass with nothing to say.
+            diffPane.sendCode(Math.min(diffPane.codeMax, before.shortest / 2))
+            const after = acts.blankTally(false)
+            // The drags above end by selecting nothing, which is the claim and photographs as an empty pane. So one
+            // more is left standing for the camera: out past a row's last character, where the band has to stop.
+            acts.standPastTheEnd()
+            Harness.report("diff_blank quiet=" + (before.quiet && after.quiet)
+                              + " clamped=" + before.clamped
+                              + " backwards=" + before.backwards
+                              + " across=" + across
+                              + " sent=" + (diffPane.codeAt > 0 && after.rows > 0)
+                              + " rows=" + before.rows + "/" + after.rows
+                              + " at=" + Math.round(diffPane.codeAt))
+            renderedBarrier.begin()
+        }
+    }
+    /// Every row whose line ends inside the pane, dragged in beside it: once entirely in the blank right of it, and —
+    /// while the head of the line is still on screen (`fromHead`) — once from that head out into the blank. Answers
+    /// how many rows were reachable, the shortest line among them, and whether the drags said what they have to.
+    /// **A pass that found no row says `rows=0` rather than going green.**
+    ///
+    /// It enters `takeAt` / `followAt` / `releaseText`, which is what the `MouseArea`'s own handlers call: a hand
+    /// that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+    function blankTally(fromHead) {
+        const hand = diffPane.textHand
+        let rows = 0
+        let shortest = 0
+        let quiet = true
+        let clamped = true
+        let backwards = true
+        for (let i = 0; i < diffPane.view.count; i++) {
+            const item = diffPane.view.itemAtIndex(i)
+            // The lines the plain copy takes, so that what is dragged out can be held against what the row holds.
+            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
+                continue
+            // Where this row's own line ends, in the hand's coordinates: the code travels under the pane.
+            const ends = item.codeInk - diffPane.codeAt
+            const y = item.y - diffPane.view.contentY + item.height / 2
+            if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
+                continue
+            rows++
+            shortest = shortest === 0 ? item.codeInk : Math.min(shortest, item.codeInk)
+            const past = Math.min(hand.width - 1, ends + 200)
+            // What the row holds, taken the other way in — by row number, which reads nothing off the pixels.
+            const whole = acts.copyOfRow(i)
+
+            diffPane.diffModel.clearSelect()
+            hand.takeAt(ends + 4, y, Qt.LeftButton)
+            hand.followAt(past, y)
+            hand.releaseText()
+            quiet = quiet && !diffPane.diffModel.selHasNew && diffPane.diffModel.selRemoved === 0
+
+            if (fromHead) {
+                clamped = clamped && acts.dragTakes(0, y, past, y, whole)
+                // And back the other way: a drag that begins out in the blank and ends on the row takes the same
+                // line. The blank is a place to start from as much as a place to stop at — every place inside the
+                // code column nobody else takes is one (規約 §diff の中身をコピーする).
+                backwards = backwards && acts.dragTakes(past, y, 0, y, whole)
+            }
+        }
+        return { rows: rows, shortest: shortest, quiet: rows > 0 && quiet,
+                 clamped: fromHead && rows > 0 && clamped,
+                 backwards: fromHead && rows > 0 && backwards }
+    }
+    /// What the plain `Copy` puts on the pad for one row, taken by row number — a way in that reads nothing off the
+    /// pixels, so it can stand as the answer the drags below are held against.
+    ///
+    /// **Read off the pad and not off the model** (`ClipboardHelper.lastCopied`): the claim is about what a reader
+    /// ends up holding, and the copy is where a selection that is right on screen could still go wrong. `took` is
+    /// what keeps a run honest — a copy that put nothing out leaves the pad saying whatever it said last.
+    function copyOfRow(row) {
+        diffPane.diffModel.clearSelect()
+        diffPane.diffModel.selectRow(row)
+        return diffPane.copySelection() ? driver.clipboard.lastCopied : ""
+    }
+    /// One drag from one point of the hand to another, and whether what it puts on the pad is `want`. The two ends
+    /// carry their own y so that a drag down the rows goes in the same way one across a row does.
+    function dragTakes(fromX, fromY, toX, toY, want) {
+        const hand = diffPane.textHand
+        diffPane.diffModel.clearSelect()
+        hand.takeAt(fromX, fromY, Qt.LeftButton)
+        hand.followAt(toX, toY)
+        hand.releaseText()
+        return diffPane.copySelection() && driver.clipboard.lastCopied === want && want !== ""
+    }
+    /// A drag that runs from the head of one row out into the blank beside a later one, held against those rows
+    /// taken one at a time by number. **The rows between the two ends are the half a single-row drag cannot ask
+    /// about**: the copy joins them with newlines and leaves the removed lines out, and an end that landed on the
+    /// wrong place would come back a line short at either edge rather than not at all.
+    ///
+    /// Answers "" where the fixture has fewer than two reachable rows, so a run that proved nothing says so.
+    function spanTakes() {
+        const hand = diffPane.textHand
+        const reach = []
+        for (let i = 0; i < diffPane.view.count; i++) {
+            const item = diffPane.view.itemAtIndex(i)
+            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
+                continue
+            const ends = item.codeInk - diffPane.codeAt
+            const y = item.y - diffPane.view.contentY + item.height / 2
+            if (ends >= 1 && ends + 4 < hand.width && y >= 0 && y < hand.height)
+                reach.push({ row: i, ends: ends, y: y })
+        }
+        if (reach.length < 2)
+            return "rows=" + reach.length
+        const first = reach[0]
+        const last = reach[reach.length - 1]
+        // Every row the copy takes between the two ends, each read on its own — the same rows in the same order,
+        // joined the way the copy joins them.
+        const lines = []
+        for (let i = first.row; i <= last.row; i++) {
+            const item = diffPane.view.itemAtIndex(i)
+            if (item && (item.kind === "ctx" || item.kind === "add"))
+                lines.push(acts.copyOfRow(i))
+        }
+        const want = lines.join("\n")
+        const took = acts.dragTakes(0, first.y, Math.min(hand.width - 1, last.ends + 200), last.y, want)
+        return "" + (took && lines.length > 1)
+    }
+    /// The picture this verb is of: a drag that ran out past a row's last character, left where it ended. **The band
+    /// has to stop at the ink** — reaching on into the blank is the failure, and it is the only part of this a camera
+    /// can see. Two rows, so the eye has a second one to read the edge against.
+    function standPastTheEnd() {
+        const hand = diffPane.textHand
+        let stood = 0
+        diffPane.diffModel.clearSelect()
+        for (let i = 0; i < diffPane.view.count && stood < 2; i++) {
+            const item = diffPane.view.itemAtIndex(i)
+            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
+                continue
+            const ends = item.codeInk - diffPane.codeAt
+            const y = item.y - diffPane.view.contentY + item.height / 2
+            if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
+                continue
+            if (stood === 0)
+                hand.takeAt(0, y, Qt.LeftButton)
+            hand.followAt(Math.min(hand.width - 1, ends + 200), y)
+            stood++
+        }
+        hand.releaseText()
+    }
     /// How far down a diff the reader is taken before the thing that could cost them their place happens — the rebuild
     /// a partial write asks for (`keep-place`), and the swap the colours arrive in (`colour-place`). One number for
     /// both, because both are judged on getting exactly it back, and a place nobody can name is not one either of them

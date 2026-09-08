@@ -295,22 +295,25 @@ fn wide(word: &str) -> String {
     out
 }
 
-/// One unstaged file whose changed lines carry full-width glyphs: the one
-/// shape in which a display column is not one advance of the mono font.
-/// The row counts a wide glyph as two columns
-/// (`encode::columns::step_of`), but a Latin-only mono family hands the
-/// glyph to a fallback that advances one em instead, so a wash laid on
-/// columns alone stands right of the characters it names (measured
-/// Measured on Windows: charW 8px against 13px, three of them a glyph).
+/// Two unstaged files of lines a column is not a character in.
 ///
-/// Three short lines to say where the wash sits, because it takes three:
-/// one with nothing wide in it, one whose change stands behind wide
-/// glyphs, and one whose change is wide glyphs standing behind more of
-/// them. Then a block that runs far past the pane on wide glyphs alone,
-/// which is a different question — how far the diff reaches
-/// (`encode::widest_lines`), where a column is two of them and an advance
-/// is not, and the one thing `widelines` cannot ask because it is
-/// deliberately ASCII.
+/// `columns.txt` carries full-width glyphs: the row counts one as two
+/// columns (`encode::columns::step_of`), but a Latin-only mono family
+/// hands it to a fallback that advances one em instead (measured on
+/// Windows: charW 8px against 13px). Three short lines to say where the
+/// wash sits, because it takes three: one with nothing wide in it, one
+/// whose change stands behind wide glyphs, and one whose change is wide
+/// glyphs standing behind more of them. Then a block that runs far past
+/// the pane on wide glyphs alone, which is a different question — how far
+/// the diff reaches (`encode::widest_lines`), and the one thing
+/// `widelines` cannot ask because it is deliberately ASCII.
+///
+/// `marks.txt` carries the rest of them, one kind a line: a tab, spaces
+/// the file really ends on, a combining mark the font draws nothing extra
+/// for, an astral glyph the string holds as two units, and full-width
+/// glyphs again. **Short lines, so the blank right of each of them is
+/// inside the pane** — which is what `diff-blank` presses in, and what no
+/// count of characters can find the left edge of.
 pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -325,6 +328,7 @@ pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
         ),
         "docs: write the wide lines down",
     )?;
+    repo.commit("marks.txt", &marks("kept"), "docs: write the marks down")?;
     repo.write(
         "columns.txt",
         &format!(
@@ -332,7 +336,30 @@ pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
             wide_run("torn")
         ),
     )?;
+    repo.write("marks.txt", &marks("torn"))?;
     Ok(())
+}
+
+/// Those lines. Every one of them ends well short of the pane, and every
+/// one of them ends somewhere a walk of columns puts in the wrong place:
+/// a tab is four columns and one character, a combining mark is a
+/// character and no advance at all, an astral glyph is one character and
+/// two of the units a place is counted in, and a full-width glyph is two
+/// columns and whatever the fallback carrying it advances. The last line
+/// is long enough that the pane has somewhere sideways to go, which is
+/// what lets one run ask the same questions after a send.
+fn marks(word: &str) -> String {
+    format!(
+        "plain {word} plain\n\
+         \tindented {word} after a tab\n\
+         {word} and then spaces   \n\
+         日本語 {word} 日本語\n\
+         e\u{301}e\u{301}e\u{301}e\u{301} {word} e\u{301}e\u{301}\n\
+         \u{1f600} {word} \u{1f600}\u{1f600}\n\
+         \t日本語\te\u{301} {word} \u{1f600}\t全角\n\
+         {word} far: {}\n",
+        "日本語の中の日本語".repeat(30)
+    )
 }
 
 /// How many full-width glyphs the wide lines of `widechars` stand on, and
