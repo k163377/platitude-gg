@@ -18,11 +18,15 @@ pub(super) const TABLE: &[Verb] = &[
     // The drag, left standing for the picture: the wash over the rows is
     // the deliverable, and a run whose drag reached nothing frames the
     // same way — an unwashed log and one nobody dragged over are one
-    // photograph. `holds=` is that half.
+    // photograph. **Two halves, and neither can pass as the other**:
+    // `holds=` is the selection the model kept, `worn=` is the rectangle
+    // every row drew of it. A wash placed off the row's own layout can
+    // come out empty with the runs perfectly right, and `holds=` alone
+    // went green over exactly that (measured).
     Verb {
         name: "commands-select",
         when: &[],
-        plain: "commands_pick holds=true",
+        plain: "commands_pick holds=true worn=true",
     },
     // And the key that takes it, which leaves nothing in the picture at
     // all: the window frames the same whether Ctrl+C took the log, one

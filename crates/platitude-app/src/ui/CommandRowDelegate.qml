@@ -27,10 +27,16 @@ Rectangle {
     /// Empty on a row the selection does not reach.
     required property string sel
 
-    /// One measured column of the mono font and what a wide glyph costs beyond the two it is counted as — the pair
-    /// the wash is placed with, handed down so the hit and the wash agree (`CommandsPane.charW` / `wideDelta`).
+    /// One measured column of the mono font (`CommandsPane.charW`). **Two spacings and nothing else**: the space
+    /// between `git` and what follows it, and the one between the two words about how the command went. Where the
+    /// characters of a column are drawn is that column's own layout to answer (`ruler`).
     required property real charW
-    required property real wideDelta
+    /// Where the selection lives — and where the three columns this row draws are cut from (`CommandsModel`, which
+    /// holds the line and hands over a column at a time).
+    required property var commandsModel
+    /// One of those columns, laid out, asked where a run of it is drawn (`LineRuler`). The same ruler the hand over
+    /// the rows reads a press against (`CommandsTextSelect`).
+    required property var ruler
 
     readonly property bool failed: row.state === "failed"
     readonly property bool showsOutput: row.failed && row.output !== ""
@@ -79,35 +85,80 @@ Rectangle {
     /// The three runs and the flag, taken apart once: `<clock>|<command>|<outcome>|<whole>`.
     readonly property var picked: row.sel === "" ? [] : row.sel.split("|")
     readonly property bool tookLine: row.picked.length === 4 && row.picked[3] === "1"
+    /// The three columns as `CommandsModel` numbers them, in the order the runs above come in — `AT_CLOCK`,
+    /// `AT_CMD`, `AT_OUT` of `models/commands/selection.rs`, whose odd numbers are the two gaps no run is drawn in.
+    /// Written out rather than derived: `CommandsTextSelect` names the same five for the hand, and a renumbering has
+    /// to find both.
+    readonly property var washCols: [0, 2, 4]
 
-    /// Where a run begins and ends in this row's own pixels. A run is `col:wides:width:wides` — columns and the wide
-    /// glyphs standing in them, because a wide glyph comes from a fallback that need not advance two mono columns
-    /// (`CommandsPane.wideDelta`).
-    function runFrom(run, baseX) {
-        const at = run.split(":")
-        return baseX + Number(at[0]) * row.charW + Number(at[1]) * row.wideDelta
+    /// How far into each of the three columns the wash reaches, in that column's own coordinates — `{ x, w }`, or
+    /// null where the column holds none of the selection. Taken from the column's own layout: a place of it is drawn
+    /// where the row drew it, and no count of characters finds that (`LineRuler`).
+    ///
+    /// **Pushed, not bound** (the same rule `DiffRowDelegate.emphRects` is written under). Asking the ruler means
+    /// putting the column on it, and a binding that writes while it is being evaluated is a binding loop — Qt says so
+    /// by name and then holds whatever it had, which is a wash left on the row before it. The column's coordinates
+    /// are its own, so the three x the columns stand at stay bindings and this is asked again only when what a
+    /// column holds changes.
+    property var washSpans: [null, null, null]
+    function settleWash() {
+        // **`sel` is read again here rather than through `picked`.** A change handler runs *before* the bindings
+        // that derive from the property it is about, so `picked` inside `onSelChanged` is still the row's previous
+        // selection — measured on a throwaway `qmltestrunner` scene, and seen as a log that held a selection and
+        // wore no wash at all.
+        const runs = row.sel === "" ? [] : row.sel.split("|")
+        const out = [null, null, null]
+        for (let at = 0; at < 3; at++) {
+            if (runs[at] === undefined || runs[at] === "")
+                continue
+            const text = row.commandsModel.columnText(row.index, row.washCols[at])
+            out[at] = row.bounds(row.ruler.rectsOf(text, false, runs[at]))
+        }
+        row.washSpans = out
     }
-    function runTo(run, baseX) {
-        const at = run.split(":")
-        return baseX + (Number(at[0]) + Number(at[2])) * row.charW + (Number(at[1]) + Number(at[3])) * row.wideDelta
+    /// One rectangle over every piece of a run. A column that reads one way comes back as one piece and this is that
+    /// piece; a column carrying a word that reads the other way comes back as several, and the wash over them is
+    /// their bounding box — this log's wash is one rectangle by design (see `washEdge`), so it cannot draw the
+    /// pieces apart the way the diff does.
+    function bounds(rects) {
+        if (rects.length === 0)
+            return null
+        let from = rects[0].x
+        let to = rects[0].x + rects[0].w
+        for (const rect of rects) {
+            from = Math.min(from, rect.x)
+            to = Math.max(to, rect.x + rect.w)
+        }
+        return { x: from, w: to - from }
     }
+    // What a column holds, and what of it the selection covers. A delegate handed to another row (`reuseItems`)
+    // arrives through these same handlers.
+    onSelChanged: row.settleWash()
+    onClockChanged: row.settleWash()
+    onArgsChanged: row.settleWash()
+    onResultChanged: row.settleWash()
+    onDurationChanged: row.settleWash()
+    Component.onCompleted: row.settleWash()
+
     /// The wash is one rectangle from the first column the selection reaches into to the last, which is what puts it
     /// over the gaps as well — a tab is a character of the line, and a terminal washes it like one.
     function washEdge(wantFirst) {
         const bases = [row.clockX, row.cmdX, row.outX]
         for (let i = 0; i < 3; i++) {
             const at = wantFirst ? i : 2 - i
-            if (row.picked[at] === undefined || row.picked[at] === "")
+            const span = row.washSpans[at]
+            if (!span)
                 continue
-            return wantFirst ? row.runFrom(row.picked[at], bases[at]) : row.runTo(row.picked[at], bases[at])
+            return bases[at] + (wantFirst ? span.x : span.x + span.w)
         }
         return 0
     }
-    readonly property real washX: row.picked.length === 0 ? 0 : row.washEdge(true)
+    // Both read `washSpans` and nothing else about the selection — a row wearing no span is a row with no wash, and
+    // asking `sel` here again would be the second reader of a property this one already answers for.
+    readonly property real washX: row.washEdge(true)
     // Clamped to the row: a command too long for its column is drawn elided, and a wash running on past the last
     // character anybody can see would be washing the panel rather than the text.
-    readonly property real washRight: row.picked.length === 0
-                                      ? 0 : Math.min(row.washEdge(false), row.width - Theme.spaceMd)
+    readonly property real washRight: Math.min(row.washEdge(false), row.width - Theme.spaceMd)
 
     Rectangle {
         x: row.washX
@@ -138,6 +189,11 @@ Rectangle {
             x: Theme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
             text: row.clock
+            // Every column of this log is the characters it holds, named on all five of them rather than left to
+            // `AutoText`: the ruler that places the wash and reads the press is set in this format (`row.ruler`),
+            // and Qt's guess is a property of the text — a row whose format came from what a command happened to
+            // carry would be drawn as a line the ruler has never seen.
+            textFormat: Text.PlainText
             color: Theme.textMuted
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
@@ -148,20 +204,23 @@ Rectangle {
             x: row.clockEnd + Theme.spaceLg
             anchors.verticalCenter: parent.verticalCenter
             text: "git"
+            textFormat: Text.PlainText
             color: Theme.textMuted
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
         Label {
             id: argsText
-            // One character along from `git`, not one spacing token: the two are one string with one space in it, and
-            // a selection that runs through them has to land on the same pixels the copy names. **Its width is
+            // One character along from `git`, not one spacing token: the two are one string with one space in it —
+            // which is the string the ruler is handed for this column (`CommandsModel.column`), so a selection that
+            // runs through them lands on the same pixels the copy names. **Its width is
             // written rather than anchored to the outcome** — an anchor on the right decides the x as well, and this
             // one has to begin where the command's own column does (measured, the args went to the far edge).
             x: program.x + 4 * row.charW
             width: Math.max(0, outcome.x - Theme.spaceMd - x)
             anchors.verticalCenter: parent.verticalCenter
             text: row.args
+            textFormat: Text.PlainText
             elide: Text.ElideRight
             color: Theme.textPrimary
             font.family: Theme.monoFamily
@@ -177,6 +236,7 @@ Rectangle {
             Label {
                 text: row.result
                 visible: text !== ""
+                textFormat: Text.PlainText
                 color: Theme.danger
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
@@ -185,6 +245,7 @@ Rectangle {
                 // Exit 0 says nothing that the absence of a complaint has not already said, so only the time it took is
                 // kept.
                 text: row.state === "running" ? qsTr("running…") : row.duration
+                textFormat: Text.PlainText
                 color: row.state === "running" ? Theme.accent : Theme.textMuted
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm

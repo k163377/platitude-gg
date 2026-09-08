@@ -1911,6 +1911,11 @@ Item {
     function sweepCommandGround(fx, fy) {
         return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
     }
+    /// Automation: how much of the log is actually wearing the wash the drag left (`CommandsPane.washTally`) — the
+    /// half of `commands-select` the picture cannot be judged on.
+    function commandWashTally() {
+        return page.commandsPane === null ? "worn=false rows=0 washed=0" : page.commandsPane.washTally()
+    }
     readonly property bool commandsHasGround: page.commandsPane !== null && page.commandsPane.hasGround
     readonly property real commandsGroundTop: page.commandsPane !== null ? page.commandsPane.groundTop : 0
     function copyCommandText() {

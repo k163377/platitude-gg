@@ -20,22 +20,23 @@ import platitude.ui
 // is the whole of the rule — except at the right edge, where the list's own bar is drawn over them and this stops
 // short of it (`barRoom`, observed against the diff's hand, which had the same shape).
 //
-// Everything about *which byte* a press landed on is asked of the model: this knows which of the row's three columns
-// the pointer was over and how far along it, and only the model holds the line those columns are drawn from.
+// **Which byte a press landed on takes two questions and neither of them is arithmetic.** This knows which of the
+// row's three columns the pointer was over and how far into it in pixels; the column's own layout says which place of
+// it that is (`LineRuler`), and the model says which byte of the line that place stands on — the line those columns
+// are cut from is there, and where their characters are drawn is here.
 Item {
     id: pick
 
     /// The rows, for the frame this stands over and for asking which row a point is on.
     required property var view
-    /// Where the selection lives.
+    /// Where the selection lives, and where the three columns come from.
     required property var commandsModel
     /// How much of the right edge belongs to the list's own scroll bar, which is where this frame ends
     /// (`AppListView.barRoom`).
     required property real barRoom
-    /// One measured column of the mono font and what a wide glyph costs beyond its two — the same pair the wash is
-    /// placed with, so the hit and the wash agree.
-    required property real charW
-    required property real wideDelta
+    /// The column's own layout, asked which place the press landed in. The same ruler the wash is placed with
+    /// (`CommandRowDelegate`), so the hit and the wash cannot disagree.
+    required property var ruler
 
     /// A drag has reached past the frame and wants the rows sent after it.
     signal scrollWanted(real dy)
@@ -130,26 +131,34 @@ Item {
         return Math.max(first, Math.min(y, last))
     }
 
-    /// Which byte of a row's line a point lands on. The row itself says where its three columns are drawn; a gap is
-    /// answered as how far across it the pointer was (0..1), which is all there is to say about the one tab in it.
+    /// Which byte of a row's line a point lands on. The row itself says where its three columns are drawn, and each
+    /// column answers for the pixels inside it; a gap holds one tab, whose only two places are its ends.
     function byteAt(row, x, y) {
         const item = pick.view.itemAtIndex(row)
         if (!item)
             return 0
         if (y - (item.y - pick.view.contentY) >= item.lineHeight)
-            return pick.commandsModel.hitAt(row, pick.atBelow, 0, pick.charW, pick.wideDelta)
+            return pick.commandsModel.hitAt(row, pick.atBelow, 0)
         if (x < item.clockEnd)
             return pick.hit(row, pick.atClock, x - item.clockX)
         if (x < item.cmdX)
-            return pick.hit(row, pick.atGapCmd, (x - item.clockEnd) / Math.max(1, item.cmdX - item.clockEnd))
+            return pick.commandsModel.hitAt(row, pick.atGapCmd, pick.sideOf(x, item.clockEnd, item.cmdX))
         if (x < item.cmdEnd)
             return pick.hit(row, pick.atCmd, x - item.cmdX)
         if (x < item.outX)
-            return pick.hit(row, pick.atGapOut, (x - item.cmdEnd) / Math.max(1, item.outX - item.cmdEnd))
+            return pick.commandsModel.hitAt(row, pick.atGapOut, pick.sideOf(x, item.cmdEnd, item.outX))
         return pick.hit(row, pick.atOut, x - item.outX)
     }
+    /// One column: the pixels are the column's own to read (`LineRuler`), and the place that comes back is the
+    /// model's to turn into a byte of the line. **Nothing in between is arithmetic** — a column is not a width, and
+    /// the walk that treated it as one selected a byte in the middle of a line the reader had dragged past the end of.
     function hit(row, at, x) {
-        return pick.commandsModel.hitAt(row, at, x, pick.charW, pick.wideDelta)
+        const text = pick.commandsModel.columnText(row, at)
+        return pick.commandsModel.hitAt(row, at, pick.ruler.placeAt(text, false, x))
+    }
+    /// Which side of a gap's one tab a point is on, as the two places that tab has.
+    function sideOf(x, from, to) {
+        return x < (from + to) / 2 ? 0 : 1
     }
 
     // ---- the ground under the last row ---------------------------------------------------------------------------

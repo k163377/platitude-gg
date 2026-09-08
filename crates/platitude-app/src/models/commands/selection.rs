@@ -10,12 +10,18 @@
 //!
 //! **The panel draws those columns at three places of its own** — the
 //! clock at the near edge, the command after it, the outcome against the
-//! far one — so a byte of the line is not `x / charW` from the row's
+//! far one — so a byte of the line is not one number away from the row's
 //! start. This is where that is answered, and it is answered the same way
-//! twice: `encode::markup::hit_byte` walks a column to find the byte a
-//! press is on, and `encode::markup::display_ranges` walks the same column
-//! to say where a byte range is drawn. The pane hands over a column and an
-//! x inside it; everything else is read off the rows.
+//! twice: `encode::markup::plain_byte` says which byte of a column a place
+//! in it stands on, and `encode::markup::plain_ranges` says which places a
+//! byte range of it covers.
+//!
+//! **A place, not a pixel.** Where a column's characters are drawn is
+//! known only to the layout that drew them, so the pane puts the column on
+//! the row's own ruler (`LineRuler`) and brings back a place in it; the
+//! column itself comes from here ([`CommandsModel::column`]), because the
+//! line those columns are cut from is here and not there. Nothing in this
+//! file measures a font, and no count of columns stands in for one.
 //!
 //! Two things follow and are worth saying once:
 //!
@@ -36,8 +42,8 @@ use super::*;
 const CLOCK_LEN: usize = 8;
 
 /// The columns a press can land in, as the pane names them. The odd
-/// numbers are the two gaps: they hold one tab each, and the pane knows
-/// only how far across the empty pixels the press was (0..1).
+/// numbers are the two gaps: they hold one tab each, so the only places
+/// in them are its two ends.
 pub(super) const AT_CLOCK: i32 = 0;
 pub(super) const AT_GAP_CMD: i32 = 1;
 pub(super) const AT_CMD: i32 = 2;
@@ -130,22 +136,39 @@ impl CommandsModel {
         self.rows.get(row).map(Line::of)
     }
 
+    /// The text of one of the three columns a row draws, for the pane to
+    /// put on its ruler and ask where a place in it falls
+    /// (`CommandsTextSelect` / `CommandRowDelegate`). The two gaps hold a
+    /// tab and nothing that has to be laid out, so nothing asks for them.
+    pub(super) fn column(&self, row: i32, at: i32) -> String {
+        let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
+            return String::new();
+        };
+        match at {
+            AT_CLOCK => line.clock,
+            AT_CMD => line.cmd,
+            AT_OUT => line.out,
+            _ => String::new(),
+        }
+    }
+
     /// Which byte of a row's line a press landed on, given the column it
-    /// landed in and how far along that column it was. A gap holds one
-    /// tab, and which side of it the press was on is all there is to say
-    /// about it (`x` is the fraction across the empty pixels there).
-    pub(super) fn hit(&self, row: i32, at: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
+    /// landed in and which place of that column the row laid the pointer
+    /// over. A gap holds one tab, so its two places are the two sides of
+    /// it, which is all there is to say about a gap.
+    pub(super) fn hit(&self, row: i32, at: i32, place: i32) -> i32 {
         let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
             return 0;
         };
+        let place = usize::try_from(place).unwrap_or(0);
         let byte = match at {
-            AT_CLOCK => hit_byte(&line.clock, x, char_w, wide_delta),
-            AT_GAP_CMD if x < 0.5 => CLOCK_LEN,
+            AT_CLOCK => plain_byte(&line.clock, place),
+            AT_GAP_CMD if place == 0 => CLOCK_LEN,
             AT_GAP_CMD => line.at_cmd(),
-            AT_CMD => line.at_cmd() + hit_byte(&line.cmd, x, char_w, wide_delta),
-            AT_GAP_OUT if x < 0.5 => line.cmd_end(),
+            AT_CMD => line.at_cmd() + plain_byte(&line.cmd, place),
+            AT_GAP_OUT if place == 0 => line.cmd_end(),
             AT_GAP_OUT => line.at_out(),
-            AT_OUT => line.at_out() + hit_byte(&line.out, x, char_w, wide_delta),
+            AT_OUT => line.at_out() + plain_byte(&line.out, place),
             // Below the line: the block of words under a failure. It is
             // taken whole or not at all, so a press in it is the end of
             // the line it belongs to.
@@ -285,11 +308,11 @@ impl CommandsModel {
     }
 
     /// One row's share, as the delegate reads it:
-    /// `<clock run>|<command run>|<outcome run>|<whole>`, each run in the
-    /// `col:wides:width:wides` the wash is placed by
-    /// (`encode::display_ranges`) and empty where that column holds none
-    /// of the selection. `<whole>` is `1` where the line is taken end to
-    /// end, which is what brings git's own words with it.
+    /// `<clock run>|<command run>|<outcome run>|<whole>`, each run the
+    /// `"from:len,…"` places of that column the wash is laid over
+    /// (`encode::plain_ranges`) and empty where the column holds none of
+    /// the selection. `<whole>` is `1` where the line is taken end to end,
+    /// which is what brings git's own words with it.
     fn spell(&self, row: usize) -> String {
         let Some((first, first_at, last, last_at)) = self.taken() else {
             return String::new();
@@ -310,7 +333,7 @@ impl CommandsModel {
             let start = from.max(base);
             let end = to.min(base + text.len());
             if start < end {
-                out.push_str(&display_ranges(text, &[(start - base, end - start)]));
+                out.push_str(&plain_ranges(text, &[(start - base, end - start)]));
             }
             out.push('|');
         }

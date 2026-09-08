@@ -244,8 +244,9 @@ Item {
         press.connect(driver.pressedWrite)
         held.completeHold()
     }
-    /// Past the end of any line these fixtures carry: `hit_byte` clamps, so a drag that means "to the end of the row"
-    /// can say so without measuring the row.
+    /// Past the end of any line these fixtures carry. Both models cut a selection's ends to the line they fell on
+    /// before reading anything off it, so a drag that means "to the end of the row" can say so without measuring
+    /// the row.
     readonly property int pastLineEnd: 9999
 
     // AutoShotDriver owns the final render boundary: it requests an update, advances the event loop, and waits for

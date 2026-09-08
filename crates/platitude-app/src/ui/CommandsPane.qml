@@ -116,6 +116,26 @@ Rectangle {
     /// one would prove nothing — and where it begins, which is the geometry a run watches settle before it sweeps.
     readonly property bool hasGround: textPick.hasGround
     readonly property real groundTop: textPick.groundTop
+    /// Automation: how many rows are wearing a rectangle of the selection, and whether every row that exists is
+    /// (`PG_AUTO_ACT=commands-select`).
+    ///
+    /// **The model's `sel` is not this.** A row can hold its whole share of the selection and draw nothing — which
+    /// is exactly what a wash asked of the row's layout does when it is asked at the wrong moment (measured: the
+    /// runs were right, the rectangles were empty, and the run went green because the picture of an unwashed log
+    /// and the picture of a log nobody dragged over are the same picture). So this counts the rectangles.
+    function washTally() {
+        let seen = 0
+        let worn = 0
+        for (let i = 0; i < list.count; i++) {
+            const row = list.itemAtIndex(i)
+            if (!row)
+                continue
+            seen++
+            if (row.washRight > row.washX)
+                worn++
+        }
+        return "worn=" + (seen > 0 && worn === seen) + " rows=" + seen + " washed=" + worn
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -232,7 +252,8 @@ Rectangle {
             delegate: CommandRowDelegate {
                 width: list.width
                 charW: pane.charW
-                wideDelta: pane.wideDelta
+                commandsModel: pane.commandsModel
+                ruler: lineRuler
             }
 
             Label {
@@ -249,18 +270,11 @@ Rectangle {
     }
 
     // ---- the hand that picks the text ---------------------------------------------------------------------------
-    /// One column of the mono font the rows are drawn in, measured rather than assumed, and what a wide glyph costs
-    /// beyond the two columns it is counted as. The same pair the diff places its wash with, measured the same way:
-    /// the mono family is Latin-only on some machines, so a kanji comes from a fallback that need not advance two of
-    /// them (`DiffPane.wideDelta`).
-    ///
-    /// The second is measured only once a row carries one (`CommandsModel.hasWide`): setting a wide glyph is what
-    /// loads that fallback, and the font is tens of megabytes of working set per window — see
-    /// `DiffTextMetrics.wideDelta`, which the same measurement and the same reasoning stand behind.
+    /// One column of the mono font the rows are drawn in, measured rather than assumed. **The rows draw nothing at
+    /// it**: where a column's characters fall is a question for that column's own layout (`lineRuler`), and this is
+    /// two spacings the row is built with — the space between `git` and what follows it, and the one between the two
+    /// words about how a command went (`CommandRowDelegate`).
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
-    readonly property real wideDelta: wideRuler.item
-        ? wideRuler.item.implicitWidth / wideRuler.item.text.length - 2 * pane.charW
-        : 0
     Text {
         id: charMeasure
         visible: false
@@ -268,17 +282,16 @@ Rectangle {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
     }
-    Loader {
-        id: wideRuler
-        active: pane.commandsModel.hasWide
-        sourceComponent: Text {
-            visible: false
-            // Five U+3042, built from the code point rather than written as the glyph: this is a ruler and not a
-            // word (CLAUDE.md 絶対制約, as in `DiffTextMetrics`).
-            text: String.fromCharCode(0x3042).repeat(5)
-            font.family: Theme.monoFamily
-            font.pixelSize: Theme.fontSm
-        }
+    /// Where a place in one of a row's three columns is drawn, and which place a point along it is over — asked of
+    /// the column itself, laid out. One for the panel and not one per row: the answer belongs to the column, so a
+    /// ruler that has just been handed one answers about it in the same statement (`LineRuler`).
+    LineRuler {
+        id: lineRuler
+        // The rows' own two. Every column of this log is the characters it holds, set in a plain `Label` at the
+        // window's own size — a ruler reading the same column as markup, or at another size, is measuring text this
+        // panel never draws.
+        textFormat: TextEdit.PlainText
+        font.pixelSize: Theme.fontSm
     }
 
     CommandsTextSelect {
@@ -286,8 +299,7 @@ Rectangle {
         view: list
         commandsModel: pane.commandsModel
         barRoom: list.barRoom
-        charW: pane.charW
-        wideDelta: pane.wideDelta
+        ruler: lineRuler
         onScrollWanted: dy => list.contentY = list.clampY(list.contentY + dy)
     }
 }

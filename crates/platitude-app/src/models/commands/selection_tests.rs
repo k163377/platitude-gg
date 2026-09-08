@@ -3,13 +3,6 @@
 use super::selection::{AT_CLOCK, AT_CMD, AT_GAP_CMD, AT_GAP_OUT, AT_OUT, clock_of};
 use super::*;
 
-/// One measured column of the mono font, and what a wide glyph costs
-/// beyond the two it is counted as. Round numbers rather than a real
-/// font's: what is being tested is the walk, and a hit is a boundary
-/// either way.
-const CHAR_W: f64 = 10.0;
-const WIDE_DELTA: f64 = -3.0;
-
 fn row(args: &str, state: &str, result: &str, duration: &str, output: &str) -> CommandItem {
     CommandItem {
         clock: "12:03:17".to_string(),
@@ -92,19 +85,46 @@ fn a_command_still_running_has_no_third_column_yet() {
 #[test]
 fn a_press_lands_on_the_byte_it_is_over() {
     let model = log(vec![row("switch -- 3.2", "ok", "", "29 ms", "")]);
-    // The clock's own column: three characters along is three bytes in.
-    assert_eq!(model.hit(0, AT_CLOCK, 3.0 * CHAR_W, CHAR_W, WIDE_DELTA), 3);
+    // The clock's own column: three places along is three bytes in.
+    assert_eq!(model.hit(0, AT_CLOCK, 3), 3);
     // The command column starts after the clock and its tab.
-    assert_eq!(model.hit(0, AT_CMD, 0.0, CHAR_W, WIDE_DELTA), 9);
-    assert_eq!(model.hit(0, AT_CMD, 4.0 * CHAR_W, CHAR_W, WIDE_DELTA), 13);
-    // The two gaps hold one tab each, and which side of it the press was
-    // on is the whole answer.
-    assert_eq!(model.hit(0, AT_GAP_CMD, 0.1, CHAR_W, WIDE_DELTA), 8);
-    assert_eq!(model.hit(0, AT_GAP_CMD, 0.9, CHAR_W, WIDE_DELTA), 9);
-    assert_eq!(model.hit(0, AT_GAP_OUT, 0.1, CHAR_W, WIDE_DELTA), 26);
-    assert_eq!(model.hit(0, AT_GAP_OUT, 0.9, CHAR_W, WIDE_DELTA), 27);
+    assert_eq!(model.hit(0, AT_CMD, 0), 9);
+    assert_eq!(model.hit(0, AT_CMD, 4), 13);
+    // The two gaps hold one tab each, and which of its two ends the press
+    // was on is the whole answer.
+    assert_eq!(model.hit(0, AT_GAP_CMD, 0), 8);
+    assert_eq!(model.hit(0, AT_GAP_CMD, 1), 9);
+    assert_eq!(model.hit(0, AT_GAP_OUT, 0), 26);
+    assert_eq!(model.hit(0, AT_GAP_OUT, 1), 27);
     // And past the end of the outcome, the line's own length.
-    assert_eq!(model.hit(0, AT_OUT, 999.0, CHAR_W, WIDE_DELTA), 32);
+    assert_eq!(model.hit(0, AT_OUT, 999), 32);
+}
+
+#[test]
+fn the_pane_is_handed_the_column_it_has_to_lay_out() {
+    // The three the row draws, which is what goes on the ruler
+    // (`CommandsTextSelect.hit`). A gap holds a tab and nothing to lay
+    // out, so it is handed nothing.
+    let model = log(vec![row("switch -- 3.2", "ok", "exit 1", "29 ms", "")]);
+    assert_eq!(model.column(0, AT_CLOCK), "12:03:17");
+    assert_eq!(model.column(0, AT_CMD), "git switch -- 3.2");
+    assert_eq!(model.column(0, AT_OUT), "exit 1 29 ms");
+    assert_eq!(model.column(0, AT_GAP_CMD), "");
+    assert_eq!(model.column(1, AT_CMD), "");
+}
+
+#[test]
+fn a_place_of_a_column_is_a_character_of_it() {
+    // A path in kanji is three places and nine bytes, and a press on the
+    // second of them is the byte that character starts at. **How wide any
+    // of them is drawn is not a question this side can be asked** — the
+    // walk that answered it in columns put the press beside the character
+    // the reader had pressed on.
+    let model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
+    let at_cmd = 9;
+    assert_eq!(model.hit(0, AT_CMD, 11), at_cmd + 11);
+    assert_eq!(model.hit(0, AT_CMD, 12), at_cmd + 14);
+    assert_eq!(model.hit(0, AT_CMD, 14), at_cmd + 20);
 }
 
 #[test]
@@ -119,10 +139,7 @@ fn a_press_below_the_line_is_the_end_of_it() {
         "fatal: no",
     )]);
     let end = model.line_at(0).unwrap().len();
-    assert_eq!(
-        model.hit(0, 9, 0.0, CHAR_W, WIDE_DELTA),
-        i32::try_from(end).unwrap()
-    );
+    assert_eq!(model.hit(0, 9, 0), i32::try_from(end).unwrap());
 }
 
 #[test]
@@ -230,11 +247,12 @@ fn each_row_is_told_where_the_wash_falls_on_it() {
     model.respell_row(1);
     // The first row keeps its clock out of it and runs to the end, so its
     // command and outcome columns both carry a run and the line is not
-    // whole.
-    assert_eq!(model.rows[0].sel, "|4:0:9:0|0:0:5:0|0");
+    // whole. A run is the places of that column the wash covers, and the
+    // pane asks the column itself where those are drawn.
+    assert_eq!(model.rows[0].sel, "|4:9|0:5|0");
     // The second starts at its first character, so the clock carries one
     // too -- and it stops inside the command, so nothing is on the third.
-    assert_eq!(model.rows[1].sel, "0:0:8:0|0:0:6:0||0");
+    assert_eq!(model.rows[1].sel, "0:8|0:6||0");
 }
 
 #[test]
@@ -247,23 +265,23 @@ fn a_row_the_selection_does_not_reach_is_told_nothing() {
     model.drag_select(0, 8);
     model.respell_row(0);
     model.respell_row(1);
-    assert_eq!(model.rows[0].sel, "0:0:8:0|||0");
+    assert_eq!(model.rows[0].sel, "0:8|||0");
     assert_eq!(model.rows[1].sel, "");
 }
 
 #[test]
-fn a_wide_glyph_is_counted_where_it_is_drawn() {
-    // A path in kanji advances two columns and comes from a fallback that
-    // does not advance exactly two of them, so the wash needs both counts
-    // (`DiffPane.wideDelta`, the same pair the diff is washed with).
+fn a_wash_names_places_and_leaves_the_pixels_to_the_row() {
+    // A path in kanji is three places of the command column, whatever the
+    // family drawing it advances them by: the row is asked where they are
+    // (`LineRuler`), and nothing here counts a column.
     let mut model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
     let end = model.line_at(0).unwrap().len();
     model.start_select(0, 9);
     model.drag_select(0, i32::try_from(end).unwrap());
     model.respell_row(0);
-    // `git add -- ` is 11 columns with no wide glyph in it, then three
-    // wide ones worth two columns each, then `.txt`.
-    assert_eq!(model.rows[0].sel, "|0:0:21:3|0:0:4:0|0");
+    // `git add -- ` is eleven places, the three kanji are one each, and
+    // `.txt` is four.
+    assert_eq!(model.rows[0].sel, "|0:18|0:4|0");
 }
 
 #[test]

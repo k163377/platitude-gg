@@ -1,7 +1,17 @@
 //! The theme's runs laid over one line as the markup
-//! `Text.StyledText` reads.
+//! `Text.StyledText` reads, and — either side of that — where a byte of a
+//! line stands in the line the row was laid out from, and back.
+//!
+//! **Places, never pixels.** Two panes read a press and place a wash on
+//! their rows, and both ask the row's own layout where a place is drawn
+//! (`LineRuler`); what crosses into here is the place. Which places a line
+//! has depends only on how the row spells it, so there are two rules and
+//! they differ over exactly one character: a diff row is markup and spells
+//! a tab as the `&nbsp;` that reach its stop ([`spelled_ranges`] /
+//! [`source_byte`]), a command log row is the characters themselves and
+//! draws a tab at one stop of its own ([`plain_ranges`] / [`plain_byte`]).
 
-use super::columns::{is_wide, step_of};
+use super::columns::step_of;
 use platitude_core::highlight::Span;
 
 /// One line as `Text.StyledText` reads it: the theme's runs where there
@@ -95,6 +105,16 @@ fn spelled_units(ch: char, col: usize) -> usize {
     }
 }
 
+/// The same count for a line drawn as itself rather than as markup: the
+/// command log's three columns are the characters they hold, set in a
+/// plain `Label` (`CommandRowDelegate`), so **a tab there is one character
+/// and one place** — the layout draws it at its own stop and the ruler
+/// reading that layout counts it once. Nothing about a line is escaped on
+/// the way to a plain row, so nothing here has a column to carry.
+fn plain_units(ch: char, _col: usize) -> usize {
+    ch.len_utf16()
+}
+
 /// Where byte ranges of the source line (`platitude_core::intraline`, the
 /// reader's own selection) fall in the line as the row spells it:
 /// `"from:len,…"` in UTF-16 units, empty where there is nothing.
@@ -107,6 +127,17 @@ fn spelled_units(ch: char, col: usize) -> usize {
 /// which is the same layout the reader's press is read against, so the
 /// wash and the hit cannot disagree.
 pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+    places_of(text, ranges, spelled_units)
+}
+
+/// The same answer for a row drawn as the characters themselves — the
+/// command log's three columns (`CommandsModel::spell`). One rule apart
+/// from [`spelled_ranges`], and it is the tab: see [`plain_units`].
+pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+    places_of(text, ranges, plain_units)
+}
+
+fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> usize) -> String {
     if ranges.is_empty() {
         return String::new();
     }
@@ -133,7 +164,7 @@ pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
                 }
             }
         }
-        here += spelled_units(ch, col);
+        here += units(ch, col);
         col += step_of(ch, col);
     }
     // A range that runs to the line's end closes here.
@@ -166,151 +197,33 @@ fn push_span(out: &mut String, from: usize, to: usize) {
 /// the way the layout itself decides between two glyphs. Past the end of
 /// the line it is the line's length.
 pub fn source_byte(text: &str, at: usize) -> usize {
+    byte_of(text, at, spelled_units)
+}
+
+/// The same answer for a row drawn as the characters themselves — the
+/// command log's three columns (`CommandsModel::hit`). One rule apart from
+/// [`source_byte`], and it is the tab: see [`plain_units`].
+pub fn plain_byte(text: &str, at: usize) -> usize {
+    byte_of(text, at, plain_units)
+}
+
+fn byte_of(text: &str, at: usize, units: fn(char, usize) -> usize) -> usize {
     let mut here = 0usize;
     let mut col = 0usize;
     for (byte, ch) in text.char_indices() {
         if at <= here {
             return byte;
         }
-        let units = spelled_units(ch, col);
-        if at < here + units {
-            return if (at - here) * 2 >= units {
+        let held = units(ch, col);
+        if at < here + held {
+            return if (at - here) * 2 >= held {
                 byte + ch.len_utf8()
             } else {
                 byte
             };
         }
-        here += units;
+        here += held;
         col += step_of(ch, col);
-    }
-    text.len()
-}
-
-/// How far along the row a walk of it stands: the display column reached,
-/// and how many of the glyphs behind it were drawn wide. The two travel
-/// together because it takes both to reach a pixel — a column is one
-/// advance of the mono font, and a wide glyph is drawn from whatever
-/// fallback carries it, which need not advance two of them.
-#[derive(Clone, Copy)]
-struct Stand {
-    col: usize,
-    wide: usize,
-}
-
-/// The display columns `ranges` (byte ranges into `text`,
-/// `platitude_core::intraline`) land on, as the row is actually drawn:
-/// this walks the line by [`step_of`], the same steps [`push_escaped`]
-/// spells it in, so the expanded tabs and the double-width glyphs are
-/// counted here exactly where they are drawn.
-///
-/// `"col:wides:width:wides,…"`, empty where there is nothing — where the
-/// run starts and how far it runs, each said twice: in columns, and in the
-/// wide glyphs standing in them. The pane needs the second number to place
-/// the first: where the mono family is Latin-only, a wide glyph comes from
-/// a fallback that advances one em rather than two mono columns
-/// (`CommandsPane.wideDelta`), and a wash placed on columns alone slid
-/// right of the characters it names by that difference a glyph.
-///
-/// **The command log's, and only its.** Columns are what this arrives at,
-/// and columns are not widths — the fallback carrying a wide glyph is not
-/// monospaced at all, so what comes out of here stands beside the
-/// characters it names rather than on them wherever the two differ. The
-/// diff asks its rows' own layout instead ([`spelled_ranges`]).
-pub fn display_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
-    if ranges.is_empty() {
-        return String::new();
-    }
-    let mut out = String::new();
-    let mut iter = ranges.iter().copied();
-    let mut current = iter.next();
-    let mut open: Option<Stand> = None;
-    let mut here = Stand { col: 0, wide: 0 };
-    for (at, ch) in text.char_indices() {
-        if let Some((start, len)) = current {
-            if open.is_none() && at == start {
-                open = Some(here);
-            }
-            if at == start + len {
-                if let Some(from) = open.take() {
-                    push_run(&mut out, from, here);
-                }
-                current = iter.next();
-                if let Some((next_start, _)) = current
-                    && at == next_start
-                {
-                    open = Some(here);
-                }
-            }
-        }
-        here.col += step_of(ch, here.col);
-        here.wide += usize::from(is_wide(ch));
-    }
-    // A range that runs to the line's end closes here.
-    if let Some(from) = open {
-        push_run(&mut out, from, here);
-    }
-    out
-}
-
-fn push_run(out: &mut String, from: Stand, to: Stand) {
-    if to.col <= from.col {
-        return;
-    }
-    if !out.is_empty() {
-        out.push(',');
-    }
-    let mut first = true;
-    for number in [from.col, from.wide, to.col - from.col, to.wide - from.wide] {
-        if !first {
-            out.push(':');
-        }
-        first = false;
-        out.push_str(&number.to_string());
-    }
-}
-
-/// Which byte of `text` a press `x` pixels along the row lands on, worked
-/// out from the columns the row stands in.
-///
-/// The inverse of [`display_ranges`], and it has to be walked by the same
-/// rule: a hit worked out any other way would put the selection's edge
-/// beside the character the reader pressed on rather than on it. So this
-/// steps by [`step_of`] and counts the wide
-/// glyphs the way [`Stand`] does — one column is `char_w`, and each wide
-/// glyph is worth `wide_delta` more than the two columns it is counted as
-/// (`CommandsPane.wideDelta`, measured).
-///
-/// The answer is a **boundary**, not a character: past the middle of a
-/// glyph the hit belongs to the gap after it, which is what makes a drag
-/// select the character it was dragged across. Past the end of the line it
-/// is the line's length.
-///
-/// **The command log's, and only its** — for the reason
-/// [`display_ranges`] says, and with the same consequence: a press on a
-/// line whose glyphs the mono family does not carry lands beside the
-/// character under it. The diff reads its press off the row's own layout
-/// ([`source_byte`]).
-pub fn hit_byte(text: &str, x: f64, char_w: f64, wide_delta: f64) -> usize {
-    // Before the row's own font has been measured there is no mapping to
-    // make; the head of the line is the only honest answer.
-    if x <= 0.0 || char_w <= 0.0 {
-        return 0;
-    }
-    let mut here = Stand { col: 0, wide: 0 };
-    let pixels = |at: Stand| at.col as f64 * char_w + at.wide as f64 * wide_delta;
-    for (at, ch) in text.char_indices() {
-        let next = Stand {
-            col: here.col + step_of(ch, here.col),
-            wide: here.wide + usize::from(is_wide(ch)),
-        };
-        let (left, right) = (pixels(here), pixels(next));
-        if x < left + (right - left) / 2.0 {
-            return at;
-        }
-        if x < right {
-            return at + ch.len_utf8();
-        }
-        here = next;
     }
     text.len()
 }
@@ -369,36 +282,6 @@ mod tests {
         // 4 and `x` stands on it. Three would carry `x` past it.
         let out = styled("日\tx", &[run(5, 0, 0, 0)]);
         assert_eq!(out, "<font color=\"#000000\">日&nbsp;&nbsp;x</font>");
-    }
-
-    #[test]
-    fn the_wash_falls_on_the_columns_the_row_is_drawn_at() {
-        // "日\tab" is drawn 日 on 0..2, the tab's two `&nbsp;` on 2..4,
-        // then ab on 4..6 — byte ranges 0..3, 3..4 and 4..6 of the source.
-        // Each run says where it starts and how far it runs, in columns
-        // and in the wide glyphs standing in them.
-        let text = "日\tab";
-        assert_eq!(display_ranges(text, &[(0, 3)]), "0:0:2:1");
-        assert_eq!(display_ranges(text, &[(3, 1)]), "2:1:2:0");
-        assert_eq!(display_ranges(text, &[(4, 2)]), "4:1:2:0");
-        assert_eq!(display_ranges(text, &[(0, 6)]), "0:0:6:1");
-        assert_eq!(display_ranges(text, &[(0, 3), (4, 1)]), "0:0:2:1,4:1:1:0");
-    }
-
-    #[test]
-    fn a_run_says_how_many_of_its_columns_wide_glyphs_took() {
-        // Columns alone do not reach pixels: 日本語 is six columns but
-        // three fallback advances, so a run that stands behind it starts
-        // three of those differences to the left of where six columns of
-        // the mono font would put it (`DiffPane.wideDelta`).
-        let text = "日本語value";
-        assert_eq!(display_ranges(text, &[(0, 9)]), "0:0:6:3");
-        assert_eq!(display_ranges(text, &[(9, 5)]), "6:3:5:0");
-    }
-
-    #[test]
-    fn a_line_nothing_changed_in_carries_no_wash() {
-        assert!(display_ranges("日\tab", &[]).is_empty());
     }
 
     #[test]
@@ -481,39 +364,40 @@ mod tests {
     }
 
     #[test]
-    fn a_press_lands_on_the_nearer_edge_of_the_glyph_it_is_over() {
-        // Ten pixels a column, nothing wide: `abc` is drawn 0..10,
-        // 10..20, 20..30.
-        assert_eq!(hit_byte("abc", 0.0, 10.0, 0.0), 0);
-        assert_eq!(hit_byte("abc", 4.0, 10.0, 0.0), 0);
-        assert_eq!(hit_byte("abc", 6.0, 10.0, 0.0), 1);
-        assert_eq!(hit_byte("abc", 14.0, 10.0, 0.0), 1);
-        assert_eq!(hit_byte("abc", 16.0, 10.0, 0.0), 2);
+    fn a_row_drawn_as_itself_counts_a_tab_once() {
+        // The one rule the log's columns do not share with a diff row:
+        // nothing spells the tab out for them, so it is one character in
+        // the string the `Label` was handed and one place to stop at.
+        let text = "a\tb";
+        assert_eq!(plain_ranges(text, &[(0, 3)]), "0:3");
+        assert_eq!(plain_ranges(text, &[(1, 1)]), "1:1");
+        assert_eq!(plain_byte(text, 1), 1);
+        assert_eq!(plain_byte(text, 2), 2);
+        // …where a diff row spells the same tab as the three `&nbsp;` that
+        // reach the stop at four, and counts every one of them.
+        assert_eq!(spelled_ranges(text, &[(0, 3)]), "0:5");
+        assert_eq!(source_byte(text, 4), 2);
     }
 
     #[test]
-    fn a_press_past_the_end_of_the_line_is_the_end_of_the_line() {
-        assert_eq!(hit_byte("abc", 400.0, 10.0, 0.0), 3);
-        // And before the font is measured there is no mapping to make.
-        assert_eq!(hit_byte("abc", 400.0, 0.0, 0.0), 0);
+    fn a_wide_glyph_is_one_place_of_a_row_drawn_as_itself() {
+        // Columns are gone from both walks: 日本語 stands three places,
+        // one a character, and where those three are drawn is a question
+        // for the row (`LineRuler`).
+        let text = "日本語.txt";
+        assert_eq!(plain_ranges(text, &[(0, 9)]), "0:3");
+        assert_eq!(plain_ranges(text, &[(9, 4)]), "3:4");
+        assert_eq!(plain_byte(text, 1), 3);
+        assert_eq!(plain_byte(text, 3), 9);
+        // An astral glyph is still the two units it is held as.
+        assert_eq!(plain_ranges("a\u{1f600}b", &[(1, 4)]), "1:2");
+        assert_eq!(plain_byte("a\u{1f600}b", 3), 5);
     }
 
     #[test]
-    fn a_tab_is_hit_across_all_the_columns_it_stands_for() {
-        // The tab reaches the stop at 4, so it is drawn 0..40 and `a`
-        // stands on 40..50.
-        assert_eq!(hit_byte("\tab", 10.0, 10.0, 0.0), 0);
-        assert_eq!(hit_byte("\tab", 30.0, 10.0, 0.0), 1);
-        assert_eq!(hit_byte("\tab", 46.0, 10.0, 0.0), 2);
-    }
-
-    #[test]
-    fn a_wide_glyph_is_hit_where_it_is_drawn_rather_than_where_columns_put_it() {
-        // 日 is counted as two columns but drawn one fallback advance
-        // wide: 2 * 10 - 3 = 17px, so its middle is at 8.5 and not at 10.
-        assert_eq!(hit_byte("日x", 8.0, 10.0, -3.0), 0);
-        assert_eq!(hit_byte("日x", 9.0, 10.0, -3.0), 3);
-        assert_eq!(hit_byte("日x", 20.0, 10.0, -3.0), 3);
-        assert_eq!(hit_byte("日x", 25.0, 10.0, -3.0), 4);
+    fn a_place_past_the_end_of_a_plain_row_is_its_end() {
+        assert_eq!(plain_byte("add --all", 400), 9);
+        assert_eq!(plain_byte("", 400), 0);
+        assert!(plain_ranges("add --all", &[]).is_empty());
     }
 }

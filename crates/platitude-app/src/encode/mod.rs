@@ -12,14 +12,14 @@ mod words;
 #[cfg(test)]
 mod rows_tests;
 
-pub use columns::{any_wide, widest_lines};
+pub use columns::widest_lines;
 pub use graph::{avatar_code, conflict_side_colors, encode_geometry, tail_lanes};
 pub(crate) use labels::pr_set;
 pub use labels::{
     co_author_pairs, encode_co_authors, encode_labels, gone_keys, label_key, label_kind_word,
     label_name_of, label_names, labels_shown,
 };
-pub use markup::{display_ranges, hit_byte, source_byte, spelled_ranges};
+pub use markup::{plain_byte, plain_ranges, source_byte, spelled_ranges};
 pub use rows::{DiffRow, flatten_patches, is_combined, is_new_file, is_unmerged_only};
 pub use select::{diff_key, hunk_selection, worktree_target};
 // `EndingWords` itself is not re-exported: every caller takes it off

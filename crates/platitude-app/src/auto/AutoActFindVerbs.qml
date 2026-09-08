@@ -275,8 +275,11 @@ Item {
             const rows = page.pageCommands.rowsHeld()
             page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
             if (Harness.autoAct === "commands-select") {
+                // Two halves, because either one alone passes a broken run: `holds=` is the selection the model is
+                // keeping, `worn=` is the rectangle every row is drawing of it. A log that holds one and wears none
+                // photographs exactly like a log nobody dragged over (`CommandsPane.washTally`).
                 Harness.report("commands_pick holds=" + (page.pageCommands.selectionText() !== "")
-                                  + " rows=" + rows)
+                                  + " " + page.commandWashTally() + " held=" + rows)
                 renderedBarrier.begin()
                 return
             }

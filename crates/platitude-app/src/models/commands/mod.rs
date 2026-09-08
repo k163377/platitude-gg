@@ -5,7 +5,7 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use platitude_core::session::Recording;
 
-use crate::encode::{any_wide, display_ranges, hit_byte};
+use crate::encode::{plain_byte, plain_ranges};
 use crate::hub::{CommandMsg, Feed};
 
 use super::{impl_notify_runs, push_run, qml_register};
@@ -77,20 +77,6 @@ pub struct CommandsModel {
     /// Whether the last command that ended failed. Cleared by the next
     /// one that does not.
     failed: bool,
-    /// Whether any row the reader can drag over carries a glyph the mono
-    /// font draws two columns wide (`encode::any_wide`). The pane
-    /// measures what one of those advances only once this is true: the
-    /// ruler that measures it sets a wide glyph, and on a Latin-only mono
-    /// family that loads a fallback font this process otherwise has no
-    /// reason to hold (`encode::has_wide` says the same for a diff).
-    ///
-    /// Only the command line is asked. The three strings the column walk
-    /// reads are the clock, `git …`, and the two words about how it went
-    /// (`selection::Line`): the first is digits and the last is written
-    /// here in English, so a path or a ref name is the only way a wide
-    /// glyph reaches the row. It stays true once set — a row that has
-    /// fallen off the end took nothing back.
-    has_wide: bool,
     background_reads: bool,
     /// Minutes to add to local time to reach UTC, as the display side
     /// reads it off the machine (`Date.getTimezoneOffset()`). What stamps
@@ -135,7 +121,6 @@ impl QListModel for CommandsModel {
     fn reset_unnotified(&mut self) {
         self.rows.clear();
         self.ids.clear();
-        self.has_wide = false;
     }
 }
 
@@ -155,7 +140,6 @@ fn humanize(ms: i64) -> String {
 impl CommandsModel {
     qproperty!("running", Member = running, Notify = changed);
     qproperty!("failed", Member = failed, Notify = changed);
-    qproperty!("hasWide", Member = has_wide, Notify = changed);
     qproperty!(
         "backgroundReads",
         Member = background_reads,
@@ -230,12 +214,23 @@ impl CommandsModel {
         self.zone_minutes = minutes;
     }
 
-    /// Which byte of a row's line a press landed on: the pane says which
-    /// column it was in and how far along, this walks that column
+    /// The text of one of a row's three columns, for the pane to lay out
+    /// and read a place off (`LineRuler`). The line those columns are cut
+    /// from is here, and where their characters are drawn is there
     /// (デザイン規約 §git が言ったことを読む場所).
     #[qslot]
-    fn hit_at(&self, row: i32, at: i32, x: f64, char_w: f64, wide_delta: f64) -> i32 {
-        self.hit(row, at, x, char_w, wide_delta)
+    fn column_text(&self, row: i32, at: i32) -> String {
+        self.column(row, at)
+    }
+
+    /// Which byte of a row's line a press landed on: the pane says which
+    /// column it was in and which place of that column the row laid the
+    /// pointer over. Pixels stop at the pane — only the column that was
+    /// laid out knows where its characters are drawn, and only the line is
+    /// here (デザイン規約 §git が言ったことを読む場所).
+    #[qslot]
+    fn hit_at(&self, row: i32, at: i32, place: i32) -> i32 {
+        self.hit(row, at, place)
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
@@ -314,7 +309,6 @@ impl CommandsModel {
                         .split_once(' ')
                         .map(|(_, rest)| rest.to_string())
                         .unwrap_or(display);
-                    self.has_wide |= any_wide(&args);
                     self.push(CommandItem {
                         clock: clock_of(at_ms, self.zone_minutes),
                         args,
