@@ -143,6 +143,9 @@ Item {
     // photographs an empty pane the same as a late one (measured, a verb fired against this repository named no
     // row and passed). The asking has no ceiling: a row that never lands leaves the run without a report line at all,
     // and the watchdog is what ends it.
+    //
+    // A beat of its own rather than the shared one, because what it asks costs a diff read per tick.
+    // waits(paced): the loop ends on the diff having arrived, never on a count of these
     Timer {
         id: stageRowTimer
         interval: 50
@@ -172,6 +175,7 @@ Item {
             return diffPane.firstChangedLine(0) >= 0
         }
         onTriggered: {
+            // waits(measured): printed in the report below and compared with nothing — the verb ends on `ready()`
             stageRowTimer.waited += stageRowTimer.interval
             const arrived = stageRowTimer.ready()
             if (!arrived)
@@ -694,12 +698,13 @@ Item {
             }
             // A row is named by walking the list's own items, and the list builds them a frame after the model hands
             // the rows over: read too early it names nothing, which is not the same as there being nothing
-            // (`keep-place` learned it too). So an empty answer is waited on — but not for ever. **The 5s cut-off is
-            // a deliberate exception to the no-fixed-time rule** (app-ui.md §UI 自動化の因果性): it never passes a run
-            // as green — the report says `staged=n want=m` and the judge fails the shortfall — it only converts "the
-            // fixture has fewer changed lines than the run asks for" from a silent watchdog into a diagnosable line.
+            // (`keep-place` learned it too). So an empty answer is waited on — but not for ever. **The 5s cut-off
+            // decides no verb**: it never passes a run as green — the report says `staged=n want=m` and the judge
+            // fails the shortfall — it only converts "the fixture has fewer changed lines than the run asks for"
+            // from a silent watchdog into a diagnosable line.
             const line = diffPane.firstChangedLine(0)
             if (line < 0) {
+                // waits(ceiling): the shortfall is still reported and still fails; this only names it before the watchdog
                 lineRunTimer.waited += lineRunTimer.interval
                 if (lineRunTimer.waited < 5000)
                     return
@@ -1264,6 +1269,7 @@ Item {
     // `<font …>` tags as letters, and a reading counted as new would have thrown away every width the rows had filed.
     // The reading before is taken on the last look at which the colours had not landed, which is the last moment the
     // question is about — the swap is a second away from the rows and this looks every 50ms.
+    // waits(paced): the run ends on the colours having landed, and the beat only decides how close the last look is
     Timer {
         id: colourPlaceTimer
         interval: 50
@@ -1290,6 +1296,7 @@ Item {
             colourPlaceTimer.drawnWas = diffPane.codeDrawn
         }
         onTriggered: {
+            // waits(measured): printed in the report and compared with nothing — the run ends on `coloured`
             colourPlaceTimer.waited += colourPlaceTimer.interval
             if (!colourPlaceTimer.scrolled) {
                 // Read down the file the moment the rows are there, which is well before the colours are.

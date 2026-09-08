@@ -5,7 +5,7 @@
 //! What it reads is every statement of test code — the integration
 //! suites with their support modules, the `#[cfg(test)]` blocks (a
 //! `mod`, a `fn` or an `impl`) and `*_tests.rs` files of every crate,
-//! and the QtTest files — and what it
+//! the QtTest files, and the app's own automation harness — and what it
 //! names is four shapes (.claude/rules/core.md §非同期・並行テスト):
 //!
 //! - `sleep`: a sleep or a `yield_now` spent in place of an answer. A
@@ -31,6 +31,14 @@
 //! goes through that module (`Wait`, `receive`, `stood`, its paces)
 //! names none of these. The product crates' bodies are not read: the
 //! product's clocks are the product's business.
+//!
+//! The one part of a product crate that is read is the app's harness
+//! ([`HARNESS`]) — the driver `PG_AUTO_ACT` runs the product through,
+//! which is test code that happens to ship inside the window. It runs on
+//! beats rather than on QtTest calls, so it is named by rules of its own
+//! ([`qml::Kind::Harness`]): every span of time it spells for itself,
+//! and every count of milliseconds it keeps. The window beside it
+//! (`src/ui`) is the product and stays unread.
 //!
 //! What a test — or a verb — may still do it says on the line:
 //! `// waits(<purpose>): <reason>` above or beside the statement, with a
@@ -89,12 +97,20 @@ const BUDGETS: [&str; 2] = ["/tests/it/support/wait.rs", "/src/wait.rs"];
 /// fixtures of the very shapes it looks for.
 const SELF: &str = "/src/waits/";
 
+/// The directory of a crate's `src` that holds the app's automation
+/// harness, read as test code beside the window it drives.
+const HARNESS: &str = "auto";
+
 /// How much was read: said beside the verdict, so that a PASS names the
 /// range it holds for.
 #[derive(Default)]
 struct Read {
     rust_files: usize,
     qml_files: usize,
+    /// How many of the QML files were the app's harness rather than
+    /// QtTest files: the two are read by different rules, and a count of
+    /// them together would hide either going to zero.
+    harness_files: usize,
     /// Rust statements read as test code.
     test_statements: usize,
     /// The files of this runner's own crate whose tool bodies were read,
@@ -147,7 +163,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
             source::Lang::Qml => {
                 read.qml_files += 1;
-                let (found, allowed) = qml::scan(relative, text);
+                let kind = qml_kind(relative);
+                if kind == qml::Kind::Harness {
+                    read.harness_files += 1;
+                }
+                let (found, allowed) = qml::scan(relative, text, kind);
                 findings.extend(found);
                 exceptions.extend(allowed);
             }
@@ -159,6 +179,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err(format!(
             "none of the files read is this runner's own ({runner}/src) — its tool bodies went \
              unread"
+        ));
+    }
+    // The same guard for the harness: its rules are the only ones that
+    // read a beat, so a harness directory that fell out of the scope
+    // above would leave every clock in the window unnamed and still say
+    // PASS.
+    if read.harness_files == 0 {
+        return Err(format!(
+            "none of the files read is an app harness (a crate's src/{HARNESS}) — the beats it \
+             spells went unread"
         ));
     }
     report(&findings, &exceptions, &read)
@@ -245,11 +275,12 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
         .join(", ");
     if findings.is_empty() {
         println!(
-            "waits: {} Rust and {} QML files read — {} statement(s) of test code, and the tool \
-             bodies of {} file(s) of this runner ({} statement(s)); {} statement(s) standing on \
-             a marker ({counted}) — PASS",
+            "waits: {} Rust and {} QML files read ({} of them the app's harness) — {} \
+             statement(s) of test code, and the tool bodies of {} file(s) of this runner ({} \
+             statement(s)); {} statement(s) standing on a marker ({counted}) — PASS",
             read.rust_files,
             read.qml_files,
+            read.harness_files,
             read.test_statements,
             read.tool_files,
             read.tool_statements,
@@ -268,8 +299,9 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
 }
 
 /// Which scanner reads a file, or none: Rust under a crate's `src` or
-/// `tests`, QtTest files under `tests/qml`, and never the budgets'
-/// own implementation or this scanner's fixtures.
+/// `tests`, QtTest files under `tests/qml`, the app's harness under a
+/// crate's `src/auto` ([`HARNESS`]), and never the budgets' own
+/// implementation or this scanner's fixtures.
 fn language_of(relative: &str) -> Option<source::Lang> {
     if BUDGETS.iter().any(|tail| relative.ends_with(tail)) || relative.contains(SELF) {
         return None;
@@ -283,10 +315,32 @@ fn language_of(relative: &str) -> Option<source::Lang> {
     if name.ends_with(".rs") && matches!(kind, "src" | "tests") {
         return Some(source::Lang::Rust);
     }
-    if kind == "tests" && name.starts_with("tst_") && name.ends_with(".qml") {
+    if !name.ends_with(".qml") {
+        return None;
+    }
+    if kind == "tests" && name.starts_with("tst_") {
+        return Some(source::Lang::Qml);
+    }
+    // Every file of the harness directory, not a name inside it: the
+    // driver is spread over a file per verb group, and a rule that read
+    // only some of them would say PASS over the rest.
+    if kind == "src" && parts.next() == Some(HARNESS) {
         return Some(source::Lang::Qml);
     }
     None
+}
+
+/// Which QML rules a file is read by: the harness's where it stands in
+/// a crate's `src/auto`, and QtTest's everywhere else a QML file is
+/// read. Decided from the same two segments [`language_of`] admitted it
+/// on, so that a `tests/auto` of somebody's is still a QtTest file.
+fn qml_kind(relative: &str) -> qml::Kind {
+    let mut parts = relative.split('/').skip(2);
+    if (parts.next(), parts.next()) == (Some("src"), Some(HARNESS)) {
+        qml::Kind::Harness
+    } else {
+        qml::Kind::Test
+    }
 }
 
 /// How much of a Rust file is read ([`rust::Scope`]): the whole of a
@@ -353,7 +407,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        language_of, module_files, runner_prefix,
+        language_of, module_files, qml, qml_kind, runner_prefix,
         rust::Scope,
         scope_of,
         source::{Declared, Lang},
@@ -429,6 +483,40 @@ mod tests {
         assert_eq!(language_of("crates/x/src/waits/rust.rs"), None);
         assert_eq!(language_of("crates/x/src/ui/Main.qml"), None);
         assert_eq!(language_of("internal-docs/x.rs"), None);
+    }
+
+    #[test]
+    fn the_harness_is_read_whatever_its_files_are_called_and_the_window_is_not() {
+        assert_eq!(
+            language_of("crates/x/src/auto/WindowDialogActs.qml"),
+            Some(Lang::Qml),
+            "the driver is a file per verb group, and every one of them is read"
+        );
+        assert_eq!(
+            language_of("crates/x/src/ui/SampleTimer.qml"),
+            None,
+            "the cadence stands in the window beside the harness, which is the product"
+        );
+        assert_eq!(language_of("crates/x/src/auto/qmldir"), None);
+        assert_eq!(
+            language_of("crates/x/src/auto/driver.rs"),
+            Some(Lang::Rust),
+            "a Rust file there is read for its test blocks like any other"
+        );
+    }
+
+    #[test]
+    fn a_qml_file_is_judged_by_the_rules_of_where_it_stands() {
+        assert_eq!(
+            qml_kind("crates/x/src/auto/WindowCensus.qml"),
+            qml::Kind::Harness
+        );
+        assert_eq!(qml_kind("crates/x/tests/qml/tst_ink.qml"), qml::Kind::Test);
+        assert_eq!(
+            qml_kind("crates/x/tests/auto/tst_ink.qml"),
+            qml::Kind::Test,
+            "a directory of that name under tests is still a QtTest file"
+        );
     }
 
     #[test]

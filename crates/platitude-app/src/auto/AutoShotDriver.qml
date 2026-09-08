@@ -113,6 +113,9 @@ Item {
         }
     }
 
+    // The outer ceiling on a run that stopped answering, and the only clock in this file. It chooses no moment: a run
+    // that reaches it has already failed, and what it does here is say what the machine was holding when it did.
+    // waits(ceiling): a run that stopped answering ends here, and every verb's own completion is causal
     Timer {
         id: watchdog
         interval: Math.max(Harness.autoWatchdogMs, 1)

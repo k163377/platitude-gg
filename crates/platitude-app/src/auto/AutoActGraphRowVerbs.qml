@@ -805,6 +805,7 @@ Item {
                 // a second click at all.
                 if (item.clickGuarded)
                     return
+                // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
                 acts.reclickGraphAt = Date.now()
                 item.leftClick(0)
                 // Read where it is set, not where it lapses: the wait is short and the box is what it turns into.
@@ -855,6 +856,7 @@ Item {
                 + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
                 // How long the box took, against the window it is waiting out. The sampler's own beat is in the
                 // difference, so this is read as "about the window", not to the millisecond.
+                // waits(measured): printed beside the window it is read against, and judged by nothing
                 + " wait=" + (Date.now() - acts.reclickGraphAt)
                 + " window=" + Application.styleHints.mouseDoubleClickInterval)
                 if (reclickGraphTimer.name === "") {

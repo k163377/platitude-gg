@@ -115,6 +115,7 @@ Item {
             font.pixelSize: Theme.fontMd
         }
 
+        // waits(measured): the idle either side is the calibration's input — the parent reads its sampler at both marks
         Timer {
             id: settleBefore
             interval: fontWalk.settleMs
@@ -129,6 +130,7 @@ Item {
             }
         }
 
+        // waits(measured): the second half of that same window, and `walked` is what ends the run
         Timer {
             id: settleAfter
             interval: fontWalk.settleMs
@@ -142,6 +144,7 @@ Item {
 
     // The memory sampler belongs beside the process-level owner: it keeps covering the full run, while `perf-done`
     // gives the last causal sample.
+    // waits(paced): the cadence a sample is taken on; nothing about the run ends on one of these
     Timer {
         interval: 500
         repeat: true

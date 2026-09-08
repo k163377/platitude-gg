@@ -258,6 +258,10 @@ Item {
         from: driver.graphPane.view.originY
         to: from + Math.max(0, Math.min(3000 * Theme.graphRowHeight,
                                       driver.graphPane.view.contentHeight - driver.graphPane.view.height))
+        // The scroll the frame rate is read over: a window of measurement, not of waiting. Nothing passes because it
+        // elapsed — `onFinished` reads how far the view actually travelled and whether it was on screen, and fails
+        // the run when either says no (規約 §UI 自動化の因果性: 非因果の終了境界も成功条件にしない).
+        // waits(measured): the length of the sample, judged by what the scroll did rather than by having ended
         duration: 12000
         onFinished: {
             driver.reportViewport("end")
