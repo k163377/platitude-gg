@@ -101,10 +101,6 @@ pub(crate) struct Ticket {
     /// Which tree the unit belongs to, which is what the fairness is
     /// between.
     pub seat: String,
-    /// Which side of the gate the unit is. The one budget covers both
-    /// and never reads this; only the measurement's `lanes` mode, where
-    /// the count was per side, tells them apart by it.
-    pub side: String,
     pub what: String,
     /// Whether it has been handed the machine.
     pub running: bool,
@@ -356,7 +352,6 @@ mod tests {
             rank,
             turn: false,
             seat: seat.to_string(),
-            side: String::new(),
             what: format!("unit {seq}"),
             running: false,
             ran_since: 0,

@@ -259,7 +259,6 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
                 rank: crate::budget::Rank::Normal,
                 seat: ground.seat,
                 what: &display,
-                side,
             });
         let room = match room {
             Ok(room) => room,

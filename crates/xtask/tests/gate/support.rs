@@ -103,15 +103,13 @@ impl Sandbox {
             .env_remove("PG_GATE_FAKE_FAIL")
             .env_remove("PG_GATE_SKIP")
             // This suite runs as a step of a gate, which marks every
-            // child of a step as running under its ticket and may have
-            // been asked for the rule the A/B measures. Both would reach
-            // the runners started here — and a budget that hands out
-            // passes is not the one under test. Spelled out, as
-            // CLAUDECODE is: this crate cannot use the runner's modules,
-            // and the runner's own suite checks the two spellings agree
-            // (`budget::tests`).
+            // child of a step as running under its ticket. That mark
+            // would reach the runners started here — and a budget that
+            // hands out passes is not the one under test. Spelled out,
+            // as CLAUDECODE is: this crate cannot use the runner's
+            // modules, and the runner's own suite checks the two
+            // spellings agree (`budget::tests`).
             .env_remove("PG_BUDGET_HELD")
-            .env_remove("PG_BUDGET")
             // The gate answers for a session's git and nobody else's, so
             // the sandbox's git is a session's — whether or not the run
             // that started these tests was one (CI's is not, a session's

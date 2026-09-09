@@ -4,7 +4,6 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use super::bench;
 use super::ledger::{Pool, QUIET_CEILING};
 use super::queue::Rank;
 use super::unit::{Ask, HELD, LIGHT};
@@ -13,11 +12,8 @@ use crate::wait::{Budget, LOOK_AGAIN, Wait};
 /// `cargo xtask budget` — what the machine is doing, and the hold the
 /// tests take from a process of their own.
 pub fn run(args: &[String]) -> Result<(), String> {
-    match args.first().map(String::as_str) {
-        Some("hold") => return hold(&args[1..]),
-        Some("bench") => return bench::run(&args[1..]),
-        Some("shaped") => return bench::shaped_run(&args[1..]),
-        _ => {}
+    if args.first().is_some_and(|first| first == "hold") {
+        return hold(&args[1..]);
     }
     let dir = match args.len() {
         0 => crate::tree::workspace_root(),
@@ -43,7 +39,7 @@ fn hold(args: &[String]) -> Result<(), String> {
     let mut dir = crate::tree::workspace_root();
     let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
     let mut rank = Rank::Normal;
-    let (mut seat, mut what, mut side) = ("held".to_string(), "hold".to_string(), String::new());
+    let (mut seat, mut what) = ("held".to_string(), "hold".to_string());
     let (mut say, mut until, mut turn) = (None, None, false);
     let mut child_until: Option<PathBuf> = None;
     let mut at = 0;
@@ -64,7 +60,6 @@ fn hold(args: &[String]) -> Result<(), String> {
             "--jobs" => jobs = next(&mut at)?.parse().map_err(|_| "--jobs takes a count")?,
             "--seat" => seat = next(&mut at)?,
             "--what" => what = next(&mut at)?,
-            "--side" => side = next(&mut at)?,
             "--say" => say = Some(PathBuf::from(next(&mut at)?)),
             "--until" => until = Some(PathBuf::from(next(&mut at)?)),
             "--child-until" => child_until = Some(PathBuf::from(next(&mut at)?)),
@@ -85,7 +80,6 @@ fn hold(args: &[String]) -> Result<(), String> {
             rank,
             seat: &seat,
             what: &what,
-            side: &side,
         })?
     };
     // A child of this unit, standing in for the cargo or the container a

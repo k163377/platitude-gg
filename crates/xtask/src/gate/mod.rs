@@ -841,7 +841,6 @@ fn run_one(
             rank: ground.rank,
             seat: ground.seat,
             what: id,
-            side: name,
         })
         .map_err(|why| format!("{id}: {why}"))?;
     ground.waited.add(room.waited);
@@ -1032,7 +1031,6 @@ fn runner(
         rank: rank(landing),
         seat: &seat_of(dir),
         what: "the task runner's build",
-        side: "host",
     })?;
     // Through the same road every step takes (`check::run_step`): the
     // announcement to a measurement, the ceiling, and the tree kill at it.

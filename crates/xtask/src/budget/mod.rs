@@ -80,10 +80,9 @@
 //! [`queue`] is the rule and touches no file; [`ledger`] is what the
 //! rule reads — the pool, the tickets and the locks under them;
 //! [`unit`] is what asks — what a unit weighs, what it holds, and what
-//! it says about the process it started; [`cli`] is `cargo xtask
-//! budget`, and [`bench`] the measurement the rule was chosen with.
+//! it says about the process it started; and [`cli`] is `cargo xtask
+//! budget`.
 
-mod bench;
 mod cli;
 mod ledger;
 mod queue;

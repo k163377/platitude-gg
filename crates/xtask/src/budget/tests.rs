@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use super::ledger::{self, DIR, Mode, Pool, SEQ, now};
+use super::ledger::{self, DIR, Pool, SEQ, now};
 use super::unit;
 use super::{Admitted, Ask, LIGHT, Rank, demand, under, weight_of};
 
@@ -57,7 +57,6 @@ fn ask<'a>(what: &'a str, weight: u32, rank: Rank, seat: &'a str) -> Ask<'a> {
         rank,
         seat,
         what,
-        side: "host",
     }
 }
 
@@ -78,7 +77,7 @@ impl Held {
         let (release, released) = std::sync::mpsc::channel::<()>();
         let (dir, what, seat) = (dir.to_path_buf(), what.to_string(), seat.to_string());
         let thread = std::thread::spawn(move || {
-            let pool = Pool::at(&dir, budget, 2);
+            let pool = Pool::at(&dir, budget);
             let held = pool
                 .admit_polled(&ask(&what, weight, rank, &seat), &polled)
                 .expect("a ticket");
@@ -202,7 +201,7 @@ fn room_a_landing_will_not_use_goes_on_down_the_queue() {
 fn landings_take_their_turn_in_the_order_they_arrived() {
     let dir = common("turns");
     let (first_looks, first_polled) = polls();
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let first = pool
         .turn_polled("a", "land a", &first_polled)
         .expect("the first landing's turn");
@@ -213,7 +212,7 @@ fn landings_take_their_turn_in_the_order_they_arrived() {
     let (second_looks, second_polled) = polls();
     let waiting_in = dir.clone();
     let second = std::thread::spawn(move || {
-        let pool = Pool::at(&waiting_in, 4, 2);
+        let pool = Pool::at(&waiting_in, 4);
         pool.turn_polled("b", "land b", &second_polled)
             .map(|turn| turn.waited)
     });
@@ -254,7 +253,7 @@ fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
     // A lock a register died before writing a ticket at, which nothing
     // else would ever look at again.
     std::fs::write(ledger.join("t-9.lock"), b"").expect("a name nobody wrote at");
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let mine = pool
         .admit(&ask("clippy", 4, Rank::Normal, "a"))
         .expect("the machine, the dead ticket being nobody's");
@@ -278,7 +277,7 @@ fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     // certainly running, and its number is certainly not one the system
     // has handed out to somebody else.
     dead_ticket(&ledger, "t-0", std::process::id(), &my_name(), now());
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let text = pool.standing().expect("the standing");
     assert!(
         text.contains("budget 4/4"),
@@ -308,7 +307,7 @@ fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
         "not-this-program",
         now(),
     );
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let text = pool.standing().expect("the standing");
     assert!(
         text.contains("budget 0/4"),
@@ -334,7 +333,7 @@ fn a_leftover_past_the_ceiling_is_reported_and_its_room_is_not_handed_out() {
     // only the second it started running is moved past the ceiling.
     let long_ago = now() - ledger::LEFTOVER_CEILING - 1;
     dead_ticket(&ledger, "t-0", std::process::id(), &my_name(), long_ago);
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let text = pool.standing().expect("the standing");
     assert!(
         text.contains("budget 4/4"),
@@ -360,7 +359,7 @@ fn a_leftover_past_the_ceiling_gives_the_room_back_when_its_child_has_gone() {
     let long_ago = now() - ledger::LEFTOVER_CEILING - 1;
     let nobody = crate::subprocess::NO_SUCH_PID;
     dead_ticket(&ledger, "t-0", nobody, &my_name(), long_ago);
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let text = pool.standing().expect("the standing");
     assert!(
         text.contains("budget 0/4"),
@@ -438,7 +437,7 @@ fn my_name() -> String {
 #[test]
 fn a_ticket_takes_its_own_files_with_it() {
     let dir = common("clean-up");
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     let mine = pool
         .admit(&ask("verb", 1, Rank::Normal, "a"))
         .expect("a ticket");
@@ -463,7 +462,7 @@ fn a_ticket_takes_its_own_files_with_it() {
 #[test]
 fn the_standing_names_what_is_holding_the_machine() {
     let dir = common("standing");
-    let pool = Pool::at(&dir, 24, 8);
+    let pool = Pool::at(&dir, 24);
     let held = pool
         .admit(&ask("test platitude-core", 4, Rank::Normal, "d"))
         .expect("a ticket");
@@ -484,37 +483,6 @@ fn the_standing_names_what_is_holding_the_machine() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Under the rule this replaced, a compiling unit was outside the count
-/// altogether and the verbs were counted a side at a time. Kept for the
-/// A/B alone, and asked for by name rather than by the environment.
-#[test]
-fn the_rule_this_replaced_counts_the_verbs_of_a_side_and_nothing_else() {
-    let dir = common("lanes-mode");
-    let lanes = || Pool::at(&dir, 4, 1).moded(Mode::Lanes);
-    let compiling = lanes()
-        .admit(&ask("test platitude-core", 4, Rank::Normal, "a"))
-        .expect("a compiling unit, which that rule never counted");
-    let verb = lanes()
-        .admit(&ask("verify wip", 1, Rank::Normal, "a"))
-        .expect("the side's one lane");
-    let (looks, polled) = polls();
-    let waiting_in = dir.clone();
-    let second = std::thread::spawn(move || {
-        let pool = Pool::at(&waiting_in, 4, 1).moded(Mode::Lanes);
-        pool.admit_polled(&ask("verify graph", 1, Rank::Normal, "b"), &polled)
-            .map(|held| held.waited)
-    });
-    until_polled(&looks);
-    assert!(!second.is_finished(), "two verbs ran on one lane");
-    drop(verb);
-    second
-        .join()
-        .expect("the second verb's thread")
-        .expect("the lane, once the first verb was done");
-    drop(compiling);
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// A pool named outright answers to its arguments and to nothing in the
 /// environment. The runner's own suite runs as a step of a gate, which
 /// marks every child of a step as carried — a pool that read that mark
@@ -522,29 +490,27 @@ fn the_rule_this_replaced_counts_the_verbs_of_a_side_and_nothing_else() {
 #[test]
 fn a_pool_named_outright_carries_nothing_from_the_environment() {
     let dir = common("no-ambient");
-    let pool = Pool::at(&dir, 4, 2);
+    let pool = Pool::at(&dir, 4);
     assert!(!pool.carried, "a named pool read the environment's mark");
-    assert_eq!(pool.mode, Mode::Whole, "a named pool read the environment");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The gate suite cannot `use` this crate's modules, so it spells the
-/// two names out; drift between the spellings would put that suite back
-/// under a gate's own marks without saying so.
+/// name out; drift between the spellings would put that suite back under
+/// a gate's own mark without saying so.
 #[test]
-fn the_gate_suite_clears_the_names_this_module_spells() {
+fn the_gate_suite_clears_the_name_this_module_spells() {
     let support = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("gate")
         .join("support.rs");
     let text = std::fs::read_to_string(&support).expect("the gate suite's sandbox");
-    for name in [crate::budget::HELD, ledger::MODE] {
-        assert!(
-            text.contains(&format!("env_remove(\"{name}\")")),
-            "{} does not clear {name}",
-            support.display()
-        );
-    }
+    let name = crate::budget::HELD;
+    assert!(
+        text.contains(&format!("env_remove(\"{name}\")")),
+        "{} does not clear {name}",
+        support.display()
+    );
 }
 
 /// A standalone command that carries its parent's mark answers before it

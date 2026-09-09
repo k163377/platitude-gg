@@ -347,18 +347,6 @@ const TAIL: &str = "  shipped [--no-build]
       process is gone holds nothing: liveness is the lock beside it, and
       the next reader clears it.
 
-  budget bench [--gates <n>] [--land] [--land-after-ms <n>] [--scenarios]
-               [--scale <n>] [--jobs <n>]
-      The admission rule against the one it replaced, on this machine,
-      under the same offered load: a model of a gate's units at the
-      durations measured off real ones, each burning real processor time
-      on as many threads as its weight says, in a ledger of the run's
-      own. Says, for each rule, when the landing finished, when
-      everything finished, the queueing and running time in all, and the
-      failures. `--scenarios` runs the three the comparison owes: one
-      gate alone, several at once, and a landing arriving into several
-      at once.
-
   budget hold --until <file> [--say <file>] [--weight <n>]
               [--landing | --launch] [--turn] [--dir <tree>]
               [--seat <name>] [--what <text>]

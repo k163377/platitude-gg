@@ -36,14 +36,6 @@ const SERVED: &str = "served";
 /// beyond its name, so the two never collide in the directory.
 const LOCK: &str = "lock";
 
-/// The switch the A/B measurement uses: with it set to `lanes`, the
-/// admission is the one this replaced — the verbs counted per side and
-/// everything else outside the count — so the two rules can be measured
-/// on the same sources, the same steps and the same stamps
-/// (internal-docs/反映前テストの機械化.md §予算の A/B). Nothing but the
-/// measurement sets it.
-pub(super) const MODE: &str = "PG_BUDGET";
-
 /// How long the queue may stand entirely still before a wait calls it
 /// hung. Silence, not the wait's length: a queue that keeps handing the
 /// machine on is working however long this unit stands in it, and what
@@ -78,33 +70,10 @@ const WHOLE_CEILING: Duration = if cfg!(test) {
 /// ([`queue::Ticket::overdue`]).
 pub(super) const LEFTOVER_CEILING: u64 = crate::check::STEP_CEILING.as_secs();
 
-/// Which rule the admission follows.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Mode {
-    /// One budget over every unit of both sides.
-    Whole,
-    /// The rule this replaced, for the A/B alone: the verbs counted per
-    /// side, everything else admitted outright.
-    Lanes,
-}
-
-impl Mode {
-    fn asked() -> Mode {
-        match std::env::var(MODE).ok().as_deref() {
-            Some("lanes") => Mode::Lanes,
-            _ => Mode::Whole,
-        }
-    }
-}
-
 /// The machine's budget, as one process sees it.
 pub(crate) struct Pool {
     dir: PathBuf,
     budget: u32,
-    /// The verbs of one side under [`Mode::Lanes`], which is what that
-    /// mode counts instead of the whole.
-    pub(super) per_side: u32,
-    pub(super) mode: Mode,
     /// This whole process runs under a ticket its parent took, so every
     /// unit of it is admitted outright ([`HELD`]).
     pub(super) carried: bool,
@@ -122,36 +91,23 @@ impl Pool {
     pub(crate) fn of(dir: &Path, jobs: usize) -> Result<Pool, String> {
         let common = crate::subprocess::common_git_dir(&dir.display().to_string())
             .ok_or_else(|| format!("{} is not a git repository", dir.display()))?;
-        let per_side = u32::try_from(jobs).unwrap_or(1).max(1);
         Ok(Pool {
-            mode: Mode::asked(),
             carried: std::env::var_os(HELD).is_some(),
             // Never under one unit's weight: a budget too small for the
             // heaviest unit is one nothing ever fits in.
-            ..Pool::at(Path::new(&common), demand(jobs).max(COMPILE), per_side)
+            ..Pool::at(Path::new(&common), demand(jobs).max(COMPILE))
         })
     }
 
-    /// The same, beside a `.git` named outright and with the numbers
+    /// The same, beside a `.git` named outright and with the budget
     /// spelled out — the tests' own, and the one shape that does not
     /// read the machine or the environment.
-    pub(crate) fn at(common: &Path, budget: u32, per_side: u32) -> Pool {
+    pub(crate) fn at(common: &Path, budget: u32) -> Pool {
         Pool {
             dir: common.join(DIR),
             budget,
-            per_side,
-            mode: Mode::Whole,
             carried: false,
         }
-    }
-
-    /// The same pool under the rule this replaced, for the tests that
-    /// watch that rule: asked for by name rather than read out of the
-    /// environment, which parallel tests share.
-    #[cfg(test)]
-    pub(super) fn moded(mut self, mode: Mode) -> Pool {
-        self.mode = mode;
-        self
     }
 
     /// Takes a ticket for one unit, waiting for the machine to have room
@@ -195,7 +151,6 @@ impl Pool {
                 rank: Rank::Landing,
                 seat,
                 what,
-                side: "",
             },
             true,
             polled,
@@ -208,11 +163,6 @@ impl Pool {
         polled: &dyn Fn(),
     ) -> Result<Admitted, String> {
         if self.carried {
-            return Ok(Admitted::carried());
-        }
-        // The mode this replaced counted the verbs of a side and nothing
-        // else; a unit it never counted is admitted here as it was then.
-        if self.mode == Mode::Lanes && ask.weight >= COMPILE {
             return Ok(Admitted::carried());
         }
         self.queued(ask, false, polled)
@@ -306,7 +256,6 @@ impl Pool {
                         rank: ask.rank,
                         turn,
                         seat: ask.seat.to_string(),
-                        side: ask.side.to_string(),
                         what: ask.what.to_string(),
                         // Nothing started yet, and nothing asked after:
                         // both are the running unit's to fill in, as is
@@ -343,19 +292,8 @@ impl Pool {
     /// to tell a queue that moves from one that does not.
     fn look(&self, ask: &Ask<'_>, seq: u64, turn: bool) -> Result<(bool, String), String> {
         let _decision = self.decide()?;
-        let tickets = self.read()?;
-        let mine: Vec<Ticket> = match self.mode {
-            Mode::Whole => tickets,
-            // The rule this replaced counted a side at a time.
-            Mode::Lanes => tickets
-                .into_iter()
-                .filter(|t| t.turn == turn && (turn || t.side == ask.side))
-                .collect(),
-        };
-        let budget = match self.mode {
-            Mode::Whole => queue::budget_of(&mine, self.budget),
-            Mode::Lanes => self.per_side,
-        };
+        let mine = self.read()?;
+        let budget = queue::budget_of(&mine, self.budget);
         let served = self.served(&mine);
         let standing = format!(
             "{} of {budget} held, {} waiting",
@@ -736,7 +674,7 @@ fn held(ticket: &Ticket, now: u64) -> Ticket {
 pub(super) fn render(ticket: &Ticket) -> String {
     format!(
         "seq {}\npid {}\nweight {}\nbudget {}\nrank {}\nturn {}\nrunning {}\nran-since {}\n\
-         child {}\nprobed {}\ntold {}\nseat {}\nside {}\nchild-name {}\nwhat {}\n",
+         child {}\nprobed {}\ntold {}\nseat {}\nchild-name {}\nwhat {}\n",
         ticket.seq,
         ticket.pid,
         ticket.weight,
@@ -749,7 +687,6 @@ pub(super) fn render(ticket: &Ticket) -> String {
         ticket.probed,
         u8::from(ticket.told),
         ticket.seat,
-        ticket.side,
         ticket.child_name,
         ticket.what,
     )
@@ -764,7 +701,6 @@ pub(super) fn parse(text: &str) -> Option<Ticket> {
         rank: Rank::Normal,
         turn: false,
         seat: String::new(),
-        side: String::new(),
         what: String::new(),
         running: false,
         ran_since: 0,
@@ -791,7 +727,6 @@ pub(super) fn parse(text: &str) -> Option<Ticket> {
             "probed" => ticket.probed = value.parse().ok()?,
             "told" => ticket.told = value == "1",
             "seat" => ticket.seat = value.to_string(),
-            "side" => ticket.side = value.to_string(),
             "what" => ticket.what = value.to_string(),
             _ => {}
         }

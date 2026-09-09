@@ -90,10 +90,6 @@ pub(crate) struct Ask<'a> {
     /// What the unit is, for `cargo xtask budget` and for the line a
     /// wait that ran out says.
     pub what: &'a str,
-    /// Which side of the gate it is. The one budget covers both; this
-    /// separates them only under the measurement's `lanes` mode, where
-    /// the count was per side.
-    pub side: &'a str,
 }
 
 /// A ticket held for as long as this stands, and how long it took to get
@@ -274,7 +270,6 @@ pub(super) fn marked(
             rank,
             seat: &crate::gate::seat_of(tree),
             what,
-            side: "host",
         })?;
     // From here on, whatever this process spawns is this unit's work
     // ([`MINE`]). Set once: a standalone command takes one ticket, and a
