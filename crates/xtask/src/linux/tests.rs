@@ -67,3 +67,31 @@ fn the_qt_version_comes_from_the_workflow() {
         "{version:?} does not look like a version"
     );
 }
+
+/// Every container is under the launcher's announcement to a measurement
+/// and under the launcher's ticket, and takes neither of its own. Both
+/// marks or neither: with only the first, a `linux verify-ui` holds a
+/// compile's weight out here while the verb inside queues for weight of
+/// its own, and enough of those pairs fill the machine with halves that
+/// cannot move (`crate::budget`, `crate::still`).
+#[test]
+fn a_container_is_started_carrying_both_marks() {
+    assert_eq!(
+        args_of(&carried()),
+        vec![
+            "run".to_string(),
+            "--rm".to_string(),
+            "--env".to_string(),
+            format!("{}=1", crate::still::UNDER),
+            "--env".to_string(),
+            format!("{}=1", crate::budget::HELD),
+        ]
+    );
+}
+
+/// The arguments as the process would see them.
+pub(super) fn args_of(cmd: &Command) -> Vec<String> {
+    cmd.get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect()
+}

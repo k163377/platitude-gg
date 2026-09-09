@@ -60,6 +60,21 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         }
     }
     let root = crate::tree::workspace_root();
+    // Somebody is waiting at the screen for this, which no test is: it
+    // goes ahead of every test on the machine and behind a landing
+    // (`crate::budget`, Rank::Launch). What is counted is the build and
+    // the start — the window itself is the user's and holds none of the
+    // machine, so the ticket comes down when this verb returns.
+    let _room = crate::budget::standalone(
+        &root,
+        if build {
+            crate::budget::COMPILE
+        } else {
+            crate::budget::LIGHT
+        },
+        crate::budget::Rank::Launch,
+        "launch",
+    )?;
     let path = crate::qt::path_with_qt()?;
     // A stale run of this tree holds both the exe (against the link) and
     // this tree's own store lock (the app would open on the refusal gate).

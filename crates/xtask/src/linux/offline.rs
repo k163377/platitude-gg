@@ -62,9 +62,8 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     cmd.arg(&app)
         .args(["bash", "ci/offline-test.sh"])
         .args(&binaries);
-    let status = cmd
-        .status()
-        .map_err(|e| format!("failed to run docker: {e}"))?;
+    let status =
+        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
     if status.code() == Some(124) {
         return Err(
             "the smoke run hit ci/offline-test.sh's timeout: the app was started \
@@ -152,15 +151,13 @@ fn profile_is_test(line: &str) -> bool {
 /// ones every other run here uses, so the build directory is the same
 /// docker volume and nothing is compiled twice.
 fn docker_run(root: &Path, network: bool, env: &[(&str, &str)]) -> Command {
-    let mut cmd = Command::new("docker");
-    cmd.arg("run").arg("--rm");
+    let mut cmd = super::carried();
     if !network {
         cmd.arg("--network").arg("none");
     }
     for (name, value) in env {
         cmd.arg("--env").arg(format!("{name}={value}"));
     }
-    cmd.arg("--env").arg(format!("{}=1", crate::still::UNDER));
     cmd.arg("--volume")
         .arg(format!("{}:{WORK}", mount_path(root)))
         .arg("--volume")
@@ -197,5 +194,19 @@ mod tests {
     fn a_stream_with_nothing_to_run_is_empty_not_wrong() {
         assert!(executables("").is_empty());
         assert!(executables("not json at all\n").is_empty());
+    }
+
+    /// This job's container comes off the one constructor too, so it is
+    /// under the launcher's ticket like every other: a run with no
+    /// network is still a run on this machine.
+    #[test]
+    fn the_offline_container_is_under_the_launchers_ticket() {
+        let said = crate::linux::tests::args_of(&docker_run(Path::new("."), false, &[]));
+        for mark in [crate::still::UNDER, crate::budget::HELD] {
+            assert!(
+                said.contains(&format!("{mark}=1")),
+                "{mark} is missing from {said:?}"
+            );
+        }
     }
 }

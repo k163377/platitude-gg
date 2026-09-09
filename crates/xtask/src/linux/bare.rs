@@ -2,7 +2,6 @@
 //! the discovery loop that works its runtime package list out again.
 
 use std::path::Path;
-use std::process::Command;
 
 use super::{OUT_MOUNT, ensure_image, in_container, mount_path, volume};
 use crate::keepsakes::keepsake_dir;
@@ -173,17 +172,17 @@ fn run_on_bare(
     out: &Path,
     script: &str,
 ) -> Result<std::process::ExitStatus, String> {
-    Command::new("docker")
-        .arg("run")
-        .arg("--rm")
-        .arg("--env")
-        .arg(format!("{}=1", crate::still::UNDER))
-        .arg("--volume")
-        .arg(format!("{}:/built:ro", volume(root, "target")))
-        .arg("--volume")
-        .arg(format!("{}:{OUT_MOUNT}", mount_path(out)))
-        .arg(tag)
-        .args(["bash", "-lc", script])
-        .status()
-        .map_err(|e| format!("failed to run docker: {e}"))
+    // Through the budget's runner, as every container command is: the
+    // container outlives a killed launcher, and the ledger has to know
+    // which number is still holding the machine (`crate::budget`).
+    let mut cmd = super::carried();
+    crate::budget::watched(
+        cmd.arg("--volume")
+            .arg(format!("{}:/built:ro", volume(root, "target")))
+            .arg("--volume")
+            .arg(format!("{}:{OUT_MOUNT}", mount_path(out)))
+            .arg(tag)
+            .args(["bash", "-lc", script]),
+    )
+    .map_err(|e| format!("failed to run docker: {e}"))
 }

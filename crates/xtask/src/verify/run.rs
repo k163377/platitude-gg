@@ -62,8 +62,33 @@ fn gits_for<'a>(
     Ok((other, path.clone(), Some(staged)))
 }
 
+/// What this run takes of the machine, held for as long as it runs: one
+/// verb is an app, its offscreen raster and the git it spawns — or a
+/// release build, when it is the one that builds (`crate::budget`).
+///
+/// Taken before the measurement is announced, which is the order the
+/// whole runner keeps, and taken here rather than only inside a gate: a
+/// verb a session runs beside another seat's gate is load like any
+/// other. A verb the gate started is under the gate's own ticket and
+/// takes none.
+fn room_for(opts: &super::options::Options) -> Result<crate::budget::Admitted, String> {
+    crate::budget::standalone(
+        &crate::tree::workspace_root(),
+        if opts.build {
+            crate::budget::COMPILE
+        } else {
+            crate::budget::LIGHT
+        },
+        // A headless verb is a test, whoever started it: the rank above
+        // it is for a window somebody is waiting at (`gui::launch`).
+        crate::budget::Rank::Normal,
+        &format!("verify-ui {}", opts.verb),
+    )
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
+    let _room = room_for(&opts)?;
     let (root, _busy) = crate::still::announced("verify-ui")?;
     let path = crate::qt::path_with_qt()?;
     let repos = repos::for_run(&opts)?;

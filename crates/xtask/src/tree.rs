@@ -58,13 +58,18 @@ pub(crate) fn app_exe(
         // Announced for as long as it compiles: a build waits for a
         // measurement to end, and a measurement waits for it (`still`).
         let _busy = crate::still::busy(root, "cargo build --release")?;
-        let status = std::process::Command::new("cargo")
-            .args(["build", "--release", "--features", HARNESS_FEATURE])
-            .args(extra)
-            .current_dir(root)
-            .env("PATH", path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        // Through the budget's own runner: this cargo is what the unit
+        // that asked for a build is actually doing, and a ledger reading
+        // this process's ticket after it is killed has to know which
+        // number is still compiling (`crate::budget::watched`).
+        let status = crate::budget::watched(
+            std::process::Command::new("cargo")
+                .args(["build", "--release", "--features", HARNESS_FEATURE])
+                .args(extra)
+                .current_dir(root)
+                .env("PATH", path),
+        )
+        .map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err(format!("cargo build --release failed{}", held_by(root)));
         }
@@ -96,12 +101,13 @@ pub(crate) fn shipped_exe(
     if build {
         println!("building (release, no features — the shipped set)…");
         let _busy = crate::still::busy(root, "cargo build --profile shipped")?;
-        let status = std::process::Command::new("cargo")
-            .args(["build", "--profile", SHIPPED_PROFILE])
-            .current_dir(root)
-            .env("PATH", path)
-            .status()
-            .map_err(|e| format!("failed to run cargo: {e}"))?;
+        let status = crate::budget::watched(
+            std::process::Command::new("cargo")
+                .args(["build", "--profile", SHIPPED_PROFILE])
+                .current_dir(root)
+                .env("PATH", path),
+        )
+        .map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err("cargo build --profile shipped failed".into());
         }

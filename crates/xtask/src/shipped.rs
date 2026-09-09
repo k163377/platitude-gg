@@ -50,6 +50,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
     let root = crate::tree::workspace_root();
+    // The release build without the harness is a compile like any other,
+    // and is counted like one (`crate::budget`) whether a gate asked for
+    // it or a session did.
+    let _room = crate::budget::standalone(
+        &root,
+        if build {
+            crate::budget::COMPILE
+        } else {
+            crate::budget::LIGHT
+        },
+        crate::budget::Rank::Normal,
+        "shipped",
+    )?;
     let path = crate::qt::path_with_qt()?;
     let exe = crate::tree::shipped_exe(&root, &path, build)?;
 
@@ -80,6 +93,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
+    // What this unit is doing, for a ledger that outlives this process
+    // (`crate::budget::child_started`).
+    crate::budget::child_started(child.id(), &exe.display().to_string());
     let out = child.stdout.take().map(collect);
     let err = child.stderr.take().map(collect);
 

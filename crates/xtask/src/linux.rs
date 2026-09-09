@@ -129,6 +129,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let root = crate::tree::workspace_root();
+    let command = command_line(rest);
+    // The container's work is this machine's work — the image built as
+    // much as the command run in it — and it is counted here
+    // (`crate::budget`): a VM's worth of cargo is not less of this
+    // machine for being behind a mount. Ahead of every road out of this
+    // verb, because all four of them are that work: the container, the
+    // two that stay in a container on Linux, and the one that runs the
+    // command where it stands. Everything inside the container is under
+    // this ticket ([`in_container`] hands the mark across, as it hands
+    // the measurement's).
+    let _room = crate::budget::standalone(
+        &root,
+        crate::budget::weight_of(&command, false),
+        crate::budget::Rank::Normal,
+        &format!("linux {}", rest.join(" ")),
+    )?;
     // The one verb that is about a different machine rather than a
     // different toolchain: it runs in the container even on Linux, because
     // what it asks is whether a stock Ubuntu is enough.
@@ -145,7 +161,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
         return offline::offline(&root);
     }
-    let command = command_line(rest);
     if cfg!(target_os = "linux") {
         if shell {
             return Err("--shell has nothing to enter: this is already Linux".into());
@@ -158,10 +173,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some(name) => name.clone(),
         None => stage_for(rest).to_string(),
     };
-    // The container's work is this machine's work — the image built as
-    // much as the command run in it — announced here (its own xtask is
-    // under the announcement); a verb run where it stands announces
-    // itself.
+    // Announced here as well (its own xtask is under the announcement);
+    // a verb run where it stands announces itself.
     let _busy = crate::still::busy(&root, "linux")?;
     let tag = ensure_image(&root, &stage, rebuild)?;
     in_container(&root, &tag, &command, shell)
@@ -290,9 +303,7 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
         cmd.arg("--build-arg")
             .arg(format!("QT_VERSION={}", qt_version(root)?));
     }
-    let status = cmd
-        .arg(root)
-        .status()
+    let status = crate::budget::watched(cmd.arg(root))
         .map_err(|e| format!("failed to run docker build: {e}"))?;
     if !status.success() {
         return Err("docker build failed".into());
@@ -342,8 +353,7 @@ fn forget_older_images(stage: &str, keep: &str) {
 }
 
 fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
-    let mut cmd = Command::new("docker");
-    cmd.arg("run").arg("--rm");
+    let mut cmd = carried();
     // A terminal only when there is one to attach: docker refuses --tty
     // outright when the harness runs this with a pipe for stdin.
     if std::io::stdin().is_terminal() {
@@ -364,9 +374,7 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         // which machine ran it, and the container is never that machine
         // (`verify::options::census_line`).
         .arg("--env")
-        .arg(format!("{IN_CONTAINER}=1"))
-        .arg("--env")
-        .arg(format!("{}=1", crate::still::UNDER));
+        .arg(format!("{IN_CONTAINER}=1"));
 
     let mut inside = command.to_vec();
     // Kept in scope past the run below: the directory behind `/out` is
@@ -383,9 +391,14 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     } else {
         cmd.args(&inside);
     }
-    let status = cmd
-        .status()
-        .map_err(|e| format!("failed to run docker: {e}"))?;
+    // Through the budget's runner: the container goes on running when
+    // the launcher is killed, so the ledger has to know which number is
+    // still holding the machine (`crate::budget::watched`). It knows the
+    // docker command that is waiting on the container, which is as far
+    // as a process table reaches — a container whose CLI has been killed
+    // too is past what this can see, and `docker ps` is what finds it.
+    let status =
+        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
         // The line as typed, not the one `bridge` wrote: that one says
         // `--no-board` whether or not the caller did.
@@ -398,13 +411,39 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     })
 }
 
+/// A `docker run`, already carrying the marks everything a container
+/// runs is under: this command's announcement to a measurement and this
+/// command's ticket, neither of which the container may take again
+/// (`still::UNDER`, `budget::HELD`).
+///
+/// **Every container starts here, because a road that carries one mark
+/// and forgets the other is a road where the machine is counted twice**
+/// — the launcher holding a compile's weight while what it started
+/// queues for weight of its own, and a machine of such pairs where
+/// neither half can move. Three roads run a container (the command,
+/// `bare`, `offline`); the fourth (`here`, on a Linux host) marks its
+/// child the same way through `budget::under`.
+pub(super) fn carried() -> Command {
+    let mut cmd = Command::new("docker");
+    cmd.arg("run").arg("--rm");
+    for mark in [crate::still::UNDER, crate::budget::HELD] {
+        cmd.arg("--env").arg(format!("{mark}=1"));
+    }
+    cmd
+}
+
 fn here(root: &Path, command: &[String]) -> Result<(), String> {
     let (program, arguments) = command.split_first().ok_or("nothing to run")?;
-    let status = Command::new(program)
-        .args(arguments)
-        .current_dir(root)
-        .status()
-        .map_err(|e| format!("failed to run {program}: {e}"))?;
+    let mut cmd = Command::new(program);
+    cmd.args(arguments).current_dir(root);
+    // Under this command's ticket, exactly as the container's contents
+    // are ([`carried`]). Without the mark a `linux verify-ui` here holds
+    // four weight in this process while the verb it started queues for
+    // its own — the machine counted twice, and a machine full of such
+    // pairs where neither half can move.
+    crate::budget::under(&mut cmd);
+    let status =
+        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run {program}: {e}"))?;
     if status.success() {
         return Ok(());
     }

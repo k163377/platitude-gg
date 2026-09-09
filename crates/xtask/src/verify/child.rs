@@ -76,9 +76,16 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         Budget::whole(Duration::from_millis(start.opts.watchdog_ms + GRACE_MS)),
         LOOK_AGAIN,
     );
+    let app = cmd.get_program().to_string_lossy().into_owned();
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
+    // What this unit is doing, where the run is a session's own rather
+    // than a gate's step: a verb killed at the wrong moment leaves the
+    // app standing, and the room is held while it does
+    // (`crate::budget::child_started`). Silent under a gate, whose steps
+    // say it through the ticket they were handed.
+    crate::budget::child_started(child.id(), &app);
     let stdout = child.stdout.take().map(crate::app_out::collect);
     let stderr = child.stderr.take().map(crate::app_out::collect);
 
