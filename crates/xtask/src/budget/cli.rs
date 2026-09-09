@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use super::bench;
 use super::ledger::{Pool, QUIET_CEILING};
 use super::queue::Rank;
 use super::unit::{Ask, HELD, LIGHT};
@@ -12,8 +13,11 @@ use crate::wait::{Budget, LOOK_AGAIN, Wait};
 /// `cargo xtask budget` — what the machine is doing, and the hold the
 /// tests take from a process of their own.
 pub fn run(args: &[String]) -> Result<(), String> {
-    if args.first().map(String::as_str) == Some("hold") {
-        return hold(&args[1..]);
+    match args.first().map(String::as_str) {
+        Some("hold") => return hold(&args[1..]),
+        Some("bench") => return bench::run(&args[1..]),
+        Some("shaped") => return bench::shaped_run(&args[1..]),
+        _ => {}
     }
     let dir = match args.len() {
         0 => crate::tree::workspace_root(),

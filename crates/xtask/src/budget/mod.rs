@@ -81,7 +81,9 @@
 //! rule reads — the pool, the tickets and the locks under them;
 //! [`unit`] is what asks — what a unit weighs, what it holds, and what
 //! it says about the process it started; [`cli`] is `cargo xtask
+//! budget`, and [`bench`] the measurement the rule was chosen with.
 
+mod bench;
 mod cli;
 mod ledger;
 mod queue;
