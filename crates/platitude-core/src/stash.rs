@@ -102,7 +102,7 @@ pub fn parse_stashes(bytes: &[u8]) -> Result<Vec<StashEntry>, StashParseError> {
         return Err(StashParseError);
     }
     let mut out = Vec::with_capacity(tokens.len() / STASH_FIELDS);
-    for record in tokens.chunks_exact(STASH_FIELDS) {
+    for record in tokens.as_chunks::<STASH_FIELDS>().0 {
         let name = String::from_utf8_lossy(record[0]).into_owned();
         let oid = Oid::from_hex(record[1]).map_err(|_| StashParseError)?;
         let time = std::str::from_utf8(record[2])
