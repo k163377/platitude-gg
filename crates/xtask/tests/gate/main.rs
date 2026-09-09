@@ -1,6 +1,7 @@
 //! The gate on throwaway repositories: selection follows the reach of a
-//! diff, stamps follow the inputs, main refuses what is not stamped, and
-//! land rebases → gates → fast-forwards. Every test builds its own
+//! diff, stamps follow the inputs, main refuses what is not stamped,
+//! land rebases → gates → fast-forwards, and the chip guard reads what a
+//! seat is holding out of the repository. Every test builds its own
 //! repository under the OS temp directory with a git configuration of
 //! its own, so they run in parallel and read nobody's identity or hooks.
 //!
@@ -23,6 +24,7 @@ mod support;
 mod wait;
 
 mod budget;
+mod chips;
 mod hook;
 mod landing;
 mod selection;

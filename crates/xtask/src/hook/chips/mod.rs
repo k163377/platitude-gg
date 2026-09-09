@@ -1,17 +1,23 @@
-//! The task-chip guard (`spawn_task` / `dismiss_task`): the number a chip
-//! leads with, the paths two chips may not both claim, and the ledger
-//! both are judged against.
+//! The task-chip guard (`spawn_task` / `dismiss_task`): what may become
+//! a chip at all, the number one leads with, the paths two may not both
+//! claim, and the ledger they are judged against.
 //!
-//! A chip is read in a list and worked in a session of its own, so two
-//! things about it are not the chip's own business: **where it stands**
-//! among the others, and **what it will touch** that another chip has
-//! already claimed. Both were left to attention and both slipped — chips
-//! arrived at the bottom of a list they should have led, and two chips
-//! arrived for one file, whose sessions then had to be untangled.
+//! A chip is read in a list and worked in a session of its own, so three
+//! things about it are not the chip's own business: **whether it is
+//! anybody else's work**, **where it stands** among the others, and
+//! **what it will touch** that another chip has already claimed. All
+//! three were left to attention and all three slipped — the work a
+//! session was in the middle of went out as chips for other sessions to
+//! redo, chips arrived at the bottom of a list they should have led, and
+//! two chips arrived for one file, whose sessions then had to be
+//! untangled.
 //!
 //! So the harness holds them. Every chip this session stacked is
 //! remembered beside the primary checkout's `.git`, and:
 //!
+//! * a chip may not claim what this session already has open — that work
+//!   is this session's to finish, and a second branch over the same file
+//!   buys a conflict and a rebase for nothing (`at_hand`);
 //! * a title leads with its priority (`1. …`), 1 being the most
 //!   important chip live right now;
 //! * a chip that asks the user to decide wears `[任意]` after its number
@@ -22,7 +28,8 @@
 //!   work (or the decision it is waiting on) is done;
 //! * a turn does not end while the live set fails to read 1..N;
 //! * and a turn does not end saying in prose that work is left undone
-//!   while stacking no chip at all (`leftovers`).
+//!   while doing nothing about it — finishing it here, writing it into
+//!   the 確認事項 doc, or, last of the three, stacking it (`leftovers`).
 //!
 //! The ledger is this session's alone. A chip the user has since started
 //! or dropped by hand is invisible from here, and a session that ends
@@ -31,6 +38,7 @@
 
 use std::collections::BTreeSet;
 
+mod at_hand;
 mod guard;
 mod ledger;
 mod leftovers;

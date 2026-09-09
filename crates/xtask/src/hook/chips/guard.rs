@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use super::Chip;
+use super::at_hand;
 use super::ledger::{load, store};
 use crate::hook::payload::{deny, printable, string_field};
 
@@ -48,6 +49,13 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
     if live.iter().any(|chip| chip.body == body) {
         return Ok(());
     }
+    let claimed = targets(&words(asked));
+    // Asked before anything about the list is: a chip over work this
+    // session is already holding is not a chip to find a number for.
+    if let Some(objection) = at_hand::objection(&session_cwd(input), &claimed) {
+        deny(&objection);
+        return Ok(());
+    }
     if let Some(taken) = live.iter().find(|chip| chip.priority == priority) {
         deny(&format!(
             "Priority {priority} is already the live chip '{}'. Two chips at one \
@@ -60,7 +68,6 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
         ));
         return Ok(());
     }
-    let claimed = targets(&words(asked));
     for chip in &live {
         let shared = shared(&claimed, &chip.targets);
         if shared.is_empty() {
@@ -297,10 +304,11 @@ fn one_target(token: &str) -> Option<String> {
     (names_a_file || ROOTS.contains(&segments[0])).then(|| path.to_string())
 }
 
-/// The targets two chips both claim. A directory covers what is under
-/// it: a chip over `crates/platitude-app/src/ui` and a chip over one
-/// .qml inside it are the same collision.
-fn shared(claimed: &BTreeSet<String>, held: &BTreeSet<String>) -> Vec<String> {
+/// The targets two claims both cover — one chip's against another's, or
+/// a chip's against what this session has open (`at_hand`). A directory
+/// covers what is under it: a chip over `crates/platitude-app/src/ui`
+/// and a chip over one .qml inside it are the same collision.
+pub(super) fn shared(claimed: &BTreeSet<String>, held: &BTreeSet<String>) -> Vec<String> {
     claimed
         .iter()
         .filter(|one| {
@@ -333,6 +341,15 @@ fn words(asked: &str) -> String {
 /// of the answer.
 fn section<'a>(input: &'a str, key: &str) -> &'a str {
     input.find(key).map_or(input, |at| &input[at..])
+}
+
+/// Where the session asking is standing, read from the payload's own
+/// half rather than from the whole: a chip may carry a `cwd` of its own
+/// for another repository, and the first `"cwd"` in the input is the
+/// answer `string_field` gives.
+fn session_cwd(input: &str) -> String {
+    let payload = input.split("\"tool_input\"").next().unwrap_or(input);
+    string_field(payload, "cwd").unwrap_or_default()
 }
 
 /// The task id in `input`, however the harness quoted it. An MCP result

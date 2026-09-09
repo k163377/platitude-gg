@@ -31,6 +31,7 @@
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(監視しない。手順と罠は verify-ui スキル §起動 fast path)。Done の基準は不変で、段 2 はユーザーが検証・反映を指示した時に走らせる
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
 - **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。**席は選ばない・与えられる**: `cargo xtask seat`(引数なし)が空き席を lock して letter と path を返すので、それを EnterWorktree に渡す(`seats` は状況を読む道具で、座る判断には使わない)。未マージの席は続きの仕事以外触らない。全席詰まりなら増設せず報告。**席は land が返す** — main へ反映した時点で letter は roster に戻り、そのまま作業を続ければ次の編集で claim が戻る(取られていたら `cargo xtask seat` をもう一度)。land しない終わり方で返すのは `cargo xtask seat release`。寝落ちの SessionEnd では claim は残る。**完了しても main へは戻さない**(§Git 運用)
+- **残件はチップに逃がさない** — 検証・掃除・後追いの修正はこのセッションの仕事。**チップは別セッションでしかできない物だけ**(別マシン・実ウィンドウ・このセッションでは得られない判断)で、書き残すだけなら `internal-docs/P<n>-確認事項.md` へ。**触っているファイルを claim するチップは deny**(出口は `hook pre-chip` / `hook stop` の文)
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PG_ALLOW_GUI=1 cargo xtask launch`。掴まれた exe・二重起動ゲートは `kill`(どちらも自ツリーの居残りだけを扱う)。**窓のビルドがどのツリーのものかは右下が名乗る**
 
 ## Rust 規約

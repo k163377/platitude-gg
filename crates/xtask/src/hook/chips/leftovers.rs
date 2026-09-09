@@ -1,15 +1,20 @@
 //! What a turn says, in its own words, that it is leaving behind.
 //!
-//! Undone work gets written down two ways: as a chip, which waits in a
-//! list until someone starts it, and as a sentence at the end of a reply,
-//! which is read once as it scrolls past. The second kept being the only
-//! one, and what was written that way was missed.
+//! Undone work has three places to go and they do not cost the same.
+//! Finishing it in the turn that found it costs a turn — the seat is
+//! entered and the files are open. Writing it into the 確認事項 doc
+//! costs a line, in the list the user reads back. Stacking it as a chip
+//! costs a whole session on a seat of its own, rebasing onto a main that
+//! moved. The last kept being the first answer rather than the last,
+//! until a session's own verification and cleanup were going out as
+//! chips for other sessions to redo; and a sentence at the end of a
+//! reply, which is none of the three, was missed altogether.
 //!
 //! So the reply is read back before the turn ends. When it says work is
-//! undone — 未対応, 残件, 見送り, TODO — and the turn stacked no chip at
-//! all, the turn does not end. The answer is a chip, or one line saying
-//! why this leftover needs none; the second is always available, because
-//! a Stop block is not asked twice, so a sentence read wrong here costs a
+//! undone — 未対応, 残件, 見送り, TODO — and the turn neither finished it,
+//! wrote the doc nor stacked a chip, the turn does not end. One line
+//! saying why this leftover needs none of them ends it too, because a
+//! Stop block is not asked twice, so a sentence read wrong here costs a
 //! line rather than a session.
 
 use std::io::{Read, Seek, SeekFrom};
@@ -77,6 +82,18 @@ const HUMAN: &str = "\"origin\":{\"kind\":\"human\"}";
 /// The same, for the call that stacks a chip.
 const SPAWN: &str = "\"name\":\"mcp__ccd_session__spawn_task\"";
 
+/// The tools that write a file, by the name a record calls them.
+const WRITERS: [&str; 2] = ["\"name\":\"Write\"", "\"name\":\"Edit\""];
+
+/// The doc a leftover goes into when it is written down rather than
+/// spawned: `internal-docs/P<n>-確認事項.md`.
+const DOC: &str = "確認事項.md";
+
+/// Where one call's own half of a record ends: the next call in it. A
+/// turn that read the doc and wrote something else carries both words in
+/// one record otherwise.
+const NEXT_CALL: &str = "\"type\":\"tool_use\"";
+
 /// Stop: a turn does not end leaving work behind in prose alone.
 pub(crate) fn stop(input: &str) -> Result<bool, String> {
     let Some(path) = string_field(input, "transcript_path") else {
@@ -86,10 +103,10 @@ pub(crate) fn stop(input: &str) -> Result<bool, String> {
         return Ok(false);
     };
     let lines: Vec<&str> = record.lines().collect();
-    // One chip anywhere in the turn is enough: the session was already
-    // thinking in chips, and which leftover belongs in which chip is a
-    // judgement the guard has no way to make.
-    if stacked_a_chip(&lines) {
+    // One chip or one write to the doc anywhere in the turn is enough:
+    // the turn was already putting its leftovers somewhere, and which
+    // one belongs where is a judgement the guard has no way to make.
+    if answered(&lines) {
         return Ok(false);
     }
     let found = leftovers(&reply(&lines));
@@ -106,17 +123,25 @@ pub(crate) fn stop(input: &str) -> Result<bool, String> {
 /// What the block says.
 fn reason(found: &[String]) -> String {
     format!(
-        "This reply leaves work behind in prose and stacked no chip for it: {}. A \
-         sentence at the end of a turn is read as it scrolls past and then gone; \
-         the chip list is what the user comes back to. Stack each leftover as a \
-         chip (mcp__ccd_session__spawn_task, title '<n>. …' with the live set \
-         renumbered around where it belongs — or '<n>. [任意] …' when it asks the \
-         user to decide rather than recommending work — written in Japanese, its \
-         prompt naming the paths it will touch), and say in the reply which chips \
-         you stacked. If one of these needs no chip — a live chip already holds \
-         it, it is a question this conversation is waiting on the user to answer, \
-         or it is not undone work at all — say which in one line instead: this is \
-         asked once, so that answer ends the turn.",
+        "This reply leaves work behind in prose and did nothing else with it: {}. A \
+         sentence at the end of a turn is read as it scrolls past and then gone. \
+         There are three places it can go, in this order. Finish it here: the seat \
+         is entered and the files are open, and the verification of a change, the \
+         cleanup beside it and the fix it asks for next are this session's own \
+         work, not a session's worth of somebody else's. Write it down: \
+         internal-docs/P3-確認事項.md (P5 for what waits on distribution) is the \
+         list the user reads back, and it costs no seat. Stack a chip only for \
+         what cannot be done here at all — another machine, a real window, a \
+         decision this session cannot get — because a chip is a whole session on a \
+         seat of its own, rebasing onto a main that moved, and the user has asked \
+         for fewer of them (mcp__ccd_session__spawn_task, title '<n>. …' with the \
+         live set renumbered around where it belongs — or '<n>. [任意] …' when it \
+         asks the user to decide rather than recommending work — written in \
+         Japanese, its prompt naming the paths it will touch). Say in the reply \
+         which of the three each leftover got. If one needs none of them — a live \
+         chip already holds it, it is a question this conversation is waiting on \
+         the user to answer, or it is not undone work at all — say which in one \
+         line instead: this is asked once, so that answer ends the turn.",
         found
             .iter()
             .map(|sentence| format!("'{sentence}'"))
@@ -145,19 +170,35 @@ fn tail(path: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&bytes[from..]).into_owned())
 }
 
-/// Whether this turn already answered with a chip. The turn reaches back
-/// to the last thing the user typed; everything between is the harness
-/// and the assistant.
-fn stacked_a_chip(lines: &[&str]) -> bool {
+/// Whether this turn already put its leftovers somewhere: a chip
+/// stacked, or the 確認事項 doc written. The turn reaches back to the
+/// last thing the user typed; everything between is the harness and the
+/// assistant.
+fn answered(lines: &[&str]) -> bool {
     for line in lines.iter().rev() {
         if line.contains(HUMAN) {
             return false;
         }
-        if line.contains(SPAWN) {
+        if line.contains(SPAWN) || wrote_the_doc(line) {
             return true;
         }
     }
     false
+}
+
+/// Whether this record wrote the doc. A tool's name comes right before
+/// the input it belongs to, so the doc is looked for between a writer's
+/// name and the next call rather than anywhere in the record — reading
+/// the doc is not writing it, and the two calls sit in one record
+/// readily enough.
+fn wrote_the_doc(line: &str) -> bool {
+    WRITERS
+        .iter()
+        .flat_map(|writer| line.match_indices(writer))
+        .any(|(at, writer)| {
+            let after = &line[at + writer.len()..];
+            after.split(NEXT_CALL).next().unwrap_or(after).contains(DOC)
+        })
 }
 
 /// The text the user is left looking at: every block the assistant spoke
@@ -271,7 +312,7 @@ fn quote(sentence: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{leftovers, quote, reply, stacked_a_chip, unfinished};
+    use super::{answered, leftovers, quote, reply, unfinished};
 
     /// One record of each kind, in the shape the harness writes them.
     fn human(text: &str) -> String {
@@ -293,6 +334,24 @@ mod tests {
             "{{\"message\":{{\"role\":\"assistant\",\"content\":[{{\"type\":\"tool_use\",\
              \"name\":\"{name}\",\"input\":{{}}}}]}},\"type\":\"assistant\"}}"
         )
+    }
+
+    /// One call over a file, as a record of its own.
+    fn on_file(name: &str, path: &str) -> String {
+        format!(
+            "{{\"message\":{{\"role\":\"assistant\",\"content\":[{{\"type\":\"tool_use\",\
+             \"name\":\"{name}\",\"input\":{{\"file_path\":\"{path}\"}}}}]}},\
+             \"type\":\"assistant\"}}"
+        )
+    }
+
+    /// One record holding two calls: the doc read, another file written.
+    fn read_the_doc_and_wrote_elsewhere() -> String {
+        "{\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\
+         \"name\":\"Edit\",\"input\":{\"file_path\":\"crates/x/src/refs.rs\"}},\
+         {\"type\":\"tool_use\",\"name\":\"Read\",\"input\":\
+         {\"file_path\":\"internal-docs/P3-確認事項.md\"}}]},\"type\":\"assistant\"}"
+            .to_string()
     }
 
     fn result() -> String {
@@ -321,12 +380,24 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_that_stacked_a_chip_has_answered_already() {
+    fn a_turn_that_put_its_leftovers_somewhere_has_answered_already() {
         let stacked = [
             human("直して"),
             called("mcp__ccd_session__spawn_task"),
             result(),
             said("1 件はチップにした"),
+        ];
+        let written = [
+            human("直して"),
+            on_file("Edit", "internal-docs/P3-確認事項.md"),
+            result(),
+            said("1 件は確認事項へ書いた"),
+        ];
+        let read_it = [
+            human("直して"),
+            on_file("Read", "internal-docs/P3-確認事項.md"),
+            result(),
+            said("未対応が 1 件"),
         ];
         let bare = [
             human("直して"),
@@ -338,11 +409,20 @@ mod tests {
             human("mcp__ccd_session__spawn_task の話"),
             said("未対応が 1 件"),
         ];
-        assert!(stacked_a_chip(&borrow(&stacked)));
-        assert!(!stacked_a_chip(&borrow(&bare)));
+        assert!(answered(&borrow(&stacked)));
+        assert!(answered(&borrow(&written)));
+        // Reading the doc is not writing it — and neither is writing
+        // something else in the record that read it.
+        assert!(!answered(&borrow(&read_it)));
+        assert!(!answered(&borrow(&[
+            human("直して"),
+            read_the_doc_and_wrote_elsewhere(),
+            said("未対応が 1 件"),
+        ])));
+        assert!(!answered(&borrow(&bare)));
         // The user's own words are where the turn stops, whatever they
         // spell — a prompt about the tool is not a call to it.
-        assert!(!stacked_a_chip(&borrow(&quoted)));
+        assert!(!answered(&borrow(&quoted)));
     }
 
     #[test]

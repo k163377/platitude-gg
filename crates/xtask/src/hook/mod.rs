@@ -55,12 +55,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
 }
 
 /// Stop: one JSON object at most. The chip guards ask first — how the
-/// list is numbered, then what the reply says it is leaving out of the
-/// list — and only while this turn has an ask left: a block is put once,
-/// or the answer to it is met by the same block again. When they have
-/// nothing to say, the seat's gate standing goes to the user as a system
-/// message — a seat reported before its tip was gated is what the user
-/// reads there.
+/// list is numbered, then what the reply says it is leaving behind
+/// without putting it anywhere — and only while this turn has an ask
+/// left: a block is put once, or the answer to it is met by the same
+/// block again. When they have nothing to say, the seat's gate standing
+/// goes to the user as a system message — a seat reported before its tip
+/// was gated is what the user reads there.
 fn stop(input: &str) -> Result<(), String> {
     if payload::bool_field(input, "stop_hook_active") != Some(true) {
         if chips::numbering(input)? {
