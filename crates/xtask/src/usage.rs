@@ -333,6 +333,40 @@ const TAIL: &str = "  shipped [--no-build]
       lock file each, held open by the process: a lock nobody holds is a
       note whoever meets it clears, whatever became of the process.
 
+  budget [--dir <tree>]
+      What the machine's one budget is doing: how much of it the running
+      units hold, the queue behind them in the order they will be handed
+      it, and the landings in line. Every gate on the machine draws on
+      this — one pool over both sides, every seat and every step, sized
+      at one gate's widest moment (internal-docs/反映前テストの機械化.md
+      §機械の予算と優先キュー) — so two gates at once share one gate's
+      worth rather than adding a second machine's. The order is what
+      moves main, then a window somebody is waiting at (`launch`), then
+      every test; while a unit of one rank is short of room, nothing
+      below it is admitted into what it is waiting for. A ticket whose
+      process is gone holds nothing: liveness is the lock beside it, and
+      the next reader clears it.
+
+  budget bench [--gates <n>] [--land] [--land-after-ms <n>] [--scenarios]
+               [--scale <n>] [--jobs <n>]
+      The admission rule against the one it replaced, on this machine,
+      under the same offered load: a model of a gate's units at the
+      durations measured off real ones, each burning real processor time
+      on as many threads as its weight says, in a ledger of the run's
+      own. Says, for each rule, when the landing finished, when
+      everything finished, the queueing and running time in all, and the
+      failures. `--scenarios` runs the three the comparison owes: one
+      gate alone, several at once, and a landing arriving into several
+      at once.
+
+  budget hold --until <file> [--say <file>] [--weight <n>]
+              [--landing | --launch] [--turn] [--dir <tree>]
+              [--seat <name>] [--what <text>]
+      One ticket, taken from a process of its own and held until the file
+      appears. What the suite drives the priority, the exclusion and a
+      killed holder with (crates/xtask/tests/gate/budget.rs) — both edges
+      are the caller's, so nothing there waits on a clock.
+
   linux [--rebuild] [--shell] [--stage core|app] <command…>
       Run a command against this checkout on Ubuntu, in a container built
       from ci/linux/Dockerfile. On Linux it skips the container and runs
@@ -397,7 +431,10 @@ const TAIL: &str = "  shipped [--no-build]
       and confirm it outlived its first second. Run it with
       PG_ALLOW_GUI=1 in front — a real window is the user's ask. The app
       keeps a per-tree settings store on its own, so seats never fight
-      over one instance lock.
+      over one instance lock. Somebody is waiting at the screen for this,
+      so its build takes the machine ahead of every test and behind a
+      landing (`budget`, and it says so when it waited); the window
+      itself holds none of it.
 
   seat [release]
       Hands this session a worktree seat, and takes no argument: the
