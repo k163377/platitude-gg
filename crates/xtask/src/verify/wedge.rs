@@ -10,9 +10,19 @@
 //! been silent and what it last said, what pictures reached the disk, and
 //! how full the machine was.
 //!
-//! **Read at the ceiling and nowhere else.** Every line below costs a
-//! directory listing and a probe of a handful of lock files, and a run
-//! that answers never reaches any of it.
+//! **[`TRAIL_FILE`] is the one of these that does not need the app to
+//! still be able to answer.** The report is written once, at the end, by
+//! a thread inside the process; the trail is written as each step begins.
+//! A run killed from outside, or stopped past its own `exiting` where the
+//! exit has already ended every other thread, leaves the second and not
+//! the first — which is why a missing report says only that the write was
+//! never reached, and never where the process stood.
+//!
+//! **Read at a red that may be a process that stopped, and nowhere
+//! else** — the ceiling, and the one red that is not a ceiling at all
+//! ([`trail`], [`lanes_line`]). Every line below costs a directory
+//! listing and a probe of a handful of lock files, and a run that answers
+//! never reaches any of it.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -26,26 +36,32 @@ use std::time::Duration;
 /// beside it.
 const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
+const TRAIL_FILE: &str = "stations.txt";
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).
 const LEDGER: &str = "pg-budget";
 
-/// Clears any account left in `shot_dir` by whoever had it last.
+/// Clears any account left in `shot_dir` by whoever had it last — the
+/// report and the trail both.
 ///
 /// **Before the app starts, every run.** A named `--shot-dir` is allowed
 /// to outlive the run that made it (`verify::run`), so without this a
 /// run reaped at the ceiling would be handed the *previous* run's
 /// account — a different pid and a different station, read as its own.
+/// The app empties the trail again as it comes up, which covers a run
+/// this could not clear; this covers the run that never comes up at all.
 pub(super) fn clear_any_account(shot_dir: &Path) {
-    if let Err(error) = std::fs::remove_file(shot_dir.join(REPORT_FILE))
-        && error.kind() != std::io::ErrorKind::NotFound
-    {
-        println!(
-            "  note: {} could not be cleared ({error}) — a wedge here would read as the last \
-             run's",
-            shot_dir.join(REPORT_FILE).display()
-        );
+    for file in [REPORT_FILE, TRAIL_FILE] {
+        if let Err(error) = std::fs::remove_file(shot_dir.join(file))
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            println!(
+                "  note: {} could not be cleared ({error}) — a wedge here would read as the last \
+                 run's",
+                shot_dir.join(file).display()
+            );
+        }
     }
 }
 
@@ -74,12 +90,19 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
             ran.elapsed.as_secs_f32()
         ),
     }];
+    lines.extend(trail(shot_dir));
+    lines.extend(stopped_in(shot_dir, ran.elapsed));
     let own = self_account(shot_dir);
     lines.push(match &own {
         Some(said) => format!("  the app's own account: {said}"),
+        // **Only that the write was never reached.** The thread logs
+        // before it saves, and there are ways to stop a process that
+        // never reach either: a kill from outside, and a wedge past
+        // `exiting`, where the exit has already ended every other thread.
+        // Where it stood is the trail's to say, above.
         None => format!(
-            "  the app left no {REPORT_FILE}: it never reached its own deadline, so what ended \
-             it is outside the process"
+            "  the app left no {REPORT_FILE}: it did not reach the write at the end of its own \
+             deadline, which says nothing more than that — the trail above is where it stood"
         ),
     });
     // For both ceilings. A process that ended itself named the station it
@@ -108,6 +131,78 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
     ));
     lines.push(format!("  {}", lanes_line()));
     lines
+}
+
+/// The stations the run reached, as the one line to print under any red
+/// where a process may have stopped.
+///
+/// **The half that does not need the process to still be answering.**
+/// Every mark here was on the disk before the step it names began, so a
+/// run stopped in a way that leaves no report of its own still says how
+/// far it got — which is the whole of what a `TIMED OUT` used to be
+/// missing.
+///
+/// The seconds are the app's own clock, started in `main`, and the run's
+/// are the parent's, started at the spawn; the two differ by however long
+/// the process took to get going. Nothing here subtracts one from the
+/// other — [`stopped_in`] does, and only where the process is known to
+/// have stopped.
+pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
+    let Some(marks) = read_trail(shot_dir) else {
+        return vec![format!(
+            "  the run left no {TRAIL_FILE}: it did not reach the first station, so nothing it \
+             did is recorded on this side"
+        )];
+    };
+    if marks.is_empty() {
+        return vec![format!(
+            "  the run's {TRAIL_FILE} is empty: it was made and no station was reached after it"
+        )];
+    }
+    vec![format!(
+        "  the stations it reached: {}",
+        marks
+            .iter()
+            .map(|(at, station)| format!("{station} {at:.1}s"))
+            .collect::<Vec<_>>()
+            .join(" > ")
+    )]
+}
+
+/// Which step the run was stopped in, for the ceiling that stopped it.
+///
+/// **Only at a ceiling.** A run the process ended for itself walked every
+/// station it had left and the seconds after the last one are its exit,
+/// not a step it was held in; said there, this line would name a wedge
+/// where there was none. `None` where there is no trail to read.
+fn stopped_in(shot_dir: &Path, elapsed: Duration) -> Option<String> {
+    let (last_at, last) = read_trail(shot_dir)?.pop()?;
+    Some(format!(
+        "  it got as far as `{last}` {last_at:.1}s into its own run and no further, so the \
+         {:.1}s between that and the ceiling were spent in that step",
+        elapsed.as_secs_f32().max(last_at) - last_at
+    ))
+}
+
+/// The trail as pairs of seconds and station, in the order they were
+/// reached. `None` where the file is not there at all, which is a
+/// different answer from an empty one.
+///
+/// **A line that does not parse is dropped, never guessed at.** The file
+/// is appended to a line at a time by a process that can be stopped
+/// between the write and the newline, so the tail of it is the one place
+/// a torn record can appear.
+fn read_trail(shot_dir: &Path) -> Option<Vec<(f32, String)>> {
+    let text = std::fs::read_to_string(shot_dir.join(TRAIL_FILE)).ok()?;
+    Some(
+        text.lines()
+            .filter_map(|line| {
+                let (at, station) = line.split_once(' ')?;
+                let at = at.strip_suffix('s')?.parse().ok()?;
+                (!station.is_empty()).then(|| (at, station.to_owned()))
+            })
+            .collect(),
+    )
 }
 
 /// What the app wrote down about itself, if it got that far.
@@ -345,7 +440,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
-    use super::{Counted, account, at_a_ceiling, clear_any_account, held_in};
+    use super::{Counted, account, at_a_ceiling, clear_any_account, held_in, trail};
 
     /// A lanes directory of this test's own.
     fn lanes(name: &str) -> PathBuf {
@@ -588,6 +683,64 @@ mod tests {
         assert!(said.contains("silent for the last 138.0s"), "{said}");
     }
 
+    /// The trail is the record that does not need the process: a run
+    /// stopped where nothing inside it can report still says which step
+    /// it was in, and how much of the run was spent there.
+    #[test]
+    fn a_run_that_left_no_report_is_still_placed_by_its_trail() {
+        let dir = lanes("trail");
+        std::fs::write(
+            dir.join("stations.txt"),
+            "0.0s starting\n0.3s event-loop\n1.9s left-event-loop\n2.1s exiting\n",
+        )
+        .expect("a trail to read back");
+
+        let said = account(&dir, &ran(true, None), &[]).join("\n");
+
+        assert!(said.contains("starting 0.0s > event-loop 0.3s"), "{said}");
+        assert!(said.contains("exiting 2.1s"), "{said}");
+        assert!(said.contains("it got as far as `exiting` 2.1s"), "{said}");
+        // 140s reaped, 2.1s of stations: the rest of it was the exit.
+        assert!(said.contains("137.9s"), "{said}");
+        // And the missing report is read for what it is: the write was
+        // never reached, which on this shape it never can be.
+        assert!(said.contains("did not reach the write"), "{said}");
+        assert!(
+            !said.contains("never reached its own deadline"),
+            "the absence of a report does not place the deadline thread: {said}"
+        );
+    }
+
+    /// A trail is appended to a line at a time, so the one place a torn
+    /// record can appear is its tail — dropped rather than read as a
+    /// station, which is the only reading that could name the wrong step.
+    #[test]
+    fn a_half_written_last_line_is_dropped_rather_than_guessed_at() {
+        let dir = lanes("trail-torn");
+        std::fs::write(
+            dir.join("stations.txt"),
+            "0.0s starting\n0.3s event-loop\n0.9",
+        )
+        .expect("a trail cut off mid-line");
+
+        let said = trail(&dir).join("\n");
+
+        assert!(said.contains("starting 0.0s > event-loop 0.3s"), "{said}");
+        assert!(!said.contains("0.9"), "{said}");
+    }
+
+    /// No file at all and an empty one are different answers: the first
+    /// is a run that never reached the station the ceiling itself writes,
+    /// and reading them as one would call a process that never started
+    /// one that started and stood still.
+    #[test]
+    fn a_trail_nobody_left_and_an_empty_one_read_differently() {
+        let dir = lanes("trail-absent");
+        assert!(trail(&dir).join("\n").contains("left no stations.txt"));
+        std::fs::write(dir.join("stations.txt"), "").expect("an emptied trail");
+        assert!(trail(&dir).join("\n").contains("is empty"));
+    }
+
     /// A named `--shot-dir` outlives the run that made it, so an account
     /// left in one belongs to whoever had it last until this run starts.
     /// Reading a previous run's pid and station as this run's is worse
@@ -600,12 +753,16 @@ mod tests {
             "wedged in `the event loop` (pid 1)\n",
         )
         .expect("a report from the run before");
+        std::fs::write(dir.join("stations.txt"), "0.0s starting\n9.9s hub-down\n")
+            .expect("a trail from the run before");
 
         clear_any_account(&dir);
 
         let said = account(&dir, &ran(true, None), &[]).join("\n");
         assert!(said.contains("left no wedge.txt"), "{said}");
         assert!(!said.contains("pid 1"), "{said}");
+        assert!(said.contains("left no stations.txt"), "{said}");
+        assert!(!said.contains("hub-down"), "{said}");
     }
 
     /// Clearing what is not there is what every fresh run does.

@@ -582,6 +582,7 @@ fn select(
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.whole));
     steps.extend(qmltest_steps(reach, read.whole));
+    steps.extend(wedge_steps(reach, read.whole));
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
@@ -682,6 +683,54 @@ fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
             &linux_inputs,
         ),
     ]
+}
+
+/// What the record a stopped run leaves is made of, on both sides of the
+/// pipe: the stations and the trail the app writes, the teardown that
+/// passes them, and the parent that reads them back
+/// (`verify::faults`).
+fn record_of_a_wedge() -> [String; 6] {
+    let (app, xtask) = (app(), "crates/xtask/src/verify");
+    [
+        format!("{app}/src/harness/deadline.rs"),
+        format!("{app}/src/main.rs"),
+        format!("{app}/src/hub/life.rs"),
+        format!("{xtask}/wedge.rs"),
+        format!("{xtask}/faults.rs"),
+        format!("{xtask}/outcome.rs"),
+    ]
+}
+
+/// Three runs stopped on purpose, when a change reaches what would read
+/// them back.
+///
+/// **Selected by its own files rather than by the harness.** Every one of
+/// these is a held run paid for in wall clock, and what they check is one
+/// mechanism: nothing outside [`record_of_a_wedge`] can quietly stop a
+/// stopped run from being readable.
+///
+/// **Host only.** The two sides run the same record through the same
+/// mount, and every verb step already proves the container carries a
+/// file out of it; a second copy of these would buy the same answer at
+/// the container's pace.
+fn wedge_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
+    let inputs = record_of_a_wedge();
+    if !whole && !reach.iter().any(|file| inputs.contains(file)) {
+        return Vec::new();
+    }
+    let mut wedge = step(
+        "wedge-check",
+        Side::Host,
+        false,
+        xtask(&["wedge-check"]),
+        &inputs,
+    );
+    // It drives verify-ui, which is the release build with the harness in
+    // it: the same one the verbs are run against, and built once for all
+    // of them.
+    wedge.builds_app = true;
+    wedge.release = true;
+    vec![wedge]
 }
 
 /// clippy for every crate the reach enters, on both sides: the host's

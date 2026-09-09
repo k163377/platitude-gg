@@ -14,6 +14,16 @@
 //! the same deadline and, if the process is still standing, writes down
 //! where it stood and ends it.
 //!
+//! **And the stations go to disk as they are reached** ([`TRAIL_FILE`]),
+//! which is the half that does not depend on the process still being able
+//! to answer for itself. The thread above reports once, at the end, and
+//! there are ways to stop a run that never reach it: a kill from outside,
+//! and — on Windows — anything past [`Station::Exiting`], where
+//! `ExitProcess` has already ended every other thread before the detach
+//! handlers run. A run stopped in one of those leaves no report, and the
+//! absence of one says only that the write was never reached
+//! (`xtask::verify::wedge`); the trail is what says where it stood.
+//!
 //! **The ceiling is a diagnosis and nothing else** (.claude/rules/core.md
 //! §非同期・並行テスト). What the thread finds is never a pass, and what it
 //! writes names the limit it met: a station that stood still for the
@@ -34,7 +44,7 @@
 //! through ([`super::report`]), and the thread wakes past a ceiling no
 //! passing run reaches.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -72,6 +82,18 @@ pub(crate) const WEDGED: i32 = 97;
 /// and carried out of the container with them (`xtask::keepsakes`).
 pub(crate) const REPORT_FILE: &str = "wedge.txt";
 
+/// The trail, beside the pictures: one line per station — `<seconds>
+/// <slug>` — appended as it is reached, and emptied by [`watch`] before
+/// the run starts.
+///
+/// **What the parent can read whatever ended the run.** [`STOOD`] is in
+/// the process's memory and reaches the disk only through [`REPORT_FILE`],
+/// which is written once and only by a process still able to write; the
+/// trail is on the disk before each step begins and so does not depend on
+/// the step ending. Read at a ceiling and nowhere else
+/// (`xtask::verify::wedge`).
+const TRAIL_FILE: &str = "stations.txt";
+
 /// The places a run passes through that a wedge can be in. Coarse on
 /// purpose: this is the stack the process cannot be asked for once it has
 /// stopped answering, kept by hand at the few steps that block.
@@ -92,6 +114,13 @@ pub(crate) enum Station {
     RunDirClearing = 7,
     /// The hub is down and only the exit is left.
     HubDown = 8,
+    /// Inside `std::process::exit`, which is the one step no report can
+    /// come back from: on Windows `ExitProcess` ends every other thread —
+    /// the one below among them — before the loaded libraries are given
+    /// their detach, so a process that hangs in one of those hangs with
+    /// nothing left running to say so. Only the trail can name it, which
+    /// is the whole reason this station is in the list.
+    Exiting = 9,
 }
 
 impl Station {
@@ -99,7 +128,7 @@ impl Station {
     /// decodes by and what the tests walk. A station added to the enum
     /// is added here too — [`Station::name`] stops compiling until the
     /// enum is walked, and this is the list beside it.
-    const ALL: [Station; 9] = [
+    const ALL: [Station; 10] = [
         Self::Starting,
         Self::EventLoop,
         Self::LeftEventLoop,
@@ -109,6 +138,7 @@ impl Station {
         Self::RuntimeStopping,
         Self::RunDirClearing,
         Self::HubDown,
+        Self::Exiting,
     ];
 
     fn name(self) -> &'static str {
@@ -122,6 +152,27 @@ impl Station {
             Self::RuntimeStopping => "stopping the runtime",
             Self::RunDirClearing => "clearing the run directory",
             Self::HubDown => "the hub is down",
+            Self::Exiting => "exiting",
+        }
+    }
+
+    /// The one word a station is named by outside this file: what the
+    /// trail carries, and what `--fault-hang` is answered with
+    /// (`xtask::verify::faults`). One vocabulary for the two so that a
+    /// check can ask for a station by the name it will read back;
+    /// [`Station::name`] stays the prose the report is written in.
+    fn slug(self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::EventLoop => "event-loop",
+            Self::LeftEventLoop => "left-event-loop",
+            Self::SettingsFlush => "settings-flush",
+            Self::TabsClosing => "tabs-closing",
+            Self::WritesJoining => "writes-joining",
+            Self::RuntimeStopping => "runtime-stopping",
+            Self::RunDirClearing => "run-dir-clearing",
+            Self::HubDown => "hub-down",
+            Self::Exiting => "exiting",
         }
     }
 
@@ -181,16 +232,79 @@ static HEARD: Mutex<Option<(String, Duration)>> = Mutex::new(None);
 /// nothing else: a process that was not handed a ceiling has no clock,
 /// which is what tells [`at`] and [`heard`] there is nothing to record.
 static CLOCK: OnceLock<Instant> = OnceLock::new();
+/// Where the trail is kept, for a run that has somewhere to keep one.
+/// Unset in every other process — the shipped build, a window somebody
+/// opened, a run handed a ceiling and no shot directory — so the trail
+/// costs those nothing but the load that finds it empty.
+static TRAIL: OnceLock<PathBuf> = OnceLock::new();
 
 /// Records where the process has got to. Called from the steps
-/// themselves, so it must stay this cheap: one load, one store.
+/// themselves, and ten times in the whole life of a run: one load and one
+/// store in every process nobody is driving, and one short append beside
+/// them in a run that was handed a ceiling and a place to write.
 pub(crate) fn at(station: Station) {
     let Some(clock) = CLOCK.get() else {
         return;
     };
     let reached = clock.elapsed();
     STOOD.store(Stood { station, reached }.pack(), Ordering::Relaxed);
+    leave_a_mark(station, reached);
+    hold_here(station);
 }
+
+/// Appends one station to the trail.
+///
+/// **Opened and closed around each line.** Nothing holds the file between
+/// stations, so a process that stops answering is not also holding the
+/// directory its pictures are in open — and a line that is on the disk is
+/// there whatever becomes of the step it announces.
+fn leave_a_mark(station: Station, reached: Duration) {
+    let Some(path) = TRAIL.get() else {
+        return;
+    };
+    if let Err(error) = append(path, &format!("{} {}\n", secs(reached), station.slug())) {
+        // Only where the pictures' own directory refuses a write, which
+        // is a run with worse trouble than this one.
+        tracing::warn!(%error, station = station.slug(), "a station did not reach the trail");
+    }
+}
+
+fn append(path: &Path, line: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    file.write_all(line.as_bytes())
+}
+
+/// Holds the process at one station for good, where a run asked to be
+/// stopped there (`PG_FAULT_HANG`, `xtask::verify::faults`).
+///
+/// **After the mark and never before it.** What a held run is for is the
+/// record: it has written the station it is held at by the time it stops,
+/// and whether the parent can read that back is the thing being checked.
+#[cfg(feature = "automation")]
+fn hold_here(station: Station) {
+    /// How long a held run sleeps between doing nothing at all. Only how
+    /// often the thread wakes: a hold ends at the ceiling outside it and
+    /// at nothing this counts.
+    const NAP: Duration = Duration::from_secs(1);
+
+    if super::knobs().fault_hang != station.slug() {
+        return;
+    }
+    tracing::error!(target: "bench", "fault: held at `{}` for good", station.slug());
+    loop {
+        // waits(ceiling): the fault is the wedge under test, and a ceiling is the only way out of it
+        std::thread::sleep(NAP);
+    }
+}
+
+/// A build without the harness has no fault to be held by, and is not
+/// asked.
+#[cfg(not(feature = "automation"))]
+fn hold_here(_station: Station) {}
 
 /// Takes the last word off the channel QML reports through
 /// ([`super::report`]). What it is worth is the timestamp: the report was
@@ -227,17 +341,42 @@ pub(crate) fn watch() {
     let clock = *CLOCK.get_or_init(Instant::now);
     let shot_dir = knobs.shot_dir.clone();
     let ceiling = Duration::from_millis(ceiling);
-    // Detached: nothing joins it, and a process that ends on time takes it
-    // with it.
-    let spawned = std::thread::Builder::new()
-        .name("pg-deadline".into())
-        .spawn(move || {
-            let ended = hold_out(clock, ceiling);
-            end_it(clock, &shot_dir, &ended);
-        });
-    if let Err(error) = spawned {
-        tracing::warn!(%error, "no deadline thread: a wedged run would only be reaped");
+    // The trail comes up before the thread and before the first station.
+    // Emptied rather than added to: a named `--shot-dir` outlives the run
+    // that made it (`xtask::verify::run`), and the last run's stations
+    // read as this one's.
+    if !shot_dir.is_empty() {
+        let path = Path::new(&shot_dir).join(TRAIL_FILE);
+        match std::fs::write(&path, "") {
+            Ok(()) => {
+                TRAIL.get_or_init(|| path);
+            }
+            Err(error) => {
+                tracing::warn!(%error, "no trail: a run that stops here would leave no stations");
+            }
+        }
     }
+    if knobs.fault_no_deadline {
+        // The shape a wedge past `exiting` has of its own accord, asked
+        // for on purpose: no report can come, and what the parent reads
+        // is the trail or nothing (`xtask::verify::faults`).
+        tracing::warn!(target: "bench", "fault: no deadline thread; only the trail can say where this run stood");
+    } else {
+        // Detached: nothing joins it, and a process that ends on time
+        // takes it with it.
+        let spawned = std::thread::Builder::new()
+            .name("pg-deadline".into())
+            .spawn(move || {
+                let ended = hold_out(clock, ceiling);
+                end_it(clock, &shot_dir, &ended);
+            });
+        if let Err(error) = spawned {
+            tracing::warn!(%error, "no deadline thread: a wedged run would only be reaped");
+        }
+    }
+    // Last, so that a run held at the first station is held by a process
+    // that already has its ceiling and its trail.
+    at(Station::Starting);
 }
 
 /// Which limit a look met.
@@ -451,6 +590,33 @@ mod tests {
     #[test]
     fn a_number_nobody_wrote_reads_as_the_start() {
         assert!(Station::of(200) == Station::Starting);
+    }
+
+    /// The trail is read back by the word, and `--fault-hang` asks for a
+    /// station by the same one (`xtask::verify::faults`). Two stations
+    /// sharing a word would place a wedge at whichever the reader thought
+    /// of first, and a word with a space in it would not survive the line
+    /// the trail is written as.
+    #[test]
+    fn every_station_has_one_word_of_its_own() {
+        let mut said: Vec<&str> = Station::ALL.iter().map(|s| s.slug()).collect();
+        said.sort_unstable();
+        let spelled = said.len();
+        said.dedup();
+        assert_eq!(said.len(), spelled, "two stations answer to one word");
+        for station in Station::ALL {
+            let slug = station.slug();
+            assert!(!slug.is_empty() && !slug.contains(' '), "{slug}");
+        }
+    }
+
+    /// The last station, and the one the report cannot come from: the
+    /// exit ends every other thread of its own accord, so a hang past it
+    /// is only ever named by the trail.
+    #[test]
+    fn the_exit_is_a_station_of_its_own() {
+        assert_eq!(Station::Exiting.slug(), "exiting");
+        assert_eq!(Station::ALL.last().copied(), Some(Station::Exiting));
     }
 
     /// One number carries both, so a look reads a station with the time

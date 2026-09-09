@@ -52,6 +52,19 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           arrives; never chooses the shot, and never an
                           assertion that a verb is quick (default 600000).
                           Lower it only to diagnose the wait itself
+        --fault-hang <station>
+                          hold the app at that station for good, by the
+                          word the trail names it with: starting,
+                          event-loop, left-event-loop, settings-flush,
+                          tabs-closing, writes-joining, runtime-stopping,
+                          run-dir-clearing, hub-down, exiting. A run that
+                          cannot pass; what `wedge-check` drives.
+        --fault-no-deadline
+                          start it with no deadline thread, so it leaves
+                          no wedge.txt however it is stopped — the shape a
+                          run held past `exiting` has anyway, since the
+                          exit ends every other thread before the loaded
+                          libraries are given their detach
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run

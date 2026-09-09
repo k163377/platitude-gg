@@ -215,6 +215,15 @@ pub(super) fn announce(
                  wedge is not what this is. {}",
                 super::wedge::lanes_line()
             );
+            // And the stations under that, which say the same thing from
+            // the other side: a run whose trail stops at the event loop
+            // never left it, so what did not arrive is the verb's
+            // completion and not the process. Read here as well as at the
+            // ceiling because this is the red where the two are told
+            // apart ([`super::wedge::trail`]).
+            for line in super::wedge::trail(shot_dir) {
+                println!("{line}");
+            }
         }
     }
     if outcome.write_sank_it() {

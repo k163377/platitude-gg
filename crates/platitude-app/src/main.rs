@@ -318,6 +318,12 @@ fn main() {
         drop(lock);
         start_again();
     }
+    // The last thing said, because it is the last thing that can be: the
+    // exit ends every other thread before the loaded libraries are given
+    // their detach, so a process that hangs in one of those has nothing
+    // left running to report it and only the trail names this step
+    // (`harness::deadline`).
+    harness::station(harness::Station::Exiting);
     std::process::exit(code);
 }
 

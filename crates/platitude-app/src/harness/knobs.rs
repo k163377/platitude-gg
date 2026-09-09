@@ -51,6 +51,16 @@ pub(crate) struct Knobs {
     /// `PG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
     /// bounded. It never chooses when a screenshot is taken.
     pub watchdog_ms: i32,
+    /// `PG_FAULT_HANG` — the station to hold this run at for good, by the
+    /// one word the trail names it with (`harness::deadline`). The two
+    /// shapes a run that stops answering has are made to order with it,
+    /// so that what the parent reads back can be checked rather than
+    /// hoped for (`xtask::verify::faults`).
+    pub fault_hang: String,
+    /// `PG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
+    /// run leaves no report of its own however it ends. The shape a wedge
+    /// past `exiting` has anyway, asked for where it can be arranged.
+    pub fault_no_deadline: bool,
     /// `PG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
@@ -141,6 +151,8 @@ fn read() -> Knobs {
         shot_dir: text("PG_SHOT_DIR").replace('\\', "/"),
         other_git: text("PG_OTHER_GIT"),
         watchdog_ms: text("PG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
+        fault_hang: text("PG_FAULT_HANG"),
+        fault_no_deadline: on("PG_FAULT_NO_DEADLINE"),
         select: on("PG_AUTO_SELECT"),
         scroll: on("PG_AUTO_SCROLL"),
         perf: on("PG_AUTO_PERF"),
@@ -202,6 +214,10 @@ mod tests {
             "a build that reads no environment cannot find anything driving it"
         );
         assert_eq!(knobs.watchdog_ms, 0);
+        assert!(
+            knobs.fault_hang.is_empty() && !knobs.fault_no_deadline,
+            "a run nobody is driving is held by nothing and keeps its own deadline"
+        );
         assert!(
             knobs.fake_pr.is_empty(),
             "a badge nothing joined in is one nobody can be handed"

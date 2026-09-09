@@ -50,6 +50,16 @@ pub(super) struct Options {
     /// Diagnostic ceiling for a run whose causal completion never arrives
     /// ([`WATCHDOG_MS`]).
     pub(super) watchdog_ms: u64,
+    /// Hold the app at the station this names, for good (`PG_FAULT_HANG`
+    /// — the words are `harness::deadline`'s). **A run that will not
+    /// pass**: it is how the two shapes a wedged run comes in are made to
+    /// order, so that what the parent reads back can be checked rather
+    /// than waited for (`super::faults`).
+    pub(super) fault_hang: String,
+    /// Start the app with no deadline thread (`PG_FAULT_NO_DEADLINE`), so
+    /// it leaves no report of its own however it is stopped — the shape a
+    /// wedge past `exiting` has anyway.
+    pub(super) fault_no_deadline: bool,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
     /// run unless one is named, so a headless run never reads or writes
@@ -100,6 +110,11 @@ impl Options {
             || !self.repo.is_empty()
             || self.restore
             || self.config_dir.is_some()
+            // A run made to wedge shows nothing: it never reaches the
+            // walk the census is written off, and the line would be one
+            // nobody could type again to a green.
+            || !self.fault_hang.is_empty()
+            || self.fault_no_deadline
             || std::env::var_os(crate::linux::IN_CONTAINER).is_some()
         {
             return None;
@@ -178,6 +193,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         scroll_to: String::new(),
         system_title_bar: false,
         watchdog_ms: WATCHDOG_MS,
+        fault_hang: String::new(),
+        fault_no_deadline: false,
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -226,6 +243,13 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .parse()
                     .map_err(|e| format!("--watchdog-ms: {e}"))?;
             }
+            "--fault-hang" => {
+                opts.fault_hang = it
+                    .next()
+                    .ok_or("--fault-hang needs a station (e.g. exiting)")?
+                    .clone();
+            }
+            "--fault-no-deadline" => opts.fault_no_deadline = true,
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }
@@ -248,7 +272,14 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             other => positional.push(other),
         }
     }
-    match positional.as_slice() {
+    name_the_verb(&mut opts, &positional)?;
+    Ok(opts)
+}
+
+/// What the words that are not flags mean — the verb and its one
+/// argument — and the verb that cannot be run without one.
+fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> {
+    match positional {
         [] => return Err("verify-ui needs a verb (see `cargo xtask`)".into()),
         [verb] => opts.verb = (*verb).to_string(),
         [verb, arg] => {
@@ -265,7 +296,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     {
         return Err("publish-new-go needs <name>|<url> with a non-empty URL".into());
     }
-    Ok(opts)
+    Ok(())
 }
 
 #[cfg(test)]

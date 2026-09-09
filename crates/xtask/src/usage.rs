@@ -182,6 +182,22 @@ const TAIL: &str = "  shipped [--no-build]
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
+  wedge-check
+      Stops three runs on purpose and reads back what the parent could
+      say about each. A run reaped at a ceiling is the one red nobody
+      can arrange by waiting for it, and the account it leaves is worth
+      only what it says when one happens: so a run is held past its own
+      exit with no deadline thread (which leaves no wedge.txt, the
+      shape observed), one is held with the thread up (both records,
+      agreeing), and one is given a ceiling no verb can finish inside,
+      which turns its loop the whole time. Each is checked for the
+      sentences the next occurrence will be read from — the stations it
+      reached above all, which is the half that does not need the
+      process to still be answering.
+      Three held runs cost under a minute of wall clock and no thought:
+      the ceilings are small and every case is a run that fails, so the
+      exit codes say nothing and the words are the check.
+
   corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it
       is. 200,000 commits, 50,000 refs and a hundred thousand tracked

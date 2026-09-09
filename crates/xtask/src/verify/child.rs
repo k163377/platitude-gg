@@ -177,6 +177,15 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
+    // Set only where they were asked for: `clear_automation` above has
+    // already taken whatever the parent shell carried, so an unset knob
+    // here is an app that is not being made to wedge (`super::faults`).
+    if !opts.fault_hang.is_empty() {
+        cmd.env("PG_FAULT_HANG", &opts.fault_hang);
+    }
+    if opts.fault_no_deadline {
+        cmd.env("PG_FAULT_NO_DEADLINE", "1");
+    }
     // The two the staged copy reads to be a git: what to answer
     // `--version` with, and who to hand the rest to. Both are set on the
     // app, so every git it starts inherits them — which is how the copy
