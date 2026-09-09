@@ -6,7 +6,7 @@
 //! detached HEAD or a stray branch turns "merge into main" into a
 //! fast-forward of the wrong thing, or strands the commits off every
 //! branch (both observed). This verb reads where main actually is and
-//! picks the safe move; the pre-shell hook still demands PG_ALLOW_MAIN
+//! picks the safe move; the pre-shell hook still demands PGG_ALLOW_MAIN
 //! in front of it, so the transcript records that the user asked.
 //!
 //! The order is the gate's (internal-docs/反映前テストの機械化.md): a

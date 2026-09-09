@@ -406,7 +406,7 @@ fn a_child_under_its_parent_s_ticket_is_admitted_though_the_machine_is_full() {
     sandbox.env(&mut command);
     // After the sandbox's own environment, which clears this very mark:
     // what is under test here is a child that carries it.
-    command.env("PG_BUDGET_HELD", "1");
+    command.env("PGG_BUDGET_HELD", "1");
     let mut child = Holder {
         child: command.spawn().expect("spawn the child"),
         said,

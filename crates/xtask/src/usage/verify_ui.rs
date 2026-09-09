@@ -9,7 +9,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       the performance driver's visible state; offscreen timings are not
       benchmarks.
       Build the app (release), run it headless (offscreen QPA) against a
-      repository, fire PG_AUTO_ACT=<verb> / PG_AUTO_ACT_ARG=<arg>, and
+      repository, fire PGG_AUTO_ACT=<verb> / PGG_AUTO_ACT_ARG=<arg>, and
       judge the run by its 'screenshot saved=true' stderr line and by
       whether git refused any of the writes it made.
       The verb `solo` is run with this process holding the config
@@ -39,13 +39,13 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
         --preset <name>   or against a fresh demo repo (default: basic)
                           Both repeat: one tab per repository, in order.
         --no-build        reuse the existing release binary
-        --select          also set PG_AUTO_SELECT=1
+        --select          also set PGG_AUTO_SELECT=1
         --scroll-to <where>
-                          also set PG_SCROLL_TO=top|bottom|nav-bottom: park
+                          also set PGG_SCROLL_TO=top|bottom|nav-bottom: park
                           the graph — or the sidebar's branch list — at one
                           end once the page has stopped arriving
         --system-title-bar
-                          also set PG_SYSTEM_TITLE_BAR=1: the window shape
+                          also set PGG_SYSTEM_TITLE_BAR=1: the window shape
                           mac and Linux come up in, asked for from a
                           machine that folds the band into the title bar
         --watchdog-ms <n> the backstop under a run whose completion never

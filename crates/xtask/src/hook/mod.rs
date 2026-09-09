@@ -21,16 +21,16 @@ mod write;
 
 /// What a command carries to say an explicit instruction asked for main to
 /// move. It rides in the command itself so the transcript records the ask.
-const MAIN_ESCAPE: &str = "PG_ALLOW_MAIN";
+const MAIN_ESCAPE: &str = "PGG_ALLOW_MAIN";
 
 /// The same, for an instruction that asked for a rebase.
-const REBASE_ESCAPE: &str = "PG_ALLOW_REBASE";
+const REBASE_ESCAPE: &str = "PGG_ALLOW_REBASE";
 
 /// The same, for an instruction that asked for a real window.
-const WINDOW_ESCAPE: &str = "PG_ALLOW_GUI";
+const WINDOW_ESCAPE: &str = "PGG_ALLOW_GUI";
 
 /// The same, for an instruction that asked to kill runs beyond this tree.
-const KILL_ESCAPE: &str = "PG_ALLOW_KILL";
+const KILL_ESCAPE: &str = "PGG_ALLOW_KILL";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");

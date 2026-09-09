@@ -5,7 +5,7 @@ import platitude
 import platitude.ui
 
 /// The two things a run can be told to do to a page as it opens, neither of which is a verb: show the working tree
-/// (`PG_AUTO_WIP=1`), and pick the newest commit and open its first changed file (`PG_AUTO_SELECT=1`). What they are
+/// (`PGG_AUTO_WIP=1`), and pick the newest commit and open its first changed file (`PGG_AUTO_SELECT=1`). What they are
 /// for is a picture with something in every pane, and a measurement with a selection to time.
 ///
 /// Each one drives the page through the same door a hand goes through — `showWip` / `activateRow` / `toggleDiff` — so
@@ -29,7 +29,7 @@ Item {
         value: Harness.autoSelect || Harness.autoPerf || Harness.autoWip
     }
 
-    // PG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
+    // PGG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
     Connections {
         target: start.worktreeModel
         enabled: Harness.autoWip
@@ -41,7 +41,7 @@ Item {
         }
     }
 
-    // PG_AUTO_SELECT=1: select the newest commit, then open the first changed file's diff — the full pipeline, for the
+    // PGG_AUTO_SELECT=1: select the newest commit, then open the first changed file's diff — the full pipeline, for the
     // screenshot runs.
     property bool selected: false
     Connections {

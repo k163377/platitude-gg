@@ -536,7 +536,7 @@ Rectangle {
         onHoveredChanged: graphArea.pointerInside = hovered
     }
     /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
-    /// (`PG_AUTO_ACT=graph-bar`).
+    /// (`PGG_AUTO_ACT=graph-bar`).
     function restPointer(inside) { graphArea.pointerInside = inside }
     /// What is drawn and how brightly, not what was asked for: the hooks report the bar itself, so a broken binding
     /// cannot pass (verify-ui).

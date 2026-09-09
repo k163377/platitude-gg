@@ -26,8 +26,8 @@ impl Store {
     pub fn claim(&self) -> Claim {
         let Some(path) = self.lock_path() else {
             // A store with no files has nothing for a second process to
-            // overwrite — the ephemeral store `PG_*` automation without a
-            // named `PG_CONFIG_DIR` gets. A run that names one holds the
+            // overwrite — the ephemeral store `PGG_*` automation without a
+            // named `PGG_CONFIG_DIR` gets. A run that names one holds the
             // real lock like anyone else (the `solo` verb relies on it).
             return Claim::Ours(Lock { file: None });
         };

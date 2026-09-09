@@ -20,7 +20,7 @@ pub(crate) fn workspace_root() -> PathBuf {
 }
 
 /// The app's verification harness, which is not in a build that did not
-/// ask for it: the `PG_*` protocol, the drivers, and the `platitude.auto`
+/// ask for it: the `PGG_*` protocol, the drivers, and the `platitude.auto`
 /// QML module (`platitude-app` §features). Everything this task runner
 /// starts drives the app over that protocol, so everything it builds asks
 /// for it — the shipped build is the plain `cargo build --release` nobody
@@ -31,7 +31,7 @@ pub(crate) const HARNESS_FEATURE: &str = "automation";
 /// where its binary sits either way — `--no-build` still needs the path.
 ///
 /// Always with [`HARNESS_FEATURE`], including the window `launch` opens:
-/// it is inert without a `PG_*` variable, and asking for it every time is
+/// it is inert without a `PGG_*` variable, and asking for it every time is
 /// what keeps one release binary between the two commands instead of a
 /// relink every time somebody moves from a window to a verify-ui run.
 ///

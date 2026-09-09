@@ -7,7 +7,7 @@ import platitude.ui
 // The same three lines the picker's dialog says, out of the same place (`Words.openFailure`): which of the three it was
 // is core's answer (`errorKind`), not something read off git's wording. Which of the two screens a failure lands on is
 // decided by the road, not the kind: the picker's answers go to the dialog, everything else — a restored tab, a
-// worktree row, PG_AUTO_OPEN — comes here.
+// worktree row, PGG_AUTO_OPEN — comes here.
 //
 // Not one component with that dialog: they are two seats (デザイン規約 §可否・警告の出し場所) and read as such — this one is centred in
 // the seat it takes over and offers the way out of a tab, the dialog is a window's left-aligned form and offers the

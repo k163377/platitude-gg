@@ -76,7 +76,7 @@ Item {
     /// bring in. Widening and narrowing again each cost one repaint of the rows on screen — the same repaint the
     /// column's own divider drag costs, and taken once at each end of a pan rather than per frame. **Qt asks for that
     /// repaint itself for a canvas that is visible** (the note on `onWidthChanged` below), so the first frame of a pan
-    /// is the lanes and not the old picture stretched — verified at that frame (`PG_AUTO_ACT=graph-bar`).
+    /// is the lanes and not the old picture stretched — verified at that frame (`PGG_AUTO_ACT=graph-bar`).
     ///
     /// It reads only properties, so a binding on it takes the dependencies it names (`xOffset`, `fullWidth`, and the
     /// box the caller hands in); the rule against binding to a *method* is about the ones that measure and never

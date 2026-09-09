@@ -216,7 +216,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=commands-fail-shut: the mark's red with the panel out of the way, which is the state no other verb
+    // PGG_AUTO_ACT=commands-fail-shut: the mark's red with the panel out of the way, which is the state no other verb
     // can photograph — `commands-fail` leaves the panel standing over it and `commands-clear` takes the red away with
     // the rows. The press goes in at the `>_`'s own function rather than at `commandsOpen`, so a build where that
     // press stopped reaching the page waits here instead of passing.
@@ -243,7 +243,7 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PG_AUTO_ACT=commands-select / commands-copy: a drag over the log, and the key that takes what it picked. The
+    // PGG_AUTO_ACT=commands-select / commands-copy: a drag over the log, and the key that takes what it picked. The
     // drag runs from the head of the first row to the end of the last, which is the stretch that reaches all three of
     // a row's columns and more than one row — a drag inside one column would prove a fraction of the rule and read as
     // a pass.
@@ -292,7 +292,7 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row instead of on a row — the
+    // PGG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row instead of on a row — the
     // one place inside the panel's own frame where a press used to reach nothing
     // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
     //

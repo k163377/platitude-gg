@@ -96,7 +96,7 @@ Item {
         return acts.topBar.tabPinShown
     }
 
-    // PG_AUTO_ACT=tab-pin: the stand-in, standing at the edge the tab in front went out of. The argument names which
+    // PGG_AUTO_ACT=tab-pin: the stand-in, standing at the edge the tab in front went out of. The argument names which
     // tab that is — with the first one (the default) the strip is sent to its far end and the stand-in rides the left
     // edge; with the last, the other way about.
     //
@@ -132,7 +132,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=tab-pin-go: and the press that takes it away again. The strip travels until the row it stood for is
+    // PGG_AUTO_ACT=tab-pin-go: and the press that takes it away again. The strip travels until the row it stood for is
     // whole on screen, and the stand-in steps aside at the end of that travel.
     //
     // Nothing here is a picture: a settled strip with its front tab in view is the same photograph whether it
@@ -176,7 +176,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=tab-open-go: a repository opened into a strip that is already crowded and standing away from where
+    // PGG_AUTO_ACT=tab-open-go: a repository opened into a strip that is already crowded and standing away from where
     // the new tab lands. The band travels to it, and the stand-in it had up steps aside (デザイン規約 §タブの所作).
     //
     // Staged exactly as the two above are, with the first tab in front and the run sent to its far end — which is the

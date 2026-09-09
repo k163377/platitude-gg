@@ -16,13 +16,13 @@ Item {
     signal openRepositoryPicker()
     /// A worktree row was clicked: open that path as a new tab.
     signal openRepositoryPathRequested(string path)
-    /// PG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
+    /// PGG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
     /// A conflicted file has nowhere to be opened: the git settings screen is where the merge editor is named.
     signal gitSettingsRequested()
     /// The settings card, opened from an avatar and carrying whom it was opened on.
     signal avatarSettingsRequested(string name, string email)
-    /// PG_AUTO_PERF completion after every requested measurement output.
+    /// PGG_AUTO_PERF completion after every requested measurement output.
     signal perfFinished()
     /// The failed-open screen's "Close tab" button.
     signal closeTabRequested()
@@ -77,7 +77,7 @@ Item {
     readonly property bool replayRunning: repoTab.replaying || page.autoReplayHeld
     onReplayRunningChanged: if (page.replayRunning) page.planRunOut = false
     /// Automation: a replay this run really started, kept standing until its picture has been taken
-    /// (`AutoActNavVerbs`, PG_AUTO_ACT=doors-held). The rise is caught at the signal rather than sampled — a demo
+    /// (`AutoActNavVerbs`, PGG_AUTO_ACT=doors-held). The rise is caught at the signal rather than sampled — a demo
     /// repository's rebase is over inside one beat of the sampler — and what it holds up is the state the picture is
     /// of, not a stand-in for it (app-ui.md §UI 自動化の因果性: 一瞬だけ立つ状態は signal で観測して latch する).
     property bool autoReplayHeld: false
@@ -188,7 +188,7 @@ Item {
     // read, so the panel would come up empty (measured).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
     /// Automation: that screen's hand — the one its three lines are dragged over from the air around them
-    /// (`PG_AUTO_ACT=open-fail-sweep`). An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// (`PGG_AUTO_ACT=open-fail-sweep`). An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property alias openFailedHand: failedScreen.pad
 
     property int seenHeadCommitSeq: 0
@@ -526,7 +526,7 @@ Item {
     /// press, because entering the mode is what taking the seat *is*. What waits for the rows is only what needs a
     /// draft to mean anything, and that reads `planActive`.
     readonly property bool planShown: planModel.active || planModel.loading
-    /// Automation (`PG_AUTO_ACT=plan-loading`): the opening face, held from the real edge — the rows arrive through
+    /// Automation (`PGG_AUTO_ACT=plan-loading`): the opening face, held from the real edge — the rows arrive through
     /// the feed and can land while the asynchronous grab is still out, and the picture would then be of the plan
     /// rather than of the wait for it (verify-ui スキル §中間状態は実 edge を latch する).
     ///
@@ -1896,18 +1896,18 @@ Item {
     readonly property bool commandsShown: page.commandsPane !== null && page.commandsPane.visible
     /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
-    /// Automation only: the header's `Clear`, pressed from outside the panel (`PG_AUTO_ACT=commands-clear`).
+    /// Automation only: the header's `Clear`, pressed from outside the panel (`PGG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
         if (page.commandsPane !== null)
             page.commandsPane.clearPanel()
     }
     /// Automation only: the hand that drags over the log, and the key that takes what it picked
-    /// (`PG_AUTO_ACT=commands-select` / `commands-copy`). Both enter the panel's own functions.
+    /// (`PGG_AUTO_ACT=commands-select` / `commands-copy`). Both enter the panel's own functions.
     function pickCommandText(fromRow, fromAt, toRow, toAt) {
         if (page.commandsPane !== null)
             page.commandsPane.pickText(fromRow, fromAt, toRow, toAt)
     }
-    /// ...and the same hand started on the ground under the last row (`PG_AUTO_ACT=commands-sweep`).
+    /// ...and the same hand started on the ground under the last row (`PGG_AUTO_ACT=commands-sweep`).
     function sweepCommandGround(fx, fy) {
         return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
     }
@@ -3106,7 +3106,7 @@ Item {
     }
 
     /// Automation: the drag past whichever boundary `which` names, and whether that boundary is still drawn
-    /// (`PG_AUTO_ACT=divider-refuse`; AutoActDriver calls through the page).
+    /// (`PGG_AUTO_ACT=divider-refuse`; AutoActDriver calls through the page).
     function dragDividerPast(which) {
         splitWatch.dragPast(which)
     }

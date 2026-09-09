@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// The run's ceiling, and the height every other one here is set from:
-/// the app's own watchdog is handed this (`PG_AUTO_WATCHDOG_MS`), the
+/// the app's own watchdog is handed this (`PGG_AUTO_WATCHDOG_MS`), the
 /// deadline thread looks past it, and the parent reaps behind them both
 /// (`super::child`).
 ///
@@ -34,29 +34,29 @@ pub(super) struct Options {
     pub(super) build: bool,
     pub(super) select: bool,
     /// Park the view at one end once the page has stopped arriving
-    /// (`PG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`). Empty leaves the
+    /// (`PGG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`). Empty leaves the
     /// view where the run puts it. Like [`Options::system_title_bar`],
     /// the variable alone does not reach the app — `app_env` clears every
-    /// `PG_*` the parent shell carries — so this flag is the only way a
+    /// `PGG_*` the parent shell carries — so this flag is the only way a
     /// headless run reaches the parking at all.
     pub(super) scroll_to: String,
     /// Ask for the window shape the two platforms that cannot fold the
-    /// band into the title bar get (`PG_SYSTEM_TITLE_BAR`), so the layout
+    /// band into the title bar get (`PGG_SYSTEM_TITLE_BAR`), so the layout
     /// they come up in can be photographed from a machine that merges.
     /// The variable alone does not reach the app: `app_env` clears every
-    /// `PG_*` the parent shell carries from the runs xtask starts, so a
+    /// `PGG_*` the parent shell carries from the runs xtask starts, so a
     /// headless run has no way to ask for it but this.
     pub(super) system_title_bar: bool,
     /// Diagnostic ceiling for a run whose causal completion never arrives
     /// ([`WATCHDOG_MS`]).
     pub(super) watchdog_ms: u64,
-    /// Hold the app at the station this names, for good (`PG_FAULT_HANG`
+    /// Hold the app at the station this names, for good (`PGG_FAULT_HANG`
     /// — the words are `harness::deadline`'s). **A run that will not
     /// pass**: it is how the two shapes a wedged run comes in are made to
     /// order, so that what the parent reads back can be checked rather
     /// than waited for (`super::faults`).
     pub(super) fault_hang: String,
-    /// Start the app with no deadline thread (`PG_FAULT_NO_DEADLINE`), so
+    /// Start the app with no deadline thread (`PGG_FAULT_NO_DEADLINE`), so
     /// it leaves no report of its own however it is stopped — the shape a
     /// wedge past `exiting` has anyway.
     pub(super) fault_no_deadline: bool,

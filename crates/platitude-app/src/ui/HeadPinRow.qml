@@ -26,7 +26,7 @@ Rectangle {
     required property real viewHeight
 
     /// The pointer stand-in the rows carry, for the row this one stands
-    /// for (PG_AUTO_ACT=nav-tip head): hover cannot be injected, so what
+    /// for (PGG_AUTO_ACT=nav-tip head): hover cannot be injected, so what
     /// the pointer would light is written in the same one place the
     /// pointer's own arrival writes.
     property bool pointed: false

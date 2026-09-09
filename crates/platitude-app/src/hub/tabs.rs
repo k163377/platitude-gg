@@ -9,7 +9,7 @@ impl Hub {
     ///
     /// Only the picker goes through here — a folder that is no repository
     /// must never become a (remembered) tab. Every other way in (a
-    /// restored tab, a worktree row, `PG_AUTO_OPEN`) opens straight away
+    /// restored tab, a worktree row, `PGG_AUTO_OPEN`) opens straight away
     /// and fails on the page's own failure screen
     /// (デザイン規約 §可否・警告の出し場所).
     pub fn probe_repo(&self, path: PathBuf, feed: Arc<Feed<PickMsg>>) -> bool {

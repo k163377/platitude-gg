@@ -25,7 +25,7 @@ ToolButton {
     /// fold it into `closeRequested`), so the close gate that waits a write out (`Main.qml`) has one door to stand at.
     signal exitRequested()
 
-    /// Automation: the ☰'s `Clone repository…` row (`PG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
+    /// Automation: the ☰'s `Clone repository…` row (`PGG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
     /// press on it emits — so the handler that runs is the row's, and everything it reaches from there is the wiring a
     /// hand goes through.
     function clickCloneRow() {

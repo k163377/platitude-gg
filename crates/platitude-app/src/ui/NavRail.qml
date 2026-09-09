@@ -82,7 +82,7 @@ Rectangle {
     }
 
     /// What a cell does when the pointer arrives on it, leaves it, or is clicked on it. The cells' own handlers call
-    /// these and nothing else, so the smoke hooks (PG_AUTO_ACT=nav-peek / nav-peek-away / nav-peek-shut) reach the real
+    /// these and nothing else, so the smoke hooks (PGG_AUTO_ACT=nav-peek / nav-peek-away / nav-peek-shut) reach the real
     /// answer by calling the same three — neither hover nor a click can be injected (verify-ui スキル), and a second copy
     /// of the answer for them to call is a second answer.
     ///

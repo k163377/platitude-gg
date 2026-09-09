@@ -760,7 +760,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=graph-reclick / graph-reclick-list / ref-list-pick: the two clicks of the rename gesture put in at a
+    // PGG_AUTO_ACT=graph-reclick / graph-reclick-list / ref-list-pick: the two clicks of the rename gesture put in at a
     // graph row, and at a row of the card its chip unfolds into — and, on the same card, the double-click that is the
     // way to move. Every step waits for its own answer: the row has to exist before it can be clicked, the card has to
     // be up before one of its rows can be, and the double-click window the first click opened has to have passed
@@ -870,7 +870,7 @@ Item {
             }
         }
     }
-    // PG_AUTO_ACT=graph-reclick-lanes: the same gesture put in through **the strip over the lane column** — the half
+    // PGG_AUTO_ACT=graph-reclick-lanes: the same gesture put in through **the strip over the lane column** — the half
     // of the row between the two dividers, which has a press-taking layer of its own wherever the lanes overflow their
     // column (`GraphLanePan`). A reader aiming at the middle of a wide graph is aiming at that strip, and a strip that
     // answered with a copy of half of what a click does left the gesture doing nothing there.

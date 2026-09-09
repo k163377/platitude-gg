@@ -163,7 +163,7 @@ fn a_dialog_closed_before_the_census_still_owes_its_escape_verb() {
     );
     sb.commit_all(&sb.seat, "fix(ui): broken escape handler", &[]);
     let red = "verify settings-escape";
-    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PG_GATE_FAKE_FAIL", red)]);
+    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PGG_GATE_FAKE_FAIL", red)]);
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     assert!(sb.ran().contains(red), "{text}");
 }
@@ -194,7 +194,7 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     );
     sb.commit_all(&sb.seat, "fix(verify): harness behavior", &[]);
     let red = "verify window";
-    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PG_GATE_FAKE_FAIL", red)]);
+    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PGG_GATE_FAKE_FAIL", red)]);
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
     for verb in [
@@ -270,7 +270,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     );
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let red = "verify stash-open --preset basic";
-    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PG_GATE_FAKE_FAIL", red)]);
+    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PGG_GATE_FAKE_FAIL", red)]);
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
     for verb in [
@@ -294,7 +294,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
 ///
 /// The window between the plan and the look is another tree's to write
 /// in and nothing outside can land in it, so the runner's own switch
-/// stands in for it (`PG_GATE_FAKE_STAMP`).
+/// stands in for it (`PGG_GATE_FAKE_STAMP`).
 #[test]
 fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     let sb = Sandbox::new("stamped-while-queued");
@@ -314,7 +314,11 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     // The first of the host's verbs in the plan's order, which is the
     // one that would otherwise build the release for the rest.
     let first = "verify stash --preset basic";
-    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PG_GATE_FAKE_STAMP", first)]);
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &["--jobs", "2"],
+        &[("PGG_GATE_FAKE_STAMP", first)],
+    );
     assert!(ok, "{text}");
     assert!(
         text.contains("stamped elsewhere while this waited"),

@@ -23,7 +23,7 @@ hash が変わるので、**同じ木かは `git rev-parse <commit>:crates/plati
 
 ```
 cargo xtask corpus
-PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印刷した path> --runs 5
+PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印刷した path> --runs 5
 ```
 
 段ごとの表は 2 行目にフラグを足しただけで、**撃ち方は各節が持つ**。`--at` は計測台 rig
@@ -57,13 +57,13 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
 - 表示は既定設定(`HEAD --branches --remotes --tags` を `--max-count=2000` の
   ウィンドウ、2,001 行)
 - **窓は `\\.\DISPLAY2`(180Hz、1920x1080、原点 (0,0))に 1440x900 で固定**。
-  run ごとの `PG_CONFIG_DIR` に `state.toml` を書いて渡す。**画面を固定しないと
+  run ごとの `PGG_CONFIG_DIR` に `state.toml` を書いて渡す。**画面を固定しないと
   fps はどの画面に出たかで決まる** — この機材は 100 / 180 / 100Hz の 3 画面。
   **窓の復元はカーソルのある画面を基準に出る**ので、撃つ前にカーソルをその画面に置く
   (P3-確認事項 §app)
 - ビルドは `cargo build --release --features automation`(ハーネス込み)
 - **実ウィンドウ**(offscreen ではメモリも fps も表示性能にならない)、ウォーム
-  キャッシュ、`PG_AUTO_*` フック、WorkingSet と private bytes の 100ms サンプリング
+  キャッシュ、`PGG_AUTO_*` フック、WorkingSet と private bytes の 100ms サンプリング
   最大値、`perf_done` による因果完了、デッドライン + kill ガード。1 回目は捨てて以降を採る
 - **機械の状態も測って、駄目な run は落として撮り直す**(`--retries` 既定 3): ロック /
   セキュアデスクトップ(連続 3 tick から)/ 最小化 / 落ち着いた後の画面移動 / 画面 Hz に
@@ -90,7 +90,7 @@ PG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印�
   2 本目以降の run が毎回暗い画面から始まる)。起こすのは入力なので 0 ピクセルの
   マウス移動を注入する。**その結果 `away_ms` は「人が居たか」を答えない** —
   答えるのは「起こす側が動いているか」だけ(`perf::sampler::Awake`)
-- **表示に依らず撮るなら `--software`**(`PG_ALLOW_GUI=1 cargo xtask perf --software --at <commit>
+- **表示に依らず撮るなら `--software`**(`PGG_ALLOW_GUI=1 cargo xtask perf --software --at <commit>
   --repo <corpus>`)。表示が点いていても消えていても、途中で人が付け消ししても同じ run で、
   待ちも打ち切りも撮り直しも無い(表示の状態は `memory.csv` の `display_off` 列と report の
   `display` 行に証跡として残るだけ)。入力を注入せず、窓を前面へ上げ直さない。

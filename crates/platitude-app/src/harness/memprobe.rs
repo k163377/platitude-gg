@@ -15,7 +15,7 @@
 //!
 //! Off unless asked for, and a shipped build cannot be asked. The counting
 //! is behind the `memprobe` feature, and the per-model walks need that
-//! feature *and* `PG_MEM_REPORT=1` (`harness::knobs`, the crate's only
+//! feature *and* `PGG_MEM_REPORT=1` (`harness::knobs`, the crate's only
 //! reader of one) — they are O(rows), and a measurement must not pay for
 //! itself on every drain of a normal run.
 //!
@@ -218,7 +218,7 @@ pub fn size_classes() -> String {
 /// Two things, and both have to hold: the counting allocator has to be in
 /// this build, because attributed parts with no counted total to hold them
 /// against are half a report; and the run has to have asked
-/// (`PG_MEM_REPORT=1`, through `harness::knobs`, which is the only place
+/// (`PGG_MEM_REPORT=1`, through `harness::knobs`, which is the only place
 /// in the crate that reads one). A shipped build has neither, and the
 /// `cfg!` is what takes the walk out of it rather than a flag that
 /// happens to be off.

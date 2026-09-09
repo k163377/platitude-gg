@@ -13,7 +13,7 @@
 //! corpus asks during the scroll, where the walk's bytes and the
 //! bench's arrive in the same ticks; the calibration run asks before
 //! `perf_done` instead, idle either side, and says when ([`mark`] —
-//! `WindowPerfDriver` under `PG_PERF_FONT_WALK=1`). Offscreen there is
+//! `WindowPerfDriver` under `PGG_PERF_FONT_WALK=1`). Offscreen there is
 //! no walk to weigh: that platform's FreeType database holds no fonts,
 //! which is why `verify-ui` cannot see any of this.
 

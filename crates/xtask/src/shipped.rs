@@ -71,15 +71,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let config = crate::keepsakes::keepsake_dir("shipped")?;
     let mut cmd = Command::new(&exe);
     // Nothing of the parent's automation reaches it: this run is about
-    // the build that answers none of it, and a stray `PG_AUTO_ACT` in the
+    // the build that answers none of it, and a stray `PGG_AUTO_ACT` in the
     // shell would be a run that is not the one being judged.
     crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(&config)
         .env("PATH", &path)
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
-        .env("PG_CONFIG_DIR", &config)
-        .env("PG_LOG", "info")
+        .env("PGG_CONFIG_DIR", &config)
+        .env("PGG_LOG", "info")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if cfg!(windows) {

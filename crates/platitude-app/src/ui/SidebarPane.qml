@@ -251,7 +251,7 @@ Rectangle {
         curPage: sidebar.commandsPage
     }
     /// Automation: the colour the `>_` painted while the panel is down
-    /// (`PG_AUTO_ACT=commands-clear`; the page picks the standing seat).
+    /// (`PGG_AUTO_ACT=commands-clear`; the page picks the standing seat).
     readonly property alias commandsMarkColor: commandsSeat.markColor
     /// What the seat leaves for the list above it.
     readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
@@ -321,7 +321,7 @@ Rectangle {
     property alias peekEntered: peek.contentPointed
     /// The open section itself, for the smoke hooks alone (the shape
     /// `GraphPane.view` already has): clicks cannot be injected, so
-    /// PG_AUTO_ACT=nav-reclick puts one in at a row in here.
+    /// PGG_AUTO_ACT=nav-reclick puts one in at a row in here.
     readonly property var peekSection: peek
 
     function openPeek(kind, top) {

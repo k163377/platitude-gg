@@ -7,7 +7,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The tab strip's half of the window's PG_AUTO_ACT harness: opening a path that is already open, closing a
+/// The tab strip's half of the window's PGG_AUTO_ACT harness: opening a path that is already open, closing a
 /// tab from the middle button, and every way a tab is carried along the strip or measured on it.
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
@@ -355,7 +355,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip that narrowed the wrong tabs comes out looking
+    // PGG_AUTO_ACT=tab-widths: numbers for the band's reason — a strip that narrowed the wrong tabs comes out looking
     // like one that got it right. `widths=` is the answer, and `room=` says which of the two things the strip gives up
     // it is living on (the mark's room first, the names after).
     //
@@ -390,7 +390,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=tab-mark: the argument is which tab the hand is on — one that is not in front, or the run says
+    // PGG_AUTO_ACT=tab-mark: the argument is which tab the hand is on — one that is not in front, or the run says
     // nothing the picture of any other verb does not already say.
     SampleTimer {
         id: tabMarkActTimer
@@ -419,7 +419,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=tab-name: the names a strip of namesakes settled on, and the whole path the hand asks for on top of
+    // PGG_AUTO_ACT=tab-name: the names a strip of namesakes settled on, and the whole path the hand asks for on top of
     // them. The argument is which tab to point at. Both halves in one run because they are one question — what this tab
     // stands on — asked of the strip and then of the hover (デザイン規約 §タブの所作 / §hover のツールチップ).
     SampleTimer {
@@ -457,7 +457,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
+    // PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
     // picture is of the mechanism and not of a flag that imitates it.
     SampleTimer {
         id: soloActTimer

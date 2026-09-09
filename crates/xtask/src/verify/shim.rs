@@ -7,12 +7,12 @@ use std::process::{Command, ExitCode};
 
 /// Set on the app when `--old-git` asks for one: the version a copy of this
 /// binary, standing on PATH under git's name, answers `--version` with.
-pub(super) const SHIM_VERSION: &str = "PG_SHIM_GIT_VERSION";
+pub(super) const SHIM_VERSION: &str = "PGG_SHIM_GIT_VERSION";
 /// The git that copy passes everything else to.
-pub(super) const SHIM_REAL: &str = "PG_SHIM_REAL_GIT";
+pub(super) const SHIM_REAL: &str = "PGG_SHIM_REAL_GIT";
 /// Set on the app when `--other-git` asks for one: where a second git
 /// stands, staged beside the pictures and **not** on PATH.
-pub(super) const OTHER_GIT: &str = "PG_OTHER_GIT";
+pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 
 /// Stands in for git when this binary was copied onto a run's PATH under
 /// git's name (`--old-git`), and returns `None` in every other process —

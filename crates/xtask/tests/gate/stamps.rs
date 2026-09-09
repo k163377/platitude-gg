@@ -111,7 +111,7 @@ fn a_red_step_leaves_main_where_it_was() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &[],
-        &[("PG_GATE_FAKE_FAIL", "test platitude-core 1")],
+        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(
         !ok && text.contains("FAIL   test platitude-core 1") && text.contains("nothing stamped"),
@@ -133,7 +133,7 @@ fn a_red_step_leaves_main_where_it_was() {
 fn a_pseudo_run_off_main_is_reused_after_the_rebase() {
     let sb = Sandbox::new("pseudo");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
-    sb.commit_all(&sb.repo, "docs: main moved", &[("PG_GATE_SKIP", "1")]);
+    sb.commit_all(&sb.repo, "docs: main moved", &[("PGG_GATE_SKIP", "1")]);
     sb.write_refs(&sb.seat, 9);
     let tip = sb.commit_all(&sb.seat, "feat(core): nine", &[]);
     let text = sb.gate_ok(&sb.seat, &[]);
@@ -160,7 +160,11 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     let sb = Sandbox::new("rebase-inputs");
     // Main's move touches the stash module.
     sb.write(&sb.repo, "crates/platitude-core/src/stash.rs", "pub fn stash() { let _ = 10; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n");
-    sb.commit_all(&sb.repo, "feat(core): main moved", &[("PG_GATE_SKIP", "1")]);
+    sb.commit_all(
+        &sb.repo,
+        "feat(core): main moved",
+        &[("PGG_GATE_SKIP", "1")],
+    );
     sb.write_refs(&sb.seat, 11);
     sb.commit_all(&sb.seat, "feat(core): eleven", &[]);
     sb.gate_ok(&sb.seat, &[]);
@@ -326,7 +330,7 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
     let (ok, text) = sb.gate(
         &sb.seat,
         &[],
-        &[("PG_GATE_FAKE_REWRITE", "verify stash --preset basic")],
+        &[("PGG_GATE_FAKE_REWRITE", "verify stash --preset basic")],
     );
     assert!(!ok, "{text}");
     assert!(

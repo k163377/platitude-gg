@@ -2,7 +2,7 @@
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu)の git GUI。**Intel Mac は対象外**。
 機能要件・スコープ外の正本は [実装計画.md](internal-docs/実装計画.md) — 機能実装の前に該当セクションを読む(性能要件は本ファイル §性能予算)。
-本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [.claude/rules/structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / census)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
+本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [.claude/rules/structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / census)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
@@ -32,7 +32,7 @@
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
 - **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。**席は選ばない・与えられる**: `cargo xtask seat`(引数なし)が空き席を lock して letter と path を返すので、それを EnterWorktree に渡す(`seats` は状況を読む道具で、座る判断には使わない)。未マージの席は続きの仕事以外触らない。全席詰まりなら増設せず報告。**席は land が返す** — main へ反映した時点で letter は roster に戻り、そのまま作業を続ければ次の編集で claim が戻る(取られていたら `cargo xtask seat` をもう一度)。land しない終わり方で返すのは `cargo xtask seat release`。寝落ちの SessionEnd では claim は残る。**完了しても main へは戻さない**(§Git 運用)
 - **残件はチップに逃がさない** — 検証・掃除・後追いの修正はこのセッションの仕事。**チップは別セッションでしかできない物だけ**(別マシン・実ウィンドウ・このセッションでは得られない判断)で、書き残すだけなら `internal-docs/P<n>-確認事項.md` へ。**触っているファイルを claim するチップは deny**(出口は `hook pre-chip` / `hook stop` の文)
-- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PG_ALLOW_GUI=1 cargo xtask launch`。掴まれた exe・二重起動ゲートは `kill`(どちらも自ツリーの居残りだけを扱う)。**窓のビルドがどのツリーのものかは右下が名乗る**
+- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PGG_ALLOW_GUI=1 cargo xtask launch`。掴まれた exe・二重起動ゲートは `kill`(どちらも自ツリーの居残りだけを扱う)。**窓のビルドがどのツリーのものかは右下が名乗る**
 
 ## Rust 規約
 
@@ -55,8 +55,8 @@
 ## Git 運用
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)。force push しない
-- **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。指示があった時だけ `PG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
-- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格。land 自身が席で rebase → gate → fast-forward する。それ以外の main への書き込みは hook が止める)
+- **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。指示があった時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
+- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PGG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格。land 自身が席で rebase → gate → fast-forward する。それ以外の main への書き込みは hook が止める)
 - **本体 checkout への直コミットはしない** — ドキュメントも設定も規約も、その場でユーザーが本体への直接の変更を許可したケース以外は全部席で進める
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**

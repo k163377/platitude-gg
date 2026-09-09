@@ -99,9 +99,9 @@ impl Sandbox {
             .env("GIT_CONFIG_GLOBAL", &self.gitconfig)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("LC_ALL", "C")
-            .env("PG_GATE_FAKE_LOG", &self.fake_log)
-            .env_remove("PG_GATE_FAKE_FAIL")
-            .env_remove("PG_GATE_SKIP")
+            .env("PGG_GATE_FAKE_LOG", &self.fake_log)
+            .env_remove("PGG_GATE_FAKE_FAIL")
+            .env_remove("PGG_GATE_SKIP")
             // This suite runs as a step of a gate, which marks every
             // child of a step as running under its ticket. That mark
             // would reach the runners started here — and a budget that
@@ -109,7 +109,7 @@ impl Sandbox {
             // as CLAUDECODE is: this crate cannot use the runner's
             // modules, and the runner's own suite checks the two
             // spellings agree (`budget::tests`).
-            .env_remove("PG_BUDGET_HELD")
+            .env_remove("PGG_BUDGET_HELD")
             // The gate answers for a session's git and nobody else's, so
             // the sandbox's git is a session's — whether or not the run
             // that started these tests was one (CI's is not, a session's
@@ -363,7 +363,7 @@ impl Sandbox {
             )
             .expect("chmod");
         }
-        self.commit_all(&self.repo, "seed", &[("PG_GATE_SKIP", "1")]);
+        self.commit_all(&self.repo, "seed", &[("PGG_GATE_SKIP", "1")]);
         self.install_and_seat();
     }
 

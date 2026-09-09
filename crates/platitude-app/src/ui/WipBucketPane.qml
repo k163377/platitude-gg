@@ -25,7 +25,7 @@ ColumnLayout {
     /// This bucket's rows (`NavSectionModel` attached to this run).
     required property var model
     /// Stands in for the pointer on a row of this bucket, so a cut-down paths-view row's tooltip can be photographed
-    /// (PG_AUTO_ACT=path-tip). The pane hands down its own row number less the rows above this bucket, so a number
+    /// (PGG_AUTO_ACT=path-tip). The pane hands down its own row number less the rows above this bucket, so a number
     /// below 0 or past the end points at no row — which is every bucket but the one being photographed.
     required property int tipRow
 

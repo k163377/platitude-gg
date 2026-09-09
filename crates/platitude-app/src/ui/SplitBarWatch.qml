@@ -78,7 +78,7 @@ Item {
         overlay.refuses = Math.abs(gap) > Theme.splitterWidth
     }
 
-    /// Automation (`PG_AUTO_ACT=divider-refuse`, cases `sidebar-min` /
+    /// Automation (`PGG_AUTO_ACT=divider-refuse`, cases `sidebar-min` /
     /// `details-min` / `log-min`): a press is no more injectable than
     /// hover, so the hook puts the bar in hand the way a press does and
     /// walks the same road the pointer walks.

@@ -89,7 +89,7 @@ Item {
             ? rowItem.labelRecords[0] : ""
     // The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: chipColumn.chipItem
-    // The mark the chip wears while a second click waits out its window, as drawn (PG_AUTO_ACT=graph-reclick-mark).
+    // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
     readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
     readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
@@ -344,7 +344,7 @@ Item {
 
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click — what a headless run reads to put its second click in as a second
-    /// (app-ui.md §UI 自動化の因果性, PG_AUTO_ACT=graph-reclick). Both are the list's answer: the gesture lives there,
+    /// (app-ui.md §UI 自動化の因果性, PGG_AUTO_ACT=graph-reclick). Both are the list's answer: the gesture lives there,
     /// because this delegate is pooled the moment its row scrolls off (`GraphList`).
     readonly property bool renameArmed:
         rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameRecord) : false

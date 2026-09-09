@@ -5,7 +5,7 @@
 //! if the run behind it can be repeated exactly, so the conditions live
 //! here rather than in whatever shell somebody typed that day: release
 //! build, a **real window** (offscreen reports neither memory nor fps
-//! honestly), **on one named screen**, warm cache, the `PG_AUTO_*` hooks,
+//! honestly), **on one named screen**, warm cache, the `PGG_AUTO_*` hooks,
 //! WorkingSet sampled every 100ms for its maximum, causal `perf_done`,
 //! and an outer kill guard.
 //!
@@ -21,7 +21,7 @@
 //! still. `perf::corpus` fingerprints whichever repository it is given
 //! and compares that fingerprint either side of the runs.
 //!
-//! `--breakdown` adds `PG_MEM_REPORT=1` and prints the largest `mem
+//! `--breakdown` adds `PGG_MEM_REPORT=1` and prints the largest `mem
 //! report` line the run produced, which is what says *where* the bytes
 //! are. That needs a binary built with the `memprobe` feature; without it
 //! the line still comes, with `counted=false` and no Rust-heap total.
@@ -511,19 +511,19 @@ fn say(run: &str, note: &str, reading: &Reading) {
 ///
 /// `cargo xtask hook pre-shell` cannot see this one because it names no app
 /// binary. A worktree window can overlap another session's screenshot, so
-/// the explicit `PG_ALLOW_GUI=1` remains the authorization boundary.
+/// the explicit `PGG_ALLOW_GUI=1` remains the authorization boundary.
 fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
     let in_worktree = root
         .to_string_lossy()
         .replace('\\', "/")
         .contains("/.claude/worktrees/");
-    if !in_worktree || std::env::var("PG_ALLOW_GUI").as_deref() == Ok("1") {
+    if !in_worktree || std::env::var("PGG_ALLOW_GUI").as_deref() == Ok("1") {
         return Ok(());
     }
     Err(
         "this measurement needs a real window, and a worktree may not put one up on its own \
          (offscreen reports neither memory nor fps honestly, so there is no headless form of \
-         it). Run it again with PG_ALLOW_GUI=1 when the window was asked for."
+         it). Run it again with PGG_ALLOW_GUI=1 when the window was asked for."
             .into(),
     )
 }

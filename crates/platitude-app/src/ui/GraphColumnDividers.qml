@@ -101,7 +101,7 @@ Item {
     function outOfRange(asked, floor, ceiling) {
         return asked > ceiling + Theme.splitterWidth || asked < floor - Theme.splitterWidth
     }
-    /// Automation: the pointer resting on the graph divider, at its middle (`PG_AUTO_ACT=graph-divider`). Where that is
+    /// Automation: the pointer resting on the graph divider, at its middle (`PGG_AUTO_ACT=graph-divider`). Where that is
     /// stays here rather than in the hook — one answer, not a second one to keep in step.
     function restDividerPointer(inside) {
         dividers.dividerPointed = inside
@@ -109,7 +109,7 @@ Item {
             dividers.dividerPoint = graphDivider.mapToItem(null, graphDivider.width / 2, dividers.height / 2)
     }
     /// Automation: a drag carried out past one of the four bounds these two dividers have
-    /// (`PG_AUTO_ACT=divider-refuse`, whose argument names which). Presses are no more injectable than hover is
+    /// (`PGG_AUTO_ACT=divider-refuse`, whose argument names which). Presses are no more injectable than hover is
     /// (verify-ui), so each walks the road its own handler walks and takes the pointer where a hand would have carried
     /// it.
     function dragDividerPast(which) {

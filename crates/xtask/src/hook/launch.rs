@@ -341,9 +341,9 @@ mod tests {
     #[test]
     fn refuses_a_launch_whose_output_something_waits_on() {
         for command in [
-            "PG_ALLOW_GUI=1 cargo xtask launch 2>&1 | tail -4",
-            "PG_ALLOW_GUI=1 cargo xtask launch --no-build | Select-Object -Last 3",
-            "pid=$(PG_ALLOW_GUI=1 cargo xtask launch)",
+            "PGG_ALLOW_GUI=1 cargo xtask launch 2>&1 | tail -4",
+            "PGG_ALLOW_GUI=1 cargo xtask launch --no-build | Select-Object -Last 3",
+            "pid=$(PGG_ALLOW_GUI=1 cargo xtask launch)",
         ] {
             assert!(reads_the_launch(command), "{command}");
         }
@@ -352,11 +352,11 @@ mod tests {
     #[test]
     fn lets_through_a_launch_nothing_is_waiting_on() {
         for command in [
-            "PG_ALLOW_REBASE=1 git rebase main && PG_ALLOW_GUI=1 cargo xtask launch",
+            "PGG_ALLOW_REBASE=1 git rebase main && PGG_ALLOW_GUI=1 cargo xtask launch",
             // Nobody reads a file, and stderr joining stdout adds no reader.
-            "PG_ALLOW_GUI=1 cargo xtask launch > launch.log 2>&1",
+            "PGG_ALLOW_GUI=1 cargo xtask launch > launch.log 2>&1",
             // The pipe belongs to the command beside it, not to the launch.
-            "git rebase main 2>&1 | tail -2 && PG_ALLOW_GUI=1 cargo xtask launch",
+            "git rebase main 2>&1 | tail -2 && PGG_ALLOW_GUI=1 cargo xtask launch",
             // These two end their app themselves, so their reader sees an end.
             "cargo xtask verify-ui commit --preset basic | tail -5",
             "cargo run --release -p platitude-app 2>&1 | tail -50",

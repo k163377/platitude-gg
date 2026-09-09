@@ -22,19 +22,19 @@ QtObject {
     readonly property var sections: probe.sidebar.autoSections
     readonly property var peek: probe.sidebar.autoPeek
 
-    /// PG_AUTO_ACT=nav-filter: type into the filter band. Written into the field itself, so what the sections are
+    /// PGG_AUTO_ACT=nav-filter: type into the filter band. Written into the field itself, so what the sections are
     /// asked is what a typist asks them.
     function typeFilter(text) {
         probe.sections.filterText = text
         return probe.sections.filterText
     }
 
-    /// PG_AUTO_ACT=nav-peek: rest on one section's cell. Named rather than hovered — hover cannot be injected
+    /// PGG_AUTO_ACT=nav-peek: rest on one section's cell. Named rather than hovered — hover cannot be injected
     /// (verify-ui スキル). Whether that opens anything is the cell's answer: an empty section answers no.
     function peekAt(kind) {
         probe.rail.enterAt(kind, probe.rail.topOf(kind))
     }
-    /// PG_AUTO_ACT=nav-peek-away / nav-peek-shut: walk the pointer off the cell that opened it, and click that cell.
+    /// PGG_AUTO_ACT=nav-peek-away / nav-peek-shut: walk the pointer off the cell that opened it, and click that cell.
     /// All of these go in at the rail, so what the cells decide and report is part of what is being tested
     /// (`NavRail.enterAt`).
     function peekAway(kind) {
@@ -43,7 +43,7 @@ QtObject {
     function peekTap(kind) {
         probe.rail.tapAt(kind)
     }
-    /// PG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
+    /// PGG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
     /// out of the section the other way (into the diff or the graph) instead of back over the cell. They write the
     /// same `peekEntered` the popup's own hover writes — the leaving and the being-inside are one state, and a
     /// headless run that cannot say "inside" cannot tell the exit that closes it from the one that must not.
@@ -55,7 +55,7 @@ QtObject {
         probe.sidebar.peekEntered = false
     }
 
-    /// PG_AUTO_ACT=nav-close: close one section by putting a click in where the header band takes one — a hook that
+    /// PGG_AUTO_ACT=nav-close: close one section by putting a click in where the header band takes one — a hook that
     /// set `expTags` itself would be a second answer, and would open a section the band itself refuses to
     /// (`NavHeader.tap`).
     function closeSection(kind) {
@@ -66,30 +66,30 @@ QtObject {
     function headOf(kind) {
         return probe.sections.headOf(kind)
     }
-    /// PG_AUTO_ACT=nav-add-remote: press the `+` at the end of the REMOTES band. It goes in at the band's own signal,
+    /// PGG_AUTO_ACT=nav-add-remote: press the `+` at the end of the REMOTES band. It goes in at the band's own signal,
     /// so what answers is the page's wiring and not a second way in.
     function tapAddRemote() {
         probe.headOf("remote").addRemoteRequested()
     }
-    /// PG_AUTO_ACT=tags-eye: press the eye at the end of the TAGS band, at the button's own press
+    /// PGG_AUTO_ACT=tags-eye: press the eye at the end of the TAGS band, at the button's own press
     /// (`NavHeader.tapTags`).
     function tapTagEye() {
         probe.headOf("tag").tapTags()
     }
     /// Where a section's header band has come to rest, and where the ground under the last section begins — what
-    /// PG_AUTO_ACT=nav-close reads to see the sections packed against the top.
+    /// PGG_AUTO_ACT=nav-close reads to see the sections packed against the top.
     function headerTopOf(kind) {
         const head = probe.headOf(kind)
         return head ? head.y : -1
     }
     readonly property real groundTop: probe.sections.groundTop
-    /// Where the section the folded rail has open begins and ends (PG_AUTO_ACT=nav-peek). The panel is a popup, so a
+    /// Where the section the folded rail has open begins and ends (PGG_AUTO_ACT=nav-peek). The panel is a popup, so a
     /// headless run reads its placement here rather than off the picture: it starts at the top edge of the cell that
     /// opened it and stops inside the pane, whatever the section's row count.
     readonly property real peekY: probe.peek.y
     readonly property real peekBottom: probe.peek.y + probe.peek.height
 
-    /// PG_AUTO_ACT=nav-tip: rest the pointer on one section's row, and read back what that row answers about a
+    /// PGG_AUTO_ACT=nav-tip: rest the pointer on one section's row, and read back what that row answers about a
     /// tooltip. Hover cannot be injected (verify-ui スキル), so it goes in at the same `pointedTipRow` the file lists
     /// carry, and what comes out is the row's own attached ToolTip and the shared instance.
     function listOf(kind) {
@@ -120,12 +120,12 @@ QtObject {
     /// one of the two ways the stand-in is on screen.
     readonly property bool headPinLit: probe.sections.headPinLit
     readonly property string headPinWords: probe.sections.headPinWords
-    /// Whether it is standing, which edge it took, and where the layout put it (PG_AUTO_ACT=nav-pin-edge).
+    /// Whether it is standing, which edge it took, and where the layout put it (PGG_AUTO_ACT=nav-pin-edge).
     readonly property bool headPinShown: probe.sections.headPinShown
     readonly property bool headPinAbove: probe.sections.headPinAbove
     readonly property real headPinY: probe.sections.headPinY
 
-    /// PG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, which is the other of the two ways the stand-in
+    /// PGG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, which is the other of the two ways the stand-in
     /// comes on screen — its row scrolled off, rather than a filter leaving it no row at all (`nav-tip head`). Only
     /// scroll changes which edge it rides, and a headless run has no other way to produce one. The scroll answers
     /// where the list came to rest (`NavSections.scrollBranchesToEnd`).

@@ -36,7 +36,7 @@ pub(super) struct Options {
     /// as sampled, walk included.
     pub(super) calibrate: bool,
     /// Ask this run's app to pay the font walk before `perf_done`, idle
-    /// either side, and say when (`PG_PERF_FONT_WALK`). The calibration
+    /// either side, and say when (`PGG_PERF_FONT_WALK`). The calibration
     /// run's own; no option sets it.
     pub(super) font_walk: bool,
     pub(super) scroll: bool,

@@ -44,14 +44,14 @@ Rectangle {
     /// (`tap` — NavRail.tapAt).
     readonly property bool takesClick: header.foldable && !header.empty
 
-    /// A click landed on the band. Named rather than left to the MouseArea, so PG_AUTO_ACT=nav-close reaches the same
+    /// A click landed on the band. Named rather than left to the MouseArea, so PGG_AUTO_ACT=nav-close reaches the same
     /// refusal a pointer does — clicks cannot be injected (verify-ui スキル).
     function tap() {
         if (header.takesClick)
             header.toggled()
     }
 
-    /// The eye at the end of the band, pressed (PG_AUTO_ACT=tags-eye). Put in at the button rather than at this
+    /// The eye at the end of the band, pressed (PGG_AUTO_ACT=tags-eye). Put in at the button rather than at this
     /// component's own signal, so what answers is the band's real wiring and not a second way in written for the run.
     /// **`toggle()` flips the tick without raising `toggled`**, and a run that only flips it photographs a graph
     /// nobody asked to change. Refused where a pointer would find nothing to press: at zero tags the switch is not on

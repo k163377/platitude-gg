@@ -152,7 +152,7 @@ AppCard {
     }
     /// The pointer coming to rest on one of these rows, and what that row is wearing because of it — hover cannot be
     /// injected (verify-ui §hover の絵の撮り方), so a run writes the row's own `pointedAt` and reads the wash back off
-    /// the row rather than off a copy of what the row would have decided (PG_AUTO_ACT=ref-list-lit).
+    /// the row rather than off a copy of what the row would have decided (PGG_AUTO_ACT=ref-list-lit).
     function pointRow(i) {
         const row = refList.rowAt(i)
         if (!row)
@@ -362,7 +362,7 @@ AppCard {
                 readonly property bool nameable: GitFacts.recordKind(refRow.modelData) !== ""
                 /// A left click and a double-click on this row, as the row answers them. Named so that a run with no
                 /// pointer to press with puts its clicks in at the row itself rather than at a copy of what the row
-                /// would have decided (PG_AUTO_ACT=graph-reclick-list / ref-list-pick).
+                /// would have decided (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick).
                 ///
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
@@ -417,7 +417,7 @@ AppCard {
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
                 /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the
-                /// row would have decided (PG_AUTO_ACT=list-menu).
+                /// row would have decided (PGG_AUTO_ACT=list-menu).
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
                 }

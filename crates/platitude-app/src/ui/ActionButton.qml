@@ -123,7 +123,7 @@ HoverToolButton {
         2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing
         + actionBtn.wordFloor + btnLabel.flagRoom
     /// Automation: the word as it came out — the ink left after a cut, and whether there was one. A picture cannot be
-    /// asked whether a wording ended in a `…` of its own or was elided into one (`PG_AUTO_ACT=band-actions`).
+    /// asked whether a wording ended in a `…` of its own or was elided into one (`PGG_AUTO_ACT=band-actions`).
     readonly property real wordInk: btnLabel.inkWidth
     readonly property bool wordCut: btnLabel.capped
     /// …what this state's wording would like to be, and the box the set was measured for — which a run aiming between

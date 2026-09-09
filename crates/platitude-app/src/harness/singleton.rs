@@ -60,7 +60,7 @@ pub struct Harness {
     /// of an idle, and say when: the font database's population, paid
     /// where the memory sampler can weigh it (`WindowPerfDriver`).
     perf_font_walk: bool,
-    /// Whether anything at all is driving this run — any `PG_*` knob but
+    /// Whether anything at all is driving this run — any `PGG_*` knob but
     /// the three that say nothing about who is at the window
     /// (`settings::Env::automated`).
     automated: bool,
@@ -117,7 +117,7 @@ impl Harness {
     }
 
     /// Writes one line of the memory breakdown, tagged with where the run
-    /// had got to (`PG_MEM_REPORT=1` only). Asked from QML because the
+    /// had got to (`PGG_MEM_REPORT=1` only). Asked from QML because the
     /// sessions live on the Qt main thread — what it does is the probe's
     /// (`harness::memprobe::note_now`).
     #[qslot]

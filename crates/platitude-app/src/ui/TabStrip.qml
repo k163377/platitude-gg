@@ -34,7 +34,7 @@ Item {
 
     /// Automation: the run the tabs were handed, and what they made of it. A picture cannot say which tabs gave way and
     /// which were left alone — every strip that fits looks like every other one — so the widths themselves are the
-    /// answer (`PG_AUTO_ACT=tab-widths`).
+    /// answer (`PGG_AUTO_ACT=tab-widths`).
     readonly property int tabCount: tabs.count
     readonly property real runAvail: tabs.runAvail
     readonly property real contentWidth: tabs.contentWidth
@@ -48,7 +48,7 @@ Item {
     /// on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: menuButton.menuOpen
 
-    /// Automation: the stand-in for the tab in front (`PG_AUTO_ACT=tab-pin` / `tab-pin-go`) — whether it is standing,
+    /// Automation: the stand-in for the tab in front (`PGG_AUTO_ACT=tab-pin` / `tab-pin-go`) — whether it is standing,
     /// which edge it took, whether the row it stands for is whole on screen, and whether the strip is still travelling
     /// towards it. A picture of a scrolled strip reads the same whichever of the four is true. Read off the stand-in
     /// itself, so a binding that came apart answers with what is drawn rather than with what was asked of it.
@@ -90,14 +90,14 @@ Item {
     /// from here (the maximised inset, the window resizing) and reports the strip on.
     signal captionStripMoved()
 
-    /// Automation: the ☰, pressed (`PG_AUTO_ACT=app-menu`). Put in at the button rather than at the card it opens, so
+    /// Automation: the ☰, pressed (`PGG_AUTO_ACT=app-menu`). Put in at the button rather than at the card it opens, so
     /// what answers is the band's real wiring and not a second way in written for the run (`TopBar.stashNow`) — the
     /// toggle this verb is about lives on the button's own handler.
     function clickAppMenu() {
         menuButton.clicked()
     }
 
-    /// Automation: the ☰'s `Clone repository…` row (`PG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
+    /// Automation: the ☰'s `Clone repository…` row (`PGG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
     /// press on it emits — so the handler that runs is the row's, and everything it reaches from there is the wiring a
     /// hand goes through.
     function clickCloneRow() {
@@ -117,7 +117,7 @@ Item {
         tabStrip.tabsModel.setCurrentIndex(index)
     }
 
-    /// Automation: the tab at `index`, carried to `to` and set down (`PG_AUTO_ACT=tab-drag`). The carrying is a
+    /// Automation: the tab at `index`, carried to `to` and set down (`PGG_AUTO_ACT=tab-drag`). The carrying is a
     /// pointer's, which no headless run has; everything after it is the same road a hand takes. Carried to exactly
     /// where it comes to rest: its trailing edge on the far edge of the tab it is going to, or its leading edge on
     /// the near one — anywhere in that place passes every tab in between and none beyond it.
@@ -136,7 +136,7 @@ Item {
     }
 
     /// Automation: the tab at `index`, taken up and carried half its own width without being set down
-    /// (`PG_AUTO_ACT=tab-hold`) — the one thing a settled strip cannot show.
+    /// (`PGG_AUTO_ACT=tab-hold`) — the one thing a settled strip cannot show.
     function holdTabAt(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -158,7 +158,7 @@ Item {
         return tab ? Math.round(tab.shiftShown) : 0
     }
 
-    /// Automation: the tab at `index`, carried against the far end of the run and left there (`PG_AUTO_ACT=tab-edge`).
+    /// Automation: the tab at `index`, carried against the far end of the run and left there (`PGG_AUTO_ACT=tab-edge`).
     /// Held past the run — the distance is the speed, so the hook names it in tab widths rather than in pixels.
     function carryTabPastEnd(index) {
         const tab = tabs.itemAtIndex(index)
@@ -234,7 +234,7 @@ Item {
         return true
     }
 
-    /// Automation: the middle click, landed on the tab at `index` (`PG_AUTO_ACT=middle-close`). Answers whether there
+    /// Automation: the middle click, landed on the tab at `index` (`PGG_AUTO_ACT=middle-close`). Answers whether there
     /// was an item under it to press: the strip is a view, and the item for a row the model has only just gained
     /// arrives with the next layout — a caller reading the asking as a press would wait for a tab nobody touched.
     function middleClickTab(index) {

@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// PG_AUTO_ACT runs one operation — a write, or a surface left standing for the overlay shot — through exactly the code
+/// PGG_AUTO_ACT runs one operation — a write, or a surface left standing for the overlay shot — through exactly the code
 /// path a click takes, so the wiring can be proven headlessly. The dispatch is equality on a bare verb; the argument
 /// passes through as whatever the verb needs (a name, an oid, a row number).
 ///

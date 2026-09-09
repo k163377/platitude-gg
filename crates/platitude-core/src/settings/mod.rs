@@ -59,18 +59,18 @@ pub const SCHEMA_VERSION: i64 = 1;
 
 /// Points both files at one directory. Empty means "read nothing, write
 /// nothing", which is what a test or a screenshot run wants.
-pub const CONFIG_DIR_ENV: &str = "PG_CONFIG_DIR";
+pub const CONFIG_DIR_ENV: &str = "PGG_CONFIG_DIR";
 
 /// Automation knobs all share this prefix, and a person never sets one.
-const AUTOMATION_PREFIX: &str = "PG_";
+const AUTOMATION_PREFIX: &str = "PGG_";
 
-/// `PG_*` variables that say nothing about who is driving. Turning the
+/// `PGG_*` variables that say nothing about who is driving. Turning the
 /// logging up is something somebody does at their own window, and it must
-/// not cost them their settings. `PG_ALLOW_GUI` is the same shape from
+/// not cost them their settings. `PGG_ALLOW_GUI` is the same shape from
 /// the other end: it is how somebody says "I asked for a window" to the
 /// pre-shell guard (CLAUDE.md ビルド・テスト), so it rides on the launch
 /// that most needs the person's own tabs to come back.
-const NOT_AUTOMATION: [&str; 3] = [CONFIG_DIR_ENV, "PG_LOG", "PG_ALLOW_GUI"];
+const NOT_AUTOMATION: [&str; 3] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI"];
 
 /// Failure to write. Reading has no error type: it cannot fail loudly
 /// enough to matter, and the caller has nothing to do about it but carry

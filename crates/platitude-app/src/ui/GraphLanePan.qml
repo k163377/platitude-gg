@@ -44,7 +44,7 @@ MouseArea {
     }
     /// A press and a release on this strip, as a run with no pointer to press with puts one in — at a point in this
     /// strip's own frame, so **the mapping from the point to a row is the strip's own**, which is the half worth
-    /// proving (PG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
+    /// proving (PGG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
     ///
     /// **It goes in at the handler's own body**, not beside it: a hook that did what the handler would have done
     /// stays green while the handler does something else, which is exactly how the gap this proves survived a run.

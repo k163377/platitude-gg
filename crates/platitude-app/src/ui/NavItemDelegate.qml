@@ -36,7 +36,7 @@ Item {
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
-    /// (PG_AUTO_ACT=path-tip). -1 points at no row.
+    /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     /// Whether the pointer is on this row. Written by the handler below rather than by the `MouseArea` that fills the
     /// row: hover goes to the topmost item that takes it, and the stage `+` is a `Control` that takes its own, so the
@@ -247,7 +247,7 @@ Item {
     readonly property bool editBoxShown: editSeat.item ? editSeat.item.visible : false
     readonly property string editBoxAt: editSeat.item ? editSeat.item.cameOut : ""
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
-    /// the row itself rather than at a copy of what the row would have decided (PG_AUTO_ACT=nav-reclick).
+    /// the row itself rather than at a copy of what the row would have decided (PGG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers, held) {
         // The second click of a double-click is not a click of its own: the first one already did what a click does,
         // and the gesture is the double.

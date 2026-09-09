@@ -347,16 +347,16 @@ fn a_tag_only_a_remote_has_is_listed_and_marked() {
 }
 
 /// Ignored: it needs a repository worth measuring. Run it with
-/// `PG_PERF_REPO=<path> cargo test -p platitude-core --release
+/// `PGG_PERF_REPO=<path> cargo test -p platitude-core --release
 /// refs_join_at_scale -- --ignored --nocapture`.
 ///
 /// What it times is one `publish_refs` join — the work every poll tick
 /// does on top of the two git reads. Recorded in
 /// `ci/baseline/refs-join-windows-x64.md`.
 #[test]
-#[ignore = "needs PG_PERF_REPO pointed at a large repository"]
+#[ignore = "needs PGG_PERF_REPO pointed at a large repository"]
 fn refs_join_at_scale() {
-    let repo = std::env::var("PG_PERF_REPO").unwrap_or_else(|_| ".".to_string());
+    let repo = std::env::var("PGG_PERF_REPO").unwrap_or_else(|_| ".".to_string());
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(&repo)

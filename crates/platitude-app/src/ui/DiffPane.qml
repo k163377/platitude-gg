@@ -257,11 +257,11 @@ Rectangle {
         textPick.releaseText()
     }
     /// Automation: the hand itself, for the runs that go in through the pixels rather than through a row number — the
-    /// ground under the last row is a place only a coordinate can name (`PG_AUTO_ACT=diff-sweep`). Handed over whole,
+    /// ground under the last row is a place only a coordinate can name (`PGG_AUTO_ACT=diff-sweep`). Handed over whole,
     /// the way the view is: four forwards here would be four more lines of this file saying nothing.
     readonly property alias textHand: textPick
     /// Automation: the band's own hand — the one the path at the top is dragged over from the air beside it. Handed
-    /// over whole for the reason `textHand` is (`PG_AUTO_ACT=diff-band-sweep`).
+    /// over whole for the reason `textHand` is (`PGG_AUTO_ACT=diff-band-sweep`).
     readonly property alias headerHand: paneHeader.pad
     /// Automation: whether that band ran out of room for the path — the half a picture of a wide pane cannot answer.
     readonly property alias headerCut: paneHeader.cut

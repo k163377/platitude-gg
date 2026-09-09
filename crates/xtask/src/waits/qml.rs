@@ -6,7 +6,7 @@
 //! `tryVerify` given a deadline of its own in place of the runner's, and
 //! a rendering or polish wait whose verdict nobody reads.
 //!
-//! For the app's own harness — the driver `PG_AUTO_ACT` runs the product
+//! For the app's own harness — the driver `PGG_AUTO_ACT` runs the product
 //! through, which is test code that ships inside the window — there is
 //! no runner and no QtTest call at all. What it has instead is beats,
 //! and every one of them comes from the single type that names the

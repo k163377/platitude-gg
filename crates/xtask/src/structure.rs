@@ -26,7 +26,7 @@
 //! Three other things about how the tree is divided are counted here,
 //! because they are the same shape of question and the same second of
 //! work: the product's QML may not name a type from the verification
-//! harness's module ([`modules`]), the app's Rust may not look a `PG_*`
+//! harness's module ([`modules`]), the app's Rust may not look a `PGG_*`
 //! variable up outside the one module that owns them ([`env`]), and
 //! nothing in the product's QML closes a popup that is not its own to
 //! close ([`popups`]).

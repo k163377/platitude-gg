@@ -139,7 +139,7 @@ Item {
         }
         return true
     }
-    /// PG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
+    /// PGG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
     /// is the barrier — `pushDefault` only says the name once `git config` has run and the refresh behind it has
     /// republished the snapshot, so a picture taken here is of a repository that really is marked.
     SampleTimer {
@@ -156,7 +156,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=push-target: where the toolbar says this branch's push is going, and the standing beside it. Both
+    /// PGG_AUTO_ACT=push-target: where the toolbar says this branch's push is going, and the standing beside it. Both
     /// come off the page the button reads (`RepoPage.pushTargetLabel` / `pushState`), so what answers is the binding
     /// the window uses rather than a second reading written for the run. The marks that decided it ride the same line:
     /// the label alone cannot say **which** of them git would have followed.
@@ -177,7 +177,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
+    /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
     /// first and waited for — the question reads the marked remote as it opens, so a list opened before the write
     /// landed would be the one from before.
     SampleTimer {
@@ -200,7 +200,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
+    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
     /// offering — two on a remote that is not the destination, one on the remote that already is, since a row with
     /// nothing to do is gone rather than greyed (デザイン規約 §メニュー).
     SampleTimer {
@@ -220,7 +220,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
+    /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
     /// mark. `box=` is whether the line is checked, which is the half a picture of a form cannot be trusted for.
     SampleTimer {
         id: remoteUrlTimer

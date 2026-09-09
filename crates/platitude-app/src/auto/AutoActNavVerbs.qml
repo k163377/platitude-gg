@@ -246,7 +246,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=doors-held: the branch rebased onto, and the one the right-click then lands on. Not the one the tree
+    /// PGG_AUTO_ACT=doors-held: the branch rebased onto, and the one the right-click then lands on. Not the one the tree
     /// is standing on — `switch` is only offered away from where you already are, and that row is the whole point of
     /// the hold.
     property string heldBranch: ""
@@ -331,7 +331,7 @@ Item {
                           + " switchrow=" + refSwitchItem.blocked
                           + " why=" + (refSwitchItem.blockedWhy !== ""))
     }
-    // PG_AUTO_ACT=tags-eye: the eye at the end of the TAGS band, and the graph on the other side of it. What the
+    // PGG_AUTO_ACT=tags-eye: the eye at the end of the TAGS band, and the graph on the other side of it. What the
     // switch moves is the walk, so the commit the named tag stands on is the one thing that answers it — a tag on a
     // commit a branch also reaches keeps both its row and its chip, and a picture of that frames exactly like a
     // picture of a switch that did nothing.
@@ -385,7 +385,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=nav-reclick / nav-reclick-away: the two clicks of the rename gesture, put in at the rows of the
+    // PGG_AUTO_ACT=nav-reclick / nav-reclick-away: the two clicks of the rename gesture, put in at the rows of the
     // section the folded rail has open, and what those rows made of them. Every step waits for its own answer — the
     // row has to exist before it can be clicked, the double-click window the first click opened has to have passed
     // before a second one counts as a second, and "-away" waits for the section to have actually gone (the pointer
@@ -459,7 +459,7 @@ Item {
             }
         }
     }
-    /// PG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `remotes=` is the section the `+` was
+    /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `remotes=` is the section the `+` was
     /// pressed on — at 0 the band around it is unavailable, and that the form still came up is the half of this a
     /// picture of an empty section cannot hold either way. `collapsed=` says which of the two doors it came through,
     /// and that the folded one did not put the list back on its way (デザイン規約 §左メニューを畳む).

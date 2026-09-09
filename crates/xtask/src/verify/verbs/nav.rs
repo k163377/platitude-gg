@@ -65,7 +65,7 @@ pub(super) const TABLE: &[Verb] = &[
     // `branch --delete`, and so does one whose answer came back merged
     // — the line is the only place the two are told apart, and without
     // a row here the verb was judged on the shot alone (verify-ui
-    // §PG_AUTO_ACT 動詞表). It is also what fails the run that opened
+    // §PGG_AUTO_ACT 動詞表). It is also what fails the run that opened
     // its card over a delete that was out, which is otherwise 120
     // silent seconds of watchdog (`AutoActRefVerbs.earlyDeleteTimer`).
     //

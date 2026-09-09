@@ -128,7 +128,7 @@ Item {
         return true
     }
     /// The drag past whichever boundary `which` names, and what the window did with it
-    /// (`PG_AUTO_ACT=divider-refuse`). **A picture cannot answer any of it**: every refusal frames the same way, the
+    /// (`PGG_AUTO_ACT=divider-refuse`). **A picture cannot answer any of it**: every refusal frames the same way, the
     /// boundary is drawn whether or not it still promises the drag back, and the two column widths are not on screen
     /// as numbers.
     function dragDividerPast(which) {

@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The dialogs' half of the window's PG_AUTO_ACT harness: the platform picker, the clone box, the identity
+/// The dialogs' half of the window's PGG_AUTO_ACT harness: the platform picker, the clone box, the identity
 /// question, and the two roads out of a folder that turned out not to be a repository.
 ///
 /// The settings screen's own verbs are `WindowSettingsActs` — they reach into one dialog and nothing else,
@@ -52,7 +52,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=clone-dialog / clone-go / clone-refused: the box that fetches a repository, entered through the ☰'s
+    // PGG_AUTO_ACT=clone-dialog / clone-go / clone-refused: the box that fetches a repository, entered through the ☰'s
     // own row (`TabStrip.clickCloneRow`) so the two signal relays between the row and the window are part of what runs.
     //
     // **The far side is the repository this run opened.** A folder on this machine is a URL git takes, so no remote has
@@ -137,7 +137,7 @@ Item {
                           + " name=" + cloneDialog.wantedName)
     }
 
-    // Smoke hooks (PG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
+    // Smoke hooks (PGG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
     // window, so the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: Harness.autoAct === "open-not-a-repo"
                                     || Harness.autoAct === "open-bare"
@@ -197,7 +197,7 @@ Item {
         }
     }
 
-    // Smoke hooks (PG_AUTO_ACT=open-fail-tab / -bare / -log): the road that keeps its tab. Nothing checks the folder
+    // Smoke hooks (PGG_AUTO_ACT=open-fail-tab / -bare / -log): the road that keeps its tab. Nothing checks the folder
     // first there, so the page itself is what says so (`kind=` reports which). The `-log` half goes on to open the
     // command log the way the `>_` at the foot of that screen does.
     SampleTimer {
@@ -258,7 +258,7 @@ Item {
                           + " active=" + tabsModel.currentIndex
                           + " near=" + openFailedDialog.near)
     }
-    // PG_AUTO_ACT=identity / identity-half: "which half landed" is a pair of booleans, and a dialog that stayed open
+    // PGG_AUTO_ACT=identity / identity-half: "which half landed" is a pair of booleans, and a dialog that stayed open
     // because the save did not take looks exactly like one nobody has answered yet. Read the two verbs as a pair.
     SampleTimer {
         running: Harness.autoAct === "identity" || Harness.autoAct === "identity-half"
@@ -285,7 +285,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
+    // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
     // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer, not the open dialog.
     //
@@ -350,7 +350,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=quit-waits / quit-locked: the close that arrives while git is still writing. The commit is held by
+    // PGG_AUTO_ACT=quit-waits / quit-locked: the close that arrives while git is still writing. The commit is held by
     // the repository's own pre-commit hook (`--preset slowhook` — it sleeps), so the write is provably in flight when
     // the close lands: the gate turns the close away and stands the wait dialog up. `quit-waits` photographs that
     // state; `quit-locked` tries the door a second time and then watches the held write land anyway — the wait takes
@@ -438,7 +438,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=gate-sweep: the same screen `solo` photographs, with its words taken from the air around them
+    // PGG_AUTO_ACT=gate-sweep: the same screen `solo` photographs, with its words taken from the air around them
     // (規約 §右のペインの字は掴める). **This is the surface with no way out to the log** — the gate stands before any
     // repository is open, so git's own answer and the path of the build already holding the settings are the whole of
     // what there is to take away, and a reader who cannot drag them retypes them.

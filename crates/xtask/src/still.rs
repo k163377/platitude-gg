@@ -64,7 +64,7 @@ use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
 /// Set on every child a verb here starts ([`step`]), so the child neither
 /// announces a build its parent already announced nor waits on a hold
 /// its parent is being waited for by.
-pub(crate) const UNDER: &str = "PG_STILL_UNDER";
+pub(crate) const UNDER: &str = "PGG_STILL_UNDER";
 
 /// The hold's note, beside `.git`; its lock is the same name with
 /// [`LOCK`] for an extension.

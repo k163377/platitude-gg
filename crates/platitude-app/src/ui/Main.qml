@@ -155,7 +155,7 @@ ApplicationWindow {
         }
     }
 
-    /// Automation (`PG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of
+    /// Automation (`PGG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of
     /// that (`WindowWaitRing`). The two keep their names here — the harness calls them on the window.
     function holdWaitHand(x, y) {
         body.waitRing.holdWaitHand(x, y)
@@ -181,7 +181,7 @@ ApplicationWindow {
         onActivated: root.curPage.startFind()
     }
 
-    // Frame counter for the scroll benchmark (PG_AUTO_SCROLL=1); the page's bench reads it through Window.window.
+    // Frame counter for the scroll benchmark (PGG_AUTO_SCROLL=1); the page's bench reads it through Window.window.
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
     function claimAutoPageAct() {
@@ -202,7 +202,7 @@ ApplicationWindow {
     }
 
     // Only the picker's own answers come here: somebody there is still choosing a folder, so the way on is the picker
-    // again. Every other way a repository fails to open (a restored tab, a worktree row, PG_AUTO_OPEN) keeps its tab
+    // again. Every other way a repository fails to open (a restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab
     // and its page-sized failure screen — a modal on startup is answered before it can be read.
     OpenFailedDialog {
         id: openFailedDialog

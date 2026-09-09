@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The window's half of the PG_AUTO_ACT harness: the verbs that answer for the window itself — its frame, its band,
+/// The window's half of the PGG_AUTO_ACT harness: the verbs that answer for the window itself — its frame, its band,
 /// its tab strip, the state file it comes back to — and for the picker, which is the platform's own window and can
 /// only be entered where its answer lands.
 ///
@@ -68,7 +68,7 @@ Item {
         // ceiling.
     }
 
-    // PG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
+    // PGG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
     // clearing only the rows left it red over an empty panel, which is why this verb lives up here. The
     // same mark is read on both sides of the press: `was=` is the half the picture cannot hold.
     //
@@ -105,7 +105,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal,
+    // PGG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal,
     // reads the mark, fires the fetch that can land, and reads the same mark again — the picture can only hold the
     // quiet half.
     SampleTimer {

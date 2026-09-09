@@ -38,7 +38,7 @@ Rectangle {
     /// Whether the panel is up.
     readonly property bool open: toggle.curPage !== null && toggle.curPage.commandsOpen
     /// Automation: the colour the mark actually painted, which is what says the page's news reached it
-    /// (`PG_AUTO_ACT=commands-clear`).
+    /// (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: commandsMark.tint
 
     /// Where the mark stands and where the name begins — a section's row without the fold arrow's column, which is

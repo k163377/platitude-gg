@@ -257,7 +257,7 @@ mod tests {
     }
 
     /// A build with no harness in it has no other way to be handed a
-    /// repository, and a build with one is told over `PG_AUTO_OPEN`.
+    /// repository, and a build with one is told over `PGG_AUTO_OPEN`.
     #[test]
     fn only_a_harnessless_run_is_given_its_tab_in_the_file() {
         let driven = state_file(&options(&["--repo", "C:\\r\\kotlin"]), None);

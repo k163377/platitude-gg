@@ -143,7 +143,7 @@ Rectangle {
     /// whichever way it was going. The dragging half is a binding, so letting go ends the answer whatever the last ask
     /// was: nothing here can strand a badge.
     readonly property bool gripRefused: box.gripDragging && box.askedPast
-    /// Automation: a pull carried past one of the two ends (`PG_AUTO_ACT=divider-refuse`, cases `desc-max` /
+    /// Automation: a pull carried past one of the two ends (`PGG_AUTO_ACT=divider-refuse`, cases `desc-max` /
     /// `desc-min`).
     function pullPast(down) {
         const over = 4 * Theme.splitterWidth

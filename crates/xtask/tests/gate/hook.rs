@@ -38,9 +38,9 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     sb.git(
         &sb.repo,
         &["commit", "-q", "-m", "docs: skipped"],
-        &[("PG_GATE_SKIP", "1")],
+        &[("PGG_GATE_SKIP", "1")],
     )
-    .expect("PG_GATE_SKIP lets the user through");
+    .expect("PGG_GATE_SKIP lets the user through");
     let rewind = sb.git(&sb.repo, &["reset", "-q", "--hard", &main_before], &[]);
     assert!(
         rewind.as_ref().is_err_and(|e| e.contains("no gate stamp")),
@@ -49,9 +49,9 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     sb.git(
         &sb.repo,
         &["reset", "-q", "--hard", &main_before],
-        &[("PG_GATE_SKIP", "1")],
+        &[("PGG_GATE_SKIP", "1")],
     )
-    .expect("PG_GATE_SKIP rewinds");
+    .expect("PGG_GATE_SKIP rewinds");
 
     sb.gate_ok(&sb.seat, &[]);
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);

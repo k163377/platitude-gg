@@ -38,7 +38,7 @@ Item {
     readonly property real foldTurn: nameCell.foldTurn
 
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
-    /// (PG_AUTO_ACT=path-tip). -1 points at no row.
+    /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     /// **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, and -1 is also "the
     /// pointer is on no row" — without the guard every pooled row claims the shared tooltip, and the one row actually

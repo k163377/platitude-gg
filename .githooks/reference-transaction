@@ -7,7 +7,7 @@
 # (`cargo xtask gate verdict`): a fast-forward onto a commit that carries a
 # full, on-main gate stamp, and nothing else. The question is only ever
 # asked about a session's git; the user's own is past the gate before it
-# is asked. PG_GATE_SKIP=1 is what carries a marked git past it — the
+# is asked. PGG_GATE_SKIP=1 is what carries a marked git past it — the
 # user's to spell, never a session's (the pre-shell hook).
 #
 # `cargo xtask gate install` copies this file beside the repository's .git
@@ -37,7 +37,7 @@ while read -r old new ref; do
       fi
       unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
       if ! command -v cargo >/dev/null 2>&1; then
-        echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PG_GATE_SKIP=1 as the user)" >&2
+        echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PGG_GATE_SKIP=1 as the user)" >&2
         exit 1
       fi
       exec cargo run --quiet -p xtask --profile hooks -- gate verdict "$old" "$new"

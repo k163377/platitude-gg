@@ -8,9 +8,9 @@
 //   S5: streaming `git log` of the JetBrains/kotlin repo, first chunk < 3s
 //
 // Headless-ish automation:
-//   PG_SPIKE_AUTOBENCH=items|canvas|shape|all  -> run scroll benchmark, print fps, quit
-//   PG_SPIKE_AUTOLOG=<repo path>               -> stream git log, print timings, quit
-//   PG_SPIKE_TOPO=0                            -> use default order instead of --topo-order
+//   PGG_SPIKE_AUTOBENCH=items|canvas|shape|all  -> run scroll benchmark, print fps, quit
+//   PGG_SPIKE_AUTOLOG=<repo path>               -> stream git log, print timings, quit
+//   PGG_SPIKE_TOPO=0                            -> use default order instead of --topo-order
 
 // HashMap must be in scope: the QModelItem derive expands to unhygienic code
 // that names `HashMap` directly.
@@ -44,21 +44,21 @@ impl Default for SpikeConfig {
     fn default() -> Self {
         let home = std::env::var("USERPROFILE").unwrap_or_default();
         Self {
-            auto_bench: std::env::var("PG_SPIKE_AUTOBENCH").unwrap_or_default(),
-            auto_log: std::env::var("PG_SPIKE_AUTOLOG").unwrap_or_default(),
-            log_topo: std::env::var("PG_SPIKE_TOPO")
+            auto_bench: std::env::var("PGG_SPIKE_AUTOBENCH").unwrap_or_default(),
+            auto_log: std::env::var("PGG_SPIKE_AUTOLOG").unwrap_or_default(),
+            log_topo: std::env::var("PGG_SPIKE_TOPO")
                 .map(|v| v != "0")
                 .unwrap_or(true),
-            default_repo: std::env::var("PG_SPIKE_REPO")
+            default_repo: std::env::var("PGG_SPIKE_REPO")
                 .unwrap_or_else(|_| format!("{}/IdeaProjects/kotlin", home.replace('\\', "/"))),
-            start_tab: std::env::var("PG_SPIKE_TAB")
+            start_tab: std::env::var("PGG_SPIKE_TAB")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(-1),
-            stay: std::env::var("PG_SPIKE_STAY")
+            stay: std::env::var("PGG_SPIKE_STAY")
                 .map(|v| v == "1")
                 .unwrap_or(false),
-            shot_dir: std::env::var("PG_SPIKE_SHOTDIR")
+            shot_dir: std::env::var("PGG_SPIKE_SHOTDIR")
                 .unwrap_or_default()
                 .replace('\\', "/"),
         }
@@ -430,7 +430,7 @@ impl LogModel {
         };
         self.stats_changed();
         println!(
-            "PG_SPIKE_LOG first_chunk_ms={} total_ms={} rows={} error={:?}",
+            "PGG_SPIKE_LOG first_chunk_ms={} total_ms={} rows={} error={:?}",
             self.first_ms, self.total_ms, self.row_total, error
         );
         self.finished();

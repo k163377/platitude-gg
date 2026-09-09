@@ -128,7 +128,7 @@ ColumnLayout {
     /// Whether the block is taller than the room it was given — anything in it below the fold. What a pulled-open box
     /// pushes past the pane's edge is exactly what the block ends up scrolling by, so this is also the answer to "has
     /// the box given back what it owes". Said out loud because a headless run cannot see a scroll bar and the shot
-    /// frames alike either way (`PG_AUTO_ACT=window-floor wip`).
+    /// frames alike either way (`PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls:
         editor.blockHeight > editor.blockRoom + 1
     readonly property bool descKeeps: !editor.blockScrolls

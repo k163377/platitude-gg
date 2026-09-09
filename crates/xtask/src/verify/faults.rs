@@ -8,8 +8,8 @@
 //! passed on the spot when it was run again by hand
 //! (internal-docs/P3-確認事項.md §check ハング調査で残った観察). So the
 //! stopping is asked for here instead — the app is held at a station it
-//! names (`PG_FAULT_HANG`), or started with no deadline thread at all
-//! (`PG_FAULT_NO_DEADLINE`) — and the check is that the words the next
+//! names (`PGG_FAULT_HANG`), or started with no deadline thread at all
+//! (`PGG_FAULT_NO_DEADLINE`) — and the check is that the words the next
 //! occurrence will be read from come back.
 //!
 //! **Both mouths, because they are two different failures.** A run that

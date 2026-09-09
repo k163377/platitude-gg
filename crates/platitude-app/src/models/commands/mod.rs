@@ -195,7 +195,7 @@ impl CommandsModel {
 
     /// How many rows the log is holding, for the automation that has to
     /// weigh what a copy handed out against what it was made from
-    /// (`PG_AUTO_ACT=commands-copy`). The panel's own count is the view's
+    /// (`PGG_AUTO_ACT=commands-copy`). The panel's own count is the view's
     /// (`ListView.count`), which is not the same number in the frame a
     /// press lands in — measured: 1 there against 4 commands on
     /// the clipboard, read microseconds apart in one tick.

@@ -47,7 +47,7 @@ pub struct NavItem {
     /// `here` so every other kind of row keeps it off by default.
     pub(super) only_remote: bool,
     /// PR-state badge. Real data arrives in Phase 4 (ls-remote refs/pull
-    /// matching); until then PG_FAKE_PR previews the look.
+    /// matching); until then PGG_FAKE_PR previews the look.
     pub(super) has_pr: bool,
     /// This file's pending change has something to say about its line
     /// endings. A flag, not the sentence — the words belong to the one

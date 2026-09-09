@@ -1,6 +1,6 @@
 //! What is driving this run, read once at startup.
 //!
-//! **This is the only place in the crate that looks up a `PG_*` automation
+//! **This is the only place in the crate that looks up a `PGG_*` automation
 //! variable**, which is what makes the harness separable: without the
 //! `automation` feature the reader below is not compiled at all and
 //! [`knobs`] answers from [`Knobs::default`] — every string empty, every
@@ -30,83 +30,83 @@ use std::collections::HashSet;
 /// the same questions however it was compiled.
 #[derive(Default)]
 pub(crate) struct Knobs {
-    /// `PG_AUTO_ACT` — the one operation to run once the repository is
-    /// loaded, and `PG_AUTO_ACT_ARG` its argument. A bare verb rather than
+    /// `PGG_AUTO_ACT` — the one operation to run once the repository is
+    /// loaded, and `PGG_AUTO_ACT_ARG` its argument. A bare verb rather than
     /// a script, so QML dispatches on equality.
     pub act: String,
     pub act_arg: String,
-    /// `PG_AUTO_OPEN` — `;`-separated repositories to open as tabs
+    /// `PGG_AUTO_OPEN` — `;`-separated repositories to open as tabs
     /// instead of restoring the ones that were left.
     pub open: String,
-    /// `PG_SHOT_DIR` — where a headless run leaves its pictures.
+    /// `PGG_SHOT_DIR` — where a headless run leaves its pictures.
     /// Backslashes forward: QML takes it as a URL.
     pub shot_dir: String,
-    /// `PG_OTHER_GIT` — a second git this run may be pointed at, staged
+    /// `PGG_OTHER_GIT` — a second git this run may be pointed at, staged
     /// beside the pictures and deliberately **not** on PATH. What the
     /// settings screen's chapter needs to be photographed at all: the one
     /// state it grows a button for is a git that answers and is not the
     /// one running, and a run cannot name a second installation that
     /// exists on both a desk and a container (`--other-git`).
     pub other_git: String,
-    /// `PG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
+    /// `PGG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
     /// bounded. It never chooses when a screenshot is taken.
     pub watchdog_ms: i32,
-    /// `PG_FAULT_HANG` — the station to hold this run at for good, by the
+    /// `PGG_FAULT_HANG` — the station to hold this run at for good, by the
     /// one word the trail names it with (`harness::deadline`). The two
     /// shapes a run that stops answering has are made to order with it,
     /// so that what the parent reads back can be checked rather than
     /// hoped for (`xtask::verify::faults`).
     pub fault_hang: String,
-    /// `PG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
+    /// `PGG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
     /// run leaves no report of its own however it ends. The shape a wedge
     /// past `exiting` has anyway, asked for where it can be arranged.
     pub fault_no_deadline: bool,
-    /// `PG_AUTO_SELECT` — select the newest commit and open the first
+    /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
-    /// `PG_AUTO_SCROLL` — run the scroll benchmark.
+    /// `PGG_AUTO_SCROLL` — run the scroll benchmark.
     pub scroll: bool,
-    /// `PG_AUTO_PERF` — take the startup and interaction measurements.
+    /// `PGG_AUTO_PERF` — take the startup and interaction measurements.
     pub perf: bool,
-    /// `PG_AUTO_WIP` — open the working-tree view once there is something
+    /// `PGG_AUTO_WIP` — open the working-tree view once there is something
     /// uncommitted to show.
     pub wip: bool,
-    /// `PG_SYSTEM_TITLE_BAR` — take the window shape the two platforms
+    /// `PGG_SYSTEM_TITLE_BAR` — take the window shape the two platforms
     /// that cannot fold the band into the title bar get, neither of
     /// which can be run here.
     pub system_title_bar: bool,
-    /// `PG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
-    /// screen, and `PG_AUTO_IDENTITY_SAVE` submits it straight away.
+    /// `PGG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
+    /// screen, and `PGG_AUTO_IDENTITY_SAVE` submits it straight away.
     pub identity: String,
     pub identity_save: bool,
-    /// `PG_MEM_REPORT` — file and print the memory breakdown. The walks
+    /// `PGG_MEM_REPORT` — file and print the memory breakdown. The walks
     /// it turns on are O(rows) per drain, so a run that did not ask for
     /// it pays nothing (`memprobe::enabled`).
     pub mem_report: bool,
-    /// `PG_PERF_SELECTION` — what the interaction measurement selects
+    /// `PGG_PERF_SELECTION` — what the interaction measurement selects
     /// (`none` / `first` / `head`). Empty leaves it to [`Knobs::select`],
     /// which is what a run that only asked for a selection wants.
     #[cfg(feature = "automation")]
     pub perf_selection: String,
-    /// `PG_PERF_OID` / `PG_PERF_FILE` — the commit it selects and the
+    /// `PGG_PERF_OID` / `PGG_PERF_FILE` — the commit it selects and the
     /// changed file it opens, when the run names them.
     #[cfg(feature = "automation")]
     pub perf_oid: String,
     #[cfg(feature = "automation")]
     pub perf_file: String,
-    /// `PG_PERF_DIFF=0` — leave the diff out of the measurement.
+    /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement.
     ///
     /// Spelled as the refusal rather than the permission because an idle
     /// harness is every flag off, and the diff is *in* unless a run says
     /// otherwise.
     #[cfg(feature = "automation")]
     pub perf_no_diff: bool,
-    /// `PG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
+    /// `PGG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
     /// benchmark. A diagnostic run only: the flush can move the last
     /// frame it is measuring.
     #[cfg(feature = "automation")]
     pub perf_trace_frames: bool,
-    /// `PG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
+    /// `PGG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
     /// family lacks and say when, either side of an idle. What it is for:
     /// the first such glyph makes Qt populate its whole font database,
     /// and `cargo xtask perf` weighs that at a moment its sampler can see
@@ -115,12 +115,12 @@ pub(crate) struct Knobs {
     #[cfg(feature = "automation")]
     pub perf_font_walk: bool,
     /// Whether anything at all is driving this run
-    /// (`settings::Env::automated` — any `PG_*` knob but the three that
+    /// (`settings::Env::automated` — any `PGG_*` knob but the three that
     /// say nothing about who is at the window). The settings store is
     /// what reads it, and gives a driven run no files at all
     /// (`settings::Build::driven`).
     pub automated: bool,
-    /// `PG_FAKE_PR` — branch names wearing the PR badge, so the design can
+    /// `PGG_FAKE_PR` — branch names wearing the PR badge, so the design can
     /// be reviewed before Phase 4 joins the real thing in. **The only
     /// harness knob that reaches what a row says about a repository**, and
     /// the reason it is here: a build without the harness has an empty set
@@ -145,30 +145,30 @@ fn read() -> Knobs {
         std::env::var(name).as_deref() == Ok("1")
     }
     Knobs {
-        act: text("PG_AUTO_ACT"),
-        act_arg: text("PG_AUTO_ACT_ARG"),
-        open: text("PG_AUTO_OPEN"),
-        shot_dir: text("PG_SHOT_DIR").replace('\\', "/"),
-        other_git: text("PG_OTHER_GIT"),
-        watchdog_ms: text("PG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
-        fault_hang: text("PG_FAULT_HANG"),
-        fault_no_deadline: on("PG_FAULT_NO_DEADLINE"),
-        select: on("PG_AUTO_SELECT"),
-        scroll: on("PG_AUTO_SCROLL"),
-        perf: on("PG_AUTO_PERF"),
-        wip: on("PG_AUTO_WIP"),
-        system_title_bar: on("PG_SYSTEM_TITLE_BAR"),
-        identity: text("PG_AUTO_IDENTITY"),
-        identity_save: on("PG_AUTO_IDENTITY_SAVE"),
-        mem_report: on("PG_MEM_REPORT"),
-        perf_selection: text("PG_PERF_SELECTION"),
-        perf_oid: text("PG_PERF_OID"),
-        perf_file: text("PG_PERF_FILE"),
-        perf_no_diff: text("PG_PERF_DIFF") == "0",
-        perf_trace_frames: on("PG_PERF_TRACE_FRAMES"),
-        perf_font_walk: on("PG_PERF_FONT_WALK"),
+        act: text("PGG_AUTO_ACT"),
+        act_arg: text("PGG_AUTO_ACT_ARG"),
+        open: text("PGG_AUTO_OPEN"),
+        shot_dir: text("PGG_SHOT_DIR").replace('\\', "/"),
+        other_git: text("PGG_OTHER_GIT"),
+        watchdog_ms: text("PGG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
+        fault_hang: text("PGG_FAULT_HANG"),
+        fault_no_deadline: on("PGG_FAULT_NO_DEADLINE"),
+        select: on("PGG_AUTO_SELECT"),
+        scroll: on("PGG_AUTO_SCROLL"),
+        perf: on("PGG_AUTO_PERF"),
+        wip: on("PGG_AUTO_WIP"),
+        system_title_bar: on("PGG_SYSTEM_TITLE_BAR"),
+        identity: text("PGG_AUTO_IDENTITY"),
+        identity_save: on("PGG_AUTO_IDENTITY_SAVE"),
+        mem_report: on("PGG_MEM_REPORT"),
+        perf_selection: text("PGG_PERF_SELECTION"),
+        perf_oid: text("PGG_PERF_OID"),
+        perf_file: text("PGG_PERF_FILE"),
+        perf_no_diff: text("PGG_PERF_DIFF") == "0",
+        perf_trace_frames: on("PGG_PERF_TRACE_FRAMES"),
+        perf_font_walk: on("PGG_PERF_FONT_WALK"),
         automated: platitude_core::settings::Env::system().automated(),
-        fake_pr: text("PG_FAKE_PR")
+        fake_pr: text("PGG_FAKE_PR")
             .split(',')
             .filter(|name| !name.is_empty())
             .map(str::to_string)

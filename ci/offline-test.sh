@@ -24,11 +24,11 @@ done
 # Offscreen smoke: open a locally generated repository, stream it, and let
 # causal completion finish the run. The coreutils timeout is the parent kill
 # guard for a broken automation path; app startup is not bounded by a fixed
-# quit clock. PG_SMOKE_BIN must be a build carrying the harness feature —
+# quit clock. PGG_SMOKE_BIN must be a build carrying the harness feature —
 # without it the app reads none of the knobs below and the window stands
 # until the timeout kills it.
-if [ -n "${PG_SMOKE_BIN:-}" ]; then
-    echo "== offline smoke: ${PG_SMOKE_BIN}"
+if [ -n "${PGG_SMOKE_BIN:-}" ]; then
+    echo "== offline smoke: ${PGG_SMOKE_BIN}"
     smoke_root="$(mktemp -d)"
     smoke_repo="${smoke_root}/repo"
     smoke_config="${smoke_root}/config"
@@ -42,7 +42,7 @@ if [ -n "${PG_SMOKE_BIN:-}" ]; then
     git -C "${smoke_repo}" commit -qm "smoke commit"
 
     # Whatever automation the caller carries is cleared by rule, not by a
-    # hand-kept list: everything under `PG_` except the three names that
+    # hand-kept list: everything under `PGG_` except the three names that
     # say nothing about who is driving (xtask `app_env::clear_automation`,
     # core `settings::AUTOMATION_PREFIX` / `settings::NOT_AUTOMATION` —
     # change those and change this). A list would let a knob added to the
@@ -50,19 +50,19 @@ if [ -n "${PG_SMOKE_BIN:-}" ]; then
     smoke_env=(env)
     while IFS= read -r name; do
         case "${name}" in
-            PG_CONFIG_DIR | PG_LOG | PG_ALLOW_GUI) ;;
-            PG_*) smoke_env+=(-u "${name}") ;;
+            PGG_CONFIG_DIR | PGG_LOG | PGG_ALLOW_GUI) ;;
+            PGG_*) smoke_env+=(-u "${name}") ;;
         esac
     done < <(compgen -e)
 
     timeout 50s "${smoke_env[@]}" \
         QT_QPA_PLATFORM=offscreen \
-        PG_CONFIG_DIR="${smoke_config}" \
-        PG_AUTO_OPEN="${smoke_repo}" \
-        PG_AUTO_ACT=band \
-        PG_AUTO_WATCHDOG_MS=30000 \
-        PG_LOG=info \
-        "${PG_SMOKE_BIN}"
+        PGG_CONFIG_DIR="${smoke_config}" \
+        PGG_AUTO_OPEN="${smoke_repo}" \
+        PGG_AUTO_ACT=band \
+        PGG_AUTO_WATCHDOG_MS=30000 \
+        PGG_LOG=info \
+        "${PGG_SMOKE_BIN}"
 fi
 
 exit "${status}"

@@ -9,7 +9,7 @@ use crate::support::{EXE, Sandbox, output_past_a_busy_image, without_always};
 fn land_rebases_then_gates_then_fast_forwards() {
     let sb = Sandbox::new("land");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
-    let moved = sb.commit_all(&sb.repo, "docs: main moved", &[("PG_GATE_SKIP", "1")]);
+    let moved = sb.commit_all(&sb.repo, "docs: main moved", &[("PGG_GATE_SKIP", "1")]);
     sb.write_refs(&sb.seat, 8);
     let before = sb.commit_all(&sb.seat, "feat(core): eight", &[]);
     assert!(
@@ -58,7 +58,7 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     sb.commit_all(
         &sb.repo,
         "feat(xtask): main moved",
-        &[("PG_GATE_SKIP", "1")],
+        &[("PGG_GATE_SKIP", "1")],
     );
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
@@ -148,7 +148,7 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
 
     sb.write_refs(&sb.repo, 13);
-    let main_before = sb.commit_all(&sb.repo, "feat(core): thirteen", &[("PG_GATE_SKIP", "1")]);
+    let main_before = sb.commit_all(&sb.repo, "feat(core): thirteen", &[("PGG_GATE_SKIP", "1")]);
     let (ok, text) = sb.land("worktree-a");
     assert!(!ok && text.contains("walked back"), "{text}");
     assert_eq!(sb.head(&sb.seat), tip, "the seat stands where it did");
@@ -180,7 +180,7 @@ fn land_commits_the_census_its_gate_rewrote() {
         .args(["land", "worktree-a", "--dir"])
         .arg(&sb.repo)
         .current_dir(&sb.repo)
-        .env("PG_GATE_FAKE_REWRITE", "verify stash --preset basic");
+        .env("PGG_GATE_FAKE_REWRITE", "verify stash --preset basic");
     sb.env(&mut command);
     let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
     let text = format!(

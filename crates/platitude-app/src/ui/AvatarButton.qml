@@ -18,7 +18,7 @@ Item {
     /// author — the working tree's own row, and a commit not read yet.
     property string email: ""
     /// Stands in for the pointer where headless cannot put one, so the badge can be photographed
-    /// (PG_AUTO_ACT=avatar-hover).
+    /// (PGG_AUTO_ACT=avatar-hover).
     property bool pointedAt: false
     /// What rides the other corner (`SignatureMark`): whether the commit being written will be signed. Empty
     /// `signatureKind` puts nothing there, which is what a face standing beside its own name hands in.

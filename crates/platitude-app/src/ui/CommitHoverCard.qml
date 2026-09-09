@@ -80,7 +80,7 @@ AppCard {
     /// there is the resting one.
     readonly property bool notePointed: noteHand.containsMouse || hoverCard.notePointedAt
     /// What the note is actually painting, for a run to read back off the paint rather than off a copy of what the
-    /// note would have decided (`PaneScrollBar.slabColor`, same shape — PG_AUTO_ACT=card-note-lit).
+    /// note would have decided (`PaneScrollBar.slabColor`, same shape — PGG_AUTO_ACT=card-note-lit).
     readonly property alias noteWordColor: noteWords.color
     readonly property alias noteRuleColor: noteRule.color
 

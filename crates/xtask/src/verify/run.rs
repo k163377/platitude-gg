@@ -133,7 +133,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
 
     // A run of its own unless told otherwise. The app would refuse the
-    // real files anyway once it sees a PG_* variable, but naming a
+    // real files anyway once it sees a PGG_* variable, but naming a
     // directory is what lets one run read what the last one wrote — and
     // what lets anyone look at the two files afterwards.
     let config_dir = match &opts.config_dir {

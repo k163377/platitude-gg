@@ -331,7 +331,7 @@ mod tests {
 
     /// What turns a run of this test binary into the process that holds
     /// a claim: the path to hold, and the line it says once it has it.
-    const HELD_FOR: &str = "PG_OWNERSHIP_HOLD";
+    const HELD_FOR: &str = "PGG_OWNERSHIP_HOLD";
     const HELD: &str = "claim held";
 
     /// Names the holder to the run that starts it. A filter rather than

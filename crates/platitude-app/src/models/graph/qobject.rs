@@ -141,7 +141,7 @@ impl GraphModel {
     /// that state need a git that fails, under a repository built to be
     /// walked, at a moment nothing outside the pass can name — so the
     /// fault goes in at the walk and the pass leaves by its ordinary
-    /// reporting arm (`PG_AUTO_ACT=graph-stopped` / `graph-stale`).
+    /// reporting arm (`PGG_AUTO_ACT=graph-stopped` / `graph-stale`).
     ///
     /// The slot stays whatever the build is, the shape `AppBackend.report`
     /// takes: a `#[cfg]` on a `#[qslot]` takes the method away and leaves

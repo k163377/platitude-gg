@@ -52,7 +52,7 @@ Rectangle {
     /// go on passing after the binding that draws it had come apart.
     readonly property real markShown: closeMark.opacity
     /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it rather
-    /// than off what was asked of it — the same reason `markShown` is read off the mark (`PG_AUTO_ACT=tab-hold`).
+    /// than off what was asked of it — the same reason `markShown` is read off the mark (`PGG_AUTO_ACT=tab-hold`).
     readonly property real shiftShown: heldShift.x
     /// Automation: whether any of this name is still drawn — read off the halves the label came out with rather than
     /// off the name the tab was handed, which is whole however little of it reaches the strip. A tab cut down to the

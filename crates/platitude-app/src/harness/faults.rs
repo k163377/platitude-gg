@@ -15,7 +15,7 @@ use platitude_core::session::PassStep;
 /// The fault standing over every graph pass this process runs.
 ///
 /// **One for the process rather than one per tab.** What is driven into
-/// this is being photographed, not used (`PG_AUTO_ACT=graph-stale` /
+/// this is being photographed, not used (`PGG_AUTO_ACT=graph-stale` /
 /// `graph-stopped`), and a run photographs one window on one repository;
 /// a fault raised for a tab is a fault raised for the run. It stands once
 /// raised — a fault one pass could lift would be a race, the pass already

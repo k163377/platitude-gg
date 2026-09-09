@@ -1,4 +1,4 @@
-//! Which of the app's files may look a `PG_*` variable up, counted by
+//! Which of the app's files may look a `PGG_*` variable up, counted by
 //! machine.
 //!
 //! The verification harness is a thing the product can be built without
@@ -6,20 +6,20 @@
 //! is that the app asks one module what is driving it
 //! (`harness::knobs`) instead of asking `std::env` wherever the answer is
 //! wanted. That module is behind the feature, so a build without it never
-//! looks a `PG_*` variable up — which is what stops a variable somebody
+//! looks a `PGG_*` variable up — which is what stops a variable somebody
 //! happens to have exported from reaching a shipped window.
 //!
 //! It is one line to lose and nothing catches it at run time — on the
 //! machine that would have noticed, the variable is simply not set — so it
 //! is counted here instead (.claude/rules/app-ui.md).
 //!
-//! `PG_LOG` is the exception, and deliberately: it says how loud to be
+//! `PGG_LOG` is the exception, and deliberately: it says how loud to be
 //! rather than who is driving (`settings::NOT_AUTOMATION`), and it is read
 //! before there is a harness to ask.
 //!
 //! **Spelling a variable is not the only way to read one.** The core's
 //! `settings::Env` is a reader over the same set — `Env::system().automated()`
-//! answers "is anything driving this" without a `PG_` literal anywhere — so
+//! answers "is anything driving this" without a `PGG_` literal anywhere — so
 //! a shipped window that happened to have one exported would have gone on
 //! answering yes through it while the count above passed. That reader is
 //! held to the same one module.
@@ -34,11 +34,11 @@ const APP: &str = "crates/platitude-app/src";
 /// (`gate::graph`).
 const READER: &str = "harness/knobs.rs";
 const ENTRY: &str = "main.rs";
-const LOGGING: &str = "PG_LOG";
+const LOGGING: &str = "PGG_LOG";
 /// The core's own reader over the same variables, held to the same module.
 const READER_TYPE: &str = "settings::Env";
 
-/// One failure per file naming a `PG_*` variable it may not, and how many
+/// One failure per file naming a `PGG_*` variable it may not, and how many
 /// files were read for them.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let app = root.join(APP);
@@ -69,7 +69,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                 }
                 failures.push(format!(
                     "{APP}/{shown}:{}: names {name} — the only place in this crate that looks \
-                     a `PG_*` variable up is `{READER}` (and `{ENTRY}` for `{LOGGING}`, which \
+                     a `PGG_*` variable up is `{READER}` (and `{ENTRY}` for `{LOGGING}`, which \
                      says how loud to be rather than who is driving). Put the knob on \
                      `Knobs` instead, so a build without the harness reads no environment \
                      at all (.claude/rules/app-ui.md)",
@@ -81,7 +81,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     Ok((failures, files.len()))
 }
 
-/// The `PG_*` variables one line of Rust names as a string literal.
+/// The `PGG_*` variables one line of Rust names as a string literal.
 ///
 /// None on a comment line: the crate's comments point at the protocol
 /// constantly, and a name to read is not a lookup. What is left is close
@@ -95,7 +95,7 @@ fn named(line: &str) -> Vec<&str> {
     }
     let mut found = Vec::new();
     let mut rest = code;
-    while let Some(at) = rest.find("\"PG_") {
+    while let Some(at) = rest.find("\"PGG_") {
         // Past the opening quote, then up to the closing one.
         rest = &rest[at + 1..];
         let end = rest.find('"').unwrap_or(rest.len());
@@ -133,13 +133,13 @@ mod tests {
 
     #[test]
     fn a_literal_is_a_lookup_and_a_comment_is_a_reference() {
-        assert_eq!(named("    act: text(\"PG_AUTO_ACT\"),"), ["PG_AUTO_ACT"]);
+        assert_eq!(named("    act: text(\"PGG_AUTO_ACT\"),"), ["PGG_AUTO_ACT"]);
         assert_eq!(
-            named("        .env(\"PG_PERF_OID\", \"PG_PERF_FILE\")"),
-            ["PG_PERF_OID", "PG_PERF_FILE"]
+            named("        .env(\"PGG_PERF_OID\", \"PGG_PERF_FILE\")"),
+            ["PGG_PERF_OID", "PGG_PERF_FILE"]
         );
-        assert!(named("    /// `PG_MEM_REPORT=1`: the window drives it").is_empty());
-        assert!(named("    // PG_AUTO_ACT is read in knobs.rs").is_empty());
+        assert!(named("    /// `PGG_MEM_REPORT=1`: the window drives it").is_empty());
+        assert!(named("    // PGG_AUTO_ACT is read in knobs.rs").is_empty());
         assert!(named("    let on = knobs().mem_report;").is_empty());
     }
 

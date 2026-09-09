@@ -141,7 +141,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
 }
 
 /// The environment one run hands the app: where it reads its git identity
-/// and its settings from, and every `PG_*` knob the verb asked for.
+/// and its settings from, and every `PGG_*` knob the verb asked for.
 fn compose(start: &Start<'_>) -> Result<Command, String> {
     let Start {
         exe,
@@ -165,11 +165,11 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         .env("PATH", child_path)
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
-        .env("PG_CONFIG_DIR", config_dir)
-        .env("PG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
-        .env("PG_SHOT_DIR", shot_dir)
-        .env("PG_AUTO_ACT", &opts.verb)
-        .env("PG_AUTO_ACT_ARG", arg)
+        .env("PGG_CONFIG_DIR", config_dir)
+        .env("PGG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
+        .env("PGG_SHOT_DIR", shot_dir)
+        .env("PGG_AUTO_ACT", &opts.verb)
+        .env("PGG_AUTO_ACT_ARG", arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if cfg!(windows) {
@@ -181,10 +181,10 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     // already taken whatever the parent shell carried, so an unset knob
     // here is an app that is not being made to wedge (`super::faults`).
     if !opts.fault_hang.is_empty() {
-        cmd.env("PG_FAULT_HANG", &opts.fault_hang);
+        cmd.env("PGG_FAULT_HANG", &opts.fault_hang);
     }
     if opts.fault_no_deadline {
-        cmd.env("PG_FAULT_NO_DEADLINE", "1");
+        cmd.env("PGG_FAULT_NO_DEADLINE", "1");
     }
     // The two the staged copy reads to be a git: what to answer
     // `--version` with, and who to hand the rest to. Both are set on the
@@ -200,8 +200,8 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     }
     // The automation hooks report through tracing at info; without this
     // their lines never reach the verdict output.
-    if std::env::var_os("PG_LOG").is_none() {
-        cmd.env("PG_LOG", "info");
+    if std::env::var_os("PGG_LOG").is_none() {
+        cmd.env("PGG_LOG", "info");
     }
     if !opts.restore {
         // Naming a repository is what turns tab restoring off (Main.qml):
@@ -216,24 +216,24 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
             }
             open.push(repo);
         }
-        cmd.env("PG_AUTO_OPEN", &open);
+        cmd.env("PGG_AUTO_OPEN", &open);
     }
     if opts.select {
-        cmd.env("PG_AUTO_SELECT", "1");
+        cmd.env("PGG_AUTO_SELECT", "1");
     }
     if !opts.scroll_to.is_empty() {
-        cmd.env("PG_SCROLL_TO", &opts.scroll_to);
+        cmd.env("PGG_SCROLL_TO", &opts.scroll_to);
     }
     if opts.system_title_bar {
-        cmd.env("PG_SYSTEM_TITLE_BAR", "1");
+        cmd.env("PGG_SYSTEM_TITLE_BAR", "1");
     }
     super::perf::configure(&mut cmd, &opts.verb, arg)?;
     // The screen the identity verbs are about: the seed written above is
     // theirs, and this is what the dialog standing on it is told to do.
     if identity_seed(&opts.verb).is_some() {
-        cmd.env("PG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
+        cmd.env("PGG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
         if opts.verb == "identity-half" || opts.verb == "identity-tip" {
-            cmd.env("PG_AUTO_IDENTITY_SAVE", "1");
+            cmd.env("PGG_AUTO_IDENTITY_SAVE", "1");
         }
     }
 

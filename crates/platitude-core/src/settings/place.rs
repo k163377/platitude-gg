@@ -67,7 +67,7 @@ impl Env {
     /// True when anything is driving this process.
     ///
     /// Asked by a build that carries a verification harness, and handed
-    /// back as [`Build::driven`]. A shipped build never asks, so a `PG_*`
+    /// back as [`Build::driven`]. A shipped build never asks, so a `PGG_*`
     /// variable somebody happens to have exported costs them nothing.
     pub fn automated(&self) -> bool {
         self.vars
@@ -222,13 +222,13 @@ mod tests {
     /// the environment still decides this.
     #[test]
     fn a_knob_is_what_says_something_is_driving() {
-        assert!(Env::from_pairs(&[("PG_AUTO_ACT", "open-picker")]).automated());
+        assert!(Env::from_pairs(&[("PGG_AUTO_ACT", "open-picker")]).automated());
         assert!(
-            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PG_LOG", "info")]).automated(),
-            "PG_LOG says how loud to be, not who is driving"
+            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PGG_LOG", "info")]).automated(),
+            "PGG_LOG says how loud to be, not who is driving"
         );
         assert!(
-            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PG_ALLOW_GUI", "1")]).automated(),
+            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PGG_ALLOW_GUI", "1")]).automated(),
             "the window a person asked for opens on the tabs they left"
         );
     }

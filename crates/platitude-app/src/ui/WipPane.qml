@@ -24,7 +24,7 @@ ColumnLayout {
     property bool amending: false
     property bool headPublished: false
     /// Stands in for the pointer on a file row, so a cut-down paths-view row's tooltip can be photographed
-    /// (PG_AUTO_ACT=path-tip). -1 points at no row.
+    /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     /// A right-click menu of the page's is standing over this pane. The
     /// menus are the page's, so only it can say (デザイン規約 §メニュー).
@@ -640,7 +640,7 @@ ColumnLayout {
     readonly property real descCap: commitBlock.descCap
     readonly property int descListRows: commitBlock.descListRows
     /// Whether anything in the block is below the fold, and its complement — the editor holds the numbers, this pane
-    /// says them out loud for the headless runs (`PG_AUTO_ACT=window-floor wip`).
+    /// says them out loud for the headless runs (`PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls: commitBlock.blockScrolls
     readonly property bool descKeeps: commitBlock.descKeeps
     /// How much of the pane's bottom edge is left bare, for the corner text the page hangs there to step aside by.

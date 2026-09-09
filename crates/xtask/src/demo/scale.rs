@@ -596,7 +596,7 @@ fn plain(word: &str) -> String {
 /// tree's) each hold a row that middle-elides at any sane width, and the
 /// tree views compact the same directories into one folder-chain row
 /// that elides too — both the states the row's hover has to answer
-/// (PG_AUTO_ACT=path-tip, with and without `-tree`). The dirty tree
+/// (PGG_AUTO_ACT=path-tip, with and without `-tree`). The dirty tree
 /// keeps the graph shape fixed: row 0 is the WIP row, row 1 the commit
 /// that holds the file.
 pub(super) fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {

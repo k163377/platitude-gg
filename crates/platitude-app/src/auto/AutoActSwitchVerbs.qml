@@ -161,7 +161,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=ask-over-notice: the report and the question standing together, and which of the two Escape is
+    /// PGG_AUTO_ACT=ask-over-notice: the report and the question standing together, and which of the two Escape is
     /// then handed to. **Three beats, and every one of them is a bar that has stopped moving**: the report all the
     /// way down before the question is raised over it (a bar on its way has no shortcut behind it yet — `open` is
     /// what enables one, so the pair would be read a frame before it exists), the question all the way down for the
@@ -376,7 +376,7 @@ Item {
             driver.complete()
         }
     }
-    /// PG_AUTO_ACT=set-upstream…: the question about what a branch is measured against (`UpstreamFlow`). The bar has
+    /// PGG_AUTO_ACT=set-upstream…: the question about what a branch is measured against (`UpstreamFlow`). The bar has
     /// to be all the way down before there is a box to answer into — the form is loaded as the bar opens — and that
     /// is the picture's own moment as well (`AskBar.settled`).
     SampleTimer {

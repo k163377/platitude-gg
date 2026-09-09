@@ -50,7 +50,7 @@ Rectangle {
     readonly property real stateBadgeMinW: stateGroup.stateBadgeMinW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
-    /// came back with (`PG_AUTO_ACT=badges` / `badges-hover`). The group makes them; the band is where they are read.
+    /// came back with (`PGG_AUTO_ACT=badges` / `badges-hover`). The group makes them; the band is where they are read.
     readonly property bool stateWordsShown: stateGroup.stateWordsShown
     readonly property bool stateMarkShown: stateGroup.stateMarkShown
     readonly property color stateMarkColor: stateGroup.stateMarkColor
@@ -126,7 +126,7 @@ Rectangle {
     /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
     readonly property int fetchFails: fetchButton.fails
     readonly property bool fetchFramed: fetchButton.framed
-    /// Automation: the Stash button, pressed (`PG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
+    /// Automation: the Stash button, pressed (`PGG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
     /// so what answers is the band's real wiring and not a second way in written for the run. **Answers whether the
     /// press went in**: the band refuses it while the tab is busy — the fetch a repository does on the way open is one
     /// — and a shot fired at nothing is not one to latch, so the caller keeps offering it.
@@ -243,7 +243,7 @@ Rectangle {
     }
 
     /// Automation: what the strip made of the run it was handed, and the two ends it was settled between
-    /// (`PG_AUTO_ACT=tab-widths` / `badges`). Re-exposed for the reason the band's other readings are.
+    /// (`PGG_AUTO_ACT=tab-widths` / `badges`). Re-exposed for the reason the band's other readings are.
     readonly property real tabTitleCap: tabStrip.tabTitleCap
     readonly property int tabTitleMinW: tabStrip.tabTitleMinW
     readonly property real tabTitleEaseW: tabStrip.tabTitleEaseW

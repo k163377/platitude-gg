@@ -232,7 +232,7 @@ const TAIL: &str = "  shipped [--no-build]
       The measurement behind ci/baseline/perf-windows-x64.md, run the
       same way every time: release build, a real window (offscreen
       reports neither memory nor fps honestly) on one named screen, the
-      PG_AUTO_* hooks, WorkingSet and private bytes sampled every 100ms
+      PGG_AUTO_* hooks, WorkingSet and private bytes sampled every 100ms
       for their maximum, and a deadline with a kill guard. The first run
       is discarded — the record is a warm-cache number — unless an
       invocation minutes ago warmed the same exe and corpus, which the
@@ -246,7 +246,7 @@ const TAIL: &str = "  shipped [--no-build]
       builds and waits included, because a screen that went dark between
       two runs is as unmeasurable as one that went dark during one.
       --breakdown builds with the `memprobe` feature and adds
-      PG_MEM_REPORT=1, then prints the largest `mem report` line the run
+      PGG_MEM_REPORT=1, then prints the largest `mem report` line the run
       produced: live Rust heap, the models and the session parts holding
       it, and what none of them account for. Process memory minus Rust
       live bytes is not a measurement of Qt's live heap.
@@ -402,7 +402,7 @@ const TAIL: &str = "  shipped [--no-build]
 
   land [<branch>]
       Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
-      the pre-shell hook asks for PG_ALLOW_MAIN=1 in front, which is how
+      the pre-shell hook asks for PGG_ALLOW_MAIN=1 in front, which is how
       the transcript records that the user asked). In the branch's own
       worktree: rebases it onto main when it is behind (a rebase that
       stops is walked back), runs `gate` there — cached steps are not
@@ -433,7 +433,7 @@ const TAIL: &str = "  shipped [--no-build]
       Real-window start for 「起動して」 asks (the verify-ui skill's fast
       path): reap this tree's stale runs, build release, start detached,
       and confirm it outlived its first second. Run it with
-      PG_ALLOW_GUI=1 in front — a real window is the user's ask. The app
+      PGG_ALLOW_GUI=1 in front — a real window is the user's ask. The app
       keeps a per-tree settings store on its own, so seats never fight
       over one instance lock. Somebody is waiting at the screen for this,
       so its build takes the machine ahead of every test and behind a

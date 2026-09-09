@@ -166,7 +166,7 @@ jobs:
 
       # Build online, run offline.
       # The harness feature (xtask HARNESS_FEATURE) is the only thing that
-      # reads the PG_* knobs the smoke run drives the app with; a build
+      # reads the PGG_* knobs the smoke run drives the app with; a build
       # without it stands until the timeout kills it.
       - name: Build test binaries and app
         run: |
@@ -178,7 +178,7 @@ jobs:
             | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true) | .executable | select(. != null)')
           echo "collected ${#BINS[@]} test binaries"
           sudo -E env "PATH=${PATH}" "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" \
-            PG_SMOKE_BIN="$(pwd)/target/debug/platitude-gg" \
+            PGG_SMOKE_BIN="$(pwd)/target/debug/platitude-gg" \
             unshare -n bash ci/offline-test.sh "${BINS[@]}"
 
   deny:

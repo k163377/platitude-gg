@@ -24,7 +24,7 @@ QtObject {
     }
 
     /// How far the strip has travelled, and whether it has reached its far end. A strip with nothing to scroll has no
-    /// end to reach and answers false (`PG_AUTO_ACT=tab-edge`).
+    /// end to reach and answers false (`PGG_AUTO_ACT=tab-edge`).
     function offset() {
         return Math.round(tabRun.view.contentX)
     }
@@ -83,7 +83,7 @@ QtObject {
         return true
     }
 
-    /// Automation: the strip, sent to whichever end of the run leaves `tab` off screen (`PG_AUTO_ACT=tab-pin`). The
+    /// Automation: the strip, sent to whichever end of the run leaves `tab` off screen (`PGG_AUTO_ACT=tab-pin`). The
     /// far end, not the near one — the near one would leave the tab standing in the run, and a stand-in that never
     /// stood is what that verb is there to catch. A strip that fits has no end to send it to and answers false.
     function sendAway(tab) {

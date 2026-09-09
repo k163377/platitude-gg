@@ -48,7 +48,7 @@ Item {
     onCaptionYieldedChanged: chrome.reportCaptionStrip()
 
     /// Automation: what the platform was last told the run past the tabs is, `none` while the scene has it back
-    /// (`PG_AUTO_ACT=app-menu`). Which side owns the runs is not a thing a screenshot holds — the band frames the same
+    /// (`PGG_AUTO_ACT=app-menu`). Which side owns the runs is not a thing a screenshot holds — the band frames the same
     /// either way. The one run stands for both: they are yielded and reported together.
     property string sentStrip: "none"
 

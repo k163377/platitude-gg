@@ -135,7 +135,7 @@ Rectangle {
     /// difference (`DiffTextSelect` reads it off this row for the same reason).
     readonly property bool codeBold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
     /// Automation: how far this row's own line is drawn, which is where the blank right of it begins
-    /// (`PG_AUTO_ACT=diff-blank`). The same number the row files under `rowDrawn`, as a property — a run presses
+    /// (`PGG_AUTO_ACT=diff-blank`). The same number the row files under `rowDrawn`, as a property — a run presses
     /// beside one row rather than beside the widest, and no count of that row's characters can find this edge.
     readonly property real codeInk: codeLine ? codeLine.implicitWidth : 0
 

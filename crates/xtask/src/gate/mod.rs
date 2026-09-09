@@ -906,11 +906,11 @@ fn run_one(
 }
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
-const FAKE_LOG: &str = "PG_GATE_FAKE_LOG";
+const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
 
 /// The tests' switch for a step another tree stamped while this one
 /// waited for room ([`run_one`]).
-const FAKE_STAMP: &str = "PG_GATE_FAKE_STAMP";
+const FAKE_STAMP: &str = "PGG_GATE_FAKE_STAMP";
 
 /// Where a faked run records the steps it was handed `--no-build`, so a
 /// test can see which of a block's verbs were told to reuse a release
@@ -922,11 +922,11 @@ fn no_build_log(fake: &str) -> String {
 }
 
 /// One step, through `check`'s watched runner, its xtask launcher
-/// swapped for the runner copy ([`launched`]). With `PG_GATE_FAKE_LOG`
+/// swapped for the runner copy ([`launched`]). With `PGG_GATE_FAKE_LOG`
 /// set the step is not run at all: its id is appended to that file and
-/// it passes, unless `PG_GATE_FAKE_FAIL` names it — which is how the
+/// it passes, unless `PGG_GATE_FAKE_FAIL` names it — which is how the
 /// tests watch selection and caching without a toolchain in the
-/// throwaway repository. `PG_GATE_FAKE_REWRITE` names a step that
+/// throwaway repository. `PGG_GATE_FAKE_REWRITE` names a step that
 /// rewrites the census the way a passing verb does: one line put in,
 /// once, so the run after the commit of it finds nothing to move.
 fn execute_step(
@@ -959,12 +959,12 @@ fn execute_step(
             told.write_all(format!("{id}\n").as_bytes())
                 .map_err(|e| e.to_string())?;
         }
-        let failing = std::env::var("PG_GATE_FAKE_FAIL").unwrap_or_default();
+        let failing = std::env::var("PGG_GATE_FAKE_FAIL").unwrap_or_default();
         if failing.split(',').any(|f| f == id) {
-            return Err("failed on purpose (PG_GATE_FAKE_FAIL)".into());
+            return Err("failed on purpose (PGG_GATE_FAKE_FAIL)".into());
         }
         if let Some(line) = id.strip_prefix("verify ")
-            && std::env::var("PG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
+            && std::env::var("PGG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
         {
             // The verb's own line with one more name on it — the shape
             // of a run that met a component it had not before.

@@ -37,7 +37,7 @@ impl Store {
         store
     }
 
-    /// `PG_CONFIG_DIR` wins: a path puts both files in it, and an empty
+    /// `PGG_CONFIG_DIR` wins: a path puts both files in it, and an empty
     /// value asks for no files at all. With it unset, a build that says it
     /// is being driven still gets no files — otherwise a screenshot run
     /// would write its window geometry into the developer's real settings,
@@ -46,7 +46,7 @@ impl Store {
     /// The build says so ([`Build::driven`]) rather than the environment
     /// being read here: only a binary carrying a verification harness can
     /// be driven at all, and what ships must not lose somebody their
-    /// settings to a `PG_*` variable left in their shell.
+    /// settings to a `PGG_*` variable left in their shell.
     ///
     /// A named directory is a named directory, whichever build is asking:
     /// two runs sharing one `--config-dir` are how the saved layout is

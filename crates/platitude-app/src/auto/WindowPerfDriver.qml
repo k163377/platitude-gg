@@ -2,7 +2,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// Owns the process-level end of a PG_AUTO_PERF run. The page supplies the repository half; without a repository, the
+/// Owns the process-level end of a PGG_AUTO_PERF run. The page supplies the repository half; without a repository, the
 /// next rendered frame is the measurement's only observable completion point.
 Item {
     id: driver
@@ -86,7 +86,7 @@ Item {
         function onPerfFinished() { driver.finish() }
     }
 
-    /// The font database's population, paid at a moment the memory sampler can see (`PG_PERF_FONT_WALK=1`: the
+    /// The font database's population, paid at a moment the memory sampler can see (`PGG_PERF_FONT_WALK=1`: the
     /// calibration run of `cargo xtask perf`, whose budget line is read net of what this weighs — xtask
     /// `perf::fonts`).
     ///

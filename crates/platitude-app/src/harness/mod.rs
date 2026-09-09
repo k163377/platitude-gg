@@ -2,7 +2,7 @@
 //! verify-ui`, `cargo xtask perf` and the screenshot runs can drive it and
 //! read what came out. Nobody at a window ever reaches any of it.
 //!
-//! **The `PG_*` environment is read in this module and nowhere else in the
+//! **The `PGG_*` environment is read in this module and nowhere else in the
 //! crate.** That is what makes the harness a thing a build can be without:
 //! the app asks here what is driving, and a build without the `automation`
 //! feature answers "nothing" from an idle record ([`knobs`]) instead of

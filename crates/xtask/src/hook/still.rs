@@ -166,7 +166,7 @@ mod tests {
         for line in [
             "cargo build --release",
             "cd x && cargo test -p platitude-core",
-            "PG_X=1 cargo clippy --workspace -- -D warnings",
+            "PGG_X=1 cargo clippy --workspace -- -D warnings",
             "cargo xtask structure && cargo build",
             "cargo run -p platitude-app",
             "cargo +stable build",
@@ -195,7 +195,7 @@ mod tests {
     fn the_task_runner_and_the_harmless_are_let_through() {
         for line in [
             "cargo xtask gate --host-only",
-            "PG_ALLOW_GUI=1 cargo xtask perf --at main --repo C:/r",
+            "PGG_ALLOW_GUI=1 cargo xtask perf --at main --repo C:/r",
             "cargo run -p xtask -- structure",
             "cargo run --package xtask -- waits",
             "cargo run --quiet -p xtask --profile hooks -- hook pre-shell",

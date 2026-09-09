@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [features]
 # Builds the verification harness in (src/harness + the `platitude.auto`
-# QML module): the `PG_*` protocol `cargo xtask verify-ui`, `cargo xtask
+# QML module): the `PGG_*` protocol `cargo xtask verify-ui`, `cargo xtask
 # perf` and the screenshot runs drive the app over. Off in a shipped
 # build, which is what `cargo build --release` gives you — every xtask
 # that drives the app asks for it back.

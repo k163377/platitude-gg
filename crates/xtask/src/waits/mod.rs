@@ -34,7 +34,7 @@
 //!
 //! The one part of a product crate that is read is the app's harness,
 //! which is test code that happens to be compiled inside the window, and
-//! it has two halves. The QML driver `PG_AUTO_ACT` runs the product
+//! it has two halves. The QML driver `PGG_AUTO_ACT` runs the product
 //! through ([`HARNESS`]) runs on beats rather than on QtTest calls, so it
 //! is named by rules of its own ([`qml::Kind::Harness`]): every span of
 //! time it spells for itself, and every count of milliseconds it keeps.
@@ -107,7 +107,7 @@ const SELF: &str = "/src/waits/";
 const HARNESS: &str = "auto";
 
 /// The Rust half of that same harness: the module a run is driven and
-/// read through — the `PG_*` record, the ceiling thread that says where
+/// read through — the `PGG_*` record, the ceiling thread that says where
 /// a wedged process stood, the clock the drivers date their reports by.
 /// It is behind the same feature as [`HARNESS`] and ships in no window,
 /// so its body is read the way this runner's own is: what a run is

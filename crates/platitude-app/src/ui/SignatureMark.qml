@@ -30,7 +30,7 @@ Item {
     property string code: ""
     property string signer: ""
     /// Stands in for the pointer, so the tooltip can be photographed
-    /// (PG_AUTO_ACT=signature-tip) — hover cannot be injected.
+    /// (PGG_AUTO_ACT=signature-tip) — hover cannot be injected.
     property bool pointedAt: false
     /// The ink of the mark itself; the disc under it is that plus its
     /// own ring, the same arithmetic the pen badge does. A smaller face

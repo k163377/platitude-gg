@@ -104,7 +104,7 @@ RowLayout {
         }
     }
     // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
-    // 4; PG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
+    // 4; PGG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
     // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
     // (`ls-remote --tags`). **Both marks wear one colour**: the mark itself is the answer, and a colour on top of it
     // would be a second one (デザイン規約 §ref の種別).

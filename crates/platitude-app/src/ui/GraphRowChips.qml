@@ -47,7 +47,7 @@ Item {
     /// off the chip rather than off what was asked of it, which would be green with the binding cut.
     readonly property alias chipWaiting: rowStack.chipWaiting
     /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
-    /// ground the box is standing on, and a headless run (`PG_AUTO_ACT=name-box`) to say which of the two it got.
+    /// ground the box is standing on, and a headless run (`PGG_AUTO_ACT=name-box`) to say which of the two it got.
     /// Zero while there is no box.
     readonly property real nameBoxWidth: nameSeat.item ? nameSeat.item.width : 0
 

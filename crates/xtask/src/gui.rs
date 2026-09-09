@@ -49,7 +49,7 @@ pub fn kill(args: &[String]) -> Result<(), String> {
 }
 
 /// `cargo xtask launch [--no-build]`: start a real window from this tree.
-/// The pre-shell hook requires PG_ALLOW_GUI=1 in front from a worktree —
+/// The pre-shell hook requires PGG_ALLOW_GUI=1 in front from a worktree —
 /// a real window is the user's ask, never routine verification.
 pub fn launch(args: &[String]) -> Result<(), String> {
     let mut build = true;

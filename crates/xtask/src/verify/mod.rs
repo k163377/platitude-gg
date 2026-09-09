@@ -3,7 +3,7 @@
 //!
 //! Wraps what the verify-ui skill prescribes: release build (QML is
 //! embedded in the exe), offscreen QPA with an explicit font dir, the
-//! PG_AUTO_* hooks, a bounded wait with a kill guard, and the
+//! PGG_AUTO_* hooks, a bounded wait with a kill guard, and the
 //! `screenshot saved=true` stderr line as the verdict.
 
 mod child;

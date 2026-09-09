@@ -32,7 +32,7 @@ Rectangle {
 
     color: Theme.bgBase
 
-    /// Automation: the colour the `>_` in this band came out to (`PG_AUTO_ACT=commands-clear`).
+    /// Automation: the colour the `>_` in this band came out to (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: seat.markColor
 
     /// The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
@@ -107,7 +107,7 @@ Rectangle {
         textPick.releaseText()
     }
     /// Automation: the same hand started on the ground under the last row — the one place inside this panel's own
-    /// frame where a press used to reach nothing (`PG_AUTO_ACT=commands-sweep`). It goes in through the pixels rather
+    /// frame where a press used to reach nothing (`PGG_AUTO_ACT=commands-sweep`). It goes in through the pixels rather
     /// than through a row number, because the pixels are the whole of what changed.
     function sweepGround(fx, fy) {
         return textPick.sweepFromGround(fx, fy)
@@ -117,7 +117,7 @@ Rectangle {
     readonly property bool hasGround: textPick.hasGround
     readonly property real groundTop: textPick.groundTop
     /// Automation: how many rows are wearing a rectangle of the selection, and whether every row that exists is
-    /// (`PG_AUTO_ACT=commands-select`).
+    /// (`PGG_AUTO_ACT=commands-select`).
     ///
     /// **The model's `sel` is not this.** A row can hold its whole share of the selection and draw nothing — which
     /// is exactly what a wash asked of the row's layout does when it is asked at the wrong moment (measured: the

@@ -27,7 +27,7 @@ AppListView {
     /// none (the WIP file list) simply has no gestures — every call below is skipped.
     property var gestures: null
     /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
-    /// photographed (PG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
+    /// photographed (PGG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
     /// panes (`WipPane` / `DetailsPane`).
     property int pointedTipRow: -1
     /// Where a row's open name box is drawn — outside this list, which clips, because the box is allowed past the
@@ -76,7 +76,7 @@ AppListView {
         }
     }
 
-    /// Smoke hooks (PG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
+    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
     /// injected (verify-ui スキル), so they go in at the row's own answer. `clickRow` says false when the view has not
     /// built that row yet — the delegate arrives on the layout after the model got the rows, and a run that counted
     /// the miss as a press would wait for a gesture nobody made (app-ui.md §UI 自動化の因果性).
@@ -100,7 +100,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
-    /// The box on one row, as drawn and as the question on it wants to be drawn (PG_AUTO_ACT=nav-branch-box). Neither
+    /// The box on one row, as drawn and as the question on it wants to be drawn (PGG_AUTO_ACT=nav-branch-box). Neither
     /// is anything a picture answers: an elided placeholder frames like a shorter question. A row the view has not
     /// built answers 0 — the same miss `clickRow` reports as false.
     function rowBoxWidth(index) {
@@ -123,7 +123,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxAt : ""
     }
-    /// What the pointed row itself would say, and what it is called (PG_AUTO_ACT=nav-tip). The row decides and the
+    /// What the pointed row itself would say, and what it is called (PGG_AUTO_ACT=nav-tip). The row decides and the
     /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read off
     /// `hoverText` and not the attached `ToolTip.visible` — **that one reads back the instance's own state**, so during
     /// the delay a row that does speak answers false. An empty name says the view has not built that row yet — the same
@@ -146,7 +146,7 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// A few rows on, which is how a run puts a row just out of sight (PG_AUTO_ACT=nav-branch-box:away). Not to the
+    /// A few rows on, which is how a run puts a row just out of sight (PGG_AUTO_ACT=nav-branch-box:away). Not to the
     /// end: past the view's own cache the delegate is gone, and a box that went with it proves nothing about the one
     /// rule being read — that a box whose row has left the list goes with it.
     function scrollRows(rows) {

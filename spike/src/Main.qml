@@ -100,7 +100,7 @@ ApplicationWindow {
             const f = (frames / secs).toFixed(1)
             const name = rendererCombo.currentText
             benchResult.text = "last run: " + name + " = " + f + " fps"
-            SpikeConfig.report("PG_SPIKE_BENCH renderer=" + name + " fps=" + f)
+            SpikeConfig.report("PGG_SPIKE_BENCH renderer=" + name + " fps=" + f)
             root.benchRunning = false
             root.nextBench()
         }
@@ -120,7 +120,7 @@ ApplicationWindow {
             prepareShot()
     }
 
-    // ---- window-content screenshot mode (PG_SPIKE_SHOTDIR) --------------
+    // ---- window-content screenshot mode (PGG_SPIKE_SHOTDIR) --------------
     function prepareShot() {
         SpikeConfig.report("SHOT prepare tab=" + tabBar.currentIndex + " dir=" + SpikeConfig.shotDir)
         if (tabBar.currentIndex === 3 && !logModel.loading && logModel.rowTotal === 0)

@@ -28,7 +28,7 @@ use crate::subprocess::git_query;
 
 /// The user's own way past the gate, by name. Sessions may not spell it:
 /// the pre-shell hook refuses a command that does.
-pub(crate) const SKIP: &str = "PG_GATE_SKIP";
+pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
 /// and so in every git a session starts. It is what tells the gate whose

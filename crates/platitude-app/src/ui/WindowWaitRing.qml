@@ -35,7 +35,7 @@ Item {
     /// pointer wears gives (`RefusalBadge`): read from another file `visible` comes back stale.
     readonly property bool ringShown: waitRing.spinning
 
-    /// Automation (`PG_AUTO_ACT=replay-running`): stands a hand at `x, y` in scene coordinates and leaves it there.
+    /// Automation (`PGG_AUTO_ACT=replay-running`): stands a hand at `x, y` in scene coordinates and leaves it there.
     /// A function rather than a binding, so the map runs once against the geometry it is looking at (app-ui.md).
     function holdWaitHand(x, y) {
         waitSeat.handStandIn = waitSeat.mapFromItem(null, x, y)

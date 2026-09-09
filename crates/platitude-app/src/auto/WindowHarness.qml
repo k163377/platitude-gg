@@ -75,7 +75,7 @@ Item {
         property: "selfCloses"
         value: Harness.autoAct === ""
     }
-    // PG_AUTO_OPEN: ';'-separated repositories open as tabs in order, instead of the ones that were left.
+    // PGG_AUTO_OPEN: ';'-separated repositories open as tabs in order, instead of the ones that were left.
     Connections {
         target: harness.window
         function onStartingTabs() {
@@ -161,7 +161,7 @@ Item {
         }
     }
 
-    // The identity hooks are not verbs and run without one (`PG_AUTO_IDENTITY`), so they are built off their own
+    // The identity hooks are not verbs and run without one (`PGG_AUTO_IDENTITY`), so they are built off their own
     // knob rather than beside the verbs.
     Loader {
         active: harness.screensUp && Harness.autoIdentity !== ""

@@ -197,7 +197,7 @@ Item {
     /// Automation: whether the list's own bar is standing at all — the run's own honesty, since a diff that fits its
     /// frame has no bar and proves nothing about the strip under one.
     readonly property bool barOut: pick.barRoom > 0
-    /// Automation: that strip, and whether this hand gives it back (`PG_AUTO_ACT=diff-bar`). A press cannot be
+    /// Automation: that strip, and whether this hand gives it back (`PGG_AUTO_ACT=diff-bar`). A press cannot be
     /// injected, so what is read is the frame the press would land in — where this hand ends against where the bar
     /// begins — and the edge answering right beside it. The three that are judged stand together at the head, since
     /// `must_say` only takes words that are neighbours (`graph-head`, the same shape); the strip's own width follows
@@ -213,7 +213,7 @@ Item {
     /// Automation: a press on the very last pixel this hand covers, on the first row that takes one. What lies beyond
     /// it is the bar's strip (`barRoom`), and this is the half that says the strip was given back to the bar and not
     /// eaten out of the code: an edge that answers is an edge that stops in the right place
-    /// (`PG_AUTO_ACT=diff-bar`). Nothing is left standing — a press that never moved selected nothing.
+    /// (`PGG_AUTO_ACT=diff-bar`). Nothing is left standing — a press that never moved selected nothing.
     function pressAtRightEdge() {
         for (let i = 0; i < pick.view.count; i++) {
             const item = pick.view.itemAtIndex(i)

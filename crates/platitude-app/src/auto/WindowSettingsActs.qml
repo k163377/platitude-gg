@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The settings screen's half of the window's PG_AUTO_ACT harness: the merge editor's list, the repository group,
+/// The settings screen's half of the window's PGG_AUTO_ACT harness: the merge editor's list, the repository group,
 /// the rail between the categories, and the avatar card.
 ///
 /// A file of its own because these are the verbs that reach into one dialog and nothing else — every one of them
@@ -104,7 +104,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
+    // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
     // repository the reader is looking at, and with the chooser's list down. The argument picks a row of the strip for
     // the run that wants a repository other than the front one — through the same call a pick from the list makes,
     // not by writing the model's path (規約 §UI 自動化の因果性).
@@ -150,7 +150,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
+    // PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
     // having answered. The argument is the path to write, or none for the resting state — an empty box, which is
     // "whichever git PATH resolves" and is what a fresh settings directory comes up holding.
     //
@@ -197,7 +197,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
+    // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
     // typed is the second git this run was staged with (`--other-git`), which is what the way out has to run into.
     //
     // **Neither half is a picture.** A screen that stayed is drawn exactly like one nobody asked to close, and the
@@ -237,7 +237,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
+    // PGG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
     // row, in git's own spelling (`true` / `input` / `false`) or `inherited` for the row that writes nothing.
     //
     // **It is the only level there is.** The screen writes `core.autocrlf` into the repository somebody picked and
@@ -280,7 +280,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
+    // PGG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
     // the screen. Opened on the application category and pressed onto the other through the row's own handler
     // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
     // and would leave a dead rail green. What the report reads back is the chapters, not `category` — that is the
@@ -315,7 +315,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-escape: the way out the screen owns, taken through the same function the `✕` and the
+    // PGG_AUTO_ACT=settings-escape: the way out the screen owns, taken through the same function the `✕` and the
     // Escape shortcut are one line onto (`SettingsDialog.escapeOut`). **A picture cannot answer this one** — a
     // window with no settings screen over it is drawn exactly like one where the screen never opened — so what is
     // judged is the pair of states in the report, not the shot.
@@ -357,7 +357,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=settings-leave: the way out, taken while an identity chapter is holding an edit git has not been
+    // PGG_AUTO_ACT=settings-leave: the way out, taken while an identity chapter is holding an edit git has not been
     // given. The run types into the box the way a keystroke does, then presses the same way out the `✕` and Escape
     // press — and what has to be true afterwards is that the screen is **still there**, with the question standing
     // in its foot.

@@ -79,7 +79,7 @@ Item {
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
     /// came back with. The conditions above are what asks for a state; these are what the band made of it
-    /// (`PG_AUTO_ACT=badges` / `badges-hover`).
+    /// (`PGG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: badgeRow.visible
     readonly property bool stateMarkShown: stateToggle.visible
     /// What the mark was actually painted with — the heaviest state's colour (規約 §状態). Read off the group rather than

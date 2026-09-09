@@ -117,7 +117,7 @@ impl Spoiled {
 /// The process this run measures, and everything it is told.
 ///
 /// A build with no harness in it is told nothing at all beyond where its
-/// two files are: it answers no `PG_AUTO_*` knob, and the repository it
+/// two files are: it answers no `PGG_AUTO_*` knob, and the repository it
 /// opens comes out of the `state.toml` written beside them
 /// (`artifacts::state_file`).
 fn command(
@@ -132,8 +132,8 @@ fn command(
     cmd.current_dir(root)
         .env("PATH", path)
         .env("QT_FORCE_STDERR_LOGGING", "1")
-        .env("PG_CONFIG_DIR", config_dir)
-        .env("PG_LOG", "info")
+        .env("PGG_CONFIG_DIR", config_dir)
+        .env("PGG_LOG", "info")
         // Which graphics device and backend Qt chose, said by Qt itself.
         // Two runs on different adapters are not each other's control, and
         // this machine has more than one (ci/baseline/perf-windows-x64.md).
@@ -160,21 +160,21 @@ fn command(
     // The app reports completion only after every requested measurement
     // has answered. The parent owns termination so it can take the last
     // process-memory sample and reap exactly the child it started.
-    cmd.env("PG_AUTO_PERF", "1")
-        .env("PG_PERF_SELECTION", &opts.selection)
-        .env("PG_PERF_OID", &opts.oid)
-        .env("PG_PERF_FILE", &opts.file)
-        .env("PG_PERF_DIFF", if opts.diff { "1" } else { "0" })
+    cmd.env("PGG_AUTO_PERF", "1")
+        .env("PGG_PERF_SELECTION", &opts.selection)
+        .env("PGG_PERF_OID", &opts.oid)
+        .env("PGG_PERF_FILE", &opts.file)
+        .env("PGG_PERF_DIFF", if opts.diff { "1" } else { "0" })
         .env(
-            "PG_PERF_TRACE_FRAMES",
+            "PGG_PERF_TRACE_FRAMES",
             if opts.trace_frames { "1" } else { "0" },
         );
     for (asked, name, value) in [
-        (opts.open, "PG_AUTO_OPEN", opts.repo.display().to_string()),
-        (opts.select, "PG_AUTO_SELECT", "1".to_string()),
-        (opts.scroll, "PG_AUTO_SCROLL", "1".to_string()),
-        (opts.breakdown, "PG_MEM_REPORT", "1".to_string()),
-        (opts.font_walk, "PG_PERF_FONT_WALK", "1".to_string()),
+        (opts.open, "PGG_AUTO_OPEN", opts.repo.display().to_string()),
+        (opts.select, "PGG_AUTO_SELECT", "1".to_string()),
+        (opts.scroll, "PGG_AUTO_SCROLL", "1".to_string()),
+        (opts.breakdown, "PGG_MEM_REPORT", "1".to_string()),
+        (opts.font_walk, "PGG_PERF_FONT_WALK", "1".to_string()),
     ] {
         if asked {
             cmd.env(name, value);

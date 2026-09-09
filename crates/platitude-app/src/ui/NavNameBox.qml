@@ -120,7 +120,7 @@ SlimField {
 
     /// Whether the box is on screen at all, and where it came out. Drawn outside the list, it has one more way to be
     /// missing than a box in a row has — a layer that cuts it, a row the list has scrolled away from — and neither is
-    /// anything a picture answers (PG_AUTO_ACT=nav-branch-box / nav-rename-box).
+    /// anything a picture answers (PGG_AUTO_ACT=nav-branch-box / nav-rename-box).
     readonly property string cameOut:
         Math.round(box.x) + "," + Math.round(box.y)
         + " row=" + Math.round(box.rowTop) + " list=" + Math.round(box.rowsTop)

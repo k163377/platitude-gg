@@ -113,7 +113,7 @@ AppCard {
         // whatever the last hover said.
         peek.contentPointed = false
     }
-    /// Smoke hooks (PG_AUTO_ACT=nav-reclick): the three the open list
+    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): the three the open list
     /// answers, for the section standing beside the folded rail.
     function clickRow(index) {
         return peekList.clickRow(index)

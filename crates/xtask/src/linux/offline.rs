@@ -29,7 +29,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     let app = ensure_image(root, "app", false)?;
 
     // With the harness (`crate::tree::HARNESS_FEATURE`), because the script
-    // drives the app over the `PG_*` protocol: a build without it answers
+    // drives the app over the `PGG_*` protocol: a build without it answers
     // none of it, stands until the script's timeout kills it, and reports
     // as an exit 124 that says nothing about why.
     println!("building the app with the harness…");
@@ -58,7 +58,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     println!("collected {} test binaries", binaries.len());
 
     let smoke = format!("{TARGET_MOUNT}/debug/platitude-gg");
-    let mut cmd = docker_run(root, false, &[("PG_SMOKE_BIN", &smoke)]);
+    let mut cmd = docker_run(root, false, &[("PGG_SMOKE_BIN", &smoke)]);
     cmd.arg(&app)
         .args(["bash", "ci/offline-test.sh"])
         .args(&binaries);
@@ -67,7 +67,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     if status.code() == Some(124) {
         return Err(
             "the smoke run hit ci/offline-test.sh's timeout: the app was started \
-             and never finished on its own. A PG_SMOKE_BIN built without the \
+             and never finished on its own. A PGG_SMOKE_BIN built without the \
              harness feature is the usual cause — it reads no knob, so nothing \
              tells it to open a repository or to stop."
                 .into(),

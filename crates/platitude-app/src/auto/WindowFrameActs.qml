@@ -6,7 +6,7 @@ import QtQuick.Window
 import platitude
 import platitude.ui
 
-/// The window frame's half of the PG_AUTO_ACT harness: the width and height it can be taken to, the floor it
+/// The window frame's half of the PGG_AUTO_ACT harness: the width and height it can be taken to, the floor it
 /// refuses to go under, and the state file it comes back to.
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
@@ -22,7 +22,7 @@ Item {
     required property TopBar topBar
     required property Item mainUi
 
-    // PG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers rather than
+    // PGG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers rather than
     // a picture: the app is the whole screen, so there is no desktop left beside it to show a gap against.
     SampleTimer {
         id: fillActTimer
@@ -68,7 +68,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=window-floor: (no argument) the shape remembered in the configuration directory, which xtask writes
+    // PGG_AUTO_ACT=window-floor: (no argument) the shape remembered in the configuration directory, which xtask writes
     // at 320x240 — under every floor there is, so what comes up says whether the way in lifts it fold folded, put down
     // exactly on that floor, then the list put back: the floor rises under a window already standing on it log the same
     // rise the other way — put down on the floor without the log, then the log opened
@@ -233,7 +233,7 @@ Item {
         window.finishAutoAct()
     }
 
-    // PG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
+    // PGG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
     // agree with itself.
     SampleTimer {
         id: stateActTimer

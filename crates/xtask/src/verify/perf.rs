@@ -19,10 +19,10 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             "verify-ui perf takes none, details, diff, scroll, scroll-none, or font-walk".into(),
         );
     }
-    cmd.env("PG_AUTO_PERF", "1")
-        .env("PG_PERF_TRACE_FRAMES", "1")
+    cmd.env("PGG_AUTO_PERF", "1")
+        .env("PGG_PERF_TRACE_FRAMES", "1")
         .env(
-            "PG_PERF_SELECTION",
+            "PGG_PERF_SELECTION",
             if ["none", "scroll-none", "font-walk"].contains(&arg) {
                 "none"
             } else {
@@ -30,7 +30,7 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             },
         )
         .env(
-            "PG_PERF_DIFF",
+            "PGG_PERF_DIFF",
             if ["diff", "scroll"].contains(&arg) {
                 "1"
             } else {
@@ -38,14 +38,14 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             },
         );
     if ["scroll", "scroll-none"].contains(&arg) {
-        cmd.env("PG_AUTO_SCROLL", "1");
+        cmd.env("PGG_AUTO_SCROLL", "1");
     }
     // The calibration run's shape (`perf::fonts`): unselected, unscrolled,
     // and the font walk paid before `perf_done`. Offscreen there is
     // nothing to weigh — that platform's font database holds no fonts —
     // so what this checks is the three lines, in order.
     if arg == "font-walk" {
-        cmd.env("PG_PERF_FONT_WALK", "1");
+        cmd.env("PGG_PERF_FONT_WALK", "1");
     }
     Ok(())
 }

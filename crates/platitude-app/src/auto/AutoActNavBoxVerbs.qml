@@ -160,7 +160,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=nav-rename-far: the section is opened, scrolled until its first row is out of sight, and only then
+    // PGG_AUTO_ACT=nav-rename-far: the section is opened, scrolled until its first row is out of sight, and only then
     // asked for a box on that row. Each step waits for the one before to have landed — a list still building has no
     // height to scroll by, and a run that named the row before the scroll took would be watching the list stay put.
     property int farStep: 0
@@ -286,7 +286,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=nav-branch-box / nav-rename-box: the pane is set to the width the argument names, the ref it names
+    // PGG_AUTO_ACT=nav-branch-box / nav-rename-box: the pane is set to the width the argument names, the ref it names
     // is given a box, and the box is left standing for the shot. One timer for both, because what the shot is about —
     // how wide the box comes out on a row of that depth in a pane of that width — is one question asked of the two
     // things the box is opened for.
@@ -404,7 +404,7 @@ Item {
             driver.complete()
         }
     }
-    // PG_AUTO_ACT=rename-box-out: the ways out of the name box, one route per run. **The claim is what the box and the
+    // PGG_AUTO_ACT=rename-box-out: the ways out of the name box, one route per run. **The claim is what the box and the
     // gesture are left holding**, not how long nothing happened for: a wait still running is the whole of how a box
     // comes back by itself, so `armed=false` is what says it will not (observed — the box on a row clicked
     // again closed and reopened a window later).

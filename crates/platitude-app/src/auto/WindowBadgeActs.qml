@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The state badges' half of the band's PG_AUTO_ACT harness: the three the band raises at once, the one a graph
+/// The state badges' half of the band's PGG_AUTO_ACT harness: the three the band raises at once, the one a graph
 /// that stopped reading raises, and the one an old git raises.
 ///
 /// Built by `WindowAutoActDriver` beside `WindowBandActs`, and split from it for length alone. Each verb stands
@@ -20,7 +20,7 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
-    // PG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has ever placed the group. A hand
+    // PGG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has ever placed the group. A hand
     // cannot be made to take that order — it arrives on a mark that is already somewhere — and it is the only order
     // `BandStateGroup.standInAsking` is there for: a pointer that cannot move raises the beat once, so the card has to
     // be asked for again when the row answers. `badges-hover` puts the pointer down on a group the band has long since
@@ -34,7 +34,7 @@ Item {
             topBar.statePointedAt = true
     }
 
-    // PG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band ever asks for, and the
+    // PGG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band ever asks for, and the
     // floor is the only thing between that and a `>_` pushed off the end (デザイン規約 §ウィンドウの縁). The argument is
     // `<width>[:<tabs>]`: the window width, `floor` for the floor the three badges leave, and how many tabs the run
     // built the strip out of (`verify::repos::band_tab_count`).
@@ -143,7 +143,7 @@ Item {
         window.finishAutoAct()
     }
 
-    // PG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history, and
+    // PGG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history, and
     // the card line that says which of the two ways it came to be so. `graph-stale` fails the off-screen rebuild, so a
     // whole graph is left standing and goes out of date where it is; `graph-stopped` fails the stream, so the column
     // empties and the walk gives up part-way. Both go in at the walk itself (`GraphModel.failGraphPass`) — the state
@@ -207,7 +207,7 @@ Item {
         window.finishAutoAct()
     }
 
-    // PG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here stages the state — the run is handed a git that
+    // PGG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here stages the state — the run is handed a git that
     // answers `--version` with an older number (`verify-ui --old-git`), so the badge is answering a real reading of a
     // real program.
     SampleTimer {

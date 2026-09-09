@@ -364,7 +364,7 @@ Item {
             }
         }
     }
-    // PG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
+    // PGG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
     // taken by the hand laid over the rows (`AppListView.barRoom`). The bar is drawn *over* the rows, so anything
     // covering the frame covers the bar with it, and the hand that picks the text out took every press on the
     // trough. Two claims:
@@ -835,7 +835,7 @@ Item {
         return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
                 + "," + diffPane.codeWidestRow
     }
-    // PG_AUTO_ACT=code-grow: a row nothing picked, arriving from below. The model hands over the longest few lines by
+    // PGG_AUTO_ACT=code-grow: a row nothing picked, arriving from below. The model hands over the longest few lines by
     // column count and the pane measures those before any row exists (`DiffTextMetrics.codeW`); what settles how far
     // there is to go is the rows themselves as they are laid out (`DiffReach`). This is the case where the two
     // disagree — `--preset widelate`'s `late.txt` fills the pick with lines of combining pairs, which the walk counts
@@ -990,7 +990,7 @@ Item {
             codeGrowTimer.finish()
         }
     }
-    // PG_AUTO_ACT=code-shrink: the same file read again with its widest line taken out of it — which is what a partial
+    // PGG_AUTO_ACT=code-shrink: the same file read again with its widest line taken out of it — which is what a partial
     // write leaves behind (`--preset widelate`'s `top.txt`, whose first hunk's first changed row is that line). The
     // reading place along the row is the thing at risk: the width it is clamped against drops under it, and a reach
     // that answered zero in the gap between the two readings — or one that never let go of the largest number it had
@@ -1077,7 +1077,7 @@ Item {
             codeShrinkTimer.finish()
         }
     }
-    // PG_AUTO_ACT=code-swap: another file, and the place and the width both go with the last one. The argument names
+    // PGG_AUTO_ACT=code-swap: another file, and the place and the width both go with the last one. The argument names
     // the file to read first; the second is the row beside it in the list (`NavSectionModel.beside_path`), the way a
     // reader picks the next file, and the verb reports both.
     //
@@ -1159,7 +1159,7 @@ Item {
             codeSwapTimer.finish()
         }
     }
-    // PG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file instead of from
+    // PGG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file instead of from
     // the rows themselves — the one place inside the code column where a press used to reach nothing
     // (規約 §diff の中身をコピーする). The shape is `details-sweep`'s, and so are its two claims:
     //

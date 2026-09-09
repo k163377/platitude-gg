@@ -6,7 +6,7 @@ import platitude
 import platitude.ui
 
 /// Owns one automated run from completion through a rendered screenshot. The ordinary application constructs it too,
-/// but every timer stays idle unless the PG_AUTO_* harness variables were supplied.
+/// but every timer stays idle unless the PGG_AUTO_* harness variables were supplied.
 Item {
     id: driver
 
@@ -37,7 +37,7 @@ Item {
     /// How many marks the picture had to wait for, 0 where the scene was already drawn when it was called for. Said in
     /// the report line, so a run cannot go green with this wait unwired.
     property int inkWaited: 0
-    // Every PG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
+    // Every PGG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
     // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
     readonly property bool causal: Harness.autoAct !== ""
 

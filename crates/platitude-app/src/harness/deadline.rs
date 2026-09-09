@@ -279,7 +279,7 @@ fn append(path: &Path, line: &str) -> std::io::Result<()> {
 }
 
 /// Holds the process at one station for good, where a run asked to be
-/// stopped there (`PG_FAULT_HANG`, `xtask::verify::faults`).
+/// stopped there (`PGG_FAULT_HANG`, `xtask::verify::faults`).
 ///
 /// **After the mark and never before it.** What a held run is for is the
 /// record: it has written the station it is held at by the time it stops,

@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The band's half of the window's PG_AUTO_ACT harness: the row itself, the ☰ menu, and the three actions giving
+/// The band's half of the window's PGG_AUTO_ACT harness: the row itself, the ☰ menu, and the three actions giving
 /// their words up as the window narrows. The state badges are the other half (`WindowBadgeActs`).
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
@@ -69,7 +69,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=fetch-tip: what the fetch button offers a pointer, on each side of the one thing that decides it.
+    // PGG_AUTO_ACT=fetch-tip: what the fetch button offers a pointer, on each side of the one thing that decides it.
     // The argument names which side this run is — `off` is the repository with no remote (`--preset noremote`), where
     // the button is dim and says nothing, and `on` is any repository that has one. Neither run proves anything alone.
     //
@@ -103,7 +103,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=stash-state: which of the working tree's four answers the Stash button settled on. The argument names
+    // PGG_AUTO_ACT=stash-state: which of the working tree's four answers the Stash button settled on. The argument names
     // the one this repository is meant to give (`ready` / `clean` / `conflicts` / `unborn`), and the run waits for the
     // band to say it — the reading is built out of a HEAD and four counts that land over several drains, so a band read
     // too early would answer `unborn` for every repository on its way open.
@@ -130,7 +130,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=band: numbers rather than a screenshot — the headless platform draws no window buttons of its own, so
+    // PGG_AUTO_ACT=band: numbers rather than a screenshot — the headless platform draws no window buttons of its own, so
     // a band that lost the grab run or pushed its buttons off the end looks fine in the picture.
     SampleTimer {
         id: bandActTimer
@@ -153,7 +153,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice.
+    // PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice.
     //
     // Numbers as well as the card's picture, because the two things that were reported broken are both invisible to
     // it: a second press that reopens the card frames exactly like one that never closed it, and which side of the
@@ -196,7 +196,7 @@ Item {
         }
     }
 
-    // PG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
+    // PGG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
     // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape* rather than a number, because which pixel
     // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.
     SampleTimer {

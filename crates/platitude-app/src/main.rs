@@ -58,7 +58,7 @@ fn main() {
         tree: &tree,
         debug: cfg!(debug_assertions),
         // Asked of the harness, not of the environment: a build without
-        // one is never driven, so no `PG_*` variable left in somebody's
+        // one is never driven, so no `PGG_*` variable left in somebody's
         // shell can take their settings away.
         driven: harness::knobs().automated,
     });
@@ -397,7 +397,7 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
     }
 }
 
-/// stderr logging; level via `PG_LOG` (error/warn/info/debug/trace).
+/// stderr logging; level via `PGG_LOG` (error/warn/info/debug/trace).
 ///
 /// **Never coloured.** This stream is read by machines — `xtask perf`
 /// takes the interaction and startup numbers out of it, `xtask verify-ui`
@@ -419,7 +419,7 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 /// fail, and this is what still stands between them and a window if the
 /// writer above is ever put back to a bare stream.
 fn init_tracing() {
-    let level = match std::env::var("PG_LOG").as_deref() {
+    let level = match std::env::var("PGG_LOG").as_deref() {
         Ok("error") => tracing::Level::ERROR,
         Ok("info") => tracing::Level::INFO,
         Ok("debug") => tracing::Level::DEBUG,
