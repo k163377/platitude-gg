@@ -22,6 +22,7 @@ mod support;
 #[path = "../../src/wait.rs"]
 mod wait;
 
+mod budget;
 mod hook;
 mod landing;
 mod selection;

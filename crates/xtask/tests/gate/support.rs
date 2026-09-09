@@ -102,6 +102,16 @@ impl Sandbox {
             .env("PG_GATE_FAKE_LOG", &self.fake_log)
             .env_remove("PG_GATE_FAKE_FAIL")
             .env_remove("PG_GATE_SKIP")
+            // This suite runs as a step of a gate, which marks every
+            // child of a step as running under its ticket and may have
+            // been asked for the rule the A/B measures. Both would reach
+            // the runners started here — and a budget that hands out
+            // passes is not the one under test. Spelled out, as
+            // CLAUDECODE is: this crate cannot use the runner's modules,
+            // and the runner's own suite checks the two spellings agree
+            // (`budget::tests`).
+            .env_remove("PG_BUDGET_HELD")
+            .env_remove("PG_BUDGET")
             // The gate answers for a session's git and nobody else's, so
             // the sandbox's git is a session's — whether or not the run
             // that started these tests was one (CI's is not, a session's
@@ -198,6 +208,17 @@ impl Sandbox {
     pub fn ran(&self) -> BTreeSet<String> {
         let text = std::fs::read_to_string(&self.fake_log).unwrap_or_default();
         let _ = std::fs::remove_file(&self.fake_log);
+        text.lines().map(str::to_string).collect()
+    }
+
+    /// The steps that were told to reuse a release rather than build one
+    /// (`--no-build`), since the last look. Kept beside the fake log
+    /// rather than in it, because every other test reads that as a set
+    /// of step ids.
+    pub fn told_not_to_build(&self) -> BTreeSet<String> {
+        let path = PathBuf::from(format!("{}.no-build", self.fake_log.display()));
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let _ = std::fs::remove_file(&path);
         text.lines().map(str::to_string).collect()
     }
 

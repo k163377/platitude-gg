@@ -286,6 +286,51 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     assert_eq!(again, set(&[red]), "{again:?}");
 }
 
+/// A verb answered by a stamp another tree wrote **while this one stood
+/// in the queue** built nothing here, so it does not earn the rest of
+/// the block their `--no-build`. Read as a build, every verb after it
+/// would be judging whatever release happened to be lying in this tree
+/// — older than the sources, or absent.
+///
+/// The window between the plan and the look is another tree's to write
+/// in and nothing outside can land in it, so the runner's own switch
+/// stands in for it (`PG_GATE_FAKE_STAMP`).
+#[test]
+fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
+    let sb = Sandbox::new("stamped-while-queued");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n\
+         stash-menu --preset basic\tDriver Main StashPane\n\
+         stash-open --preset basic\tDriver Main StashPane\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    // The first of the host's verbs in the plan's order, which is the
+    // one that would otherwise build the release for the rest.
+    let first = "verify stash --preset basic";
+    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PG_GATE_FAKE_STAMP", first)]);
+    assert!(ok, "{text}");
+    assert!(
+        text.contains("stamped elsewhere while this waited"),
+        "the window was never entered: {text}"
+    );
+    let told = sb.told_not_to_build();
+    assert!(
+        !told.contains("verify stash-menu --preset basic"),
+        "the verb after the stamped one was told to reuse a release nothing built here: {told:?}"
+    );
+    assert!(
+        told.contains("verify stash-open --preset basic"),
+        "the block never reached a verb that could reuse the build: {told:?}"
+    );
+}
+
 #[test]
 fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     let sb = Sandbox::new("qmltest");
