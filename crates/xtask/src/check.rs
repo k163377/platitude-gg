@@ -31,8 +31,12 @@ use crate::wait::{Budget, LOOK_AGAIN, Wait};
 /// (`wait::Wait::saw`).
 const QUIET_CEILING: Duration = Duration::from_secs(20 * 60);
 
-/// The absolute ceiling per step, for a hang that keeps talking.
-const STEP_CEILING: Duration = Duration::from_secs(90 * 60);
+/// The absolute ceiling per step, for a hang that keeps talking. Also
+/// how long a killed unit's leftovers may hold the machine's budget,
+/// which is the same question asked from the other side: past the
+/// longest a step may run, what is at that number is not that step
+/// (`budget::Pool::leftover`).
+pub(crate) const STEP_CEILING: Duration = Duration::from_secs(90 * 60);
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut verbs: Vec<String> = Vec::new();
@@ -160,18 +164,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Last so it reuses the release the container's verify-ui just built.
     linux_steps.push(xtask(&["linux", "bare"]));
 
-    let host_root = root.clone();
-    let host = std::thread::spawn(move || run_side("host", &host_root, &host_steps));
-    let linux_root = root.clone();
-    let linux = std::thread::spawn(move || run_side("linux", &linux_root, &linux_steps));
-
-    let mut failures: Vec<String> = Vec::new();
-    for handle in [host, linux] {
-        match handle.join() {
-            Ok(mut side_failures) => failures.append(&mut side_failures),
-            Err(_) => failures.push("a side panicked".to_string()),
-        }
-    }
+    let failures = both_sides(&root, &host_steps, &linux_steps)?;
 
     let minutes = started.elapsed().as_secs() / 60;
     let seconds = started.elapsed().as_secs() % 60;
@@ -203,7 +196,51 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// had already answered. The file also survives a hang — when a step is
 /// killed at a ceiling, its tail says what the step was doing, which a
 /// pipe lost in a buffer cannot.
-fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
+/// Both sides at once, each on a thread of its own, and what came back
+/// red.
+///
+/// One pool for the whole run, as the gate builds one for its sides
+/// (`gate::run_sides`): this verb drives steps, and a runner's steps are
+/// units of the machine's budget the same way a gate's are. Not the
+/// standalone road — that one is for a command that *is* one unit and
+/// holds one ticket for its whole life (`budget::standalone`).
+fn both_sides(
+    root: &Path,
+    host_steps: &[Vec<String>],
+    linux_steps: &[Vec<String>],
+) -> Result<Vec<String>, String> {
+    let pool = crate::budget::Pool::of(root, crate::gate::default_jobs())?;
+    let seat = crate::gate::seat_of(root);
+    let ground = Ground {
+        root,
+        pool: &pool,
+        seat: &seat,
+    };
+    Ok(std::thread::scope(|scope| {
+        let host = scope.spawn(|| run_side("host", &ground, host_steps));
+        let linux = scope.spawn(|| run_side("linux", &ground, linux_steps));
+        let mut failures = Vec::new();
+        for handle in [host, linux] {
+            match handle.join() {
+                Ok(mut side_failures) => failures.append(&mut side_failures),
+                Err(_) => failures.push("a side panicked".to_string()),
+            }
+        }
+        failures
+    }))
+}
+
+/// What both of this verb's sides stand on: the tree, and the machine's
+/// budget their steps are admitted out of.
+#[derive(Clone, Copy)]
+struct Ground<'a> {
+    root: &'a Path,
+    pool: &'a crate::budget::Pool,
+    seat: &'a str,
+}
+
+fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<String> {
+    let root = ground.root;
     let logs = root.join("target").join("check-logs");
     if let Err(e) = std::fs::create_dir_all(&logs) {
         return vec![format!("{}: {e}", logs.display())];
@@ -211,10 +248,28 @@ fn run_side(side: &str, root: &Path, steps: &[Vec<String>]) -> Vec<String> {
     for (index, step) in steps.iter().enumerate() {
         let display = step.join(" ");
         let log = logs.join(format!("{side}-{index:02}.log"));
+        // One step is one unit of the machine, here as in the gate
+        // (`crate::budget`): this verb is the older road to the same
+        // work, and a machine full of seats counts what runs on it
+        // however it was started.
+        let room = ground
+            .pool
+            .admit_once_the_machine_is_free(&crate::budget::Ask {
+                weight: crate::budget::weight_of(step, false),
+                rank: crate::budget::Rank::Normal,
+                seat: ground.seat,
+                what: &display,
+                side,
+            });
+        let room = match room {
+            Ok(room) => room,
+            Err(why) => return vec![format!("{display}: {why}")],
+        };
         println!("[{side}] {display} … (log: {})", log.display());
         // waits(measured): the step's wall clock, said on its line and judged by nothing
         let at = Instant::now();
-        let outcome = run_step(root, step, &log);
+        let outcome = run_step(root, step, &log, &room);
+        drop(room);
         // Lossy, never empty-on-error: one localized byte in a linker or
         // Qt line must not blank a failure's whole log.
         let text = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();
@@ -275,7 +330,12 @@ pub(crate) fn tail_of(text: &str) -> String {
 /// watched rather than awaited. `Ok` is the step's own verdict; `Err` is a
 /// ceiling or a spawn failure — the reasons a check used to sit forever.
 /// The gate runs its steps through here too.
-pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool, String> {
+pub(crate) fn run_step(
+    root: &Path,
+    step: &[String],
+    log: &Path,
+    room: &crate::budget::Admitted,
+) -> Result<bool, String> {
     let out = std::fs::File::create(log).map_err(|e| format!("{}: {e}", log.display()))?;
     let err = out
         .try_clone()
@@ -286,6 +346,11 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
     let mut command = Command::new(&step[0]);
     command.args(&step[1..]).current_dir(root);
     crate::still::step(&mut command);
+    // Every caller of this is itself one unit of the machine's budget —
+    // the gate's step under its own ticket, `check`'s under no budget at
+    // all — so what the step starts is under that and takes no second
+    // ticket of its own (`crate::budget`).
+    crate::budget::under(&mut command);
     // So that a step ended at a ceiling takes its cargo's rustc with it,
     // rather than leaving one holding this side's build lock (`reap`).
     crate::reap::own_group(&mut command);
@@ -295,6 +360,11 @@ pub(crate) fn run_step(root: &Path, step: &[String], log: &Path) -> Result<bool,
         .stderr(Stdio::from(err))
         .spawn()
         .map_err(|e| e.to_string())?;
+    // What this step is, as far as the machine's budget is concerned:
+    // the ticket is this runner's, but the load is the child's, and a
+    // ledger that outlives this process has to know which number to ask
+    // after — and what to expect at it (`budget::Pool::leftover`).
+    room.started(child.id(), &step[0]);
     let mut wait = Wait::new(
         "the step",
         Budget::of(QUIET_CEILING, STEP_CEILING),

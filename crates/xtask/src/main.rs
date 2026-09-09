@@ -6,6 +6,7 @@
 
 mod app_env;
 mod app_out;
+mod budget;
 mod check;
 mod corpus;
 mod demo;
@@ -65,6 +66,7 @@ fn main() -> ExitCode {
         Some("seats") => seats::run(&args[1..]),
         Some("shots") => shots::run(&args[1..]),
         Some("still") => still::run(&args[1..]),
+        Some("budget") => budget::run(&args[1..]),
         Some("land") => land::run(&args[1..]),
         Some("kill") => gui::kill(&args[1..]),
         Some("launch") => gui::launch(&args[1..]),

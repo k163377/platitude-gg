@@ -94,6 +94,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
             seat.path
         ));
     }
+    // The landings' own queue, taken before anything of this one runs
+    // and held to the end: one landing at a time goes through rebase,
+    // gate, census and fast-forward, in the order they arrived
+    // (`budget::Pool::turn`). Nothing else is held while this waits —
+    // the seat's tree, its gate and the machine's budget are all taken
+    // after it — so a landing standing in line stands in nobody's way.
+    let _turn = crate::budget::Pool::of(&root, crate::gate::default_jobs())?
+        .turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"))?;
     let mut phases = Phases::start();
     // The seat's slot alone: it is the one the gate rebuilds. The
     // primary's is rebuilt by nothing this landing does — the verdict runs

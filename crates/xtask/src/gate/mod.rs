@@ -134,7 +134,11 @@ fn options(args: &[String]) -> Result<Options, String> {
 /// (its QML engine and offscreen raster) plus the git it spawns, and both
 /// sides run at once; the measurement behind the third is in
 /// internal-docs/反映前テストの機械化.md §実測.
-fn default_jobs() -> usize {
+///
+/// It is also what the machine's whole budget is computed from
+/// (`budget::demand`), so every process on the machine names the same
+/// pool without having to agree on anything but this.
+pub(crate) fn default_jobs() -> usize {
     let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
     (cpus / 3).clamp(1, 8)
 }
@@ -366,7 +370,7 @@ fn execute(
     let runner = if std::env::var_os(FAKE_LOG).is_some() {
         None
     } else {
-        Some(runner(&plan.dir, &logs)?)
+        Some(runner(&plan.dir, &logs, jobs, landing)?)
     };
     spent.runner = at.elapsed();
     // waits(measured): the phase's cost, for the record
@@ -447,9 +451,9 @@ fn execute(
     Ok(Gated::Stamped)
 }
 
-/// Both sides at once, each on a thread of its own ([`side`]) and their
-/// verbs in the machine's lanes: what came back red, once the wall clock
-/// has been said.
+/// Both sides at once, each on a thread of its own ([`side`]) and every
+/// unit of both out of the machine's one budget: what came back red,
+/// once the wall clock has been said.
 fn run_sides(
     plan: &Plan,
     store: &Store,
@@ -469,23 +473,21 @@ fn run_sides(
         .iter()
         .filter(|r| r.step.side == Side::Linux)
         .collect();
-    // The lanes are the machine's — beside the repository's `.git`,
-    // which every seat shares (`lanes`). `jobs` above the machine's
+    // The budget is the machine's — beside the repository's `.git`,
+    // which every seat shares (`budget`). `jobs` above the machine's
     // count widens the pool, an explicit ask; below it, it narrows this
     // gate's share of it.
-    let common = crate::subprocess::common_git_dir(&plan.dir.display().to_string())
-        .map(std::path::PathBuf::from)
-        .ok_or_else(|| format!("{} is not a git repository", plan.dir.display()))?;
     let count = jobs.max(default_jobs());
-    let host_lanes = crate::lanes::Lanes::new(&common, "host", count, landing);
-    let linux_lanes = crate::lanes::Lanes::new(&common, "linux", count, landing);
+    let pool = crate::budget::Pool::of(&plan.dir, count)?;
+    let seat = seat_of(&plan.dir);
     // waits(measured): the sides' wall clock, said when both are in
     let started = std::time::Instant::now();
     println!(
-        "gate: verbs {jobs} at a time per side, on the machine's {count} lanes{}; a side's \
-         checks run beside its verbs",
+        "gate: verbs {jobs} at a time per side, every unit of both sides out of the machine's \
+         one budget of {}{}; a side's checks run beside its verbs",
+        crate::budget::demand(count),
         if landing {
-            " (a landing's verbs go ahead of the other gates')"
+            " (a landing's units go ahead of the other gates')"
         } else {
             ""
         }
@@ -499,6 +501,10 @@ fn run_sides(
         logs,
         runner,
         waited: &host_waited,
+        pool: &pool,
+        seat: &seat,
+        rank: rank(landing),
+        fresh: plan.fresh,
     };
     let linux_ground = Ground {
         name: "linux",
@@ -506,8 +512,8 @@ fn run_sides(
         ..host_ground
     };
     let failures: Vec<String> = std::thread::scope(|scope| {
-        let host = scope.spawn(|| side(&host_ground, &host, jobs, &host_lanes));
-        let linux = scope.spawn(|| side(&linux_ground, &linux, jobs, &linux_lanes));
+        let host = scope.spawn(|| side(&host_ground, &host, jobs));
+        let linux = scope.spawn(|| side(&linux_ground, &linux, jobs));
         let mut failures = Vec::new();
         for handle in [host, linux] {
             match handle.join() {
@@ -519,8 +525,9 @@ fn run_sides(
     });
     let secs = started.elapsed().as_secs();
     println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
-    spent.host_lanes = host_waited.read();
-    spent.linux_lanes = linux_waited.read();
+    spent.host_budget = host_waited.read();
+    spent.linux_budget = linux_waited.read();
+    spent.longest = Waited::longest_of([&host_waited, &linux_waited]);
     Ok(failures)
 }
 
@@ -578,9 +585,35 @@ struct Ground<'a> {
     store: &'a Store,
     logs: &'a Path,
     runner: Option<&'a Path>,
-    /// Where this side's verbs tally what they waited for a lane another
-    /// gate held — said in a line here and kept in the run's record.
+    /// Where this side's units tally what they waited for room another
+    /// gate was holding — said in a line here and kept in the run's
+    /// record, beside the longest units, which are what a landing's
+    /// wait is made of.
     waited: &'a Waited,
+    /// The machine's budget, which both sides and every seat draw on.
+    pool: &'a crate::budget::Pool,
+    /// The tree, which is what the fairness between equals is over.
+    seat: &'a str,
+    rank: crate::budget::Rank,
+    /// `--fresh`: every step runs whether or not a stamp answers, so the
+    /// one another tree wrote while this unit queued is not taken either.
+    fresh: bool,
+}
+
+/// Which tree a unit belongs to, as the queue names it: the seat's
+/// letter, or the checkout's own name for the primary.
+pub(crate) fn seat_of(dir: &Path) -> String {
+    dir.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| dir.display().to_string())
+}
+
+fn rank(landing: bool) -> crate::budget::Rank {
+    if landing {
+        crate::budget::Rank::Landing
+    } else {
+        crate::budget::Rank::Normal
+    }
 }
 
 /// One side's steps, as two groups that share no build directory and so
@@ -599,12 +632,7 @@ struct Ground<'a> {
 /// among them is what a person fixes before anything else — a verb block
 /// started beside them would run its minutes to greens that fix takes
 /// away, the app being every verb's input.
-fn side(
-    ground: &Ground<'_>,
-    steps: &[&Required],
-    jobs: usize,
-    lanes: &crate::lanes::Lanes<'_>,
-) -> Vec<String> {
+fn side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<String> {
     let mut at = 0;
     while at < steps.len() && steps[at].step.always {
         if let Err(why) = run_one(ground, at, steps[at], false) {
@@ -617,7 +645,7 @@ fn side(
         .partition(|(_, r): &(usize, &Required)| r.step.release);
     std::thread::scope(|scope| {
         let checks = scope.spawn(|| in_order(ground, &checks));
-        let built = scope.spawn(|| against_the_build(ground, &built, jobs, lanes));
+        let built = scope.spawn(|| against_the_build(ground, &built, jobs));
         let mut failures = Vec::new();
         for handle in [checks, built] {
             match handle.join() {
@@ -647,7 +675,6 @@ fn against_the_build(
     ground: &Ground<'_>,
     steps: &[(usize, &Required)],
     jobs: usize,
-    lanes: &crate::lanes::Lanes<'_>,
 ) -> Vec<String> {
     let mut at = 0;
     while at < steps.len() {
@@ -656,7 +683,7 @@ fn against_the_build(
                 .iter()
                 .position(|(_, r)| !r.step.builds_app)
                 .map_or(steps.len(), |n| at + n);
-            let failures = verbs(ground, &steps[at..end], jobs, lanes);
+            let failures = verbs(ground, &steps[at..end], jobs);
             if !failures.is_empty() {
                 return failures;
             }
@@ -680,9 +707,10 @@ fn against_the_build(
 /// others their `--no-build`: a cached verb's build happened in whatever
 /// tree took the stamp, and the binary here may be older than the tree.
 ///
-/// Every verb runs in a lane of the machine's (`lanes`), the first one
-/// included: what bounds the load is the count of apps running, and the
-/// building verb is one of them.
+/// Every verb takes a ticket out of the machine's budget ([`run_one`]),
+/// the first one included: what bounds the load is what is running, and
+/// the building verb is one of them — the heavier one, since it is the
+/// build.
 ///
 /// A building verb that went red because the app did not build ends the
 /// block: the next one alone would build the same sources to the same
@@ -690,12 +718,7 @@ fn against_the_build(
 /// so a hundred times. The checks group's clippy fails on the same
 /// source beside this block rather than ahead of it, so the block has to
 /// stop itself.
-fn verbs(
-    ground: &Ground<'_>,
-    block: &[(usize, &Required)],
-    jobs: usize,
-    lanes: &crate::lanes::Lanes<'_>,
-) -> Vec<String> {
+fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<String> {
     let name = ground.name;
     for (_, required) in block.iter().filter(|(_, r)| r.cached) {
         println!("[{name}] cached {}", required.step.id);
@@ -703,16 +726,6 @@ fn verbs(
     // What the side had waited before this block, so that the line below
     // says this block's own wait rather than the side's running total.
     let before = ground.waited.read();
-    // How many verbs waited for a lane held elsewhere, and for how long
-    // in all: the one line that says another gate was running beside
-    // this one, without a line per verb.
-    let in_a_lane = |index: usize, required: &Required, no_build: bool| -> Result<(), String> {
-        let lane = lanes
-            .take()
-            .map_err(|why| format!("{}: {why}", required.step.id))?;
-        ground.waited.add(lane.waited);
-        run_one(ground, index, required, no_build)
-    };
     let mut queue = block.iter().filter(|(_, r)| !r.cached);
     let mut failures = Vec::new();
     // Alone until one is green: a red first verb may have left no build
@@ -722,8 +735,14 @@ fn verbs(
         let Some((index, required)) = queue.next() else {
             return failures;
         };
-        match in_a_lane(*index, required, false) {
-            Ok(()) => built = true,
+        match run_one(ground, *index, required, false) {
+            // Only a verb that actually ran here has left a release for
+            // the others to reuse. One answered by a stamp another tree
+            // wrote built nothing in this tree, and reading it as a
+            // build is how the rest of the block would be handed
+            // `--no-build` against a binary older than the sources.
+            Ok(Ran::Step) => built = true,
+            Ok(Ran::Stamped) => continue,
             Err(why) => {
                 failures.push(why);
                 if app_did_not_build(&log_of(ground, *index)) {
@@ -746,7 +765,7 @@ fn verbs(
                     let Some((index, required)) = rest.get(i) else {
                         break;
                     };
-                    if let Err(why) = in_a_lane(*index, required, true) {
+                    if let Err(why) = run_one(ground, *index, required, true) {
                         failed
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -760,7 +779,7 @@ fn verbs(
     let (verbs_waited, in_all) = (after.0 - before.0, after.1 - before.1);
     if verbs_waited > 0 {
         println!(
-            "[{name}] lanes: {verbs_waited} verb(s) waited for a lane held elsewhere ({} in all)",
+            "[{name}] budget: {verbs_waited} verb(s) waited for room held elsewhere ({} in all)",
             crate::seats::format_age(Some(in_all))
         );
     }
@@ -774,21 +793,80 @@ fn log_of(ground: &Ground<'_>, index: usize) -> std::path::PathBuf {
     ground.logs.join(format!("{}-{index:02}.log", ground.name))
 }
 
-/// One step against its log: run, timed, said as ok or FAIL, and stamped
-/// when green (never an always-step, whose seconds are not worth one).
-/// `no_build` is a verb's `--no-build`, the block's to hand out
-/// ([`verbs`]). A failure comes back as the line to report.
+/// What became of one step: it ran here, or a stamp answered for it.
+///
+/// The two are not the same to the caller. A verb that ran here built
+/// the release the rest of its block reuses; a verb a stamp answered for
+/// built nothing here, whatever it built in the tree that took the stamp
+/// ([`verbs`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ran {
+    Step,
+    Stamped,
+}
+
+/// One step against its log: the machine's room taken for it, then run,
+/// timed, said as ok or FAIL, and stamped when green (never an
+/// always-step, whose seconds are not worth one). `no_build` is a verb's
+/// `--no-build`, the block's to hand out ([`verbs`]). A failure comes
+/// back as the line to report.
+///
+/// **The step is the unit** the budget hands the machine out in
+/// (`budget`), which is the granularity the runner already had. What
+/// that costs is that a landing waits out whichever unit is running, so
+/// the longest of them are kept and said ([`Waited::ran`]) — a unit that
+/// is minutes long is a landing's wait, and the one worth splitting.
+///
+/// The ticket is taken before the step announces itself to a measurement
+/// (`still::busy`, inside `check::run_step`) and let go after the step
+/// has ended, so nothing holds room it is not using and nothing holds
+/// part of what it needs while waiting for the rest.
 fn run_one(
     ground: &Ground<'_>,
     index: usize,
     required: &Required,
     no_build: bool,
-) -> Result<(), String> {
+) -> Result<Ran, String> {
     let name = ground.name;
     let id = &required.step.id;
     if required.cached {
         println!("[{name}] cached {id}");
-        return Ok(());
+        return Ok(Ran::Stamped);
+    }
+    let weight = crate::budget::weight_of(&required.step.command, no_build);
+    let room = ground
+        .pool
+        .admit_once_the_machine_is_free(&crate::budget::Ask {
+            weight,
+            rank: ground.rank,
+            seat: ground.seat,
+            what: id,
+            side: name,
+        })
+        .map_err(|why| format!("{id}: {why}"))?;
+    ground.waited.add(room.waited);
+    // Looked at again now rather than only when the plan was made: a
+    // unit that stood in the queue may have been answered while it stood
+    // — another tree gating the same commit writes the same key, and the
+    // stamps are the repository's rather than the tree's (`stamp`). It
+    // takes duplicated work off a machine full of seats; what it cannot
+    // do is stop two that miss at the same instant, which both then run.
+    // Never under `--fresh`, which is the ask to run the step whatever
+    // any stamp says.
+    // The tests' switch for the window itself: the instant between the
+    // plan and this look is another tree's to write in, and nothing a
+    // test drives from outside can land in it. Named by step id, it
+    // stamps this very key here — which is what the tree that took the
+    // stamp would have left behind (`FAKE_LOG`).
+    if std::env::var(FAKE_STAMP).is_ok_and(|named| named == *id) {
+        ground
+            .store
+            .mark_step(&required.key, &format!("{id}\nstamped elsewhere\n"))
+            .map_err(|why| format!("{id}: {why}"))?;
+    }
+    if !ground.fresh && !required.key.is_empty() && ground.store.step_green(&required.key) {
+        println!("[{name}] cached {id} (stamped elsewhere while this waited)");
+        return Ok(Ran::Stamped);
     }
     let log = log_of(ground, index);
     println!("[{name}] run    {id} … (log: {})", log.display());
@@ -798,8 +876,14 @@ fn run_one(
     if no_build {
         command.push("--no-build".to_string());
     }
-    let outcome = execute_step(ground.dir, id, &command, &log, ground.runner);
-    let secs = at.elapsed().as_secs();
+    let outcome = execute_step(ground.dir, id, &command, &log, ground.runner, &room);
+    let ran = at.elapsed();
+    let secs = ran.as_secs();
+    // How long this unit held the machine, kept because it is how long a
+    // landing arriving behind it would have waited: nothing is killed to
+    // make room (`budget`), so the longest unit is the interruption's
+    // own ceiling.
+    ground.waited.ran(id, weight, ran);
     match outcome {
         Ok(()) => {
             println!("[{name}] ok     {id} ({secs}s)");
@@ -813,7 +897,7 @@ fn run_one(
                     )
                     .map_err(|why| format!("{id}: green but not stamped: {why}"))?;
             }
-            Ok(())
+            Ok(Ran::Step)
         }
         Err(why) => {
             println!("[{name}] FAIL   {id} ({secs}s): {why}");
@@ -824,6 +908,19 @@ fn run_one(
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
 const FAKE_LOG: &str = "PG_GATE_FAKE_LOG";
+
+/// The tests' switch for a step another tree stamped while this one
+/// waited for room ([`run_one`]).
+const FAKE_STAMP: &str = "PG_GATE_FAKE_STAMP";
+
+/// Where a faked run records the steps it was handed `--no-build`, so a
+/// test can see which of a block's verbs were told to reuse a release
+/// and which were left to build one ([`verbs`]). Beside the fake log,
+/// whose own lines are the ids and nothing else — every test reads that
+/// one as a set of ids, and widening it would rewrite all of them.
+fn no_build_log(fake: &str) -> String {
+    format!("{fake}.no-build")
+}
 
 /// One step, through `check`'s watched runner, its xtask launcher
 /// swapped for the runner copy ([`launched`]). With `PG_GATE_FAKE_LOG`
@@ -839,6 +936,7 @@ fn execute_step(
     command: &[String],
     log: &Path,
     runner: Option<&Path>,
+    room: &crate::budget::Admitted,
 ) -> Result<(), String> {
     if let Ok(fake) = std::env::var(FAKE_LOG) {
         use std::io::Write;
@@ -853,6 +951,15 @@ fn execute_step(
             .map_err(|e| format!("{fake}: {e}"))?;
         file.write_all(format!("{id}\n").as_bytes())
             .map_err(|e| e.to_string())?;
+        if command.iter().any(|word| word == "--no-build") {
+            let mut told = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(no_build_log(&fake))
+                .map_err(|e| format!("{fake}: {e}"))?;
+            told.write_all(format!("{id}\n").as_bytes())
+                .map_err(|e| e.to_string())?;
+        }
         let failing = std::env::var("PG_GATE_FAKE_FAIL").unwrap_or_default();
         if failing.split(',').any(|f| f == id) {
             return Err("failed on purpose (PG_GATE_FAKE_FAIL)".into());
@@ -880,7 +987,7 @@ fn execute_step(
         }
         return Ok(());
     }
-    match crate::check::run_step(dir, &launched(command, runner), log) {
+    match crate::check::run_step(dir, &launched(command, runner), log, room) {
         Ok(true) => Ok(()),
         Ok(false) => Err(format!(
             "exited non-zero (log: {})\n{}",
@@ -909,8 +1016,24 @@ const RUNNER: &str = "xtask-runner-";
 /// the slot away from under this very process and the slot is what cargo
 /// rebuilds. What earlier gates left is taken away first; a copy a
 /// process of theirs still holds stays, its name carrying their pid.
-fn runner(dir: &Path, logs: &Path) -> Result<std::path::PathBuf, String> {
+fn runner(
+    dir: &Path,
+    logs: &Path,
+    jobs: usize,
+    landing: bool,
+) -> Result<std::path::PathBuf, String> {
     let exe = format!("xtask{}", std::env::consts::EXE_SUFFIX);
+    // A compile like any other, and out of the same budget: this is the
+    // one the gate runs before its sides, so a machine full of seats
+    // would otherwise start every gate with an uncounted cargo.
+    let pool = crate::budget::Pool::of(dir, jobs.max(default_jobs()))?;
+    let room = pool.admit_once_the_machine_is_free(&crate::budget::Ask {
+        weight: crate::budget::COMPILE,
+        rank: rank(landing),
+        seat: &seat_of(dir),
+        what: "the task runner's build",
+        side: "host",
+    })?;
     // Through the same road every step takes (`check::run_step`): the
     // announcement to a measurement, the ceiling, and the tree kill at it.
     // A build with no ceiling would sit on a rustc holding this tree's
@@ -918,7 +1041,7 @@ fn runner(dir: &Path, logs: &Path) -> Result<std::path::PathBuf, String> {
     // would be refused by a live pid saying nothing.
     let build_log = logs.join(format!("{RUNNER}build-{}.log", std::process::id()));
     let build = ["cargo", "build", "-p", "xtask"].map(String::from);
-    match crate::check::run_step(dir, &build, &build_log) {
+    match crate::check::run_step(dir, &build, &build_log, &room) {
         Ok(true) => {}
         Ok(false) => {
             return Err(format!(

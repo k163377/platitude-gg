@@ -59,6 +59,11 @@ pub(crate) struct Plan {
     /// landing would add.
     pub onto_main: bool,
     pub host_only: bool,
+    /// Every step asked for again whether or not a stamp answers for it.
+    /// Kept past the selection because the run has one more chance to
+    /// find a step already green — another tree's, stamped while this
+    /// one queued — and a fresh run is not to take it (`gate::run_one`).
+    pub fresh: bool,
     /// Every file in the tree counted as reached, and why: `--all`, or the
     /// build input that changed.
     pub everything: Option<String>,
@@ -277,6 +282,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         base,
         onto_main,
         host_only: ask.host_only,
+        fresh: ask.fresh,
         everything,
         changed,
         reach,

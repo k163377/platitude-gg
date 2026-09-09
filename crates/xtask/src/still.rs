@@ -234,6 +234,32 @@ pub(crate) fn busy(tree: &Path, what: &str) -> Result<Busy, String> {
     }
 }
 
+/// Waits until no measurement holds the machine still, and announces
+/// nothing.
+///
+/// **What a unit does before it takes room out of the machine's budget**
+/// (`crate::budget`). A ticket taken first would be held by something
+/// that cannot start — the ledger would say a unit is running where
+/// nothing is, and a reader could not tell a queue from a stall
+/// (internal-docs/反映前テストの機械化.md §機械の予算と優先キュー). The
+/// announcement itself still happens inside the step (`busy`), where it
+/// belongs; a hold that arrives in between is waited out there.
+///
+/// Silent under a parent's announcement, as `busy` is: a step of a verb
+/// is not a second thing to wait for.
+/// Beside a `.git` the caller already knows, because it is asked once
+/// per unit and must not spend a `git rev-parse` on each: the pool holds
+/// the directory its ledger stands in, and the hold stands beside it
+/// (`budget::Pool::admit_once_the_machine_is_free`).
+pub(crate) fn until_free_in(common: &Path, what: &str) -> Result<(), String> {
+    if std::env::var_os(UNDER).is_some() {
+        return Ok(());
+    }
+    let mut wait = Wait::new(what, Budget::whole(HOLD_CEILING), LOOK_AGAIN);
+    let mut said = false;
+    wait_for_hold(&common.join(HOLD), what, &mut wait, &mut said, &|| {})
+}
+
 /// This workspace, and the build in it announced: the two lines a verb
 /// that is heavy without compiling opens with, as one.
 pub(crate) fn announced(what: &str) -> Result<(PathBuf, Busy), String> {

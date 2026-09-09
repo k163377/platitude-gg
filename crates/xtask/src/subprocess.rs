@@ -327,12 +327,13 @@ pub(crate) fn born_still_at(pid: u32, recorded: &str) -> Option<bool> {
     }
 }
 
-/// Whether two spellings name one program. Both sides come from
-/// [`behind`], so this is the tolerance a probe's own drift needs —
-/// a path where a bare name was expected, and Windows' indifference to
-/// case — and not a guess at what any particular program is called.
+/// Whether two spellings name one program. The tolerance is a probe's
+/// own drift and a launcher's — a path where a bare name was expected,
+/// Windows' indifference to case, and the suffix the loader adds to a
+/// program a caller spelled without one ([`stem`]) — and not a guess at
+/// what any particular program is called.
 fn same_image(image: &str, recorded: &str) -> bool {
-    !recorded.is_empty() && basename(image).eq_ignore_ascii_case(basename(recorded))
+    !recorded.is_empty() && stem(image).eq_ignore_ascii_case(stem(recorded))
 }
 
 /// Whether an image name is this runner's, however it is spelled: cargo's
@@ -347,6 +348,44 @@ fn is_task_runner(image: &str) -> bool {
 /// An image name with whatever path a probe put in front of it taken off.
 fn basename(image: &str) -> &str {
     image.rsplit(['/', '\\']).next().unwrap_or(image)
+}
+
+/// The same, with the executable suffix off as well — because the two
+/// sides of a comparison are not always written by the same hand. A
+/// claim that records what a *launcher* spelled has `cargo` or `docker`
+/// where the machine hands back the image it loaded, `cargo.exe`
+/// (`budget::Pool::leftover`). A name that is nothing but a suffix is
+/// left whole: two dotfiles are not one program.
+fn stem(image: &str) -> &str {
+    let base = basename(image);
+    match base.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem,
+        _ => base,
+    }
+}
+
+/// A program a caller spelled itself, written in the vocabulary a probe
+/// on this machine answers in — for a claim that has to record a name
+/// without paying a process for it ([`image_of`] costs one, and the
+/// budget records a name on every step of a gate).
+///
+/// **Linux keeps only the first fifteen characters of a program's name**
+/// (`TASK_COMM_LEN` less its terminator), so a gate's runner copy is
+/// `xtask-runner-12345` to the launcher and `xtask-runner-1` to `ps` —
+/// and a claim that recorded the whole of it would read as a stranger's
+/// on every step. Nothing else here truncates: Windows hands the image
+/// name back whole and macOS hands back a path, and [`same_image`] takes
+/// the path and the suffix off either side.
+pub(crate) fn as_probed(program: &str) -> String {
+    let stem = stem(program);
+    if !cfg!(target_os = "linux") {
+        return stem.to_string();
+    }
+    const COMM: usize = 15;
+    stem.char_indices()
+        .nth(COMM)
+        .map_or(stem, |(at, _)| &stem[..at])
+        .to_string()
 }
 
 /// A pid no process on this machine can carry — for the tests that need a
@@ -450,6 +489,11 @@ mod tests {
             ("node", "node"),
             ("node.exe", "C:\\Program Files\\nodejs\\node.exe"),
             ("/usr/local/bin/claude", "claude"),
+            // What a launcher spelled against what the loader ran: the
+            // budget's leftover records the program it started, and the
+            // machine hands the image back with the suffix on.
+            ("cargo.exe", "cargo"),
+            ("docker.exe", "docker"),
         ] {
             assert!(same_image(image, recorded), "{image} vs {recorded}");
         }
@@ -459,6 +503,8 @@ mod tests {
             ("claude.exe", ""),
             ("", ""),
             ("claude.exe", "claude-code.exe"),
+            // Nothing but a suffix: two of those are not one program.
+            (".bashrc", ".profile"),
         ] {
             assert!(!same_image(image, recorded), "{image} vs {recorded}");
         }

@@ -27,14 +27,34 @@ const DIR: &str = "gate-runs";
 /// for is the last handful, and a day of gating is a few dozen.
 const KEEP: usize = 200;
 
-/// How long the verbs of one side waited for a lane another gate was
-/// holding, and how many did. Filled by the threads running the verbs,
-/// read once at the end ([`super::verbs`]).
+/// How long one side's units waited for room another gate was holding,
+/// how many did, and how long the units themselves ran. Filled by the
+/// threads running them, read once at the end ([`super::run_one`]).
+///
+/// The two halves answer different questions. The wait says another gate
+/// was on the machine beside this one. The run lengths say what a
+/// landing arriving at any moment would have had to wait out: nothing is
+/// killed or suspended to make room (`crate::budget`), so the longest
+/// unit is the ceiling on how fast a landing can be let in, and it is
+/// the one worth splitting when it is worth splitting anything.
 #[derive(Default)]
 pub(crate) struct Waited {
     verbs: AtomicUsize,
     nanos: AtomicU64,
+    /// Every unit that ran, longest first, kept to [`LONGEST`].
+    longest: std::sync::Mutex<Vec<Unit>>,
 }
+
+/// One unit of work the gate ran, as the record names it.
+pub(crate) struct Unit {
+    pub id: String,
+    pub weight: u32,
+    pub ran: Duration,
+}
+
+/// How many of the longest units a record names. Enough to see whether
+/// one step is the ceiling or a dozen share it, and short enough to read.
+const LONGEST: usize = 5;
 
 impl Waited {
     pub(crate) fn add(&self, waited: Duration) {
@@ -46,11 +66,56 @@ impl Waited {
         self.nanos.fetch_add(nanos, Ordering::Relaxed);
     }
 
+    /// Notes that `id` held the machine for `ran`.
+    pub(crate) fn ran(&self, id: &str, weight: u32, ran: Duration) {
+        let mut longest = self
+            .longest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let at = longest.partition_point(|unit| unit.ran > ran);
+        if at >= LONGEST {
+            return;
+        }
+        longest.insert(
+            at,
+            Unit {
+                id: id.to_string(),
+                weight,
+                ran,
+            },
+        );
+        longest.truncate(LONGEST);
+    }
+
     pub(crate) fn read(&self) -> (usize, Duration) {
         (
             self.verbs.load(Ordering::Relaxed),
             Duration::from_nanos(self.nanos.load(Ordering::Relaxed)),
         )
+    }
+
+    /// The longest units it saw, longest first.
+    pub(crate) fn longest(&self) -> Vec<Unit> {
+        self.longest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .map(|unit| Unit {
+                id: unit.id.clone(),
+                weight: unit.weight,
+                ran: unit.ran,
+            })
+            .collect()
+    }
+
+    /// The two sides' lists as one, longest first: the machine is one,
+    /// and what a landing waits out is whichever unit of either side is
+    /// running.
+    pub(crate) fn longest_of(sides: [&Waited; 2]) -> Vec<Unit> {
+        let mut units: Vec<Unit> = sides.iter().flat_map(|side| side.longest()).collect();
+        units.sort_by_key(|unit| std::cmp::Reverse(unit.ran));
+        units.truncate(LONGEST);
+        units
     }
 }
 
@@ -80,11 +145,14 @@ pub(crate) struct Spent {
     pub census_after: Duration,
     /// The whole run.
     pub total: Duration,
-    /// How many verbs of the host side waited for a lane held elsewhere,
+    /// How many units of the host side waited for room held elsewhere,
     /// and for how long in all.
-    pub host_lanes: (usize, Duration),
+    pub host_budget: (usize, Duration),
     /// The same for the container side.
-    pub linux_lanes: (usize, Duration),
+    pub linux_budget: (usize, Duration),
+    /// The longest units of the run, longest first: what a landing
+    /// arriving mid-run has to wait out.
+    pub longest: Vec<Unit>,
 }
 
 /// What a run was asked to do and what came of it, beside its timings.
@@ -147,12 +215,22 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
         moment(spent.census_after),
     ));
     out.push_str(&format!(
-        "  lanes  host {} verb(s) waited {} / linux {} verb(s) waited {}\n",
-        spent.host_lanes.0,
-        moment(spent.host_lanes.1),
-        spent.linux_lanes.0,
-        moment(spent.linux_lanes.1),
+        "  budget host {} unit(s) waited {} / linux {} unit(s) waited {}\n",
+        spent.host_budget.0,
+        moment(spent.host_budget.1),
+        spent.linux_budget.0,
+        moment(spent.linux_budget.1),
     ));
+    // The ceiling on how fast a landing can be let in: nothing is
+    // preempted, so a landing waits out whichever of these is running.
+    if !spent.longest.is_empty() {
+        let units: Vec<String> = spent
+            .longest
+            .iter()
+            .map(|unit| format!("{} {} (weight {})", unit.id, moment(unit.ran), unit.weight))
+            .collect();
+        out.push_str(&format!("  longest {}\n", units.join(" / ")));
+    }
     // What the run's verbs did to the census, by name rather than as a
     // file: one name every line gained is the whole file's diff, and the
     // row that says so is what keeps the one line that moved on its own
@@ -201,7 +279,7 @@ fn sweep(records: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Run, Spent, Waited, moment, render};
+    use super::{Run, Spent, Unit, Waited, moment, render};
     use std::time::Duration;
 
     #[test]
@@ -222,12 +300,39 @@ mod tests {
         assert_eq!(waited.read(), (2, Duration::from_secs(5)));
     }
 
+    /// What a landing arriving mid-run waits out is the longest unit,
+    /// so that is what the tally keeps — of both sides together, since
+    /// the machine is one.
+    #[test]
+    fn the_tally_keeps_the_longest_units_of_both_sides() {
+        let host = Waited::default();
+        let linux = Waited::default();
+        for (id, secs) in [("fmt", 1), ("clippy", 30), ("test it", 63), ("docs", 2)] {
+            host.ran(id, 4, Duration::from_secs(secs));
+        }
+        linux.ran("test core", 4, Duration::from_secs(45));
+        let longest: Vec<String> = Waited::longest_of([&host, &linux])
+            .into_iter()
+            .map(|unit| format!("{} {}", unit.id, unit.ran.as_secs()))
+            .collect();
+        assert_eq!(
+            longest,
+            ["test it 63", "test core 45", "clippy 30", "docs 2", "fmt 1"],
+            "the longest of both sides, longest first"
+        );
+    }
+
     #[test]
     fn a_record_names_every_phase_it_timed() {
         let spent = Spent {
             graph: Duration::from_secs(1),
             sides: Duration::from_secs(90),
             total: Duration::from_secs(100),
+            longest: vec![Unit {
+                id: "test platitude-core it".to_string(),
+                weight: 4,
+                ran: Duration::from_secs(63),
+            }],
             ..Spent::default()
         };
         let run = Run {
@@ -251,7 +356,8 @@ mod tests {
             "prepare",
             "runner",
             "sides",
-            "lanes",
+            "budget host",
+            "longest test platitude-core it 1m03s (weight 4)",
             "1m30s",
             "1m40s",
             "steps 720",

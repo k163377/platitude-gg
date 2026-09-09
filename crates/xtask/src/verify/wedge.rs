@@ -27,9 +27,9 @@ use std::time::Duration;
 const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
 
-/// The directory the machine's verb lanes stand in, beside the
-/// repository's `.git` (`crate::lanes`).
-const LANES: &str = "pg-lanes";
+/// The ledger the machine's budget stands in, beside the repository's
+/// `.git` (`crate::budget`).
+const LEDGER: &str = "pg-budget";
 
 /// Clears any account left in `shot_dir` by whoever had it last.
 ///
@@ -202,111 +202,130 @@ fn clipped(line: &str) -> String {
     }
 }
 
-/// How full the machine was, in the lanes every gate on it shares. A run
-/// that stopped answering while the machine was full reads differently
-/// from one that stopped answering alone (`crate::lanes`).
+/// How full the machine was, in the budget every gate on it draws on. A
+/// run that stopped answering while the machine was full reads
+/// differently from one that stopped answering alone (`crate::budget`).
 ///
 /// Read by the ceiling above and by the one red that is not a ceiling at
 /// all: a run the app's own watchdog ended turned its loop the whole
-/// time and simply never reached the verb's completion, and how many
-/// verbs the machine was running is the difference between a verb that
-/// is wrong and a verb that was starved (`super::outcome`).
+/// time and simply never reached the verb's completion, and how much of
+/// the machine was running beside it is the difference between a verb
+/// that is wrong and a verb that was starved (`super::outcome`).
 pub(super) fn lanes_line() -> String {
-    let Some(lanes) = lanes_dir() else {
+    let Some(ledger) = ledger_dir() else {
         return "lanes: not read (no repository here to find them beside)".to_string();
     };
-    match held_in(&lanes) {
+    match held_in(&ledger) {
         Ok(counted) => format!("lanes: {}", counted.line()),
         Err(why) => format!("lanes: not read ({why})"),
     }
 }
 
-fn lanes_dir() -> Option<PathBuf> {
+fn ledger_dir() -> Option<PathBuf> {
     let root = crate::tree::workspace_root();
     crate::subprocess::common_git_dir(&root.display().to_string())
-        .map(|common| Path::new(&common).join(LANES))
+        .map(|common| Path::new(&common).join(LEDGER))
 }
 
-/// What the probe made of the lanes: how many of each side somebody
-/// holds, the marks a landing leaves while its verbs wait, and how many
-/// files it could not answer for at all.
+/// What the probe made of the ledger: how much of the machine somebody
+/// is holding and on how many units, how many units are queued behind
+/// them, how many landings are in line, and how many tickets it could
+/// not answer for at all.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Counted {
-    /// Ordered, so two reports of the same machine read the same.
-    sides: std::collections::BTreeMap<String, (usize, usize)>,
+    /// The weights the running units hold, and how many they are.
+    held: (u32, usize),
+    waiting: usize,
     landings: usize,
     unprobed: usize,
 }
 
 impl Counted {
     fn line(&self) -> String {
-        let mut said: Vec<String> = self
-            .sides
-            .iter()
-            .map(|(side, (held, seen))| format!("{side} {held}/{seen} held"))
-            .collect();
+        let mut said: Vec<String> = Vec::new();
+        if self.held.1 > 0 {
+            said.push(format!(
+                "{} weight held by {} unit(s)",
+                self.held.0, self.held.1
+            ));
+        }
+        if self.waiting > 0 {
+            said.push(format!("{} unit(s) waiting", self.waiting));
+        }
         if self.landings > 0 {
-            said.push(format!("{} landing mark(s) standing", self.landings));
+            said.push(format!("{} landing(s) in line", self.landings));
         }
         // Said rather than folded into the counts. A container's runner may
-        // have no road to the lanes at all — a seat's `.git` is a file
-        // naming a directory outside the mount, so the lock files are not
-        // there to open — and a silent `0/8` would read as an idle
-        // machine, which is the one answer this line must never give
-        // wrongly.
+        // have no road to the ledger at all — a seat's `.git` is a file
+        // naming a directory outside the mount, so the ticket files are
+        // not there to open — and a silent "nothing held" would read as
+        // an idle machine, which is the one answer this line must never
+        // give wrongly.
         if self.unprobed > 0 {
             said.push(format!("{} could not be probed from here", self.unprobed));
         }
         match said.is_empty() {
-            true => "none have ever been taken here".to_string(),
+            true => "nothing is running on it".to_string(),
             false => said.join(", "),
         }
     }
 }
 
-/// Counts the lock files of each side, and the marks beside them.
+/// Counts the tickets somebody is holding, and what they say.
 ///
-/// **Takes nothing away.** A lane that probes free here is one nobody is
-/// in, and a landing's mark nobody holds is a landing's that is gone —
-/// clearing either is the waiting side's business (`crate::lanes`), and
-/// doing it from a report would let a dead run's paperwork move a live
-/// one's queue.
-fn held_in(lanes: &Path) -> Result<Counted, String> {
-    let entries = match std::fs::read_dir(lanes) {
+/// **Takes nothing away.** A ticket that probes free here belongs to a
+/// process that is gone, and clearing it is the waiting side's business
+/// (`crate::budget`): doing it from a report would let a dead run's
+/// paperwork move a live one's queue. It is not counted either — a
+/// ticket nobody holds is holding nothing.
+fn held_in(ledger: &Path) -> Result<Counted, String> {
+    let entries = match std::fs::read_dir(ledger) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Counted::default());
         }
-        Err(error) => return Err(format!("{}: {error}", lanes.display())),
+        Err(error) => return Err(format!("{}: {error}", ledger.display())),
     };
     let mut counted = Counted::default();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(stem) = name.strip_suffix(".lock") else {
-            continue;
-        };
-        let Some((side, rest)) = stem.split_once('-') else {
+        let Some(stem) = name.strip_suffix(".lock").filter(|s| s.starts_with("t-")) else {
             continue;
         };
         let Some(held) = is_held(&entry.path()) else {
             counted.unprobed += 1;
             continue;
         };
-        if rest.starts_with("landing-") {
-            counted.landings += usize::from(held);
+        if !held {
             continue;
         }
-        let counts = counted.sides.entry(side.to_string()).or_default();
-        counts.0 += usize::from(held);
-        counts.1 += 1;
+        // The ticket beside the lock says what its holder is doing. One
+        // that cannot be read is a unit on the machine all the same —
+        // said as unprobed rather than dropped.
+        let Some((weight, running, turn)) =
+            crate::budget::probe(&ledger.join(stem)).or_else(|| {
+                counted.unprobed += 1;
+                None
+            })
+        else {
+            continue;
+        };
+        if turn {
+            counted.landings += 1;
+        } else if running {
+            counted.held.0 += weight;
+            counted.held.1 += 1;
+        } else {
+            counted.waiting += 1;
+        }
     }
     Ok(counted)
 }
 
 /// Whether somebody holds the lock at `path`, and `None` where the probe
 /// could not answer. **The two are not the same**: a file this cannot
-/// open is not a lane nobody is in, and counting it as free would report
-/// a busy machine idle.
+/// open is not a ticket nobody holds, and counting it as free would
+/// report a busy machine idle.
 fn is_held(path: &Path) -> Option<bool> {
     let file = File::options().read(true).write(true).open(path).ok()?;
     match file.try_lock() {
@@ -336,7 +355,13 @@ mod tests {
         dir
     }
 
-    fn lock(dir: &std::path::Path, name: &str) -> std::fs::File {
+    /// A lock this test holds until it drops it — through [`Locked`], so
+    /// that letting go is an unlock rather than a close: a close leaves
+    /// the lock standing on every open file description a neighbouring
+    /// test's fork carried away, and a ticket nobody holds would then
+    /// probe as held (`crate::locks`). Seen on Linux, where `flock`
+    /// follows the description.
+    fn lock(dir: &std::path::Path, name: &str) -> crate::locks::Locked {
         let file = std::fs::File::options()
             .read(true)
             .write(true)
@@ -345,7 +370,7 @@ mod tests {
             .open(dir.join(name))
             .expect("a lock file");
         file.try_lock().expect("a lock nobody else has");
-        file
+        crate::locks::Locked::new(file)
     }
 
     fn ran(timed_out: bool, code: Option<i32>) -> super::super::child::Ran {
@@ -384,45 +409,68 @@ mod tests {
         assert!(!at_a_ceiling(&ran(false, Some(1))));
     }
 
-    /// Held and free are told apart by the lock, not by the file being
-    /// there: every lane leaves its file behind for the next gate.
+    /// A ticket somebody holds is on the machine; one nobody holds
+    /// belongs to a process that is gone, and is neither counted nor
+    /// cleared from here.
     #[test]
-    fn the_lanes_are_counted_by_who_holds_them() {
+    fn the_machine_is_counted_off_the_tickets_somebody_holds() {
         let dir = lanes("counted");
-        let _host = lock(&dir, "host-0.lock");
-        drop(lock(&dir, "host-1.lock"));
-        drop(lock(&dir, "linux-0.lock"));
-        let _mark = lock(&dir, "host-landing-4242.lock");
+        let ticket = |name: &str, weight: u32, running: u8, turn: u8| {
+            std::fs::write(
+                dir.join(name),
+                format!(
+                    "seq 1\npid 7\nweight {weight}\nbudget 24\nrank normal\nturn {turn}\n\
+                     running {running}\nsince 0\nseat a\nside host\nwhat a unit\n"
+                ),
+            )
+            .expect("a ticket");
+        };
+        ticket("t-0", 4, 1, 0);
+        let _running = lock(&dir, "t-0.lock");
+        ticket("t-1", 1, 0, 0);
+        let _waiting = lock(&dir, "t-1.lock");
+        ticket("t-2", 0, 1, 1);
+        let _landing = lock(&dir, "t-2.lock");
+        // A gate that was killed: its ticket says four are running and
+        // nobody holds the lock beside it.
+        ticket("t-3", 4, 1, 0);
+        drop(lock(&dir, "t-3.lock"));
 
-        let held = held_in(&dir).expect("a readable lanes directory");
+        let held = held_in(&dir).expect("a readable ledger");
 
         assert_eq!(
             held.line(),
-            "host 1/2 held, linux 0/1 held, 1 landing mark(s) standing"
+            "4 weight held by 1 unit(s), 1 unit(s) waiting, 1 landing(s) in line"
         );
+        assert!(dir.join("t-3").exists(), "a report cleared the ledger");
     }
 
     /// A machine no gate has run on yet has no directory, and that is an
     /// answer rather than a failure to read one.
     #[test]
-    fn lanes_nobody_has_taken_are_not_an_error() {
+    fn a_ledger_nobody_has_written_is_not_an_error() {
         let dir = lanes("untaken").join("never-made");
         assert_eq!(held_in(&dir), Ok(Counted::default()));
-        assert_eq!(Counted::default().line(), "none have ever been taken here");
+        assert_eq!(Counted::default().line(), "nothing is running on it");
     }
 
-    /// A container's runner may have no road to the lanes — a seat's
-    /// `.git` is a file naming a directory outside the mount — so its lock
-    /// files cannot be opened at all. **Silence there would read as an
-    /// idle machine** — the one answer this line must never give wrongly.
+    /// A container's runner may have no road to the ledger — a seat's
+    /// `.git` is a file naming a directory outside the mount — so its
+    /// ticket files cannot be opened at all. **Silence there would read
+    /// as an idle machine** — the one answer this line must never give
+    /// wrongly.
     #[test]
-    fn lanes_that_could_not_be_probed_are_said_rather_than_called_free() {
+    fn tickets_that_could_not_be_probed_are_said_rather_than_called_free() {
         let counted = Counted {
             unprobed: 8,
             ..Counted::default()
         };
         assert_eq!(counted.line(), "8 could not be probed from here");
-        assert!(!counted.line().contains("0/8"), "{}", counted.line());
+        assert!(
+            !counted.line().contains("nothing is running"),
+            "{}",
+            counted.line()
+        );
     }
 
     /// The account is what the next occurrence is read from, so a run

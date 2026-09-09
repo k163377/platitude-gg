@@ -1,0 +1,134 @@
+//! `cargo xtask budget` — what the machine is doing, said to a person,
+//! and the hold the suite takes from a process of its own.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+use super::ledger::{Pool, QUIET_CEILING};
+use super::queue::Rank;
+use super::unit::{Ask, HELD, LIGHT};
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
+
+/// `cargo xtask budget` — what the machine is doing, and the hold the
+/// tests take from a process of their own.
+pub fn run(args: &[String]) -> Result<(), String> {
+    if args.first().map(String::as_str) == Some("hold") {
+        return hold(&args[1..]);
+    }
+    let dir = match args.len() {
+        0 => crate::tree::workspace_root(),
+        2 if args[0] == "--dir" => PathBuf::from(&args[1]),
+        _ => {
+            return Err(format!(
+                "unknown option {:?} (budget takes --dir <tree>, or `hold`)",
+                args.join(" ")
+            ));
+        }
+    };
+    let pool = Pool::of(&dir, crate::gate::default_jobs())?;
+    print!("{}", pool.standing()?);
+    Ok(())
+}
+
+/// `cargo xtask budget hold …` — one unit's ticket, taken from a process
+/// of this machine's own so that the priority, the exclusion and the
+/// death of a holder can be watched between real processes rather than
+/// between threads. Says one word when it is admitted, and holds until a
+/// file appears: the test drives both edges, and no clock is in it.
+fn hold(args: &[String]) -> Result<(), String> {
+    let mut dir = crate::tree::workspace_root();
+    let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
+    let mut rank = Rank::Normal;
+    let (mut seat, mut what, mut side) = ("held".to_string(), "hold".to_string(), String::new());
+    let (mut say, mut until, mut turn) = (None, None, false);
+    let mut child_until: Option<PathBuf> = None;
+    let mut at = 0;
+    while let Some(arg) = args.get(at) {
+        let next = |at: &mut usize| -> Result<String, String> {
+            *at += 1;
+            args.get(*at)
+                .cloned()
+                .ok_or_else(|| format!("{arg} needs a value"))
+        };
+        match arg.as_str() {
+            "--dir" => dir = PathBuf::from(next(&mut at)?),
+            "--weight" => {
+                weight = next(&mut at)?
+                    .parse()
+                    .map_err(|_| "--weight takes a count")?;
+            }
+            "--jobs" => jobs = next(&mut at)?.parse().map_err(|_| "--jobs takes a count")?,
+            "--seat" => seat = next(&mut at)?,
+            "--what" => what = next(&mut at)?,
+            "--side" => side = next(&mut at)?,
+            "--say" => say = Some(PathBuf::from(next(&mut at)?)),
+            "--until" => until = Some(PathBuf::from(next(&mut at)?)),
+            "--child-until" => child_until = Some(PathBuf::from(next(&mut at)?)),
+            "--landing" => rank = Rank::Landing,
+            "--launch" => rank = Rank::Launch,
+            "--turn" => turn = true,
+            other => return Err(format!("unknown option {other:?}")),
+        }
+        at += 1;
+    }
+    let until = until.ok_or("budget hold needs --until <file>: the word to let go")?;
+    let pool = Pool::of(&dir, jobs)?;
+    let held = if turn {
+        pool.turn(&seat, &what)?
+    } else {
+        pool.admit(&Ask {
+            weight,
+            rank,
+            seat: &seat,
+            what: &what,
+            side: &side,
+        })?
+    };
+    // A child of this unit, standing in for the cargo or the container a
+    // step starts: the ledger is told its number, so a test can kill
+    // this holder and watch the room stay held until the child goes
+    // (`tests/gate/budget.rs`). Under this unit's own ticket, so it takes
+    // none of its own.
+    let mut child = match &child_until {
+        Some(word) => {
+            let me = std::env::current_exe().map_err(|e| e.to_string())?;
+            let mut command = Command::new(&me);
+            command
+                .args(["budget", "hold", "--dir"])
+                .arg(&dir)
+                .arg("--until")
+                .arg(word)
+                .env(HELD, "1")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            let child = command.spawn().map_err(|e| e.to_string())?;
+            held.started(child.id(), &me.display().to_string());
+            Some(child)
+        }
+        None => None,
+    };
+    if let Some(say) = say {
+        std::fs::write(&say, format!("{}\n", std::process::id()))
+            .map_err(|e| format!("could not write {}: {e}", say.display()))?;
+    }
+    println!("held {what} after {}ms", held.waited.as_millis());
+    // The ceiling is the queue's silence one rather than its whole: a
+    // hold is a test's, and one whose word never comes — the suite gone,
+    // the directory taken away with it — must not sit on the machine's
+    // room for the length of a queue.
+    let mut wait = Wait::new(
+        format!("the word at {}", until.display()),
+        Budget::whole(QUIET_CEILING),
+        LOOK_AGAIN,
+    );
+    while !until.exists() {
+        wait.look_again("the word to let go")
+            .map_err(|expired| expired.to_string())?;
+    }
+    if let Some(child) = &mut child {
+        child.wait().map_err(|e| e.to_string())?;
+    }
+    drop(held);
+    Ok(())
+}
