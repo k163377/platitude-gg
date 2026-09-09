@@ -47,12 +47,10 @@ pub(crate) fn common_git_dir(dir: &str) -> Option<String> {
 /// leaving a dead one standing.
 #[cfg(windows)]
 pub(crate) fn process_exists(pid: u32) -> bool {
-    // tasklist exits 0 found or not; the filter's answer is the output.
-    std::process::Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
-        .output()
-        .map(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
-        .unwrap_or(true)
+    // Through the same three-answer probe as everything else here: a
+    // question that could not be asked reads as alive, never as gone
+    // ([`listed_by_tasklist`]).
+    !matches!(behind(pid), Behind::Nobody)
 }
 
 /// The same, where a signal-less kill is the question.
@@ -89,9 +87,33 @@ fn behind(pid: u32) -> Behind {
     else {
         return Behind::Unanswerable;
     };
+    listed_by_tasklist(
+        out.status.success(),
+        &String::from_utf8_lossy(&out.stdout),
+        &String::from_utf8_lossy(&out.stderr),
+        pid,
+    )
+}
+
+/// What `tasklist` said, as one of the three answers.
+///
+/// **A probe that could not ask is not a process that is gone.** The
+/// tool answers a pid nobody has with a line saying so and an exit of
+/// zero, so an empty result on its own means "nobody" — but a tool that
+/// was refused, or is not there, or is restricted by policy, also
+/// returns nothing that matches, and reading *that* as nobody hands out
+/// a running process's claim. Every claim here is broken on the strength
+/// of this answer, so the two are told apart: a non-zero exit, or
+/// anything said on the error stream, is a question that did not get
+/// asked.
+#[cfg(windows)]
+fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind {
+    if !ok || !stderr.trim().is_empty() {
+        return Behind::Unanswerable;
+    }
     // `"xtask.exe","12345","Console","1","75,836 K"`: the image and the
     // pid are the first two fields, ahead of the one holding a comma.
-    String::from_utf8_lossy(&out.stdout)
+    stdout
         .lines()
         .find_map(|line| {
             let mut fields = line.split(',').map(|field| field.trim().trim_matches('"'));
@@ -101,20 +123,37 @@ fn behind(pid: u32) -> Behind {
         .map_or(Behind::Nobody, Behind::Named)
 }
 
-/// The same, asking `ps` for the command name.
+/// The same, asking `ps` for the state and the command name.
+///
+/// **A zombie is nobody.** It has already exited and holds no processor,
+/// no memory and no lock; what keeps its number in the table is that
+/// whoever started it has not waited on it — and where the parent was
+/// killed, nobody ever will unless the system's first process reaps
+/// (inside a container that process is the command the container was
+/// started with, and cargo reaps nothing it did not start). Read as
+/// alive, such a number would hold a machine claim for as long as the
+/// container lived.
 #[cfg(not(windows))]
 fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("ps")
-        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .args(["-o", "stat=,comm=", "-p", &pid.to_string()])
         .output()
     else {
         return Behind::Unanswerable;
     };
     // A pid nobody has answers with nothing and a non-zero exit.
-    match String::from_utf8_lossy(&out.stdout).trim() {
-        name if out.status.success() && !name.is_empty() => Behind::Named(name.to_string()),
-        _ => Behind::Nobody,
+    let answer = String::from_utf8_lossy(&out.stdout);
+    let answer = answer.trim();
+    if !out.status.success() || answer.is_empty() {
+        return Behind::Nobody;
     }
+    let mut fields = answer.split_whitespace();
+    let state = fields.next().unwrap_or_default();
+    let name = fields.next().unwrap_or_default();
+    if state.starts_with('Z') || name.is_empty() {
+        return Behind::Nobody;
+    }
+    Behind::Named(name.to_string())
 }
 
 /// Whether the process `pid` names still exists **and is a program
@@ -144,6 +183,17 @@ pub(crate) fn image_of(pid: u32) -> Option<String> {
         Behind::Named(image) => Some(image),
         Behind::Nobody | Behind::Unanswerable => None,
     }
+}
+
+/// Whether anything is still *running* at `pid` — for a claim that has
+/// no name to compare against and only wants to know whether the work
+/// is still on the machine (`budget::Pool::leftover`). Stricter than
+/// [`process_exists`] in the one way that matters there: a process that
+/// has exited and not been waited on holds nothing, and [`behind`] reads
+/// it as nobody. Answers "alive" when it could not ask, as every probe
+/// here does.
+pub(crate) fn running_at(pid: u32) -> bool {
+    image_matches(pid, |_| true)
 }
 
 /// Whether `pid` still names this task runner — for the claims nothing
@@ -315,6 +365,52 @@ mod tests {
         NO_SUCH_PID, born_of, born_still_at, image_of, image_still_at, is_task_runner,
         process_exists, same_image, task_runner_exists,
     };
+
+    /// A probe that was refused is not a process that is gone. Every
+    /// claim on this machine is broken on the strength of this answer —
+    /// a seat's, a run's, and the room a unit is holding on the
+    /// machine's budget — so a `tasklist` that could not answer must
+    /// come back as the third answer rather than as "nobody".
+    #[test]
+    #[cfg(windows)]
+    fn a_refused_listing_is_not_a_process_that_is_gone() {
+        use super::{Behind, listed_by_tasklist};
+        let named = |seen: Behind| matches!(seen, Behind::Named(_));
+        assert!(
+            named(listed_by_tasklist(
+                true,
+                "\"xtask.exe\",\"1234\",\"Console\",\"1\",\"75,836 K\"\n",
+                "",
+                1234
+            )),
+            "the ordinary answer"
+        );
+        assert!(
+            matches!(
+                listed_by_tasklist(
+                    true,
+                    "INFO: No tasks are running which match the specified criteria.\n",
+                    "",
+                    1234
+                ),
+                Behind::Nobody
+            ),
+            "a pid nobody has is answered, and the answer is nobody"
+        );
+        for (ok, stdout, stderr) in [
+            (false, "", "ERROR: Access is denied.\n"),
+            (false, "", ""),
+            (true, "", "ERROR: The RPC server is unavailable.\n"),
+        ] {
+            assert!(
+                matches!(
+                    listed_by_tasklist(ok, stdout, stderr, 1234),
+                    Behind::Unanswerable
+                ),
+                "a refused listing read as a process that is gone ({ok}, {stderr:?})"
+            );
+        }
+    }
 
     #[test]
     fn the_runner_is_known_by_its_image_name_however_cargo_spelled_it() {
