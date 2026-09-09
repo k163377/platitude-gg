@@ -113,7 +113,7 @@ Item {
             // down with the `>_` instead, which leaves the error line standing and the mark red.
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
-            repoTab.checkoutBranch("pg-no-such-branch", false)
+            repoTab.checkoutBranch("pgg-no-such-branch", false)
             if (act === "commands-fail-shut")
                 commandsShutTimer.start()
         } else {

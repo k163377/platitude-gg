@@ -657,7 +657,7 @@ mod tests {
     /// shows any more comes to find a line it never wrote (observed
     /// under a gate, where a side spawns processes by the dozen).
     fn root_with(components: &[&str]) -> PathBuf {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pg-census"), "root")
+        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-census"), "root")
             .expect("a root of this test's own");
         let ui = root.join("crates/platitude-app/src/ui");
         std::fs::create_dir_all(&ui).expect("ui dir");

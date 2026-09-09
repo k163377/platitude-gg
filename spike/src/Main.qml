@@ -5,7 +5,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Shapes
-import pg_spike
+import pgg_spike
 
 ApplicationWindow {
     id: root

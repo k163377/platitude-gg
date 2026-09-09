@@ -11,7 +11,7 @@
 # user's to spell, never a session's (the pre-shell hook).
 #
 # `cargo xtask gate install` copies this file beside the repository's .git
-# (pg-gate/hooks/) and writes `tree` next to the copy: the checkout whose
+# (pgg-gate/hooks/) and writes `tree` next to the copy: the checkout whose
 # task runner answers. The verdict runs there, whichever tree the git
 # command ran in — git's own environment for the hook is dropped so that
 # cargo and git read that tree and not this one. Every session start and

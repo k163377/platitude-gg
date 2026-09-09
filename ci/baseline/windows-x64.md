@@ -3,7 +3,7 @@
 実装計画 §11.2 の CI 照合の元データ。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
 P5 でリリース workflow の allowlist 照合スクリプトがこのデータを pin する。
 
-- 計測対象: `pg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
+- 計測対象: `pgg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
 - deploy コマンド: `windeployqt --release --compiler-runtime --no-translations --qmldir spike/src <exe>`
 - 検査コマンド: `dumpbin /imports <exe>` / `dumpbin /dependents <dll>`（VS 2022 Build Tools）
 - 配布物: 217 ファイル / 約111MB（qml/ の .qml 資材・vc_redist 含む）
@@ -46,7 +46,7 @@ VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 
 トップレベル:
 ```
-pg_spike.exe  vc_redist.x64.exe
+pgg_spike.exe  vc_redist.x64.exe
 Qt6Core / Qt6Gui / Qt6Network / Qt6OpenGL / Qt6Qml / Qt6QmlMeta / Qt6QmlModels /
 Qt6QmlWorkerScript / Qt6Quick / Qt6QuickControls2 / Qt6QuickControls2Basic /
 Qt6QuickControls2BasicStyleImpl / Qt6QuickControls2Fusion / Qt6QuickControls2FusionStyleImpl /

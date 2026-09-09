@@ -13,7 +13,7 @@
 //! (CLAUDE.md ビルド・テスト: no .ps1 / .bat).
 //!
 //! The installed copy lives beside the repository's own `.git`
-//! (`pg-gate/hooks/`), where no worktree edits it and no seat's reset or
+//! (`pgg-gate/hooks/`), where no worktree edits it and no seat's reset or
 //! removal can pull it out from under main; `core.hooksPath` is written
 //! absolute, to that copy. Beside it, `tree` names the checkout whose
 //! task runner answers the verdict: the script `cd`s there before it
@@ -74,7 +74,7 @@ pub(crate) fn install(dir: &Path) -> Result<String, String> {
         })?;
     let script = std::fs::read_to_string(Path::new(&source_tree).join(HOOKS_DIR).join(HOOK))
         .map_err(|e| format!("{source_tree}/{HOOKS_DIR}/{HOOK}: {e}"))?;
-    let hooks = PathBuf::from(&common).join("pg-gate").join("hooks");
+    let hooks = PathBuf::from(&common).join("pgg-gate").join("hooks");
     std::fs::create_dir_all(&hooks).map_err(|e| format!("{}: {e}", hooks.display()))?;
     write_executable(&hooks.join(HOOK), &script)?;
     std::fs::write(hooks.join("tree"), format!("{source_tree}\n"))

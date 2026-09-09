@@ -83,7 +83,7 @@ pub(crate) fn claim_resource(
 /// that was unlinked. The sweep takes them instead, at a day old — which
 /// is longer than any claim lives, a run being minutes and its watchdog
 /// two — and a file still held is one whose note was written today.
-const LOCKS: &str = "pg-verify-locks";
+const LOCKS: &str = "pgg-verify-locks";
 
 /// The file a claim on `canonical` is taken on, and the key by which a
 /// run tells the paths it already holds. One name per resolved path, and
@@ -118,7 +118,7 @@ fn note(file: &mut std::fs::File, canonical: &Path) -> std::io::Result<()> {
 /// Claim a run-owned directory before any repository, shim, config, or PNG
 /// is created in it.
 pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
-    claim_dir(&std::env::temp_dir().join("pg-verify"), verb)
+    claim_dir(&std::env::temp_dir().join("pgg-verify"), verb)
 }
 
 /// The directories under the system temp a run leaves something in. Four
@@ -127,7 +127,7 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
 /// container run's mount (`keepsakes::keepsake_dir`), and the roots the
 /// tests claim. And one it leaves a file in — [`LOCKS`], where a claim
 /// is taken and which nothing else ever clears.
-const RUN_BASES: [&str; 5] = ["pg-verify", "pg-demo", "pg-linux", "pg-census", LOCKS];
+const RUN_BASES: [&str; 5] = ["pgg-verify", "pgg-demo", "pgg-linux", "pgg-census", LOCKS];
 
 /// How long a run's directory stands before it is litter. A run is
 /// minutes long — its watchdog is two, a cold build ten — and the
@@ -136,7 +136,7 @@ const RUN_BASES: [&str; 5] = ["pg-verify", "pg-demo", "pg-linux", "pg-census", L
 const RUN_LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The file that takes a directory out of every sweep, for good.
-const KEEP: &str = ".pg-keep";
+const KEEP: &str = ".pgg-keep";
 
 /// Marks `root` as a tree a person asked for rather than one a run left,
 /// which is the whole of what the sweep goes by.
@@ -145,7 +145,7 @@ const KEEP: &str = ".pg-keep";
 /// this application is showing is held by nothing — git is a subprocess
 /// per operation and no directory is watched — so a handle would answer
 /// "nobody's" for the tab that is on screen; a tree built to be looked at
-/// later is nobody's by definition; and under `pg-linux` the only side
+/// later is nobody's by definition; and under `pgg-linux` the only side
 /// that could hold one is across the mount.
 ///
 /// A mark is forever: a floor of any length is a guess at how long a
@@ -262,7 +262,7 @@ mod tests {
     /// runs now and go when it runs the day after tomorrow.
     #[test]
     fn a_sweep_takes_the_runs_of_a_day_ago_and_leaves_todays() {
-        let base = super::claim_dir(&std::env::temp_dir().join("pg-census"), "sweep")
+        let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep")
             .expect("a base of this test's own");
         let run = super::claim_dir(&base, "run").expect("a run directory");
         std::fs::write(run.join("app.png"), b"picture").expect("a picture in it");
@@ -284,7 +284,7 @@ mod tests {
     /// every day after.
     #[test]
     fn a_sweep_leaves_a_marked_tree_and_takes_the_run_beside_it() {
-        let base = super::claim_dir(&std::env::temp_dir().join("pg-census"), "sweep-keep")
+        let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep-keep")
             .expect("a base of this test's own");
         let run = super::claim_dir(&base, "run").expect("a run directory");
         let kept = super::claim_dir(&base, "by-hand").expect("a hand-built directory");

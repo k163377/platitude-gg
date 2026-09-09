@@ -1,7 +1,7 @@
 # Phase 0 spike — throwaway code to validate Qt Bridges (S1-S6).
 # Kept OUTSIDE the workspace: building this requires a Qt installation.
 [package]
-name = "pg_spike"
+name = "pgg_spike"
 version = "0.0.0"
 edition = "2024"
 license = "MIT"

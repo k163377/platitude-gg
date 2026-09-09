@@ -148,14 +148,14 @@ FROM ubuntu:24.04 AS bare
 ARG QT_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/lib /opt/pg-qt/lib
-COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/plugins /opt/pg-qt/plugins
-COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/qml /opt/pg-qt/qml
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/lib /opt/pgg-qt/lib
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/plugins /opt/pgg-qt/plugins
+COPY --from=app /opt/qt/${QT_VERSION}/gcc_64/qml /opt/pgg-qt/qml
 
-ENV LD_LIBRARY_PATH=/opt/pg-qt/lib \
-    QT_PLUGIN_PATH=/opt/pg-qt/plugins \
-    QML_IMPORT_PATH=/opt/pg-qt/qml \
-    QML2_IMPORT_PATH=/opt/pg-qt/qml \
+ENV LD_LIBRARY_PATH=/opt/pgg-qt/lib \
+    QT_PLUGIN_PATH=/opt/pgg-qt/plugins \
+    QML_IMPORT_PATH=/opt/pgg-qt/qml \
+    QML2_IMPORT_PATH=/opt/pgg-qt/qml \
     LANG=C.UTF-8
 
 # The same machine, with exactly what a package would have to declare. The

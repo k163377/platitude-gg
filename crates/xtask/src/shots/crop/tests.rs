@@ -7,7 +7,7 @@ fn words(args: &[&str]) -> Vec<String> {
 /// A directory of this run's own, and the picture the crops are cut
 /// from: six by four, every pixel telling which one it is.
 fn shot() -> Result<(PathBuf, PathBuf), String> {
-    let dir = crate::verify::claim_dir(&std::env::temp_dir().join("pg-crop"), "crop")?;
+    let dir = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-crop"), "crop")?;
     let source = dir.join("app.png");
     let png = png::rgba(6, 4, |x, y| [x as u8 * 40, y as u8 * 60, 7, 255]);
     std::fs::write(&source, &png).map_err(|e| e.to_string())?;

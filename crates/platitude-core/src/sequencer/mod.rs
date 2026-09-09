@@ -2,7 +2,7 @@
 //!
 //! git asks an editor to write the todo list; this module supplies that
 //! editor. The plan the user assembled is written to a file, and
-//! `GIT_SEQUENCE_EDITOR` is pointed at the `pg-todo-editor` helper that
+//! `GIT_SEQUENCE_EDITOR` is pointed at the `pgg-todo-editor` helper that
 //! ships beside the application, which copies the plan over git's todo
 //! file and exits (実装計画 §6, P3-確認事項 §残っている実装).
 //!

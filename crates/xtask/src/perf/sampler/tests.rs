@@ -320,7 +320,7 @@ fn a_window_that_came_up_on_another_screen_is_refused() {
 fn the_children_of_the_watched_process_are_counted_as_its_own() {
     use std::os::windows::process::CommandExt;
     use std::time::Duration;
-    let csv = std::env::temp_dir().join(format!("pg-sampler-{}.csv", std::process::id()));
+    let csv = std::env::temp_dir().join(format!("pgg-sampler-{}.csv", std::process::id()));
     let file = std::fs::File::create(&csv).expect("a csv to write");
     let armed = super::arm(Duration::from_secs(30), file, false).expect("an armed sampler");
     let mut child = std::process::Command::new("cmd")

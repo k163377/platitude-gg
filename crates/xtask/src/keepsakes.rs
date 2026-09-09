@@ -120,7 +120,7 @@ fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
 }
 
 pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
-    crate::verify::claim_dir(&std::env::temp_dir().join("pg-linux"), kind)
+    crate::verify::claim_dir(&std::env::temp_dir().join("pgg-linux"), kind)
 }
 
 #[cfg(test)]

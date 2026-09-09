@@ -46,7 +46,7 @@ fn volume_names_survive_a_windows_path() {
             Path::new("C:\\Users\\x\\IdeaProjects\\platitude-gg"),
             "target"
         ),
-        "pg-linux-target-platitude-gg"
+        "pgg-linux-target-platitude-gg"
     );
 }
 

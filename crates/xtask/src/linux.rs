@@ -54,7 +54,7 @@ mod offline;
 mod tests;
 
 /// The image. Its tag names the stage and fingerprints what built it.
-const IMAGE: &str = "pg-linux";
+const IMAGE: &str = "pgg-linux";
 
 /// Where the checkout, the build directory, the download cache and anything
 /// a run means to leave behind land inside the container.
@@ -71,7 +71,7 @@ const OUT_MOUNT: &str = "/out";
 /// away. One volume per checkout, as the build directory is, because a
 /// template is only good for the task runner that built it and two
 /// checkouts build their own.
-const DEMO_MOUNT: &str = "/tmp/pg-demo";
+const DEMO_MOUNT: &str = "/tmp/pgg-demo";
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is
 /// writing.

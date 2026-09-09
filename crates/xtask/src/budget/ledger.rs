@@ -17,7 +17,7 @@ use crate::locks::Locked;
 use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
 
 /// The ledger, beside `.git`.
-pub(super) const DIR: &str = "pg-budget";
+pub(super) const DIR: &str = "pgg-budget";
 
 /// The lock every read and write of the ledger happens under.
 const ADMIT: &str = "admit.lock";

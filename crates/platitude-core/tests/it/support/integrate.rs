@@ -9,7 +9,7 @@ use platitude_core::integrate::InProgress;
 use platitude_core::opstate;
 
 pub fn helper() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"))
+    PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"))
 }
 
 /// Runs whatever `plan_edit` produced, the way the session does.

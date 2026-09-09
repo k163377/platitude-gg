@@ -6,7 +6,7 @@
 //! shell, expects it to exit promptly, and reads its exit code — none of
 //! which sits well with a windowed application.
 //!
-//! Usage: `pg-todo-editor --todo-editor <plan> <todo>`
+//! Usage: `pgg-todo-editor --todo-editor <plan> <todo>`
 //! (the application supplies everything up to `<plan>`; git appends
 //! `<todo>`.)
 
@@ -20,7 +20,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [flag, plan, todo] = args.as_slice() else {
         return fail(&format!(
-            "usage: pg-todo-editor {TODO_EDITOR_FLAG} <plan> <todo>"
+            "usage: pgg-todo-editor {TODO_EDITOR_FLAG} <plan> <todo>"
         ));
     };
     if flag != TODO_EDITOR_FLAG {
@@ -36,7 +36,7 @@ fn main() -> ExitCode {
 /// rebase rather than letting it run git's own todo list.
 fn fail(message: &str) -> ExitCode {
     let mut err = std::io::stderr();
-    if let Err(e) = writeln!(err, "pg-todo-editor: {message}") {
+    if let Err(e) = writeln!(err, "pgg-todo-editor: {message}") {
         // Nothing left to report with; the exit code still stops the rebase.
         drop(e);
     }

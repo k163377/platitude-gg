@@ -68,16 +68,16 @@ pub(crate) const UNDER: &str = "PGG_STILL_UNDER";
 
 /// The hold's note, beside `.git`; its lock is the same name with
 /// [`LOCK`] for an extension.
-const HOLD: &str = "pg-still";
+const HOLD: &str = "pgg-still";
 
 /// The announcements, beside `.git`: one note per announcing thread, and
 /// a lock beside each.
-const BUSY: &str = "pg-busy";
+const BUSY: &str = "pgg-busy";
 
 /// The stamps, beside `.git`: one per process, the time its last
 /// announcement ended. Swept of anything older than a day as they are
 /// read — a pid is a name a machine hands out again.
-const BUILT: &str = "pg-built";
+const BUILT: &str = "pgg-built";
 
 /// The extension of the lock file beside a note.
 const LOCK: &str = "lock";
@@ -751,7 +751,7 @@ mod tests {
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pg-still-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pgg-still-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a directory to hold in");
         dir
@@ -1111,12 +1111,12 @@ mod tests {
         );
         assert!(Note::parse("something else").is_none());
         assert_eq!(
-            lock_of(&PathBuf::from("C:/x/.git/pg-still")),
-            PathBuf::from("C:/x/.git/pg-still.lock")
+            lock_of(&PathBuf::from("C:/x/.git/pgg-still")),
+            PathBuf::from("C:/x/.git/pgg-still.lock")
         );
         assert_eq!(
-            lock_of(&PathBuf::from("C:/x/.git/pg-busy/12-3")),
-            PathBuf::from("C:/x/.git/pg-busy/12-3.lock")
+            lock_of(&PathBuf::from("C:/x/.git/pgg-busy/12-3")),
+            PathBuf::from("C:/x/.git/pgg-busy/12-3.lock")
         );
     }
 }

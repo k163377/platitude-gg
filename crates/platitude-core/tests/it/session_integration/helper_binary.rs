@@ -28,7 +28,7 @@ fn run_published_helper(
 fn the_helper_is_replaced_rather_than_written_over() {
     use std::os::unix::fs::MetadataExt;
 
-    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
     let dir = tempfile::tempdir().expect("tempdir");
     let first = publish_helper(&built, dir.path()).expect("install");
     let before = std::fs::metadata(&first).expect("stat").ino();
@@ -45,7 +45,7 @@ fn the_helper_is_replaced_rather_than_written_over() {
     // the file it publishes is one git can execute.
     let out = run_published_helper(&again, || {}).expect("run the installed helper");
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("usage: pg-todo-editor"),
+        String::from_utf8_lossy(&out.stderr).contains("usage: pgg-todo-editor"),
         "the installed file is not the helper: {out:?}"
     );
 }
@@ -65,7 +65,7 @@ fn the_helper_is_replaced_rather_than_written_over() {
 #[test]
 #[cfg(target_os = "linux")]
 fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
-    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+    let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
     let dir = tempfile::tempdir().expect("tempdir");
     let published = publish_helper(&built, dir.path()).expect("install");
 
@@ -91,7 +91,7 @@ fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
         .expect("the helper runner")
         .expect("run the installed helper");
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("usage: pg-todo-editor"),
+        String::from_utf8_lossy(&out.stderr).contains("usage: pgg-todo-editor"),
         "the installed file is not the helper: {out:?}"
     );
 }

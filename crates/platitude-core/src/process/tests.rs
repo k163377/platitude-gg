@@ -99,11 +99,11 @@ fn executor_and_command_environment_are_both_in_the_full_form() {
     let executor = GitExecutor::new().with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
     let full = executor.describe_full(
         &GitCommand::new()
-            .env("GIT_EDITOR", "pg-todo-editor")
+            .env("GIT_EDITOR", "pgg-todo-editor")
             .arg("rebase"),
     );
     assert!(full.contains("GIT_CONFIG_NOSYSTEM=1"), "{full}");
-    assert!(full.contains("GIT_EDITOR=pg-todo-editor"), "{full}");
+    assert!(full.contains("GIT_EDITOR=pgg-todo-editor"), "{full}");
 }
 
 #[derive(Default)]
@@ -135,7 +135,7 @@ impl CommandObserver for Recorder {
 #[tokio::test]
 async fn the_observer_hears_about_a_command_that_never_started() {
     let recorder = Arc::new(Recorder::default());
-    let executor = GitExecutor::with_program("pg-no-such-program").observed(
+    let executor = GitExecutor::with_program("pgg-no-such-program").observed(
         Arc::clone(&recorder) as Arc<dyn CommandObserver>,
         Kept::Asked,
     );

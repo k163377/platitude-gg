@@ -38,7 +38,7 @@ use std::path::Path;
 pub(crate) struct Module {
     /// `platitude_core`, `platitude_app`, `xtask`, or — for the binaries
     /// that are each a crate of their own — `platitude_core::it`,
-    /// `platitude_core::pg_todo_editor`.
+    /// `platitude_core::pgg_todo_editor`.
     pub krate: String,
     /// Module path from the crate root, empty at the root.
     pub path: Vec<String>,
@@ -1542,7 +1542,7 @@ mod tests {
     #[test]
     fn a_bin_is_named_by_the_variable_cargo_sets_for_it() {
         // Spelled in pieces so this file names no binary of its own.
-        let var = concat!("CARGO_BIN_EXE", "_pg-todo-editor");
+        let var = concat!("CARGO_BIN_EXE", "_pgg-todo-editor");
         let code = format!(
             "const EXE: &str = env!(\"{var}\");\nlet late = option_env!(\"{var}\");\n\
              // env!(\"{var}\") in a comment shoots nothing\n\
@@ -1550,7 +1550,7 @@ mod tests {
         );
         assert_eq!(
             bin_exe_names(&string_bodies(&code)),
-            vec!["pg-todo-editor", "pg-todo-editor"],
+            vec!["pgg-todo-editor", "pgg-todo-editor"],
             "the comment is not one of them"
         );
     }
@@ -1572,7 +1572,7 @@ mod tests {
                 "platitude-core/tests/it/support",
                 "integrate.rs",
                 "platitude-core/src/bin",
-                "pg-todo-editor.rs",
+                "pgg-todo-editor.rs",
             ),
         ];
         for (test_dir, test_name, bin_dir, bin_name) in pairs {

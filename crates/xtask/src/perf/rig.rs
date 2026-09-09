@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn the_shelf_keeps_the_newest_builds() {
-        let dir = std::env::temp_dir().join(format!("pg-rig-shelf-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pgg-rig-shelf-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         for (name, age) in [("old", 30), ("middle", 20), ("new", 10), ("newest", 0)] {
             let build = dir.join(name);

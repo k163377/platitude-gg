@@ -16,7 +16,7 @@ fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     sb.gate_ok(&sb.seat, &["--dry-run"]);
     let warm = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(warm.contains(" (kept)"), "{warm}");
-    let shelf = sb.repo.join(".git/pg-gate/graphs");
+    let shelf = sb.repo.join(".git/pgg-gate/graphs");
     let cached: Vec<_> = std::fs::read_dir(&shelf)
         .expect("graph shelf")
         .map(|entry| entry.expect("entry").path())

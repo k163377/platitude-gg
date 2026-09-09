@@ -78,7 +78,7 @@ fn fnv(text: &str) -> u64 {
 /// seat of it reads the same ones.
 fn shelf(dir: &Path) -> Option<PathBuf> {
     let common = common_git_dir(&dir.display().to_string())?;
-    Some(PathBuf::from(common).join("pg-gate").join("graphs"))
+    Some(PathBuf::from(common).join("pgg-gate").join("graphs"))
 }
 
 /// The graph kept under `key`, if one is.

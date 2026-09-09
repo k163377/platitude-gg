@@ -45,7 +45,7 @@
 //! Beside the repository's own `.git`, which every worktree shares:
 //!
 //! ```text
-//! pg-budget/
+//! pgg-budget/
 //!   admit.lock        one decision at a time; every read and write of
 //!                     the ledger happens under it
 //!   seq               the arrival counter

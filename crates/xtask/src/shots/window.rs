@@ -258,7 +258,7 @@ mod tests {
     /// session's, tomorrow's.
     #[test]
     fn a_window_written_down_is_the_one_the_next_command_finds() {
-        let board = std::env::temp_dir().join(format!("pg-shots-window-{}", std::process::id()));
+        let board = std::env::temp_dir().join(format!("pgg-shots-window-{}", std::process::id()));
         std::fs::create_dir_all(&board).expect("a board to write into");
         assert!(
             standing(&board).is_none(),

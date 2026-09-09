@@ -19,7 +19,7 @@ use super::todo::{RebaseStep, TodoAction, TodoLine, render_todo};
 pub const TODO_EDITOR_FLAG: &str = "--todo-editor";
 
 /// Name of the helper executable, which ships beside the application.
-pub const HELPER_NAME: &str = "pg-todo-editor";
+pub const HELPER_NAME: &str = "pgg-todo-editor";
 
 /// Scratch tag of the message files reword `exec` lines read.
 const REWORD_MSG_TAG: &str = "REWORD_MSG";

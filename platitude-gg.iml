@@ -10,7 +10,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/platitude-app/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/xtask/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
-      <excludeFolder url="file://$MODULE_DIR$/.pg-perf-corpus" />
+      <excludeFolder url="file://$MODULE_DIR$/.pgg-perf-corpus" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

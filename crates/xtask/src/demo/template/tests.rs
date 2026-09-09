@@ -181,7 +181,7 @@ fn runs_started_together_are_handed_one_template() {
 /// built in, and comes out standing on itself.
 #[test]
 fn a_named_root_is_built_where_it_was_named() {
-    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pg-demo"), "named-root")
+    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "named-root")
         .expect("a root of this test's own");
     let work = crate::demo::create("one-commit", Some(root.clone())).expect("a run at the root");
     assert_eq!(work, root.join("repo"));
@@ -193,7 +193,7 @@ fn a_named_root_is_built_where_it_was_named() {
 /// what it holds is content.
 #[test]
 fn a_bare_repository_is_gits_own_and_a_name_ending_in_git_is_not() {
-    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pg-demo"), "metadata")
+    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "metadata")
         .expect("a root of this test's own");
     let bare = root.join("origin.git");
     std::fs::create_dir_all(bare.join("objects")).expect("a bare repository's objects");
@@ -218,7 +218,7 @@ fn a_bare_repository_is_gits_own_and_a_name_ending_in_git_is_not() {
 
 #[test]
 fn a_needle_is_found_where_it_is_and_nowhere_else() {
-    assert!(holds(b"gitdir: /tmp/pg-demo/basic-ab", b"basic-ab"));
+    assert!(holds(b"gitdir: /tmp/pgg-demo/basic-ab", b"basic-ab"));
     assert!(holds(b"basic-ab", b"basic-ab"));
     assert!(!holds(b"basic-a", b"basic-ab"));
     assert!(!holds(b"", b"basic-ab"));

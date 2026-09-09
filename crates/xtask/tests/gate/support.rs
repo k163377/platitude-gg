@@ -73,7 +73,7 @@ pub struct Sandbox {
 impl Sandbox {
     pub fn new(name: &str) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir().join(format!("pg-gate-{name}-{}-{n}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("pgg-gate-{name}-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&root).expect("temp root");
         let gitconfig = root.join("gitconfig");
         std::fs::write(

@@ -124,7 +124,7 @@ mod tests {
     /// write the same file name, and a shared path would let one read
     /// what the other wrote.
     fn config_dir(stem: &str) -> PathBuf {
-        crate::verify::claim_dir(&std::env::temp_dir().join("pg-verify"), stem)
+        crate::verify::claim_dir(&std::env::temp_dir().join("pgg-verify"), stem)
             .expect("a config directory nobody else has")
     }
 

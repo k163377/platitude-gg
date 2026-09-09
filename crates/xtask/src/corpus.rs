@@ -45,7 +45,7 @@ use std::process::{Command, Stdio};
 /// **A `git clean -xfd` in the primary checkout takes it**, as it takes
 /// the board — it is ignored, which is what an ignored directory means.
 /// Building it again is the whole recovery.
-const DIR_NAME: &str = ".pg-perf-corpus";
+const DIR_NAME: &str = ".pgg-perf-corpus";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut force = false;
@@ -117,7 +117,7 @@ fn clearable(at: &Path) -> Result<(), String> {
 /// `objects/info/alternates`, which git resolves against the mirror's
 /// own `objects/`, and the remote URLs are resolved against wherever
 /// the git process runs — so a corpus built at `target/corpus` had
-/// mirrors looking for `…/pg-remotes/JetBrains.git/objects/target/corpus/.git/objects`
+/// mirrors looking for `…/pgg-remotes/JetBrains.git/objects/target/corpus/.git/objects`
 /// and failed on the first ref written through them (measured). The
 /// default path is absolute already (`default_path`); this makes a
 /// given one the same.
@@ -1069,7 +1069,7 @@ fn import(at: &Path, clock: &mut Clock) -> Result<stream::Newest, String> {
     // Under `.git`, so the checkout does not carry them; each is a mark
     // and an id per placement, read once by the commit pass and removed.
     let marks: Vec<String> = (0..BLOB_IMPORTS)
-        .map(|shard| format!(".git/pg-marks-{shard}"))
+        .map(|shard| format!(".git/pgg-marks-{shard}"))
         .collect();
     std::thread::scope(|scope| {
         let shards: Vec<_> = marks
@@ -1219,18 +1219,18 @@ mod tests {
     /// that merely sits beside the corpus must never be read as one.
     #[test]
     fn a_partial_build_is_found_under_the_name_it_was_given() {
-        let at = std::path::Path::new("/home/x/platitude-gg/.pg-perf-corpus");
+        let at = std::path::Path::new("/home/x/platitude-gg/.pgg-perf-corpus");
         let partial = partial_path(at, 4242);
         assert_eq!(partial.parent(), at.parent(), "beside its destination");
         assert_eq!(
             partial.file_name().and_then(|name| name.to_str()),
-            Some(".pg-perf-corpus.partial-4242")
+            Some(".pgg-perf-corpus.partial-4242")
         );
         assert_eq!(partial_owner(at, &partial), Some(4242));
         for other in [
-            "/home/x/platitude-gg/.pg-perf-corpus",
-            "/home/x/platitude-gg/.pg-perf-corpus.partial-x",
-            "/home/x/platitude-gg/.pg-perf-corpus-notes",
+            "/home/x/platitude-gg/.pgg-perf-corpus",
+            "/home/x/platitude-gg/.pgg-perf-corpus.partial-x",
+            "/home/x/platitude-gg/.pgg-perf-corpus-notes",
             "/home/x/platitude-gg/target",
         ] {
             assert_eq!(
@@ -1258,7 +1258,7 @@ mod tests {
         let from_seat = shown("C:/Users/x/IdeaProjects/platitude-gg/.git");
         assert_eq!(
             from_seat,
-            "C:/Users/x/IdeaProjects/platitude-gg/.pg-perf-corpus"
+            "C:/Users/x/IdeaProjects/platitude-gg/.pgg-perf-corpus"
         );
         assert!(!from_seat.contains("/.claude/worktrees/"), "{from_seat}");
         assert_eq!(
@@ -1272,9 +1272,9 @@ mod tests {
     /// its own checkout.
     #[test]
     fn force_will_not_delete_something_that_is_not_a_corpus() {
-        assert!(clearable(std::path::Path::new("/tmp/.pg-perf-corpus")).is_ok());
+        assert!(clearable(std::path::Path::new("/tmp/.pgg-perf-corpus")).is_ok());
         let refused = clearable(std::path::Path::new("/home/x/platitude-gg"))
             .expect_err("a checkout is not a corpus");
-        assert!(refused.contains(".pg-perf-corpus"), "{refused}");
+        assert!(refused.contains(".pgg-perf-corpus"), "{refused}");
     }
 }

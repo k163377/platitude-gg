@@ -133,7 +133,7 @@ mod tests {
 
     /// A `.git`-shaped directory of this test's own.
     fn common(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pg-lanes-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pgg-lanes-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a directory to hold a gate's note in");
         dir

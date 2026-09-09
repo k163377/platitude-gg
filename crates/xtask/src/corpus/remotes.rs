@@ -32,7 +32,7 @@ use super::{git, shape};
 /// Where the mirrors live: under the corpus's `.git`, so they are not in
 /// its working tree for `git status` to find, and so that clearing the
 /// corpus clears them with it.
-const MIRRORS: &str = "pg-remotes";
+const MIRRORS: &str = "pgg-remotes";
 
 /// Builds one bare mirror per remote, configures the corpus to use them,
 /// and puts `main` ahead of the first.

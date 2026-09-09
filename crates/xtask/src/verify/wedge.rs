@@ -40,7 +40,7 @@ const TRAIL_FILE: &str = "stations.txt";
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).
-const LEDGER: &str = "pg-budget";
+const LEDGER: &str = "pgg-budget";
 
 /// Clears any account left in `shot_dir` by whoever had it last — the
 /// report and the trail both.
@@ -444,7 +444,7 @@ mod tests {
 
     /// A lanes directory of this test's own.
     fn lanes(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pg-wedge-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pgg-wedge-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a directory to hold lanes in");
         dir

@@ -90,7 +90,7 @@ commands:
                       instead of main (the tests' sandboxes)
       gate verdict <old> <new>   the hook's question (exit 0 = may move)
       gate install               copy .githooks/reference-transaction
-                                 beside .git (pg-gate/hooks/), note the
+                                 beside .git (pgg-gate/hooks/), note the
                                  tree whose xtask answers, point
                                  core.hooksPath there; every session
                                  start and every land does this
@@ -223,7 +223,7 @@ const TAIL: &str = "  shipped [--no-build]
       thing worth keeping: the dates and the strings are fixed, so a
       corpus deleted and built again is the same corpus, down to the
       object ids.
-      It lives in .pg-perf-corpus/ beside the primary checkout's .git —
+      It lives in .pgg-perf-corpus/ beside the primary checkout's .git —
       ignored, like the shot board — so all six seats measure one corpus
       and nothing is written outside the project. --path puts it
       somewhere else; --force builds over one already there.

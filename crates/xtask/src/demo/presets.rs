@@ -77,7 +77,7 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 
 /// A directory of this run's own to build a demo repository in.
 ///
-/// **`pg-demo` is one directory for the whole machine**, so the name
+/// **`pgg-demo` is one directory for the whole machine**, so the name
 /// under it is the whole of what keeps two runs apart, and a name read
 /// off a clock is not enough — the seats build their repositories
 /// concurrently, and two that share a root `git init` into each other.
@@ -92,7 +92,7 @@ pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
 /// than of a whole path (`template`), and it puts the templates where the
 /// sweep that takes yesterday's runs already looks.
 pub(super) fn base() -> PathBuf {
-    std::env::temp_dir().join("pg-demo")
+    std::env::temp_dir().join("pgg-demo")
 }
 
 /// Builds `preset` with the work tree called `name` rather than `repo` —
@@ -200,7 +200,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
 mod tests {
     use super::root_for;
 
-    /// `pg-demo` is one directory for every seat on the machine, so the
+    /// `pgg-demo` is one directory for every seat on the machine, so the
     /// root a preset is built in is the whole of what keeps two runs
     /// apart — the repositories, the `origin.git` they push to and the
     /// configuration they are isolated by all sit in it. The gate starts

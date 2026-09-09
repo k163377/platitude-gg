@@ -34,8 +34,8 @@ use std::sync::OnceLock;
 /// The file a finished template carries, and the one a preset that
 /// cannot be copied carries instead. Both sit at the template's top
 /// level, and neither is copied into a run.
-const READY: &str = ".pg-template-ready";
-const REFUSED: &str = ".pg-template-refused";
+const READY: &str = ".pgg-template-ready";
+const REFUSED: &str = ".pgg-template-refused";
 
 /// Copies the template for `preset` into `root`, building the template
 /// first if this run is the one that finds it missing.

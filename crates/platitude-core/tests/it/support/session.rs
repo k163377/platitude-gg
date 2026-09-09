@@ -454,7 +454,7 @@ pub async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String
 /// a file somebody holds open for writing cannot be executed at all
 /// (`ETXTBSY`), and all five replaying tests call this and then hand the
 /// path to git. Copying straight onto it put one test's write fd under
-/// another's exec — `pg-todo-editor: Text file busy`, reported by the `sh`
+/// another's exec — `pgg-todo-editor: Text file busy`, reported by the `sh`
 /// git runs `GIT_SEQUENCE_EDITOR` through, on 6 runs out of 8 with a thread
 /// per core (measured, 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
 pub fn install_todo_editor() {
@@ -463,7 +463,7 @@ pub fn install_todo_editor() {
     // is in flight; the rename covers the rest — another process sharing
     // this `target/` never sees a partly-written helper either.
     INSTALLED.call_once(|| {
-        let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pg-todo-editor"));
+        let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
         let Some(dir) = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))

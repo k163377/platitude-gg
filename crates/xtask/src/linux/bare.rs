@@ -17,7 +17,7 @@ use crate::keepsakes::keepsake_dir;
 /// the library that broke it. Cheap enough to put in front of a merge:
 /// nothing is downloaded, and the answer is a start or a missing symbol.
 pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
-    // Workspace-wide, not `-p platitude-app`: pg-todo-editor is a bin of
+    // Workspace-wide, not `-p platitude-app`: pgg-todo-editor is a bin of
     // platitude-core, and a release directory without it is one binary
     // short of what interactive rebase needs.
     let app = ensure_image(root, "app", false)?;
@@ -47,8 +47,8 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
     // never opens a stopped rebase would not miss it.
     let script = format!(
         "set -e; \
-         test -x /built/release/pg-todo-editor \
-           || {{ echo 'pg-todo-editor is not beside the app'; exit 2; }}; \
+         test -x /built/release/pgg-todo-editor \
+           || {{ echo 'pgg-todo-editor is not beside the app'; exit 2; }}; \
          timeout 50s env QT_QPA_PLATFORM=offscreen \
          QT_FORCE_STDERR_LOGGING=1 PGG_AUTO_ACT=band \
          PGG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PGG_SHOT_DIR={OUT_MOUNT} /built/release/platitude-gg"

@@ -10,7 +10,7 @@ fn test_dir(label: &str) -> std::io::Result<std::path::PathBuf> {
     loop {
         let serial = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "pg-structure-{label}-{}-{serial}",
+            "pgg-structure-{label}-{}-{serial}",
             std::process::id()
         ));
         match std::fs::create_dir(&dir) {

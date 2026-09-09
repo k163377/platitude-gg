@@ -1184,7 +1184,7 @@ mod tests {
 
     #[test]
     fn a_build_that_failed_is_read_off_the_verbs_log() {
-        let dir = std::env::temp_dir().join(format!("pg-gate-build-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pgg-gate-build-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log = dir.join("host-08.log");
         std::fs::write(

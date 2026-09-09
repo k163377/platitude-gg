@@ -119,7 +119,7 @@ Item {
         } else if (act === "fetch-recover") {
             // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
             // success takes down by itself.
-            repoTab.fetch("pg-no-such-remote")
+            repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-fail") {
             // The argument is how many failed fetches to run, so one verb reaches the warning shape and the stopped one
             // alike. The fetches are asked for by `fetchFailTimer`, which is also what ends the run.

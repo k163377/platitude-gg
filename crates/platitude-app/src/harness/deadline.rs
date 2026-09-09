@@ -365,7 +365,7 @@ pub(crate) fn watch() {
         // Detached: nothing joins it, and a process that ends on time
         // takes it with it.
         let spawned = std::thread::Builder::new()
-            .name("pg-deadline".into())
+            .name("pgg-deadline".into())
             .spawn(move || {
                 let ended = hold_out(clock, ceiling);
                 end_it(clock, &shot_dir, &ended);

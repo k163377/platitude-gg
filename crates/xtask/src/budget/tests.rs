@@ -22,7 +22,7 @@ use super::{Admitted, Ask, LIGHT, Rank, demand, under, weight_of};
 
 /// A `.git`-shaped directory of this test's own.
 fn common(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("pg-budget-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("pgg-budget-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to hold a ledger in");
     dir
@@ -522,7 +522,7 @@ fn the_gate_suite_clears_the_name_this_module_spells() {
 /// such run into an error.
 #[test]
 fn a_carried_command_is_admitted_without_a_ledger_to_ask() {
-    let nowhere = std::env::temp_dir().join("pg-budget-no-repository-here");
+    let nowhere = std::env::temp_dir().join("pgg-budget-no-repository-here");
     let carried = unit::marked(&nowhere, LIGHT, Rank::Normal, "linux test", true)
         .expect("a carried command needs no ledger");
     assert!(carried.mine.is_none(), "a carried command took a ticket");

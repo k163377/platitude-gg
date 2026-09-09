@@ -34,7 +34,7 @@ impl Store {
         )
         .ok_or_else(|| format!("{} is not a git repository", dir.display()))?;
         Ok(Self {
-            root: PathBuf::from(common).join("pg-gate"),
+            root: PathBuf::from(common).join("pgg-gate"),
         })
     }
 

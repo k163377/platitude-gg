@@ -103,7 +103,7 @@ fn a_value_never_carries_a_separator() {
 /// order the directory happened to hand the files back.
 #[test]
 fn runs_come_back_in_the_order_they_went_up() {
-    let runs = std::env::temp_dir().join(format!("pg-shots-order-{}", std::process::id()));
+    let runs = std::env::temp_dir().join(format!("pgg-shots-order-{}", std::process::id()));
     std::fs::create_dir_all(&runs).expect("a runs directory to write into");
     let run = |at| Run {
         label: "x".to_string(),
