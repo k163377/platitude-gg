@@ -214,9 +214,11 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     } = standing(&here, ask.main_ref)?;
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
-    let (g, reused) = super::reuse::graph_of(dir)?;
+    let loaded = super::reuse::graph_of(dir)?;
     spent.graph = at.elapsed();
-    spent.graph_reused = reused;
+    spent.graph_reused = loaded.reused;
+    spent.graph_cache = loaded.note;
+    let g = loaded.graph;
     // Keep documents in the reported diff, but only executable inputs
     // select tests, including under asset and harness directories.
     let executable_changes: Vec<String> = changed

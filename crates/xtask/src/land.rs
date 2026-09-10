@@ -153,6 +153,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
 /// Free only the seat's build slot: the primary's verdict runs from
 /// `target/hooks`. Install the main-ref guard before rebase and gate.
 fn prepare_gate(root: &std::path::Path, seat: &str) -> Result<(), String> {
+    if let Err(why) = crate::gate::preserve_reader() {
+        eprintln!("graph cache: {why}");
+    }
     if let Some(word) = step_out_of_the_build_slot(&[seat]) {
         println!("{word}");
     }

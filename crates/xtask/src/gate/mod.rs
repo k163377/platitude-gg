@@ -35,6 +35,7 @@ use std::path::Path;
 
 use plan::{Plan, Required, Side};
 use record::{Spent, Waited};
+pub(crate) use reuse::preserve_reader;
 use stamp::{CommitStamp, Store};
 
 use census::{Census, Shift};

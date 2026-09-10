@@ -2,7 +2,106 @@
 //! earn, when they are reused and when they are not, and the one gate a
 //! tree holds while it runs.
 
-use crate::support::{ALWAYS, Sandbox, set, without_always};
+use crate::support::{ALWAYS, EXE, Sandbox, output_past_a_busy_image, set, without_always};
+
+#[test]
+fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
+    let sb = Sandbox::new("graph-reader-copy");
+    sb.gate_ok(&sb.repo, &["--dry-run"]);
+    let copy = sb
+        .root
+        .join(format!("reader{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(EXE, &copy).expect("copy the same reader");
+    let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+    std::fs::File::options()
+        .write(true)
+        .open(&copy)
+        .expect("reader copy")
+        .set_times(std::fs::FileTimes::new().set_modified(stamp))
+        .expect("different timestamp");
+    let run = || {
+        let mut command = std::process::Command::new(&copy);
+        command.args(["gate", "--dry-run", "--dir"]).arg(&sb.seat);
+        sb.env(&mut command);
+        let out = output_past_a_busy_image(&mut command, || {}).expect("run the copied reader");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.status.success(), "{text}");
+        text
+    };
+    let reused = run();
+    assert!(
+        reused.contains(" (kept)"),
+        "same bytes in another tree: {reused}"
+    );
+
+    // PE and ELF leave trailing bytes outside the loaded image. Change
+    // those bytes while preserving the timestamp to exercise the key.
+    {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&copy)
+            .expect("reader copy");
+        file.write_all(b"graph-cache-reader-probe")
+            .expect("change the reader bytes");
+        file.set_times(std::fs::FileTimes::new().set_modified(stamp))
+            .expect("keep its timestamp");
+    }
+    let changed = run();
+    assert!(!changed.contains(" (kept)"), "changed bytes: {changed}");
+    {
+        use std::io::{Seek, SeekFrom, Write};
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&copy)
+            .expect("reader copy");
+        let replacement = b"Graph-cache-reader-probe";
+        file.seek(SeekFrom::End(-(replacement.len() as i64)))
+            .expect("same-sized trailing bytes");
+        file.write_all(replacement)
+            .expect("change bytes without changing length");
+        file.set_times(std::fs::FileTimes::new().set_modified(stamp))
+            .expect("keep timestamp again");
+    }
+    let same_metadata = run();
+    assert!(
+        !same_metadata.contains(" (kept)"),
+        "same length and time, different bytes: {same_metadata}"
+    );
+    assert!(run().contains(" (kept)"));
+}
+
+#[test]
+fn a_changed_tree_invalidates_the_graph_and_cache_io_failures_are_reported() {
+    let sb = Sandbox::new("graph-verdicts");
+    let first = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(first.contains("graph cache miss: entry absent"), "{first}");
+    assert!(
+        sb.gate_ok(&sb.seat, &["--dry-run"])
+            .contains("graph cache hit;")
+    );
+    sb.write_refs(&sb.seat, 12);
+    sb.commit_all(&sb.seat, "test: change graph input", &[]);
+    let changed = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(
+        changed.contains("graph cache miss: entry absent"),
+        "{changed}"
+    );
+
+    let blocked = Sandbox::new("graph-cache-io");
+    blocked.write(
+        &blocked.repo,
+        ".git/pgg-gate/graphs",
+        "a file, not a directory\n",
+    );
+    let text = blocked.gate_ok(&blocked.seat, &["--dry-run"]);
+    assert!(text.contains("not saved: cache directory:"), "{text}");
+    assert!(!text.contains(" (kept)"), "{text}");
+}
 
 /// A run's output with runs of spaces taken out, so a test says what a
 /// row holds and not how wide the column beside it was.
@@ -27,6 +126,14 @@ fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     std::fs::write(&cached[0], &text[..first_edge + 1]).expect("truncate at record boundary");
     let rebuilt = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(!rebuilt.contains(" (kept)"), "{rebuilt}");
+    assert!(
+        rebuilt.contains("graph cache miss: invalid cache payload"),
+        "{rebuilt}"
+    );
+    assert!(
+        sb.gate_ok(&sb.seat, &["--dry-run"])
+            .contains("graph cache hit;")
+    );
     sb.git_ok(&sb.seat, &["config", "status.showUntrackedFiles", "no"]);
     sb.write(
         &sb.seat,
@@ -35,6 +142,10 @@ fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     );
     let dirty = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(!dirty.contains(" (kept)"), "{dirty}");
+    assert!(
+        dirty.contains("graph cache bypass: uncommitted or untracked files"),
+        "{dirty}"
+    );
 }
 
 #[test]

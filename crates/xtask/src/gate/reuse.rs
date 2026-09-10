@@ -2,17 +2,15 @@
 //! read the sources again.
 //!
 //! [`super::graph::build`] opens every Rust and QML file of the workspace.
-//! Warm that is a fifth of a second; behind a cargo build, which has just
-//! written gigabytes through the machine's file cache, it is five and a
-//! half — measured on Windows, reproducibly, as the first read after any
-//! `cargo build` (internal-docs/反映前テストの機械化.md §実測). Every gate
-//! pays it, and a landing pays it twice.
+//! Reusing the graph avoids the source walk after a build has displaced
+//! the machine's file cache (internal-docs/反映前テストの機械化.md §実測).
 //!
 //! What the graph is a function of: the sources, the set of files, and
 //! the reader that walked them. The key is all three — the commit's root
 //! tree object, which moves when any tracked byte or name does, and the
-//! fingerprint of this very executable, which moves when the reader is
-//! rebuilt. **Nothing is kept or reused for a tree with uncommitted or
+//! fingerprint of this executable's bytes. Copying the reader changes
+//! neither the graph nor its key; size and mtime cannot establish its
+//! contents. **Nothing is kept or reused for a tree with uncommitted or
 //! untracked files**: the graph is read off the working tree and the
 //! commit's tree would not be describing it. The gate itself refuses to
 //! run over such a tree anyway; a `--dry-run` there simply reads the
@@ -41,33 +39,74 @@ const VERSION: &str = "graph-cache 2";
 /// another seat has already read finds it read.
 const KEEP: usize = 24;
 
+/// Land removes its running image from the build slot before rebuilding.
+/// Keep that reader's identity, including a failed read, so a replacement
+/// executable at the same path can never name this process's graph.
+static READER: std::sync::OnceLock<Result<u64, String>> = std::sync::OnceLock::new();
+
+fn reader() -> Result<u64, String> {
+    READER
+        .get_or_init(|| {
+            let exe =
+                std::env::current_exe().map_err(|e| format!("reader path unavailable: {e}"))?;
+            let bytes =
+                std::fs::read(&exe).map_err(|e| format!("reader bytes unavailable: {e}"))?;
+            Ok(fingerprint(&bytes))
+        })
+        .clone()
+}
+
+pub(crate) fn preserve_reader() -> Result<(), String> {
+    reader().map(|_| ())
+}
+
 /// What a kept graph is a function of: the tree it was read from and the
-/// program that read it. `None` when the working tree holds anything the
-/// commit does not, in which case the tree is not what the key names.
-pub(crate) fn key(dir: &Path) -> Option<String> {
+/// program that read it. Refuse a key when the working tree holds anything
+/// the commit does not, in which case the tree is not what the key names.
+fn key(dir: &Path) -> Result<Key, String> {
     let here = dir.display().to_string();
-    if !git_query(&here, &["status", "--porcelain", "--untracked-files=all"])?.is_empty() {
-        return None;
+    let status = git_query(&here, &["status", "--porcelain", "--untracked-files=all"])
+        .ok_or("git status unavailable")?;
+    if !status.is_empty() {
+        return Err("uncommitted or untracked files".into());
     }
-    let tree = git_query(&here, &["rev-parse", "HEAD^{tree}"])?;
-    let exe = std::env::current_exe().ok()?;
-    let read = std::fs::metadata(&exe).ok()?;
-    let stamped = read
-        .modified()
-        .ok()
-        .and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |since| since.as_nanos());
-    Some(format!(
-        "{:016x}",
-        fnv(&format!("{VERSION} {tree} {} {stamped}", read.len()))
-    ))
+    let tree = git_query(&here, &["rev-parse", "HEAD^{tree}"]).ok_or("HEAD tree unavailable")?;
+    Ok(Key {
+        tree,
+        reader: reader()?,
+    })
+}
+
+struct Key {
+    tree: String,
+    reader: u64,
+}
+
+impl Key {
+    fn name(&self) -> String {
+        format!(
+            "{:016x}",
+            fnv(&format!(
+                "{VERSION} reader-bytes {} {:016x}",
+                self.tree, self.reader
+            ))
+        )
+    }
+
+    fn description(&self) -> String {
+        format!("tree={} reader={:016x}", self.tree, self.reader)
+    }
 }
 
 /// FNV-64a, as the step stamps use: a name for a set of bytes, not a
 /// guard against anyone choosing them.
 fn fnv(text: &str) -> u64 {
+    fingerprint(text.as_bytes())
+}
+
+fn fingerprint(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in text.as_bytes() {
+    for byte in bytes {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x1000_0000_01b3);
     }
@@ -76,40 +115,44 @@ fn fnv(text: &str) -> u64 {
 
 /// Where the graphs of this repository live — beside its `.git`, so every
 /// seat of it reads the same ones.
-fn shelf(dir: &Path) -> Option<PathBuf> {
-    let common = common_git_dir(&dir.display().to_string())?;
-    Some(PathBuf::from(common).join("pgg-gate").join("graphs"))
+fn shelf(dir: &Path) -> Result<PathBuf, String> {
+    let common =
+        common_git_dir(&dir.display().to_string()).ok_or("git common directory unavailable")?;
+    Ok(PathBuf::from(common).join("pgg-gate").join("graphs"))
 }
 
 /// The graph kept under `key`, if one is.
-pub(crate) fn load(dir: &Path, key: &str) -> Option<Graph> {
-    let text = std::fs::read_to_string(shelf(dir)?.join(key)).ok()?;
-    read(&text)
+fn load(dir: &Path, key: &str) -> Result<Graph, String> {
+    let text = std::fs::read_to_string(shelf(dir)?.join(key)).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "entry absent".to_string()
+        } else {
+            format!("cache read failed: {e}")
+        }
+    })?;
+    read(&text).ok_or_else(|| "invalid cache payload".to_string())
 }
 
 /// Keeps `graph` under `key` and takes away all but the newest [`KEEP`].
 /// A graph nobody could write is not worth a red gate — the run has the
 /// graph in hand either way.
-pub(crate) fn keep(dir: &Path, key: &str, graph: &Graph) {
-    let Some(shelf) = shelf(dir) else {
-        return;
-    };
-    if std::fs::create_dir_all(&shelf).is_err() {
-        return;
-    }
+fn keep(dir: &Path, key: &str, graph: &Graph) -> Result<(), String> {
+    let shelf = shelf(dir)?;
+    std::fs::create_dir_all(&shelf).map_err(|e| format!("cache directory: {e}"))?;
     // Written whole under another name and moved into place: a reader
     // arriving mid-write would otherwise take half a graph for a whole
     // one, and half a graph is a selection with edges missing.
     let staging = shelf.join(format!("{key}.{}.part", std::process::id()));
-    if std::fs::write(&staging, write(graph)).is_err() {
+    if let Err(e) = std::fs::write(&staging, write(graph)) {
         let _ = std::fs::remove_file(&staging);
-        return;
+        return Err(format!("cache staging write: {e}"));
     }
-    if std::fs::rename(&staging, shelf.join(key)).is_err() {
+    if let Err(e) = std::fs::rename(&staging, shelf.join(key)) {
         let _ = std::fs::remove_file(&staging);
-        return;
+        return Err(format!("cache publish: {e}"));
     }
     sweep(&shelf);
+    Ok(())
 }
 
 /// All but the newest [`KEEP`], by when each was last written.
@@ -230,19 +273,45 @@ fn read(text: &str) -> Option<Graph> {
 
 /// The graph of `dir`, from the shelf when one answers for this tree and
 /// this reader, and read off the sources otherwise — kept on the way out.
-/// Whether it came off the shelf is the second answer, for the record.
-pub(crate) fn graph_of(dir: &Path) -> Result<(Graph, bool), String> {
-    let key = key(dir);
-    if let Some(key) = &key
-        && let Some(graph) = load(dir, key)
-    {
-        return Ok((graph, true));
-    }
+/// The cache verdict travels with it into the run's record.
+pub(crate) struct Loaded {
+    pub graph: Graph,
+    pub reused: bool,
+    pub note: String,
+}
+
+pub(crate) fn graph_of(dir: &Path) -> Result<Loaded, String> {
+    let key = match key(dir) {
+        Ok(key) => key,
+        Err(why) => {
+            return Ok(Loaded {
+                graph: super::graph::build(dir)?,
+                reused: false,
+                note: format!("bypass: {why}"),
+            });
+        }
+    };
+    let name = key.name();
+    let reason = match load(dir, &name) {
+        Ok(graph) => {
+            return Ok(Loaded {
+                graph,
+                reused: true,
+                note: format!("hit; {}", key.description()),
+            });
+        }
+        Err(why) => why,
+    };
     let graph = super::graph::build(dir)?;
-    if let Some(key) = &key {
-        keep(dir, key, &graph);
-    }
-    Ok((graph, false))
+    let saved = match keep(dir, &name, &graph) {
+        Ok(()) => "saved".to_string(),
+        Err(why) => format!("not saved: {why}"),
+    };
+    Ok(Loaded {
+        graph,
+        reused: false,
+        note: format!("miss: {reason}; {}; {saved}", key.description()),
+    })
 }
 
 /// What a graph read back must answer the same as the one written: the

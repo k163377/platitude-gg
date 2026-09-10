@@ -6,6 +6,23 @@ use std::process::Command;
 use crate::support::{EXE, Sandbox, output_past_a_busy_image, without_always};
 
 #[test]
+fn land_keeps_the_readers_identity_when_it_leaves_the_build_slot() {
+    let sb = Sandbox::new("land-graph-reader");
+    sb.write_refs(&sb.seat, 8);
+    sb.commit_all(&sb.seat, "feat(core): eight", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let slot = sb.seat.join("target/debug");
+    std::fs::create_dir_all(&slot).expect("build slot");
+    let running = slot.join(format!("xtask{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(EXE, &running).expect("the same reader in the build slot");
+    let (ok, text) = sb.land_from(&running, "worktree-a");
+    assert!(ok, "{text}");
+    assert!(text.contains("stepped out of"), "{text}");
+    assert!(text.contains("graph cache hit;"), "{text}");
+    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
+}
+
+#[test]
 fn land_rebases_then_gates_then_fast_forwards() {
     let sb = Sandbox::new("land");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");

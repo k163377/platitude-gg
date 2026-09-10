@@ -129,6 +129,8 @@ pub(crate) struct Spent {
     pub graph: Duration,
     /// Whether that graph came off the shelf rather than the sources.
     pub graph_reused: bool,
+    /// Why the graph was reused, rebuilt or kept out of the cache.
+    pub graph_cache: String,
     /// The one `git ls-tree` the cache keys are made of.
     pub ids: Duration,
     /// The census, and the wearers the components are read through.
@@ -214,6 +216,9 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
         moment(spent.sides),
         moment(spent.census_after),
     ));
+    if !spent.graph_cache.is_empty() {
+        out.push_str(&format!("  graph cache {}\n", spent.graph_cache));
+    }
     out.push_str(&format!(
         "  budget host {} unit(s) waited {} / linux {} unit(s) waited {}\n",
         spent.host_budget.0,
@@ -326,6 +331,7 @@ mod tests {
     fn a_record_names_every_phase_it_timed() {
         let spent = Spent {
             graph: Duration::from_secs(1),
+            graph_cache: "miss: invalid cache payload; saved".to_string(),
             sides: Duration::from_secs(90),
             total: Duration::from_secs(100),
             longest: vec![Unit {
@@ -350,6 +356,7 @@ mod tests {
         for word in [
             "gate lock",
             "graph",
+            "graph cache miss: invalid cache payload; saved",
             "tree ids",
             "census",
             "plan",
