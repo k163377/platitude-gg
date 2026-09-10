@@ -4,11 +4,11 @@
 //! **This is the axis the startup number hangs off.** `status::read`
 //! runs `git status --porcelain=v2 -z --branch -uall`, whose cost is one
 //! `lstat` per tracked file and whose output the session holds. The
-//! reference repository has 106,581 tracked files and a status to match;
-//! a corpus of a few hundred files answers in a fraction of that, and the
-//! difference is most of what the record calls startup
-//! (ci/baseline/code-costs-windows-x64.md §git のプロセス代,
-//! ci/baseline/perf-windows-x64.md §判定).
+//! reference repository has 106,581 tracked files and an index to match;
+//! a corpus of 512 carries an index two orders of magnitude smaller and
+//! answers in a fraction of the time, and that difference is most of what
+//! the record calls startup (ci/baseline/code-costs-windows-x64.md
+//! §git のプロセス代, ci/baseline/perf-windows-x64.md §判定).
 //!
 //! **The tables are the reference repository's own histograms**, so the
 //! shape is readable here without running anything: how deep its

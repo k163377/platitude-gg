@@ -58,7 +58,7 @@
 | `models::nav::Source`(組んだ行で持つ案) | +13.9MB(kotlin) |
 | `WindowDialogSeat`(設定画面と clone 箱を常時建てる案) | 素の窓に +約 8MB |
 | `DiffRowDelegate` の hunk ボタン(見出し以外の行にも建てる案) | 57 行の diff で 75MB(大半は行が描かないもの) |
-| `GraphLaneCell` の full-width canvas(行に 2 枚) | 42.6MB(グラフを一度スクロールさせた後の working set) |
+| `GraphLaneCell` の full-width canvas(行に 2 枚) | 42.6MB(グラフを一度スクロールさせた後の working set)。**直した後の差**(見える幅で建てる = 約 10MB)は [rules-refs/app-ui.md](../../.claude/rules-refs/app-ui.md) の `Canvas` の行が持つ — 別の量なので両方を読む |
 | `GraphRowChips`(名前のある行だけに建てて recycle ごとに作り直す案) | 1 スクロールで +35MB(chip 自身ではなく作り直しのヒープ) |
 | `corpus` の loose refs | 5 万本で slack 80MB、`pack-refs` 後は 6MB |
 
@@ -69,7 +69,7 @@
 | `highlight::patch::LEX_LINE_BUDGET` = 5,000 | lexer は約 16,000 行/秒(release、このリポジトリのソース)= 約 300ms |
 | `highlight::patch::QUICK_LINE_BUDGET` = 1,000 | 同じ速度で約 60ms |
 | 予算を置かない読み | 2 万行の全書き換えで 1.2s |
-| `DiffColoured` を行と一緒に送る案 | 6,000 行の Rust で 951ms(同じテキストを「何も言えない名前」で読ませると 3ms)= 操作応答の 100ms の外 |
+| `DiffColoured` を行と一緒に送る案 | 6,000 行の Rust で 951ms(同じテキストを「何も言えない名前」で読ませると 3ms)= 操作応答の 100ms の外。**同じ 2 つの数が [rules-refs/app-ui.md](../../.claude/rules-refs/app-ui.md) の diff の feed の行にも在る**(そちらは応答が要求順に返らない話)— 撃ち直したら両方を書き換える |
 | `models::diff` の行の作り直し | 6,000 行で 2ms(色が届いた時に全行を組み直せる根拠) |
 
 ## コーパス生成(`cargo xtask corpus`)
