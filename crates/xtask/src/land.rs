@@ -48,6 +48,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         }
         at += 1;
     }
+    phases.target(&root, "");
     let here = root.to_string_lossy().replace('\\', "/");
     let branch = match branch {
         Some(name) => name,
@@ -117,15 +118,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
     phases.mark("queue");
     let _turn = turn?;
-    // The seat's slot alone: it is the one the gate rebuilds. The
-    // primary's is rebuilt by nothing this landing does — the verdict runs
-    // from `target/hooks` — so a landing run from the primary's runner
-    // stays where it is.
-    if let Some(word) = step_out_of_the_build_slot(&[&seat.path]) {
-        println!("{word}");
-    }
-    // The hook that holds main to the stamp, in place before main moves.
-    println!("{}", crate::gate::install(&root)?);
+    prepare_gate(&root, &seat.path)?;
     phases.mark("prepare");
     if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
@@ -154,6 +147,16 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     clear_the_board(&listing, &branch);
     release_claim(&here, &trees, &branch);
     phases.mark("hook, board and claim");
+    Ok(())
+}
+
+/// Free only the seat's build slot: the primary's verdict runs from
+/// `target/hooks`. Install the main-ref guard before rebase and gate.
+fn prepare_gate(root: &std::path::Path, seat: &str) -> Result<(), String> {
+    if let Some(word) = step_out_of_the_build_slot(&[seat]) {
+        println!("{word}");
+    }
+    println!("{}", crate::gate::install(root)?);
     Ok(())
 }
 

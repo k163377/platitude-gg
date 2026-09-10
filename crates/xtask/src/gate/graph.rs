@@ -90,9 +90,10 @@ fn is_ident(c: char) -> bool {
 
 /// Markdown is checked by the always-run harness checks, not test dependencies.
 pub(crate) fn is_markdown(file: &str) -> bool {
-    Path::new(file)
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+    !file.ends_with('/')
+        && Path::new(file)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
 }
 
 impl Graph {
@@ -1381,6 +1382,8 @@ mod tests {
             }
         }
         assert!(graph.deps.is_empty());
+        graph.edge("src/notice.rs", "src/fixtures.md/");
+        assert!(graph.deps["src/notice.rs"].contains("src/fixtures.md/"));
         graph.edge("src/notice.rs", "src/input.txt");
         assert!(graph.deps["src/notice.rs"].contains("src/input.txt"));
     }
