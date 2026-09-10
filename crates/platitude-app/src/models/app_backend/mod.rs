@@ -11,6 +11,7 @@ use super::qml_register;
 
 mod avatars;
 mod build_id;
+mod identity;
 mod lifecycle;
 mod persist;
 mod qobject;
@@ -60,13 +61,9 @@ enum AppMsg {
         /// takes as long to fail as the name does.
         names_the_run: bool,
     },
-    /// An identity write finished; `error` carries git's own message and
-    /// the two flags say which half git now reports as what was asked for.
-    IdentitySaved {
-        error: Option<String>,
-        name_saved: bool,
-        email_saved: bool,
-    },
+    /// The readback and verdict travel together: a drain between two
+    /// messages would expose `ready` before `unsaved` and dismiss the gate.
+    IdentitySaved(Result<platitude_core::identity::IdentityWrite, String>),
 }
 
 pub struct AppBackend {

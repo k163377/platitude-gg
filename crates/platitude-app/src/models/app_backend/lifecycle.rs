@@ -152,34 +152,7 @@ impl AppBackend {
                     &cancel,
                 )
                 .await;
-                match written {
-                    Ok(written) => {
-                        // What git answers, not what was typed: the write
-                        // reads itself back, so a half that did not land
-                        // and a repository-local setting sitting over the
-                        // global one both show here.
-                        let (name_saved, email_saved) = (written.name_saved, written.email_saved);
-                        let message = written.message;
-                        feed.push(AppMsg::Identity {
-                            name: written.identity.name.unwrap_or_default(),
-                            email: written.identity.email.unwrap_or_default(),
-                        });
-                        feed.push(AppMsg::IdentitySaved {
-                            // git's own message, and only git's: a write
-                            // that failed nowhere and still did not take
-                            // is explained on screen, where it can be
-                            // translated.
-                            error: (!message.is_empty()).then_some(message),
-                            name_saved,
-                            email_saved,
-                        });
-                    }
-                    Err(e) => feed.push(AppMsg::IdentitySaved {
-                        error: Some(e.to_string()),
-                        name_saved: false,
-                        email_saved: false,
-                    }),
-                }
+                feed.push(AppMsg::IdentitySaved(written.map_err(|e| e.to_string())));
             });
             true
         })
@@ -212,16 +185,7 @@ impl AppBackend {
                     self.git_error = message;
                 }
                 AppMsg::Identity { name, email } => {
-                    // Both halves are required; git refuses to commit with
-                    // either one missing.
-                    self.identity_state = if name.is_empty() || email.is_empty() {
-                        "missing"
-                    } else {
-                        "ready"
-                    }
-                    .into();
-                    self.identity_name = name;
-                    self.identity_email = email;
+                    self.read_identity(name, email);
                 }
                 AppMsg::IdentityUnknown { message } => {
                     // Not the same as unset: git could not answer, so the
@@ -266,18 +230,8 @@ impl AppBackend {
                     // band's badge says the rest.
                     self.settle_restart_offer();
                 }
-                AppMsg::IdentitySaved {
-                    error,
-                    name_saved,
-                    email_saved,
-                } => {
-                    self.identity_busy = false;
-                    self.identity_name_saved = name_saved;
-                    self.identity_email_saved = email_saved;
-                    self.identity_unsaved = !(name_saved && email_saved);
-                    if let Some(message) = error {
-                        self.identity_error = message;
-                    }
+                AppMsg::IdentitySaved(written) => {
+                    self.finish_identity(written);
                     // A write that only half landed still changed the
                     // configuration, so the open repositories re-read it
                     // whichever way this one went.
