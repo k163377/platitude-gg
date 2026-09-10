@@ -105,9 +105,9 @@ pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> 
 /// Which of the two reds this is: the one no ceiling ended.
 ///
 /// The app's own watchdog is a QML `Timer` (`auto/AutoShotDriver.qml`),
-/// so a run it ended turned its event loop to the last second and
-/// answered for itself — the verb's completion is the only thing that
-/// never arrived. The other red is a process that stopped answering, and
+/// so a run it ended answered its event loop when the timer fired.
+/// This says nothing about earlier stalls or which completion was missing.
+/// The other red is a process that stopped answering, and
 /// it is read off the ceiling instead (`super::wedge`), whose account
 /// already carries the machine's load. **Exclusive, so the load is said
 /// once**: a run whose watchdog fired and whose teardown then wedged is
@@ -198,29 +198,21 @@ pub(super) fn announce(
     }
     if outcome.watchdog_expired {
         println!(
-            "  the app's own watchdog ended this run — the verb never reached its \
-             completion, and a run that wedged between the two grabs still leaves app.png \
-             behind to pass on."
+            "  the app's own watchdog ended this run — the act, screenshot, and census did \
+             not all finish; a run stalled between grabs can still leave app.png behind."
         );
         // The other half of the reading, and the half a red under load is
         // told from a red that is wrong by. This watchdog is a QML
-        // `Timer`, so its firing is proof the event loop was turning:
-        // whatever this run is, it is not a process that stopped
-        // answering — that one is the ceiling above, with the app's own
-        // account under it. What is left to ask is how much of the
-        // machine the run was sharing.
+        // `Timer`, so its firing proves the loop answered at that point.
+        // Earlier stalls and lost completion edges are still possible.
         if loop_was_turning(outcome, ran) {
             println!(
-                "  the loop was turning the whole time — the watchdog is a QML timer, so a \
-                 wedge is not what this is. {}",
+                "  the loop answered its watchdog — this does not rule out earlier stalls. {}",
                 super::wedge::lanes_line()
             );
-            // And the stations under that, which say the same thing from
-            // the other side: a run whose trail stops at the event loop
-            // never left it, so what did not arrive is the verb's
-            // completion and not the process. Read here as well as at the
-            // ceiling because this is the red where the two are told
-            // apart ([`super::wedge::trail`]).
+            // The trail also contains the teardown after the watchdog
+            // asked to quit. Reaching `exiting` does not explain which
+            // completion was missing while the loop was up.
             for line in super::wedge::trail(shot_dir) {
                 println!("{line}");
             }

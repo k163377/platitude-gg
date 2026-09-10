@@ -91,7 +91,7 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
         ),
     }];
     lines.extend(trail(shot_dir));
-    lines.extend(stopped_in(shot_dir, ran.elapsed));
+    lines.extend(stopped_in(shot_dir));
     let own = self_account(shot_dir);
     lines.push(match &own {
         Some(said) => format!("  the app's own account: {said}"),
@@ -144,19 +144,25 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 ///
 /// The seconds are the app's own clock, started in `main`, and the run's
 /// are the parent's, started at the spawn; the two differ by however long
-/// the process took to get going. Nothing here subtracts one from the
-/// other — [`stopped_in`] does, and only where the process is known to
-/// have stopped.
+/// the process took to get going. They cannot be subtracted to measure
+/// how long the last station lasted.
 pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
-    let Some(marks) = read_trail(shot_dir) else {
-        return vec![format!(
-            "  the run left no {TRAIL_FILE}: it did not reach the first station, so nothing it \
-             did is recorded on this side"
-        )];
+    let marks = match read_trail(shot_dir) {
+        Ok(marks) => marks,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return vec![format!(
+                "  the run left no {TRAIL_FILE}: no stations are recorded; its progress is unknown"
+            )];
+        }
+        Err(error) => {
+            return vec![format!(
+                "  could not read {TRAIL_FILE}: {error}; its progress is unknown"
+            )];
+        }
     };
     if marks.is_empty() {
         return vec![format!(
-            "  the run's {TRAIL_FILE} is empty: it was made and no station was reached after it"
+            "  the run's {TRAIL_FILE} is empty or has no complete records; its progress is unknown"
         )];
     }
     vec![format!(
@@ -169,40 +175,34 @@ pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
     )]
 }
 
-/// Which step the run was stopped in, for the ceiling that stopped it.
-///
-/// **Only at a ceiling.** A run the process ended for itself walked every
-/// station it had left and the seconds after the last one are its exit,
-/// not a step it was held in; said there, this line would name a wedge
-/// where there was none. `None` where there is no trail to read.
-fn stopped_in(shot_dir: &Path, elapsed: Duration) -> Option<String> {
-    let (last_at, last) = read_trail(shot_dir)?.pop()?;
+/// The last recorded step at a ceiling. A failed append can hide later
+/// progress, so this is a location in the record, not proof of a wedge.
+fn stopped_in(shot_dir: &Path) -> Option<String> {
+    let (last_at, last) = read_trail(shot_dir).ok()?.pop()?;
     Some(format!(
-        "  it got as far as `{last}` {last_at:.1}s into its own run and no further, so the \
-         {:.1}s between that and the ceiling were spent in that step",
-        elapsed.as_secs_f32().max(last_at) - last_at
+        "  it got as far as `{last}` {last_at:.1}s into its own run; this is the last recorded \
+         station, not a measurement of time spent there"
     ))
 }
 
 /// The trail as pairs of seconds and station, in the order they were
-/// reached. `None` where the file is not there at all, which is a
-/// different answer from an empty one.
+/// reached. Read errors are kept apart from an empty file.
 ///
 /// **A line that does not parse is dropped, never guessed at.** The file
 /// is appended to a line at a time by a process that can be stopped
 /// between the write and the newline, so the tail of it is the one place
 /// a torn record can appear.
-fn read_trail(shot_dir: &Path) -> Option<Vec<(f32, String)>> {
-    let text = std::fs::read_to_string(shot_dir.join(TRAIL_FILE)).ok()?;
-    Some(
-        text.lines()
-            .filter_map(|line| {
-                let (at, station) = line.split_once(' ')?;
-                let at = at.strip_suffix('s')?.parse().ok()?;
-                (!station.is_empty()).then(|| (at, station.to_owned()))
-            })
-            .collect(),
-    )
+fn read_trail(shot_dir: &Path) -> std::io::Result<Vec<(f32, String)>> {
+    let text = std::fs::read_to_string(shot_dir.join(TRAIL_FILE))?;
+    Ok(text
+        .split_inclusive('\n')
+        .filter_map(|line| {
+            let line = line.strip_suffix('\n')?;
+            let (at, station) = line.split_once(' ')?;
+            let at: f32 = at.strip_suffix('s')?.parse().ok()?;
+            (at.is_finite() && at >= 0.0 && !station.is_empty()).then(|| (at, station.to_owned()))
+        })
+        .collect())
 }
 
 /// What the app wrote down about itself, if it got that far.
@@ -440,7 +440,9 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
-    use super::{Counted, account, at_a_ceiling, clear_any_account, held_in, trail};
+    use super::{
+        Counted, TRAIL_FILE, account, at_a_ceiling, clear_any_account, held_in, stopped_in, trail,
+    };
 
     /// A lanes directory of this test's own.
     fn lanes(name: &str) -> PathBuf {
@@ -700,8 +702,7 @@ mod tests {
         assert!(said.contains("starting 0.0s > event-loop 0.3s"), "{said}");
         assert!(said.contains("exiting 2.1s"), "{said}");
         assert!(said.contains("it got as far as `exiting` 2.1s"), "{said}");
-        // 140s reaped, 2.1s of stations: the rest of it was the exit.
-        assert!(said.contains("137.9s"), "{said}");
+        assert!(!said.contains("137.9s"), "different clock origins: {said}");
         // And the missing report is read for what it is: the write was
         // never reached, which on this shape it never can be.
         assert!(said.contains("did not reach the write"), "{said}");
@@ -719,7 +720,7 @@ mod tests {
         let dir = lanes("trail-torn");
         std::fs::write(
             dir.join("stations.txt"),
-            "0.0s starting\n0.3s event-loop\n0.9",
+            "0.0s starting\n0.3s event-loop\n0.9s exit",
         )
         .expect("a trail cut off mid-line");
 
@@ -729,10 +730,8 @@ mod tests {
         assert!(!said.contains("0.9"), "{said}");
     }
 
-    /// No file at all and an empty one are different answers: the first
-    /// is a run that never reached the station the ceiling itself writes,
-    /// and reading them as one would call a process that never started
-    /// one that started and stood still.
+    /// Missing and empty records are different observations, neither of
+    /// which establishes whether the process reached a station.
     #[test]
     fn a_trail_nobody_left_and_an_empty_one_read_differently() {
         let dir = lanes("trail-absent");
@@ -769,5 +768,30 @@ mod tests {
     #[test]
     fn clearing_an_account_nobody_left_is_quiet() {
         clear_any_account(&lanes("nothing-to-clear"));
+    }
+
+    #[test]
+    fn missing_or_unreadable_stations_do_not_place_the_process() {
+        let dir = lanes("trail-unknown");
+        let absent = trail(&dir).join("\n");
+        assert!(!absent.contains("did not reach"), "{absent}");
+        std::fs::create_dir(dir.join(TRAIL_FILE)).expect("an unreadable trail path");
+        let unreadable = trail(&dir).join("\n");
+        assert!(unreadable.contains("could not read"), "{unreadable}");
+    }
+
+    #[test]
+    fn startup_delay_is_not_charged_to_the_last_station() {
+        let dir = lanes("trail-clock-origin");
+        std::fs::write(dir.join(TRAIL_FILE), "0.0s starting\n2.0s exiting\n")
+            .expect("the child's clock starts after process startup");
+        let mut delayed = ran(true, None);
+        delayed.elapsed = Duration::from_secs(24);
+        let said = account(&dir, &delayed, &[]).join("\n");
+        assert!(
+            !said.contains("22.0s"),
+            "startup delay was charged to exiting: {said}"
+        );
+        assert!(stopped_in(&dir).unwrap().contains("last recorded station"));
     }
 }

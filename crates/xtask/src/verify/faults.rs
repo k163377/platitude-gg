@@ -51,6 +51,25 @@ struct Case {
     /// with them: what is being checked is the sentence a person reads,
     /// so a rewording that leaves the reading behind is a red here.
     wants: &'static [&'static str],
+    /// A watchdog abort also reaches `exiting`, but is not an act that
+    /// completed before stopping. Do not accept it as the held case.
+    forbids: &'static [&'static str],
+}
+
+impl Case {
+    fn missing(&self, said: &str) -> Vec<String> {
+        self.wants
+            .iter()
+            .filter(|want| !said.contains(**want))
+            .map(|want| format!("missing `{want}`"))
+            .chain(
+                self.forbids
+                    .iter()
+                    .filter(|word| said.contains(**word))
+                    .map(|word| format!("unexpected `{word}`")),
+            )
+            .collect()
+    }
 }
 
 /// The two mouths, and the one that is only half of a mouth: a hold with
@@ -68,32 +87,39 @@ const CASES: &[Case] = &[
             "--fault-no-deadline",
         ],
         wants: &[
+            "auto_act complete=band",
+            "screenshot saved=true",
             "TIMED OUT",
             "the stations it reached:",
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
         ],
+        forbids: &["auto-act watchdog expired"],
     },
     Case {
         shape: "held past the exit with its deadline thread up — both records, agreeing",
         args: &["--watchdog-ms", HELD_MS, "--fault-hang", "exiting"],
         wants: &[
+            "auto_act complete=band",
+            "screenshot saved=true",
             "the stations it reached:",
             "> exiting ",
             "it got as far as `exiting`",
             "the app's own account: wedged in `exiting`",
         ],
+        forbids: &["auto-act watchdog expired"],
     },
     Case {
         shape: "the loop turning and the verb's completion never arriving",
         args: &["--watchdog-ms", TURNING_MS],
         wants: &[
             "auto-act watchdog expired",
-            "the loop was turning the whole time",
+            "the loop answered its watchdog",
             "the stations it reached:",
             "event-loop ",
         ],
+        forbids: &["auto_act complete=band"],
     },
 ];
 
@@ -113,12 +139,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         // The first case builds the app; the rest are handed what it
         // built, the way a suite's verbs are (`gate::plan`).
         let said = drive(&me, case, nth == 0)?;
-        let absent: Vec<&str> = case
-            .wants
-            .iter()
-            .copied()
-            .filter(|want| !said.contains(want))
-            .collect();
+        let absent = case.missing(&said);
         println!(
             "  {} in {:.1}s",
             if absent.is_empty() {
@@ -150,9 +171,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 /// Runs one case and answers with everything it printed, both streams
 /// together.
 ///
-/// **The exit code is not read.** Every case here is a run that fails on
-/// purpose, and a case that came back green would mean the fault never
-/// took — which the missing words say better than a number.
+/// Every case fails on purpose. Both the failure exit and the record
+/// must come back, so a runner that swallows the failure cannot pass.
 fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, String> {
     let mut command = std::process::Command::new(me);
     command.arg("verify-ui").arg(VERB).args(case.args);
@@ -163,6 +183,12 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
         command.arg("--no-build");
     }
     let out = crate::subprocess::run_captured(&mut command)?;
+    if out.status.success() {
+        return Err(format!(
+            "the injected fault passed verify-ui: {}",
+            case.shape
+        ));
+    }
     Ok(format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -173,6 +199,21 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
 #[cfg(test)]
 mod tests {
     use super::{CASES, TURNING_MS, VERB};
+
+    #[test]
+    fn an_aborted_act_is_not_a_completed_act_held_at_exit() {
+        for case in &CASES[..2] {
+            let said = case.wants.join("\n");
+            assert!(case.missing(&said).is_empty());
+            assert!(
+                !case
+                    .missing(&format!("{said}\nauto-act watchdog expired"))
+                    .is_empty()
+            );
+            let unfinished = said.replace("auto_act complete=band", "");
+            assert!(!case.missing(&unfinished).is_empty());
+        }
+    }
 
     /// Every case is a run that stops in a way the parent has to be able
     /// to read, so each has to ask for something. A case with nothing to
@@ -220,7 +261,7 @@ mod tests {
     fn one_case_is_the_loop_that_kept_turning() {
         let turning = CASES
             .iter()
-            .find(|case| case.wants.contains(&"the loop was turning the whole time"))
+            .find(|case| case.wants.contains(&"the loop answered its watchdog"))
             .expect("the other mouth");
         assert!(turning.args.contains(&TURNING_MS));
         assert!(

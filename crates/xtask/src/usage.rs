@@ -190,13 +190,13 @@ const TAIL: &str = "  shipped [--no-build]
       exit with no deadline thread (which leaves no wedge.txt, the
       shape observed), one is held with the thread up (both records,
       agreeing), and one is given a ceiling no verb can finish inside,
-      which turns its loop the whole time. Each is checked for the
+      which answers its watchdog on the event loop. Each is checked for the
       sentences the next occurrence will be read from — the stations it
       reached above all, which is the half that does not need the
       process to still be answering.
-      Three held runs cost under a minute of wall clock and no thought:
-      the ceilings are small and every case is a run that fails, so the
-      exit codes say nothing and the words are the check.
+      Each run must fail and leave the expected record. The held cases
+      must have completed the act and saved its picture first; a watchdog
+      abort reaching the same exit station is not accepted.
 
   corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it
