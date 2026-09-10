@@ -8,8 +8,9 @@ import platitude.ui
 
 // The window's two biggest dialogs — the settings screen and the clone box — with the model and the folder chooser
 // the clone owns. Together in one seat because every way into either goes through the doors below, and the doors are
-// what lets neither screen exist until it is first opened: holding the two ready costs the bare window ~8MB of
-// working set it never uses (measured — the figures are in rules-refs/app-ui.md's dialog-seat line).
+// what lets neither screen exist until it is first opened: holding the two ready costs the bare window working set
+// it never uses, and the floor grows with every pane the settings screen gains (the figures are in
+// rules-refs/app-ui.md's dialog-seat line).
 //
 // The harness is the one caller that gets them up front ([`keepBuilt`]): its verbs read a dialog's properties before
 // opening it (`WindowDialogActs` / `WindowSettingsActs`), and a null there is a dead run, not a refusal.

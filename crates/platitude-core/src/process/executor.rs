@@ -56,10 +56,11 @@ const FIXED_ARGS: [&str; 9] = [
     // same with it off (measured). What it costs is that cache going
     // unmaintained, since nothing this end refreshes the index any more:
     // a work tree whose stats all moved without its contents changing is
-    // re-hashed by every read rather than by the one after the first
-    // (measured: 780 files, `status` 72ms against 28ms once refreshed).
-    // Ordinary editing leaves a handful of such entries; a tree copied in
-    // from outside git leaves all of them.
+    // re-hashed by every read rather than by the one after the first —
+    // which on such a tree is most of what a `status` costs
+    // (ci/baseline/code-costs-windows-x64.md). Ordinary editing leaves a
+    // handful of such entries; a tree copied in from outside git leaves
+    // all of them.
     "-c",
     "diff.autoRefreshIndex=false",
     "--no-optional-locks",
@@ -161,10 +162,12 @@ impl GitExecutor {
     /// on this — a local write is waited out, never killed
     /// (`session::write::remote_paced`). And test harnesses lift the
     /// budget from their whole executor — under a loaded suite a git
-    /// round trip inflates ~25×, and a wall-clock cap that generous
-    /// decides by load, not correctness; the harness arms its own
-    /// failure-detection backstops instead (.claude/rules/core.md). The
-    /// application's reads keep the stock budget.
+    /// round trip inflates by more than an order of magnitude
+    /// (ci/baseline/code-costs-windows-x64.md §テストとハーネス), and a
+    /// wall-clock cap that generous decides by load, not correctness; the
+    /// harness arms its own failure-detection backstops instead
+    /// (.claude/rules/core.md). The application's reads keep the stock
+    /// budget.
     pub fn without_stock_timeouts(mut self) -> Self {
         self.stock_timeout = None;
         self

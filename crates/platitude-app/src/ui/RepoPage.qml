@@ -517,10 +517,10 @@ Item {
     readonly property bool planActive: planModel.active && !page.planLoadHeld
     /// The plan's face has the graph's seat: the read that opens it is out, or its rows have arrived.
     ///
-    /// **The seat is taken at the press, not at the answer**. The read walks the whole range — 27ms where the click
-    /// was shallow, a second and more at the root of a real history (measured, JetBrains/kotlin) — and a screen that
-    /// does not move for that long says the press was not heard. What the pane can say before the rows land is in
-    /// the pane (`RebasePlanPane.waiting`).
+    /// **The seat is taken at the press, not at the answer**. The read walks the whole range, so a shallow click is
+    /// quick and the root of a real history is far past the moment a press has to be acknowledged in
+    /// (ci/baseline/code-costs-windows-x64.md) — and a screen that does not move for that long says the press was
+    /// not heard. What the pane can say before the rows land is in the pane (`RebasePlanPane.waiting`).
     ///
     /// **The mode's restrictions are on this too** — the left menu, `push`, `stash` and Ctrl+F all go out from the
     /// press, because entering the mode is what taking the seat *is*. What waits for the rows is only what needs a
@@ -925,9 +925,9 @@ Item {
     //
     // **A delete takes the row away at the press, and git is asked behind it** (デザイン規約 §消す操作は先に画面から消す).
     // The write itself is the short half: `git branch -d` is one process, and everything the reader is actually
-    // waiting on comes after it — the refs read, then the walk that rebuilds the graph (kotlin 級で 54ms のあとに
-    // 1.3s、`busyCount` はその先頭しか覆わない — measured). Left to those, the row sits there through all of it
-    // with nothing to say whether the press even landed.
+    // waiting on comes after it — the refs read, then the walk that rebuilds the graph, which on a real history is
+    // the long one and which `busyCount` does not cover (ci/baseline/code-costs-windows-x64.md). Left to those, the
+    // row sits there through all of it with nothing to say whether the press even landed.
     //
     // One key per kind, because a delete touches at most one of each; `Delete both` is the one that touches two.
     // Empty means nothing is being shown as gone, which is also what a refusal goes back to.

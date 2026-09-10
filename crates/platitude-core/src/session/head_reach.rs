@@ -31,8 +31,9 @@ impl RepoSession {
     /// itself: some other ref sitting exactly on the tip.
     ///
     /// That half is what makes tags count without paying for them. Tags
-    /// are left out of the walk (`JetBrains/kotlin`: 45,846 of 53,672
-    /// refs, 478ms of 501ms — ci/baseline/head-reach-windows-x64.md), and
+    /// are left out of the walk — on a tag-heavy repository they are the
+    /// great majority of both the refs and the walk's own time
+    /// (ci/baseline/head-reach-windows-x64.md) — and
     /// a tag on the tip is the shape that actually turns up; one strictly
     /// ahead of it is missed, which costs a hold mark on a row that could
     /// have been a click.

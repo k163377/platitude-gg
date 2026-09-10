@@ -2,7 +2,7 @@
 //!
 //! Building platitude-app needs `qmake` on PATH (qtbridge), and on Windows
 //! *running* the built exe needs the Qt bin directory too — without it the
-//! process dies in ~10ms with no output (verify-ui skill). The harness shells
+//! process dies at once with no output (verify-ui skill). The harness shells
 //! don't inherit the user's PATH edits, so this module rebuilds a PATH that
 //! works: the current one, with Qt prepended when qmake isn't reachable.
 

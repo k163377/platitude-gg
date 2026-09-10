@@ -4,11 +4,11 @@
 //! cold cache — the exe, the Qt libraries, the corpus's packs — and the
 //! record is a warm number. But a record is taken as a run of
 //! invocations minutes apart on one exe and one corpus, and only the
-//! first of them starts cold: measured over one such session, the first
-//! invocation's first run stood out (startup 1226ms) while every later
-//! invocation's first run sat among the kept ones (1081–1177ms against
-//! the kept runs' 1096–1178ms), so each of those discards was fourteen
-//! seconds spent on a number already known. An invocation that finished
+//! first of them starts cold: over one such session only the very first
+//! invocation's first run stood out, while every later invocation's first
+//! run sat among the kept ones (ci/baseline/code-costs-windows-x64.md
+//! §テストとハーネス), so each of those discards was a whole run spent on
+//! a number already known. An invocation that finished
 //! leaves a note of what it warmed; the next one keeps its first run
 //! when the note is minutes old, names the same exe, corpus, repository
 //! and scenario, and no build of another process has ended since — a

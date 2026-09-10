@@ -50,11 +50,11 @@ fn deep_first(now: u64) -> u64 {
 /// where it stopped (the window cut's lanes and its one line).
 ///
 /// Written as a single `fast-import` stream rather than a commit at a
-/// time: 2100 git processes cost about a minute of every run that asks
-/// for this shape, and one costs a tenth of a second (measured,
-/// Windows: 92ms for this history). One blob serves every commit — what
-/// this preset is for is the *count*, and a tree that changed on every
-/// step would only make the import bigger.
+/// time: a process per commit puts a minute on every run that asks for
+/// this shape, and one process is a fraction of a second
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成). One blob serves
+/// every commit — what this preset is for is the *count*, and a tree that
+/// changed on every step would only make the import bigger.
 pub(super) fn deep(repo: &mut DemoRepo) -> Result<(), String> {
     deep_history(repo, SideLine::None)
 }

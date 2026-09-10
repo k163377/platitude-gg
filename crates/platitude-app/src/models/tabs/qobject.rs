@@ -75,10 +75,11 @@ impl TabsModel {
 
     /// Takes a picked folder as a plain path: check first, open second.
     ///
-    /// The check costs one `git rev-parse` (measured 30–36ms on Windows,
-    /// repository or not), which is why nothing is shown while it runs —
-    /// and why the tab is not opened up front and closed again, which
-    /// would flash a tab for the length of a frame or two.
+    /// The check costs one `git rev-parse` — a whole process, whether the
+    /// folder is a repository or not (ci/baseline/code-costs-windows-x64.md)
+    /// — which is why nothing is shown while it runs, and why the tab is
+    /// not opened up front and closed again, which would flash a tab for
+    /// the length of a frame or two.
     #[qslot]
     fn open_picked_path(&mut self, path: String) {
         let path_buf = std::path::PathBuf::from(path.trim());

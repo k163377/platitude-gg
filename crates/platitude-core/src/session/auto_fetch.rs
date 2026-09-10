@@ -496,8 +496,8 @@ mod tests {
 
     /// The refusal of a stopped timer must not wait for its task to be
     /// polled: nothing schedules a cancelled task on any deadline, and
-    /// under load one sat unpolled for a test suite's whole overall budget
-    /// (900s, measured) while the caller of `tick` hung with it. Modelled
+    /// under load one sat unpolled for a test suite's whole overall
+    /// budget while the caller of `tick` hung with it. Modelled
     /// as a timer whose task never runs at all — the channel stays open,
     /// nobody will answer, and the stop token is the only word there is.
     #[tokio::test]

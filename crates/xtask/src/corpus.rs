@@ -428,8 +428,9 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     // The chain the reference repository has. Startup reads it, so a
     // corpus without one is measuring a different walk.
     git(at, &["commit-graph", "write", "--reachable", "--split"])?;
-    // 50,000 loose refs cost 80MB of slack and slow every walk that
-    // reads them; packed they are 6MB (measured).
+    // Tens of thousands of loose refs are a file each — slack on every
+    // one, and a walk that reads them all; packed they are one file
+    // (ci/baseline/code-costs-windows-x64.md §メモリの形).
     git(at, &["pack-refs", "--all"])?;
     packs(at)?;
     clock.mark("indexes");
@@ -700,11 +701,11 @@ fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
 /// corpus that is a fraction of that is measuring a fraction of the
 /// startup it claims to.
 ///
-/// **The time is a reading of the walk, not of a clone's settings.**
-/// That repository answers in 0.28s with `core.fsmonitor` off and 0.76s
-/// with it on, which is how it is configured — the daemon costs it half
-/// a second rather than saving any. A corpus that copied the setting
-/// would be measuring a daemon's health on the day.
+/// **The time is a reading of the walk, not of a clone's settings.** On
+/// the reference repository `core.fsmonitor` — which is how that clone is
+/// configured — makes the status slower, not faster
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成), so a corpus that
+/// copied the setting would be measuring a daemon's health on the day.
 fn worktree(at: &Path) -> Result<(), String> {
     let tracked = git(at, &["ls-files"])?.lines().count();
     let index = std::fs::metadata(at.join(".git").join("index"))
@@ -716,8 +717,8 @@ fn worktree(at: &Path) -> Result<(), String> {
     // status without it** (`process::executor::FIXED_ARGS`), and
     // because this same reading is taken of repositories that are only
     // being read — a status without it rewrites their index. It is not
-    // a timing device: measured warm on the reference repository, with
-    // and without are both 0.76s.
+    // a timing device: warm, with and without read the same
+    // (ci/baseline/code-costs-windows-x64.md §コーパス生成).
     git(
         at,
         &[
@@ -1039,10 +1040,11 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 ///
 /// **The blobs are two thirds of the import and the only part of it
 /// that parallelises.** `fast-import` reads its stream on one thread,
-/// and a stream that spells every body out in its commit is 25GB
-/// through that one thread: 596s, where the same commits over 300-byte
-/// bodies took 200s (measured, same machine, same hour — the generator
-/// itself writes the whole stream in 20s,
+/// and a stream that spells every body out in its commit puts tens of
+/// gigabytes through that one thread — the bodies, not the number of
+/// commits, are what the wait is (times:
+/// ci/baseline/code-costs-windows-x64.md §コーパス生成; the generator
+/// writing the whole stream is a rounding error beside it,
 /// `stream::tests::time_the_generator_alone`). The bodies hash to the
 /// same ids whichever process reads them, so they go through this many
 /// at once under marks, and the commit stream names the marks
@@ -1055,9 +1057,10 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 /// would shave seconds and add a pack each.
 ///
 /// **`--depth=0` is not a shortcut.** It skips the delta attempt on
-/// every blob, which is a quarter of a single-process import (446s
-/// against 596s, measured), but also the deltas between versions of the
-/// big directories' trees, and the pack comes out 10.7GiB against 6.5.
+/// every blob, which is about a quarter of a single-process import
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成), but also the
+/// deltas between versions of the big directories' trees, and the pack
+/// comes out 10.7GiB against 6.5.
 const BLOB_IMPORTS: usize = 4;
 
 /// The import: the blobs through [`BLOB_IMPORTS`] processes at once,

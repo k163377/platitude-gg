@@ -272,8 +272,8 @@ fn scroll(kept: &[Reading], context: &Context<'_>, software: bool) {
             not_the_display(software)
         );
         // What the screen could have delivered is the only thing that
-        // makes two screens comparable: 176fps on a 180Hz monitor and
-        // 98fps on a 100Hz one are the same application. The software
+        // makes two screens comparable: an application that keeps up with
+        // its screen reads as a different fps on each one. The software
         // scene graph delivered nothing to the screen, so it has no
         // share of one.
         if let Some(hz) = context

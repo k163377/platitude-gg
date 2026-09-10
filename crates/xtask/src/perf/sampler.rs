@@ -339,9 +339,9 @@ impl Conditions {
         // screen that was unplugged, asleep or renamed between the
         // enumeration and the launch leaves the window wherever the
         // platform put it — and the report divides the frame rate by
-        // the refresh of the screen that was *asked* for. On this
-        // machine that is 180Hz against 100Hz, so the same application
-        // reads as 98% or as 176% of its screen.
+        // the refresh of the screen that was *asked* for. Where the two
+        // screens do not run at one rate, that puts the same application
+        // either under its screen or absurdly over it.
         let landed_elsewhere = pinned
             .zip(self.displays.first())
             .is_some_and(|(pinned, landed)| landed.as_str() != pinned);

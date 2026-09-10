@@ -10,8 +10,9 @@ use super::*;
 /// dialog that wants one field of the answer. Letting each start its own
 /// read spends every one of those processes for the one answer they end
 /// up agreeing on — and a `status --porcelain=v2 -uall` over the
-/// benchmark corpus is 2.9 seconds of wall clock and 2.3 of CPU, spent
-/// twice, exactly where the reader is waiting.
+/// benchmark corpus is seconds of wall clock and nearly as much CPU
+/// (ci/baseline/code-costs-windows-x64.md), spent twice, exactly where
+/// the reader is waiting.
 ///
 /// **The ordering rides on the same gate**: a pass holds it from before
 /// it looks at the repository until after it has published, so there is

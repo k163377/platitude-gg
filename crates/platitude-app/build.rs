@@ -5,7 +5,7 @@
 //! `assets/platitude.res` is checked in rather than compiled here. The
 //! resource compiler ships with the Windows SDK, and making every build
 //! find it — including on the two platforms with no use for a `.res` —
-//! buys nothing over a 21KB file in the tree. `assets/platitude.rc` says
+//! buys nothing over a small file in the tree. `assets/platitude.rc` says
 //! how to rebuild it.
 //!
 //! The icon here is separate from the one the running window wears, which

@@ -313,7 +313,7 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
 
 /// Removes the older images of this stage once a new one has built. The
 /// tag is a fingerprint, so every edit to the Dockerfile leaves the last
-/// image behind — 1.5GB for the core stage, over 4GB for the app stage —
+/// image behind — gigabytes a stage, the app one the larger of the two —
 /// and nothing else would ever name them again.
 ///
 /// Two things keep this from taking something out from under anybody.

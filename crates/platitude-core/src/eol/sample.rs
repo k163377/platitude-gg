@@ -125,9 +125,9 @@ enum Group {
 }
 
 /// Index paths, optionally under one directory. The index only — asking for
-/// endings here would read every worktree file in the repository (24.7s on
-/// the 106k-file reference repository, measured, against 42ms for a handful
-/// of settled paths).
+/// endings here would read every worktree file in the repository, which on
+/// a hundred thousand of them is tens of seconds against one process for
+/// the handful of settled paths (ci/baseline/code-costs-windows-x64.md).
 async fn list(
     executor: &GitExecutor,
     workdir: &Path,

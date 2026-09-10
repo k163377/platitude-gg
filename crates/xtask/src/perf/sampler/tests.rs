@@ -285,8 +285,8 @@ fn a_wake_helper_that_stopped_is_refused() {
 }
 
 /// Pinning a window asks; it does not decide. The report divides the
-/// frame rate by the refresh of the screen that was asked for, and
-/// on this machine the screens are 180Hz and 100Hz.
+/// frame rate by the refresh of the screen that was asked for, which
+/// says nothing about the one the window actually came up on.
 #[test]
 fn a_window_that_came_up_on_another_screen_is_refused() {
     let mut conditions = Conditions::default();

@@ -39,8 +39,9 @@ pub(super) const MERGE_EVERY: u64 = 1_429;
 /// among them — review branches that were never merged, whose tips are
 /// remote-tracking refs. A corpus whose window were one line of
 /// development would draw a fraction of the lanes, the edges and the
-/// chips a real one does, and would flatter every number taken off it
-/// (measured: a single-column corpus weighed 95MB less).
+/// chips a real one does, and would flatter every number taken off it —
+/// a single-column corpus weighed tens of megabytes less
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成).
 pub(super) const SIDE_BRANCHES: u64 = 232;
 pub(super) const SIDE_LENGTH: u64 = 8;
 
@@ -634,8 +635,9 @@ pub(super) const HUGE_EVERY: u64 = 30;
 /// **Beside the sources, not under one directory.** A rule naming a
 /// directory prunes the walk — git stats the directory once and skips
 /// everything beneath it, so 78,000 files under `build/` cost one stat
-/// and the status stays at half the reference repository's (measured:
-/// 0.44s against 1.01s). A pattern is what makes git walk them.
+/// and the status comes out at about half the reference repository's
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成). A pattern is
+/// what makes git walk them.
 pub(super) const IGNORED_FILES: u64 = 78_000;
 
 /// What the tracked ignore rules say. Patterns rather than directories,

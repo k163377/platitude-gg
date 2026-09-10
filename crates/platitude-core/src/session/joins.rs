@@ -382,8 +382,9 @@ pub(super) fn build_snapshot(
             .then(a.short.cmp(&b.short))
     });
     // Built by pushing, so each list is holding up to twice the room it
-    // needs, and this one is kept for as long as the repository is open
-    // (45,901 tags overshoot by 1.2MB on their own).
+    // needs, and this one is kept for as long as the repository is open —
+    // on tens of thousands of tags the overshoot alone is over a megabyte
+    // (ci/baseline/code-costs-windows-x64.md §メモリの形).
     snapshot.locals.shrink_to_fit();
     snapshot.remotes.shrink_to_fit();
     snapshot.tags.shrink_to_fit();

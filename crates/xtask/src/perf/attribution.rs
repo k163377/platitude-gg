@@ -19,7 +19,8 @@
 //!   says which file each resident page belongs to.
 //! * `RtlQueryProcessDebugInformation(PDI_HEAPS | PDI_HEAP_BLOCKS)` walks
 //!   the process heaps block by block: busy and free by size class, which
-//!   is what turns "+75MB" into "+360,000 blocks of 210 bytes".
+//!   is what turns "the heap grew by this much" into "by this many blocks
+//!   of this size".
 //!
 //! Taken at the end of the `--settle-ms` wait, of a process that has
 //! stopped working, and **after** the settled reading was read off the

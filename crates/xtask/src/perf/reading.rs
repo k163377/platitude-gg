@@ -313,8 +313,8 @@ pub(super) fn graph_finished(line: &str) -> bool {
 
 /// What Qt says about the device it is drawing on and the rate it thinks
 /// it has, under `QSG_INFO=1`. Kept verbatim: two runs on different
-/// adapters are not each other's control, and this machine offers three
-/// (an NVIDIA discrete, an AMD integrated, and the basic render driver).
+/// adapters are not each other's control, and a machine can offer several
+/// — a discrete, an integrated and the basic render driver.
 fn graphics_note(line: &str) -> bool {
     [
         "Creating QRhi with backend",

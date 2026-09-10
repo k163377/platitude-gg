@@ -137,7 +137,7 @@ fn delta(after: u64, before: u64) -> i64 {
     i64::try_from(after).unwrap_or(i64::MAX) - i64::try_from(before).unwrap_or(i64::MAX)
 }
 
-/// `+55.2MB` / `-0.3MB`: a difference of working sets, which unlike a
+/// `+12.3MB` / `-0.4MB`: a difference of working sets, which unlike a
 /// working set has a sign worth printing.
 pub(super) fn signed_mb(bytes: i64) -> String {
     format!("{:+.1}MB", bytes as f64 / (1024.0 * 1024.0))

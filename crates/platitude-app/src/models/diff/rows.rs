@@ -10,11 +10,11 @@ impl DiffModel {
     /// Their words change and nothing else does — same rows, same order,
     /// same numbers — so this rewrites the two fields that carry the
     /// markup and says `dataChanged` over the lot. Swapping the list
-    /// instead would be no slower to build (2ms for 6,000 rows), but a
-    /// `ListView` handed a new list starts again at the top: measured
-    /// `at=0` where the reader had scrolled to 400 (measured,
-    /// `PGG_AUTO_ACT=colour-place`). The colours arrive a second after the
-    /// rows do, which is exactly long enough to have started reading.
+    /// instead would be no slower to build, but a `ListView` handed a new
+    /// list starts again at the top: `at=0` where the reader had scrolled
+    /// down (observed, `PGG_AUTO_ACT=colour-place`). The colours arrive a
+    /// beat after the rows do, which is exactly long enough to have
+    /// started reading.
     pub(super) fn repaint_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {
         let Some(patches) = self.shown.clone() else {
             return;

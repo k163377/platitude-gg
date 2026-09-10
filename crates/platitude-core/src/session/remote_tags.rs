@@ -14,11 +14,12 @@ use super::*;
 /// **One sorted run rather than a map of maps.** A tag standing on two
 /// commits is rare, so nearly every name has exactly one reading — and a
 /// `BTreeMap` per name allocates a whole eleven-slot node to hold that one
-/// (measured on `JetBrains/kotlin`, 45,901 remote tags: 43.5MB, a third of
-/// the process's entire Rust heap, in 45,901 nodes holding one entry each).
-/// Flat, the same readings are 4.4MB. The operations are the ones the two
-/// joins need — is this name out there, and walk the names in order — and
-/// both are as good on a sorted run as on a tree.
+/// — a node per name, which on a repository with tens of thousands of
+/// remote tags is an order of magnitude more than the same readings take
+/// flat, and a large share of the process's entire Rust heap
+/// (ci/baseline/code-costs-windows-x64.md §メモリの形). The operations are
+/// the ones the two joins need — is this name out there, and walk the
+/// names in order — and both are as good on a sorted run as on a tree.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct RemoteTagIndex {
     /// Sorted by name, then by commit. Built once per merge and read many
@@ -97,8 +98,9 @@ impl RemoteTagIndex {
     ///
     /// **This is what makes the index the only copy.** Keeping the
     /// per-remote answers beside it, so one remote's could be replaced on
-    /// its own, is a second 45,909 names — 4.3MB of the memory budget —
-    /// for data already here. Taking them out again costs one pass.
+    /// its own, is a second copy of every name — megabytes of the memory
+    /// budget (ci/baseline/code-costs-windows-x64.md §メモリの形) — for
+    /// data already here. Taking them out again costs one pass.
     pub(crate) fn readings(
         &self,
     ) -> impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)> + '_ {

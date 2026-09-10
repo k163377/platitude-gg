@@ -105,13 +105,13 @@ async fn user_defined_tools_come_from_their_keys() {
     assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
 }
 
-/// Opt-in: `--tool-help` takes around eight seconds on Windows, because it
-/// sources every tool definition twice and probes the registry for each.
+/// Opt-in: `--tool-help` takes seconds on Windows, because it sources
+/// every tool definition twice and probes the registry for each.
 /// The parsing it feeds is covered by unit tests against captured output;
 /// this only checks that the command still answers in the shape they
 /// assume. Run it with `--ignored` after touching either.
 #[tokio::test]
-#[ignore = "git mergetool --tool-help takes ~8s on Windows"]
+#[ignore = "git mergetool --tool-help takes seconds on Windows"]
 async fn available_tools_never_offers_one_that_needs_a_terminal() {
     let repo = TestRepo::init();
     let (exec, cancel) = env();

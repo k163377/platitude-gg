@@ -7,9 +7,10 @@ use super::*;
 /// the index once and coming back.
 ///
 /// These are the writes that can stand for tens of seconds — a replay
-/// costs about 11ms a commit (measured), so a range of a few hundred is
-/// seconds and the graph's own window is more than twenty — and they are
-/// the ones git leaves a standing operation on disk for while they run.
+/// pays per commit (ci/baseline/code-costs-windows-x64.md), so a range of
+/// a few hundred is seconds and the graph's own window is far longer —
+/// and they are the ones git leaves a standing operation on disk for
+/// while they run.
 /// Both halves of that matter: the poll is let through under these so the
 /// badge can count the steps out ([`RepoSession::refresh_poll`]), and the
 /// screen holds its write doors down for as long as one is out.

@@ -97,9 +97,9 @@ impl RepoSession {
                 // HEAD is only while nothing has told it, so the answer
                 // goes down as early as this read can put it there.
                 //
-                // It does not save the two walks `open` starts. Measured
-                // on `JetBrains/kotlin`: the listing above is 300ms on its
-                // own, and both of them are past this point before it
+                // It does not save the two walks `open` starts: on a
+                // repository whose listing above takes long enough to
+                // matter, both of them are past this point before it
                 // returns. What it settles is every rebuild after — a
                 // commit, a fetch, a poll tick that found a ref moved.
                 self.record_head_from_refs(looked, &refs, &head);

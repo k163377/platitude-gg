@@ -19,11 +19,11 @@ fn asked_about_both() -> RepoTab {
 }
 
 // Two reads race, and the one about the selection already left behind
-// can win — a coin flip decided by how long two `ssh-keygen` runs
-// take (measured, 143µs apart under six concurrent runs). The
-// answer the pane is waiting for had already landed, so letting the
-// late one overwrite it puts the pane back to "nothing has answered"
-// — and nothing asks again, so it stays there.
+// can win — a coin flip decided by how long two `ssh-keygen` runs take,
+// which under concurrent runs land close enough together for either
+// order (observed). The answer the pane is waiting for had already
+// landed, so letting the late one overwrite it puts the pane back to
+// "nothing has answered" — and nothing asks again, so it stays there.
 #[test]
 fn a_signature_answer_about_a_selection_left_behind_is_dropped() {
     let mut tab = asked_about_both();

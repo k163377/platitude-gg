@@ -1,0 +1,97 @@
+# コードの判断を支えた実測(Windows x64)
+
+ソースのコメントから引き上げた値の置き場。**コメントは値を持たない**(CLAUDE.md
+§Rust 規約)— 機械が変われば当然、同じ機械でも負荷で動く数字を、動かないもののふりで
+コードに置かないため。コメントに残すのは「何が支配項か」「どちらが桁で大きいか」で、
+その桁を決めた読みがこの表。
+
+- 台: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26200 / git 2.55.0 /
+  Qt 6.10.3。画面 3 枚(100 / 180 / 100Hz)・GPU 3 系統
+  ([perf-windows-x64.md](perf-windows-x64.md) §計測条件 と同じ台。**静かな機械ではない**)
+- **1 度ずつ読んだ値で、撃ち直しの手順を持たない** — [perf-windows-x64.md](perf-windows-x64.md) /
+  [poll-cost](poll-cost-windows-x64.md) / [head-reach](head-reach-windows-x64.md) /
+  [refs-join](refs-join-windows-x64.md) の 4 本(条件を書いて撃ち直せる記録)とは別物。
+  ここの行から読めるのは**順序と桁**だけで、絶対値を予算行と並べない
+- **数字が要る判断をするなら、その時に自分が使う量を測り直す**。この表は
+  「なぜ今の形なのか」を読むためだけにある
+- 参照リポジトリは `JetBrains/kotlin`(clone した時期で refs も tip も動く)、
+  合成コーパスは `cargo xtask corpus`(token は perf 記録が持つ)
+
+## git のプロセス代
+
+100ms の操作応答(CLAUDE.md §性能予算)に対して、**Windows ではプロセスの起動が
+コマンドの代金の大半**という 1 点がこの表の全部。
+
+| 場所 | 読み |
+|---|---|
+| `process::program`(Git for Windows の `cmd\git.exe` はランチャー) | `git --version` 22.7ms 対 本体直叩き 10.3ms / details の `git show` 19.0ms 対 10.7ms(ウォーム) |
+| `details::commit_details` | git 自身の仕事は約 1ms、残りはプロセス |
+| `repo::is_bare`(`rev-parse` 1 本) | 33ms |
+| `models::tabs` の folder 検査(`rev-parse` 1 本) | 30–36ms(リポジトリでもそうでなくても) |
+| `session::write` の replay(1 コミット) | 約 11ms(数百コミットの range で数秒) |
+| `session::build` の carry(refused → detect → stash) | 追加 3 spawn で 100–300ms |
+| `eol::attrs`(`check-attr` を 200 パスまとめて) | 1 batch 71ms 対 1 パス spawn 42ms |
+| `eol::sample`(index ではなく worktree を読ませた場合) | 24.7s(106k ファイル)対 settled 数本の 42ms |
+| `eol::worktree`(`ls-files --eol` は worktree ファイルを全部読む) | 120MB のファイル 1 本で 213ms |
+| `conflict::tool`(`mergetool --tool-help`) | 約 8 秒(ウォーム) |
+| `process::executor` の `diff.autoRefreshIndex=false` の代金 | stat が全部動いた 780 ファイルで `status` 72ms、refresh 後なら 28ms |
+| `session::refresh` の refs listing | 300ms(kotlin) |
+| `session::mod` / `session::read_flight` の `status --porcelain=v2 -uall` | 2.9s wall / 2.3 CPU 秒(合成コーパス = tracked 109,652 + ignored 78,000) |
+| `session::query` の「動いていない snapshot を組み直して等値比較」 | 39ms / 1 コア(kotlin) |
+| `session::model` の tag 込み walk | 最初の 1 バイトまで約 +1.7s(kotlin の 44k タグ、commit-graph 有り) |
+| `session::head_reach` / `reachable` の tag 抜き | tag は refs 53,672 のうち 45,846、walk 501ms のうち 478ms(→ [head-reach](head-reach-windows-x64.md)) |
+| `RefListPopup` の「測るためにもう 1 組並べる」案 | kotlin の最深行で 109ms(操作応答 100ms を単体で超える) |
+| `RepoPage` の plan range 読み | 浅い click で 27ms、実履歴の根で 1 秒超(kotlin) |
+| `RepoPage` の ref delete 後 | refs 読み 54ms → グラフ再構築の walk 1.3s(`busyCount` は前半だけ覆う) |
+
+## メモリの形
+
+300MB(CLAUDE.md §性能予算)に対する読み。**どれも「同じ答えを持つ 2 つの形」の差**で、
+形を選んだ理由がこの列。
+
+| 場所 | 読み |
+|---|---|
+| `session::model::LabelIndex` | `HashMap<Oid, Vec<RefLabel>>` 案は table 4.3MB + 4 枠 Vec 10.7MB で、中身の label は 2.7MB(kotlin の 47,715 ラベル付きコミット) |
+| `session::RemoteTagIndex` | 名前ごとの `BTreeMap` 案 43.5MB(プロセスの Rust ヒープの 1/3)対 flat 4.4MB。per-remote の控えを別に持つ案は名前をもう 1 組持つので さらに +4.3MB(kotlin の 45,901 リモートタグ) |
+| `session::joins` の `shrink_to_fit` | push で伸ばした Vec の余りはタグ 45,901 本で 1.2MB |
+| `session::snapshot::BranchItem`(oid を文字列で持つ案) | 2.6MB(kotlin の 53,724 refs) |
+| `models::nav::Source`(組んだ行で持つ案) | +13.9MB(kotlin) |
+| `WindowDialogSeat`(設定画面と clone 箱を常時建てる案) | 素の窓に +約 8MB |
+| `DiffRowDelegate` の hunk ボタン(見出し以外の行にも建てる案) | 57 行の diff で 75MB(大半は行が描かないもの) |
+| `GraphLaneCell` の full-width canvas(行に 2 枚) | 42.6MB(グラフを一度スクロールさせた後の working set) |
+| `GraphRowChips`(名前のある行だけに建てて recycle ごとに作り直す案) | 1 スクロールで +35MB(chip 自身ではなく作り直しのヒープ) |
+| `corpus` の loose refs | 5 万本で slack 80MB、`pack-refs` 後は 6MB |
+
+## 着色(`highlight`)
+
+| 場所 | 読み |
+|---|---|
+| `highlight::patch::LEX_LINE_BUDGET` = 5,000 | lexer は約 16,000 行/秒(release、このリポジトリのソース)= 約 300ms |
+| `highlight::patch::QUICK_LINE_BUDGET` = 1,000 | 同じ速度で約 60ms |
+| 予算を置かない読み | 2 万行の全書き換えで 1.2s |
+| `DiffColoured` を行と一緒に送る案 | 6,000 行の Rust で 951ms(同じテキストを「何も言えない名前」で読ませると 3ms)= 操作応答の 100ms の外 |
+| `models::diff` の行の作り直し | 6,000 行で 2ms(色が届いた時に全行を組み直せる根拠) |
+
+## コーパス生成(`cargo xtask corpus`)
+
+`corpus.rs` / `corpus::shape` の定数を決めた読み。**生成時間の話で、製品の性能では
+ない**。
+
+| 対象 | 読み |
+|---|---|
+| blob を 1 プロセスで流す(body を全部綴った 25GB のストリーム) | 596s。同じコミットを 300 バイト body で流すと 200s、生成器がストリームを書くだけなら 20s(同じ台・同じ時間帯) |
+| `--depth=0`(delta を試させない) | 446s 対 596s だが、パックは 10.7GiB 対 6.5GiB |
+| 大きいファイルの履歴を持たない corpus | パックは 3.52GiB 対 4.66GiB |
+| 単列(側枝なし)の corpus | 95MB 軽く出る = 全部の数字を良く見せる |
+| ignore をディレクトリ名で書く | git はディレクトリを 1 回 stat して枝を切るので `status` 0.44s 対 パターンの 1.01s |
+| `core.fsmonitor`(kotlin 実物) | off 0.28s / on 0.76s = この台ではデーモンが払わせる側 |
+| `--no-optional-locks`(タイミング装置ではない) | 有無どちらも 0.76s |
+| `demo --preset deep` を 1 コミットずつ書く案 | 2,100 プロセスで約 1 分。1 本の `fast-import` なら 92ms |
+
+## テストとハーネス
+
+| 対象 | 読み |
+|---|---|
+| `cargo test --workspace` 下の git 1 往復(コアごとにスレッド、全部が git を spawn) | 単独時の約 25 倍。**壁時計の上限は負荷で判定を決める**ので、テストのハーネスは stock timeout を外して自前の backstop を持つ |
+| `perf` の warm 判定(`perf::warmth`) | invocation 1 本目の 1 run 目だけ突出(startup 1226ms)、2 本目以降の 1 run 目は採用 run(1096–1178ms)に混ざる(1081–1177ms)= 毎回 1 run 捨てるのは 14 秒の無駄 |
+| `xtask::gui` の起動見張り | Qt プラットフォームプラグインの失敗はほぼ即死(約 10ms)。`FIRST_MOMENT` の残りはコールドスタートの余白 |

@@ -6,8 +6,8 @@
 //! offscreen Qt builds no scene graph worth measuring.
 //!
 //! **On one named screen, deliberately.** The window's place is written
-//! into the run's own `state.toml` rather than left to the platform: this
-//! machine has monitors at 100, 180 and 100Hz, and the screen a window
+//! into the run's own `state.toml` rather than left to the platform: a
+//! machine's screens need not run at one rate, and the screen a window
 //! lands on sets the rate its frames can possibly arrive at
 //! (`perf::display`).
 

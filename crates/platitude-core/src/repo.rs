@@ -112,8 +112,8 @@ pub async fn open(
 
 /// Whether `path` is a repository git will not give a work tree for.
 ///
-/// Only asked once [`open`] has already failed, so the cost lands on the
-/// folder nobody could open (measured, 33ms) rather than on every one that
+/// Only asked once [`open`] has already failed, so the extra process
+/// lands on the folder nobody could open rather than on every one that
 /// works. `false` for a folder that is no repository at all, and for a
 /// question git could not answer — the screen falls back to git's own
 /// wording either way.

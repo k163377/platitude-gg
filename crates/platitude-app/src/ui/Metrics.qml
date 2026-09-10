@@ -65,9 +65,9 @@ QtObject {
     // the first press has always settled before the run starts. A repeat is told from a fresh press by the key itself
     // (`KeyEvent.isAutoRepeat`), never by timing.
     readonly property int keyStepSettleMs: 150
-    // Repository reload while the page is on screen. **One tick contains a `git status -uall`**, which costs about
-    // 760ms on a reference-sized repository (ci/baseline/poll-cost-windows-x64.md) — the measurement is what set this,
-    // so it is not shortened to feel more responsive.
+    // Repository reload while the page is on screen. **One tick contains a `git status -uall`**, and on a
+    // reference-sized repository that read is most of a second (ci/baseline/poll-cost-windows-x64.md) — the
+    // measurement is what set this interval, so it is not shortened to feel more responsive.
     readonly property int pollIntervalMs: 10000
     // The badge's `n/m` while a replay runs, on a tick of its own. It reads two progress files out of the git
     // directory and **starts no process**, which is why the cost above does not apply to it. Faster than this and

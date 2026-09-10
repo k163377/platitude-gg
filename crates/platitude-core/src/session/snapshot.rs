@@ -95,8 +95,8 @@ impl RefsSnapshot {
 /// The commit is kept as an [`Oid`] and spelled out where it is shown.
 /// Forty hex characters is a string allocation per row for something no
 /// reader ever sees in full — the graph is what it is for — and a
-/// repository's branches and tags together made 2.6MB of them
-/// (`JetBrains/kotlin`, 53,724 refs).
+/// repository with tens of thousands of refs pays megabytes for them
+/// (ci/baseline/code-costs-windows-x64.md §メモリの形).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchItem {
     pub short: crate::Name,

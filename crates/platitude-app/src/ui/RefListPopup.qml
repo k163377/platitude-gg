@@ -197,8 +197,8 @@ AppCard {
     ///
     /// **The rows it measures are the rows the list is going to show** — the card is given the page for the length of
     /// this call, the list builds what fits in it, and those are read back. Nothing is built twice: a second set laid
-    /// out beside the list to be measured cost the deepest row of `JetBrains/kotlin` 109ms of the 100ms a hand is
-    /// answered in, for rows the list was about to build anyway.
+    /// out beside the list to be measured spent the whole 100ms a hand is answered in on the deepest row of
+    /// `JetBrains/kotlin` (ci/baseline/code-costs-windows-x64.md), for rows the list was about to build anyway.
     ///
     /// A card that fits is measured whole and comes out at exactly the width it always had. One that does not is
     /// measured over the rows the reader has in front of them the moment it opens, and a longer name below the fold

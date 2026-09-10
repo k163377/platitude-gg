@@ -54,8 +54,9 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
 /// available for tests that intentionally exercise the host configuration.
 ///
 /// The stock wall-clock budget is raised to the suite's overall backstop,
-/// not lifted: under a loaded suite one git round trip measures ~25× its
-/// lone cost (`wait.rs`), so the everyday cap would decide by load — but
+/// not lifted: under a loaded suite one git round trip inflates by more
+/// than an order of magnitude (`wait.rs`), so the everyday cap would
+/// decide by load — but
 /// a *wedged* git must still fail the awaiting test by name. Session
 /// waits have `Patience` under this; a test that awaits the executor
 /// directly has nothing else.

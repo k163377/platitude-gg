@@ -231,8 +231,8 @@ Item {
     /// repository makes on the way open, or the one a verb asked for itself (`push-tag` on a drifted tag). A barrier
     /// armed at the start passes on that answer and photographs the card still up, the row half filled and nothing
     /// written; the census walked then holds the card, and the next run's — whose stray answer came sooner or later
-    /// — does not (measured: `push-tag v1.5:drift` finished 130ms into a 500ms hold with both cards up, and under the
-    /// gate's load with neither).
+    /// — does not (observed: `push-tag v1.5:drift` framed both cards up on one run and neither under the gate's load,
+    /// which is the whole reason the moment the stray answer lands cannot be part of the barrier).
     ///
     /// `edge` is the signal the hold's end sends the write on: the row's own `held` unless the hold runs through a
     /// pane — `DiffPane.completeHold` presses a row of its list and says so on `discardHunkRequested`,

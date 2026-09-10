@@ -14,15 +14,17 @@ use super::{DiffColors, LexCache, LineColors, PatchColors};
 
 /// How many lines of lexing one ordinary patch may spend, everything
 /// counted — the walk down to each hunk, every row painted inside one,
-/// the other side's readings too. The lexer runs at ~16,000 lines a
-/// second (measured on a release build, this repo's own source), so this is
-/// about 300ms — as long as opening a diff can spend on colour. Rows
-/// past it go out plain, which is what every file the set does not know
-/// looks like anyway.
+/// the other side's readings too. **Counted in lines, because lines are
+/// what the lexer spends** — the count is set from the rate it reads at,
+/// so that a reading stays inside what opening a diff can spend on colour
+/// (the rate and what this comes to in milliseconds:
+/// ci/baseline/code-costs-windows-x64.md §着色). Rows past it go out
+/// plain, which is what every file the set does not know looks like
+/// anyway.
 ///
 /// One budget per patch, not per hunk: what it bounds is the whole cost
-/// of colouring one file, whatever shape its hunks take (the unbounded
-/// reading measured 1.2s over a 20,000-line rewrite). It bounds each
+/// of colouring one file, whatever shape its hunks take — unbounded, a
+/// whole-file rewrite reads an order of magnitude past that. It bounds each
 /// *reading*, not how deep colours can ever reach: a walk resumed from a
 /// [`LexCache`] checkpoint starts its budget from there.
 const LEX_LINE_BUDGET: usize = 5_000;
@@ -33,8 +35,8 @@ const LEX_LINE_BUDGET: usize = 5_000;
 /// left off.
 const CHECKPOINT_STRIDE: usize = 512;
 
-/// What [`colors_quick`] may spend: a fraction of [`LEX_LINE_BUDGET`],
-/// around 60ms — what a pane can wear as "immediate".
+/// What [`colors_quick`] may spend: a fifth of [`LEX_LINE_BUDGET`], which
+/// at the same rate is what a pane can wear as "immediate".
 const QUICK_LINE_BUDGET: usize = 1_000;
 
 /// Whether the language set can say anything about this path at all —

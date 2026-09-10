@@ -107,8 +107,9 @@ Item {
         // **Built on every row and hidden where there is no name — unlike the box beside it.** A chip stands on one
         // row in three, and rows are recycled as the graph scrolls: built only where there is a name, the chip was
         // built and torn down on every recycling that crossed that line, and the working set over one scroll of the
-        // window came out 35MB *higher* than with a chip built once per delegate (measured — the churn's own heap,
-        // not the chip's). The box is different: nobody is naming a row while the graph scrolls.
+        // window came out tens of megabytes *higher* than with a chip built once per delegate — the churn's own heap,
+        // not the chip's (ci/baseline/code-costs-windows-x64.md §メモリの形). The box is different: nobody is naming
+        // a row while the graph scrolls.
         visible: chipColumn.records.length > 0 && !chipColumn.naming
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceXs

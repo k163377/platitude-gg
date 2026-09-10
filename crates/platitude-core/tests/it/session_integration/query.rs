@@ -312,9 +312,9 @@ async fn a_detached_head_is_still_read_correctly() {
 /// last — the same one, by pointer — instead of building an equal one.
 ///
 /// Sorting every ref into a snapshot and a label map on every tick just
-/// to compare the result equal costs 39ms of a core against
-/// `JetBrains/kotlin`, ten seconds apart, for an answer the key already
-/// had.
+/// to compare the result equal spends tens of milliseconds of a core on
+/// a tag-heavy repository, every ten seconds, for an answer the key
+/// already had (ci/baseline/code-costs-windows-x64.md).
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
     let mut repo = TestRepo::init();

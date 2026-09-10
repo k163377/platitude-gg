@@ -174,9 +174,11 @@ pub struct DiffModel {
     current_key: String,
     /// The rows of the diff on screen, kept so the colours — which arrive
     /// behind them — can be laid over the same lines without another read
-    /// (`DiffMsg::Coloured`). Rebuilding all of them measured 2ms for a
-    /// 6,000-line diff, which is why the colours can afford to redo the
-    /// whole list rather than address rows one at a time.
+    /// (`DiffMsg::Coloured`). Rebuilding all of them costs orders of
+    /// magnitude less than colouring them did
+    /// (ci/baseline/code-costs-windows-x64.md §着色), which is why the
+    /// colours can afford to redo the whole list rather than address rows
+    /// one at a time.
     shown: Option<Arc<Vec<FilePatch>>>,
     /// What changed inside each shown row (`intraline`), kept beside
     /// `shown` for the same rebuilds.

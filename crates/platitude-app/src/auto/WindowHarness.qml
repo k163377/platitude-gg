@@ -51,7 +51,7 @@ Item {
     Component.onCompleted: {
         // A verb reads a screen's properties before opening it, and a null there is a dead run rather than a
         // refusal. Only where a verb or the identity hook is going to want one: holding the two ready costs the bare
-        // window ~8MB of working set (`WindowDialogSeat`).
+        // window working set it never uses (`WindowDialogSeat`).
         harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
         harness.windowShape.keepSavedSize = Harness.automated

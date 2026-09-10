@@ -116,11 +116,12 @@ static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::co
 
 /// Merge tools git found installed and this app can actually launch.
 ///
-/// **Slow on Windows** — around 8 seconds, measured warm. `--tool-help`
-/// sources every one of git's ~25 tool definitions twice and probes each
-/// one's availability, which on Windows means walking the registry and
-/// Program Files. Never put this on the write queue, and never let
-/// anything wait on it.
+/// **Slow on Windows** — seconds, not milliseconds
+/// (ci/baseline/code-costs-windows-x64.md). `--tool-help` sources every
+/// one of git's tool definitions twice and probes each one's
+/// availability, which on Windows means walking the registry and Program
+/// Files. Never put this on the write queue, and never let anything wait
+/// on it.
 ///
 /// Only the first group is read (what is installed); the second group
 /// lists tools git knows of but cannot find, which is not an offer worth

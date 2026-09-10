@@ -2,12 +2,12 @@
 //! launcher Git for Windows puts there, in which case the git it launches.
 //!
 //! `C:\Program Files\Git\cmd\git.exe` — the one entry the installer adds
-//! to PATH — is a 46KB launcher: it sets up an environment and spawns
+//! to PATH — is a launcher: it sets up an environment and spawns
 //! `mingw64\bin\git.exe`, which does the work. Two processes per command,
 //! and the first is pure overhead on a machine where a process is most
-//! of what a command costs (measured on a warm 24-thread desktop: `git
-//! --version` 22.7ms through the launcher, 10.3ms without; the details
-//! pane's `git show` 19.0ms against 10.7ms). The real binary needs none
+//! of what a command costs, so going straight to the real binary takes a
+//! short command down by about half
+//! (ci/baseline/code-costs-windows-x64.md). The real binary needs none
 //! of the launcher's setup: it puts its own `libexec/git-core`,
 //! `mingw64/bin` and `usr/bin` on the PATH of what it spawns, so hooks,
 //! `!` aliases, ssh and gpg are found, and it derives `HOME` and finds

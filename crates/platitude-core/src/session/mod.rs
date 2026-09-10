@@ -245,9 +245,10 @@ pub enum AfterWrite {
     /// The saving is per tick, on the longest read in the app: automatic
     /// fetching runs by the minute, almost every tick brings nothing
     /// down, and one `git status -uall` walks every tracked and every
-    /// ignored path there is (measured on the 200,000-commit synthetic
-    /// corpus — 109,652 tracked, 78,000 ignored: 2.9s wall, 2.3 CPU
-    /// seconds spread over the preload-index threads).
+    /// ignored path there is — on the synthetic corpus's hundred thousand
+    /// tracked and seventy-eight thousand ignored paths that is seconds,
+    /// not milliseconds, spread over the preload-index threads
+    /// (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
     ///
     /// **Only for a write that reaches neither the index, the working
     /// tree, nor the configuration.** The status event carries the push

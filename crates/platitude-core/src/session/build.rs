@@ -74,10 +74,10 @@ impl Replay<'_> {
     /// **Which is why it sits here and not once at the caller.** The carry
     /// runs this command twice: the first attempt is refused over the
     /// dirty tree, and the second comes after a `detect` and a stash —
-    /// three more spawns, 100–300ms — with the tree emptied and nothing
-    /// looking at the tip again. A check made once before the first spawn
-    /// leaves that whole stretch open, and the commit typed into it is the
-    /// one that goes.
+    /// three more spawns, and a process each — with the tree emptied and
+    /// nothing looking at the tip again. A check made once before the
+    /// first spawn leaves that whole stretch open, and the commit typed
+    /// into it is the one that goes.
     ///
     /// It cannot close the window, only narrow it to the gap nothing can
     /// be put inside: git takes a todo but not the tip it was written for,

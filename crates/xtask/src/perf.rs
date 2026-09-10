@@ -447,10 +447,10 @@ fn frames_delivered(
 }
 
 /// One graphics stack across the kept runs. Two runs that drew on
-/// different adapters are not each other's control, and this machine
-/// offers three — an NVIDIA discrete, an AMD integrated and the basic
-/// render driver (`QT_D3D_ADAPTER_INDEX` is the lever if Qt ever takes a
-/// different one).
+/// different adapters are not each other's control, and a machine can
+/// offer several — a discrete, an integrated and the basic render driver
+/// (the rig's own: ci/baseline/perf-windows-x64.md §計測条件.
+/// `QT_D3D_ADAPTER_INDEX` is the lever if Qt ever takes a different one).
 fn one_graphics_stack(kept: &[Reading]) -> Result<(), String> {
     let Some(first) = kept.first() else {
         return Ok(());

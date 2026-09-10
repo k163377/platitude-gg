@@ -67,9 +67,10 @@ Item {
     /// How wide the canvas below is drawn.
     ///
     /// **The lanes reach `fullWidth`, but only the column is ever on screen while the graph is not sent sideways**,
-    /// and a canvas is an image the size of the item it is: at the reference repository that is 852 pixels held for
-    /// 252 shown, on every row that is built, and the same ratio again on every repaint (measured — two full-width
-    /// canvases a row were 42.6MB of the working set once the graph had been scrolled through).
+    /// and a canvas is an image the size of the item it is: at the reference repository the lanes are several times
+    /// the width the column shows, on every row that is built, and the same ratio again on every repaint — two
+    /// full-width canvases a row put tens of megabytes on the working set once the graph had been scrolled through
+    /// (ci/baseline/code-costs-windows-x64.md §メモリの形).
     ///
     /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
     /// moving the canvas rather than repainting it (`x`), so during a pan it has to already hold what the slide will

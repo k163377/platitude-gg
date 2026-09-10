@@ -24,7 +24,8 @@ use crate::wait::{LOOK_AGAIN, stood};
 
 /// How long a window just started is watched before it is called
 /// launched: long enough for a Qt platform plugin failure to have ended
-/// the process (that death takes ~10ms; the margin is for a cold start).
+/// the process (that death is immediate — the margin is for a cold
+/// start, ci/baseline/code-costs-windows-x64.md §テストとハーネス).
 /// A stretch of the product's own standing, not a wait for anything
 /// (`wait::stood`) — a window nothing drives says nothing this could
 /// wait for.
@@ -129,7 +130,8 @@ const APP_NAME: &str = "platitude-gg";
 /// tells this seat's runs from another seat's ([`is_under`]). One copy
 /// per tree, which is both what it takes — `launch` reaps this tree's
 /// runs before it writes the copy, so nothing of ours is standing on it
-/// by then — and what it costs, 60MB beside a build of the same size.
+/// by then — and what it costs, a second copy of the exe beside the
+/// build it came from.
 fn standing_copy(root: &Path) -> PathBuf {
     root.join("target")
         .join("window")

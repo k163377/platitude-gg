@@ -70,9 +70,10 @@ pub async fn rulings_given(
         return Ok(Vec::new());
     }
     let mut out = Vec::with_capacity(paths.len());
-    // Measured against the reference repository: a 200-path batch answers
-    // in 71ms vs 42ms per one-path spawn. Chunking also keeps a long list
-    // under the command-line length limit.
+    // A batch of hundreds costs less than twice what a single path's own
+    // spawn does — the process is most of the price, not the paths
+    // (ci/baseline/code-costs-windows-x64.md). Chunking also keeps a long
+    // list under the command-line length limit.
     for batch in paths.chunks(ATTR_BATCH) {
         for attrs in attributes(executor, workdir, batch, cancel).await? {
             out.push(match attrs {

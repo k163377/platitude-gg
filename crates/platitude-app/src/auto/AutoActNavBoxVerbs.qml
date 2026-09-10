@@ -147,8 +147,8 @@ Item {
         id: renameTakenTimer
         onTriggered: {
             // The bar all the way down as well as the box: the words are written on the answer and the height follows
-            // over 200ms, so a picture taken on the refusal alone catches a bar 12px tall (`NoticeBar.settled`,
-            // measured, — the first run of this verb framed exactly that).
+            // over 200ms, so a picture taken on the refusal alone catches a bar still on its way down
+            // (`NoticeBar.settled` — the first run of this verb framed exactly that).
             if (repoTab.busyCount !== 0 || !sidebarPane.editRefused || !page.noticeCard.settled)
                 return
             renameTakenTimer.stop()

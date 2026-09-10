@@ -4,9 +4,9 @@
 //! either side of a run — and it is also what the run is *placed* against:
 //! the window is pinned onto one named screen (`perf::screen`), and that
 //! screen's nominal Hz is the ceiling the delivered frames are read
-//! against. A machine whose monitors run at 100, 180 and 100Hz answers
-//! three different fps for the same application otherwise
-//! (ci/baseline/perf-windows-x64.md §この記録の読み方).
+//! against. A machine whose monitors do not all run at one rate answers
+//! a different fps for the same application on each of them otherwise
+//! (the rig's own screens: ci/baseline/perf-windows-x64.md §計測条件).
 use std::path::Path;
 
 /// One screen, as both the OS mode table and the virtual desktop see it.

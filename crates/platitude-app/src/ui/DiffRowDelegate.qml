@@ -380,9 +380,9 @@ Rectangle {
     //
     // **Built only on a heading that has them, never hidden on the other lines.** A delegate is built per line on
     // screen, and each `ActionButton` is a label with its rulers, a hold and its timers — on the lines that are not
-    // headings the pair was the heaviest thing in the row while drawing nothing (measured: 57 lines of a commit's diff
-    // cost 75MB of heap, most of it in parts the rows never showed). Same rule as the dialogs behind
-    // `WindowDialogSeat` (rules-refs/app-ui.md).
+    // headings the pair was the heaviest thing in the row while drawing nothing — tens of megabytes of heap on a diff
+    // of a few dozen lines, most of it in parts the rows never showed (ci/baseline/code-costs-windows-x64.md §メモリの形).
+    // Same rule as the dialogs behind `WindowDialogSeat` (rules-refs/app-ui.md).
     Loader {
         id: hunkTools
         active: diffRow.partial && diffRow.kind === "hunk"

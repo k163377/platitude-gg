@@ -20,8 +20,9 @@
 //! (`patch::LEX_LINE_BUDGET`): everything the lexer reads — the walk
 //! down to each hunk, both sides of every row — spends from one pool,
 //! and rows past it go out plain. That is the whole of what a diff may
-//! cost, whatever its shape (a 20,000-line rewrite measured 1.2s
-//! unbounded).
+//! cost, whatever its shape — unbounded, a whole-file rewrite runs an
+//! order of magnitude past what opening a diff can spend on colour
+//! (ci/baseline/code-costs-windows-x64.md §着色).
 //!
 //! Without the file (it could not be read, it is too big, the language is
 //! unknown) each hunk starts clean instead. That is not merely less

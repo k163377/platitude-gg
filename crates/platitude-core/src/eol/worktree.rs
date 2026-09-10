@@ -10,8 +10,8 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use super::Eol;
 
 /// Files above this size are not sampled: `ls-files --eol` reads the whole
-/// worktree file to fill its `w/` column (measured: 213ms for one 120MB
-/// file).
+/// worktree file to fill its `w/` column, so what one costs is its own
+/// bytes (ci/baseline/code-costs-windows-x64.md).
 const SAMPLE_MAX_BYTES: u64 = 1 << 20;
 
 /// Every untracked, non-ignored file and what its bytes look like.

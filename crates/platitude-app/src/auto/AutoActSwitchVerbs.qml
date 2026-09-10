@@ -42,8 +42,8 @@ Item {
         } else if (act === "move-ask") {
             // The other question a move can raise: landing on a remote branch whose local one holds commits of its
             // own. `move-branch` is the same road past this bar; this one stops on it. Waited on at `AskBar.settled`
-            // for the reason `switch-stopped` is — `dbl-remote` completes 18ms after the question opens and
-            // photographs a marked row under no bar at all (measured).
+            // for the reason `switch-stopped` is — `dbl-remote` completes before the bar has finished opening and
+            // photographs a marked row under no bar at all (observed).
             page.switchToRef("R", arg)
             moveAskTimer.start()
         } else if (act === "ask-over-notice") {
@@ -70,8 +70,8 @@ Item {
             //
             // The argument is `<branch>[:<stashes>]`, and the count is there because **the branch is not the last
             // thing to arrive**: the stash list is read on its own after the move, so a run that stopped at the branch
-            // photographed a carry whose entry was not in the list yet (measured — the row reached the graph
-            // 70ms after the shot).
+            // photographed a carry whose entry was not in the list yet (observed — the row reached the graph after
+            // the shot had been taken).
             const landing = arg.split(":")
             switchLandsTimer.branch = landing[0]
             switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1

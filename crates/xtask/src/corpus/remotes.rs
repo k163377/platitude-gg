@@ -8,8 +8,9 @@
 //! remote therefore never reaches `remote::list_tags`, so
 //! `session::RemoteTagIndex` is built from nothing, no tag carries a
 //! remote reading, and no branch has an upstream. Against a repository
-//! this size that index is tens of thousands of entries, and the record
-//! notes a run where it cost 4.7MB — bytes the corpus could not show.
+//! this size that index is tens of thousands of entries carrying
+//! megabytes (ci/baseline/code-costs-windows-x64.md §メモリの形) — bytes
+//! the corpus could not show.
 //!
 //! **Nothing here can reach a network.** A remote is a directory: a bare
 //! repository holding refs and no objects of its own, which reads the

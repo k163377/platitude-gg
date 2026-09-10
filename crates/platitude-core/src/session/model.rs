@@ -6,9 +6,10 @@ use super::*;
 /// What the log stream walks.
 ///
 /// Tags are shown by default (product decision). On tag-heavy repositories
-/// they dominate the walk's frontier setup (JetBrains/kotlin: 44k tags cost
-/// ~1.7s extra before the first byte even with a commit-graph), which is
-/// why the toggle exists.
+/// they dominate the walk's frontier setup — tens of thousands of them
+/// hold the first byte back for a second and more even with a
+/// commit-graph (ci/baseline/code-costs-windows-x64.md) — which is why
+/// the toggle exists.
 #[derive(Debug, Clone, Copy)]
 pub struct LogOptions {
     pub include_tags: bool,
@@ -80,9 +81,10 @@ pub struct RefLabel {
 /// — one name on one commit — and `HashMap<Oid, Vec<RefLabel>>` charges
 /// twice for that shape: the table's power-of-two buckets, and a separate
 /// four-slot `Vec` for every commit, because a `Vec` grown by one `push`
-/// asks for four. Measured on `JetBrains/kotlin` (47,715 labelled
-/// commits): 4.3MB of table plus 10.7MB of four-slot vectors, to hold
-/// 2.7MB of labels.
+/// asks for four. On a repository with tens of thousands of labelled
+/// commits the table and its vectors together come to several times what
+/// the labels themselves hold
+/// (ci/baseline/code-costs-windows-x64.md §メモリの形).
 ///
 /// Flat, the two questions asked of it stay as cheap. A streamed row looks
 /// its own commit up (binary search, once per shown row), and the refresh

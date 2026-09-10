@@ -16,10 +16,11 @@
 //! already in the listing the refresh just read, so that half is free and
 //! covers tags. The other half — a branch, a remote-tracking ref or a
 //! stash that is a *descendant* of the tip — needs git, and deliberately
-//! leaves tags out of the walk: on the benchmark repository they are 45,846
-//! of the 53,672 refs and 478 ms of the 501 ms (ci/baseline). Missing one
-//! costs a hold mark on a row that could have been a click, which is the
-//! direction to be wrong in.
+//! leaves tags out of the walk: on a tag-heavy repository they are the
+//! great majority of both the refs and the walk's own time
+//! (ci/baseline/head-reach-windows-x64.md). Missing one costs a hold mark
+//! on a row that could have been a click, which is the direction to be
+//! wrong in.
 
 use std::path::Path;
 

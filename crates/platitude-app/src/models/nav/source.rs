@@ -3,9 +3,10 @@ use super::*;
 /// Where a section's rows come from.
 ///
 /// Every section keeps what arrived, in the shape it arrived in, and
-/// answers for a row as the view asks. Measured on `JetBrains/kotlin`:
-/// holding the refs sections as built rows was 13.9MB of the process's
-/// Rust heap, all of it a second copy of what the snapshot says.
+/// answers for a row as the view asks. Holding the refs sections as built
+/// rows instead put megabytes on the process's Rust heap, all of it a
+/// second copy of what the snapshot says
+/// (ci/baseline/code-costs-windows-x64.md §メモリの形).
 #[derive(Default)]
 pub(super) enum Source {
     #[default]

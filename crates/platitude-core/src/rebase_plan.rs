@@ -103,8 +103,9 @@ pub enum PlanAnswer {
 /// Two serial process latencies, not seven: the range read carries the
 /// merge answer in its own `%P` field, and the onto row, its branch name
 /// and the count a remote already has of the range — all about the
-/// already-resolved range — run side by side
-/// (CLAUDE.md §性能予算: 操作応答 100ms、spawn は 1 本 ~25ms). More go out
+/// already-resolved range — run side by side. Serial spawns are what a
+/// 100ms interaction budget goes on (CLAUDE.md §性能予算,
+/// ci/baseline/code-costs-windows-x64.md §git のプロセス代). More go out
 /// only where git says there is nothing under `from`, to tell the
 /// history's first commit from a clone that stops there
 /// ([`sequencer::base_of`]).
