@@ -23,7 +23,17 @@ use crate::seats::{
 };
 use crate::subprocess::git_query;
 
+mod record;
+use record::Phases;
+
 pub fn run(args: &[String]) -> Result<(), String> {
+    let mut phases = Phases::start();
+    let result = land(args, &mut phases);
+    phases.finish(&result);
+    result
+}
+
+fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let mut root = crate::tree::workspace_root();
     let mut branch: Option<String> = None;
     let mut at = 0;
@@ -43,6 +53,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some(name) => name,
         None => current_branch(&here)?,
     };
+    phases.target(&root, &branch);
     if branch == "main" {
         return Err("land moves a branch onto main; main itself is not one".into());
     }
@@ -86,6 +97,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ));
     };
     let seat_dir = std::path::Path::new(&seat.path);
+    phases.target(seat_dir, &branch);
     let dirty = git_query(&seat.path, &["status", "--porcelain"]).unwrap_or_default();
     if !dirty.is_empty() {
         return Err(format!(
@@ -100,9 +112,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // (`budget::Pool::turn`). Nothing else is held while this waits —
     // the seat's tree, its gate and the machine's budget are all taken
     // after it — so a landing standing in line stands in nobody's way.
-    let _turn = crate::budget::Pool::of(&root, crate::gate::default_jobs())?
-        .turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"))?;
-    let mut phases = Phases::start();
+    let pool = crate::budget::Pool::of(&root, crate::gate::default_jobs())?;
+    phases.mark("preflight");
+    let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
+    phases.mark("queue");
+    let _turn = turn?;
     // The seat's slot alone: it is the one the gate rebuilds. The
     // primary's is rebuilt by nothing this landing does — the verdict runs
     // from `target/hooks` — so a landing run from the primary's runner
@@ -112,11 +126,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     // The hook that holds main to the stamp, in place before main moves.
     println!("{}", crate::gate::install(&root)?);
+    phases.mark("prepare");
     if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
         rebase(&seat.path)?;
-        phases.mark("rebase");
     }
+    phases.mark("rebase");
     gate_in_the_seat(seat_dir, &branch)?;
     phases.mark("gate");
     let ahead = crate::seats::commits_in(&here, &format!("main..{branch}")).unwrap_or(ahead);
@@ -139,47 +154,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     clear_the_board(&listing, &branch);
     release_claim(&here, &trees, &branch);
     phases.mark("hook, board and claim");
-    println!("{}", phases.report());
     Ok(())
-}
-
-/// Where a landing's time went, phase by phase: the one line that lets
-/// the next look at "landing is slow" start from numbers rather than
-/// from the transcripts — the gate's own wall clock is in its output,
-/// but the rebase, the verdict and the board are not.
-struct Phases {
-    started: std::time::Instant,
-    last: std::time::Instant,
-    marks: Vec<String>,
-}
-
-impl Phases {
-    fn start() -> Self {
-        // waits(measured): the phase clock `land` says at the end, judged by nothing
-        let now = std::time::Instant::now();
-        Self {
-            started: now,
-            last: now,
-            marks: Vec::new(),
-        }
-    }
-
-    /// Closes the phase called `what` at this moment.
-    fn mark(&mut self, what: &str) {
-        // waits(measured): the phase's end, for the same line
-        let now = std::time::Instant::now();
-        self.marks
-            .push(format!("{what} {}", clock(now.duration_since(self.last))));
-        self.last = now;
-    }
-
-    fn report(&self) -> String {
-        format!(
-            "land: {} — {} in all",
-            self.marks.join(", "),
-            clock(self.started.elapsed())
-        )
-    }
 }
 
 /// A duration the way the gate says its wall clock: minutes and seconds,

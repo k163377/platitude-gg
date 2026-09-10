@@ -217,19 +217,26 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     let (g, reused) = super::reuse::graph_of(dir)?;
     spent.graph = at.elapsed();
     spent.graph_reused = reused;
+    // Keep documents in the reported diff, but only executable inputs
+    // select tests, including under asset and harness directories.
+    let executable_changes: Vec<String> = changed
+        .iter()
+        .filter(|file| !graph::is_markdown(file))
+        .cloned()
+        .collect();
     let everything = if ask.all {
         Some("--all".to_string())
-    } else if let Some(input) = changed.iter().find(|f| moves_everything(f)) {
+    } else if let Some(input) = executable_changes.iter().find(|f| moves_everything(f)) {
         Some(input.clone())
     } else {
-        changed
+        executable_changes
             .iter()
             .find(|f| gone_source(dir, f))
             .map(|f| format!("{f} is gone"))
     };
     // What the change itself reaches is what has to be shown; a build
     // input widens what runs, not what the census owes.
-    let touched = g.reach(&changed);
+    let touched = g.reach(&executable_changes);
     let reach = if everything.is_some() {
         // Every node of the graph, and every QML file whether or not it
         // is one: a component that names nothing — or names only what
@@ -259,7 +266,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         worn: &worn,
         whole: everything.is_some(),
     };
-    let (steps, verbs_in_shadow) = select(&g, &read, &reach, &changed, ask);
+    let (steps, verbs_in_shadow) = select(&g, &read, &reach, &executable_changes, ask);
     let store = Store::open(dir)?;
     let required = owed(&here, &head, &store, steps, ask, spent)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
@@ -353,14 +360,7 @@ fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
 /// `-z` so that a path is spelled as it is, never octal-escaped in
 /// quotes the way a non-ASCII name otherwise comes back.
 fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
-    String::from_utf8_lossy(listing)
-        .split('\0')
-        .filter_map(|entry| {
-            let (head, path) = entry.split_once('\t')?;
-            let id = head.split(' ').nth(2)?;
-            Some((path.to_string(), id.to_string()))
-        })
-        .collect()
+    super::inputs::from_listing(listing)
 }
 
 /// A file every build reads: a change to it is a change to everything,
@@ -1122,16 +1122,13 @@ mod tests {
             100644 blob 2222222222222222222222222222222222222222\tcrates/a.rs\0\
             100644 blob 3333333333333333333333333333333333333333\tinternal-docs/規約.md\0";
         let ids = parse_ls_tree(listing.as_bytes());
-        assert_eq!(ids.len(), 3);
-        assert_eq!(ids["crates"], "1111111111111111111111111111111111111111");
+        assert_eq!(ids.len(), 2);
+        assert!(ids["crates"].starts_with("files:"));
         assert_eq!(
             ids["crates/a.rs"],
             "2222222222222222222222222222222222222222"
         );
-        assert_eq!(
-            ids["internal-docs/規約.md"],
-            "3333333333333333333333333333333333333333"
-        );
+        assert!(!ids.contains_key("internal-docs/規約.md"));
         assert!(parse_ls_tree(b"").is_empty());
     }
 }

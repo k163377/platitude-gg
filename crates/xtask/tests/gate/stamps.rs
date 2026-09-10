@@ -78,6 +78,26 @@ fn a_step_is_asked_again_only_when_what_it_reads_changed() {
 }
 
 #[test]
+fn markdown_beside_code_does_not_invalidate_passed_steps() {
+    let sb = Sandbox::new("markdown-cache");
+    sb.write_refs(&sb.seat, 4);
+    sb.commit_all(&sb.seat, "feat(core): four", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(!without_always(&sb.ran()).is_empty());
+    for content in [Some("# First\n"), Some("# Second\n"), None] {
+        let path = "crates/platitude-core/src/README.md";
+        if let Some(content) = content {
+            sb.write(&sb.seat, path, content);
+        } else {
+            std::fs::remove_file(sb.seat.join(path)).expect("delete markdown");
+        }
+        sb.commit_all(&sb.seat, "docs: change beside code", &[]);
+        sb.gate_ok(&sb.seat, &[]);
+        assert_eq!(sb.ran(), set(&ALWAYS), "markdown invalidated a passed step");
+    }
+}
+
+#[test]
 fn a_host_only_run_stamps_half_and_the_full_run_reuses_it() {
     let sb = Sandbox::new("host-only");
     sb.write_refs(&sb.seat, 5);

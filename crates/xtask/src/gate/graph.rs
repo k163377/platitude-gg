@@ -88,9 +88,16 @@ fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
+/// Markdown is checked by the always-run harness checks, not test dependencies.
+pub(crate) fn is_markdown(file: &str) -> bool {
+    Path::new(file)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+}
+
 impl Graph {
     fn edge(&mut self, from: &str, to: &str) {
-        if from == to {
+        if from == to || is_markdown(to) {
             return;
         }
         self.deps
@@ -1364,6 +1371,19 @@ mod tests {
         reexports_in, string_bodies, strip_comments,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn markdown_never_enters_a_test_or_directory_dependency() {
+        let mut graph = super::Graph::default();
+        for reader in ["src/notice.rs", "src/"] {
+            for document in ["docs/rules.md", "src/README.MD"] {
+                graph.edge(reader, document);
+            }
+        }
+        assert!(graph.deps.is_empty());
+        graph.edge("src/notice.rs", "src/input.txt");
+        assert!(graph.deps["src/notice.rs"].contains("src/input.txt"));
+    }
 
     #[test]
     fn a_test_of_any_runtime_counts_and_a_cfg_guard_does_not() {

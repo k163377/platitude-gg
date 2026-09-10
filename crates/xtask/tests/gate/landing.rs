@@ -25,6 +25,16 @@ fn land_rebases_then_gates_then_fast_forwards() {
     assert!(ok, "{text}");
     assert!(text.contains("rebasing"), "{text}");
     assert!(text.contains("landed worktree-a"), "{text}");
+    assert!(text.contains("queue "), "{text}");
+    let records = std::fs::read_dir(sb.seat.join("target/land-runs"))
+        .expect("landing records")
+        .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(records.len(), 1);
+    assert!(
+        records[0].contains("PASS") && records[0].contains("queue "),
+        "{records:?}"
+    );
     let after = sb.head(&sb.seat);
     assert_ne!(after, before, "the rebase rewrote the commit");
     assert_eq!(sb.main_sha(), after, "main is the seat's tip");
@@ -145,6 +155,12 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     );
     let (ok, text) = sb.land("worktree-a");
     assert!(!ok && text.contains("uncommitted"), "{text}");
+    let failures = std::fs::read_dir(sb.seat.join("target/land-runs"))
+        .expect("failed landing record")
+        .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(failures.len(), 1);
+    assert!(failures[0].contains("FAIL:") && failures[0].contains("uncommitted"));
     std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
 
     sb.write_refs(&sb.repo, 13);

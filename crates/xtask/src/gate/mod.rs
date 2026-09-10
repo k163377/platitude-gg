@@ -25,6 +25,7 @@ mod census;
 mod deps;
 mod graph;
 mod hooks;
+mod inputs;
 mod plan;
 mod record;
 mod reuse;

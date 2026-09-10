@@ -16,6 +16,51 @@ fn a_docs_only_change_owes_the_always_steps_and_nothing_else() {
 }
 
 #[test]
+fn markdown_named_by_code_or_under_build_inputs_only_owes_consistency_checks() {
+    let sb = Sandbox::new("markdown-inputs");
+    let paths = [
+        "internal-docs/P3-確認事項.md",
+        "CLAUDE.md",
+        ".cargo/notes.md",
+        "crates/platitude-app/assets/README.md",
+        "crates/xtask/src/verify/README.md",
+        "crates/platitude-core/src/README.MD",
+    ];
+    for path in paths {
+        sb.write(&sb.repo, path, "# Before\n");
+    }
+    sb.write(&sb.repo, "crates/xtask/src/notices.rs",
+        "pub fn notice() -> &'static str { \"internal-docs/P3-確認事項.md\" }\n#[test]\nfn notice_names_the_doc() { assert!(!notice().is_empty()); }\n");
+    sb.write(
+        &sb.repo,
+        "crates/xtask/src/main.rs",
+        "mod notices;\nfn main() {}\n",
+    );
+    sb.commit_all(
+        &sb.repo,
+        "test: markdown references",
+        &[("PGG_GATE_SKIP", "1")],
+    );
+    sb.git_ok(&sb.seat, &["merge", "--ff-only", "main"]);
+    for path in paths {
+        sb.write(&sb.seat, path, "# After\n");
+    }
+    sb.commit_all(&sb.seat, "docs: edit named and nested markdown", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert_eq!(sb.ran(), set(&ALWAYS));
+
+    sb.write_refs(&sb.seat, 2);
+    sb.commit_all(&sb.seat, "feat(core): change beside markdown", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    assert!(ran.contains("test platitude-core 1"), "{ran:?}");
+    assert!(
+        !ran.iter().any(|id| id.starts_with("test xtask")),
+        "{ran:?}"
+    );
+}
+
+#[test]
 fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
     let sb = Sandbox::new("core");
     sb.write(&sb.seat, "crates/platitude-core/src/stash.rs", "pub fn stash() { let _ = 1; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n");
