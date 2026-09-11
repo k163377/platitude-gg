@@ -246,6 +246,12 @@ Item {
     readonly property real editBoxSeat: rowLayout.boxSeat.width
     readonly property bool editBoxShown: editSeat.item ? editSeat.item.visible : false
     readonly property string editBoxAt: editSeat.item ? editSeat.item.cameOut : ""
+    /// Whether the one shared tooltip is standing **on this row's box** — the reason a refused name gives, which is
+    /// said nowhere else (`NavNameBox`). Taken off the box's own attached read rather than off the instance, because
+    /// that is the one that weighs the instance's target against this item (`tests/qml/tst_tipowner.qml`); the
+    /// instance's own `visible` would answer the same for anybody's tip. The shape `SignatureMark.tipShown` and
+    /// `MessageEditor.summaryTipShown` already carry.
+    readonly property bool editTipShown: editSeat.item ? editSeat.item.ToolTip.visible : false
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself rather than at a copy of what the row would have decided (PGG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers, held) {

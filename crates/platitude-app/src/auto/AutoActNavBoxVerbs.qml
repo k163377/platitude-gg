@@ -87,12 +87,7 @@ Item {
             // **The picture cannot judge this**: the answer is the frame's colour and a line that lives in a tooltip,
             // and a box that took the name frames the same as one that would not. `was=` is the name it is being
             // weighed against, so a run that opened the box on the wrong row says so instead of passing.
-            sidebarPane.beginRename("tag", tagsModel.nameAt(0), arg)
-            Harness.report("tag_name_box was=" + tagsModel.nameAt(0)
-                              + " typed=" + arg
-                              + " refused=" + sidebarPane.editRefused
-                              + " why=" + sidebarPane.editRefusedWhy)
-            renderedBarrier.begin()
+            tagNameBoxTimer.begin(arg)
         } else if (act === "rename-remote" || act === "rename-remote-box"
                    || act === "rename-remote-go") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
@@ -158,6 +153,51 @@ Item {
                               + " tone=" + page.noticeCard.tone
                               + " why=" + sidebarPane.editRefusedWhy)
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=rename-tag-box: the box, and whether the reason for turning the name down reached the reader.
+    //
+    // **Every field on the line is the output side.** `beginRename` is an ask, and `editKey` is that ask written down:
+    // the box it names is built by a `Loader` in a row the view has yet to lay out, so a run that read the answer off
+    // the key would report a refusal on a field nobody can see or type into. `box=` is the box as drawn and holding
+    // the keyboard (`NavList.rowBoxShown` / `rowFocused`), which is the state the refusal is about.
+    //
+    // **`tip=` and `text=` are the halves nothing else here can answer.** `refused=` is the box's own mark, and a box
+    // that refuses in silence carries it just as well; the sentence lives in the shared tooltip, which a binding on
+    // the box raises (`NavNameBox`) and Qt can drop without a word — it reads the re-entry as a binding loop. So
+    // `tip=` is taken **through the box** (`NavList.rowTipShown`), which is the read that weighs whose tip it is
+    // (`tests/qml/tst_tipowner.qml`), and `text=` is the instance saying what is written on it. The reason the model
+    // worked out is not reported: what it is worth is that the reader sees it, and `text=` is that same sentence
+    // where the reader gets it.
+    SampleTimer {
+        id: tagNameBoxTimer
+        property string typed: ""
+        function begin(arg) {
+            tagNameBoxTimer.typed = "" + arg
+            sidebarPane.beginRename("tag", tagsModel.nameAt(0), tagNameBoxTimer.typed)
+            tagNameBoxTimer.start()
+        }
+        onTriggered: {
+            // Asked again every beat: the row is a call, not a property, so a binding taken off it would hold the
+            // answer the empty model gave (app-ui.md §測って決める値は押し出す).
+            const was = tagsModel.nameAt(0)
+            const row = tagsModel.rowOfName(was)
+            const list = navProbe.listOf("tag")
+            const open = row >= 0 && list.rowBoxShown(row) && list.rowFocused(row)
+            if (!open)
+                return
+            // The name the box takes raises nothing, so only the refused arm has a tip to wait for.
+            const tipped = list.rowTipShown(row)
+            if (sidebarPane.editRefused && !tipped)
+                return
+            tagNameBoxTimer.stop()
+            Harness.report("tag_name_box was=" + was
+                              + " typed=" + tagNameBoxTimer.typed
+                              + " box=" + open
+                              + " refused=" + sidebarPane.editRefused
+                              + " tip=" + tipped
+                              + " text=" + page.ToolTip.toolTip.text)
+            renderedBarrier.begin()
         }
     }
     // PGG_AUTO_ACT=nav-rename-far: the section is opened, scrolled until its first row is out of sight, and only then

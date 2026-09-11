@@ -25,14 +25,25 @@ pub(super) const TABLE: &[Verb] = &[
     // (デザイン規約 §答えの要らない報せ, by design). Two runs make the
     // pair: the one that has to be turned down, and the one beside it that
     // must not be, since a box that refuses everything frames the same.
+    //
+    // Every field is the output side. `box=` is the field drawn and
+    // holding the keyboard, because the ask that opens it lands before
+    // the row is laid out and a refusal on a field nobody can type into
+    // is not the state this is about. `tip=` is the refusal reaching the
+    // reader — the box's own mark says it turned the name down, while the
+    // sentence saying why is raised on the shared tooltip by a binding
+    // Qt can drop, and it is read through the box so that somebody
+    // else's tip cannot answer for it. `text=` is that sentence where the
+    // reader gets it, which is why the reason the model worked out is not
+    // on the line at all.
     Verb {
         name: "rename-tag-box",
         when: &[(
             Arg::Is("v1.0"),
-            "tag_name_box was=v0.3-local typed=v1.0 refused=false why=",
+            "tag_name_box was=v0.3-local typed=v1.0 box=true refused=false tip=false text=",
         )],
-        plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL refused=true \
-                why=Only the letter case differs — on this disk that deletes both names",
+        plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL box=true refused=true tip=true \
+                text=Only the letter case differs — on this disk that deletes both names",
     },
     // Every door onto the history while a rebase replays behind the
     // screen — the graph's and the left pane's. **None of it is a

@@ -123,6 +123,12 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxAt : ""
     }
+    /// Whether the shared tooltip is standing on that row's box (PGG_AUTO_ACT=rename-tag-box). A row the view has not
+    /// built answers false — the same miss the rest of these report.
+    function rowTipShown(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editTipShown : false
+    }
     /// What the pointed row itself would say, and what it is called (PGG_AUTO_ACT=nav-tip). The row decides and the
     /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read off
     /// `hoverText` and not the attached `ToolTip.visible` — **that one reads back the instance's own state**, so during
