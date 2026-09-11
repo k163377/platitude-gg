@@ -34,6 +34,14 @@ const AFTER_DONE_MS: u64 = 250;
 /// second past it only makes a covered window cost more.
 const SCROLL_CEILING: Duration = Duration::from_secs(30);
 
+fn scroll_deadline() -> Wait {
+    Wait::new(
+        "the scroll bench",
+        Budget::whole(SCROLL_CEILING),
+        Duration::ZERO,
+    )
+}
+
 /// Why a run produced no reading, and whether taking it again could
 /// help. The difference matters: a machine that spoiled a run will not
 /// have spoiled the next one, and an application that stopped answering
@@ -278,13 +286,7 @@ pub(super) fn measure(
                 scroll_generation = scroll.generation();
                 bench = None;
             }
-            let bench = bench.get_or_insert_with(|| {
-                Wait::new(
-                    "the scroll bench",
-                    Budget::whole(SCROLL_CEILING),
-                    Duration::ZERO,
-                )
-            });
+            let bench = bench.get_or_insert_with(scroll_deadline);
             if bounded && bench.check("a frame").is_err() {
                 let _ = child.kill();
                 break Ended::Covered;
