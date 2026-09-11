@@ -2956,11 +2956,13 @@ Item {
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it
-                        // (`page.messageEdit`). The words are the page's; the rule is core's — and while a plan row
-                        // carries `reword`, the same boxes are that row's plan input, because there is one place in
-                        // this app to type a message. A plain amend is held down for the plan's whole stay — it is a
-                        // queued rewrite of the very history the plan is composed on, which the freeze exists to
-                        // stop; on a plan row the way to type is the row's own verb.
+                        // (`page.messageEdit`). `not-head` is the silent one: it names a row the reader can see is
+                        // not the top of the history, so the box stops taking typing and says nothing. The other
+                        // words are the page's; the rule is core's — and while a plan row carries `reword`, the
+                        // same boxes are that row's plan input, because there is one place in this app to type a
+                        // message. A plain amend is held down for the plan's whole stay — it is a queued rewrite
+                        // of the very history the plan is composed on, which the freeze exists to stop; on a plan
+                        // row the way to type is the row's own verb.
                         editable: (page.messageEdit === "amend" && !page.planActive) || page.planReword
                         intoPlan: page.planReword
                         planDraftOid: page.planActive ? planModel.selectedOid : ""
@@ -2970,11 +2972,9 @@ Item {
                             ? qsTr("Mark the row reword to retype its message")
                             : page.messageEdit === "stash"
                               ? qsTr("Rename it in the list on the left")
-                              : page.messageEdit === "not-head"
-                                ? qsTr("Only the newest commit's message can be rewritten here")
-                                : page.messageEdit === "standing"
-                                  ? qsTr("Finish the stopped operation first")
-                                  : ""
+                              : page.messageEdit === "standing"
+                                ? qsTr("Finish the stopped operation first")
+                                : ""
                         busy: repoTab.busyCount > 0
                         published: page.selectedPublished
                         signatureKind: page.selectedSignatureKind
