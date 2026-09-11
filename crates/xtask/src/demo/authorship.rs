@@ -110,11 +110,18 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
 /// Every way the person who wrote a commit and the person who put it
 /// here can be two, newest first: a patch applied by somebody else days
 /// after it was written, one applied by somebody else the moment it
-/// arrived (a squash merge on a forge), one the same hand committed
+/// arrived (a squash merge on a forge, so a bot wrote it and carries a
+/// forge noreply for an address), one the same hand committed
 /// later than it wrote it (an amend, a rebase), and two ordinary
 /// commits, where the two are one person at one moment.
 pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     const MAILED: &str = "Yuki Tanaka <yuki.tanaka@example.com>";
+    // What a forge puts here is usually a bot's work, and a bot's address
+    // is a forge noreply — the long kind. The length is deliberate, the
+    // way the co-authors' last address is: the card that reads an address
+    // in full is where a long one has to hold, and the pane it opens over
+    // is narrower than this.
+    const BOT: &str = "deps-bot[bot] <49206153+deps-bot[bot]@users.noreply.forge.example.co.jp>";
     const DAY: u64 = 24 * 60 * 60;
 
     repo.commit(
@@ -134,7 +141,7 @@ pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "src/merged.txt"])?;
     repo.git(&[
         "commit",
-        &format!("--author={MAILED}"),
+        &format!("--author={BOT}"),
         "-m",
         "feat: take the config out into a file",
     ])?;

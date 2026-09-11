@@ -16,11 +16,11 @@ AppCard {
     /// Packed co-author records (name, address, identicon — see `encode::encode_co_authors`), in the order the message
     /// lists them.
     property var records: []
-    /// How wide a name or address may run before it is elided. Neither has a length worth trusting — an address may be
-    /// 254 characters — and a popup clamps its *position* to the window, never its width, so without a cap a long one
-    /// simply runs off the edge. The owner sets it from the pane the card opens over.
-    property real maxRowWidth: 0
-    readonly property real rowCap: mateCard.maxRowWidth > 0 ? mateCard.maxRowWidth : Number.MAX_VALUE
+    /// How wide this card may stand — the same ceiling the author's card carries, and set the same way
+    /// (`AuthorCard.maxWidth`, `DetailsAuthorCards.takeRoom`).
+    property real maxWidth: 0
+    readonly property real rowCap: mateCard.maxWidth > 0
+        ? mateCard.maxWidth - 2 * mateCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
 
     padding: Theme.spaceXs
     // Nothing stands between the underlined stretch and this: the pointer has to be able to walk down into it without
@@ -54,8 +54,9 @@ AppCard {
                 // own size, so the row moved out from under the hand that asked for it and the card shut
                 // (observed). Nothing that a hover reveals may resize what is being hovered.
                 //
-                // On a second line rather than beside the name: side by side made the card wider than the pane it opens
-                // in, and this way the address costs height, which the card has to spare.
+                // On a second line rather than beside the name: side by side makes every row as wide as a name and an
+                // address end to end, and height is what this card has to spare — width is what it has to ask the
+                // window for.
                 //
                 // **Both wrap rather than being cut**, and for the same reason the height was always the side that gave:
                 // this card is where the names and addresses the date line could not fit are read in full and taken

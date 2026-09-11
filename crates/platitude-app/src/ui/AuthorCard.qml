@@ -31,11 +31,14 @@ AppCard {
     property bool committerDiffers: false
     /// ...or they put it here at another moment than it was written.
     property bool timeDiffers: false
-    /// How wide a name or address may run before it is elided. Neither has a length worth trusting — an address may be
+    /// How wide this card may stand. Neither a name nor an address has a length worth trusting — an address may be
     /// 254 characters — and a popup clamps its *position* to the window, never its width, so without a cap a long one
-    /// simply runs off the edge. The owner sets it from the pane the card opens over.
-    property real maxRowWidth: 0
-    readonly property real rowCap: authorCard.maxRowWidth > 0 ? authorCard.maxRowWidth : Number.MAX_VALUE
+    /// simply runs off the edge; what is over the cap wraps. **The owner measures the room against the window**, not
+    /// against the pane the card opens over (`DetailsAuthorCards.takeRoom`).
+    property real maxWidth: 0
+    /// What is left of it for a row's own words, once the frame's padding and the blocks' inset are out.
+    readonly property real rowCap: authorCard.maxWidth > 0
+        ? authorCard.maxWidth - 2 * authorCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
 
     /// When the two acts are worth naming, both are named — the moment is what the second person's line is for, and a
     /// commit written and committed in the same second still has two lines to say so.

@@ -34,18 +34,24 @@ QtObject {
     readonly property bool matesPointerInside: mateCard.pointerInside
     readonly property bool authorPointerInside: authorCard.pointerInside
 
-    /// The row raised an anchor in its own coordinates: map it here and open. Set on open rather than bound — the
-    /// answer only matters at the moment it is asked.
+    /// Where each card was raised, in the host's coordinates, and how far either may stand to the sides. Set on open
+    /// rather than bound — the answer only matters at the moment it is asked, and `mapToItem` is a call, so a
+    /// binding on one would not see the splitter move.
+    property real mateAnchorX: 0
+    property real authorAnchorX: 0
+    property real leftStop: 0
+    property real rightStop: 0
+
+    /// The row raised an anchor in its own coordinates: map it here and open.
     function openMateCard(at) {
         const records = cards.block.coAuthorRecords
         if (records.length === 0)
             return
         const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
         mateCard.records = records
-        // Measured from where it opens, not from the pane: the card starts
-        // partway across, so the pane's width is not what is left for it.
-        mateCard.maxRowWidth = cards.host.width - p.x - 2 * Theme.spaceXs
-        mateCard.x = p.x
+        cards.takeRoom()
+        mateCard.maxWidth = cards.rightStop - cards.leftStop
+        cards.mateAnchorX = p.x
         // Flush against the underline: a gap is a band the pointer crosses
         // while touching neither, and the card closes under it. Same rule
         // the ref list follows.
@@ -56,10 +62,32 @@ QtObject {
         if (cards.details.authorName === "")
             return
         const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
-        authorCard.maxRowWidth = cards.host.width - p.x - 2 * Theme.spaceXs
-        authorCard.x = p.x
+        cards.takeRoom()
+        authorCard.maxWidth = cards.rightStop - cards.leftStop
+        cards.authorAnchorX = p.x
         authorCard.y = p.y
         authorCard.open()
+    }
+    /// How far a card may reach on either side.
+    ///
+    /// **The room is the window's, not the pane's.** These cards float over the whole window the way a menu and the
+    /// chip's list do, and the pane they hang off is the narrowest column in it: measured from the name's shoulder
+    /// to the pane's own edge, an ordinary forge address does not fit on one line and the card wraps it with the
+    /// graph lying empty beside it. What is over the window's room still wraps — that part is the card's own rule
+    /// (規約 §hover のツールチップ).
+    function takeRoom() {
+        // `spaceXxl` short of the window on the far side, the stop every floating card in the app keeps
+        // (`AppMenu.roomForRows` / `RefListPopup.chipRoom`), and the pane's own inset on the near side, where these
+        // cards have been standing all along.
+        cards.leftStop = Theme.spaceXxl - cards.host.mapToItem(null, 0, 0).x
+        cards.rightStop = cards.host.width - 2 * Theme.spaceXs
+    }
+    /// Where a card of that width sits: at the shoulder of the stretch that raised it, and backed up out of the pane
+    /// when what is left of the row cannot hold it — **the seat is what gives way, not the address**, which is the
+    /// thing the card was opened to show. A binding rather than a seat assigned on open: a popup does not have its
+    /// final width in the frame it is handed its rows (app-ui.md).
+    function seatX(anchorX, cardWidth) {
+        return Math.max(cards.leftStop, Math.min(anchorX, cards.rightStop - cardWidth))
     }
     /// The pointer left the row, or the card: each host closes its own a beat later.
     function settleMates() {
@@ -72,6 +100,7 @@ QtObject {
     readonly property CoAuthorCard mateCard: CoAuthorCard {
         id: mateCard
         parent: cards.host
+        x: cards.seatX(cards.mateAnchorX, mateCard.width)
     }
     readonly property HoverCardHost mateKeep: HoverCardHost {
         id: mateKeep
@@ -82,6 +111,7 @@ QtObject {
     readonly property AuthorCard authorCard: AuthorCard {
         id: authorCard
         parent: cards.host
+        x: cards.seatX(cards.authorAnchorX, authorCard.width)
         authorName: cards.details.authorName
         authorEmail: cards.details.authorEmail
         authorFace: cards.details.avatar
