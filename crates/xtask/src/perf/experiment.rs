@@ -27,7 +27,8 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
         (a.commit, b.commit)
     };
     if opts.open {
-        opts.corpus = super::corpus::describe(&opts.repo)?.token;
+        let found = super::corpus::describe(&opts.repo)?;
+        freeze_corpus(&mut opts, found)?;
     }
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -88,6 +89,14 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
         directory.display(),
         blocks * 2
     );
+    Ok(())
+}
+
+fn freeze_corpus(opts: &mut Options, found: super::corpus::Corpus) -> Result<(), String> {
+    if let Some(complaint) = super::corpus::mismatch(&found, &opts.corpus) {
+        return Err(complaint);
+    }
+    opts.corpus = found.token;
     Ok(())
 }
 
@@ -257,6 +266,27 @@ pub(super) fn save(output: &Path, opts: &Options, kept: &[Reading]) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comparison_checks_the_requested_corpus_before_freezing_it() {
+        let mut opts = super::super::options::parse(&["--repo", "x"].map(str::to_owned)).unwrap();
+        let found = super::super::corpus::Corpus {
+            token: "actual".into(),
+            head: "head".into(),
+            commits: 1,
+            refs: 1,
+            tags: 0,
+            remotes: 0,
+            dirty: 0,
+        };
+        opts.corpus = "requested".into();
+        assert!(freeze_corpus(&mut opts, found.clone()).is_err());
+        assert_eq!(opts.corpus, "requested");
+        opts.corpus.clear();
+        freeze_corpus(&mut opts, found.clone()).unwrap();
+        assert_eq!(opts.corpus, "actual");
+        freeze_corpus(&mut opts, found).unwrap();
+    }
 
     #[test]
     fn every_block_balances_variant_and_position() {
