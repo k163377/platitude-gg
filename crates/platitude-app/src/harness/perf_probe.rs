@@ -17,6 +17,13 @@ pub struct PerfProbe {
     with_diff: bool,
     verifying: bool,
     trace_frames: bool,
+    cases: Vec<Vec<String>>,
+    cycles: u32,
+    completion: String,
+    diff_scroll: bool,
+    scroll_surface: String,
+    scroll_case: String,
+    scroll_operation: i32,
     scroll_start: Option<f64>,
     // App-clock timestamps stay ordered until the sampling window closes.
     frames: Vec<f64>,
@@ -41,6 +48,17 @@ impl Default for PerfProbe {
             with_diff: !knobs.perf_no_diff,
             verifying: knobs.act == "perf",
             trace_frames: knobs.perf_trace_frames,
+            cases: knobs
+                .perf_cases
+                .lines()
+                .map(|l| l.split('\t').map(str::to_owned).collect())
+                .collect(),
+            cycles: knobs.perf_cycles.max(1),
+            completion: knobs.perf_completion.clone(),
+            diff_scroll: knobs.perf_diff_scroll,
+            scroll_surface: "graph".into(),
+            scroll_case: "default".into(),
+            scroll_operation: 0,
             scroll_start: None,
             frames: Vec::new(),
         }
@@ -61,6 +79,48 @@ impl PerfProbe {
     qproperty!("filePath", Member = file_path, Constant);
     qproperty!("withDiff", Member = with_diff, Constant);
     qproperty!("verifying", Member = verifying, Constant);
+    qproperty!("diffScroll", Member = diff_scroll, Constant);
+
+    #[qslot]
+    fn operation_count(&self) -> i32 {
+        self.cases
+            .len()
+            .max(1)
+            .saturating_mul(self.cycles as usize)
+            .min(i32::MAX as usize) as i32
+    }
+
+    #[qslot]
+    fn case_field(&self, operation: i32, field: i32) -> String {
+        if operation < 0 || field < 0 {
+            return String::new();
+        }
+        if self.cases.is_empty() {
+            return match field {
+                0 => "default".into(),
+                1 => self.oid.clone(),
+                2 => self.file_path.clone(),
+                3 => self.completion.clone(),
+                _ => String::new(),
+            };
+        }
+        self.cases
+            .get(operation as usize % self.cases.len())
+            .and_then(|c| c.get(field as usize))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[qslot]
+    fn scroll_surface(&mut self, surface: String) {
+        self.scroll_surface = surface;
+    }
+
+    #[qslot]
+    fn scroll_context(&mut self, case: String, operation: i32) {
+        self.scroll_case = case;
+        self.scroll_operation = operation;
+    }
 
     #[qslot]
     fn clock_ms(&self) -> f64 {
@@ -99,6 +159,7 @@ impl PerfProbe {
                     index,
                     clock_ms,
                     interval_ms = clock_ms - previous,
+                    surface = self.scroll_surface,
                     "perf_frame"
                 );
                 previous = clock_ms;
@@ -113,6 +174,9 @@ impl PerfProbe {
             } else {
                 0.0
             },
+            surface = self.scroll_surface,
+            case = self.scroll_case,
+            operation = self.scroll_operation,
             rows,
             start_clock_ms = start,
             elapsed_ms = elapsed,

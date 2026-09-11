@@ -1,5 +1,7 @@
 # PGG_AUTO_ACT 動詞表(正本)
 
+- `perf colour|diff-scroll|sequence --preset perf-sequence`: 固定Kotlin diffの最終色付け、可視diffスクロール、2 OIDを2周する表示契約。順に `perf_colour_frame`、`perf_diff_scroll_frame visible=true`、`perf_operations count=4` とPNGで判定。raw frameと最終色付けは同じfingerprintに属し、次の操作はその後に始まる。offscreen値を性能判定に使わない。実測のケース一覧・cache・ABBA・OS別baselineは `ci/baseline/perf-local.md`。
+
 [SKILL.md](SKILL.md) の参照資料 — **1 動詞 1 行**(近縁動詞は束ねる・段落側だけの動詞は §動詞ごとの読み方・仕込み)、使う動詞名で Grep して該当行と続く節の該当段落だけを読み(全読みしない)、追記も 1 動詞 1 行(段落で書く仕込みは下の節へ)。
 
 **動詞を消す・改名する時は census の行も落とす** — 行を書き直すのは run なので、**もう存在しない動詞の行にはどの run も届かない**。残すと gate がその名前で走ろうとして `auto_act unknown=` から watchdog まで行き、`nothing stamped` で止まる(実測)。生成物への手編集を避ける規則の例外はここだけ — 行を消すのは run を騙さない。

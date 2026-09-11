@@ -175,6 +175,20 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
                 "test: performance scenario",
             )?;
         }
+        "perf-sequence" => {
+            deep(&mut repo)?;
+            for revision in 0..2 {
+                let mut source = String::from("class Benchmark {\n");
+                for line in 0..180 {
+                    source.push_str(&format!(
+                        "    fun item{line}(): Int = {}\n",
+                        line + revision
+                    ));
+                }
+                source.push_str("}\n");
+                repo.commit("bench.kt", &source, "test: coloured performance sequence")?;
+            }
+        }
         "deep-detached" => deep_detached(&mut repo)?,
         "deep-parked" => deep_parked(&mut repo)?,
         "replay" => replay(&mut repo)?,

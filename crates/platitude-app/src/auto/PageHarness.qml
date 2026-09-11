@@ -159,6 +159,7 @@ Item {
             detailsModel: harness.detailsModel
             diffModel: harness.diffModel
             graphPane: harness.graphPane
+            diffPane: harness.diffPane
         }
     }
 }

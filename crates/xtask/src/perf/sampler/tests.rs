@@ -1,8 +1,30 @@
 use super::{Conditions, Limits, Sample, Series, WAKE_SECS, parse_host, parse_sample};
 
+#[test]
+fn an_os_high_water_mark_preserves_a_peak_between_samples() {
+    let mut series = Series::default();
+    let mut tick = sample(100, true, 1, 0, 0);
+    tick.os_peak_working_set = Some(900);
+    series.absorb(tick, 0);
+    series.absorb(sample(120, true, 2, 0, 0), 100_000);
+    assert_eq!(series.peak_working_set, 120);
+    assert_eq!(series.os_peak_working_set, Some(900));
+    assert_eq!(
+        parse_sample("ws=100 pv=50 peakws=900")
+            .unwrap()
+            .os_peak_working_set,
+        Some(900)
+    );
+    assert_eq!(
+        parse_sample("ws=100 pv=50").unwrap().os_peak_working_set,
+        None
+    );
+}
+
 fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
     Sample {
         working_set: ws,
+        os_peak_working_set: None,
         private: ws / 2,
         display: "\\\\.\\DISPLAY2".into(),
         foreground: fg,

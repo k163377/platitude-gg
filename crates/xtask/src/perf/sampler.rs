@@ -40,6 +40,7 @@ const BLIND_TICKS: usize = 3;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Sample {
     pub(super) working_set: u64,
+    pub(super) os_peak_working_set: Option<u64>,
     pub(super) private: u64,
     /// The OS device name of the screen the window was on, empty while
     /// there is no window yet. Never the friendly name Qt reports — those
@@ -459,6 +460,7 @@ fn percent(part: u64, whole: u64) -> f64 {
 #[derive(Debug, Default)]
 pub(super) struct Series {
     pub(super) peak_working_set: u64,
+    pub(super) os_peak_working_set: Option<u64>,
     pub(super) peak_private: u64,
     pub(super) last: Option<Sample>,
     first: Option<Sample>,
@@ -478,6 +480,7 @@ impl Series {
             private: sample.private,
         });
         self.peak_working_set = self.peak_working_set.max(sample.working_set);
+        self.os_peak_working_set = self.os_peak_working_set.max(sample.os_peak_working_set);
         self.peak_private = self.peak_private.max(sample.private);
         self.conditions.absorb(&sample, self.last.as_ref());
         if self.first.is_none() {
@@ -498,9 +501,14 @@ impl Sampler {
     /// The series as it stands, copied out so the sampler is never held
     /// up by a reader.
     pub(super) fn read(&self) -> Series {
-        let held = self.series.lock().unwrap_or_else(|e| e.into_inner());
+        Self::snapshot(&self.series)
+    }
+
+    fn snapshot(series: &Arc<Mutex<Series>>) -> Series {
+        let held = series.lock().unwrap_or_else(|e| e.into_inner());
         Series {
             peak_working_set: held.peak_working_set,
+            os_peak_working_set: held.os_peak_working_set,
             peak_private: held.peak_private,
             last: held.last.clone(),
             first: held.first.clone(),
@@ -510,11 +518,10 @@ impl Sampler {
     }
 
     pub(super) fn finish(self) -> Result<Series, String> {
-        let series = self.read();
         self.handle
             .join()
             .map_err(|_| "memory sampler panicked".to_string())??;
-        Ok(series)
+        Ok(Self::snapshot(&self.series))
     }
 }
 
@@ -619,14 +626,14 @@ impl Armed {
                 csv,
                 "parent_elapsed_us,working_set_bytes,private_bytes,display_name,windowed,\
                  foreground,interactive,minimized,kernel_100ns,user_100ns,idle_100ns,\
-                 process_100ns,own_100ns,children_counted,display_off"
+                 process_100ns,own_100ns,children_counted,display_off,os_peak_working_set_bytes"
             )
             .map_err(|e| e.to_string())?;
             let mut record = |sample: Sample| -> Result<(), String> {
                 let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
                 writeln!(
                     csv,
-                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
                     at_us,
                     sample.working_set,
                     sample.private,
@@ -653,6 +660,10 @@ impl Armed {
                         Some(false) => "0",
                         None => "-",
                     },
+                    sample
+                        .os_peak_working_set
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
                 )
                 .map_err(|e| e.to_string())?;
                 shared
@@ -741,6 +752,7 @@ fn parse_sample(line: &str) -> Option<Sample> {
     let display = field("display=").unwrap_or("-");
     Some(Sample {
         working_set: number("ws=")?,
+        os_peak_working_set: number("peakws="),
         private: number("pv=")?,
         display: if display == "-" {
             String::new()
@@ -1042,7 +1054,7 @@ using System.Runtime.InteropServices;\n\
            [void][PerfHost]::SetThreadExecutionState([uint32]{awake});\
            $own=$p.TotalProcessorTime.Ticks;$app=$own;\
            if($jobok -eq 1){{$t=[PerfHost]::JobTime($job);if($t -ge 0){{$app=$t}}}};\
-           Write-Output \"ws=$($p.WorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs()) dark=$([PerfDisplay]::Dark())\";\
+           Write-Output \"ws=$($p.WorkingSet64) peakws=$($p.PeakWorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs()) dark=$([PerfDisplay]::Dark())\";\
            }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}\
@@ -1363,6 +1375,8 @@ fn linux_sample_once(pid: u32) -> Sample {
         };
         if let Some(rest) = line.strip_prefix("VmRSS:") {
             sample.working_set = kb(rest);
+        } else if let Some(rest) = line.strip_prefix("VmHWM:") {
+            sample.os_peak_working_set = Some(kb(rest));
         } else if let Some(rest) = line.strip_prefix("VmData:") {
             sample.private = kb(rest);
         }

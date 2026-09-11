@@ -13,6 +13,12 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "perf",
         when: &[
+            (Arg::Is("colour"), "perf_colour_frame elapsed_ms="),
+            (
+                Arg::Is("diff-scroll"),
+                "perf_diff_scroll_frame visible=true",
+            ),
+            (Arg::Is("sequence"), "perf_operations count=4"),
             (
                 Arg::Is("scroll-none"),
                 "perf_complete selection=none details=false diff=false graph=true scrolled=true",

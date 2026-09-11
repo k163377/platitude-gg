@@ -14,6 +14,7 @@ use super::Options;
 #[derive(Default, Clone, Debug)]
 pub(super) struct Reading {
     pub(super) peak_working_set: u64,
+    pub(super) os_peak_working_set: Option<u64>,
     pub(super) peak_private: u64,
     /// What the process still held after `--settle-ms`, or 0 where the
     /// run was not asked to wait. Read beside the peak: the difference
@@ -47,6 +48,8 @@ pub(super) struct Reading {
     pub(super) details_ms: Vec<u64>,
     pub(super) details_frame_ms: Vec<f64>,
     pub(super) diff_frame_ms: Vec<f64>,
+    pub(super) events: Vec<super::interactions::Event>,
+    pub(super) diff_scrolls: Vec<String>,
     pub(super) frame_p95_ms: Option<f64>,
     pub(super) frame_p99_ms: Option<f64>,
     pub(super) frame_max_ms: Option<f64>,
@@ -95,9 +98,20 @@ pub(super) struct Reading {
 pub(super) struct Scroll {
     began: std::sync::atomic::AtomicBool,
     ended: std::sync::atomic::AtomicBool,
+    generation: std::sync::atomic::AtomicUsize,
 }
 
 impl Scroll {
+    pub(super) fn generation(&self) -> usize {
+        self.generation.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn begin(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.ended.store(false, Relaxed);
+        self.generation.fetch_add(1, Relaxed);
+        self.began.store(true, Relaxed);
+    }
     /// Whether the bench has begun and not yet ended: the stretch a frame
     /// is owed in, under a deadline of the bench's own (`measure`).
     pub(super) fn running(&self) -> bool {
@@ -145,9 +159,7 @@ pub(super) fn read_app(
                     found.failure = Some(line.clone());
                 }
                 if line.contains("perf_scroll_begin") {
-                    watched
-                        .began
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    watched.begin();
                 }
                 if line.contains("scroll_bench") {
                     watched
@@ -187,6 +199,7 @@ pub(super) fn read_app(
 /// The app's log picking up colour is one way to lose every `key=value`
 /// at once (`platitude_gg::init_tracing`).
 pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
+    super::interactions::validate(reading, opts)?;
     let mut gaps = Vec::new();
     if reading.peak_working_set == 0 || reading.peak_private == 0 {
         gaps.push("nonzero process memory samples");
@@ -332,7 +345,14 @@ fn graphics_note(line: &str) -> bool {
 }
 
 pub(super) fn absorb(line: &str, found: &mut Reading) {
-    if line.contains("perf_frame ") {
+    if let Some(event) = super::interactions::read(line) {
+        found.events.push(event);
+    }
+    let diff_surface = token(line, "surface=").is_some_and(|v| v.trim_matches('"') == "diff");
+    if line.contains("scroll_bench") && diff_surface {
+        found.diff_scrolls.push(line.to_owned());
+    }
+    if line.contains("perf_frame ") && !diff_surface {
         found.traced_frames += 1;
     }
     if line.contains("perf_done") {
@@ -391,7 +411,7 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
     {
         found.diff_frame_ms.push(ms);
     }
-    if line.contains("scroll_bench") {
+    if line.contains("scroll_bench") && !diff_surface {
         found.frame_count = field(line, "frame_count=").and_then(|v| v.parse().ok());
         found.fps = field(line, "fps=").and_then(|v| v.parse().ok());
         found.scroll_visible = field(line, "visible=") == Some("true")

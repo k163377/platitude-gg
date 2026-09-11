@@ -44,6 +44,13 @@ pub(super) struct Options {
     pub(super) selection: String,
     pub(super) oid: String,
     pub(super) file: String,
+    pub(super) cases: Vec<super::cases::Case>,
+    pub(super) cycles: u32,
+    pub(super) completion: String,
+    pub(super) diff_scroll: bool,
+    pub(super) cache: String,
+    pub(super) cold_prepare: String,
+    pub(super) compare: String,
     pub(super) diff: bool,
     pub(super) output: Option<PathBuf>,
     pub(super) breakdown: bool,
@@ -114,8 +121,8 @@ impl Options {
     }
 }
 
-pub(super) fn parse(args: &[String]) -> Result<Options, String> {
-    let mut opts = Options {
+fn defaults() -> Options {
+    Options {
         repo: PathBuf::new(),
         label: String::new(),
         runs: 3,
@@ -130,6 +137,13 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         selection: "first".into(),
         oid: String::new(),
         file: String::new(),
+        cases: Vec::new(),
+        cycles: 1,
+        completion: "raw".into(),
+        diff_scroll: false,
+        cache: "warm".into(),
+        cold_prepare: String::new(),
+        compare: String::new(),
         diff: true,
         output: None,
         breakdown: false,
@@ -142,7 +156,11 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         at: String::new(),
         limits: Limits::default(),
         software: false,
-    };
+    }
+}
+
+pub(super) fn parse(args: &[String]) -> Result<Options, String> {
+    let mut opts = defaults();
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -188,6 +206,17 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--selection" => opts.selection = value()?,
             "--select-oid" => opts.oid = value()?,
             "--file" => opts.file = value()?,
+            "--cases" => {
+                let file = value()?;
+                let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
+                opts.cases = super::cases::parse(&text)?;
+            }
+            "--cycles" => opts.cycles = value()?.parse().map_err(|_| "--cycles takes a number")?,
+            "--completion" => opts.completion = value()?,
+            "--diff-scroll" => opts.diff_scroll = true,
+            "--cache" => opts.cache = value()?,
+            "--cold-prepare" => opts.cold_prepare = value()?,
+            "--compare" => opts.compare = value()?,
             "--no-diff" => opts.diff = false,
             "--output" => opts.output = Some(PathBuf::from(value()?)),
             "--no-open" => opts.open = false,
@@ -252,7 +281,83 @@ fn shipped(opts: &mut Options) -> Result<(), String> {
 
 /// Everything that has to hold whichever build is being measured, and the
 /// one name a run that gave none takes.
+fn cache(opts: &mut Options) -> Result<(), String> {
+    if !["warm", "first", "cold"].contains(&opts.cache.as_str()) {
+        return Err("--cache takes warm, first, or cold".into());
+    }
+    if (opts.cache == "cold") != !opts.cold_prepare.is_empty() {
+        return Err(
+            "--cache cold requires --cold-prepare <executable>; first launch alone is not cold"
+                .into(),
+        );
+    }
+    if !opts.cold_prepare.is_empty() {
+        opts.cold_prepare = std::fs::canonicalize(&opts.cold_prepare)
+            .map_err(|e| format!("cold preparation executable: {e}"))?
+            .to_string_lossy()
+            .into_owned();
+    }
+    if opts.cache != "warm" {
+        opts.calibrate = false;
+        opts.retries = 0;
+    }
+    if opts.cache == "first" && opts.runs != 1 {
+        return Err(
+            "--cache first requires --runs 1; later launches are not first launches".into(),
+        );
+    }
+    if !opts.compare.is_empty() && (opts.at.is_empty() || opts.cache == "first") {
+        return Err(
+            "--compare needs --at and warm or cold cache (A/B cannot share one first launch)"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 fn settle(mut opts: Options) -> Result<Options, String> {
+    cache(&mut opts)?;
+    if !["raw", "coloured"].contains(&opts.completion.as_str()) || opts.cycles == 0 {
+        return Err("--completion takes raw or coloured; --cycles must be positive".into());
+    }
+    if (!opts.cases.is_empty() || opts.diff_scroll || opts.completion != "raw")
+        && (!opts.harness || !opts.open || !opts.diff || opts.selection == "none")
+    {
+        return Err("cases, colour completion and diff scroll require the harness, repository, selection and diff".into());
+    }
+    if !opts.cases.is_empty() && (!opts.oid.is_empty() || !opts.file.is_empty()) {
+        return Err(
+            "--cases owns the OIDs and paths; do not combine with --select-oid or --file".into(),
+        );
+    }
+    if opts.cycles > 1
+        && opts
+            .cases
+            .iter()
+            .map(|c| &c.oid)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            < 2
+    {
+        return Err("--cycles requires cases with at least two distinct OIDs".into());
+    }
+    if opts
+        .cycles
+        .checked_mul(opts.cases.len().max(1) as u32)
+        .is_none_or(|n| n > i32::MAX as u32)
+    {
+        return Err("too many case operations".into());
+    }
+    if opts.cases.windows(2).any(|pair| pair[0].oid == pair[1].oid)
+        || (opts.cycles > 1
+            && opts
+                .cases
+                .first()
+                .zip(opts.cases.last())
+                .is_some_and(|(a, b)| a.oid == b.oid))
+    {
+        return Err("successive cases must select different OIDs, including the cycle boundary (a reclick is a different gesture)".into());
+    }
     if !["none", "first", "head"].contains(&opts.selection.as_str()) {
         return Err("--selection takes none, first, or head".into());
     }
@@ -308,8 +413,48 @@ fn settle(mut opts: Options) -> Result<Options, String> {
 mod tests {
     use super::parse;
 
+    #[test]
+    fn cache_modes_do_not_relabel_a_warm_repeat_as_cold() {
+        assert!(
+            options(&["--repo", "x", "--cache", "cold"])
+                .unwrap_err()
+                .contains("cold-prepare")
+        );
+        assert!(
+            options(&["--repo", "x", "--cache", "first"])
+                .unwrap_err()
+                .contains("--runs 1")
+        );
+        let first = options(&["--repo", "x", "--cache", "first", "--runs", "1"]).unwrap();
+        assert!(!first.calibrate);
+        assert_eq!(first.retries, 0);
+        assert!(options(&["--repo", "x", "--compare", "main"]).is_err());
+        assert!(options(&["--repo", "x", "--cycles", "100"]).is_err());
+        assert!(options(&["--repo", "x", "--no-diff", "--completion", "coloured"]).is_err());
+    }
+
     fn options(words: &[&str]) -> Result<super::Options, String> {
         parse(&words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn every_selection_changes_commit_including_the_cycle_boundary() {
+        let mut opts = options(&["--repo", "x"]).unwrap();
+        opts.cases = super::super::cases::parse(&format!(
+            "one\t{}\ta.kt\traw\ntwo\t{}\tb.kt\traw\nthree\t{}\tc.kt\traw",
+            "a".repeat(40),
+            "b".repeat(40),
+            "a".repeat(40)
+        ))
+        .unwrap();
+        assert!(super::settle(opts.clone()).is_ok());
+        opts.cycles = 2;
+        assert!(super::settle(opts.clone()).is_err());
+        opts.cases.pop();
+        assert!(super::settle(opts.clone()).is_ok());
+        opts.cases[1].oid = opts.cases[0].oid.clone();
+        opts.cycles = 1;
+        assert!(super::settle(opts).is_err());
     }
 
     #[test]

@@ -158,6 +158,10 @@ fn last_before(history: &[Tick], at_us: u64) -> Option<Tick> {
 /// is the difference between two idle ticks of its own.
 pub(super) fn calibration(opts: &Options) -> Options {
     Options {
+        cases: Vec::new(),
+        cycles: 1,
+        completion: "raw".into(),
+        diff_scroll: false,
         selection: "none".into(),
         select: false,
         scroll: false,

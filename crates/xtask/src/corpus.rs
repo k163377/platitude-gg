@@ -496,11 +496,15 @@ fn against(at: &Path) -> Result<(), String> {
 
 /// What both columns of the distance table are made of.
 fn readings(at: &Path) -> Result<(), String> {
+    println!("profile: refs (counts and navigation structure; no aggregate workload score)");
     tags(at)?;
-    worktree(at)?;
     branch_tree(at)?;
+    println!("profile: startup/status (tracked tree, index and ignored paths)");
+    worktree(at)?;
+    println!("profile: graph/scroll (lanes, chips, visible text and font coverage)");
     graph(at)?;
     window(at)?;
+    println!("profile: diff (changed-file count and source-size distribution)");
     diffs(at)
 }
 

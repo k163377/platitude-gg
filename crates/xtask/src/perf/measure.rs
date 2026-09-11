@@ -164,6 +164,13 @@ fn command(
         .env("PGG_PERF_SELECTION", &opts.selection)
         .env("PGG_PERF_OID", &opts.oid)
         .env("PGG_PERF_FILE", &opts.file)
+        .env("PGG_PERF_CASES", super::cases::encode(&opts.cases))
+        .env("PGG_PERF_CYCLES", opts.cycles.to_string())
+        .env("PGG_PERF_COMPLETION", &opts.completion)
+        .env(
+            "PGG_PERF_DIFF_SCROLL",
+            if opts.diff_scroll { "1" } else { "0" },
+        )
         .env("PGG_PERF_DIFF", if opts.diff { "1" } else { "0" })
         .env(
             "PGG_PERF_TRACE_FRAMES",
@@ -251,6 +258,7 @@ pub(super) fn measure(
     // the case `--allow-noisy` exists to publish rather than refuse.
     let bounded = !opts.limits.quiet_percent.is_infinite();
     let mut bench: Option<Wait> = None;
+    let mut scroll_generation = 0;
     let ended = loop {
         if let Ok(success) = done_rx.try_recv() {
             break Ended::Done(success);
@@ -266,6 +274,10 @@ pub(super) fn measure(
         // in twelve seconds ends never — and waiting the whole watchdog
         // out to say so costs five minutes and names the wrong culprit.
         if scroll.running() {
+            if scroll.generation() != scroll_generation {
+                scroll_generation = scroll.generation();
+                bench = None;
+            }
             let bench = bench.get_or_insert_with(|| {
                 Wait::new(
                     "the scroll bench",
@@ -316,6 +328,7 @@ pub(super) fn measure(
     reading.attribution = attributed;
     reading.perf_done |= done;
     reading.peak_working_set = series.peak_working_set;
+    reading.os_peak_working_set = series.os_peak_working_set;
     reading.peak_private = series.peak_private;
     reading.settled_working_set = if done && opts.settle_ms > 0 {
         held.last.as_ref().map_or(0, |sample| sample.working_set)

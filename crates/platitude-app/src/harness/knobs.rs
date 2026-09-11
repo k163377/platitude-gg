@@ -94,6 +94,14 @@ pub(crate) struct Knobs {
     pub perf_oid: String,
     #[cfg(feature = "automation")]
     pub perf_file: String,
+    #[cfg(feature = "automation")]
+    pub perf_cases: String,
+    #[cfg(feature = "automation")]
+    pub perf_cycles: u32,
+    #[cfg(feature = "automation")]
+    pub perf_completion: String,
+    #[cfg(feature = "automation")]
+    pub perf_diff_scroll: bool,
     /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement.
     ///
     /// Spelled as the refusal rather than the permission because an idle
@@ -164,6 +172,10 @@ fn read() -> Knobs {
         perf_selection: text("PGG_PERF_SELECTION"),
         perf_oid: text("PGG_PERF_OID"),
         perf_file: text("PGG_PERF_FILE"),
+        perf_cases: text("PGG_PERF_CASES"),
+        perf_cycles: text("PGG_PERF_CYCLES").parse().unwrap_or(1),
+        perf_completion: text("PGG_PERF_COMPLETION"),
+        perf_diff_scroll: on("PGG_PERF_DIFF_SCROLL"),
         perf_no_diff: text("PGG_PERF_DIFF") == "0",
         perf_trace_frames: on("PGG_PERF_TRACE_FRAMES"),
         perf_font_walk: on("PGG_PERF_FONT_WALK"),

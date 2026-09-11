@@ -70,9 +70,12 @@
 
 mod artifacts;
 mod attribution;
+mod cases;
 mod corpus;
 mod display;
+mod experiment;
 mod fonts;
+mod interactions;
 mod measure;
 mod options;
 mod reading;
@@ -105,6 +108,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err("memory sampling is not implemented for this OS".into());
     }
     let opts = parse(args)?;
+    if !opts.compare.is_empty() {
+        return experiment::compare(opts);
+    }
+    run_options(opts)
+}
+
+fn run_options(opts: Options) -> Result<(), String> {
     let root = crate::tree::workspace_root();
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
@@ -197,7 +207,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     one_graphics_stack(&kept)?;
     unmoved_corpus(&opts, corpus.as_ref())?;
-    warmth::note(&root, &warmed);
+    if opts.cache == "warm" {
+        warmth::note(&root, &warmed);
+    }
+    experiment::save(&output, &opts, &kept)?;
     report(
         &opts,
         &kept,
@@ -281,8 +294,19 @@ fn build_in(
 /// that drove less would have left cold (`warmth`).
 fn scenario(opts: &Options) -> String {
     format!(
-        "{}/{}/{}/{}/{}/{}",
-        opts.selection, opts.diff, opts.scroll, opts.open, opts.oid, opts.file
+        "{}/{}/{}/{}/{}/{}/{}/{}/{}/{}",
+        opts.selection,
+        opts.diff,
+        opts.scroll,
+        opts.open,
+        opts.oid,
+        opts.file,
+        cases::encode(&opts.cases)
+            .replace('\n', "|")
+            .replace('\t', "/"),
+        opts.cycles,
+        opts.completion,
+        opts.diff_scroll
     )
 }
 
@@ -310,6 +334,17 @@ fn calibrate(
 /// this and nothing built since, in which case every run is kept
 /// (`warmth`).
 fn first_run(root: &std::path::Path, warmed: &warmth::Warmed, opts: &Options) -> u32 {
+    if opts.cache != "warm" {
+        println!(
+            "cache: {} (no calibration or discarded launch; no automatic retry)",
+            opts.cache
+        );
+        return 1;
+    }
+    if !opts.compare.is_empty() {
+        println!("cache: warm (each A/B sample gets its own discarded warm-up)");
+        return 0;
+    }
     let (first, why) = match warmth::warm(root, warmed) {
         Some(age) => (
             1,
@@ -319,7 +354,10 @@ fn first_run(root: &std::path::Path, warmed: &warmth::Warmed, opts: &Options) ->
                 age.as_secs()
             ),
         ),
-        None => (0, "the first is discarded — cold cache".to_string()),
+        None => (
+            0,
+            "the first is a discarded warm-up; OS cache state is not inferred".to_string(),
+        ),
     };
     println!(
         "repo: {} | runs: {} ({why})",
@@ -385,6 +423,7 @@ impl Bench<'_> {
             });
             std::fs::create_dir(&run_dir).map_err(|e| e.to_string())?;
             display::capture(&run_dir, "before")?;
+            experiment::prepare_cold(opts, self.exe, &run_dir)?;
             let result = measure(self.exe, self.path, self.root, opts, &run_dir, self.screen);
             std::fs::write(run_dir.join("result.txt"), format!("{result:#?}"))
                 .map_err(|e| e.to_string())?;

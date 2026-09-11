@@ -294,3 +294,16 @@ fn a_shipped_run_owes_the_two_lines_a_build_without_the_harness_can_say() {
             .contains("memory")
     );
 }
+#[test]
+fn every_scroll_has_a_fresh_deadline_even_when_the_parent_misses_the_gap() {
+    let scroll = super::Scroll::default();
+    scroll.begin();
+    assert!(scroll.running());
+    let first = scroll.generation();
+    scroll
+        .ended
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    scroll.begin();
+    assert!(scroll.running());
+    assert_eq!(scroll.generation(), first + 1);
+}

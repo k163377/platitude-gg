@@ -289,6 +289,14 @@ const TAIL: &str = "  shipped [--no-build]
         --selection <s>   none, first (default), or head
         --select-oid <id>  select this full OID from the loaded graph
         --file <path>     open this changed file (default: first)
+        --cases <tsv>     fixed name/OID/path/raw-or-coloured cases (tab-separated)
+        --cycles <n>      repeat the case list; needs two distinct OIDs
+        --completion <s> raw (default) or final coloured frame
+        --diff-scroll    separately measure each visible overflowing diff
+        --cache <s>      warm (default), first (--runs 1), or cold
+        --cold-prepare <exe>  explicit cache preparation; receives repo and binary
+        --compare <rev>  ABBA against --at; --runs counts blocks (two samples each)
+                          See ci/baseline/perf-local.md for contracts and OS baselines.
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
         --trace-frames    diagnostic app-clock frame series in app.log;

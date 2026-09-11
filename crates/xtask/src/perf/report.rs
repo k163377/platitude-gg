@@ -38,6 +38,7 @@ pub(super) fn report(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     timings(kept, opts.software);
     scroll(kept, context, opts.software);
     interaction(kept, opts.software);
+    super::interactions::report(kept);
     host(kept);
     tail(kept);
     attribution(kept);
@@ -140,6 +141,11 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     println!("\n== {} ==", opts.label);
     println!("  build       : {}", opts.features());
     println!(
+        "  cache       : {} | platform: {}",
+        opts.cache,
+        super::experiment::platform()
+    );
+    println!(
         "  commit      : {} built in {}",
         context.built.short(),
         context.built.tree.display()
@@ -161,6 +167,28 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         );
     }
     println!("  working set : {}", spread(&ws));
+    let os_peaks: Vec<_> = kept
+        .iter()
+        .filter_map(|r| r.os_peak_working_set)
+        .map(mb)
+        .collect();
+    if !os_peaks.is_empty() {
+        println!(
+            "  OS resident peak: {} MiB (process lifetime high-water mark; diagnostic, no font subtraction)",
+            spread(&os_peaks)
+        );
+        let missed: Vec<_> = kept
+            .iter()
+            .filter_map(|r| {
+                r.os_peak_working_set
+                    .map(|p| mb(p.saturating_sub(r.peak_working_set)))
+            })
+            .collect();
+        println!(
+            "  above sampled peak: {} MiB (the high-water mark does not locate the allocation)",
+            spread(&missed)
+        );
+    }
     println!("  private     : {}", spread(&private));
     if cfg!(target_os = "linux") {
         println!("  Linux private column is VmData, not Windows committed Private Bytes.");

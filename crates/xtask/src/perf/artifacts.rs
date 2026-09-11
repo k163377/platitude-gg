@@ -103,10 +103,11 @@ pub(super) fn prepare(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let directory = opts
-        .output
-        .clone()
-        .unwrap_or_else(|| root.join("target/perf").join(stamp.to_string()));
+    let directory = opts.output.clone().unwrap_or_else(|| {
+        root.join("target/perf")
+            .join(super::experiment::platform())
+            .join(stamp.to_string())
+    });
     if let Some(parent) = directory.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -115,8 +116,16 @@ pub(super) fn prepare(
         .map_err(|e| format!("cannot reserve {}: {e}", directory.display()))?;
     let mut manifest =
         std::fs::File::create(directory.join("manifest.txt")).map_err(|e| e.to_string())?;
+    writeln!(manifest, "cache={}\ncold_prepare={}\ncycles={}\ncompletion={}\ndiff_scroll={}\nbaseline_platform={}\n",
+        opts.cache, opts.cold_prepare, opts.cycles, opts.completion, opts.diff_scroll, super::experiment::platform())
+        .map_err(|e| e.to_string())?;
+    std::fs::write(
+        directory.join("cases.tsv"),
+        super::cases::encode(&opts.cases),
+    )
+    .map_err(|e| e.to_string())?;
     writeln!(manifest,
-        "protocol=7\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\ncalibrate={}\nruns={}\nsoftware={}\n",
+        "protocol=8\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\ncalibrate={}\nruns={}\nsoftware={}\n",
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.features(),
         opts.repo.display(), opts.selection, opts.oid, opts.file, opts.diff, opts.scroll,
         opts.open, opts.settle_ms, opts.breakdown, opts.attribute, opts.calibrate, opts.runs, opts.software).map_err(|e| e.to_string())?;

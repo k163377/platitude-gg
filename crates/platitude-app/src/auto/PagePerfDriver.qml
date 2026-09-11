@@ -15,6 +15,13 @@ Item {
     property DetailsModel detailsModel
     property DiffModel diffModel
     property GraphPane graphPane
+    property DiffPane diffPane
+    property int operation: 0
+    property string wantedPath: ""
+    property string wantedFingerprint: ""
+    property int wantedGeneration: -1
+    readonly property string caseName: PerfProbe.caseField(driver.operation, 0)
+    readonly property bool wantsColour: PerfProbe.caseField(driver.operation, 3) === "coloured"
     property string stage: "opening"
     property string wantedOid: ""
     property real actionStart: 0
@@ -40,6 +47,8 @@ Item {
 
     function waitFrame(next) {
         graphPane.view.forceLayout()
+        if (page.diffShown)
+            diffPane.view.forceLayout()
         driver.frameBefore = driver.frames
         driver.stage = next
         page.Window.window.requestUpdate()
@@ -52,8 +61,25 @@ Item {
             driver.choose()
         else if (driver.stage === "details" && !detailsModel.loading && detailsModel.shaHex === driver.wantedOid)
             driver.waitFrame("details-frame")
-        else if (driver.stage === "diff" && !diffModel.loading && diffModel.title !== "" && page.diffShown)
+        else if (driver.stage === "diff" && !diffModel.loading && diffModel.title === driver.wantedPath
+                 && diffModel.fingerprint !== "" && page.diffShown)
             driver.waitFrame("diff-frame")
+        else if (driver.stage === "colour" && driver.sameDiff() && diffModel.coloured) {
+            driver.wantedGeneration = diffModel.rowsGen
+            driver.waitFrame("colour-frame")
+        }
+    }
+
+    function sameDiff() {
+        return page.diffShown && page.diffPath === driver.wantedPath && detailsModel.shaHex === driver.wantedOid
+                && !diffModel.loading && diffModel.fingerprint === driver.wantedFingerprint
+    }
+
+    function note(point) {
+        Harness.report(point + " elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
+                       + " case=" + driver.caseName + " operation=" + driver.operation
+                       + " oid=" + driver.wantedOid + " rows_gen=" + diffModel.rowsGen
+                       + " fingerprint=" + diffModel.fingerprint)
     }
 
     function choose() {
@@ -74,7 +100,8 @@ Item {
             return
         }
         let row = -1
-        const oid = PerfProbe.oid !== "" ? PerfProbe.oid
+        const caseOid = PerfProbe.caseField(driver.operation, 1)
+        const oid = caseOid !== "" ? caseOid
                     : PerfProbe.selection === "head" ? workTree.headOid : ""
         if (oid !== "")
             row = graphModel.rowOf(oid)
@@ -99,23 +126,24 @@ Item {
         driver.actionStart = PerfProbe.clockMs()
         page.releasePressedAway(null)
         item.leftClick(0)
-        Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid)
+        Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid
+                       + " case=" + driver.caseName + " operation=" + driver.operation)
         driver.tick()
     }
 
     function afterDetails() {
         driver.sawDetails = true
-        Harness.report("perf_details_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
-                          + " oid=" + detailsModel.shaHex + " boundary=handler-to-frame")
+        driver.note("perf_details_frame")
         if (!PerfProbe.withDiff) {
             driver.afterInteraction()
             return
         }
         let file = 0
-        if (PerfProbe.filePath !== "") {
+        const caseFile = PerfProbe.caseField(driver.operation, 2)
+        if (caseFile !== "") {
             file = -1
             for (let i = 0; i < detailsModel.fileTotal; i++) {
-                if (detailsModel.filePathAt(i) === PerfProbe.filePath) {
+                if (detailsModel.filePathAt(i) === caseFile) {
                     file = i
                     break
                 }
@@ -126,6 +154,7 @@ Item {
             return
         }
         driver.stage = "diff"
+        driver.wantedPath = detailsModel.filePathAt(file)
         driver.actionStart = PerfProbe.clockMs()
         Harness.report("perf_file path=" + detailsModel.filePathAt(file))
         page.openDiff("commit", detailsModel.filePathAt(file), detailsModel.fileOrigPathAt(file))
@@ -133,6 +162,13 @@ Item {
     }
 
     function afterInteraction() {
+        if (driver.operation + 1 < PerfProbe.operationCount()) {
+            if (page.diffShown)
+                page.closeDiff()
+            driver.operation++
+            driver.waitFrame("next-frame")
+            return
+        }
         if (Harness.autoScroll) {
             const returning = page.diffShown
             if (returning)
@@ -147,11 +183,42 @@ Item {
         }
     }
 
+    function afterDiff() {
+        if (PerfProbe.diffScroll) {
+            diffPane.view.forceLayout()
+            if (!diffPane.visible || diffBench.to <= diffBench.from) {
+                driver.fail("diff-scroll-hidden-or-no-overflow")
+                return
+            }
+            const before = diffPane.view.contentY
+            diffPane.view.positionViewAtBeginning()
+            // A static offscreen scene need not swap another frame. The caller
+            // already observed this diff's frame; only a moved viewport needs one more.
+            if (diffPane.view.contentY === before)
+                driver.beginDiffScroll()
+            else
+                driver.waitFrame("diff-scroll-frame")
+        } else {
+            driver.afterInteraction()
+        }
+    }
+
+    function beginDiffScroll() {
+        driver.scrollStart = diffPane.view.contentY
+        driver.scrollValid = true
+        driver.stage = "diff-scrolling"
+        PerfProbe.scrollSurface("diff")
+        PerfProbe.scrollContext(driver.caseName, driver.operation)
+        PerfProbe.beginScroll()
+        diffBench.start()
+    }
+
     function finish() {
         driver.stage = "finished"
         Harness.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
                           + " diff=" + driver.sawDiff + " graph=" + driver.graphVisible
                           + " scrolled=" + Harness.autoScroll + " rows=" + graphModel.rowTotal)
+        Harness.report("perf_operations count=" + (driver.operation + 1))
         page.perfFinished()
     }
 
@@ -164,6 +231,7 @@ Item {
         }
         driver.stage = "scrolling"
         driver.scrollStart = graphPane.view.contentY
+        PerfProbe.scrollSurface("graph")
         PerfProbe.beginScroll()
         scrollBench.start()
     }
@@ -177,6 +245,11 @@ Item {
     }
 
     function frame() {
+        if (driver.stage === "diff-scrolling") {
+            driver.scrollValid = driver.scrollValid && driver.sameDiff() && diffPane.visible
+            PerfProbe.frame()
+            return
+        }
         if (driver.stage === "scrolling") {
             driver.scrollValid = driver.scrollValid && driver.graphVisible
             PerfProbe.frame()
@@ -205,7 +278,34 @@ Item {
             driver.afterDetails()
         } else if (driver.stage === "diff-frame") {
             driver.sawDiff = true
-            Harness.report("perf_diff_frame elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart))
+            driver.wantedFingerprint = diffModel.fingerprint
+            driver.note("perf_diff_frame")
+            if (driver.wantsColour) {
+                driver.stage = "colour"
+                driver.tick()
+            } else {
+                driver.afterDiff()
+            }
+        } else if (driver.stage === "colour-frame") {
+            if (!driver.sameDiff() || !diffModel.coloured || diffModel.rowsGen !== driver.wantedGeneration) {
+                driver.fail("colour-frame-changed-target")
+                return
+            }
+            driver.note("perf_colour_frame")
+            driver.afterDiff()
+        } else if (driver.stage === "next-frame") {
+            driver.choose()
+        } else if (driver.stage === "diff-scroll-frame") {
+            driver.beginDiffScroll()
+        } else if (driver.stage === "diff-end-frame") {
+            const view = diffPane.view
+            const row = view.indexAt(view.width / 2, view.contentY + view.height / 2)
+            if (!driver.sameDiff() || row < 0 || !view.itemAtIndex(row)) {
+                driver.fail("diff-scroll-ended-without-visible-row")
+                return
+            }
+            Harness.report("perf_diff_scroll_frame visible=true case=" + driver.caseName
+                           + " operation=" + driver.operation + " row=" + row)
             driver.afterInteraction()
         } else if (driver.stage === "scroll-frame") {
             driver.beginScroll()
@@ -249,6 +349,24 @@ Item {
     Connections {
         target: driver.page.Window.window
         function onFrameSwapped() { driver.frames++; driver.frame() }
+    }
+
+    NumberAnimation {
+        id: diffBench
+        target: driver.diffPane.view
+        property: "contentY"
+        from: driver.diffPane.view.originY
+        to: from + Math.max(0, driver.diffPane.view.contentHeight - driver.diffPane.view.height)
+        // waits(measured): sample visible diff frames over this animation; movement and a final row are required
+        duration: 2000
+        onFinished: {
+            const moved = Math.abs(driver.diffPane.view.contentY - driver.scrollStart)
+            PerfProbe.endScroll(driver.diffPane.view.count, moved, driver.scrollValid)
+            if (!driver.scrollValid || moved <= 0)
+                driver.fail("diff-scroll-not-observed")
+            else
+                driver.waitFrame("diff-end-frame")
+        }
     }
 
     NumberAnimation {
