@@ -33,6 +33,13 @@ Item {
         id: stack
         maxWidth: 200
     }
+    /// A card of the kind the chip's list is made of: one name, wrapped rather than cut, and a room handed to it from
+    /// outside. The list hands over a room of its own as it opens and reads the width back in that same turn, which is
+    /// the whole of what `RefChipRoom` is about.
+    RefChip {
+        id: roomChip
+        wrapped: true
+    }
     // The column arithmetic that has to keep back what the card above spends. Handed a pane so its own two required
     // properties are answered; nothing here reads the lanes.
     GraphColumnMetrics {
@@ -283,6 +290,39 @@ Item {
             verify(columns.labelColWMin <= Metrics.labelColW,
                    "the floor " + columns.labelColWMin + " is past the width the column opens at "
                    + Metrics.labelColW)
+        }
+    }
+
+    // What a chip answers when the room it is given moves. **The card that unfolds a chip measures its rows in the
+    // turn it hands them that room** (`RefListPopup.layOutRows`) — it has to, because a card that grows after it is
+    // shown cannot tell that the hand walking into it is already inside — so what those rows answer in that turn is
+    // what the card comes out at.
+    TestCase {
+        id: refChipRoom
+        name: "RefChipRoom"
+        when: windowShown
+
+        /// The name a graph column has to cut and a card has room to show whole.
+        readonly property string cutInTheColumn: "L00010feature/a-name-far-too-long-for-any-column"
+
+        // A chip handed a wider room answers with the width it had before it, until it is asked to lay out: the frame's
+        // contents are a positioner, and a positioner sums itself in the polish after the turn its children moved in.
+        // Left unasked, the card came out at the width the graph's column had left the chip and cut the name off
+        // inside its own frame (measured: 152 read back off a chip the card was about to draw at 1095).
+        function test_a_chip_given_more_room_answers_in_that_turn() {
+            roomChip.maxWidth = Metrics.labelColW
+            roomChip.records = [refChipRoom.cutInTheColumn]
+            verify(waitForRendering(roomChip), "the chip was laid out and drawn")
+            compare(roomChip.width, Metrics.labelColW, "the name did not fill the column it was cut to")
+
+            // The room the card hands over as it opens, and the reading it takes in that same turn.
+            roomChip.maxWidth = 4 * Metrics.labelColW
+            roomChip.layOutNow()
+            const asRead = roomChip.width
+            verify(waitForRendering(roomChip), "the chip was drawn at its new room")
+            compare(asRead, roomChip.width, "the chip answered with a width from the pass before")
+            verify(asRead > Metrics.labelColW,
+                   "the chip kept the column's width in a room four times as wide")
         }
     }
 }

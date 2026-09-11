@@ -64,6 +64,17 @@ Rectangle {
     /// is what the frame clips off its own right-hand end — so nothing inside may ask for more than the name's room
     /// leaves, which is the whole of what [`furnitureW`] is measured for (`tst_refstack.qml` holds it).
     readonly property real contentW: chipContent.implicitWidth
+    /// Lays the frame's contents out now, for a caller that has just changed the room this chip is given and is about
+    /// to read its width back in the same turn (`RefListPopup.layOutRows`).
+    ///
+    /// **The row inside the frame is a positioner, and a positioner answers its width in the polish after the turn it
+    /// was changed in.** The label re-lays itself out where it stands — its line count and its own width are current
+    /// the moment `maxWidth` moves — but what the frame is measured by is the row's sum, and that one is a pass
+    /// behind: a chip handed the card's room and read in the same breath answers with the width it had in the graph's
+    /// column, whole columns narrower than the name it is already drawing (`tst_refstack.qml` holds it).
+    function layOutNow() {
+        chipContent.forceLayout()
+    }
     /// Whether the row carries names this card is not showing, which is the whole of what the count is for.
     readonly property bool hasCount: chip.records.length > 1
     /// The count's own seat, measured off the label that draws it rather than off a token standing in for one. **A

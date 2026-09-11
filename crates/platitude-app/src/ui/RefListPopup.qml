@@ -217,6 +217,12 @@ AppCard {
             const row = rowsList.itemAtIndex(i)
             if (!row)
                 break
+            // **Laid out before it is read.** A row built before the card handed over its room — the first one is,
+            // every time: the list builds it the moment the records land, and the room is set after that — carries
+            // the chip at the width the graph's column left it, and the frame's own row is a positioner, so its sum
+            // is a pass behind the room it was given. Read unasked, the card came out at the column's width and cut
+            // the name off inside its own frame (`RefChip.layOutNow`).
+            row.layOutNow()
             widest = Math.max(widest, row.implicitWidth)
             stacked += row.height
             seen = i + 1
@@ -302,13 +308,35 @@ AppCard {
                 readonly property bool leadsNowhere:
                     refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
 
+                /// Lays this row's chip out now, so that the width the card's measuring pass reads off it is the one
+                /// the room it has just been given asks for (`layOutRows`; `RefChip.layOutNow` says why it is a pass
+                /// behind without this).
+                function layOutNow() {
+                    rowChip.layOutNow()
+                }
+
+                /// What the reading's remote costs this row: its own ink and the gap that keeps it off the name.
+                readonly property real whoseRoom: whose.visible ? whose.width + Theme.spaceSm : 0
+                /// What is left for the chip. **The page while the card is being measured, the card itself once it
+                /// has a width.** The measuring pass is where the card decides how wide to be, so the rows it reads
+                /// there ask for everything the page leaves them (`refList.chipRoom`) — but a row built after it, one
+                /// below the fold that a scroll brings up, was in no reading at all, and a chip still asking for the
+                /// page is drawn wider than the card and **cut by its frame instead of wrapped inside it** (observed
+                /// on a card of forty-three names, scrolled to the long one under them). Held to the card, the name
+                /// wraps, which is what this card does with a name too long for its room.
+                readonly property real chipRoom: {
+                    const page = refList.chipRoom - refRow.whoseRoom
+                    if (refList.measuring)
+                        return page
+                    return Math.min(page, rows.width - rows.rightInset - Theme.spaceXs - refRow.whoseRoom)
+                }
+
                 // **The row is the band; the chip stands in it.** The air on either side of the chip is the row's own,
                 // and the card's frame ends where the band begins, so the wash the pointer puts on a row covers the
                 // whole of what that row answers to (規約 §当たり判定). What stands between a chip's frame and the card's
                 // is that air and nothing else (規約 §グラフ行のダブルクリック — the card lands on the chip column's own edge,
                 // and a wider one would reach past the divider into the lanes).
-                implicitWidth: Theme.spaceXs + rowChip.width
-                               + (whose.visible ? whose.width + Theme.spaceSm : 0)
+                implicitWidth: Theme.spaceXs + rowChip.width + refRow.whoseRoom
                 width: rows.width
                 // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
@@ -331,7 +359,7 @@ AppCard {
                     // the reading's remote has its seat — and what will not fit even then is wrapped, not cut: this is
                     // the one place the name is shown in order to be read (規約 §hover のツールチップ).
                     wrapped: true
-                    maxWidth: refList.chipRoom - (whose.visible ? whose.width + Theme.spaceSm : 0)
+                    maxWidth: refRow.chipRoom
                 }
                 // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a drifted
                 // one puts the same bare name on two rows — this card is where the two meet, so it is where the
