@@ -196,6 +196,71 @@ Item {
         }
     }
 
+    /// Whether the run of failures that stops the timer is over, asking for one more if it is not.
+    ///
+    /// **One at a time, and each waited out.** A fetch is answered a drain after it is asked for, so three fired in a
+    /// row are counted as one — the seq the timer holds is the write this verb's last fetch was asked at. The remote
+    /// has to be one git cannot reach (`--preset unreachable`), or this never comes true.
+    function stoppedYet(tab, timer) {
+        if (tab.autoFetchSuspended)
+            return true
+        if (timer.askSeq >= 0 && tab.writeSeq <= timer.askSeq)
+            return false
+        timer.askSeq = tab.writeSeq
+        tab.fetch("")
+        return false
+    }
+
+    // PGG_AUTO_ACT=fetch-tip-link: the word inside the fetch button's tip that is a place to go, pressed — and the
+    // panel it names coming up marked (デザイン規約 §hover のツールチップ — 送った先は名乗る).
+    //
+    // The failures come first; then the hand goes on the button and the tip is waited out, because a tip that is not
+    // standing has no word in it to press.
+    SampleTimer {
+        id: tipLinkTimer
+        running: Harness.autoAct === "fetch-tip-link"
+        property int askSeq: -1
+        property bool shut: false
+        property bool pressed: false
+        onTriggered: {
+            if (acts.window.curPage === null)
+                return
+            const page = acts.window.curPage
+            const tab = page.pageTab
+            if (tab.busyCount !== 0 || tab.autoFetchRunning)
+                return
+            if (!acts.stoppedYet(tab, tipLinkTimer))
+                return
+            // The failures raised the panel on the way here (§git が言ったことを読む場所), and a press that finds it
+            // already up proves only half of what this verb is about. So it goes down first, by the reader's own
+            // hand — which is the state the link is worth having: somebody who put it away and was then sent back.
+            if (!tipLinkTimer.shut) {
+                tipLinkTimer.shut = true
+                if (page.commandsOpen)
+                    page.shutCommands()
+                return
+            }
+            if (!tipLinkTimer.pressed) {
+                acts.topBar.fetchPointedAt = true
+                if (!acts.topBar.fetchTipStanding)
+                    return
+                if (!acts.window.pressTipLink())
+                    return
+                tipLinkTimer.pressed = true
+                return
+            }
+            // The panel is built into its seat as it is raised (`RepoPage.commandsSeat`), so what says the press
+            // arrived is the panel standing and wearing the mark — not the page's own flag alone.
+            if (!page.commandsOpen || page.commandsPane === null)
+                return
+            tipLinkTimer.stop()
+            Harness.report("fetch_link open=" + page.commandsShown
+                              + " lit=" + page.commandsPane.attention
+                              + " suspended=" + tab.autoFetchSuspended)
+            acts.window.finishAutoAct()
+        }
+    }
+
     // PGG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
     // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape* rather than a number, because which pixel
     // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.
@@ -205,7 +270,9 @@ Item {
                  || Harness.autoAct === "band-actions-none"
                  || Harness.autoAct === "band-actions-fold"
                  || Harness.autoAct === "band-actions-alert"
+                 || Harness.autoAct === "band-actions-stopped"
         property bool pushRequested: false
+        property int askSeq: -1
         onTriggered: {
             // The box the set shares is settled once the band has loaded (`TopBar.widestAction`), and every width
             // here is measured off it — asked for before that, the run would size the window against a box of zero.
@@ -232,6 +299,15 @@ Item {
                 if (!topBar.actionAlertShown)
                     return
             }
+            // The same corner on the other button. Fetch has no go to be refused — what puts a mark there is a run of
+            // failures, and the third of them stops the timer (`stoppedYet`).
+            if (Harness.autoAct === "band-actions-stopped") {
+                const tab = window.curPage.pageTab
+                if (tab.busyCount !== 0 || tab.autoFetchRunning)
+                    return
+                if (!acts.stoppedYet(tab, actionsActTimer))
+                    return
+            }
             // Asked for again on every tick rather than once. **What the shape is worth is measured off the wording
             // the button is saying**, and push's wording arrives with the readings that decide it — a width settled
             // on the tick the working tree loaded is one measured for `push`, and the band it lands on is saying
@@ -249,6 +325,13 @@ Item {
             if (topBar.width !== mainUi.width)
                 return
             stop()
+            // Which button the corner mark belongs to. The band's own `alert=` is the pair or-ed together
+            // (`TopBar.actionAlertShown`), so on its own it cannot tell this run from the one that photographs the
+            // refused push — and the two put their mark on different corners of different marks.
+            if (Harness.autoAct === "band-actions-stopped")
+                Harness.report("band_stopped suspended=" + window.curPage.pageTab.autoFetchSuspended
+                                  + " framed=" + topBar.fetchFramed
+                                  + " alert=" + topBar.actionAlertShown)
             acts.reportBandActions()
         }
     }

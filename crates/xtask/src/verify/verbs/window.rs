@@ -292,6 +292,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "band_actions fits=true folded=true cut=true alert=true",
     },
+    // The same corner on the other mark. What puts it there is the
+    // run of failures that stops the timer, so this one is judged on
+    // its own line: the band's `alert=` is the pair or-ed together
+    // and cannot say which of the two buttons is carrying it, while
+    // the frame at this width belongs to the stopped fetch alone.
+    Verb {
+        name: "band-actions-stopped",
+        when: &[],
+        plain: "band_stopped suspended=true framed=true alert=true",
+    },
     // Kept beside its pair so the two read together.
     Verb {
         name: "band-actions-none",

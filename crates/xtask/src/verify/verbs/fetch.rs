@@ -119,6 +119,18 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "fetch_hover tip=true word=true rest=true stopped=false",
     },
+    // The word inside that tip which is a place to go, pressed. The
+    // panel is put away first — the failures raised it on the way
+    // here — so `open=` is the press's own doing and not what it
+    // walked in on, and `lit=` is the panel saying which reader it
+    // is standing for. The picture holds the second one and not the
+    // first: a panel that was never down looks exactly like a panel
+    // that came back up.
+    Verb {
+        name: "fetch-tip-link",
+        when: &[],
+        plain: "fetch_link open=true lit=true",
+    },
     // The resume on the end of such a run, whose whole show is over
     // before the picture is taken: what it ends on is a button back
     // at work, and that frames exactly like `fetch-fail 1`.
