@@ -142,6 +142,14 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.name : ""
     }
+    /// What commit that row names, read off the row itself (PGG_AUTO_ACT=nav-jump): where a click on it leads is the
+    /// row's own answer, and a run that worked the commit out from the model instead would be asking the question the
+    /// click is supposed to answer. Empty on a row the view has not built — and on the one row here that names no
+    /// commit, a bare worktree entry.
+    function rowOidAt(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.oid_hex : ""
+    }
     /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
     /// `contentY` rather than off a delegate: a row scrolled away has none, and "there is no delegate" is also what a
     /// list that has not been built yet says.

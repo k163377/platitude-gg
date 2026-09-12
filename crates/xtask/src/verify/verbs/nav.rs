@@ -226,6 +226,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "lit=true wants=true tip=true",
     },
+    // Where one click on a left-panel row leads. **The picture cannot
+    // answer it**: the window opens with a row already lit, so a graph
+    // standing on the commit the click asked for and a graph that never
+    // moved frame the same — and a wiring that dropped the click
+    // silently is exactly the second one. `same=` is the graph's own row
+    // carrying the commit the row named, `lit=` the light on it, and the
+    // two together are what the press produced rather than what it was
+    // asked to produce. `wip=false` is beside them because the history
+    // has to be the face on screen for either to mean anything.
+    //
+    // `at=` and `name=` stay out of the claim: they are the repository's
+    // numbers — where that commit happened to sort and what the folder
+    // was called — and a preset with one more commit in it would fail a
+    // claim that reached them while nothing about the jump had changed.
+    Verb {
+        name: "nav-jump",
+        when: &[],
+        plain: "same=true lit=true marked=true wip=false",
+    },
     // The current branch's stand-in riding the edge its own row went out
     // of, with the list scrolled out from under it. **The picture cannot
     // answer this**: on the top edge the stand-in draws the same whether

@@ -26,6 +26,7 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
+    readonly property var graphPane: driver.graphPane
     readonly property var branchesModel: driver.branchesModel
     readonly property var remotesModel: driver.remotesModel
     readonly property var stashesModel: driver.stashesModel
@@ -95,6 +96,11 @@ Item {
             acts.tagEyeBack = backing
             acts.tagEyeStep = 0
             tagEyeTimer.start()
+        } else if (act === "nav-jump") {
+            // One click on a row of the left panel, and where it leads (デザイン規約 §左メニューの所作). The argument is
+            // `<section>[:<row>]`, the row 0 by default. The press goes in at the row's own `leftClick`
+            // (`NavList.clickRow`), so what routes it is the delegate's own answer and not a copy of it here.
+            jumpTimer.start()
         } else if (act === "nav-reclick" || act === "nav-reclick-away") {
             // The rename gesture, on the section the folded rail has open. The plain verb clicks the same row twice
             // with that section standing; "-away" lets the pointer leave in between, so the two clicks land in a list
@@ -382,6 +388,75 @@ Item {
                               + " tag=" + Harness.autoActArg
                               + " rows=" + graphModel.rowTotal
                               + " tags=" + tagsModel.total)
+            driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=nav-jump: one click on a row of the left panel, and the commit it led to.
+    //
+    // **The claim is read off the graph, not off the page.** Where the click sent the page is the click's own
+    // bookkeeping, and a wiring that kept the selection while the history stood still would answer it; what says the
+    // jump arrived is the graph's row for that commit, lit and laid out (帳簿の外の証人 — `GraphRowDelegate.selected`).
+    /// What the row named when it was pressed, and whether the press is in. Read before the click: the delegate is
+    /// recycled, and a row asked afterwards can be showing somebody else's name.
+    property string jumpWant: ""
+    property bool jumpPressed: false
+    SampleTimer {
+        id: jumpTimer
+        /// Which section, and which of its rows — the row travels with the argument (`worktree:1`) and defaults to
+        /// the first.
+        readonly property string kind: {
+            const arg = Harness.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? arg : arg.substring(0, cut)
+        }
+        readonly property int row: {
+            const arg = Harness.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
+        }
+        onTriggered: {
+            const list = navProbe.listOf(jumpTimer.kind)
+            if (!list)
+                return
+            if (!acts.jumpPressed) {
+                // A row the view has not laid out yet is not a row that was pressed, and one that names no commit
+                // has nothing for this verb to follow (`NavList.rowOidAt`).
+                const oid = list.rowOidAt(jumpTimer.row)
+                if (oid === "" || !list.clickRow(jumpTimer.row))
+                    return
+                acts.jumpWant = oid
+                acts.jumpPressed = true
+                return
+            }
+            // The landing: the page reading that commit, the pane on the right having answered for it, and the
+            // graph holding a laid-out row of its own to show for it.
+            if (page.selectedOid !== acts.jumpWant || !driver.cardSettled)
+                return
+            const at = graphModel.rowOf(acts.jumpWant)
+            // **A commit the walk never reached is an answer, not a wait.** The page had settled before the click
+            // (`AutoActDriver` / `PageSettled` — the walk has finished a pass), so a row that is not there is not
+            // going to arrive, and a run that went on waiting for it would spend the watchdog to say what it
+            // already knows — and take no picture of the state it found (`screenshot saved=false`). A row the model
+            // has but the view has not laid out yet is the other case, and that one is waited for.
+            const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+            if (at >= 0 && !item)
+                return
+            jumpTimer.stop()
+            Harness.report("nav_jump section=" + jumpTimer.kind
+                              + " row=" + jumpTimer.row
+                              // The graph's own answer about the row the click landed on: the commit it carries and
+                              // the light it draws. `same=` is what makes `lit=` about this jump rather than about
+                              // wherever the window opened.
+                              + " same=" + (!!item && item.oid_hex === acts.jumpWant)
+                              + " lit=" + (!!item && item.selected)
+                              // The row the click landed on keeps the mark, which is the left panel's half of the
+                              // same press (`NavItemDelegate` の chosenBox).
+                              + " marked=" + (sidebarPane.activeKey !== "")
+                              // The face the graph is on: a jump puts the history up, whatever was being read before
+                              // (`RepoPage.jumpToRef`).
+                              + " wip=" + page.wipShown
+                              + " at=" + at
+                              + " name=" + list.rowNameAt(jumpTimer.row))
             driver.complete()
         }
     }
