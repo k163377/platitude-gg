@@ -22,10 +22,13 @@
 //! this existed. A tab reopened over itself cannot: it opens from the
 //! path it already held, which git answers the same way twice.
 //!
-//! **Only the local lane takes a place** ([`Lane::Local`]). A push or a
-//! fetch touches no index and dies with the session that asked for it, so
-//! ordering it against another session's writes would only put a commit
-//! behind somebody else's network round trip.
+//! **What takes a place is what writes here**
+//! ([`OperationKind::writes_here`]), which is a different question from
+//! the lane a write is supervised on. A push and the fetches take none —
+//! their whole effect is at the other end, and ordering them would put a
+//! commit behind somebody else's round trip. A composite delete takes
+//! one even though the network paces its far half, because its near half
+//! takes a ref away here.
 //!
 //! **Nothing here holds a session.** The members are weak and the running
 //! write is a few numbers, so an order costs nothing once the last

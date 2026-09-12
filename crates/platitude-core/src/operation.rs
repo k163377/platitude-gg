@@ -185,6 +185,57 @@ impl OperationKind {
         }
     }
 
+    /// Whether a write of this kind changes what this copy of the
+    /// repository holds — its index, its own refs, the operation left
+    /// standing in it.
+    ///
+    /// **A second question from [`Self::lane`], and not read off it.**
+    /// The lane says how a write is supervised: what budget it runs
+    /// under, whose token can stop it, whether a close waits it out.
+    /// This says whether the working tree's order has to serve it in
+    /// turn (`session::write_order`). The composite deletes are where
+    /// the two part company — their far half is paced by the network, so
+    /// they are supervised as remote writes, and their near half deletes
+    /// a ref here, so they must not overtake a rename accepted before
+    /// them.
+    ///
+    /// `false` only where the whole effect is at the other end and on
+    /// the remote-tracking refs that mirror it: a push, and the three
+    /// fetches. Putting those in the order would leave a commit waiting
+    /// behind somebody else's round trip for nothing.
+    ///
+    /// Exhaustive for the same reason the lane is: a new kind has to be
+    /// placed by hand, and neither answer is a default to fall into.
+    #[must_use]
+    pub fn writes_here(self) -> bool {
+        match self {
+            Self::Push | Self::Fetch | Self::AutoFetch | Self::OpenFetch => false,
+            Self::DeleteBranchEverywhere
+            | Self::DeleteTagEverywhere
+            | Self::Stage
+            | Self::Unstage
+            | Self::Discard
+            | Self::Commit
+            | Self::Checkout
+            | Self::Reset
+            | Self::Stash
+            | Self::Branch
+            | Self::Tag
+            | Self::Remote
+            | Self::Merge
+            | Self::Rebase
+            | Self::Squash
+            | Self::Drop
+            | Self::Reword
+            | Self::CherryPick
+            | Self::Revert
+            | Self::Resolve
+            | Self::Mergetool
+            | Self::Config
+            | Self::Identity => true,
+        }
+    }
+
     /// Whether a write of this kind replays history a commit at a time,
     /// rather than touching the index once and coming back.
     ///

@@ -382,8 +382,15 @@ impl RepoSession {
             };
             // Kept even where the answer is not wanted any more: the
             // states are about the file, not about who asked, and the
-            // cache tells a stale source apart on its own.
-            *relock(&s.lex_cache) = cache;
+            // cache tells a stale source apart on its own. Not past the
+            // close, though — that gave this very cell back
+            // (`RepoSession::keeps_what_it_reads`).
+            {
+                let mut slot = relock(&s.lex_cache);
+                if s.keeps_what_it_reads() {
+                    *slot = cache;
+                }
+            }
             // Asked again: a long colouring can be overtaken while it runs,
             // and the pane would drop the answer anyway.
             if !s.diff_is_current(epoch) {

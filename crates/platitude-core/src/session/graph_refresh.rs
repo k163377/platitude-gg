@@ -470,6 +470,29 @@ impl RepoSession {
         drop(self.start_refresh_poll());
     }
 
+    /// Reads the repository again because a write landed in it — from
+    /// this session or from another on the same working tree
+    /// ([`RepoSession::tell_the_tree`]).
+    ///
+    /// **Owed, not offered.** A clock tick the single-flight slot turns
+    /// away is no loss: another comes. This one is news, and the read
+    /// holding the slot began before the write, so dropping it would
+    /// leave the session showing a repository that no longer exists
+    /// until something else happened to ask. Refused, it is written down
+    /// and taken by the reader in front as it hands the slot back.
+    pub(super) fn read_again(self: &Arc<Self>) {
+        self.read_owed.store(true, Ordering::SeqCst);
+        drop(self.start_refresh_poll());
+    }
+
+    /// Takes the read owed, if one is — called where a poll hands the
+    /// slot back, which is the moment a refused one can be served.
+    fn take_the_read_owed(self: &Arc<Self>) {
+        if self.read_owed.load(Ordering::SeqCst) {
+            drop(self.start_refresh_poll());
+        }
+    }
+
     /// Runs one poll tick and returns a boundary that includes any graph
     /// rebuild the tick requested.
     pub fn refresh_poll_tracked(self: &Arc<Self>) -> RefreshTask {
@@ -488,6 +511,10 @@ impl RepoSession {
             tracing::trace!("poll skipped: the previous one has not finished");
             return RefreshTask::ready(RefreshOutcome::Busy);
         };
+        // The reads below start from here, so they answer for anything
+        // that landed before this moment — a write landing inside them
+        // owes another, and sets this again ([`Self::read_again`]).
+        self.read_owed.store(false, Ordering::SeqCst);
         let held = self.graph_passes.enter();
         let s = Arc::clone(self);
         // Nobody follows a tick that was taken over: a newer ask for the
@@ -515,6 +542,7 @@ impl RepoSession {
                     if finished.send(RefreshOutcome::Cancelled).is_err() {
                         tracing::trace!("poll completion was not observed");
                     }
+                    s.take_the_read_owed();
                     return;
                 };
                 let (run_cancel, mut run) = s.take_log_run();
@@ -531,6 +559,9 @@ impl RepoSession {
             if finished.send(outcome).is_err() {
                 tracing::trace!("poll completion was not observed");
             }
+            // Last, and after the slot is back: a read this session was
+            // refused while this one held it is served here or nowhere.
+            s.take_the_read_owed();
         });
         task
     }

@@ -176,6 +176,13 @@ pub struct RepoSession {
     /// One permit, held by a running poll: a tick that arrives while the
     /// previous one is still reading is dropped rather than queued.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
+    /// A read this session owes the working tree: a write landed in it
+    /// while this session was already reading, so the read holding the
+    /// slot began before that write and cannot answer for it
+    /// ([`RepoSession::read_again`]). Remembered rather than dropped,
+    /// because a clock tick that is refused comes round again and a
+    /// write's news does not.
+    pub(super) read_owed: std::sync::atomic::AtomicBool,
     /// One in flight per snapshot, for the reads a repository can be asked
     /// for from more than one place at once (see [`ReadFlight`]). Each
     /// answers its callers with what they act on: whether the refs or
@@ -197,6 +204,10 @@ pub struct RepoSession {
     /// first ([`RepoSession::write`] says what disagreeing would cost).
     /// Nothing else about a write is under it.
     pub(super) accepting: Mutex<()>,
+    /// Set by the close, before it gives anything back
+    /// ([`RepoSession::keeps_what_it_reads`]). Reads already in flight
+    /// answer after it, and what they answer with must not be kept.
+    pub(super) released: std::sync::atomic::AtomicBool,
     /// Time budget for fetch / push. Persisted as the settings key
     /// `network_timeout_secs`; only the settings dialog's input field is
     /// missing (実装計画 §7).
@@ -352,9 +363,35 @@ impl RepoSession {
     /// tag index behind its chips. Nothing left here reads them: a closed
     /// session makes no reads behind its writes, and what they leave is
     /// read by whichever session holds the tree next.
+    /// Whether what this session's reads answer with is still kept.
+    ///
+    /// **Read inside the lock of whatever is about to be stored**, and
+    /// false from before the close gives anything back, so a read already
+    /// in flight either lands ahead of the release — and is cleared by it
+    /// — or finds the door shut. Without that the pass that was walking
+    /// when the tab went would write its chips back into the `Shared`
+    /// just emptied, and the memory would be held for as long as the
+    /// write keeping the session alive takes.
+    ///
+    /// Reading needs no door: a released session's copy is empty, which
+    /// is the true answer.
+    pub(super) fn keeps_what_it_reads(&self) -> bool {
+        !self.released.load(Ordering::SeqCst)
+    }
+
+    /// Where a read's answer about the graph is kept — `None` once this
+    /// session has let go of it ([`Self::keeps_what_it_reads`]).
+    pub(super) fn store_shared(&self) -> Option<std::sync::MutexGuard<'_, Shared>> {
+        let shared = self.lock_shared();
+        self.keeps_what_it_reads().then_some(shared)
+    }
+
     /// Replaced rather than emptied, every one of them: `clear()` keeps a
     /// collection's buckets, which is most of what a full one costs.
     fn forget_the_screens_copy(&self) {
+        // Before anything is given back, so no store can read an open
+        // door and land after the release ([`Self::keeps_what_it_reads`]).
+        self.released.store(true, Ordering::SeqCst);
         *self.lock_shared() = Shared::default();
         *relock(&self.last_snapshot) = None;
         *relock(&self.lex_cache) = None;

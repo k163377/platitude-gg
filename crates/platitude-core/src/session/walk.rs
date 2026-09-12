@@ -236,7 +236,9 @@ impl RepoSession {
 
     /// Sends the same row for a branch with no commits yet.
     fn emit_wip_root_row(&self, generation: u64) {
-        let mut guard = self.lock_shared();
+        let Some(mut guard) = self.store_shared() else {
+            return;
+        };
         if guard.generation != generation {
             return; // this stream is not the graph on screen (see emit_rows)
         }
@@ -250,7 +252,9 @@ impl RepoSession {
 
     /// Sends the synthetic WIP row as its own chunk.
     fn emit_wip_row(&self, generation: u64, head: &Oid, incoming: &[Oid]) {
-        let mut guard = self.lock_shared();
+        let Some(mut guard) = self.store_shared() else {
+            return;
+        };
         if guard.generation != generation {
             return; // this stream is not the graph on screen (see emit_rows)
         }
@@ -280,7 +284,9 @@ impl RepoSession {
         totals: &mut LogTotals,
     ) {
         let tags = self.tags_shown();
-        let mut guard = self.lock_shared();
+        let Some(mut guard) = self.store_shared() else {
+            return;
+        };
         if guard.generation != generation {
             return;
         }

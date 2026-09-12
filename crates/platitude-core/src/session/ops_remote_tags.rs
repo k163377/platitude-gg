@@ -103,7 +103,7 @@ impl RepoSession {
         });
         let index = RemoteTagIndex::build(kept.chain(fresh.iter().cloned()));
         let mut slot = relock(&self.remote_tag_index);
-        if **slot == index {
+        if **slot == index || !self.keeps_what_it_reads() {
             return false;
         }
         *slot = Arc::new(index);

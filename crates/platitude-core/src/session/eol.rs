@@ -161,7 +161,12 @@ impl RepoSession {
         let fresh = eol::baseline(&self.executor, workdir, path, cancel)
             .await
             .unwrap_or_default();
-        relock(&self.eol_baselines).insert(key, fresh.clone());
+        {
+            let mut baselines = relock(&self.eol_baselines);
+            if self.keeps_what_it_reads() {
+                baselines.insert(key, fresh.clone());
+            }
+        }
         fresh
     }
 

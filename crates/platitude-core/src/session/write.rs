@@ -32,7 +32,9 @@
 //! * the reads a poll takes stay out of the tree for the whole of any
 //!   write on it, this session's or another's
 //!   ([`RepoSession::tree_write`]), and are taken again the moment that
-//!   write lands ([`RepoSession::tell_the_tree`]);
+//!   write lands ([`RepoSession::tell_the_tree`]) — as a read the
+//!   session owes, so one asked for while it was already reading is
+//!   served when that read ends rather than dropped;
 //! * **the reads an opening makes are not held back** — a tab has to
 //!   paint, and holding them would leave it on "loading" for as long as
 //!   somebody else's rebase takes. They can therefore read a tree
@@ -75,9 +77,11 @@ impl RepoSession {
         // call that hands the id back, so two sessions on one tree are
         // ordered by when each accepted: a tab opened over a write still
         // running cannot step in front of it, and neither can the writes
-        // it goes on to accept (`session::write_order`). Only the local
-        // lane takes one — a push or a fetch touches no index and dies
-        // with the session that asked for it.
+        // it goes on to accept (`session::write_order`). What takes one
+        // is what changes this copy ([`OperationKind::writes_here`]) —
+        // the question the lane does not answer, because a composite
+        // delete is paced by the network and still takes a ref away here
+        // before it gets there.
         //
         // **Taken and queued under one lock.** The loop serves this queue
         // in order and every request waits for its own place, so a pair
@@ -87,7 +91,8 @@ impl RepoSession {
         // asking at once is all that would take.
         let sent = {
             let _accepting = relock(&self.accepting);
-            let place = local
+            let place = kind
+                .writes_here()
                 .then(|| self.write_order())
                 .flatten()
                 .map(|order| order.take_place());
@@ -150,12 +155,17 @@ impl RepoSession {
     /// Called once the place is back, never before — a session told to
     /// look while the tree still says it is being written skips the tick
     /// it was woken for.
+    ///
+    /// What is asked for is a read the session **owes**
+    /// ([`RepoSession::read_again`]), not a tick it may drop: the read
+    /// it is already making began before this write, so a refusal that
+    /// went nowhere would leave it showing a repository that is gone.
     fn tell_the_tree(self: &Arc<Self>) {
         let Some(order) = self.write_order() else {
             return;
         };
         for reader in order.others(self) {
-            reader.refresh_poll();
+            reader.read_again();
         }
     }
 
@@ -205,8 +215,13 @@ impl RepoSession {
         // gives it back by ending, so the tree is free from here on.
         self.run_write(request).await;
         *relock(&self.write_running) = None;
+        // Two questions, two answers: the quit gate counts the writes a
+        // close waits out (the lane), and the tree is told about the
+        // writes that changed it (the kind).
         if operation.lane == Lane::Local {
             self.local_writes.fetch_sub(1, Ordering::SeqCst);
+        }
+        if operation.kind.writes_here() {
             self.tell_the_tree();
         }
     }

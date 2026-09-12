@@ -24,7 +24,12 @@ impl RepoSession {
             return Arc::clone(previous);
         }
         let shared = Arc::new(fresh);
-        *slot = Some(Arc::clone(&shared));
+        // Handed to the caller either way — the event it rides is the
+        // caller's to send — but kept only while this session keeps what
+        // it reads (`RepoSession::keeps_what_it_reads`).
+        if self.keeps_what_it_reads() {
+            *slot = Some(Arc::clone(&shared));
+        }
         shared
     }
 
@@ -41,7 +46,9 @@ impl RepoSession {
     /// commits there.
     pub(super) fn apply_refs(&self, label_map: LabelIndex) {
         let tags = self.tags_shown();
-        let mut shared = self.lock_shared();
+        let Some(mut shared) = self.store_shared() else {
+            return;
+        };
         shared.label_map = label_map;
 
         let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();

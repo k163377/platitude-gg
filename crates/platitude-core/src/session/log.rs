@@ -228,8 +228,12 @@ impl RepoSession {
             // one lock: everything that reads row numbers out of `shared`
             // takes the same lock and sends what it read before letting
             // go, so no message can describe a graph the consumer is not
-            // on yet (see `apply_refs`).
-            let mut shared = self.lock_shared();
+            // on yet (see `apply_refs`). A session that has let go of
+            // what it drew keeps nothing this pass could put back
+            // (`RepoSession::keeps_what_it_reads`).
+            let Some(mut shared) = self.store_shared() else {
+                return RefreshOutcome::Cancelled;
+            };
             // Whoever asked last owns the graph, and asking is what
             // cancelled this token (both entry points swap it before
             // spawning). Resetting for a stream nobody wants any more
@@ -295,7 +299,9 @@ impl RepoSession {
                 // message describing what is in `shared`: a rebuild taking
                 // the lock next compares against this footer, and must not
                 // find it before the consumer has been told.
-                let mut shared = self.lock_shared();
+                let Some(mut shared) = self.store_shared() else {
+                    return RefreshOutcome::Cancelled;
+                };
                 // Only the stream the consumer is on may answer for it.
                 // A superseded one would leave its numbers behind as the
                 // record of somebody else's graph (see `emit_rows`).
@@ -409,7 +415,9 @@ impl RepoSession {
         let total = rows.len() as u32;
         let tags = self.tags_shown();
         {
-            let mut shared = self.lock_shared();
+            let Some(mut shared) = self.store_shared() else {
+                return RefreshOutcome::Cancelled;
+            };
             // Superseded: someone asked for a graph after this pass was
             // started, and that ask cancelled this token. Read here
             // rather than the generation counter — that one is stamped
