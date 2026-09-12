@@ -370,6 +370,13 @@ HoverToolButton {
             }
             ActionButtonLabel {
                 id: btnLabel
+                // **Out of the row once the word is given up**, not merely emptied. A zero-width child still takes
+                // the row's `spacing` on both sides of itself, and the two spacers either end share out what is
+                // left — so the mark came to rest half a gap left of its cell's middle while the gap the word was
+                // not in hung to the right of it (measured: 2px in a 36px cell, on all three of the band's
+                // buttons). Everything read off this label is read off its bindings, which an item out of the
+                // layout goes on answering.
+                visible: !actionBtn.folded
                 text: actionBtn.text
                 code: actionBtn.code
                 widestText: actionBtn.widestText
