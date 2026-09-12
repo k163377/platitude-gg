@@ -604,6 +604,13 @@ fn always_steps() -> Vec<Step> {
         ),
         step("waits", Side::Host, true, xtask(&["waits"]), &["crates"]),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
+        // What it fails on is a census line no verb answers — a renamed
+        // or deleted verb whose line the gate would go on running, where
+        // the app ignores the name and the run waits out its ceiling
+        // saying nothing. The verbs with no line at all are counted and
+        // printed rather than failed: that is a backlog to record
+        // (internal-docs/P3-確認事項.md), not a break to catch here.
+        step("verbs", Side::Host, true, xtask(&["verbs"]), &["crates"]),
         step(
             "fmt",
             Side::Host,

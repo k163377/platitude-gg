@@ -12,7 +12,7 @@ pub const EXE: &str = env!("CARGO_BIN_EXE_xtask");
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The steps every gate runs regardless of the diff.
-pub const ALWAYS: [&str; 4] = ["structure", "waits", "docs", "fmt"];
+pub const ALWAYS: [&str; 5] = ["structure", "waits", "docs", "verbs", "fmt"];
 
 /// Runs a command, retrying while the kernel answers that somebody still
 /// holds its image open for writing (`ETXTBSY`).
