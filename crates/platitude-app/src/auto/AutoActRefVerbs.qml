@@ -79,6 +79,25 @@ Item {
             refMenu.openSub(refTagCard)
             refTagDeleteItem.completeHold()
             goneRowTimer.start()
+        } else if (act === "delete-stood-down") {
+            // The other end of `delete-gone`: that one holds the in-between open, and this one waits for it to be
+            // over. **The screen cannot say which it is** — a row gone because the list no longer carries it draws
+            // exactly like a row the window is drawing without, so the claim is the pair `stood=` / `chips=` read
+            // either side of the wait, and the run is judged on the line rather than on the picture.
+            //
+            // What it fails on is the stand-in that never lets go: the rows come off at the press and the listing
+            // that takes them away for good is measured, not counted (`ops::StandIn`), so a delete measured against
+            // a number no listing can reach would leave the gone set standing and this sampler waiting out the
+            // ceiling. **A tag**, for the reason `delete-gone` takes one: git refuses no tag delete, so the run
+            // never lands in the branch that puts rows back instead.
+            page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
+            refMenu.openSub(refTagCard)
+            // The hold's end is the press, and the latch is read there rather than sampled for: the stand-in can be
+            // let go inside one tick on a demo repository (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態).
+            driver.expectWriteAtPress()
+            refTagDeleteItem.held.connect(stoodDownTimer.pressed)
+            refTagDeleteItem.completeHold()
+            stoodDownTimer.start()
         } else if (act === "delete-tag" || act === "delete-tag-go") {
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
@@ -577,6 +596,35 @@ Item {
                               + " total=" + tagsModel.total
                               + " chips=" + (graphModel.goneChips !== ""))
             driver.complete()
+        }
+    }
+    // …and the row let go of again, which is the half no picture holds. **Waited on the gone set, not on the
+    // write**: the write answers before the listing that takes the row away for good is even asked for, so a
+    // barrier on the answer would report the middle of the operation as its end.
+    SampleTimer {
+        id: stoodDownTimer
+        /// Whether the row was ever stood in for, read off the graph's own gone set **at the press** — the delete's
+        /// slot fills it before the press returns, and a run that sampled for it could miss the whole window. Without
+        /// it the wait below is satisfied by a press that took nothing away at all.
+        property bool stood: false
+        function pressed() {
+            stoodDownTimer.stood = graphModel.goneChips !== ""
+            driver.pressedWrite()
+        }
+        onTriggered: {
+            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+                return
+            // The answer is not the end of it: the rows stay off the screen until a listing that looked after the
+            // write has been drawn, and this is that listing arriving (`ops::StandIn`).
+            if (graphModel.goneChips !== "")
+                return
+            stoodDownTimer.stop()
+            Harness.report("stood_down tag=" + Harness.autoActArg
+                              + " stood=" + stoodDownTimer.stood
+                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
+                              + " total=" + tagsModel.total
+                              + " chips=" + (graphModel.goneChips !== ""))
+            renderedBarrier.begin()
         }
     }
 }

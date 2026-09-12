@@ -31,7 +31,7 @@ QtObject {
                 "rename-remote-go", "rename-local-upstream", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
-                "delete-branch-chip",
+                "delete-branch-chip", "delete-stood-down",
                 "set-upstream-go",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
@@ -76,6 +76,9 @@ QtObject {
                 "code-send", "code-grow", "code-shrink", "code-swap",
                 "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all", "resolve-all",
+                // The write answers before the listing that lets the stood-in rows go is even asked for, so the
+                // write barrier would call the middle of the operation its end.
+                "delete-stood-down",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",

@@ -71,6 +71,24 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "gone_row tag=v0.3-local row=-1 total=2 chips=true",
     },
+    // …and the same row let go of again, which **no picture can answer
+    // at all**: a row gone because the list no longer carries it draws
+    // exactly like a row the window is drawing without. `stood=true` is
+    // the press having taken it away and `chips=false` the standing in
+    // being over, and the claim is the pair — either alone passes a
+    // window that never stood the row in, or one that never let it go.
+    //
+    // It is the other half of `delete-gone` and fails the other way: a
+    // delete whose rows are put down by counting listings rather than by
+    // measuring them (`ops::StandIn`) can be answered by a reading that
+    // never saw the write, and one measured against a number no reading
+    // reaches is never answered at all. The second of those leaves this
+    // run waiting out the ceiling.
+    Verb {
+        name: "delete-stood-down",
+        when: &[],
+        plain: "stood_down tag=v0.3-local stood=true row=-1 total=2 chips=false",
+    },
     // The delete row dressed with git's answer before any click. **The
     // picture cannot answer this**: a row nobody asked about wears
     // `branch --delete`, and so does one whose answer came back merged
