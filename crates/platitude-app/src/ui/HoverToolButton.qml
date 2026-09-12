@@ -57,6 +57,15 @@ ToolButton {
     /// resting on another item entirely — binds `ToolTip.visible` itself and leaves this empty; a use-site binding
     /// replaces the one below.
     property string tip: ""
+    /// A word inside `tip` that is a place to go, and the name the page answers for it (`RepoPage.tipLinkAsked`).
+    /// Both empty — the ordinary case — leaves the tip the plain sentence it is.
+    ///
+    /// **The sentence itself is never spelled twice.** `tip` stays plain: it is what is measured, what a run reads
+    /// back (`TopBar.fetchTipShown`), and what can hold a ref name or a path git printed without a `<` in it eating
+    /// the rest of the line. The tooltip finds this word inside it and draws that run as an anchor, which is also
+    /// where the anchor's colour has to be decided (`SharedToolTip`).
+    property string tipPlace: ""
+    property string tipHref: ""
 
     ToolTip.visible: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.lit
     ToolTip.delay: Metrics.tipDelayMs

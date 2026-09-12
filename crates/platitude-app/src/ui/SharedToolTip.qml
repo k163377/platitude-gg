@@ -33,6 +33,21 @@ Item {
 
     readonly property var sharedTip: shared.host.ToolTip.toolTip
 
+    /// The word inside the tip that is a place to go, and what the page calls it — read off the target the tip is
+    /// standing on, since the attached property has one string to carry and the plain sentence is what every other
+    /// reader of it wants (`HoverToolButton.tipPlace`). A target with no such property is every other target.
+    readonly property string tipPlace: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipPlace !== undefined ? at.tipPlace : ""
+    }
+    readonly property string tipHref: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipHref !== undefined ? at.tipHref : ""
+    }
+    /// The word inside the tip that is a place to go was pressed. Only the href is said — what it names belongs to
+    /// the page that owns the thing it points at, and `Main` hands it there.
+    signal linkAsked(string href)
+
     /// Where the hand is on the target, for the runs that have no pointer to put anywhere: a share of the target's own
     /// width (0 = its left edge, 1 = its right). Negative — the ordinary case — means there is no stand-in, and a tip
     /// with no hand to open beside centres on its target the way the style's own did.
@@ -307,6 +322,12 @@ Item {
         id: tipWord
         CardText {
             text: shared.sharedTip.text
+            // Built here rather than by the site, because the step under the pointer is a colour and the colour has
+            // to ride inside the markup (`Words.placeInSentence`). The step itself is the one a graph row's card
+            // makes on its note (`CommitHoverCard`).
+            markup: Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
+                                          pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
+            onLinkAsked: href => shared.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary
             // Half the window, the same share a graph row's card holds its message to: a tooltip is one sentence

@@ -32,6 +32,16 @@ Item {
     /// is handed. The ruler measures whichever of the two is drawn, or a width would be bid for the tags as well.
     property string markup: ""
     property color color: Theme.textPrimary
+    /// The word the pointer is on, empty when it is on none of them, and the press on it.
+    ///
+    /// **An anchor rather than a rule drawn under a Label** (`CommitHoverCard`'s note is the other shape): that note
+    /// is a whole line and this one is a run of glyphs inside a sentence, and only the field knows where that run
+    /// begins and ends. What the field draws for it is the word underlined — **and in whatever colour the markup
+    /// gave it**, since an anchor's ink is the document's: `linkColor` belongs to `Text` and this is a `TextEdit`
+    /// (measured — the type would not load at all), and `palette.link` is not read here either (measured — the
+    /// anchor came out in the style's blue).
+    readonly property alias pointedLink: field.hoveredLink
+    signal linkAsked(string href)
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
     /// Spelled in git's own family rather than the window's — a path git printed, a hash (規約 §git 用語のコード表記).
@@ -164,6 +174,7 @@ Item {
         // The one line that is markup says so because a caller built it and escaped everything that went into it.
         textFormat: cardText.markup !== "" ? TextEdit.RichText : TextEdit.PlainText
         color: cardText.color
+        onLinkActivated: href => cardText.linkAsked(href)
         font.family: cardText.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cardText.pixelSize
         font.weight: cardText.weight

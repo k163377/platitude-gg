@@ -186,11 +186,6 @@ impl RepoTab {
         Member = auto_fetch_running,
         Notify = changed
     );
-    qproperty!(
-        "autoFetchError",
-        Member = auto_fetch_error,
-        Notify = changed
-    );
     qproperty!("fetchFailures", Member = fetch_failures, Notify = changed);
     qproperty!(
         "autoFetchSuspended",

@@ -26,6 +26,17 @@ QtObject {
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
     readonly property string addRemote: qsTr("Add remote…")
 
+    /// The command log's own name — its heading (`CommandsToggle`), and the word every tip that sends a reader there
+    /// points at. Said here because the three have to be the one word in every language.
+    readonly property string commandsTitle: qsTr("GIT COMMANDS")
+    /// The name the command log answers to inside a tooltip's markup (`CardText.linkAsked` → `RepoPage.tipLinkAsked`).
+    ///
+    /// **Not translated and not a URL.** It never reaches a reader — it is the one word the writer of a tip and the
+    /// page that reads it back have to spell the same, and a name that moved with the language would pair them only
+    /// in the language it was written in. The scheme is this application's own so that nothing here can be mistaken
+    /// for an address something else in the machine would open.
+    readonly property string commandsHref: "pgg:commands"
+
     /// The way out that writes nothing, as the three dialogs' foot says it. **Dialogs only**: what a dialog's way out
     /// puts away is the box itself, and the reader can see its edges. The plan takes the graph's whole seat with no
     /// box to dismiss, so its own way out names what goes instead (`RebasePlanPane` — `Discard`).
@@ -273,12 +284,33 @@ QtObject {
              + "<font color=\"" + tint + "\">" + Words.inked(name) + "</font>"
              + Words.inked(sentence.substring(seat + 2))
     }
+    /// The same shape with a place to go where the colour was: the one word in the sentence a press can reach
+    /// (`CardText.markup`). **The whole sentence comes in already said** — the plain spelling is the one that is
+    /// measured and read back (`HoverToolButton.tip`), so this finds the place inside it rather than being handed
+    /// the halves.
+    ///
+    /// The tint rides inside the anchor because an anchor's ink is the document's own: neither `linkColor` nor
+    /// `palette.link` reaches a `TextEdit` (both measured, `CardText`). The href is read by nobody but the page that
+    /// answers it.
+    function placeInSentence(sentence, place, href, tint) {
+        const seat = sentence.indexOf(place)
+        if (place === "" || seat < 0)
+            return ""
+        return Words.inked(sentence.substring(0, seat))
+             + "<a href=\"" + href + "\"><font color=\"" + tint + "\">" + Words.inked(place) + "</font></a>"
+             + Words.inked(sentence.substring(seat + place.length))
+    }
     /// Words as markup reads them. **Rich text folds a run of spaces the way HTML does** (`encode::markup`), so all
     /// but the last space of a run is pinned — and **only those**: one of the two fields this is drawn in wraps rather
     /// than cutting (`NoticeLine`), and a sentence pinned at every space has nowhere left to break, so it breaks
     /// through the middle of a word instead (measured, qmltestrunner `tst_refwords`).
+    ///
+    /// **A line break is spelled out as well.** Rich text folds a newline the way it folds spaces, and the one field
+    /// that is handed a sentence of more than one line is the tooltip (規約 §hover のツールチップ — 2 行目は
+    /// 「なぜ今その見た目か」): left as it came, the two lines come out as one (measured).
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                     .replace(/ (?= )/g, "&nbsp;")
+                    .replace(/\n/g, "<br>")
     }
 }

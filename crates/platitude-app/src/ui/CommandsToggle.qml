@@ -95,7 +95,7 @@ Rectangle {
         visible: toggle.captioned
         x: toggle.captionX
         anchors.verticalCenter: parent.verticalCenter
-        text: qsTr("GIT COMMANDS")
+        text: Words.commandsTitle
         font.pixelSize: Theme.fontMd
         font.weight: Font.DemiBold
         color: toggle.wrong ? Theme.danger : Theme.textSecondary

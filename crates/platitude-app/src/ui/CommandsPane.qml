@@ -26,6 +26,11 @@ Rectangle {
     /// clicking it — and by `Clear`, which takes everything the panel says at once.
     property string errorText: ""
 
+    /// A reader was sent here from somewhere else in the window, and this says so until they do something next
+    /// (`RepoPage.commandsAttention`, デザイン規約 §hover のツールチップ). The same mark the right pane wears for the
+    /// same reason — its own frame in `accent` (`MessageEditor.attention`).
+    property bool attention: false
+
     signal closeRequested()
     signal errorCleared()
     signal copyRequested(string text)
@@ -135,6 +140,24 @@ Rectangle {
                 worn++
         }
         return "worn=" + (seen > 0 && worn === seen) + " rows=" + seen + " washed=" + worn
+    }
+
+    // The mark, over everything this panel draws. A frame rather than a colour swapped into one it already had (which
+    // is what the right pane's box does): this panel has no frame of its own, and the split it stands in is the whole
+    // of what separates it from the pane above.
+    //
+    // **It reaches up over that separator.** Drawn inside the panel's own top edge the line comes out under the
+    // split's, and the two read as a hairline pair rather than as one box round one thing (measured).
+    Rectangle {
+        anchors.fill: parent
+        anchors.topMargin: -Theme.splitterWidth
+        visible: pane.attention
+        color: "transparent"
+        border.color: Theme.accent
+        border.width: Theme.borderWidth
+        // Over the header band and the rows both, and over nothing that can be pressed: the frame is a line on the
+        // panel's own edges, where none of its controls are.
+        z: 1
     }
 
     ColumnLayout {

@@ -90,7 +90,6 @@ impl Default for RepoTab {
             move_ask_start: String::new(),
             move_ask_seq: 0,
             auto_fetch_running: false,
-            auto_fetch_error: String::new(),
             fetch_failures: 0,
             fetch_log_raised: false,
             auto_fetch_suspended: false,
@@ -138,7 +137,6 @@ impl RepoTab {
         if error.is_empty() {
             self.fetch_failures = 0;
             self.fetch_log_raised = false;
-            self.auto_fetch_error = String::new();
             // The header line is state, not history: a fetch that has
             // just landed makes "fetch cannot reach the remote" untrue,
             // and red kept up over that would contradict the button that

@@ -333,7 +333,6 @@ pub struct RepoTab {
     /// Auto fetch, reported apart from the shared busy/error surface so an
     /// offline machine does not raise a banner every interval.
     auto_fetch_running: bool,
-    auto_fetch_error: String,
     /// Fetches that came back with something to say, in a row, whoever
     /// asked for them. Any fetch that comes back clean puts it to zero.
     fetch_failures: i32,

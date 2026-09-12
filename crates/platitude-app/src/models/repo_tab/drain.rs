@@ -126,7 +126,6 @@ impl RepoTab {
                 } => {
                     self.auto_fetch_running = running;
                     if !running {
-                        self.auto_fetch_error = error.clone();
                         self.fetch_settled(&error, announce);
                     }
                 }

@@ -115,6 +115,10 @@ Item {
     /// they do after arriving is the answer that they arrived (デザイン規約 §hover のツールチップ).
     function notePress() {
         detailsPane.dropAttention()
+        // The same answer for the same question, on the other mark this window raises (`raiseCommands`). **A link is
+        // answered on the release and this is read on the press**, so the press that sends a reader here takes the
+        // mark down a moment before putting it up — and what stands afterwards is the one they were sent for.
+        page.commandsAttention = false
     }
     /// And Escape, which every other standing thing in this window answers (デザイン規約 §hover のツールチップ).
     ///
@@ -128,9 +132,10 @@ Item {
     ///
     /// Accepted only when there was a mark to take: an Escape this page did nothing with is not this page's.
     function escapePressed() {
-        if (!detailsPane.attention)
+        if (!detailsPane.attention && !page.commandsAttention)
             return false
         detailsPane.dropAttention()
+        page.commandsAttention = false
         return true
     }
     Keys.onEscapePressed: event => {
@@ -1851,6 +1856,24 @@ Item {
         commandsOwner.readerTakes()
         page.commandsOpen = !page.commandsOpen
     }
+    /// The panel was sent for from somewhere else in the window, and it says so once the reader gets there
+    /// (デザイン規約 §hover のツールチップ — 送った先は名乗る). **The reader's own hand, so `readerTakes()`**: a panel
+    /// asked for is a panel the next landing fetch may not take away, which is the same thing the `>_` says.
+    ///
+    /// Raised whether or not the panel was already up — what the mark answers is "you were sent here", and a reader
+    /// who was looking at it already was still sent.
+    property bool commandsAttention: false
+    function raiseCommands() {
+        commandsOwner.readerTakes()
+        page.commandsOpen = true
+        page.commandsAttention = true
+    }
+    /// The one link this window's tooltips carry (`Words.commandsHref`). Unknown hrefs are nobody's: a tip is not a
+    /// browser, and the set of places it can send a reader is the set spelled here.
+    function tipLinkAsked(href) {
+        if (href === Words.commandsHref)
+            page.raiseCommands()
+    }
     /// Takes the panel down for its own two controls — `Clear` and the closing mark.
     function shutCommands() {
         commandsOwner.readerTakes()
@@ -3050,6 +3073,10 @@ Item {
                     curPage: page
                     commandsModel: commandsModel
                     errorText: repoTab.lastError
+                    // Read off the page rather than set on the panel: the press that raises the mark is often the
+                    // press that builds this seat, and a panel told afterwards would come up dark and light a frame
+                    // later.
+                    attention: page.commandsAttention
                     onCloseRequested: page.shutCommands()
                     onErrorCleared: repoTab.clearLastError()
                     onCopyRequested: text => clipboard.copy(text)

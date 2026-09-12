@@ -319,6 +319,24 @@ ApplicationWindow {
         id: sharedToolTip
         host: body
         hand: body.hand
+        // One tip for the whole window, so what a press inside it means belongs to whatever is open under it — the
+        // window carries the href across and the page reads it (`RepoPage.tipLinkAsked`).
+        onLinkAsked: href => {
+            if (root.curPage !== null)
+                root.curPage.tipLinkAsked(href)
+        }
+    }
+    /// Automation: the press on the word inside the tip that is a place to go (`PGG_AUTO_ACT=fetch-tip-link`).
+    /// **Answers whether there was one**, so a run cannot pass on a tip that offered nothing to press.
+    ///
+    /// Put in at the tip's own signal rather than at the page's handler: the glyphs a hand would press are the one
+    /// part of this a run cannot reach at all (verify-ui スキル), and everything after them — the window's hand-off
+    /// and the page's answer — is what a build can break.
+    function pressTipLink() {
+        if (sharedToolTip.tipPlace === "" || sharedToolTip.tipHref === "")
+            return false
+        sharedToolTip.linkAsked(sharedToolTip.tipHref)
+        return true
     }
 
     /// Something other than the strip's own memory is opening this window's tabs, so the ones that were left stay
