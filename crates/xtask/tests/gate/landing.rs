@@ -293,3 +293,58 @@ fn a_landed_seat_goes_back_to_the_roster() {
         "the seat of a session that ended goes back to the roster"
     );
 }
+
+#[test]
+fn landing_an_already_merged_seat_releases_only_our_clean_claim() {
+    let sb = Sandbox::new("land-again");
+    let seat = sb.seat.display().to_string();
+    let before = sb.main_sha();
+    for (reason, dirty, released) in [
+        ("claude-seat mine", false, true),
+        ("claude-seat gone pid 2147483645", false, true),
+        ("claude-seat theirs", false, false),
+        ("claude-seat", false, false),
+        ("claude-seat mine", true, false),
+    ] {
+        sb.git_ok(&sb.repo, &["worktree", "lock", "--reason", reason, &seat]);
+        if dirty {
+            sb.write_refs(&sb.seat, 64);
+        }
+        let (ok, text) = sb.land_as("worktree-a", "mine");
+        assert!(ok && text.contains("nothing to land"), "{text}");
+        let listing = sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"]);
+        assert_eq!(!listing.contains("locked"), released, "{reason}: {text}");
+        assert_eq!(sb.main_sha(), before);
+        if !released {
+            sb.git_ok(&sb.repo, &["worktree", "unlock", &seat]);
+        }
+    }
+}
+
+#[test]
+fn codex_identity_releases_a_claim_without_a_claude_environment() {
+    let sb = Sandbox::new("codex-claim");
+    let seat = sb.seat.display().to_string();
+    sb.git_ok(
+        &sb.repo,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "claude-seat codex-test",
+            &seat,
+        ],
+    );
+    let mut command = Command::new(EXE);
+    sb.env(&mut command);
+    command
+        .args(["land", "worktree-a", "--dir"])
+        .arg(&sb.repo)
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CLAUDE_PID")
+        .env("CODEX_THREAD_ID", "codex-test");
+    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
+    assert!(output.status.success(), "{output:?}");
+    let listing = sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"]);
+    assert!(!listing.contains("locked"), "{listing}");
+}

@@ -71,8 +71,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let ahead = crate::seats::commits_in(&here, &format!("main..{branch}"))
         .ok_or("git could not count main..branch — is main a local branch here?")?;
     if ahead == 0 {
-        println!("{branch} has nothing main does not already have — nothing to land.");
-        return Ok(());
+        return release_already_landed(&here, &branch);
     }
     let listing =
         git_query(&here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
@@ -407,6 +406,24 @@ fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
              letter out again.",
         ),
     }
+}
+
+fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
+    println!("{branch} has nothing main does not already have — nothing to land.");
+    let listing =
+        git_query(here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
+    let trees = worktree_blocks(&listing);
+    if let Some(tree) = landed_claim(&trees, branch) {
+        if crate::seats::dirty_lines(&tree.path) == Some(0) {
+            release_claim(here, &trees, branch);
+        } else {
+            println!(
+                "the seat claim stays: {} is dirty or could not be inspected",
+                tree.path
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Whose a landed seat's claim is. Pure, so the line between a session

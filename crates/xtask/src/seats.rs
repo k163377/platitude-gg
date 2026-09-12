@@ -64,14 +64,14 @@ pub(crate) struct Identity {
 impl Identity {
     /// This session's marks: the session id a hook payload carries, or
     /// the environment's for a command run outside one, and the Claude
-    /// process both run under. A claim missing either mark still works,
-    /// with the question that mark answers left unanswerable.
+    /// process both run under. Codex's task id supplies the session when
+    /// no Claude identity is present; no desktop or shell pid is inferred.
     pub(crate) fn current(session: Option<&str>) -> Self {
-        let session = session
-            .map(str::to_string)
-            .filter(|session| !session.is_empty())
-            .or_else(|| std::env::var("CLAUDE_CODE_SESSION_ID").ok())
-            .unwrap_or_default();
+        let session = session_id(
+            session,
+            std::env::var("CLAUDE_CODE_SESSION_ID").ok().as_deref(),
+            std::env::var("CODEX_THREAD_ID").ok().as_deref(),
+        );
         let pid = std::env::var("CLAUDE_PID")
             .ok()
             .and_then(|pid| pid.trim().parse().ok());
@@ -80,6 +80,16 @@ impl Identity {
             pid,
             image: None,
             born: None,
+        }
+    }
+
+    fn require_session(&self) -> Result<(), String> {
+        if self.session.trim().is_empty() {
+            Err("missing session identity: supply the hook session_id, \
+                 CLAUDE_CODE_SESSION_ID or CODEX_THREAD_ID before claiming or releasing a seat"
+                .into())
+        } else {
+            Ok(())
         }
     }
 
@@ -125,6 +135,16 @@ impl Identity {
             None => format!("session {}", self.session),
         }
     }
+}
+
+fn session_id(hook: Option<&str>, claude: Option<&str>, codex: Option<&str>) -> String {
+    [hook, claude, codex]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|id| !id.is_empty())
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// What kind of process a claim's pid names, which is the form its
@@ -323,6 +343,9 @@ fn wrote_it(holder: &Identity, me: &Identity) -> bool {
 /// Answers where the seat stood once this was done — only `Ours` means
 /// the session may work there.
 pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
+    if let Err(reason) = me.require_session() {
+        return Standing::Foreign(reason);
+    }
     match standing(lock_reason(seat_path), me, held) {
         Standing::Ours => Standing::Ours,
         Standing::Foreign(reason) => Standing::Foreign(reason),
@@ -479,6 +502,7 @@ pub fn take(args: &[String]) -> Result<(), String> {
 /// out no seat with work in it, so a release leaves that work for a
 /// reader to land or drop rather than for the next session to find.
 fn release(root: &str, me: &Identity) -> Result<(), String> {
+    me.require_session()?;
     let (primary, trees) = primary_checkout(root)?;
     let Some(held) = held_seat(&seat_entries_of(trees), me) else {
         return Err("this session holds no seat, so there is none to release".into());
@@ -520,6 +544,7 @@ fn left_behind(path: &str) -> String {
 /// back is a tree that is ready to be worked in: claimed, empty, and at
 /// main's tip.
 pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
+    me.require_session()?;
     let (primary, trees) = primary_checkout(cwd)?;
     let entries = seat_entries_of(trees);
     if let Some(held) = held_seat(&entries, me) {
@@ -693,7 +718,7 @@ fn spread_order() -> [&'static str; SEATS.len()] {
 /// Uncommitted changes in `dir`, untracked files included. --no-optional-
 /// locks because a plain status opportunistically rewrites the index it
 /// refreshed, and the survey reports index mtimes.
-fn dirty_lines(dir: &str) -> Option<usize> {
+pub(crate) fn dirty_lines(dir: &str) -> Option<usize> {
     crate::subprocess::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
         .map(|status| status.lines().filter(|line| !line.is_empty()).count())
 }
@@ -1060,6 +1085,44 @@ mod tests {
     /// (`subprocess::NO_SUCH_PID`).
     fn dead_pid() -> u32 {
         crate::subprocess::NO_SUCH_PID
+    }
+
+    #[test]
+    fn an_anonymous_session_cannot_start_a_claim() {
+        for session in ["", "   "] {
+            let anonymous = me(session, None);
+            let error = super::assign("not-a-repository", &anonymous)
+                .err()
+                .expect("no identity must fail before probing git");
+            assert!(error.contains("session identity"), "{error}");
+            let error = super::release("not-a-repository", &anonymous)
+                .expect_err("an anonymous release must fail before probing git");
+            assert!(error.contains("session identity"), "{error}");
+            assert!(matches!(
+                super::take_seat(
+                    "not-a-repository",
+                    "no-seat",
+                    &anonymous,
+                    super::Held::BySession
+                ),
+                Standing::Foreign(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn session_identity_uses_the_first_nonblank_source() {
+        assert_eq!(
+            super::session_id(Some("hook"), Some("claude"), Some("codex")),
+            "hook"
+        );
+        assert_eq!(
+            super::session_id(Some(" "), Some("claude"), Some("codex")),
+            "claude"
+        );
+        assert_eq!(super::session_id(None, Some(" "), Some("codex")), "codex");
+        assert_eq!(super::session_id(None, None, Some("codex")), "codex");
+        assert_eq!(super::session_id(None, None, None), "");
     }
 
     #[test]

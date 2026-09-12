@@ -25,9 +25,9 @@ not a second copy of the project rules. User instructions take precedence.
 
 ## Seat identity before any claim
 
-`xtask` currently reads Claude's session environment, not Codex's task ID.
-In each fresh PowerShell invocation that acquires/releases a seat or runs another
-identity-dependent xtask command, bridge the identity before running it:
+`xtask` reads the hook session id, then `CLAUDE_CODE_SESSION_ID`, then
+`CODEX_THREAD_ID`, skipping blank values. Anonymous claims are rejected.
+Keep the bridge below in fresh PowerShell invocations for older worktree runners:
 
 ```powershell
 if ([string]::IsNullOrWhiteSpace($env:CODEX_THREAD_ID)) {
@@ -42,6 +42,10 @@ use a short-lived shell PID, or use the shared desktop PID. Do not set `CLAUDECO
 Keep `seat` argumentless; report its letter, branch, and absolute path immediately.
 Work only in the assigned tree. Apply the same identity bridge for `seat release`.
 Follow `CLAUDE.md` for release, rebase, GUI launch, and land authorization.
+Before reporting a seat released, verify the unlock result and the worktree's
+lock state. A successful land is not proof of release: another or anonymous
+claim may remain. End without landing via `seat release`; committed work remains
+on its branch and is still excluded from allocation until merged or discarded.
 
 If assignment fails, do not equate its generic message with a full roster. Check
 identity, `cargo xtask seats`, and `git worktree list --porcelain` read-only. If Git
