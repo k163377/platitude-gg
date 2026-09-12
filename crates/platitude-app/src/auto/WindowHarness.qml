@@ -103,6 +103,12 @@ Item {
     /// One run has one ending. The census is not asked for here: the picture calls for it
     /// (`AutoShotDriver.appPictured`) and it walks once the window has stopped arriving, which the ending waits for.
     function finish() {
+        // …and a run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): the verb did its work, the loop goes on
+        // turning, and the only thing left to end the run is the ceiling. That is a shape `cargo xtask wedge-check`
+        // has to be able to read back, and the one shape it cannot wait for — so it is ordered here rather than raced
+        // for with a ceiling short enough to outrun a completion (`xtask::verify::faults`).
+        if (Harness.faultHoldAct)
+            return
         shotDriver.finish()
     }
 

@@ -65,6 +65,12 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           run held past `exiting` has anyway, since the
                           exit ends every other thread before the loaded
                           libraries are given their detach
+        --fault-hold-act  swallow the verb's completion, so the act runs,
+                          the loop goes on turning and only the ceiling
+                          ends the run. The third shape `wedge-check`
+                          drives, and the one a short ceiling cannot make
+                          on its own: a ceiling that outruns a completion
+                          here loses to it on a busier machine
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run

@@ -186,6 +186,9 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.fault_no_deadline {
         cmd.env("PGG_FAULT_NO_DEADLINE", "1");
     }
+    if opts.fault_hold_act {
+        cmd.env("PGG_FAULT_HOLD_ACT", "1");
+    }
     // The two the staged copy reads to be a git: what to answer
     // `--version` with, and who to hand the rest to. Both are set on the
     // app, so every git it starts inherits them — which is how the copy

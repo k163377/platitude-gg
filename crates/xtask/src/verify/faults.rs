@@ -34,11 +34,19 @@ const VERB: &str = "band";
 /// ends itself (`super::child`, `harness::deadline`).
 const HELD_MS: &str = "4000";
 
-/// The ceiling the turning run is given. One millisecond, which is the
-/// QML timer's own floor (`AutoShotDriver`): no verb completes inside it,
-/// so the watchdog fires from a loop that is certainly turning — the red
-/// this reproduces, arranged rather than waited for.
-const TURNING_MS: &str = "1";
+/// The ceiling the turning run is given. Long enough that the verb runs
+/// and the loop goes on turning after it — **the ceiling is not what
+/// withholds the completion here**, the fault is (`--fault-hold-act`).
+///
+/// It used to be one millisecond, on the reading that no verb could
+/// complete inside a QML timer's own floor. A verb can: the ceiling is
+/// armed when the run begins and the act completed in the loop turn
+/// before that timer's first tick, so the case that forbids `complete=`
+/// went red on a product that was working (2026-09-12, one gate running
+/// eight jobs; the same tree answered in a second on its own). A
+/// judgement that is a race between a ceiling and a loop is one the
+/// machine decides.
+const TURNING_MS: &str = "2000";
 
 /// One run made to stop, and the words it has to come back with.
 struct Case {
@@ -112,7 +120,7 @@ const CASES: &[Case] = &[
     },
     Case {
         shape: "the loop turning and the verb's completion never arriving",
-        args: &["--watchdog-ms", TURNING_MS],
+        args: &["--watchdog-ms", TURNING_MS, "--fault-hold-act"],
         wants: &[
             "auto-act watchdog expired",
             "the loop answered its watchdog",
@@ -256,7 +264,11 @@ mod tests {
     }
 
     /// And one has to be the other mouth: a loop that turned the whole
-    /// time, which no hold can produce — the ceiling is what makes it.
+    /// time. **What withholds the completion is the fault that swallows
+    /// it**, never a ceiling short enough to outrun the act — that is a
+    /// race, and the machine decides it (`TURNING_MS`). A hold is no way
+    /// to make this shape either: it stops the very loop the case is
+    /// about, and a run with no deadline leaves nothing to read.
     #[test]
     fn one_case_is_the_loop_that_kept_turning() {
         let turning = CASES
@@ -265,8 +277,13 @@ mod tests {
             .expect("the other mouth");
         assert!(turning.args.contains(&TURNING_MS));
         assert!(
-            !turning.args.iter().any(|arg| arg.starts_with("--fault")),
-            "a held run cannot turn its loop"
+            turning.args.contains(&"--fault-hold-act"),
+            "the completion is withheld on purpose rather than outrun"
+        );
+        assert!(
+            !turning.args.contains(&"--fault-hang")
+                && !turning.args.contains(&"--fault-no-deadline"),
+            "a held run cannot turn its loop, and one with no deadline leaves nothing to read"
         );
     }
 

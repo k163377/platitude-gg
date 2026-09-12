@@ -60,6 +60,12 @@ pub(super) struct Options {
     /// it leaves no report of its own however it is stopped — the shape a
     /// wedge past `exiting` has anyway.
     pub(super) fault_no_deadline: bool,
+    /// Swallow the verb's completion (`PGG_FAULT_HOLD_ACT`), so the run
+    /// ends at the ceiling with the loop still turning. **A run that will
+    /// not pass**, and the one shape that cannot be made by shortening
+    /// the ceiling instead: a ceiling that beats the completion on this
+    /// machine loses to it on a busier one (`super::faults`).
+    pub(super) fault_hold_act: bool,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
     /// run unless one is named, so a headless run never reads or writes
@@ -115,6 +121,7 @@ impl Options {
             // nobody could type again to a green.
             || !self.fault_hang.is_empty()
             || self.fault_no_deadline
+            || self.fault_hold_act
             || std::env::var_os(crate::linux::IN_CONTAINER).is_some()
         {
             return None;
@@ -195,6 +202,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         watchdog_ms: WATCHDOG_MS,
         fault_hang: String::new(),
         fault_no_deadline: false,
+        fault_hold_act: false,
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -250,6 +258,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .clone();
             }
             "--fault-no-deadline" => opts.fault_no_deadline = true,
+            "--fault-hold-act" => opts.fault_hold_act = true,
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }
@@ -379,6 +388,27 @@ mod tests {
         assert!(asked.allow_write_failure);
         assert_eq!(asked.verb, "fetch-fail");
         assert_eq!(asked.arg, "3");
+    }
+
+    /// The fault that makes a run stop answering, and the census line it
+    /// takes away with it: a run whose act is swallowed never reaches the
+    /// walk, so the line would be one nobody could type again to a green.
+    #[test]
+    fn a_held_act_is_asked_for_and_writes_no_census_line() {
+        let plain = parse(&["band".to_string()]).expect("verb only");
+        assert!(!plain.fault_hold_act);
+        let asked =
+            parse(&["band".to_string(), "--fault-hold-act".to_string()]).expect("verb and fault");
+        assert!(asked.fault_hold_act);
+        assert!(asked.census_line().is_none());
+        // The other half only exists where a line does. Every run in the
+        // container is off the census by where it runs, so asking there
+        // whether the fault took the line away is asking about a line
+        // that was never there (`census_line`, and the comparison the
+        // board's own test is written as for the same reason).
+        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
+            assert!(plain.census_line().is_some());
+        }
     }
 
     /// The ceiling is a backstop, so the default is set high enough that

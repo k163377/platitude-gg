@@ -61,6 +61,12 @@ pub(crate) struct Knobs {
     /// run leaves no report of its own however it ends. The shape a wedge
     /// past `exiting` has anyway, asked for where it can be arranged.
     pub fault_no_deadline: bool,
+    /// `PGG_FAULT_HOLD_ACT` — swallow the verb's completion, so the loop
+    /// keeps turning and nothing ever says the act is done. The third
+    /// shape (`xtask::verify::faults`): ordered rather than raced for,
+    /// since a ceiling short enough to beat a completion on one machine
+    /// is one the completion beats on another.
+    pub fault_hold_act: bool,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
@@ -161,6 +167,7 @@ fn read() -> Knobs {
         watchdog_ms: text("PGG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
         fault_hang: text("PGG_FAULT_HANG"),
         fault_no_deadline: on("PGG_FAULT_NO_DEADLINE"),
+        fault_hold_act: on("PGG_FAULT_HOLD_ACT"),
         select: on("PGG_AUTO_SELECT"),
         scroll: on("PGG_AUTO_SCROLL"),
         perf: on("PGG_AUTO_PERF"),
@@ -227,8 +234,8 @@ mod tests {
         );
         assert_eq!(knobs.watchdog_ms, 0);
         assert!(
-            knobs.fault_hang.is_empty() && !knobs.fault_no_deadline,
-            "a run nobody is driving is held by nothing and keeps its own deadline"
+            knobs.fault_hang.is_empty() && !knobs.fault_no_deadline && !knobs.fault_hold_act,
+            "a run nobody is driving is held by nothing, keeps its own deadline, and finishes what it starts"
         );
         assert!(
             knobs.fake_pr.is_empty(),

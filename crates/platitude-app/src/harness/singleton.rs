@@ -64,6 +64,11 @@ pub struct Harness {
     /// the three that say nothing about who is at the window
     /// (`settings::Env::automated`).
     automated: bool,
+    /// Swallow the verb's completion where a run asked for it: the act
+    /// runs, the loop turns, and nothing ever reports done
+    /// (`xtask::verify::faults` orders this shape rather than racing a
+    /// ceiling against it).
+    fault_hold_act: bool,
 }
 
 impl Default for Harness {
@@ -85,6 +90,7 @@ impl Default for Harness {
             mem_report: super::memprobe::enabled(),
             perf_font_walk: knobs.perf_font_walk,
             automated: knobs.automated,
+            fault_hold_act: knobs.fault_hold_act,
         }
     }
 }
@@ -108,6 +114,7 @@ impl Harness {
     qproperty!("memReport", Member = mem_report, Constant);
     qproperty!("perfFontWalk", Member = perf_font_walk, Constant);
     qproperty!("automated", Member = automated, Constant);
+    qproperty!("faultHoldAct", Member = fault_hold_act, Constant);
 
     /// The reporting channel the harness reads its answers off (QML →
     /// tracing → `xtask`).
