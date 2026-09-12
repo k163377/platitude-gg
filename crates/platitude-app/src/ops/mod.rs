@@ -14,17 +14,24 @@
 //! Nothing here counts answers or reads anything into the order they
 //! arrive in — what answered in between is somebody else's.
 //!
-//! Held per tab by the hub rather than by the page that draws it
-//! (`hub::stand_in`), so the state of a write outlives whichever QML
-//! component happens to be showing it: a page is built for the tab in
-//! front and taken down behind it (`Main.qml`), and an operation that is
-//! still out is not over because the thing drawing it went away. What does
-//! end it is the session being let go, which is a decision the owner is
-//! told about (`StandIn::session_gone`) — and a different one from the
-//! operation itself ending, because what a session numbered goes with it.
+//! **Where an owner is held is decided by what it is holding.** The rows
+//! a delete took off the screen are the tab's ([`StandIn`], kept per tab
+//! by the hub — `hub::stand_in`): a page is built for the tab in front
+//! and taken down behind it (`Main.qml`), and rows that are still gone
+//! are not back because the thing drawing them went away. What does end
+//! that is the session being let go, which the owner is told about
+//! ([`StandIn::session_gone`]) — a different thing from the operation
+//! ending, because what a session numbered goes with it. What is waited
+//! for on behalf of one page's own boxes is that page's ([`Press`],
+//! kept on the tab model the editor was typed into): a page that went
+//! away took the text with it, and there is nothing left to empty.
 
+mod press;
+#[cfg(test)]
+mod press_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
 
+pub use press::Press;
 pub use stand_in::{Row, Rows, StandIn};

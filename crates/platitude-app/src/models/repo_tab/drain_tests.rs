@@ -107,6 +107,14 @@ fn settled(op: &str, error: &str) -> RepoTab {
     tab
 }
 
+/// Whether the answer this tab took last left a commit at the tip. Read
+/// off the answer because that is where it is kept — a landing is waited
+/// for by answer, never off a property the next one rewrites
+/// (`WriteAnswer::at_tip`).
+fn at_tip(tab: &RepoTab) -> bool {
+    tab.write_answers.last().is_some_and(|a| a.at_tip)
+}
+
 #[test]
 fn a_landed_stage_leaves_the_shown_diff_stale() {
     let tab = settled("stage", "");
@@ -124,33 +132,26 @@ fn a_refused_stage_is_the_drifted_rows_own_answer() {
     );
 }
 
+// A commit nobody here pressed for — the page that sent it is gone, or
+// the queue took nothing — has no editor waiting to be emptied, so its
+// answer falls to the group like any other nobody named.
 #[test]
-fn a_refused_commit_asks_for_no_reread() {
+fn a_commit_nobody_waits_for_falls_to_the_group() {
     let tab = settled("commit", "nothing to commit, working tree clean");
     assert!(tab.write_refused);
-    assert!(!tab.write_stale_diff);
-    assert!(
-        !tab.write_committed,
-        "a rejected commit keeps the editor's text"
-    );
-}
+    assert!(!tab.write_stale_diff, "a refusal asks for no re-read");
+    assert_eq!(tab.commit_answer, -1);
 
-#[test]
-fn a_landed_commit_lands_and_moves_the_sides() {
     let tab = settled("commit", "");
-    assert!(tab.write_committed);
     assert!(tab.write_stale_diff);
-    assert!(
-        !tab.write_at_tip,
-        "the landing is the editor's, not a tip jump"
-    );
+    assert!(!at_tip(&tab), "the landing is the editor's, not a tip jump");
 }
 
 #[test]
 fn a_merge_that_landed_answers_at_the_tip() {
-    assert!(settled("merge", "").write_at_tip);
-    assert!(settled("cherry-pick", "").write_at_tip);
-    assert!(!settled("merge", "fatal: refusing to merge").write_at_tip);
+    assert!(at_tip(&settled("merge", "")));
+    assert!(at_tip(&settled("cherry-pick", "")));
+    assert!(!at_tip(&settled("merge", "fatal: refusing to merge")));
 }
 
 #[test]
@@ -160,7 +161,7 @@ fn a_merge_that_stopped_does_not_claim_the_tip() {
     // (`TabMsg::WriteStopped`), so the flag is already standing.
     tab.last_write_stopped = true;
     tab.settle_write(1, "merge".into(), String::new(), None, 0, 0);
-    assert!(!tab.write_at_tip, "nothing landed at the tip to go to");
+    assert!(!at_tip(&tab), "nothing landed at the tip to go to");
 }
 
 #[test]
@@ -447,7 +448,7 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
             reads_from: 0,
         },
     ]);
-    assert!(!tab.write_at_tip, "the group describes the fetch");
+    assert!(!at_tip(&tab), "the answer that came last is the fetch's");
     let landed: Vec<&str> = tab
         .write_answers
         .iter()
@@ -573,19 +574,27 @@ fn a_refusal_with_a_report_turns_no_row() {
     assert_eq!(tab.branch_delete_landed, "");
 }
 
-/// One stash answer as the bridge carries it, under the id its press was
-/// given.
-fn stash_answered(id: u64, error: &str) -> TabMsg {
+/// One answer as the bridge carries it, under the id its press was
+/// given, with something to report or without.
+fn reported(id: u64, op: &str, error: &str, report: Option<platitude_core::WriteReport>) -> TabMsg {
     TabMsg::WriteState {
         id,
-        op: "stash".into(),
+        op: op.into(),
         running: false,
         replays: false,
         error: error.into(),
-        report: None,
+        report,
         head_seq: 0,
         reads_from: 0,
     }
+}
+
+fn answered(id: u64, op: &str, error: &str) -> TabMsg {
+    reported(id, op, error, None)
+}
+
+fn stash_answered(id: u64, error: &str) -> TabMsg {
+    answered(id, "stash", error)
 }
 
 // Two stash answers in one drain — an apply that landed and the pop
@@ -651,4 +660,126 @@ fn a_notify_that_carried_no_answer_says_so() {
         None,
         "the answer this notify did not carry is not found in it"
     );
+}
+
+// ---- the editor's commit, found by the id its press was given --------
+
+/// The id the queue took the editor's commit under, and one it gave
+/// somebody else. What these tests are about is that the editor's answer
+/// is found by the number rather than by its turn.
+const OURS: u64 = 7;
+const SOMEBODY_ELSE: u64 = 8;
+
+/// A tab whose editor has sent a commit and is waiting for it
+/// (`state::commit_from_fields` writes the id down at the press).
+fn editor_pressed() -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.commit_out.asked(Some(OURS));
+    tab
+}
+
+/// What this notify carried for that editor, if anything.
+fn for_the_editor(tab: &RepoTab) -> Option<&WriteAnswer> {
+    tab.write_answer_at(tab.commit_answer)
+}
+
+// The fetch left running comes back while the commit's answer is still
+// being waited out, and the two meet in one drain (`take_feed` empties
+// the queue whole and notifies once). Written into one group, the
+// fetch's answer — landed, nothing to report — is the one the page would
+// read, and the editor would sit there full of a message that is already
+// a commit.
+#[test]
+fn the_editors_commit_answers_over_the_fetch_behind_it() {
+    let mut tab = editor_pressed();
+    tab.absorb(vec![
+        answered(OURS, "commit", ""),
+        answered(SOMEBODY_ELSE, "fetch", ""),
+    ]);
+    let answer = for_the_editor(&tab).expect("the editor's own answer");
+    assert_eq!(answer.op, "commit");
+    assert!(!answer.failed, "git wrote the commit");
+    assert!(
+        tab.write_fetched,
+        "and the fetch is still the group's — it is nobody's by name"
+    );
+}
+
+// The other way round, to say that nothing reads the order: the fetch
+// answers first and the commit behind it.
+#[test]
+fn the_order_the_two_came_back_in_is_not_read_into() {
+    let mut tab = editor_pressed();
+    tab.absorb(vec![
+        answered(SOMEBODY_ELSE, "fetch", ""),
+        answered(OURS, "commit", ""),
+    ]);
+    let answer = for_the_editor(&tab).expect("the editor's own answer");
+    assert_eq!(answer.op, "commit");
+    assert!(!answer.failed);
+    assert!(tab.write_fetched);
+}
+
+// Once. The answer belongs to the notify that carried it, so the drain
+// after it tells the editor nothing — a second telling would empty boxes
+// somebody has since typed into.
+#[test]
+fn the_editor_is_told_once() {
+    let mut tab = editor_pressed();
+    tab.absorb(vec![answered(OURS, "commit", "")]);
+    assert!(for_the_editor(&tab).is_some());
+    tab.absorb(vec![answered(SOMEBODY_ELSE, "fetch", "")]);
+    assert_eq!(tab.commit_answer, -1, "this drain carried none of it");
+    tab.absorb(vec![TabMsg::MergeTools {
+        names: Vec::new(),
+        settled: true,
+    }]);
+    assert_eq!(tab.commit_answer, -1);
+}
+
+// A hook turned the commit down while a stash pressed behind it landed.
+// The refusal is the one with something to say, and it is the one a
+// single group loses: read there, the page would find a landing with
+// nothing to report and the words would never reach the screen.
+#[test]
+fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
+    let mut tab = editor_pressed();
+    tab.absorb(vec![
+        reported(
+            OURS,
+            "commit",
+            "`git commit` exited with code 1",
+            Some(platitude_core::WriteReport::local(
+                ReportKind::Commit,
+                "lint found 1 problem".into(),
+            )),
+        ),
+        answered(SOMEBODY_ELSE, "stash", ""),
+    ]);
+    let answer = for_the_editor(&tab).expect("the editor's own answer");
+    assert!(answer.failed, "a rejected commit keeps the editor's text");
+    assert_eq!(answer.report_kind, "commit");
+    assert_eq!(answer.report_reason, "lint found 1 problem");
+    // …and it is reported once: the group is the stash's, so nothing the
+    // page reads there can report the same refusal a second time.
+    assert!(!tab.write_refused);
+    assert!(tab.write_stashed, "the landing beside it is still its own");
+    assert_eq!(tab.write_report_kind, "");
+}
+
+// The group is this notify's, like the answers beside it. A refusal the
+// page has already reported would otherwise still be standing in it when
+// the next drain notifies, and be reported over again on an answer that
+// went somewhere else entirely.
+#[test]
+fn a_drain_whose_answer_had_an_owner_leaves_the_group_saying_nothing() {
+    let mut tab = editor_pressed();
+    tab.absorb(vec![answered(SOMEBODY_ELSE, "push", "! [rejected]")]);
+    assert!(tab.write_refused);
+    tab.absorb(vec![answered(OURS, "commit", "")]);
+    assert!(
+        !tab.write_refused,
+        "the push's refusal was the last drain's news"
+    );
+    assert!(for_the_editor(&tab).is_some());
 }

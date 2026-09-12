@@ -64,12 +64,10 @@ Item {
         function onRenameRemoteAsked(from, to) {
             Harness.report("rename_remote_asked from=" + from + " to=" + to)
         }
-        // What the write was about is still on the tab when this goes out — the page clears its own standing
-        // questions, not the tab's report of the answer.
-        function onWriteReported() {
-            Harness.report("write_reported kind=" + reports.repoTab.writeReportKind
-                              + " ref=" + reports.repoTab.writeReportRemote
-                              + "/" + reports.repoTab.writeReportName)
+        // What the write was about rides the signal: a report belongs to the answer that carried it, and one drain
+        // can bring several (`RepoTab.writeAnswerReportKind`).
+        function onWriteReported(kind, remote, name) {
+            Harness.report("write_reported kind=" + kind + " ref=" + remote + "/" + name)
         }
     }
 

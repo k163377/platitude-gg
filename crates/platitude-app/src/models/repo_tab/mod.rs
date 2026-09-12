@@ -236,9 +236,18 @@ pub struct RepoTab {
     last_write_stopped: bool,
     write_seq: i32,
     /// That answer, classified where the op names are known
-    /// (`drain::settle_write`). Every one of these describes the answer
-    /// `write_seq` counted last, and every answer rewrites the whole
-    /// group — nothing stays armed for a later write to trip over.
+    /// (`drain::settle_write`).
+    ///
+    /// **What is left over.** Every one of these describes the last
+    /// answer of this notify that **nobody was waiting for by name**, and
+    /// each such answer rewrites the whole group, so nothing stays armed
+    /// for a later write to trip over. An answer that went to an owner is
+    /// left out of it entirely (`ops::Press`): the page acts on it
+    /// where the owner hands it over, and a copy here would have the page
+    /// act on the same answer a second time. The group is emptied at the
+    /// top of every drain like the answers beside it, so a notify that
+    /// carried nothing for it says so rather than leaving the last
+    /// drain's classification up to be read again.
     ///
     /// git would not do it, or could not reach the far side to;
     /// `last_write_error` holds its words.
@@ -249,17 +258,9 @@ pub struct RepoTab {
     /// *because* the rows on screen drifted. Either way the answer is
     /// the fresh file.
     write_stale_diff: bool,
-    /// The answer is a commit at the tip: a revert / cherry-pick / merge
-    /// that landed without stopping — including a merge git answered
-    /// "Already up to date", whose tip is exactly where that merge would
-    /// have put anyone. Not a property of its own: where a landing is
-    /// waited for, it is waited for by answer (`WriteAnswer::at_tip`).
-    write_at_tip: bool,
     /// HEAD moved (a checkout or a reset landed), so the working tree
     /// under an open diff was rewritten.
     write_moved_head: bool,
-    /// The editor's commit landed.
-    write_committed: bool,
     /// A reword landed: the saved message is on its commit.
     write_reworded: bool,
     /// A stash operation landed. Which one is not said — push, pop,
@@ -302,6 +303,22 @@ pub struct RepoTab {
     /// tells an answer already counted from this one's own; `id` is what
     /// a reader that was handed one at the press looks for.
     write_answers: Vec<WriteAnswer>,
+    /// The commit the editor sent, waiting for the answer that empties
+    /// its boxes — **the id it was accepted under, written down by the
+    /// press itself** (`state::commit_from_fields`), so no reader has to
+    /// hold one across the bridge and none has to guess from the order
+    /// answers arrive in.
+    ///
+    /// **A copy of what it says is beside it.** The owner is plain Rust
+    /// and knows neither Qt nor git (`ops::Press`, whose transitions
+    /// run under `cargo test`); `commit_answer` is the picture QML is
+    /// handed, the way the four `gone_*` are the delete's.
+    commit_out: crate::ops::Press,
+    /// Where the editor's own answer stands in `write_answers`, or -1
+    /// where this notify carried none of it — which is most notifies.
+    /// What git said about it is read off that answer, like every other
+    /// reader that waits for one write by name.
+    commit_answer: i32,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing
@@ -370,11 +387,22 @@ struct WriteAnswer {
     failed: bool,
     at_tip: bool,
     head_seq: i32,
+    /// What the far side, a hook, or this end itself said about refusing
+    /// it — **carried on the answer rather than beside the group**,
+    /// because a report is the answer's and a drain can bring several.
+    /// Empty `kind` is "this one came with nothing to report", which is
+    /// git's plain refusal and the command log's news
+    /// (デザイン規約 §答えの要らない報せ).
+    report_kind: String,
+    report_remote: String,
+    report_name: String,
+    report_reason: String,
 }
 
-/// An id as the bridge carries it (`i32`). The ids a process hands out
-/// are counted from one and never reach the top of the range, so the
-/// saturation is a formality rather than a case.
-fn bridge_id(id: u64) -> i32 {
-    i32::try_from(id).unwrap_or(i32::MAX)
+/// One of a session's running numbers as the bridge carries it (`i32`)
+/// — the id a write was accepted under, or the report of HEAD an answer
+/// names. A process counts both from one and neither reaches the top of
+/// the range, so the saturation is a formality rather than a case.
+fn bridge_id(number: u64) -> i32 {
+    i32::try_from(number).unwrap_or(i32::MAX)
 }

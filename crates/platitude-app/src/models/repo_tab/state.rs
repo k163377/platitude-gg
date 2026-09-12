@@ -72,15 +72,15 @@ impl Default for RepoTab {
             write_seq: 0,
             write_refused: false,
             write_stale_diff: false,
-            write_at_tip: false,
             write_moved_head: false,
-            write_committed: false,
             write_reworded: false,
             write_stashed: false,
             write_branch_op: false,
             write_pushed: false,
             write_fetched: false,
             write_answers: Vec::new(),
+            commit_out: crate::ops::Press::default(),
+            commit_answer: -1,
             write_report_kind: String::new(),
             write_report_remote: String::new(),
             write_report_name: String::new(),
@@ -224,6 +224,12 @@ impl RepoTab {
     }
 
     /// The commit slot's two fields, joined and optioned for core.
+    ///
+    /// **The press writes down the id it was accepted under** — the one
+    /// thing the answer cannot say for itself is whose press it was, and
+    /// the editor is emptied by its own answer and no other
+    /// (`ops::Press`). Asked and written down together, so a commit
+    /// can never be sent without the wait that receives it.
     pub(super) fn commit_from_fields(
         &mut self,
         subject: String,
@@ -237,7 +243,9 @@ impl RepoTab {
             allow_empty: false,
             reset_author: amend && reset_author,
         };
-        self.with_session(|s| s.commit(message.clone(), options));
+        let asked = self.ask_session(|s| s.commit(message.clone(), options));
+        self.commit_out
+            .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
     /// The reset slot's mode word, turned into core's enum; an unknown

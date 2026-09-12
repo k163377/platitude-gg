@@ -253,6 +253,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "text_bar ink=0.3",
     },
+    // A commit git wrote, and the boxes it was typed into being let go.
+    // **The picture cannot judge this either**, for a reason of its own:
+    // git answers before the reading that redraws the pane
+    // (`session::write::run_write`), so at the moment the shot is taken
+    // an emptied editor and a full one frame identically — and the press
+    // is two writes, the staging in front and the commit behind it, so
+    // the write barrier is answered by whichever finished first.
+    // `empty=true` is the whole claim: the answer found the editor that
+    // sent it, out of the answers that notify carried (`ops::Press`),
+    // rather than off a property the fetch behind it rewrites. `amend=`
+    // is the row under the boxes going down with them, which is why the
+    // two verbs want the same line — `amend` turns it on before pressing.
+    Verb {
+        name: "commit",
+        when: &[],
+        plain: "commit_answered landed=true empty=true amend=false",
+    },
+    Verb {
+        name: "amend",
+        when: &[],
+        plain: "commit_answered landed=true empty=true amend=false",
+    },
     // A commit a hook would not have. **The picture cannot judge this**
     // for the same reason the far side's refusals cannot be: a bar
     // saying nothing frames exactly like a bar saying the right thing,

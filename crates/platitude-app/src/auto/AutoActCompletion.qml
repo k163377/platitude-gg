@@ -109,6 +109,10 @@ QtObject {
                 "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
+                // The press is two writes — the staging in front and the commit behind it — so the write barrier is
+                // answered by whichever of them finished first and stands in front of the claim. What these wait for
+                // is the editor's own answer reaching the editor (`RepoPage.commitAnswered`).
+                "commit", "amend",
                 // The bar is what these wait for, and it comes down after the write's own answer.
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
                 "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",

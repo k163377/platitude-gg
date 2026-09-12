@@ -43,6 +43,7 @@ Item {
             // no such fallback — there an empty message means "keep HEAD's" (`--no-edit`).
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
+            commitAnswer.armed = true
             page.commitNow()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
             // The same press against a repository whose `pre-commit` hook says no (`--preset hooked`). Nothing is
@@ -78,6 +79,7 @@ Item {
             wipPane.setAmendChecked(true)
             page.amending = true
             wipPane.setMessage(arg, "")
+            commitAnswer.armed = true
             page.commitNow()
         } else if (act === "amend-reset-author") {
             // Whether authorship is HEAD's to take over is only known once HEAD has been read, so this one goes the
@@ -236,6 +238,32 @@ Item {
             return false
         }
         return true
+    }
+    /// The editor's own answer, latched off the edge that carries it (`RepoPage.commitAnswered`).
+    ///
+    /// **The write barrier cannot stand for this one.** The press is two writes — the staging that goes first and
+    /// the commit behind it — and the barrier is satisfied by whichever of them answers, so a run held there
+    /// photographs the pane before the commit was even sent. And the answer that matters is not on screen at all:
+    /// git answers before the reading that redraws the pane (`session::write::run_write`), so the emptied boxes and
+    /// the full ones frame identically at that moment.
+    ///
+    /// `empty=` is the claim — the answer reached the editor that sent it and the boxes were let go — and `amend=`
+    /// the row under them going down with it. Both are read off the pane rather than off the tab: what the tab said
+    /// is the input to this, not the proof of it.
+    Connections {
+        target: acts.page
+        enabled: commitAnswer.armed
+        function onCommitAnswered(landed) {
+            commitAnswer.armed = false
+            Harness.report("commit_answered landed=" + landed
+                              + " empty=" + (wipPane.subjectText === "" && wipPane.bodyText === "")
+                              + " amend=" + page.amending)
+            driver.complete()
+        }
+    }
+    QtObject {
+        id: commitAnswer
+        property bool armed: false
     }
     // The lanes of the uncommitted row, in the tokens its delegate paints from. A lane is a stroke a couple of pixels
     // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.

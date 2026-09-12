@@ -19,8 +19,15 @@ impl RepoTab {
     pub(super) fn absorb(&mut self, batch: Vec<TabMsg>) {
         // Whatever the last notify carried is over: this one answers for
         // itself, and an empty list is a drain that brought no write
-        // answer at all.
+        // answer at all. The owners waiting for one answer of their own
+        // are put down with it, and so is the group left over for the
+        // readers that wait for none — **a classification read a second
+        // time is a screen sequenced twice off one answer**, which is
+        // what "the editor is emptied once" rests on.
         self.write_answers.clear();
+        self.commit_out.new_notify();
+        self.read_commit_out();
+        self.clear_write_group();
         for msg in batch {
             match msg {
                 TabMsg::Opened { title, path } => {
@@ -213,15 +220,22 @@ impl RepoTab {
         self.signature_signer = signer;
     }
 
-    /// One write's answer, folded into the properties the page reads.
+    /// One write's answer, **handed to whoever pressed for it**.
     ///
-    /// The op names are turned into meanings **here**, on this side of
-    /// the bridge, so the page sequences the screen — reload the diff,
-    /// arm a landing, put taken rows back — without ever branching on
-    /// git vocabulary (app-ui.md: no business logic in QML). Every
-    /// answer rewrites the whole group, so nothing stays armed for a
-    /// later write to trip over; `write_seq` says which answer the
-    /// group describes, and `id` names the press it answers.
+    /// The op names are turned into meanings here, on this side of the
+    /// bridge, so the page sequences the screen — reload the diff, arm a
+    /// landing, put taken rows back — without ever branching on git
+    /// vocabulary (app-ui.md: no business logic in QML).
+    ///
+    /// **Where those meanings go is decided by the id.** A press that
+    /// wrote its id down at the time is waiting for this one answer and
+    /// no other, so the answer goes to it and stops there
+    /// (`ops::Press`, `ops::StandIn`). What is left — the answers
+    /// nobody named — is folded into the group the page reads when any
+    /// answer will do. A drain empties the whole queue and notifies once,
+    /// so that group can only ever describe one of the answers it
+    /// carried: written for all of them, it says whichever finished last
+    /// and the earlier ones are read as never having answered.
     pub(super) fn settle_write(
         &mut self,
         id: u64,
@@ -241,9 +255,9 @@ impl RepoTab {
         // **The kind is named here**, on this side of the bridge, so the
         // page picks its sentence without ever branching on core's types
         // or on git vocabulary (app-ui.md: no business logic in QML).
-        // Rewritten by every answer, like the rest of the group: a report
-        // nobody took down would otherwise come back up under the next
-        // write.
+        // It rides the answer below rather than standing beside the
+        // group: a report is the answer's own, and a drain can bring
+        // several.
         let reported = report.is_some();
         let (kind, remote, name, reason) = match report {
             Some(report) => (
@@ -271,10 +285,6 @@ impl RepoTab {
             ),
             None => (String::new(), String::new(), String::new(), String::new()),
         };
-        self.write_report_kind = kind;
-        self.write_report_remote = remote;
-        self.write_report_name = name;
-        self.write_report_reason = reason;
         // A fetch the user asked for counts the same way the timer's do:
         // what the button says is about fetching, not about who started
         // it.
@@ -282,32 +292,18 @@ impl RepoTab {
             self.fetch_settled(&error, true);
         }
         let landed = error.is_empty();
-        self.write_refused = !landed;
         // The rows a delete took off the screen, answered by name rather
         // than by turn: what answered in between is somebody else's, and
         // this is the only thing that puts them back. `reads_from` goes
         // with it — the listings that take the rows away for good are
         // measured against it, not counted (`ops_delete::delete_answered`).
         self.delete_answered(id, !landed, reads_from);
-        // A landed write moved what the two sides hold; a refused stage,
-        // unstage or discard was refused *because* the rows on screen
-        // drifted (the fingerprint refuses on nothing else). Both mean
-        // the shown diff no longer describes the file.
-        self.write_stale_diff = matches!(op.as_str(), "stage" | "unstage" | "discard")
-            || (landed && matches!(op.as_str(), "commit" | "stash"));
         // Stopped part-way is not a landing: there is no commit at the
         // tip to go to, and the answer to the press is the working tree
         // (`last_write_stopped`, raised by the message before this one).
-        self.write_at_tip = landed
+        let at_tip = landed
             && !self.last_write_stopped
             && matches!(op.as_str(), "revert" | "cherry-pick" | "merge");
-        self.write_moved_head = landed && matches!(op.as_str(), "checkout" | "reset");
-        self.write_committed = landed && op == "commit";
-        self.write_reworded = landed && op == "reword";
-        self.write_stashed = landed && op == "stash";
-        self.write_branch_op = op == "branch";
-        self.write_pushed = op == "push";
-        self.write_fetched = op == "fetch";
         self.write_seq += 1;
         // The plain branch delete's own answer, for the card that stayed
         // up to catch it, by the name it asked with. **Not part of the
@@ -331,19 +327,93 @@ impl RepoTab {
             self.branch_delete_refused = turned_down;
             self.branch_delete_seq = self.write_seq;
         }
-        // …and kept beside the group as well, because the group holds
-        // only one answer and a drain can bring several. A reader waiting
-        // for its own write looks for it here (`write_answers`); the
-        // group is what the page reads when any answer will do.
+        // The answer as it came, kept whole: this is what an owner is
+        // handed and what every reader waiting for one write by name
+        // reads its meanings off (`write_answers`).
         self.write_answers.push(WriteAnswer {
             id,
             seq: self.write_seq,
-            op,
+            op: op.clone(),
             stopped: self.last_write_stopped,
             failed: !landed,
-            at_tip: self.write_at_tip,
+            at_tip,
             head_seq: i32::try_from(head_seq).unwrap_or(i32::MAX),
+            report_kind: kind,
+            report_remote: remote,
+            report_name: name,
+            report_reason: reason,
         });
+        let at = self.write_answers.len() - 1;
+        // Handed to the press that named this write, and no further: the
+        // page reads it where the owner holds it, and a copy in the group
+        // below would have the page act on the one answer twice.
+        if self.commit_out.answered(id, at) {
+            self.read_commit_out();
+        } else {
+            self.fold_into_group(&op, landed, at);
+        }
         self.last_write_error = error;
+    }
+
+    /// The picture QML is handed of what the editor's commit is waiting
+    /// for — a copy, so a binding reads a plain member and never the
+    /// owner (`ops_delete::stand_in` keeps the delete's four the same
+    /// way).
+    fn read_commit_out(&mut self) {
+        self.commit_answer = self
+            .commit_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+    }
+
+    /// One answer nobody was waiting for by name, folded into the group
+    /// the page reads when any answer will do.
+    ///
+    /// Every such answer rewrites the whole of it, so nothing stays armed
+    /// for a later write to trip over; the drain puts it down again at
+    /// its top ([`Self::clear_write_group`]), so a notify carrying none
+    /// of these says so rather than leaving the last one up to be read a
+    /// second time.
+    fn fold_into_group(&mut self, op: &str, landed: bool, at: usize) {
+        // A landed write moved what the two sides hold; a refused stage,
+        // unstage or discard was refused *because* the rows on screen
+        // drifted (the fingerprint refuses on nothing else). Both mean
+        // the shown diff no longer describes the file.
+        self.write_stale_diff = matches!(op, "stage" | "unstage" | "discard")
+            || (landed && matches!(op, "commit" | "stash"));
+        self.write_refused = !landed;
+        self.write_moved_head = landed && matches!(op, "checkout" | "reset");
+        self.write_reworded = landed && op == "reword";
+        self.write_stashed = landed && op == "stash";
+        self.write_branch_op = op == "branch";
+        self.write_pushed = op == "push";
+        self.write_fetched = op == "fetch";
+        // The report travels on the answer; the group shows the one that
+        // came with the answer it is describing.
+        let Some(answer) = self.write_answers.get(at) else {
+            return;
+        };
+        self.write_report_kind = answer.report_kind.clone();
+        self.write_report_remote = answer.report_remote.clone();
+        self.write_report_name = answer.report_name.clone();
+        self.write_report_reason = answer.report_reason.clone();
+    }
+
+    /// Every property of that group put down — the resting values, which
+    /// are the ones that ask the page to do nothing at all.
+    fn clear_write_group(&mut self) {
+        self.write_refused = false;
+        self.write_stale_diff = false;
+        self.write_moved_head = false;
+        self.write_reworded = false;
+        self.write_stashed = false;
+        self.write_branch_op = false;
+        self.write_pushed = false;
+        self.write_fetched = false;
+        self.write_report_kind = String::new();
+        self.write_report_remote = String::new();
+        self.write_report_name = String::new();
+        self.write_report_reason = String::new();
     }
 }

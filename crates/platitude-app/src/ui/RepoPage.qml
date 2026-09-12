@@ -311,9 +311,65 @@ Item {
 
     // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
     // bring back, and the push that would spread it is asked about on its own.
+    //
+    // **The id the queue took it under is written down by the slot itself** (`ops::Press`), so nothing here holds
+    // one and the answer below is found without reading anything into what else came back.
     function commitNow() {
         repoTab.commit(wipPane.outgoingSubject, wipPane.outgoingBody, page.amending, wipPane.resetAuthor)
     }
+    /// The answer to that commit, whichever way it went — **its own answer**, out of the ones this notify carried
+    /// (`RepoTab.commitAnswer`, -1 where it carried none). A drain empties the whole queue and notifies once, so the
+    /// fetch running behind the press answers in the same batch: read off a property every answer rewrites, a commit
+    /// that landed would leave the editor full of a message that is already a commit, and one a hook turned down
+    /// would be refused with nobody told.
+    ///
+    /// Everything the page does with a commit is here, so the branch below — which reads what is left over for the
+    /// answers nobody waited for — never reaches this one and cannot do any of it a second time.
+    function absorbCommitAnswer() {
+        const answer = repoTab.commitAnswer
+        if (answer < 0)
+            return
+        const landed = !repoTab.writeAnswerFailed(answer)
+        if (landed) {
+            // The message is on its commit: the boxes have done their job, and the amend they may have been filled
+            // from is over.
+            page.clearCommitEditor()
+            wipPane.setAmendChecked(false)
+            page.amending = false
+            // …and the commit moved what the two sides hold, so a diff left open on either is a picture of a file as
+            // it was. Which write re-read it is remembered, so the status that follows does not read it over again.
+            page.diffReadAt = repoTab.writeSeq
+            page.reloadDiff()
+        } else {
+            // A rejected commit keeps its text: the boxes are the one thing on this page that cannot be read back
+            // off disk, and pressing again is the reader's to do.
+            const kind = repoTab.writeAnswerReportKind(answer)
+            const remote = repoTab.writeAnswerReportRemote(answer)
+            const name = repoTab.writeAnswerReportName(answer)
+            if (kind !== "") {
+                // Somebody outside this application turned it down — a hook here or over there. Nothing here can put
+                // it right and nothing was half done, so it comes down as a report and the log stays where the
+                // reader left it (デザイン規約 §答えの要らない報せ).
+                page.showReport(kind, remote, name, repoTab.writeAnswerReportReason(answer))
+                // …and the mark in the corner goes quiet with it, the way every answered report takes it down: the
+                // row it is about may not have reached the log yet, and then this pays for it when it does.
+                if (!commandsModel.failed)
+                    page.answeredFailures++
+                commandsModel.noteAnswered()
+                page.writeReported(kind, remote, name)
+            } else {
+                // Nothing else on screen says what git said, so the log comes up
+                // (デザイン規約 §git が言ったことを読む場所).
+                commandsOwner.newsTakes()
+                page.commandsOpen = true
+            }
+        }
+        page.commitAnswered(landed)
+    }
+    /// Automation: the editor's own commit has been answered and the boxes have been dealt with — **the one thing no
+    /// picture can make**, since git answers before the reading that redraws the pane and the window photographs the
+    /// same either way. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    signal commitAnswered(bool landed)
 
     // ---- moving between branches and commits ----------------------
     // Terminology is deliberate: git runs `switch` / `restore`, and the UI says "Switch to" (デザイン規約 §用語).
@@ -1378,9 +1434,11 @@ Item {
                         Words.reportTone(kind))
     }
     /// Automation: git's answer to a write has been taken all the way — the bar raised, the mark taken down, the
-    /// standing questions cleared. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md); what the
-    /// write was about is still on `repoTab.writeReport*` when this goes out.
-    signal writeReported()
+    /// standing questions cleared. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    ///
+    /// **What it was about rides the signal.** A report is the answer's own and a drain can bring several
+    /// (`RepoTab.writeAnswerReportKind`), so the tab holds no one report for a listener to read back afterwards.
+    signal writeReported(string kind, string remote, string name)
     /// Raises the report. `label` is what did not happen, `detail` whoever said no in their own words, `tone` the
     /// state it is in if it is in one at all.
     function showNotice(label, detail, tone) {
@@ -1420,11 +1478,25 @@ Item {
         // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
         // landings, above the refusal branch and its early returns.
         page.absorbPopLabel()
+        // The same for the editor's commit, which is answered by the write it sent and by no other. Above the branch
+        // below for the same reason, and out of it altogether: the group that branch reads describes the answers
+        // nobody was waiting for, and this one was waited for by name (`RepoTab.commitAnswer`).
+        page.absorbCommitAnswer()
         // Whether the working tree emptying next is this window's own doing — only a stash can empty a tree, so the
         // count arriving at zero is what says it was one, and this only says whose. Read off every answer rather than
         // armed and cleared, so nothing can be left standing for a later write to trip over; a refusal writes `false`
         // the same way.
         page.stashLanded = repoTab.writeStashed
+        // What is left over is the answers nobody named — **and its branches end it rather than this function**, so
+        // no press's own answer can be skipped by a refusal somebody else's write came back with.
+        page.absorbLeftoverAnswer()
+    }
+    /// The one answer of this notify nobody was waiting for by name, sequenced off the group it left behind
+    /// (`RepoTab::fold_into_group`): the timer's fetch, a write a page that has since gone away sent.
+    ///
+    /// **Every early return in here ends this and nothing else.** The presses that named their writes are answered
+    /// above, where a refusal in this group cannot reach them.
+    function absorbLeftoverAnswer() {
         if (repoTab.writeRefused) {
             // Nothing moved, so nothing is coming to the screen for a move to be recognised by: pressing again is the
             // reader's to do, and this is the one put-down `moveLanding` cannot wait for a landing for.
@@ -1438,7 +1510,7 @@ Item {
             // catch the drift that caused it (an outside change that moves no bucket count moves no tally), so left
             // alone the same press would be refused again for as long as the reader cared to try. The refusal's
             // answer is the fresh file.
-            if (repoTab.writeStaleDiff) {
+            if (repoTab.writeStaleDiff && page.diffReadAt !== repoTab.writeSeq) {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
             }
@@ -1477,7 +1549,9 @@ Item {
                 commandsModel.noteAnswered()
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
-                page.writeReported()
+                page.writeReported(repoTab.writeReportKind,
+                                   repoTab.writeReportRemote,
+                                   repoTab.writeReportName)
                 return
             }
             // The one refusal this page has a second move for — a branch delete git would not do on its own — is
@@ -1529,11 +1603,6 @@ Item {
             page.pendingRenameTo = ""
             page.askRenameRemote(spokenFor, took)
         }
-        if (repoTab.writeCommitted) {
-            page.clearCommitEditor()
-            wipPane.setAmendChecked(false)
-            page.amending = false
-        }
         // Where the answer sends the reader — **read out of the answers this notify carried, not off the group they
         // leave behind**. One drain empties the whole queue and notifies once (`RepoTab::write_answers`), so a write
         // *starting* in the same batch — the fetch that follows a run — takes the stop's flag back down before this
@@ -1575,8 +1644,10 @@ Item {
         // published only when it has rows to change, so a second line staged out of the same file would never be read
         // at all.
         //
-        // Which write this was is remembered, so the status that follows does not read the same file over again.
-        if (repoTab.writeStaleDiff) {
+        // Which write this was is remembered, so the status that follows does not read the same file over again — and
+        // so does an answer of this notify that has already re-read it (`absorbCommitAnswer`): two answers in one
+        // drain leave the same file to read, and the second reading would cost a second git.
+        if (repoTab.writeStaleDiff && page.diffReadAt !== repoTab.writeSeq) {
             page.diffReadAt = repoTab.writeSeq
             page.reloadDiff()
         }

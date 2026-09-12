@@ -132,11 +132,18 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
-    // The last answer, classified in drain::settle_write — the page reads
-    // meanings, never op names (app-ui.md). What a reader waiting for one
-    // particular answer asks instead is `writeAnswerCount` and the five
-    // beside it: a drain can carry several answers and these describe
-    // only the last of them.
+    // Where the editor's own commit answered in this notify, or -1 — the
+    // press wrote its id down and the drain hands the answer back here,
+    // so nothing on the page has to hold an id across the bridge or read
+    // anything into which answer came last (`ops::Press`).
+    qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
+    // What is left over, classified in drain::settle_write — the page
+    // reads meanings, never op names (app-ui.md). These describe the last
+    // answer of this notify **nobody was waiting for by name**: a drain
+    // can carry several answers, and one that went to an owner is read
+    // where that owner holds it rather than here. What a reader waiting
+    // for one particular answer asks instead is `writeAnswerCount` and
+    // the nine beside it.
     qproperty!("writeRefused", Member = write_refused, Notify = changed);
     qproperty!(
         "writeStaleDiff",
@@ -148,7 +155,6 @@ impl RepoTab {
         Member = write_moved_head,
         Notify = changed
     );
-    qproperty!("writeCommitted", Member = write_committed, Notify = changed);
     qproperty!("writeReworded", Member = write_reworded, Notify = changed);
     qproperty!("writeStashed", Member = write_stashed, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
@@ -297,6 +303,50 @@ impl RepoTab {
     #[qslot]
     fn write_answer_at_tip(&self, index: i32) -> bool {
         self.write_answer_at(index).is_some_and(|a| a.at_tip)
+    }
+
+    /// That write did not happen and something outside this application
+    /// said so — a protected branch, a repository rule, a hook over there
+    /// or here. Which report it is (`delete` / `update` / `outdated` /
+    /// `commit` …) is what the page's sentence turns on, and the four
+    /// below are read together: empty here is "nothing to report", which
+    /// is git's plain refusal and the command log's news
+    /// (デザイン規約 §答えの要らない報せ).
+    ///
+    /// **Read off the answer, not off the group**, because a report is
+    /// the answer's own: a drain carrying two refusals would otherwise
+    /// leave only the later one's words, and the earlier press would
+    /// report whatever the other write was turned down for.
+    #[qslot]
+    fn write_answer_report_kind(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.report_kind.clone())
+            .unwrap_or_default()
+    }
+
+    /// The remote it was about, where one was involved.
+    #[qslot]
+    fn write_answer_report_remote(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.report_remote.clone())
+            .unwrap_or_default()
+    }
+
+    /// The ref it was about, spelled the way the screen spells it.
+    #[qslot]
+    fn write_answer_report_name(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.report_name.clone())
+            .unwrap_or_default()
+    }
+
+    /// Whoever said no, in their own words — carried across rather than
+    /// interpreted, the way `lastWriteError` is.
+    #[qslot]
+    fn write_answer_report_reason(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.report_reason.clone())
+            .unwrap_or_default()
     }
 
     /// Local branch name a remote-tracking ref would take: the ref with
