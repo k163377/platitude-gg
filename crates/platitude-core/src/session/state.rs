@@ -103,16 +103,61 @@ impl AutoFetchTicker {
     }
 }
 
-/// A queued write: what to run, what it invalidates, what to call it.
-pub(super) struct WriteRequest {
-    pub(super) op: &'static str,
+/// One write as the queue was asked for it — the header every event
+/// about the write repeats, and what the queue reads to serve it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Operation {
+    /// Handed back at acceptance; every event about the write carries it.
+    pub(super) id: OperationId,
+    pub(super) kind: OperationKind,
+    /// The kind's lane ([`OperationKind::lane`]), read once here.
+    pub(super) lane: Lane,
+    /// What the write invalidates — which reads follow it.
     pub(super) after: AfterWrite,
-    /// Which lane serves it: `true` keeps the stock budget and dies with
-    /// the session, `false` is waited out to the end. Derived from the op
-    /// label ([`super::remote_paced`]) except for the compound writes
-    /// whose network half the label cannot see — those say so themselves
-    /// ([`super::RepoSession::write_remote_paced`]).
-    pub(super) remote_paced: bool,
+}
+
+impl Operation {
+    /// Accepts a write: takes its id and settles its lane.
+    pub(super) fn new(kind: OperationKind, after: AfterWrite) -> Self {
+        Self {
+            id: OperationId::next(),
+            kind,
+            lane: kind.lane(),
+            after,
+        }
+    }
+}
+
+/// What a snapshot read came back with, for the callers that act on it
+/// — the answer the refs and status flights share ([`ReadFlight`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum Reread {
+    /// Nothing the caller acts on moved. Also what a read fenced by a
+    /// write answers, having asked again for itself.
+    #[default]
+    Same,
+    /// What the caller acts on moved: the WIP row, or the refs.
+    Moved,
+    /// The read failed and published nothing. The failure is on the error
+    /// surface already ([`SessionEvent::OpFailed`]); this is what lets a
+    /// write settling behind the read name it under its own id.
+    Failed,
+}
+
+/// What the worktree listing came back with — the flight's shared answer,
+/// so every caller answered by one pass acts on the same news and none
+/// of them settles before the reads that news asks for.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct WorktreeRead {
+    /// Whether the listing published; `false` is a failed read.
+    pub(super) published: bool,
+    /// What the listing found moved, and so which reads it asks for.
+    pub(super) news: super::joins::WorktreeNews,
+}
+
+/// A queued write: what it is, and what to run.
+pub(super) struct WriteRequest {
+    pub(super) operation: Operation,
     #[expect(
         clippy::type_complexity,
         reason = "a boxed async job needs its shape spelled out"

@@ -71,8 +71,16 @@ pub enum TabMsg {
     /// `OpError` is sent, because the page answers it with a notice
     /// instead (デザイン規約 §答えの要らない報せ).
     WriteState {
+        /// The id the queue handed back when the write was asked for
+        /// (`platitude_core::OperationId`) — what a reader waiting on its
+        /// own write matches, whatever answered in between.
+        id: u64,
         op: String,
         running: bool,
+        /// Whether the write replays history a commit at a time — the
+        /// kind's own answer (`OperationKind::replays_history`), carried
+        /// so the page holds its doors down without classifying the label.
+        replays: bool,
         error: String,
         report: Option<platitude_core::WriteReport>,
         /// The smallest number the first report of HEAD after this write

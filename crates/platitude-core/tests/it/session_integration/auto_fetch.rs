@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, open_unawaited, opened, write_result};
-use platitude_core::session::{AutoFetchTicker, OPEN_FETCH_OP, OpenFetch, SessionEvent};
+use platitude_core::OperationKind;
+use platitude_core::session::{AutoFetchTicker, OpenFetch, SessionEvent};
 
 /// One hand-stepped tick, under the suite's backstop.
 ///
@@ -28,11 +29,11 @@ async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
     sink.wait_for("an automatic fetch", |evs| {
         evs.iter()
             .filter_map(|e| match e {
-                SessionEvent::WriteFinished { op, error, .. }
-                    if *op == platitude_core::session::AUTO_FETCH_OP =>
-                {
-                    Some(error.clone())
-                }
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::AutoFetch,
+                    error,
+                    ..
+                } => Some(error.clone()),
                 _ => None,
             })
             .nth(nth - 1)
@@ -217,9 +218,11 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     let error = sink
         .wait_for("the push to be refused", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::WriteFinished { op, error, .. } if *op == "push" => {
-                    Some(error.clone())
-                }
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::Push,
+                    error,
+                    ..
+                } => Some(error.clone()),
                 _ => None,
             })
         })
@@ -236,7 +239,11 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     sink.wait_for("the fetch that answers it", |evs| {
         evs.iter()
             .any(|e| match e {
-                SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" => {
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::Fetch,
+                    error,
+                    ..
+                } => {
                     assert!(error.is_none(), "the catch-up fetch failed: {error:?}");
                     true
                 }
@@ -274,7 +281,7 @@ async fn opening_a_repository_fetches_without_being_asked() {
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(session.fetch_on_open(), OpenFetch::Started);
     assert_eq!(
-        write_result(&sink, OPEN_FETCH_OP).await,
+        write_result(&sink, OperationKind::OpenFetch).await,
         None,
         "the file:// remote fetched cleanly"
     );
@@ -321,7 +328,7 @@ async fn an_ask_that_beats_the_opening_is_kept_for_it() {
         OpenFetch::Held,
         "the repository is not open yet, so the session keeps the ask"
     );
-    assert_eq!(write_result(&sink, OPEN_FETCH_OP).await, None);
+    assert_eq!(write_result(&sink, OperationKind::OpenFetch).await, None);
     assert_eq!(
         clone.git(&["rev-parse", "origin/main"]),
         origin.git(&["rev-parse", "main"]),
@@ -402,9 +409,15 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
         "the opening redeemed the ask rather than leaving it held"
     );
     session.fetch(None);
-    assert_eq!(write_result(&sink, "fetch").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Fetch).await, None);
     assert_eq!(
-        sink.count(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == OPEN_FETCH_OP)),
+        sink.count(|e| matches!(
+            e,
+            SessionEvent::WriteStarted {
+                kind: OperationKind::OpenFetch,
+                ..
+            }
+        )),
         0,
         "the opening reached for nothing"
     );
@@ -435,11 +448,14 @@ async fn the_timer_queues_nothing_where_there_is_no_remote() {
     // Asked for by hand, the same fetch runs: the gate is on what nobody
     // asked for, not on the button.
     session.fetch(None);
-    assert_eq!(write_result(&sink, "fetch").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Fetch).await, None);
     assert_eq!(
         sink.count(|e| matches!(
             e,
-            SessionEvent::WriteStarted { op } if *op == platitude_core::session::AUTO_FETCH_OP
+            SessionEvent::WriteStarted {
+                kind: OperationKind::AutoFetch,
+                ..
+            }
         )),
         0,
         "the tick in front of it queued nothing"
@@ -543,22 +559,35 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
 
     // The write that closes the second tick's window.
     session.fetch(None);
-    assert_eq!(write_result(&sink, "fetch").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Fetch).await, None);
 
     let events = sink.events.lock().unwrap();
     let ticked: Vec<usize> = events
         .iter()
         .enumerate()
         .filter(|(_, e)| {
-            matches!(e, SessionEvent::WriteStarted { op }
-                if *op == platitude_core::session::AUTO_FETCH_OP)
+            matches!(
+                e,
+                SessionEvent::WriteStarted {
+                    kind: OperationKind::AutoFetch,
+                    ..
+                }
+            )
         })
         .map(|(at, _)| at)
         .collect();
     assert_eq!(ticked.len(), 2, "two automatic fetches ran: {events:?}");
     let asked = events
         .iter()
-        .position(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == "fetch"))
+        .position(|e| {
+            matches!(
+                e,
+                SessionEvent::WriteStarted {
+                    kind: OperationKind::Fetch,
+                    ..
+                }
+            )
+        })
         .expect("the fetch asked for by hand started");
     let statuses = |from: usize, to: usize| {
         events[from..to]

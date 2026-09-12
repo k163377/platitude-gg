@@ -3,8 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::support::{Patience, TestRepo};
-use platitude_core::GitError;
-use platitude_core::session::{PassHooks, PassStep, RepoSession, SessionEvent, SessionSink};
+use platitude_core::session::{
+    FollowUp, PassHooks, PassStep, RepoSession, SessionEvent, SessionSink,
+};
+use platitude_core::{GitError, OperationId, OperationKind};
 
 /// Picks the event a [`CaptureSink`] hook fires on.
 type When = Box<dyn Fn(&SessionEvent) -> bool + Send>;
@@ -426,19 +428,52 @@ impl PassHooks for PassDoors {
 /// Read after [`write_result`], which is what does the waiting: the stop
 /// is published between the write's start and its answer, so by the time
 /// the answer has arrived this is settled.
-pub fn write_stopped(sink: &CaptureSink, op: &'static str) -> bool {
+pub fn write_stopped(sink: &CaptureSink, kind: OperationKind) -> bool {
     sink.events
         .lock()
         .unwrap()
         .iter()
-        .any(|e| matches!(e, SessionEvent::WriteStopped { op: got } if *got == op))
+        .any(|e| matches!(e, SessionEvent::WriteStopped { kind: got, .. } if *got == kind))
 }
 
-/// Waits for the write named `op` to finish and returns git's error, if any.
-pub async fn write_result(sink: &CaptureSink, op: &'static str) -> Option<String> {
-    sink.wait_for(op, |evs| {
+/// Waits for the first write of `kind` to finish and returns git's error,
+/// if any. By kind, for a test that made one write of it; a test whose
+/// writes look alike waits by the id the session handed back
+/// ([`write_answer`]).
+pub async fn write_result(sink: &CaptureSink, kind: OperationKind) -> Option<String> {
+    sink.wait_for(kind.label(), |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::WriteFinished { op: got, error, .. } if *got == op => Some(error.clone()),
+            SessionEvent::WriteFinished {
+                kind: got, error, ..
+            } if *got == kind => Some(error.clone()),
+            _ => None,
+        })
+    })
+    .await
+}
+
+/// Waits for the write accepted under `id` to finish and returns git's
+/// error, if any — found by the id the acceptance handed back, whatever
+/// else answered before or after it.
+pub async fn write_answer(sink: &CaptureSink, id: OperationId) -> Option<String> {
+    sink.wait_for("the write's own answer", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::WriteFinished { id: got, error, .. } if *got == id => Some(error.clone()),
+            _ => None,
+        })
+    })
+    .await
+}
+
+/// Waits for the reads the write accepted under `id` invalidated to have
+/// been made — its last boundary ([`SessionEvent::WriteSettled`]) — and
+/// returns the ones that did not land, empty where every read did.
+pub async fn write_settled(sink: &CaptureSink, id: OperationId) -> Vec<FollowUp> {
+    sink.wait_for("the write settled", |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::WriteSettled {
+                id: got, failed, ..
+            } if *got == id => Some(failed.clone()),
             _ => None,
         })
     })

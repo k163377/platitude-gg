@@ -9,25 +9,25 @@ use super::*;
 
 impl RepoSession {
     /// `git add` for whole files.
-    pub fn stage_paths(self: &Arc<Self>, paths: Vec<String>) {
+    pub fn stage_paths(self: &Arc<Self>, paths: Vec<String>) -> Option<OperationId> {
         self.write(
-            "stage",
+            OperationKind::Stage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
-        );
+        )
     }
 
     /// `git add --all` for the whole work tree, untracked included.
-    pub fn stage_all(self: &Arc<Self>) {
+    pub fn stage_all(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
-            "stage",
+            OperationKind::Stage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::stage_all(&exec, &repo.workdir, &cancel).await
             },
-        );
+        )
     }
 
     /// `git add` over every path git reports as unmerged: the whole
@@ -41,9 +41,9 @@ impl RepoSession {
     ///
     /// Deliberately not `git add --all`: the unstaged bucket beside this
     /// one is not part of what was asked for.
-    pub fn stage_conflicted(self: &Arc<Self>) {
+    pub fn stage_conflicted(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
-            "stage",
+            OperationKind::Stage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 let paths: Vec<String> = status::load(&exec, &repo.workdir, &cancel)
@@ -56,43 +56,46 @@ impl RepoSession {
                 // saying so here keeps the reason with the read.
                 stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
-        );
+        )
     }
 
     /// Empties the index back to HEAD.
-    pub fn unstage_all(self: &Arc<Self>) {
+    pub fn unstage_all(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
-            "unstage",
+            OperationKind::Unstage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::unstage_all(&exec, &repo.workdir, &cancel).await
             },
-        );
+        )
     }
 
     /// Removes whole files from the index.
-    pub fn unstage_paths(self: &Arc<Self>, paths: Vec<String>) {
+    pub fn unstage_paths(self: &Arc<Self>, paths: Vec<String>) -> Option<OperationId> {
         self.write(
-            "unstage",
+            OperationKind::Unstage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::unstage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
-        );
+        )
     }
 
     /// Discards a chosen set of rows as one queued write: unstaged edits,
     /// untracked files and staged changes each go by their own command,
     /// and a staged rename takes the name it came from with it — read
     /// from status inside the write (see [`stage::discard_chosen`]).
-    pub fn discard_chosen(self: &Arc<Self>, choices: Vec<(String, stage::DiscardSide)>) {
+    pub fn discard_chosen(
+        self: &Arc<Self>,
+        choices: Vec<(String, stage::DiscardSide)>,
+    ) -> Option<OperationId> {
         self.write(
-            "discard",
+            OperationKind::Discard,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::discard_chosen(&exec, &repo.workdir, &choices, &cancel).await
             },
-        );
+        )
     }
 
     /// Throws away part of one file's unstaged diff (hunk / line level).
@@ -102,14 +105,14 @@ impl RepoSession {
         target: DiffTarget,
         selects: Vec<HunkSelect>,
         seen: u64,
-    ) {
+    ) -> Option<OperationId> {
         self.write(
-            "discard",
+            OperationKind::Discard,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::discard_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },
-        );
+        )
     }
 
     /// Stages or unstages part of one file's diff (hunk / line level).
@@ -120,25 +123,29 @@ impl RepoSession {
         target: DiffTarget,
         selects: Vec<HunkSelect>,
         seen: u64,
-    ) {
+    ) -> Option<OperationId> {
         self.write(
-            "stage",
+            OperationKind::Stage,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
                 stage::apply_partial(&exec, &repo, &target, &selects, seen, &cancel).await
             },
-        );
+        )
     }
 
     /// Commits the index (or amends HEAD).
-    pub fn commit(self: &Arc<Self>, message: String, options: CommitOptions) {
+    pub fn commit(
+        self: &Arc<Self>,
+        message: String,
+        options: CommitOptions,
+    ) -> Option<OperationId> {
         self.write(
-            "commit",
+            OperationKind::Commit,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 commit::commit(&exec, &repo, &message, options, &cancel).await
             },
-        );
+        )
     }
 
     /// Moves HEAD, taking uncommitted work along (デザイン規約
@@ -151,14 +158,14 @@ impl RepoSession {
     /// asked first: the refusal itself proved the repository is untouched,
     /// and every outcome of the long way is one the working tree can show
     /// and the stash can undo.
-    pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) {
+    pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) -> Option<OperationId> {
         self.write(
-            "checkout",
+            OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 move_carrying(&exec, &repo, &target, &cancel).await
             },
-        );
+        )
     }
 
     /// Puts the operation standing in the way down — see
@@ -170,15 +177,18 @@ impl RepoSession {
     /// Every command stands in the log under its own line, which is what
     /// a reader who typed them would have in front of them
     /// (デザイン規約 §進行中の操作から出る).
-    pub fn checkout_leaving_operation(self: &Arc<Self>, target: CheckoutTarget) {
+    pub fn checkout_leaving_operation(
+        self: &Arc<Self>,
+        target: CheckoutTarget,
+    ) -> Option<OperationId> {
         self.write(
-            "checkout",
+            OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 leave_operation(&exec, &repo, &cancel).await?;
                 move_carrying(&exec, &repo, &target, &cancel).await
             },
-        );
+        )
     }
 
     /// Moves a local branch onto `start` and lands on it, asking first only
@@ -198,10 +208,15 @@ impl RepoSession {
     /// it: a move that has to ask leaves the operation standing for the
     /// answer to that second question to undo, so a reader who walks away
     /// from `Move here?` still has their cherry-pick.
-    pub fn checkout_moving_branch(self: &Arc<Self>, local: String, start: String, leaving: bool) {
+    pub fn checkout_moving_branch(
+        self: &Arc<Self>,
+        local: String,
+        start: String,
+        leaving: bool,
+    ) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "checkout",
+            OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 if !branch::is_merged_into(&exec, &repo.workdir, &local, &start, &cancel).await? {
@@ -216,19 +231,19 @@ impl RepoSession {
                 let target = CheckoutTarget::ForceCreate { local, start };
                 move_carrying(&exec, &repo, &target, &cancel).await
             },
-        );
+        )
     }
 
     /// Moves the current branch to `rev`, carrying the index and the
     /// working tree as far as `mode` says. `ResetMode::Hard` destroys
     /// uncommitted work, so the UI asks before sending that one.
-    pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) {
+    pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) -> Option<OperationId> {
         self.write(
-            "reset",
+            OperationKind::Reset,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::reset(&exec, &repo.workdir, &rev, mode, &cancel).await
             },
-        );
+        )
     }
 }

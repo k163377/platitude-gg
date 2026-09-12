@@ -27,6 +27,23 @@ pub enum RefreshOutcome {
     Failed,
 }
 
+impl RefreshOutcome {
+    /// Whether the graph on screen now answers for the repository.
+    ///
+    /// **A handover is not an answer.** A pass another ask took over
+    /// says nothing about the repository — the ask that took it over is
+    /// the one that will — so a caller that has to know waits for that
+    /// one first ([`RepoSession::graph_answer`]). By the time a
+    /// `Cancelled` reaches such a caller it means nothing ever will: the
+    /// session is closing. Every other outcome here leaves the picture
+    /// as it was, which is what a write settling behind the rebuild
+    /// reports under its own id ([`super::FollowUp::Graph`]).
+    #[must_use]
+    pub fn landed(self) -> bool {
+        matches!(self, Self::Changed | Self::Unchanged)
+    }
+}
+
 /// How many graph passes could still walk.
 ///
 /// A pass registers here on the thread that is about to spawn it and
@@ -37,27 +54,115 @@ pub enum RefreshOutcome {
 /// then reads what the session did is reading a count the displaced pass
 /// has not finished adding to — [`RepoSession::wait_for_graph_passes`]
 /// is the boundary that closes it.
+///
+/// It also numbers the asks and keeps what each came to, which is the
+/// other half of the same question: a pass that was taken over leaves
+/// its caller waiting on whoever took it over, and that is the ask this
+/// records ([`GraphRun`]).
 pub(super) struct GraphPasses {
     live: std::sync::atomic::AtomicUsize,
     changed: tokio::sync::watch::Sender<u64>,
+    /// Numbers the asks for the graph, in the order the stream changed
+    /// hands ([`RepoSession::take_log_run`]): an ask that took a pass
+    /// over is numbered after the pass it displaced, so "newer than
+    /// mine" names exactly the passes that could answer in its place.
+    asks: AtomicU64,
+    /// The newest ask that answered *for the graph* rather than being
+    /// taken over in its turn. What a displaced pass's caller waits for
+    /// ([`RepoSession::graph_answer`]).
+    landed: tokio::sync::watch::Sender<Option<(u64, RefreshOutcome)>>,
 }
 
 impl Default for GraphPasses {
     fn default() -> Self {
         let (changed, _) = tokio::sync::watch::channel(0);
+        let (landed, _) = tokio::sync::watch::channel(None);
         Self {
             live: std::sync::atomic::AtomicUsize::new(0),
             changed,
+            asks: AtomicU64::new(0),
+            landed,
         }
     }
 }
 
 impl GraphPasses {
+    /// Numbers one ask for the graph. Taken with the token that takes
+    /// the stream over ([`RepoSession::take_log_run`]) and on the same
+    /// thread, so the numbering is the order the asks were made.
+    pub(super) fn ask(self: &Arc<Self>) -> GraphRun {
+        let ask = self.asks.fetch_add(1, Ordering::SeqCst) + 1;
+        GraphRun {
+            passes: Arc::clone(self),
+            ask,
+            answered: false,
+        }
+    }
+
+    /// Records what an ask came to.
+    ///
+    /// A pass that was taken over is not an answer for the graph — the
+    /// ask that took it over is — so those are not recorded at all, and
+    /// a caller waiting behind one goes on waiting for the ask that
+    /// displaced it. Of the rest the newest stands: two passes can end
+    /// in either order, and an older one's answer must not overwrite a
+    /// newer one's.
+    fn answered(&self, ask: u64, outcome: RefreshOutcome) {
+        if outcome == RefreshOutcome::Cancelled {
+            return;
+        }
+        self.landed.send_if_modified(|held| match held {
+            Some((seen, _)) if *seen >= ask => false,
+            _ => {
+                *held = Some((ask, outcome));
+                true
+            }
+        });
+    }
+
+    /// Waits for an ask at or after `after` to answer for the graph —
+    /// the answer a caller whose own pass was taken over is owed.
+    ///
+    /// **This terminates because every ask answers.** Each one is
+    /// numbered before its pass is spawned and reports its outcome from
+    /// the task, or from [`GraphRun`]'s drop where the task never got
+    /// there; a chain of handovers ends at the ask nobody took over.
+    /// `None` where the session closed first — every pass under its
+    /// token is cancelled and nothing new will be asked for, so there is
+    /// no answer left to wait for.
+    ///
+    /// **`after` itself counts**, and only the drop guard can put it
+    /// there: a pass that was taken over records nothing, so a record
+    /// under the caller's own number means that pass ended without
+    /// answering. Waiting past it would be waiting for a newer ask that
+    /// nothing is going to make — and the caller is a write's settling,
+    /// so the whole queue would wait with it.
+    async fn landed_after(
+        &self,
+        after: u64,
+        closing: &CancellationToken,
+    ) -> Option<RefreshOutcome> {
+        let mut changed = self.landed.subscribe();
+        loop {
+            let seen = *changed.borrow_and_update();
+            if let Some((ask, outcome)) = seen
+                && ask >= after
+            {
+                return Some(outcome);
+            }
+            tokio::select! {
+                biased;
+                () = closing.cancelled() => return None,
+                answered = changed.changed() => answered.ok()?,
+            }
+        }
+    }
+
     /// Registers one pass. **Called before the pass is spawned**, never
     /// from inside the spawned task: a task is not scheduled in the order
     /// the asks came in, and one that registered itself would leave the
     /// boundary reading "idle" for the pass that has not started yet
-    /// (see [`RepoSession::take_log_token`], which is taken the same way
+    /// (see [`RepoSession::take_log_run`], which is taken the same way
     /// and for the same reason).
     pub(super) fn enter(self: &Arc<Self>) -> GraphPassHeld {
         self.live.fetch_add(1, Ordering::SeqCst);
@@ -93,17 +198,65 @@ impl Drop for GraphPassHeld {
     }
 }
 
+/// One ask for the graph, from the moment it takes the stream over
+/// ([`RepoSession::take_log_run`]) to the answer it leaves behind.
+///
+/// **Answered by the task that runs the pass, and by this drop where
+/// the task never got there** — it unwound, or went down with the
+/// runtime. Somebody may be waiting behind this ask for it to say what
+/// became of the graph ([`RepoSession::graph_answer`]), and an ask that
+/// left no answer would leave them waiting for a pass nothing will ever
+/// run. [`super::PassWatch`] is the other guard on the same unwind and
+/// speaks to the screen; this one speaks to the queue behind it.
+pub(super) struct GraphRun {
+    passes: Arc<GraphPasses>,
+    ask: u64,
+    answered: bool,
+}
+
+impl GraphRun {
+    /// The number this ask is known by, for the boundary a caller
+    /// follows ([`RefreshTask`]).
+    pub(super) fn ask(&self) -> u64 {
+        self.ask
+    }
+
+    /// What this ask came to. Called once, with the outcome the whole
+    /// task settled on: a restart runs two passes under one ask, and it
+    /// is the last of them that answers for the graph.
+    pub(super) fn answer(&mut self, outcome: RefreshOutcome) {
+        self.answered = true;
+        self.passes.answered(self.ask, outcome);
+    }
+}
+
+impl Drop for GraphRun {
+    fn drop(&mut self) {
+        if !self.answered {
+            self.passes.answered(self.ask, RefreshOutcome::Failed);
+        }
+    }
+}
+
 /// Completion of one explicitly tracked background refresh.
-pub struct RefreshTask(tokio::sync::oneshot::Receiver<RefreshOutcome>);
+pub struct RefreshTask {
+    /// The ask this is the boundary of, where one was started — what
+    /// [`RepoSession::graph_answer`] follows when the pass behind it was
+    /// taken over. `None` for an answer that started no pass at all, and
+    /// for the poll, whose boundary nobody follows: a tick another ask
+    /// took over is that ask's to answer, not the tick's.
+    ask: Option<u64>,
+    answer: tokio::sync::oneshot::Receiver<RefreshOutcome>,
+}
 
 impl RefreshTask {
-    fn pending() -> (tokio::sync::oneshot::Sender<RefreshOutcome>, Self) {
-        let (send, receive) = tokio::sync::oneshot::channel();
-        (send, Self(receive))
+    fn pending(ask: Option<u64>) -> (tokio::sync::oneshot::Sender<RefreshOutcome>, Self) {
+        let (send, answer) = tokio::sync::oneshot::channel();
+        (send, Self { ask, answer })
     }
 
     fn ready(outcome: RefreshOutcome) -> Self {
-        let (send, task) = Self::pending();
+        let (send, task) = Self::pending(None);
         if send.send(outcome).is_err() {
             tracing::trace!("refresh completion was not observed");
         }
@@ -114,7 +267,7 @@ impl RefreshTask {
     /// same observable result as cancellation: no later answer from this
     /// operation can arrive.
     pub async fn outcome(self) -> RefreshOutcome {
-        self.0.await.unwrap_or(RefreshOutcome::Cancelled)
+        self.answer.await.unwrap_or(RefreshOutcome::Cancelled)
     }
 }
 
@@ -228,19 +381,57 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return RefreshTask::ready(RefreshOutcome::Unavailable);
         };
-        let run_cancel = self.take_log_token();
+        let (run_cancel, mut run) = self.take_log_run();
         let held = self.graph_passes.enter();
         let s = Arc::clone(self);
         let options = self.log_options();
-        let (finished, task) = RefreshTask::pending();
+        let (finished, task) = RefreshTask::pending(Some(run.ask()));
         self.runtime.spawn(async move {
             let _held = held;
             let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+            run.answer(outcome);
             if finished.send(outcome).is_err() {
                 tracing::trace!("refresh completion was not observed");
             }
         });
         task
+    }
+
+    /// Rebuilds the graph and waits for the answer the rebuild is owed,
+    /// following a pass another ask took over to the ask that took it
+    /// over ([`Self::graph_answer`]) — what a write's settling waits on.
+    pub(super) async fn settle_graph(self: &Arc<Self>) -> RefreshOutcome {
+        let task = self.refresh_log_tracked();
+        self.graph_answer(task).await
+    }
+
+    /// The answer `task` is owed, which is not always its own.
+    ///
+    /// **A pass taken over answers for nothing.** Something asked for a
+    /// newer graph while this one was walking, and that ask is the one
+    /// that says whether the repository reached the screen — so a caller
+    /// that has to know waits for it rather than reading the handover as
+    /// an answer. Read as one, a write reports itself settled while the
+    /// graph it asked for is still being walked, and calls the rebuild
+    /// landed even where the ask that replaced it then failed (measured
+    /// — `session_integration::operations`).
+    ///
+    /// The wait ends at the ask nobody took over, or at a session
+    /// closing under all of them ([`GraphPasses::landed_after`]).
+    pub(super) async fn graph_answer(&self, task: RefreshTask) -> RefreshOutcome {
+        let ask = task.ask;
+        let outcome = task.outcome().await;
+        if outcome != RefreshOutcome::Cancelled {
+            return outcome;
+        }
+        // Nothing was started, so nothing took it over either.
+        let Some(ask) = ask else {
+            return outcome;
+        };
+        self.graph_passes
+            .landed_after(ask, &self.root_cancel)
+            .await
+            .unwrap_or(RefreshOutcome::Cancelled)
     }
 
     /// The periodic re-read that runs while the repository is on screen:
@@ -253,7 +444,8 @@ impl RepoSession {
     /// still going, so a slow repository polls less often instead of
     /// stacking reads up.
     ///
-    /// **Except under a write that replays** ([`super::replays_history`]).
+    /// **Except under a write that replays**
+    /// ([`OperationKind::replays_history`]).
     /// Those stand for as long as the range is deep — seconds, and past
     /// twenty on a window's worth of commits — and skipping the poll
     /// through all of it leaves the window saying nothing at all: no
@@ -276,7 +468,10 @@ impl RepoSession {
     }
 
     fn start_refresh_poll(self: &Arc<Self>) -> RefreshTask {
-        if self.write_busy.load(Ordering::SeqCst) && !self.write_replays.load(Ordering::SeqCst) {
+        if self
+            .running_write()
+            .is_some_and(|write| !write.kind.replays_history())
+        {
             tracing::trace!("poll skipped: a write is running");
             return RefreshTask::ready(RefreshOutcome::WriteBusy);
         }
@@ -286,7 +481,10 @@ impl RepoSession {
         };
         let held = self.graph_passes.enter();
         let s = Arc::clone(self);
-        let (finished, task) = RefreshTask::pending();
+        // Nobody follows a tick that was taken over: a newer ask for the
+        // graph is that ask's to answer, and the tick has no caller
+        // waiting on the repository having reached the screen.
+        let (finished, task) = RefreshTask::pending(None);
         self.runtime.spawn(async move {
             let _held = held;
             // The config stamp is settled before either read starts. The
@@ -301,8 +499,8 @@ impl RepoSession {
             // Both reads can call for a rebuild, but the graph is one
             // picture: an external commit moves a ref *and* cleans the
             // tree, and walking twice would throw one pass away.
-            let (refs_moved, wip_flipped) = tokio::join!(s.read_refs(), s.read_status());
-            let outcome = if refs_moved || wip_flipped {
+            let (refs, tree) = tokio::join!(s.read_refs(), s.read_status());
+            let outcome = if refs == Reread::Moved || tree == Reread::Moved {
                 let Some(workdir) = s.workdir() else {
                     drop(permit);
                     if finished.send(RefreshOutcome::Cancelled).is_err() {
@@ -310,9 +508,11 @@ impl RepoSession {
                     }
                     return;
                 };
-                let run_cancel = s.take_log_token();
+                let (run_cancel, mut run) = s.take_log_run();
                 let options = s.log_options();
-                s.run_swap_pass(&workdir, options, &run_cancel).await
+                let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+                run.answer(outcome);
+                outcome
             } else {
                 RefreshOutcome::Unchanged
             };

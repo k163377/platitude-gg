@@ -13,25 +13,25 @@ impl RepoSession {
     /// **What the press gives up**: with nothing brought down it no
     /// longer doubles as a status poll, so a tree made dirty outside this
     /// window lands on the following tick rather than on the button.
-    pub fn fetch(self: &Arc<Self>, remote: Option<String>) {
+    pub fn fetch(self: &Arc<Self>, remote: Option<String>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "fetch",
+            OperationKind::Fetch,
             AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 s.fetch_and_read_tags(&exec, &repo.workdir, remote.as_deref(), timeout, &cancel)
                     .await
             },
-        );
+        )
     }
 
     /// `git push` for one branch.
-    pub fn push(self: &Arc<Self>, spec: remote::PushSpec) {
+    pub fn push(self: &Arc<Self>, spec: remote::PushSpec) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let target = spec.remote.clone();
@@ -39,7 +39,7 @@ impl RepoSession {
                 s.catch_up_after(&result, target);
                 result
             },
-        );
+        )
     }
 
     /// Fetches when a push was refused for knowing the remote only as it
@@ -52,11 +52,14 @@ impl RepoSession {
     /// the remote has left and would be turned down again as it stands.
     ///
     /// Queued rather than run here, so it reports and refreshes like any
-    /// other fetch. The push still fails: nothing is retried, and the next
-    /// move is whoever is looking at it to make.
+    /// other fetch — under an id of its own, which nobody holds: the
+    /// push's answer is the push's. The push still fails: nothing is
+    /// retried, and the next move is whoever is looking at it to make.
     fn catch_up_after(self: &Arc<Self>, result: &Result<(), GitError>, remote: String) {
-        if result.as_ref().is_err_and(|error| error.is_outdated()) {
-            self.fetch(Some(remote));
+        if result.as_ref().is_err_and(|error| error.is_outdated())
+            && self.fetch(Some(remote)).is_none()
+        {
+            tracing::debug!("the catch-up fetch was not accepted: the session is closed");
         }
     }
 
@@ -65,11 +68,15 @@ impl RepoSession {
     /// Resolving the target is part of the job rather than something the
     /// UI works out: which remote a branch tracks lives in configuration,
     /// and a name like `origin/main` cannot be split back apart reliably.
-    pub fn push_current(self: &Arc<Self>, fallback_remote: String, force: remote::PushForce) {
+    pub fn push_current(
+        self: &Arc<Self>,
+        fallback_remote: String,
+        force: remote::PushForce,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let spec = remote::plan_current_push(
@@ -85,7 +92,7 @@ impl RepoSession {
                 s.catch_up_after(&result, target);
                 result
             },
-        );
+        )
     }
 
     /// The first push of a branch, to the target the user just named.
@@ -98,11 +105,11 @@ impl RepoSession {
         remote_name: String,
         remote_branch: String,
         expect: String,
-    ) {
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let spec = remote::plan_publish(
@@ -119,7 +126,7 @@ impl RepoSession {
                 s.catch_up_after(&result, target);
                 result
             },
-        );
+        )
     }
 
     /// `git remote add <name> <url>`.
@@ -127,14 +134,14 @@ impl RepoSession {
     /// Nothing is contacted, so this succeeds on a URL that goes nowhere;
     /// the push that follows is what finds out. The remote is left in place
     /// when that happens — [`Self::set_remote_url`] is the way back.
-    pub fn add_remote(self: &Arc<Self>, name: String, url: String) {
+    pub fn add_remote(self: &Arc<Self>, name: String, url: String) -> Option<OperationId> {
         self.write(
-            "remote",
+            OperationKind::Remote,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::add(&exec, &repo.workdir, &name, &url, &cancel).await
             },
-        );
+        )
     }
 
     /// Marks where a push goes when no branch says otherwise, or clears the
@@ -149,9 +156,9 @@ impl RepoSession {
     ///
     /// Goes through the write queue for the refresh behind it: the mark is
     /// in the refs snapshot, and the sidebar reads it from there.
-    pub fn set_push_default(self: &Arc<Self>, name: String) {
+    pub fn set_push_default(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
-            "remote",
+            OperationKind::Remote,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 if name.is_empty() {
@@ -160,18 +167,18 @@ impl RepoSession {
                     remote::set_push_default(&exec, &repo.workdir, &name, &cancel).await
                 }
             },
-        );
+        )
     }
 
     /// `git remote set-url <name> <url>` — correcting a URL typed wrong.
-    pub fn set_remote_url(self: &Arc<Self>, name: String, url: String) {
+    pub fn set_remote_url(self: &Arc<Self>, name: String, url: String) -> Option<OperationId> {
         self.write(
-            "remote",
+            OperationKind::Remote,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::set_url(&exec, &repo.workdir, &name, &url, &cancel).await
             },
-        );
+        )
     }
 
     /// Asks whether a remote already carries a branch name, so a first push
@@ -265,10 +272,14 @@ impl RepoSession {
     }
 
     /// `git push <remote> --delete <branch>`.
-    pub fn delete_remote_branch(self: &Arc<Self>, remote_name: String, branch_name: String) {
+    pub fn delete_remote_branch(
+        self: &Arc<Self>,
+        remote_name: String,
+        branch_name: String,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::delete_remote_branch(
@@ -281,7 +292,7 @@ impl RepoSession {
                 )
                 .await
             },
-        );
+        )
     }
 
     /// Deletes a branch here and on its remote as one write. The local
@@ -290,18 +301,19 @@ impl RepoSession {
     /// that asked morphs the way the plain delete's does. The remote
     /// half reaches the network, which is why the pair sits on the write
     /// queue as one command with one answer (合成は 1 手目が失敗したら
-    /// 止める — core.md) — and why the pair says its lane itself: the op
-    /// label is a local op's, but the far end paces the second half.
+    /// 止める — core.md) — and why the pair is a kind of its own
+    /// ([`OperationKind::DeleteBranchEverywhere`]): it answers as a
+    /// branch write, but the far end paces its second half.
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
         remote_name: String,
         remote_branch: String,
         force: bool,
-    ) {
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
-        self.write_remote_paced(
-            "branch",
+        self.write(
+            OperationKind::DeleteBranchEverywhere,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
@@ -315,16 +327,21 @@ impl RepoSession {
                 )
                 .await
             },
-        );
+        )
     }
 
     /// Renames a branch on a remote, which git does as a push and a delete
     /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
     /// name is destroyed, not moved.
-    pub fn rename_remote_branch(self: &Arc<Self>, remote_name: String, from: String, to: String) {
+    pub fn rename_remote_branch(
+        self: &Arc<Self>,
+        remote_name: String,
+        from: String,
+        to: String,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::rename_remote_branch(
@@ -338,6 +355,6 @@ impl RepoSession {
                 )
                 .await
             },
-        );
+        )
     }
 }

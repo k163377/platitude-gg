@@ -237,11 +237,24 @@ impl RepoTab {
         i32::try_from(self.write_answers.len()).unwrap_or(i32::MAX)
     }
 
-    /// What `write_seq` counted that answer at — how a reader tells the
-    /// answer to its own press from one counted before it.
+    /// What `write_seq` counted that answer at — how a reader that holds
+    /// no id tells the answer to its own press from one counted before it.
     #[qslot]
     fn write_answer_seq(&self, index: i32) -> i32 {
         self.write_answer_at(index).map_or(0, |a| a.seq)
+    }
+
+    /// Where the answer to the press given `id` stands in this notify's
+    /// list, or -1 where it did not answer in this notify — a reader
+    /// holding an id asks this and reads nothing into the order or the
+    /// count of what else answered.
+    #[qslot]
+    fn write_answer_index(&self, id: i32) -> i32 {
+        u64::try_from(id)
+            .ok()
+            .and_then(|id| self.write_answer_index_of(id))
+            .and_then(|index| i32::try_from(index).ok())
+            .unwrap_or(-1)
     }
 
     /// The number the session named for the first report of HEAD after
@@ -681,13 +694,18 @@ impl RepoTab {
         self.stash_chosen_paths(message)
     }
 
-    /// `git stash pop` on the given selector (stash-row action).
+    /// `git stash pop` on the given selector (stash-row action). Answers
+    /// with the id the queue accepted it under, so the page can find the
+    /// pop's own answer among the stash answers that look alike
+    /// (`writeAnswerIndex`); zero where no session took it.
     #[qslot]
-    fn pop_stash(&mut self, selector: String) {
-        self.with_session(|s| s.stash_pop(selector.clone()));
+    fn pop_stash(&self, selector: String) -> i32 {
+        self.ask_session(|s| s.stash_pop(selector.clone()))
     }
 
-    /// `git stash apply` on the given selector (keeps the stash).
+    /// `git stash apply` on the given selector (keeps the stash). No id
+    /// comes back: an apply leaves the entry where it is, so nothing on
+    /// the page is waiting to hear which answer was this one's.
     #[qslot]
     fn apply_stash(&mut self, selector: String) {
         self.with_session(|s| s.stash_apply(selector.clone()));

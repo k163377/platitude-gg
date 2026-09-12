@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use platitude_core::OperationId;
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
@@ -112,7 +113,13 @@ impl CommandObserver for Log {
     fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
+    fn started(
+        &self,
+        display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<OperationId>,
+    ) -> u64 {
         let mut rows = self.0.lock().unwrap();
         rows.push((display.to_string(), None));
         rows.len() as u64 - 1
@@ -181,7 +188,13 @@ impl CommandObserver for Ends {
     fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, _display: &str, _full: &str, _kept: Kept) -> u64 {
+    fn started(
+        &self,
+        _display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<OperationId>,
+    ) -> u64 {
         0
     }
     fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
@@ -214,7 +227,13 @@ impl CommandObserver for Said {
     fn records(&self, _kept: Kept) -> bool {
         true
     }
-    fn started(&self, _display: &str, _full: &str, _kept: Kept) -> u64 {
+    fn started(
+        &self,
+        _display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<OperationId>,
+    ) -> u64 {
         0
     }
     fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {

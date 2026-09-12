@@ -82,7 +82,7 @@ impl RepoSession {
         };
         let grown = options.limit;
 
-        let run_cancel = self.take_log_token();
+        let (run_cancel, mut run) = self.take_log_run();
         let held = self.graph_passes.enter();
 
         let s = Arc::clone(self);
@@ -99,7 +99,9 @@ impl RepoSession {
             // graph (`run_swap_pass` -> `fail`). Put the window back to
             // the one that is drawn and take the ordinary route, which
             // does answer the graph.
-            if s.run_swap_pass(&workdir, options, &run_cancel).await == RefreshOutcome::Failed {
+            let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+            run.answer(outcome);
+            if outcome == RefreshOutcome::Failed {
                 // **Only if the window is still the one this press set.**
                 // A failure is reported without re-reading the token, so
                 // it can arrive after somebody else has asked for a
@@ -147,50 +149,76 @@ impl RepoSession {
             return;
         };
 
-        let run_cancel = self.take_log_token();
+        let (run_cancel, mut run) = self.take_log_run();
         let held = self.graph_passes.enter();
 
         let s = Arc::clone(self);
         let options = self.log_options();
         self.runtime.spawn(async move {
             let _held = held;
-            if options.include_tags {
+            // Two passes under one ask, and the last of them answers for
+            // it: the fast one only paints, and a rebuild is owed the
+            // picture the tags are in.
+            let outcome = if options.include_tags {
                 let fast = LogOptions {
                     include_tags: false,
                     ..options
                 };
-                if s.run_direct_pass(&workdir, fast, &run_cancel).await.is_ok() {
-                    let _outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+                match s.run_direct_pass(&workdir, fast, &run_cancel).await {
+                    RefreshOutcome::Changed => {
+                        s.run_swap_pass(&workdir, options, &run_cancel).await
+                    }
+                    stopped => stopped,
                 }
             } else {
-                let _completed = s.run_direct_pass(&workdir, options, &run_cancel).await;
-            }
+                s.run_direct_pass(&workdir, options, &run_cancel).await
+            };
+            run.answer(outcome);
         });
     }
 
     /// Takes the log stream over: a fresh token for this pass, with the
-    /// one it displaces cancelled.
+    /// one it displaces cancelled, and the ask it answers as
+    /// ([`GraphRun`]) — numbered here, so the ask that displaced a pass
+    /// is numbered after it and the pass's caller can wait for this one
+    /// instead ([`RepoSession::graph_answer`]).
     ///
     /// **Called on the caller's thread, before the pass is spawned**,
     /// never from inside the spawned task: call order is what decides
     /// which pass owns the graph, and spawn order does not follow it
     /// (core.md).
-    pub(super) fn take_log_token(&self) -> CancellationToken {
+    ///
+    /// **The number and the handover are taken together**, under the
+    /// lock the token is swapped under: two asks racing here would
+    /// otherwise be able to number themselves in one order and take the
+    /// stream in the other, leaving the pass that was displaced waiting
+    /// on a number lower than its own replacement's — which is a wait
+    /// nothing in the chain answers.
+    pub(super) fn take_log_run(&self) -> (CancellationToken, GraphRun) {
         let run_cancel = self.root_cancel.child_token();
-        if let Some(prev) = relock(&self.log_cancel).replace(run_cancel.clone()) {
+        let (run, displaced) = {
+            let mut owner = relock(&self.log_cancel);
+            (self.graph_passes.ask(), owner.replace(run_cancel.clone()))
+        };
+        // Outside the lock, the way it was taken: what a cancellation
+        // wakes is somebody else's task, and this lock is not one to be
+        // holding while that happens.
+        if let Some(prev) = displaced {
             prev.cancel();
         }
-        run_cancel
+        (run_cancel, run)
     }
 
     /// Streams one pass straight to the UI (chunked, resets the graph).
-    /// Returns Err after reporting when the pass failed or was cancelled.
+    /// Reports itself and answers what it came to: `Changed` where the
+    /// stream reached the consumer, and the two ways it does not —
+    /// taken over, or a walk that failed.
     async fn run_direct_pass(
         self: &Arc<Self>,
         workdir: &std::path::Path,
         options: LogOptions,
         cancel: &CancellationToken,
-    ) -> Result<(), ()> {
+    ) -> RefreshOutcome {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let mut watch = PassWatch::operation(self);
         // Before the lock, because reading them can go to git.
@@ -211,7 +239,7 @@ impl RepoSession {
             // put back.
             if cancel.is_cancelled() {
                 watch.answered();
-                return Err(());
+                return RefreshOutcome::Cancelled;
             }
             shared.builder = GraphBuilder::new();
             // Seeded from the refs this graph is being drawn against, so
@@ -282,10 +310,11 @@ impl RepoSession {
                     truncated: footer.truncated,
                 });
                 watch.answered();
-                Ok(())
+                RefreshOutcome::Changed
             }
             Err(error) => {
-                if !matches!(error, GitError::Cancelled { .. }) {
+                let cancelled = matches!(error, GitError::Cancelled { .. });
+                if !cancelled {
                     self.sink.event(SessionEvent::LogFailed {
                         generation,
                         error: error.to_string(),
@@ -294,7 +323,11 @@ impl RepoSession {
                 // A cancelled pass says nothing on purpose: whoever
                 // cancelled it is the one drawing now.
                 watch.answered();
-                Err(())
+                if cancelled {
+                    RefreshOutcome::Cancelled
+                } else {
+                    RefreshOutcome::Failed
+                }
             }
         }
     }

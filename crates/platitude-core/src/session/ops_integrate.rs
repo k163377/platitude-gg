@@ -23,35 +23,53 @@ impl RepoSession {
     /// conflicted rows (デザイン規約 §進行中の操作から出る). The event
     /// says the one thing the write's own answer cannot, that the press
     /// is answered by the working tree and not by a commit at the tip.
-    fn note_landing(&self, op: &'static str, landing: integrate::Landing) {
-        if landing == integrate::Landing::Stopped {
-            self.sink.event(SessionEvent::WriteStopped { op });
+    ///
+    /// Called from inside the write's own task, so the write it speaks
+    /// for is the one the queue is serving ([`Self::running_write`]).
+    fn note_landing(&self, landing: integrate::Landing) {
+        if landing != integrate::Landing::Stopped {
+            return;
+        }
+        match self.running_write() {
+            Some(write) => self.sink.event(SessionEvent::WriteStopped {
+                id: write.id,
+                kind: write.kind,
+            }),
+            None => tracing::warn!("a stop was noted with no write being served"),
         }
     }
 
     /// `git merge <rev>`.
-    pub fn merge(self: &Arc<Self>, rev: String, options: integrate::MergeOptions) {
+    pub fn merge(
+        self: &Arc<Self>,
+        rev: String,
+        options: integrate::MergeOptions,
+    ) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "merge",
+            OperationKind::Merge,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let landing =
                     integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await?;
-                session.note_landing("merge", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// `git rebase <upstream>`, carrying uncommitted work across the way
     /// every other rewrite here does — nothing is asked, and the
     /// staged/unstaged split survives
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
-    pub fn rebase(self: &Arc<Self>, upstream: String, options: integrate::RebaseOptions) {
+    pub fn rebase(
+        self: &Arc<Self>,
+        upstream: String,
+        options: integrate::RebaseOptions,
+    ) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "rebase",
+            OperationKind::Rebase,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let rewrite = Rewrite::Onto {
@@ -59,10 +77,10 @@ impl RepoSession {
                     options: &options,
                 };
                 let landing = rewrite_carrying(&exec, &repo, &rewrite, &cancel).await?;
-                session.note_landing("rebase", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// `git rebase --interactive` with a plan assembled in the UI. The todo
@@ -94,10 +112,10 @@ impl RepoSession {
         steps: Vec<sequencer::RebaseStep>,
         options: integrate::RebaseOptions,
         expect_head: String,
-    ) {
+    ) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "rebase",
+            OperationKind::Rebase,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let state = opstate::detect(&exec, &repo.workdir, &cancel).await?;
@@ -112,10 +130,10 @@ impl RepoSession {
                 let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
-                session.note_landing("rebase", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// Asks what an interactive rebase from `from` (a full commit id)
@@ -179,10 +197,10 @@ impl RepoSession {
     }
 
     /// Folds one commit into its parent.
-    pub fn squash_into_parent(self: &Arc<Self>, oid: String) {
+    pub fn squash_into_parent(self: &Arc<Self>, oid: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "squash",
+            OperationKind::Squash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let plan = sequencer::plan_edit(
@@ -194,17 +212,17 @@ impl RepoSession {
                 )
                 .await?;
                 let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing("squash", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// Leaves one commit out of the history.
-    pub fn drop_commit(self: &Arc<Self>, oid: String) {
+    pub fn drop_commit(self: &Arc<Self>, oid: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "drop",
+            OperationKind::Drop,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let plan = sequencer::plan_edit(
@@ -216,20 +234,20 @@ impl RepoSession {
                 )
                 .await?;
                 let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing("drop", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// Replaces one commit's message.
     ///
     /// The newest commit is amended instead of replayed: an amend touches
     /// nothing else, while a rebase would rewrite every commit after it.
-    pub fn reword(self: &Arc<Self>, oid: String, message: String) {
+    pub fn reword(self: &Arc<Self>, oid: String, message: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "reword",
+            OperationKind::Reword,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
@@ -249,76 +267,83 @@ impl RepoSession {
                 )
                 .await?;
                 let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing("reword", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// `git cherry-pick <revs>`.
-    pub fn cherry_pick(self: &Arc<Self>, revs: Vec<String>) {
+    pub fn cherry_pick(self: &Arc<Self>, revs: Vec<String>) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "cherry-pick",
+            OperationKind::CherryPick,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let landing = integrate::cherry_pick(&exec, &repo.workdir, &revs, &cancel).await?;
-                session.note_landing("cherry-pick", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// `git revert <revs>`.
-    pub fn revert(self: &Arc<Self>, revs: Vec<String>) {
+    pub fn revert(self: &Arc<Self>, revs: Vec<String>) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
-            "revert",
+            OperationKind::Revert,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let landing = integrate::revert(&exec, &repo.workdir, &revs, &cancel).await?;
-                session.note_landing("revert", landing);
+                session.note_landing(landing);
                 Ok(())
             },
-        );
+        )
     }
 
     /// Continues / aborts / skips whatever operation is in progress.
-    pub fn resolve_current(self: &Arc<Self>, continuation: integrate::Continuation) {
+    pub fn resolve_current(
+        self: &Arc<Self>,
+        continuation: integrate::Continuation,
+    ) -> Option<OperationId> {
         self.write(
-            "resolve",
+            OperationKind::Resolve,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 integrate::resolve_current(&exec, &repo.workdir, continuation, &cancel)
                     .await
                     .map(drop)
             },
-        );
+        )
     }
 
     /// Resolves conflicted paths by taking one side wholesale.
-    pub fn take_side(self: &Arc<Self>, paths: Vec<String>, side: conflict::Side) {
+    pub fn take_side(
+        self: &Arc<Self>,
+        paths: Vec<String>,
+        side: conflict::Side,
+    ) -> Option<OperationId> {
         self.write(
-            "resolve",
+            OperationKind::Resolve,
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
                 conflict::take_side(&exec, &repo.workdir, &paths, side, &cancel).await
             },
-        );
+        )
     }
 
     /// Hands conflicted paths to `git mergetool` (empty = all of them).
     ///
     /// Runs under the write lock like any other write, which means it holds
     /// the lock for as long as the user keeps the tool open.
-    pub fn mergetool(self: &Arc<Self>, paths: Vec<String>) {
+    pub fn mergetool(self: &Arc<Self>, paths: Vec<String>) -> Option<OperationId> {
         self.write(
-            "mergetool",
+            OperationKind::Mergetool,
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
                 conflict::mergetool(&exec, &repo.workdir, &paths, &cancel).await
             },
-        );
+        )
     }
 
     /// Reads what the settings field can offer: tools named in config
@@ -326,9 +351,8 @@ impl RepoSession {
     /// Windows, kept for the life of the process).
     ///
     /// Deliberately **not** on the write queue, for the reason the remote
-    /// tag read is not: eight seconds there would raise `write_busy`, hold
-    /// the poll out, and put every later write behind a dialog nobody is
-    /// waiting on.
+    /// tag read is not: eight seconds there would hold the poll out and
+    /// put every later write behind a dialog nobody is waiting on.
     ///
     /// The answers arrive in up to two waves — config names in
     /// milliseconds, the installed sweep when it lands — with `settled`
@@ -387,19 +411,19 @@ impl RepoSession {
     ///
     /// Refreshing afterwards is what re-reads the name for the menu row,
     /// so the row and the config never disagree for longer than a write.
-    pub fn set_merge_tool(self: &Arc<Self>, tool: String) {
+    pub fn set_merge_tool(self: &Arc<Self>, tool: String) -> Option<OperationId> {
         // The refresh this write triggers has to re-read, or it would
         // repeat the name from before the write.
         self.merge_tool_wanted
             .store(true, std::sync::atomic::Ordering::SeqCst);
         self.write(
-            // Not "mergetool": that label is what the pane watches to know
+            // Not `Mergetool`: that kind is what the pane watches to know
             // a tool is open, and writing the setting is not opening one.
-            "config",
+            OperationKind::Config,
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {
                 conflict::set_merge_tool(&exec, &repo.workdir, &tool, &cancel).await
             },
-        );
+        )
     }
 }

@@ -126,10 +126,11 @@ impl RepoSession {
 
     /// Does not rebuild the graph itself: after a write the caller knows
     /// whether it needs one anyway, and rebuilding on both counts would do
-    /// it twice.
-    pub(super) async fn publish_status(self: &Arc<Self>) -> bool {
+    /// it twice. Answers whether the WIP row flipped — or that nothing was
+    /// published at all.
+    pub(super) async fn publish_status(self: &Arc<Self>) -> Reread {
         let Some(workdir) = self.workdir() else {
-            return false;
+            return Reread::Failed;
         };
         // Stamped before git is spawned, the way the refs read is: what
         // this status saw of HEAD is offered to the one record under it
@@ -148,7 +149,7 @@ impl RepoSession {
                 // fenced would otherwise wait for the next tick.
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
-                    return false;
+                    return Reread::Same;
                 }
                 // Only a standing rebase has a counter to read or a stop
                 // to explain, and the two ride one spawn — this runs every
@@ -210,7 +211,7 @@ impl RepoSession {
                 };
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
-                    return false;
+                    return Reread::Same;
                 }
                 // What this status saw of HEAD, into the one record every
                 // consumer reads it from — before anything below is sent,
@@ -265,11 +266,11 @@ impl RepoSession {
                     eol_marks,
                     stop,
                 });
-                flipped
+                if flipped { Reread::Moved } else { Reread::Same }
             }
             (Err(e), _) | (_, Err(e)) => {
-                self.fail("status", e);
-                false
+                self.fail(FollowUp::Status.label(), e);
+                Reread::Failed
             }
         }
     }

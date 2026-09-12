@@ -3,6 +3,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{opened, write_result};
+use platitude_core::OperationKind;
 use platitude_core::session::SessionEvent;
 
 /// Writes are serialized per session: a burst of concurrent stage requests
@@ -101,10 +102,10 @@ async fn stage_commit_and_branch_through_the_session() {
 
     let done = sink
         .wait_for("three writes finished", |evs| {
-            let done: Vec<(&str, Option<String>)> = evs
+            let done: Vec<(OperationKind, Option<String>)> = evs
                 .iter()
                 .filter_map(|e| match e {
-                    SessionEvent::WriteFinished { op, error, .. } => Some((*op, error.clone())),
+                    SessionEvent::WriteFinished { kind, error, .. } => Some((*kind, error.clone())),
                     _ => None,
                 })
                 .collect();
@@ -116,8 +117,12 @@ async fn stage_commit_and_branch_through_the_session() {
         "all succeeded: {done:?}"
     );
     assert_eq!(
-        done.iter().map(|(op, _)| *op).collect::<Vec<_>>(),
-        vec!["stage", "commit", "branch"],
+        done.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
+        vec![
+            OperationKind::Stage,
+            OperationKind::Commit,
+            OperationKind::Branch
+        ],
         "they ran in the order they were asked for"
     );
 
@@ -137,7 +142,7 @@ async fn a_reset_moves_the_branch_through_the_write_queue() {
 
     let (sink, session) = opened(&repo).await;
     session.reset(root.clone(), platitude_core::branch::ResetMode::Mixed);
-    assert_eq!(write_result(&sink, "reset").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Reset).await, None);
 
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
     assert_eq!(
@@ -173,7 +178,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
         .wait_for("rebase reported", |evs| {
             evs.iter().find_map(|e| match e {
                 SessionEvent::WriteFinished {
-                    op: "rebase",
+                    kind: OperationKind::Rebase,
                     error,
                     ..
                 } => Some(error.clone()),
@@ -187,7 +192,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     // and the answer just waited for.
     assert_eq!(error, None, "a stop is not a failed write");
     assert!(
-        crate::support::session::write_stopped(&sink, "rebase"),
+        crate::support::session::write_stopped(&sink, OperationKind::Rebase),
         "the landing is said out loud, because the answer cannot say it"
     );
 
@@ -214,9 +219,15 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     // assertion below races it. Windows loses that race slowly enough to
     // pass; Linux does not (measured).
     sink.wait_for("clean again", |evs| {
-        let aborted = evs
-            .iter()
-            .position(|e| matches!(e, SessionEvent::WriteFinished { op: "resolve", .. }))?;
+        let aborted = evs.iter().position(|e| {
+            matches!(
+                e,
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::Resolve,
+                    ..
+                }
+            )
+        })?;
         evs[aborted..].iter().rev().find_map(|e| match e {
             SessionEvent::StatusLoaded {
                 op_state, progress, ..
@@ -276,7 +287,11 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
 
     let (sink, session) = opened(&repo).await;
     session.stage_conflicted();
-    assert_eq!(write_result(&sink, "stage").await, None, "the write landed");
+    assert_eq!(
+        write_result(&sink, OperationKind::Stage).await,
+        None,
+        "the write landed"
+    );
 
     assert_eq!(
         repo.git(&["ls-files", "--unmerged"]),
@@ -314,7 +329,7 @@ fn barrier_hook(release: &std::path::Path) -> String {
 
 /// A close loses nothing the queue was already asked for. The running
 /// commit outlives it — the token handed to git is the write's own and no
-/// stock budget binds the local lane (`session::write::remote_paced`), so
+/// stock budget binds the local lane (`operation::Lane::Local`), so
 /// a tab going down, or the whole application, waits it out instead of
 /// killing it mid-write: killed, the commit is simply gone (measured with
 /// a short stock budget before the lane was split; a cancel lost it the
@@ -338,7 +353,15 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
     );
     sink.wait_for("the commit started", |evs| {
         evs.iter()
-            .any(|e| matches!(e, SessionEvent::WriteStarted { op: "commit" }))
+            .any(|e| {
+                matches!(
+                    e,
+                    SessionEvent::WriteStarted {
+                        kind: OperationKind::Commit,
+                        ..
+                    }
+                )
+            })
             .then_some(())
     })
     .await;
@@ -352,12 +375,12 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
     std::fs::write(&release, b"go").expect("release the hook");
 
     assert_eq!(
-        write_result(&sink, "commit").await,
+        write_result(&sink, OperationKind::Commit).await,
         None,
         "the commit landed"
     );
     assert_eq!(
-        write_result(&sink, "branch").await,
+        write_result(&sink, OperationKind::Branch).await,
         None,
         "the queued branch landed behind it"
     );

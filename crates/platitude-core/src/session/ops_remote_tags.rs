@@ -134,11 +134,16 @@ impl RepoSession {
     /// the refs once the closure returns, and a read asked for from
     /// inside would be a second pass over every ref — the longest read
     /// this application makes on a repository that has them.
-    pub fn push_tag(self: &Arc<Self>, remote_name: String, tag: String, expect: String) {
+    pub fn push_tag(
+        self: &Arc<Self>,
+        remote_name: String,
+        tag: String,
+        expect: String,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::push_tag(
@@ -155,7 +160,7 @@ impl RepoSession {
                     .await;
                 Ok(())
             },
-        );
+        )
     }
 
     /// Takes one tag off one remote, leaving whatever is here.
@@ -164,11 +169,15 @@ impl RepoSession {
     /// [`Self::push_tag`] does: nothing local records what a remote
     /// carries, so a delete that landed would otherwise keep its badge
     /// until the next timer tick.
-    pub fn delete_remote_tag(self: &Arc<Self>, remote_name: String, tag: String) {
+    pub fn delete_remote_tag(
+        self: &Arc<Self>,
+        remote_name: String,
+        tag: String,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         self.write(
-            "push",
+            OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 remote::delete_remote_tag(
@@ -184,7 +193,7 @@ impl RepoSession {
                     .await;
                 Ok(())
             },
-        );
+        )
     }
 
     /// Deletes a tag here and on the remote as one queued write.
@@ -193,14 +202,18 @@ impl RepoSession {
     /// though nothing about a tag refuses: what that ordering buys here is
     /// that a cancelled or failed pair never leaves the name gone from the
     /// remote while it still stands in the sidebar.
-    pub fn delete_tag_everywhere(self: &Arc<Self>, tag: String, remote_name: String) {
+    pub fn delete_tag_everywhere(
+        self: &Arc<Self>,
+        tag: String,
+        remote_name: String,
+    ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         // The far end paces the pair's second half and the read behind
-        // it, so the lane is said here — the op label is a local op's
-        // (`write_remote_paced`).
-        self.write_remote_paced(
-            "tag",
+        // it, so the pair is a kind of its own: it answers as a tag write
+        // and runs on the remote lane ([`OperationKind::DeleteTagEverywhere`]).
+        self.write(
+            OperationKind::DeleteTagEverywhere,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 tag::delete(&exec, &repo.workdir, &tag, &cancel).await?;
@@ -217,6 +230,6 @@ impl RepoSession {
                     .await;
                 Ok(())
             },
-        );
+        )
     }
 }

@@ -11,6 +11,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, install_todo_editor, opened, write_result};
+use platitude_core::OperationKind;
 use platitude_core::sequencer::{RebaseStep, TodoAction};
 use platitude_core::session::SessionEvent;
 
@@ -89,7 +90,7 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
         // The very tip the plan was composed against: the pin agrees.
         head.clone(),
     );
-    let refusal = write_result(&sink, "rebase")
+    let refusal = write_result(&sink, OperationKind::Rebase)
         .await
         .expect("the run is refused");
     assert!(
@@ -128,7 +129,7 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
 
     let (sink, session) = opened(&repo).await;
     session.squash_into_parent(head.clone());
-    let refusal = write_result(&sink, "squash")
+    let refusal = write_result(&sink, OperationKind::Squash)
         .await
         .expect("the squash is refused");
     assert!(
@@ -175,7 +176,7 @@ async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
             ..Default::default()
         },
     );
-    let refusal = write_result(&sink, "rebase")
+    let refusal = write_result(&sink, OperationKind::Rebase)
         .await
         .expect("the rebase is refused");
     assert!(
@@ -224,7 +225,7 @@ async fn a_dirty_tree_under_a_bisect_still_carries() {
         },
     );
     assert_eq!(
-        write_result(&sink, "rebase").await,
+        write_result(&sink, OperationKind::Rebase).await,
         None,
         "the rewrite was not refused for the bisect"
     );

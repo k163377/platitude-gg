@@ -30,10 +30,14 @@ pub struct RepoSession {
     pub(super) details_read: Latest,
     /// One interactive-rebase plan ask at a time (`ask_rebase_plan`).
     pub(super) plan_read: Latest,
-    /// Whether the write in flight is one that replays
-    /// ([`super::replays_history`]) — the poll reads it to know it may
-    /// keep running under this one.
-    pub(super) write_replays: std::sync::atomic::AtomicBool,
+    /// The write the queue is serving, held from before git runs it
+    /// until the reads it invalidated have published — the whole request
+    /// — and `None` between requests. Two readers: the poll, which stays
+    /// out of a repository mid-operation unless the write is one that
+    /// replays ([`OperationKind::replays_history`]), and a task running
+    /// under the queue that has to say which write it is
+    /// (`note_landing`).
+    pub(super) write_running: Mutex<Option<Operation>>,
     /// The graph passes that could still walk, whether or not the stream
     /// is still theirs (see [`GraphPasses`]).
     pub(super) graph_passes: Arc<GraphPasses>,
@@ -158,13 +162,11 @@ pub struct RepoSession {
     /// thousands of tags must not rebuild every section, on the Qt thread,
     /// to discover that a poll tick changed nothing.
     pub(super) last_snapshot: Mutex<Option<Arc<RefsSnapshot>>>,
-    /// Set while the write queue runs a request, so the poll can stay out
-    /// of a repository that is mid-operation.
-    pub(super) write_busy: std::sync::atomic::AtomicBool,
     /// Local writes handed to the queue and not yet done with — the ones
-    /// a close waits out rather than kills ([`super::remote_paced`] is
-    /// the other lane). What the application's quit gate reads: zero on
-    /// every open session is the moment the window may go.
+    /// a close waits out rather than kills ([`Lane::Local`]; the other
+    /// lanes die with the session). What the application's quit gate
+    /// reads: zero on every open session is the moment the window may
+    /// go.
     pub(super) local_writes: std::sync::atomic::AtomicUsize,
     /// The write loop's own task. Handed to the application on the way
     /// out ([`RepoSession::take_write_join`]): dropping the runtime drops
@@ -175,11 +177,14 @@ pub struct RepoSession {
     /// previous one is still reading is dropped rather than queued.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
     /// One in flight per snapshot, for the reads a repository can be asked
-    /// for from more than one place at once (see [`ReadFlight`]).
-    pub(super) refs_read: ReadFlight,
-    pub(super) status_read: ReadFlight,
+    /// for from more than one place at once (see [`ReadFlight`]). Each
+    /// answers its callers with what they act on: whether the refs or
+    /// the WIP row moved, whether the stash listing published, what the
+    /// worktree listing found moved.
+    pub(super) refs_read: ReadFlight<Reread>,
+    pub(super) status_read: ReadFlight<Reread>,
     pub(super) stash_read: ReadFlight,
-    pub(super) worktrees_read: ReadFlight,
+    pub(super) worktrees_read: ReadFlight<WorktreeRead>,
     /// Submission end of the write queue (see the module docs).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// Time budget for fetch / push. Persisted as the settings key
@@ -289,7 +294,7 @@ impl RepoSession {
 
     /// Cancels everything this session is doing — except the local
     /// writes already asked for, running and queued alike, which run to
-    /// completion on tokens of their own ([`super::remote_paced`]):
+    /// completion on tokens of their own ([`Lane::Local`]):
     /// killing git mid-write loses what the user asked for, dropping a
     /// queued request loses it silently, and a local git is only ever
     /// slow in proportion to the work. What stops is intake — nothing

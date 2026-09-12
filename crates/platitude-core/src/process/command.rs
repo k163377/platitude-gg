@@ -5,6 +5,8 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::operation::OperationId;
+
 /// Wraps a path from git's own output so git reads it back as that exact
 /// path, never as pathspec magic (a file really named `:(glob)x` has to
 /// round-trip).
@@ -78,7 +80,11 @@ pub trait CommandObserver: Send + Sync + 'static {
     /// is reported under. `display` is the log line, `full` the same
     /// command with the fixed configuration and environment spelled out,
     /// so it can be pasted into a terminal and do the same thing.
-    fn started(&self, display: &str, full: &str, kept: Kept) -> u64;
+    /// `operation` is the write the command runs under, where the handle
+    /// was given one ([`super::GitExecutor::under`]) — a compound write
+    /// is several commands under one id — and `None` for a read.
+    fn started(&self, display: &str, full: &str, kept: Kept, operation: Option<OperationId>)
+    -> u64;
 
     fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
 }

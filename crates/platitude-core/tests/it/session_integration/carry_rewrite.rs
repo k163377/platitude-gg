@@ -5,6 +5,7 @@ use crate::support::TestRepo;
 use crate::support::session::{
     CaptureSink, install_todo_editor, opened, write_result, write_stopped,
 };
+use platitude_core::OperationKind;
 use platitude_core::sequencer::RebaseStep;
 use platitude_core::session::SessionEvent;
 
@@ -18,14 +19,14 @@ async fn squash_and_reword_run_through_the_write_queue() {
 
     let (sink, session) = opened(&repo).await;
     session.squash_into_parent(fold);
-    assert_eq!(write_result(&sink, "squash").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
     assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "2");
 
     // Rewording HEAD takes the amend path: no replay, same parent.
     let parent = repo.git(&["rev-parse", "HEAD~1"]);
     let head = repo.git(&["rev-parse", "HEAD"]);
     session.reword(head, "reworded head\n".into());
-    assert_eq!(write_result(&sink, "reword").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Reword).await, None);
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded head");
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), parent);
     session.close();
@@ -88,7 +89,7 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
 
     let (sink, session) = opened(&repo).await;
     session.squash_into_parent(fold);
-    assert_eq!(write_result(&sink, "squash").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
 
     assert_eq!(
         rewrite_route(&sink),
@@ -150,7 +151,7 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
 
     let (sink, session) = opened(&repo).await;
     session.rebase("main".into(), rebase_onto());
-    assert_eq!(write_result(&sink, "rebase").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
 
     assert_eq!(
         rewrite_route(&sink),
@@ -201,12 +202,12 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     let (sink, session) = opened(&repo).await;
     session.rebase("main".into(), rebase_onto());
     assert_eq!(
-        write_result(&sink, "rebase").await,
+        write_result(&sink, OperationKind::Rebase).await,
         None,
         "a stop is not a failed write (by design)"
     );
     assert!(
-        write_stopped(&sink, "rebase"),
+        write_stopped(&sink, OperationKind::Rebase),
         "and the landing is said out loud, because the answer cannot say it"
     );
 
@@ -240,7 +241,7 @@ async fn untracked_files_alone_are_replayed_straight_over() {
 
     let (sink, session) = opened(&repo).await;
     session.drop_commit(gone);
-    assert_eq!(write_result(&sink, "drop").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Drop).await, None);
 
     assert_eq!(
         rewrite_route(&sink),
@@ -273,7 +274,11 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
 
     let (sink, session) = opened(&repo).await;
     session.drop_commit(gone);
-    assert_eq!(write_result(&sink, "drop").await, None, "nothing failed");
+    assert_eq!(
+        write_result(&sink, OperationKind::Drop).await,
+        None,
+        "nothing failed"
+    );
 
     assert_eq!(
         rewrite_route(&sink),
@@ -317,12 +322,12 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
     let (sink, session) = opened(&repo).await;
     session.drop_commit(gone);
     assert_eq!(
-        write_result(&sink, "drop").await,
+        write_result(&sink, OperationKind::Drop).await,
         None,
         "a stop is not a failed write (by design)"
     );
     assert!(
-        write_stopped(&sink, "drop"),
+        write_stopped(&sink, OperationKind::Drop),
         "and the landing is said out loud, because the answer cannot say it"
     );
 
@@ -397,7 +402,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
     let injected = repo.git(&["rev-parse", "HEAD"]);
     release.send(()).expect("the carry is released");
 
-    let refusal = write_result(&sink, "rebase")
+    let refusal = write_result(&sink, OperationKind::Rebase)
         .await
         .expect("the replay is refused");
     assert!(

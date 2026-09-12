@@ -53,9 +53,9 @@ pub struct RepoTab {
     busy_count: i32,
     busy_op: String,
     /// Whether the write in flight is one that replays history a commit
-    /// at a time (`platitude_core::session::replays_history`). **The op
-    /// name is turned into this meaning here**, so the page holds its
-    /// write doors down without branching on git vocabulary
+    /// at a time — the kind's own answer, carried across the bridge
+    /// (`TabMsg::WriteState::replays`), so the page holds its write
+    /// doors down without branching on git vocabulary
     /// (app-ui.md「QML にビジネスロジックを書かない」).
     replaying: bool,
     /// Merge tool names the settings field can offer, joined by U+001F the
@@ -250,8 +250,8 @@ pub struct RepoTab {
     write_reworded: bool,
     /// A stash operation landed. Which one is not said — push, pop,
     /// apply, drop and rename all answer as one — so a reader waiting on
-    /// a particular one tells its own answer apart by `write_seq`
-    /// (`RepoPage.absorbPopLabel`).
+    /// a particular one finds its own answer by the id its press was
+    /// given (`WriteAnswer::id`; `RepoPage.absorbPopLabel`).
     write_stashed: bool,
     /// The answer was about a branch (create / delete / rename),
     /// whichever way it went: what the page armed for one — a refusal to
@@ -285,7 +285,8 @@ pub struct RepoTab {
     /// Emptied at the top of every drain: a notify raised from anywhere
     /// else (a slot that writes a setting) carries no answers, and the
     /// list left standing would be read a second time. `seq` is what
-    /// tells an answer already counted from this one's own.
+    /// tells an answer already counted from this one's own; `id` is what
+    /// a reader that was handed one at the press looks for.
     write_answers: Vec<WriteAnswer>,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
@@ -340,16 +341,27 @@ pub struct RepoTab {
 /// which write answered, whether git stopped part-way, whether it was
 /// refused, and whether it left a commit at the tip — **the meanings are
 /// named on this side of the bridge**, the same way `settle_write` names
-/// them for the group (app-ui.md: no business logic in QML). `seq` is the
-/// number `write_seq` counted it at, so a run tells its own answer from
-/// one already counted before it pressed; `head_seq` is the number the
-/// session named for the first report of HEAD after the write
-/// (`TabMsg::WriteState::head_seq`), which a landing on its tip arms on.
+/// them for the group (app-ui.md: no business logic in QML). `id` is the
+/// one the queue handed back at the press (`platitude_core::OperationId`),
+/// which is how a reader that holds one finds its answer whatever came
+/// in between; `seq` is the number `write_seq` counted it at, so a run
+/// that holds no id tells its own answer from one already counted before
+/// it pressed; `head_seq` is the number the session named for the first
+/// report of HEAD after the write (`TabMsg::WriteState::head_seq`), which
+/// a landing on its tip arms on.
 struct WriteAnswer {
+    id: u64,
     seq: i32,
     op: String,
     stopped: bool,
     failed: bool,
     at_tip: bool,
     head_seq: i32,
+}
+
+/// An id as the bridge carries it (`i32`). The ids a process hands out
+/// are counted from one and never reach the top of the range, so the
+/// saturation is a formality rather than a case.
+fn bridge_id(id: u64) -> i32 {
+    i32::try_from(id).unwrap_or(i32::MAX)
 }

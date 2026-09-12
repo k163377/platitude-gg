@@ -293,12 +293,15 @@ impl SessionSink for BridgeSink {
                     settled,
                 });
             }
+            // The write a command ran under is not drawn yet: the log
+            // reads its rows one command at a time.
             SessionEvent::CommandStarted {
                 id,
                 display,
                 full,
                 at_ms,
                 asked,
+                operation: _,
             } => self.feeds.commands.push(CommandMsg::Started {
                 id,
                 display,
@@ -439,32 +442,50 @@ impl SessionSink for BridgeSink {
                     author_email: head.author_email,
                 });
             }
-            SessionEvent::WriteStarted { op } if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP => {
+            // The fetches nobody asked for are the toolbar indicator's,
+            // not the write group's: nobody holds an id for them, and an
+            // offline machine must not raise a banner every interval.
+            SessionEvent::WriteStarted {
+                kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
+                ..
+            } => {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: true,
                     error: String::new(),
-                    announce: op == AUTO_FETCH_OP,
+                    announce: kind == OperationKind::AutoFetch,
                 });
             }
-            SessionEvent::WriteFinished { op, error, .. }
-                if op == AUTO_FETCH_OP || op == OPEN_FETCH_OP =>
-            {
+            SessionEvent::WriteFinished {
+                kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
+                error,
+                ..
+            } => {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: false,
                     error: error.unwrap_or_default(),
-                    announce: op == AUTO_FETCH_OP,
+                    announce: kind == OperationKind::AutoFetch,
                 });
             }
+            // The page waits on the answer, not on the reads behind it
+            // (`TabMsg::WriteState`), so nothing here has a boundary to
+            // carry yet — the harness's write barrier is the first
+            // consumer one would have (internal-docs/P3-確認事項.md).
+            SessionEvent::WriteSettled { .. } => {}
             SessionEvent::WriteStopped { .. } => self.feeds.tab.push(TabMsg::WriteStopped),
-            SessionEvent::WriteStarted { op } => self.feeds.tab.push(TabMsg::WriteState {
-                op: op.to_string(),
-                running: true,
-                error: String::new(),
-                report: None,
-                head_seq: 0,
-            }),
+            SessionEvent::WriteStarted { id, kind } => {
+                self.feeds.tab.push(TabMsg::WriteState {
+                    id: id.as_u64(),
+                    op: kind.label().to_string(),
+                    running: true,
+                    replays: kind.replays_history(),
+                    error: String::new(),
+                    report: None,
+                    head_seq: 0,
+                });
+            }
             SessionEvent::WriteFinished {
-                op,
+                id,
+                kind,
                 error,
                 report,
                 head_seq,
@@ -479,12 +500,14 @@ impl SessionSink for BridgeSink {
                     && report.is_none()
                 {
                     self.feeds.tab.push(TabMsg::OpError {
-                        message: format!("{op}: {message}"),
+                        message: format!("{}: {message}", kind.label()),
                     });
                 }
                 self.feeds.tab.push(TabMsg::WriteState {
-                    op: op.to_string(),
+                    id: id.as_u64(),
+                    op: kind.label().to_string(),
                     running: false,
+                    replays: kind.replays_history(),
                     error: error.unwrap_or_default(),
                     report,
                     head_seq,

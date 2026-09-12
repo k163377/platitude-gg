@@ -265,7 +265,11 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
 async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
     sink.wait_for("RefsLoaded after the fetch", |evs| {
         let done = evs.iter().position(|e| match e {
-            SessionEvent::WriteFinished { op, error, .. } if *op == "fetch" => {
+            SessionEvent::WriteFinished {
+                kind: platitude_core::OperationKind::Fetch,
+                error,
+                ..
+            } => {
                 assert!(error.is_none(), "the fetch failed: {error:?}");
                 true
             }

@@ -267,36 +267,40 @@ Item {
     /// words. Empty for one git named itself (`WIP on …`) — that line names the commit the work was standing on,
     /// not the work.
     property string pendingPopLabel: ""
-    /// What `writeSeq` stood at when it was armed, so the answer it is waiting for can be told from any other.
+    /// The id the queue gave the pop at the press (`RepoTab.popStash`), so its answer is found by name rather than
+    /// by turn. Zero while no pop is out.
     ///
     /// **Every stash operation answers under the same word** (`writeStashed` cannot say whose), so the answer alone
     /// does not say it was the pop's: the details pane's band leaves its buttons live, and an `apply` pressed just
-    /// before a pop would take the pop's name with it — and drop it if that apply were refused. Only the very next
-    /// answer is this one's, and anything else disarms it: a name put back off the wrong write is worse than one not
-    /// put back at all.
-    property int pendingPopSeq: -1
+    /// before a pop answers first — counted by turn, its landing would be taken for the pop's, and the pop's own
+    /// refusal for somebody else's. The id says which answer is this one's whatever answered in between, and nothing
+    /// else disarms it: no other answer can be mistaken for the pop's, so there is nothing to disarm against.
+    property int pendingPopId: 0
     /// Both ways in to a pop — the graph row's menu and the details pane's band — so the name comes back from one
     /// place (デザイン規約 §変更を退避する).
     function popStash(selector) {
         page.pendingPopLabel = GitFacts.stashLabel(stashesModel.nameOfFull(selector))
-        page.pendingPopSeq = repoTab.writeSeq
-        repoTab.popStash(selector)
+        page.pendingPopId = repoTab.popStash(selector)
         page.selectedStashRef = ""
     }
     /// The answer to that pop, whichever way it went. Read before the refusal branch below so both landings pass
     /// through here — and the words only go in where the pop is what answered, and it landed
-    /// (デザイン規約 §変更を退避する. by design).
+    /// (デザイン規約 §変更を退避する. by design). Looked up by id in the answers this notify carried
+    /// (`RepoTab.writeAnswerIndex`): a notify that did not carry it leaves the wait standing.
     ///
     /// **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
     /// back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
     function absorbPopLabel() {
-        if (page.pendingPopSeq < 0 || repoTab.writeSeq <= page.pendingPopSeq)
+        if (page.pendingPopId === 0)
+            return
+        const answer = repoTab.writeAnswerIndex(page.pendingPopId)
+        if (answer < 0)
             return
         const carried = page.pendingPopLabel
-        const mine = repoTab.writeSeq === page.pendingPopSeq + 1 && repoTab.writeStashed
+        const landed = !repoTab.writeAnswerFailed(answer)
         page.pendingPopLabel = ""
-        page.pendingPopSeq = -1
-        if (mine && carried !== "" && wipPane.subjectText === "" && wipPane.bodyText === "")
+        page.pendingPopId = 0
+        if (landed && carried !== "" && wipPane.subjectText === "" && wipPane.bodyText === "")
             wipPane.setMessage(carried, "")
     }
 
@@ -991,10 +995,9 @@ Item {
     /// Puts every one of them back: git refused, and what it refused is still there.
     ///
     /// **Only for the answer to the write that took them away** — `goneAtSeq` is read before the write goes out, so
-    /// its own answer is the next one. The queue is serial across the refreshes as well (`session::write` holds
-    /// `write_busy` around the whole request), so the only thing that can still be standing when a later write
-    /// answers is the stash: its listing is asked for after the request returns rather than awaited inside it, and a
-    /// refusal read as this one's would put a dropped stash back while its own listing was still in flight.
+    /// its own answer is the next one. The queue is serial across the refreshes as well (`session::write` serves a
+    /// request whole, the stash and worktree listings included, before it says the write is settled), so nothing
+    /// taken away by an earlier write can still be standing when a later one answers.
     ///
     /// **What it cannot tell apart is the composite.** `Delete both` deletes locally and then pushes, and a remote
     /// half that failed answers with the same one error as a local half git would not do — so a landed local delete

@@ -5,12 +5,27 @@
 use super::*;
 
 impl RepoSession {
-    /// Re-reads the author identity and signing configuration.
-    pub fn refresh_author(self: &Arc<Self>) {
-        self.spawn_read("identity", |s, workdir, cancel| async move {
-            let config = identity::load(&s.executor, &workdir, &cancel).await?;
-            Ok(SessionEvent::AuthorLoaded { config })
-        });
+    /// Re-reads the author identity and signing configuration. The task
+    /// answers once the configuration has published — what the write
+    /// queue waits on after an identity write (`session::write`) — with
+    /// the read that did not land, empty where it did. `None` where no
+    /// repository is open and nothing was read.
+    pub fn refresh_author(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
+        let workdir = self.workdir()?;
+        let s = Arc::clone(self);
+        Some(self.runtime.spawn(async move {
+            let cancel = s.root_cancel.clone();
+            match identity::load(&s.executor, &workdir, &cancel).await {
+                Ok(config) => {
+                    s.sink.event(SessionEvent::AuthorLoaded { config });
+                    Vec::new()
+                }
+                Err(e) => {
+                    s.fail(FollowUp::Author.label(), e);
+                    vec![FollowUp::Author]
+                }
+            }
+        }))
     }
 
     /// Records `user.name` / `user.email`.
@@ -19,9 +34,9 @@ impl RepoSession {
         name: String,
         email: String,
         scope: identity::ConfigScope,
-    ) {
+    ) -> Option<OperationId> {
         self.write(
-            "identity",
+            OperationKind::Identity,
             AfterWrite::Author,
             move |exec, repo, cancel| async move {
                 let written =
@@ -41,7 +56,7 @@ impl RepoSession {
                     },
                 })
             },
-        );
+        )
     }
 
     /// Reads HEAD's message and author so an amend can start from them.

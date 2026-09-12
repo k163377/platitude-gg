@@ -116,7 +116,13 @@ impl CommandObserver for Recorder {
         true
     }
 
-    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
+    fn started(
+        &self,
+        display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<OperationId>,
+    ) -> u64 {
         let mut seen = self.seen.lock().unwrap();
         let id = seen.len() as u64;
         seen.push((id, display.to_string(), CommandEnd::Failed, String::new()));

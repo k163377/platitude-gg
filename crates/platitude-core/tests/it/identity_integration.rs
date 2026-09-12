@@ -35,7 +35,13 @@ impl CommandObserver for Spawns {
         true
     }
 
-    fn started(&self, display: &str, _full: &str, _kept: Kept) -> u64 {
+    fn started(
+        &self,
+        display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<platitude_core::OperationId>,
+    ) -> u64 {
         let mut seen = self.0.lock().unwrap();
         seen.push(display.to_string());
         seen.len() as u64

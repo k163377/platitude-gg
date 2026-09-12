@@ -3,6 +3,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{opened, write_result};
+use platitude_core::OperationKind;
 
 /// A move that fails for a reason a stash cannot help with — a name git
 /// rejects — stops there: nothing is stashed, so the uncommitted work is
@@ -18,7 +19,7 @@ async fn a_move_that_fails_outright_stashes_nothing() {
         name: "no-such-branch".into(),
     });
     assert!(
-        write_result(&sink, "checkout").await.is_some(),
+        write_result(&sink, OperationKind::Checkout).await.is_some(),
         "git rejected the branch name"
     );
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
@@ -51,7 +52,7 @@ async fn a_move_nothing_can_unblock_puts_the_stashed_work_back() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    let error = write_result(&sink, "checkout").await;
+    let error = write_result(&sink, OperationKind::Checkout).await;
     assert!(
         error.is_some_and(|e| e.contains("would be overwritten")),
         "git's first refusal is the one worth reporting"
@@ -98,7 +99,7 @@ async fn a_move_git_refuses_goes_round_through_a_stash() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
 
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
@@ -131,7 +132,7 @@ async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
 
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
@@ -162,7 +163,7 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
         name: "other".into(),
     });
     assert_eq!(
-        write_result(&sink, "checkout").await,
+        write_result(&sink, OperationKind::Checkout).await,
         None,
         "a conflict is the outcome that was asked for, not an error"
     );
@@ -197,7 +198,7 @@ async fn a_carry_leaves_other_stashes_alone() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
 
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     let list = repo.git(&["stash", "list"]);
@@ -225,7 +226,7 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    let error = write_result(&sink, "checkout").await;
+    let error = write_result(&sink, OperationKind::Checkout).await;
     assert!(
         error.is_some_and(|e| e.contains("untracked")),
         "git's own wording goes through"
@@ -257,7 +258,7 @@ async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     let (sink, session) = opened(&repo).await;
     session.stash_pop("stash@{0}".into());
     assert_eq!(
-        write_result(&sink, "stash").await,
+        write_result(&sink, OperationKind::Stash).await,
         None,
         "the restore landed; it just needs settling"
     );
@@ -297,7 +298,7 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
 
     let (sink, session) = opened(&repo).await;
     session.stash_pop("stash@{0}".into());
-    let error = write_result(&sink, "stash").await;
+    let error = write_result(&sink, OperationKind::Stash).await;
     assert!(
         error.is_some(),
         "the refusal is not read as a landed conflict"
@@ -324,7 +325,7 @@ async fn a_conflicting_apply_is_not_a_failure_either() {
     let (sink, session) = opened(&repo).await;
     session.stash_apply("stash@{0}".into());
     assert_eq!(
-        write_result(&sink, "stash").await,
+        write_result(&sink, OperationKind::Stash).await,
         None,
         "the restore landed; it just needs settling"
     );
@@ -362,7 +363,7 @@ async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
     session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
         repo.git(&["status", "--porcelain=v2"]),
@@ -403,7 +404,7 @@ async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {
     session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
         repo.git(&["rev-parse", "main"]),
@@ -436,7 +437,7 @@ async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down
     session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(repo.git(&["status", "--porcelain=v2"]), "");
     assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
@@ -457,7 +458,7 @@ async fn nothing_in_the_way_means_nothing_is_put_aside() {
     session.checkout_leaving_operation(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(
         repo.git(&["stash", "list"]),
@@ -484,7 +485,7 @@ async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });
-    let error = write_result(&sink, "checkout").await;
+    let error = write_result(&sink, OperationKind::Checkout).await;
     assert!(
         error.is_some_and(|e| e.contains("cherry-picking")),
         "git's own refusal comes through"
@@ -510,7 +511,7 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
 
     let (sink, session) = opened(&repo).await;
     session.checkout_moving_branch("other".into(), "main".into(), true);
-    assert_eq!(write_result(&sink, "checkout").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert!(
         sink.count(|e| matches!(
             e,

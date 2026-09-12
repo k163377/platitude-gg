@@ -32,9 +32,9 @@ fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
 impl RepoTab {
     /// The gathered-path writes share one shape: take the set, skip an
     /// empty ask, hand the batch to the session.
-    pub(super) fn drain_paths(
+    pub(super) fn drain_paths<R>(
         &mut self,
-        send: impl FnOnce(&std::sync::Arc<platitude_core::session::RepoSession>, Vec<String>),
+        send: impl FnOnce(&std::sync::Arc<platitude_core::session::RepoSession>, Vec<String>) -> R,
     ) {
         let paths = std::mem::take(&mut self.pending_paths);
         if paths.is_empty() {

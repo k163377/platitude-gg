@@ -7,6 +7,7 @@ use crate::support::TestRepo;
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{open_unawaited, opened, write_result};
 use crate::support::wait::bounded;
+use platitude_core::OperationKind;
 use platitude_core::session::{RefreshOutcome, SessionEvent};
 
 /// Every `HeadObserved` the session has sent, as `(oid, seq)`.
@@ -22,11 +23,13 @@ fn heads_of(events: &[SessionEvent]) -> Vec<(Option<String>, u64)> {
 
 /// The number the write's answer named as the first a report after it
 /// can carry.
-fn owed_by(events: &[SessionEvent], op: &str) -> Option<u64> {
+fn owed_by(events: &[SessionEvent], kind: OperationKind) -> Option<u64> {
     events.iter().rev().find_map(|e| match e {
         SessionEvent::WriteFinished {
-            op: got, head_seq, ..
-        } if *got == op => Some(*head_seq),
+            kind: got,
+            head_seq,
+            ..
+        } if *got == kind => Some(*head_seq),
         _ => None,
     })
 }
@@ -120,9 +123,10 @@ async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
 
     // Staging reads the tree and nothing else behind it (`AfterWrite::Tree`).
     session.stage_paths(vec!["f.txt".to_string()]);
-    let error = write_result(&sink, "stage").await;
+    let error = write_result(&sink, OperationKind::Stage).await;
     assert_eq!(error, None);
-    let owed = owed_by(&sink.events.lock().unwrap(), "stage").expect("the write answered");
+    let owed =
+        owed_by(&sink.events.lock().unwrap(), OperationKind::Stage).expect("the write answered");
     assert!(
         owed > before,
         "the answer names a number above every report before the write"

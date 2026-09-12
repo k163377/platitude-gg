@@ -100,7 +100,7 @@ pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use feed::Recording;
-use graph_refresh::GraphPasses;
+use graph_refresh::{GraphPasses, GraphRun};
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };
@@ -119,24 +119,15 @@ pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
 use state::{
-    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Shared, WriteRequest,
+    AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Operation, Reread,
+    Shared, WorktreeRead, WriteRequest,
 };
-pub use write::{remote_paced, replays_history};
+
+use crate::operation::{Lane, OperationId, OperationKind};
 
 /// First chunk is small so the first paint happens as early as possible.
 const FIRST_CHUNK_ROWS: usize = 512;
 const CHUNK_ROWS: usize = 4096;
-
-/// Op name of the interval-driven fetch. The UI keeps this one off the
-/// shared error surface, so both sides have to agree on the spelling.
-pub const AUTO_FETCH_OP: &str = "auto-fetch";
-
-/// Op name of the fetch an opening fires. Told apart from the interval's
-/// because the UI answers it differently: the button turns for both, and
-/// only this one leaves the command log where it was — a tab opened on a
-/// machine that is offline must not throw the panel up
-/// (デザイン規約 §リモートから取り込む).
-pub const OPEN_FETCH_OP: &str = "open-fetch";
 
 /// Longest auto-fetch interval there is, in minutes: past an hour the
 /// automatic fetch has no point left. The settings input offers up to
@@ -210,6 +201,38 @@ pub const fn log_limit(limit: u32) -> u32 {
 #[must_use]
 pub const fn log_window_step(initial: u32) -> u32 {
     if initial < 4 { 1 } else { initial / 4 }
+}
+
+/// One of the reads a write's settling waits for — what
+/// [`SessionEvent::WriteSettled`] names when one of them did not put the
+/// write's result on screen. The label is the one the failure itself went
+/// out under ([`SessionEvent::OpFailed`]), so the two name the same read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FollowUp {
+    /// The working tree and the standing operation.
+    Status,
+    /// The refs listing, the snapshot and the chips.
+    Refs,
+    /// The graph rebuild, asked for by the write or by a read it made.
+    Graph,
+    Stashes,
+    Worktrees,
+    /// The author identity, after an identity write.
+    Author,
+}
+
+impl FollowUp {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Status => "status",
+            Self::Refs => "refs",
+            Self::Graph => "log",
+            Self::Stashes => "stash",
+            Self::Worktrees => "worktrees",
+            Self::Author => "identity",
+        }
+    }
 }
 
 /// What a write invalidates once it succeeds.

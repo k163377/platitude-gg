@@ -12,14 +12,14 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use platitude_core::OperationKind;
 use platitude_core::details::DiffTarget;
 use platitude_core::opstate::OpState;
 use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::FilePreview;
 use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
-    AUTO_FETCH_OP, LogRow, OPEN_FETCH_OP, RefLabel, RefsSnapshot, RepoSession, SessionEvent,
-    SessionSink,
+    LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;

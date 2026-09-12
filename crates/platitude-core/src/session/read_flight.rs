@@ -34,14 +34,18 @@ use super::*;
 /// write settled by a pass older than itself would have the graph
 /// rebuilt from the repository as it was *before* the write, with the
 /// correction waiting on the next poll tick.
-pub(super) struct ReadFlight {
+///
+/// `A` is what a pass answers its callers with — what they act on, which
+/// each snapshot spells for itself (`Reread`, `WorktreeRead`); the
+/// listings that answer nothing but "published" use a `bool`.
+pub(super) struct ReadFlight<A = bool> {
     /// One pass at a time. An async mutex because what it guards is a git
     /// subprocess rather than CPU work; tokio hands it on in the order it
     /// was asked for, which is what keeps a caller from being passed over
     /// while others read. Which pass may answer whom is decided by the
     /// stamps below and not by that order.
     gate: tokio::sync::Mutex<()>,
-    passes: Mutex<Passes>,
+    passes: Mutex<Passes<A>>,
     /// Callers that have taken a stamp and not yet left, the waiting ones
     /// included, so a boundary can close the work already in flight.
     live: std::sync::atomic::AtomicUsize,
@@ -51,17 +55,17 @@ pub(super) struct ReadFlight {
 }
 
 #[derive(Default)]
-struct Passes {
+struct Passes<A> {
     /// How many passes have started. A caller reads this before it queues
     /// and compares it with what landed: anything numbered above it began
     /// after the caller had its reason.
     started: u64,
     /// Which pass landed last, and what it answered.
     landed: u64,
-    answer: bool,
+    answer: A,
 }
 
-impl Default for ReadFlight {
+impl<A: Default> Default for ReadFlight<A> {
     fn default() -> Self {
         let (changed, _) = tokio::sync::watch::channel(0);
         Self {
@@ -87,7 +91,7 @@ pub(super) struct Stamp {
     asked: u64,
 }
 
-impl ReadFlight {
+impl<A> ReadFlight<A> {
     /// Takes a caller's place now, to be run later ([`Self::run_from`]).
     pub(super) fn stamp(&self) -> Stamp {
         // One lock for both, so that a caller counted here is a caller
@@ -107,12 +111,12 @@ impl ReadFlight {
     /// started after it asked has already answered the same question.
     ///
     /// `read` reports whatever its callers act on — the working-tree row
-    /// that moved, the refs that moved. A reader with nothing to answer
-    /// says `false`.
-    pub(super) async fn run<F, Fut>(&self, read: F) -> bool
+    /// that moved, the refs that moved, a read that failed.
+    pub(super) async fn run<F, Fut>(&self, read: F) -> A
     where
+        A: Copy,
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = bool>,
+        Fut: std::future::Future<Output = A>,
     {
         // The stamp is taken before the gate is asked for, so a pass
         // numbered above it is known to have started afterwards.
@@ -121,10 +125,11 @@ impl ReadFlight {
 
     /// [`Self::run`] for a caller whose place was taken earlier
     /// ([`Self::stamp`]).
-    pub(super) async fn run_from<F, Fut>(&self, stamp: Stamp, read: F) -> bool
+    pub(super) async fn run_from<F, Fut>(&self, stamp: Stamp, read: F) -> A
     where
+        A: Copy,
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = bool>,
+        Fut: std::future::Future<Output = A>,
     {
         let stamped = Live {
             flight: self,
@@ -184,13 +189,13 @@ impl ReadFlight {
 /// Dropped by the caller itself, so one that unwound or went down with
 /// the runtime still reports that it has left rather than holding the
 /// boundary open forever.
-struct Live<'a> {
-    flight: &'a ReadFlight,
+struct Live<'a, A> {
+    flight: &'a ReadFlight<A>,
     /// Passes that had started when this caller asked.
     asked: u64,
 }
 
-impl Drop for Live<'_> {
+impl<A> Drop for Live<'_, A> {
     fn drop(&mut self) {
         self.flight.live.fetch_sub(1, Ordering::SeqCst);
         self.flight.woken();
@@ -201,7 +206,7 @@ impl Drop for Live<'_> {
 mod tests {
     use super::*;
 
-    impl ReadFlight {
+    impl<A> ReadFlight<A> {
         /// Callers that have taken a stamp and not yet left. A test waits
         /// on this rather than on a moment: a caller counted here has
         /// chosen the pass that must answer it, so releasing the read in

@@ -95,9 +95,30 @@ impl Default for RepoTab {
     }
 }
 impl RepoTab {
-    /// Runs `f` with this tab's session, if the tab is still open.
-    pub(super) fn with_session(&self, f: impl FnOnce(&Arc<platitude_core::session::RepoSession>)) {
+    /// Runs `f` with this tab's session, if the tab is still open. The
+    /// id a write hands back is let go; a slot that returns it to the
+    /// page asks through [`Self::ask_session`].
+    pub(super) fn with_session<R>(
+        &self,
+        f: impl FnOnce(&Arc<platitude_core::session::RepoSession>) -> R,
+    ) {
         crate::hub::with_session(self.tab_id, f);
+    }
+
+    /// Asks the session for a write and answers with the id it was
+    /// accepted under, as the bridge carries it — zero where there is no
+    /// session to ask or the session took nothing (it is closed), which
+    /// no accepted write is ever numbered (`OperationId::next`). The
+    /// page holds this id to find its own answer (`RepoPage.pendingPopId`).
+    pub(super) fn ask_session(
+        &self,
+        f: impl FnOnce(
+            &Arc<platitude_core::session::RepoSession>,
+        ) -> Option<platitude_core::OperationId>,
+    ) -> i32 {
+        crate::hub::from_session(self.tab_id, f)
+            .flatten()
+            .map_or(0, |id| bridge_id(id.as_u64()))
     }
 
     /// A fetch ended, whoever asked for it. Counts the ones that failed

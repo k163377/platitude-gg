@@ -358,8 +358,10 @@ pub fn from_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) -> O
 }
 
 /// The same for telling it to do something, where there being no session
-/// means there is nothing to do.
-pub fn with_session(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>)) {
+/// means there is nothing to do. What the session answers — the id of a
+/// write it accepted — is let go here; a slot that has to hand that id
+/// back to the page asks through [`from_session`] instead.
+pub fn with_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) {
     from_session(tab_id, f);
 }
 

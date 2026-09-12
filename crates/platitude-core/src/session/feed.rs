@@ -58,6 +58,7 @@ struct Held {
     display: String,
     full: String,
     at_ms: i64,
+    operation: Option<OperationId>,
 }
 
 /// Whether git itself said no, which is the only end a command nobody
@@ -105,7 +106,13 @@ impl crate::process::CommandObserver for CommandFeed {
         kept != Kept::Unasked || self.background()
     }
 
-    fn started(&self, display: &str, full: &str, kept: Kept) -> u64 {
+    fn started(
+        &self,
+        display: &str,
+        full: &str,
+        kept: Kept,
+        operation: Option<OperationId>,
+    ) -> u64 {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         if kept == Kept::UnaskedUnlessItFails && !self.background() {
             relock(&self.held).insert(
@@ -114,6 +121,7 @@ impl crate::process::CommandObserver for CommandFeed {
                     display: display.to_string(),
                     full: full.to_string(),
                     at_ms: Self::now_ms(),
+                    operation,
                 },
             );
             return id;
@@ -124,6 +132,7 @@ impl crate::process::CommandObserver for CommandFeed {
             full: full.to_string(),
             at_ms: Self::now_ms(),
             asked: kept == Kept::Asked,
+            operation,
         });
         id
     }
@@ -142,6 +151,7 @@ impl crate::process::CommandObserver for CommandFeed {
                 full: held.full,
                 at_ms: held.at_ms,
                 asked: false,
+                operation: held.operation,
             });
         }
         self.sink.event(SessionEvent::CommandFinished {

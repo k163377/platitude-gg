@@ -375,9 +375,13 @@ pub enum SessionEvent {
         local: String,
         start: String,
     },
-    /// A write operation started; the UI can show it as in flight.
+    /// The queue took a write up: git is about to run it. `id` is the
+    /// one the acceptance handed back ([`RepoSession::write`]), and every
+    /// event about this write from here on carries it
+    /// (`crate::operation`).
     WriteStarted {
-        op: &'static str,
+        id: OperationId,
+        kind: OperationKind,
     },
     /// A write did what it was asked and git stopped part-way through it,
     /// leaving the operation standing for someone to finish. Not a
@@ -386,11 +390,14 @@ pub enum SessionEvent {
     /// cannot — that the screen should go to the conflicts rather than to
     /// a commit that was never made.
     WriteStopped {
-        op: &'static str,
+        id: OperationId,
+        kind: OperationKind,
     },
-    /// A write operation's Git command ended. `error` carries Git's own
-    /// message. The queue can still be settling its follow-up snapshots and
-    /// graph, so this is deliberately not a queue-idle boundary.
+    /// A write's git command ended — the second of the write's three
+    /// boundaries, between its acceptance and
+    /// [`WriteSettled`](SessionEvent::WriteSettled). `error` carries
+    /// git's own message. The reads the write invalidated have not been
+    /// made yet, so this is deliberately not a boundary for them.
     ///
     /// `report` is the failure with something else to be made of it: the
     /// write did not happen, something outside this application said so,
@@ -402,11 +409,40 @@ pub enum SessionEvent {
     /// this write can carry (`Standing::fence`): a consumer landing on
     /// what the write left arms on it, and is answered by the report
     /// numbered at or above it — whichever of the two reaches it first.
+    /// Its own number, not the write's id: reads nobody asked for move it
+    /// too.
     WriteFinished {
-        op: &'static str,
+        id: OperationId,
+        kind: OperationKind,
         error: Option<String>,
         report: Option<crate::report::WriteReport>,
         head_seq: u64,
+    },
+    /// The reads the write invalidated have been made — the last of its
+    /// three boundaries, after which nothing more is said under this id
+    /// and the queue takes the next request. What has been read by now:
+    /// the working tree and the refs where the write's [`AfterWrite`]
+    /// reads them, the graph where either moved, the stash and worktree
+    /// listings and the reads those asked for (a working copy taken or
+    /// given back re-joins the refs and, standing on no branch, walks the
+    /// graph again), and the author configuration after an identity
+    /// write. Not the reachability walk behind the rewrite rows
+    /// (`settle_head_reach`), which answers when it can and is skipped
+    /// while the previous one runs.
+    ///
+    /// `failed` names the reads among those that did not put the write's
+    /// result on screen — empty where every one of them landed. Each
+    /// failure also went out as [`OpFailed`](SessionEvent::OpFailed)
+    /// under the same label, but that event carries no id; this is what
+    /// ties it to the write. A graph rebuild a newer request took over
+    /// is not a failure: that request's pass answers for the repository.
+    ///
+    /// Sent after a cancelled write too, with nothing read and nothing
+    /// failed: the session is closing, and the boundaries still balance.
+    WriteSettled {
+        id: OperationId,
+        kind: OperationKind,
+        failed: Vec<FollowUp>,
     },
     /// A git subprocess was spawned (command log). Only what the user
     /// asked for, unless background reads were switched on — plus the
@@ -426,6 +462,12 @@ pub enum SessionEvent {
         /// more: it raises no panel and reddens no mark
         /// (デザイン規約 §git が言ったことを読む場所).
         asked: bool,
+        /// The write this command ran under, for a compound write to be
+        /// read as one operation of several commands — the id its
+        /// acceptance handed back. `None` for a read; every write's
+        /// commands carry its id, the fetches nobody asked for included,
+        /// whose row appears only where git said no.
+        operation: Option<OperationId>,
     },
     /// The command with this id ended.
     CommandFinished {

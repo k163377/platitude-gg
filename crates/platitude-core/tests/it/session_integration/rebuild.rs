@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, scenario};
+use platitude_core::OperationKind;
 use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
 
 /// A write rebuilds the graph exactly once. Committing turns a dirty tree
@@ -34,18 +35,26 @@ async fn a_write_rebuilds_the_graph_once() {
 
     let barrier_at = sink
         .wait_for("the write behind the commit", |evs| {
-            let commit_at = position_of(evs, "commit")?;
+            let commit_at = position_of(evs, OperationKind::Commit)?;
             evs[commit_at..]
                 .iter()
-                .position(|e| matches!(e, SessionEvent::WriteStarted { op } if *op == "stage"))
+                .position(|e| {
+                    matches!(
+                        e,
+                        SessionEvent::WriteStarted {
+                            kind: OperationKind::Stage,
+                            ..
+                        }
+                    )
+                })
                 .map(|after| commit_at + after)
         })
         .await;
 
     {
         let events = sink.events.lock().unwrap();
-        let stage_at = position_of(&events, "stage").expect("stage finished");
-        let commit_at = position_of(&events, "commit").expect("commit finished");
+        let stage_at = position_of(&events, OperationKind::Stage).expect("stage finished");
+        let commit_at = position_of(&events, OperationKind::Commit).expect("commit finished");
         assert_eq!(
             log_starts(&events[stage_at..commit_at]),
             0,
@@ -68,9 +77,15 @@ async fn a_write_rebuilds_the_graph_once() {
     sink.wait_for("the barrier write to finish", |events| {
         (events
             .iter()
-            .filter(
-                |event| matches!(event, SessionEvent::WriteFinished { op, .. } if *op == "stage"),
-            )
+            .filter(|event| {
+                matches!(
+                    event,
+                    SessionEvent::WriteFinished {
+                        kind: OperationKind::Stage,
+                        ..
+                    }
+                )
+            })
             .count()
             == 2)
             .then_some(())
@@ -470,10 +485,10 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
     session.close();
 }
 
-fn position_of(events: &[SessionEvent], op: &str) -> Option<usize> {
+fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {
     events
         .iter()
-        .position(|e| matches!(e, SessionEvent::WriteFinished { op: got, .. } if *got == op))
+        .position(|e| matches!(e, SessionEvent::WriteFinished { kind: got, .. } if *got == kind))
 }
 
 /// What the session actually spawned, for a failure that is about the

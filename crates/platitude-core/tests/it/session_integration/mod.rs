@@ -15,6 +15,7 @@ mod details;
 mod details_order;
 mod head;
 mod helper_binary;
+mod operations;
 mod pass_watch;
 mod published;
 mod query;

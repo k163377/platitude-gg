@@ -14,6 +14,7 @@ use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
 use crate::error::GitError;
+use crate::operation::OperationId;
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -24,7 +25,7 @@ mod tests;
 /// user-paced) opt out via [`GitCommand::no_timeout`], network commands
 /// set their own, longer budget instead (`remote`), and the write
 /// queue's local lane lifts the stock budget wholesale
-/// (`session::write::remote_paced`) — a local write is waited out to
+/// (`operation::Lane::Local`) — a local write is waited out to
 /// completion, because killing git mid-write loses what it was writing
 /// and a local git is only ever slow in proportion to the work.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -104,6 +105,11 @@ pub struct GitExecutor {
     /// stay unaware of it: the session hands out a different handle for
     /// each answer.
     kept: Kept,
+    /// The write the commands run through this handle belong to, for the
+    /// log to say so ([`CommandObserver::started`]). Set by the write
+    /// queue on the handle it gives a task ([`GitExecutor::under`]);
+    /// `None` on every read.
+    operation: Option<OperationId>,
     /// What [`TimeBudget::Stock`] resolves to. `None` lifts the stock
     /// budget entirely — the test harness's setting, where wall time is
     /// load-dependent and must not decide correctness
@@ -119,6 +125,7 @@ impl std::fmt::Debug for GitExecutor {
             .field("env_overrides", &self.env.len())
             .field("observed", &self.observer.is_some())
             .field("kept", &self.kept)
+            .field("operation", &self.operation)
             .finish()
     }
 }
@@ -152,6 +159,7 @@ impl GitExecutor {
             env: Arc::new(Vec::new()),
             observer: None,
             kept: Kept::Unasked,
+            operation: None,
             stock_timeout: Some(DEFAULT_TIMEOUT),
         }
     }
@@ -160,7 +168,7 @@ impl GitExecutor {
     /// one of its own: those commands are then bounded by cancellation
     /// alone. Two callers. The session's write queue puts its local lane
     /// on this — a local write is waited out, never killed
-    /// (`session::write::remote_paced`). And test harnesses lift the
+    /// (`operation::Lane::Local`). And test harnesses lift the
     /// budget from their whole executor — under a loaded suite a git
     /// round trip inflates by more than an order of magnitude
     /// (ci/baseline/code-costs-windows-x64.md §テストとハーネス), and a
@@ -207,8 +215,19 @@ impl GitExecutor {
             env: Arc::clone(&self.env),
             observer: Some(observer),
             kept,
+            operation: self.operation,
             stock_timeout: self.stock_timeout,
         }
+    }
+
+    /// Returns a handle whose every invocation is reported as part of
+    /// `operation` — what the write queue hands the task it runs, so a
+    /// compound write's commands stand in the log under the one id its
+    /// acceptance returned.
+    #[must_use]
+    pub fn under(mut self, operation: OperationId) -> Self {
+        self.operation = Some(operation);
+        self
     }
 
     /// The command as it would have to be typed to do the same thing:
@@ -337,7 +356,12 @@ impl GitExecutor {
         let watch = match self.observer.as_ref() {
             Some(o) if o.records(self.kept) => Some((
                 o,
-                o.started(&described, &self.describe_full(cmd), self.kept),
+                o.started(
+                    &described,
+                    &self.describe_full(cmd),
+                    self.kept,
+                    self.operation,
+                ),
             )),
             _ => None,
         };

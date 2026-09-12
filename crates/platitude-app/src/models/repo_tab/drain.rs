@@ -147,8 +147,10 @@ impl RepoTab {
                 // flag is already standing when the answer below is read.
                 TabMsg::WriteStopped => self.last_write_stopped = true,
                 TabMsg::WriteState {
+                    id,
                     op,
                     running,
+                    replays,
                     error,
                     report,
                     head_seq,
@@ -159,17 +161,23 @@ impl RepoTab {
                         // write's answer, and only that answer knows what
                         // to make of it (`write_running`).
                         self.write_running = true;
-                        self.replaying = platitude_core::session::replays_history(&op);
+                        self.replaying = replays;
                         self.busy_op = op;
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(op, error, report, head_seq);
+                        self.settle_write(id, op, error, report, head_seq);
                     }
                 }
             }
         }
+    }
+
+    /// Where the answer to the write with this id stands in this
+    /// notify's list, or `None` where it did not answer in this notify.
+    pub(super) fn write_answer_index_of(&self, id: u64) -> Option<usize> {
+        self.write_answers.iter().position(|a| a.id == id)
     }
 
     /// One of the answers this notify carried, or nothing where the
@@ -213,9 +221,10 @@ impl RepoTab {
     /// git vocabulary (app-ui.md: no business logic in QML). Every
     /// answer rewrites the whole group, so nothing stays armed for a
     /// later write to trip over; `write_seq` says which answer the
-    /// group describes.
+    /// group describes, and `id` names the press it answers.
     pub(super) fn settle_write(
         &mut self,
+        id: u64,
         op: String,
         error: String,
         report: Option<platitude_core::WriteReport>,
@@ -320,6 +329,7 @@ impl RepoTab {
         // for its own write looks for it here (`write_answers`); the
         // group is what the page reads when any answer will do.
         self.write_answers.push(WriteAnswer {
+            id,
             seq: self.write_seq,
             op,
             stopped: self.last_write_stopped,

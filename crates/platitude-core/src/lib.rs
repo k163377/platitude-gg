@@ -25,6 +25,7 @@ pub mod mem;
 pub mod model;
 pub mod offers;
 pub mod oid;
+pub mod operation;
 pub mod opstate;
 pub mod parse;
 pub mod patch;
@@ -67,6 +68,7 @@ pub mod worktrees;
 pub use error::GitError;
 pub use model::{CommitMeta, Name, StrPool};
 pub use oid::Oid;
+pub use operation::{Lane, OperationId, OperationKind};
 pub use process::{
     CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput, Kept,
 };

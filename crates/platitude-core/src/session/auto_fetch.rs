@@ -23,6 +23,9 @@ pub enum OpenFetch {
     NoRemote,
     /// This session has already had its opening fetch.
     Spent,
+    /// The session is closed: the queue accepts nothing, so nothing was
+    /// started.
+    Closed,
 }
 
 /// What wakes the timer between hand-stepped ticks: the interval clock
@@ -258,8 +261,8 @@ impl RepoSession {
         };
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
-        self.write(
-            OPEN_FETCH_OP,
+        let accepted = self.write(
+            OperationKind::OpenFetch,
             AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 let _permit = permit;
@@ -267,7 +270,12 @@ impl RepoSession {
                     .await
             },
         );
-        OpenFetch::Started
+        // The permit went with the request the queue would not take.
+        if accepted.is_some() {
+            OpenFetch::Started
+        } else {
+            OpenFetch::Closed
+        }
     }
 
     fn lock_open_fetch(&self) -> std::sync::MutexGuard<'_, OpenFetchState> {
@@ -341,9 +349,10 @@ impl RepoSession {
     /// tags out of the walk the chips that carry this reading are not on
     /// screen, and the timer will fill it in within the interval anyway.
     ///
-    /// Deliberately **not** on the write queue. A request there sets
-    /// `write_busy`, which holds the poll out and puts every later write
-    /// behind this one — far too much to spend on a badge. It runs as a
+    /// Deliberately **not** on the write queue. A request there holds the
+    /// poll out and puts every later write behind this one
+    /// (`RepoSession::running_write`) — far too much to spend on a badge.
+    /// It runs as a
     /// plain background read instead, on the handle that keeps it out of
     /// the command log, and only republishes if the answer moved.
     ///
@@ -477,8 +486,8 @@ impl RepoSession {
         };
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
-        self.write(
-            AUTO_FETCH_OP,
+        let accepted = self.write(
+            OperationKind::AutoFetch,
             AfterWrite::Refs,
             move |exec, repo, cancel| async move {
                 let _permit = permit;
@@ -486,7 +495,9 @@ impl RepoSession {
                     .await
             },
         );
-        true
+        // A queue that takes nothing is a closed session's: the timer has
+        // nothing left to tick for.
+        accepted.is_some()
     }
 }
 

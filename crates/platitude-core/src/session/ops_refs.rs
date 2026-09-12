@@ -12,9 +12,9 @@ impl RepoSession {
         name: String,
         start_point: Option<String>,
         switch_to: bool,
-    ) {
+    ) -> Option<OperationId> {
         self.write(
-            "branch",
+            OperationKind::Branch,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::create(
@@ -27,17 +27,17 @@ impl RepoSession {
                 )
                 .await
             },
-        );
+        )
     }
 
-    pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) {
+    pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) -> Option<OperationId> {
         self.write(
-            "branch",
+            OperationKind::Branch,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::delete(&exec, &repo.workdir, &name, force, &cancel).await
             },
-        );
+        )
     }
 
     /// Asks whether `branch --delete` would go through for this branch:
@@ -91,59 +91,64 @@ impl RepoSession {
     /// write: the counts beside the branch, the delete's reference point
     /// and where a push goes all come off this setting, so the reads
     /// behind it are the ones that put the new answer on screen.
-    pub fn set_upstream(self: &Arc<Self>, branch: String, upstream: String) {
+    pub fn set_upstream(self: &Arc<Self>, branch: String, upstream: String) -> Option<OperationId> {
         self.write(
-            "branch",
+            OperationKind::Branch,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::set_upstream(&exec, &repo.workdir, &branch, &upstream, &cancel).await
             },
-        );
+        )
     }
 
-    pub fn rename_branch(self: &Arc<Self>, from: String, to: String, force: bool) {
+    pub fn rename_branch(
+        self: &Arc<Self>,
+        from: String,
+        to: String,
+        force: bool,
+    ) -> Option<OperationId> {
         self.write(
-            "branch",
+            OperationKind::Branch,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::rename(&exec, &repo.workdir, &from, &to, force, &cancel).await
             },
-        );
+        )
     }
 
     /// Puts a tag on a commit. Lightweight, and never forced: an existing
     /// name is git's to refuse (see [`crate::tag::create`]).
-    pub fn create_tag(self: &Arc<Self>, name: String, commit: String) {
+    pub fn create_tag(self: &Arc<Self>, name: String, commit: String) -> Option<OperationId> {
         self.write(
-            "tag",
+            OperationKind::Tag,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 tag::create(&exec, &repo.workdir, &name, &commit, &cancel).await
             },
-        );
+        )
     }
 
     /// Renames a tag: a new name on the same object, then the old name
     /// dropped (git has no rename of its own — see [`crate::tag`]).
-    pub fn rename_tag(self: &Arc<Self>, from: String, to: String) {
+    pub fn rename_tag(self: &Arc<Self>, from: String, to: String) -> Option<OperationId> {
         self.write(
-            "tag",
+            OperationKind::Tag,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 tag::rename(&exec, &repo.workdir, &from, &to, &cancel).await
             },
-        );
+        )
     }
 
     /// Deletes a tag. Destructive in one way only: what it marked may
     /// have nothing else reaching it, so the UI asks first.
-    pub fn delete_tag(self: &Arc<Self>, name: String) {
+    pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
-            "tag",
+            OperationKind::Tag,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 tag::delete(&exec, &repo.workdir, &name, &cancel).await
             },
-        );
+        )
     }
 }

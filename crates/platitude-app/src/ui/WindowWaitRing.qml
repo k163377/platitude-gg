@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// A write that replays history stands for seconds (`session::replays_history`), and for all of them the pointer is
+// A write that replays history stands for seconds (`OperationKind::replays_history`), and for all of them the pointer is
 // the one thing the reader is looking at. The ring goes beside it, over everything, and belongs to no pane: it
 // answers the hand rather than whatever the hand happens to be over.
 //

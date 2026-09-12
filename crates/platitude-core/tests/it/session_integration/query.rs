@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, opened_with, write_result};
+use platitude_core::OperationKind;
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
 use platitude_core::session::{DiffReadOutcome, Recording, RefreshOutcome, SessionEvent};
@@ -135,7 +136,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
     session.stage_paths(vec!["f.txt".to_string()]);
     // git's own answer to the write, which it gives before the reads that
     // settle behind it: the burst is out before the parked read is let go.
-    write_result(&sink, "stage").await;
+    write_result(&sink, OperationKind::Stage).await;
     release.send(()).expect("let the parked read finish");
 
     sink.wait_for("a status read that sees the staged file", |evs| {
@@ -213,7 +214,7 @@ async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
     // git's own answer to the replay, given before the reads that settle
     // behind it — and those are stuck on the park, so the write still
     // holds the repository at the line below.
-    assert_eq!(write_result(&sink, "rebase").await, None);
+    assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
 
     let poll = session.refresh_poll_tracked();
     release.send(()).expect("let the parked read finish");
@@ -453,7 +454,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     // snapshot is the causal boundary after the replacement read.
     let before_write = snapshots(&sink);
     session.create_branch("side".into(), None, false);
-    write_result(&sink, "branch").await;
+    write_result(&sink, OperationKind::Branch).await;
     settle(before_write + 1).await;
     assert_eq!(reads(&sink), 1, "{:?}", commands_of(&sink));
 

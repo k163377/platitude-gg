@@ -27,11 +27,11 @@ impl RepoSession {
             // that pass asked before it could answer anyone.
             s.refs_read
                 .run_from(stamp, || async {
-                    let moved = s.publish_refs().await;
-                    if moved {
+                    let reread = s.publish_refs().await;
+                    if reread == Reread::Moved {
                         s.refresh_log();
                     }
-                    moved
+                    reread
                 })
                 .await;
         });
@@ -42,12 +42,13 @@ impl RepoSession {
     /// the periodic tick and a write's own settling included, which is
     /// what keeps two `for-each-ref` over tens of thousands of refs from
     /// running at once.
-    pub(super) async fn read_refs(self: &Arc<Self>) -> bool {
+    pub(super) async fn read_refs(self: &Arc<Self>) -> Reread {
         self.refs_read.run(|| self.publish_refs()).await
     }
 
     /// Reads refs and HEAD, publishes the snapshot and the label diff, and
-    /// reports whether the ref layout moved since the last read.
+    /// reports whether the ref layout moved since the last read — or that
+    /// nothing was published at all.
     ///
     /// Chips alone are applied without rebuilding, but a moved ref means
     /// commits the graph has never seen (an external commit, a fetch, a
@@ -55,9 +56,9 @@ impl RepoSession {
     ///
     /// Does not rebuild the graph itself: a caller that reads status in the
     /// same pass rebuilds once for both (see [`RepoSession::refresh_poll`]).
-    async fn publish_refs(self: &Arc<Self>) -> bool {
+    async fn publish_refs(self: &Arc<Self>) -> Reread {
         let Some(workdir) = self.workdir() else {
-            return false;
+            return Reread::Failed;
         };
         // Stamped before git is spawned: what the stamp orders is when
         // the repository was looked at, not when the answer came back
@@ -91,7 +92,7 @@ impl RepoSession {
                 // on the gate where the write reads refs — answers it.
                 if !self.standing.current(looked) {
                     self.read_refs_from(self.refs_read.stamp());
-                    return false;
+                    return Reread::Same;
                 }
                 // First, and before the joins: the walk asks git where
                 // HEAD is only while nothing has told it, so the answer
@@ -129,7 +130,7 @@ impl RepoSession {
                     self.sink.event(SessionEvent::RefsLoaded { snapshot: held });
                     // The refs are part of `inputs`, so they are where
                     // they were: nothing to walk, nothing to re-ask.
-                    return false;
+                    return Reread::Same;
                 }
                 // One index and one set of joins for both halves: the
                 // sidebar snapshot and the row chips read the same
@@ -176,11 +177,15 @@ impl RepoSession {
                 if refs_moved && remotes_repeated {
                     self.remotes.forget();
                 }
-                refs_moved
+                if refs_moved {
+                    Reread::Moved
+                } else {
+                    Reread::Same
+                }
             }
             (Err(e), _) | (_, Err(e)) => {
-                self.fail("refs", e);
-                false
+                self.fail(FollowUp::Refs.label(), e);
+                Reread::Failed
             }
         }
     }
@@ -202,11 +207,11 @@ impl RepoSession {
                     // An external change (another tool, the terminal) can
                     // make the tree dirty or clean, which adds or removes
                     // the WIP row.
-                    let flipped = s.publish_status().await;
-                    if flipped {
+                    let reread = s.publish_status().await;
+                    if reread == Reread::Moved {
                         s.refresh_log();
                     }
-                    flipped
+                    reread
                 })
                 .await;
         });
@@ -221,81 +226,109 @@ impl RepoSession {
     /// [`RepoSession::publish_refs`] is; what keeps a fourth caller off it
     /// is this doc and
     /// `session_integration::the_ways_in_to_a_status_read_never_run_two_at_once`.
-    pub(super) async fn read_status(self: &Arc<Self>) -> bool {
+    pub(super) async fn read_status(self: &Arc<Self>) -> Reread {
         self.status_read.run(|| self.publish_status()).await
     }
 
-    /// One snapshot read behind its own flight ([`ReadFlight`]), which is
-    /// what orders the answers: a pass holds the flight from before it
-    /// looks until after it has published, so a second caller waits for
-    /// it rather than reading beside it and racing it to the sink.
+    /// Reads the stash list again, behind its own flight ([`ReadFlight`]),
+    /// which is what orders the answers: a pass holds the flight from
+    /// before it looks until after it has published, so a second caller
+    /// waits for it rather than reading beside it and racing it to the
+    /// sink.
     ///
-    /// The flight is reached through an accessor because the spawned task
-    /// outlives this call and each snapshot has one of its own.
-    ///
-    /// Not what refs and status do: those publish through a shared path
-    /// and answer their caller whether the graph has to be walked again,
-    /// so their flight is entered from more than this one place.
-    fn refresh_gated<F, Fut>(
-        self: &Arc<Self>,
-        op: &'static str,
-        flight: fn(&Self) -> &ReadFlight,
-        read: F,
-    ) where
-        F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = Result<SessionEvent, GitError>> + Send,
-    {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
+    /// Answers with the read's task, done once the listing has published
+    /// — what the write queue waits on before it says a write is settled
+    /// (`session::write`) — and what the task answers is the reads that
+    /// did not: empty where the listing landed. `None` where no repository
+    /// is open and nothing was read.
+    pub fn refresh_stashes(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
+        let workdir = self.workdir()?;
         let s = Arc::clone(self);
-        self.runtime.spawn(async move {
+        Some(self.runtime.spawn(async move {
             let session = Arc::clone(&s);
-            flight(&s)
+            let published = s
+                .stash_read
                 .run(move || async move {
                     let cancel = session.root_cancel.clone();
-                    match read(Arc::clone(&session), workdir, cancel).await {
-                        Ok(event) => session.sink.event(event),
-                        Err(e) => session.fail(op, e),
+                    match stash::load(&session.executor, &workdir, &cancel).await {
+                        Ok(stashes) => {
+                            session.sink.event(SessionEvent::StashesLoaded { stashes });
+                            true
+                        }
+                        Err(e) => {
+                            session.fail(FollowUp::Stashes.label(), e);
+                            false
+                        }
                     }
-                    // Nothing here rebuilds the graph, so there is nothing
-                    // to answer the callers sharing this pass.
-                    false
                 })
                 .await;
-        });
+            if published {
+                Vec::new()
+            } else {
+                vec![FollowUp::Stashes]
+            }
+        }))
     }
 
-    pub fn refresh_stashes(self: &Arc<Self>) {
-        self.refresh_gated(
-            "stash",
-            |s| &s.stash_read,
-            |s, workdir, cancel| async move {
-                let stashes = stash::load(&s.executor, &workdir, &cancel).await?;
-                Ok(SessionEvent::StashesLoaded { stashes })
-            },
-        );
-    }
-
-    pub fn refresh_worktrees(self: &Arc<Self>) {
-        self.refresh_gated(
-            "worktrees",
-            |s| &s.worktrees_read,
-            |s, workdir, cancel| async move {
-                let worktrees = crate::worktrees::load(&s.executor, &workdir, &cancel).await?;
-                // A working copy taken or given back moves no ref, so the
-                // join that marks the rows has to be asked for by name —
-                // and a copy standing on no branch is a row of its own,
-                // which only the walk can put there.
-                let news = s.note_worktree_holders(&worktrees, &workdir);
-                if news.joins {
-                    s.refresh_refs();
+    /// Reads the worktree list again, behind its own flight the way
+    /// [`Self::refresh_stashes`] does, and then the reads the listing asks
+    /// for: a working copy taken or given back moves no ref, so the join
+    /// that marks the rows has to be asked for by name — and a copy
+    /// standing on no branch is a row of its own, which only the walk can
+    /// put there.
+    ///
+    /// **Those reads are waited for, after the flight is let go.** The
+    /// task this answers with is what the write queue waits on before it
+    /// says a write is settled, and a settling that let the listing's own
+    /// walk run on would put the boundary before the row it is a boundary
+    /// for. Every caller the pass answers acts on the same news
+    /// ([`WorktreeRead`]), so a caller answered by somebody else's pass
+    /// waits for the same reads rather than settling ahead of them. What
+    /// the task answers is the reads that did not land, the listing's own
+    /// included; empty where everything did.
+    pub fn refresh_worktrees(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
+        let workdir = self.workdir()?;
+        let s = Arc::clone(self);
+        Some(self.runtime.spawn(async move {
+            let session = Arc::clone(&s);
+            let read = s
+                .worktrees_read
+                .run(move || async move {
+                    let cancel = session.root_cancel.clone();
+                    match crate::worktrees::load(&session.executor, &workdir, &cancel).await {
+                        Ok(worktrees) => {
+                            let news = session.note_worktree_holders(&worktrees, &workdir);
+                            session
+                                .sink
+                                .event(SessionEvent::WorktreesLoaded { worktrees });
+                            WorktreeRead {
+                                published: true,
+                                news,
+                            }
+                        }
+                        Err(e) => {
+                            session.fail(FollowUp::Worktrees.label(), e);
+                            WorktreeRead::default()
+                        }
+                    }
+                })
+                .await;
+            let mut failed = Vec::new();
+            if !read.published {
+                failed.push(FollowUp::Worktrees);
+            }
+            let mut walk = read.news.walk;
+            if read.news.joins {
+                match s.read_refs().await {
+                    Reread::Moved => walk = true,
+                    Reread::Same => {}
+                    Reread::Failed => failed.push(FollowUp::Refs),
                 }
-                if news.walk {
-                    s.refresh_log();
-                }
-                Ok(SessionEvent::WorktreesLoaded { worktrees })
-            },
-        );
+            }
+            if walk && !s.settle_graph().await.landed() {
+                failed.push(FollowUp::Graph);
+            }
+            failed
+        }))
     }
 }
