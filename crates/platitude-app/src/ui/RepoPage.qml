@@ -337,9 +337,8 @@ Item {
             wipPane.setAmendChecked(false)
             page.amending = false
             // …and the commit moved what the two sides hold, so a diff left open on either is a picture of a file as
-            // it was. Which write re-read it is remembered, so the status that follows does not read it over again.
-            page.diffReadAt = repoTab.writeSeq
-            page.reloadDiff()
+            // it was.
+            page.readDiffForAnswer()
         } else if (!page.reportRefusal(answer)) {
             // A rejected commit keeps its text — the boxes are the one thing on this page that cannot be read back
             // off disk — and nothing else on screen says what git said, so the log comes up
@@ -1492,12 +1491,28 @@ Item {
     // A finished write the editor asked for: clear it only once git says the commit landed, so a rejected one keeps its
     // text.
     property int seenWriteSeq: 0
+    /// Whether the open file has already been read again for the answers this notify carried. **One read for the
+    /// lot of them**: a drain can bring two answers that both moved what the two sides hold, and they leave the same
+    /// one file to read — a second reading would cost a second git and bring back the same bytes.
+    property bool diffReadForAnswers: false
+    /// Reads the open file again because a write answered, and tells the tab it was read — which is what keeps the
+    /// status that write publishes behind it from reading the very same file as news (`ops::DiffReread`).
+    ///
+    /// **The one door**, so that door is where the reading is counted.
+    function readDiffForAnswer() {
+        if (page.diffReadForAnswers)
+            return
+        page.diffReadForAnswers = true
+        repoTab.noteDiffRead()
+        page.reloadDiff()
+    }
     // What an answer *means* is settled on the tab, where the op names are known (`drain::settle_write`); this
     // function only sequences the screen off those classified properties — reads, landings, menus.
     function absorbWriteResult() {
         if (repoTab.writeSeq === page.seenWriteSeq)
             return
         page.seenWriteSeq = repoTab.writeSeq
+        page.diffReadForAnswers = false
         // The press has its answer. What is left of the wait is the read, which says so itself (`diffSettling`).
         page.diffAwaits = false
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
@@ -1534,10 +1549,8 @@ Item {
             // catch the drift that caused it (an outside change that moves no bucket count moves no tally), so left
             // alone the same press would be refused again for as long as the reader cared to try. The refusal's
             // answer is the fresh file.
-            if (repoTab.writeStaleDiff && page.diffReadAt !== repoTab.writeSeq) {
-                page.diffReadAt = repoTab.writeSeq
-                page.reloadDiff()
-            }
+            if (repoTab.writeStaleDiff)
+                page.readDiffForAnswer()
             // The write did not happen and something outside this application said so — a protected branch, a hook
             // over there or here, a remote this end had only an older picture of. Nothing here could have known
             // beforehand and nothing here can answer it, so what it said comes down as a report and the log stays
@@ -1655,13 +1668,8 @@ Item {
         // published only when it has rows to change, so a second line staged out of the same file would never be read
         // at all.
         //
-        // Which write this was is remembered, so the status that follows does not read the same file over again — and
-        // so does an answer of this notify that has already re-read it (`absorbCommitAnswer`): two answers in one
-        // drain leave the same file to read, and the second reading would cost a second git.
-        if (repoTab.writeStaleDiff && page.diffReadAt !== repoTab.writeSeq) {
-            page.diffReadAt = repoTab.writeSeq
-            page.reloadDiff()
-        }
+        if (repoTab.writeStaleDiff)
+            page.readDiffForAnswer()
         // The message landed: the editor stops offering to save it, and keeps what was written until the selection
         // catches up with the commit that now carries it.
         if (repoTab.writeReworded)
@@ -2737,9 +2745,6 @@ Item {
     /// The `WorkTreeModel.treeRevision` the open diff was last read against — the counts of the four buckets are what
     /// a stage or an unstage moves whoever made it, and the model bumps the revision when they do.
     property int seenTreeRev: -1
-    /// The write whose answer already re-read the file, so that the status arriving behind it does not read the same
-    /// file over again. -1 once that status has come and gone.
-    property int diffReadAt: -1
     // **The tree was read.** Said by the working-tree model rather than by the file list beside it: the list says
     // `changed` only when its rows differ, and a status that moved no row is exactly the one this has to hear about (a
     // second line staged out of a file already on both sides moves nothing).
@@ -2752,9 +2757,13 @@ Item {
             // and the only one a clean stop ever moves (`leaveWipWhenDone`).
             const opGone = page.seenOpText !== "" && workTree.opText === ""
             page.seenOpText = workTree.opText
-            // The status that follows this window's own write: the file was read when the write answered.
-            const ours = page.diffReadAt === repoTab.writeSeq
-            page.diffReadAt = -1
+            // The status that follows this window's own write: the file was read when the write answered, and this
+            // report is the one that write published. Measured against the number the answer named for it
+            // (`ops::DiffReread`) rather than against a count of answers — another write answering in between moves
+            // every counter without saying which tree this status describes, and a read already in flight when the
+            // write ended arrives with a number from before it. **The counts' own number**, because a report of HEAD
+            // arrives on its own as well and moves none of them.
+            const ours = repoTab.takeDiffRead(workTree.statusSeq)
             // Something outside this window moved the tree, so the rows on screen — and the fingerprint the next `+`
             // would be written against — are a picture of the file as it was. Pressing one then came back with git's
             // refusal.

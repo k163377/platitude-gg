@@ -274,7 +274,8 @@ impl RepoTab {
     /// page reads first.
     #[qslot]
     fn write_answer_head_seq(&self, index: i32) -> i32 {
-        self.write_answer_at(index).map_or(0, |a| a.head_seq)
+        self.write_answer_at(index)
+            .map_or(0, |a| bridge_id(a.head_seq))
     }
 
     /// Which write answered. Raw data, the way `lastWriteError` is: what
@@ -801,6 +802,39 @@ impl RepoTab {
             return false;
         };
         self.stash_out.read(seen, emptied)
+    }
+
+    /// The open file was read again because a write answered, so the
+    /// status that write publishes behind it is not news
+    /// (`ops::DiffReread`).
+    ///
+    /// Measured against the number that write's answer named for the
+    /// first report of HEAD after it — the answers this notify carried
+    /// are read for once, so the fence is the last of them. A notify
+    /// that carried none arms nothing: there is no write for a status to
+    /// be the answer to.
+    #[qslot]
+    fn note_diff_read(&mut self) {
+        let after = self.write_answers.last().map_or(0, |a| a.head_seq);
+        self.diff_reread.read_after(after);
+    }
+
+    /// A status has arrived whose counts stand beside the report of HEAD
+    /// numbered `seen`: says whether the read standing here already
+    /// answers for it, and spends the read where it does.
+    ///
+    /// **The counts' own number** (`WorkTreeModel.statusSeq`), for the
+    /// reason the stash's landing takes it: a report of HEAD on its own
+    /// moves no counts, and spending the read on it would have the next
+    /// status read the same file over again.
+    ///
+    /// **Asked, not watched**, like the stash's landing beside it.
+    #[qslot]
+    fn take_diff_read(&mut self, seen: i32) -> bool {
+        let Ok(seen) = u64::try_from(seen) else {
+            return false;
+        };
+        self.diff_reread.taken(seen)
     }
 
     /// `git fetch --prune`; an empty remote fetches all of them.

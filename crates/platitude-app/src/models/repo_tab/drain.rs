@@ -317,7 +317,7 @@ impl RepoTab {
             stopped: self.last_write_stopped,
             failed: !landed,
             at_tip,
-            head_seq: i32::try_from(head_seq).unwrap_or(i32::MAX),
+            head_seq,
             report_kind: kind,
             report_remote: remote,
             report_name: name,

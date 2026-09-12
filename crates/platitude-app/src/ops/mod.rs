@@ -30,6 +30,9 @@
 mod branch_delete_out;
 #[cfg(test)]
 mod branch_delete_out_tests;
+mod diff_reread;
+#[cfg(test)]
+mod diff_reread_tests;
 mod press;
 #[cfg(test)]
 mod press_tests;
@@ -41,6 +44,7 @@ mod stash_out;
 mod stash_out_tests;
 
 pub use branch_delete_out::BranchDeleteOut;
+pub use diff_reread::DiffReread;
 pub use press::Press;
 pub use stand_in::{Row, Rows, StandIn};
 pub use stash_out::StashOut;

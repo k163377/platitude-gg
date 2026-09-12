@@ -321,6 +321,13 @@ pub struct RepoTab {
     /// What git said about it is read off that answer, like every other
     /// reader that waits for one write by name.
     commit_answer: i32,
+    /// The open diff read again where a write answered, waiting for the
+    /// status that write publishes behind it (`ops::DiffReread`).
+    ///
+    /// **Not a property**, for the reason the stash's landing is not:
+    /// the question has an answer only at the moment a status is being
+    /// read, and asking spends it (`takeDiffRead`).
+    diff_reread: crate::ops::DiffReread,
     /// The stash this window pressed to take the working tree away,
     /// waiting for the reading where that tree turns out to be empty
     /// (`ops::StashOut`).
@@ -397,7 +404,7 @@ struct WriteAnswer {
     stopped: bool,
     failed: bool,
     at_tip: bool,
-    head_seq: i32,
+    head_seq: u64,
     /// What the far side, a hook, or this end itself said about refusing
     /// it — **carried on the answer rather than beside the group**,
     /// because a report is the answer's and a drain can bring several.

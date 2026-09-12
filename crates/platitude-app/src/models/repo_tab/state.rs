@@ -81,6 +81,7 @@ impl Default for RepoTab {
             commit_out: crate::ops::Press::default(),
             commit_answer: -1,
             stash_out: crate::ops::StashOut::default(),
+            diff_reread: crate::ops::DiffReread::default(),
             write_report_kind: String::new(),
             write_report_remote: String::new(),
             write_report_name: String::new(),
