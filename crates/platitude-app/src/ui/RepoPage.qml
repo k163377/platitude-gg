@@ -340,31 +340,39 @@ Item {
             // it was. Which write re-read it is remembered, so the status that follows does not read it over again.
             page.diffReadAt = repoTab.writeSeq
             page.reloadDiff()
-        } else {
-            // A rejected commit keeps its text: the boxes are the one thing on this page that cannot be read back
-            // off disk, and pressing again is the reader's to do.
-            const kind = repoTab.writeAnswerReportKind(answer)
-            const remote = repoTab.writeAnswerReportRemote(answer)
-            const name = repoTab.writeAnswerReportName(answer)
-            if (kind !== "") {
-                // Somebody outside this application turned it down — a hook here or over there. Nothing here can put
-                // it right and nothing was half done, so it comes down as a report and the log stays where the
-                // reader left it (デザイン規約 §答えの要らない報せ).
-                page.showReport(kind, remote, name, repoTab.writeAnswerReportReason(answer))
-                // …and the mark in the corner goes quiet with it, the way every answered report takes it down: the
-                // row it is about may not have reached the log yet, and then this pays for it when it does.
-                if (!commandsModel.failed)
-                    page.answeredFailures++
-                commandsModel.noteAnswered()
-                page.writeReported(kind, remote, name)
-            } else {
-                // Nothing else on screen says what git said, so the log comes up
-                // (デザイン規約 §git が言ったことを読む場所).
-                commandsOwner.newsTakes()
-                page.commandsOpen = true
-            }
+        } else if (!page.reportRefusal(answer)) {
+            // A rejected commit keeps its text — the boxes are the one thing on this page that cannot be read back
+            // off disk — and nothing else on screen says what git said, so the log comes up
+            // (デザイン規約 §git が言ったことを読む場所).
+            commandsOwner.newsTakes()
+            page.commandsOpen = true
         }
         page.commitAnswered(landed)
+    }
+    /// What one answer that did not happen has to say for itself, whoever was waiting for it: somebody outside this
+    /// application turned it down — a hook here or over there, a remote this end had only an older picture of.
+    /// Nothing here could have known beforehand and nothing here can answer it, so what they said comes down as a
+    /// report and the log stays where the reader left it (デザイン規約 §答えの要らない報せ).
+    ///
+    /// Says whether there was one, because what is left when there is not differs for every reader: the editor
+    /// raises the log, and the card that stayed up for a delete turns its own row instead.
+    ///
+    /// **Read off the answer, not off the group the answers leave behind** — a report belongs to the answer that
+    /// carried it, and one drain can bring several (`RepoTab.writeAnswerReportKind`).
+    function reportRefusal(answer) {
+        const kind = repoTab.writeAnswerReportKind(answer)
+        if (kind === "")
+            return false
+        const remote = repoTab.writeAnswerReportRemote(answer)
+        const name = repoTab.writeAnswerReportName(answer)
+        page.showReport(kind, remote, name, repoTab.writeAnswerReportReason(answer))
+        // …and the mark in the corner goes quiet with it, the way every answered report takes it down: the row it is
+        // about may not have reached the log yet, and then this pays for it when it does.
+        if (!commandsModel.failed)
+            page.answeredFailures++
+        commandsModel.noteAnswered()
+        page.writeReported(kind, remote, name)
+        return true
     }
     /// Automation: the editor's own commit has been answered and the boxes have been dealt with — **the one thing no
     /// picture can make**, since git answers before the reading that redraws the pane and the window photographs the
@@ -988,6 +996,25 @@ Item {
     /// The same, for the failures a report has already answered — armed by the report when the row it is about has
     /// not reached the log yet (`absorbWriteResult`), spent by that row's own arrival.
     property int answeredFailures: 0
+    /// The answer to the plain delete a card stayed up for — **its own answer**, out of the ones this notify
+    /// carried (`RepoTab.branchDeleteAnswer`, -1 where it carried none). The name it was asked with is what the card
+    /// acts on and that stands until the next delete is asked; this is how the page tells the answer in hand from
+    /// the one standing above it, which no count of answers could.
+    function absorbBranchDelete() {
+        const answer = repoTab.branchDeleteAnswer
+        if (answer < 0)
+            return
+        // Taken, and the card goes by itself off the name (`RefBranchMenu`); turned down by git on its own, and the
+        // same card turns its row into the held `-D`. **The row is the answer** — a refusal does not mean the
+        // commits stop being reachable (git measures the branch against its upstream when it has one, so a branch
+        // merged into HEAD but not yet pushed is refused while nothing at all would be lost — measured), so there is
+        // nothing here to raise over it.
+        if (!repoTab.writeAnswerFailed(answer))
+            return
+        // What is left is a refusal somebody outside made — the far side keeping the branch. The row cannot answer
+        // that and the name it asked with is not what was turned down, so the bar carries it instead.
+        page.reportRefusal(answer)
+    }
 
     // ---- what the window is already showing as gone ------------------
     //
@@ -1482,6 +1509,8 @@ Item {
         // below for the same reason, and out of it altogether: the group that branch reads describes the answers
         // nobody was waiting for, and this one was waited for by name (`RepoTab.commitAnswer`).
         page.absorbCommitAnswer()
+        // …and for the plain delete a card stayed up for, which is the same arrangement one door along.
+        page.absorbBranchDelete()
         // What is left over is the answers nobody named — **and its branches end it rather than this function**, so
         // no press's own answer can be skipped by a refusal somebody else's write came back with.
         page.absorbLeftoverAnswer()
@@ -1546,18 +1575,6 @@ Item {
                 page.writeReported(repoTab.writeReportKind,
                                    repoTab.writeReportRemote,
                                    repoTab.writeReportName)
-                return
-            }
-            // The one refusal this page has a second move for — a branch delete git would not do on its own — is
-            // answered where it was asked: the card that stayed up for it reads its own name off the tab and turns
-            // its row into the held `-D` (`RefBranchMenu`). A refusal does not mean the commits stop being
-            // reachable: git measures the branch against its upstream when it has one, so a branch merged into HEAD
-            // but not yet pushed is refused while nothing at all would be lost (measured). Nothing to raise here —
-            // the row is the answer. **This answer's, by its seq**: the name stands until the next delete is
-            // asked, and a refusal of something else that comes later must still raise the log.
-            if (repoTab.branchDeleteRefused !== "" && repoTab.branchDeleteSeq === repoTab.writeSeq) {
-                page.pendingRenameRemote = ""
-                page.pendingRenameTo = ""
                 return
             }
             // Nothing else on screen says what git said, so the log comes up (デザイン規約 §git が言ったことを読む場所). Raised from the

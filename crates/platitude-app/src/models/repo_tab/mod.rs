@@ -105,23 +105,30 @@ pub struct RepoTab {
     /// The plain `branch --delete` out for git's answer — the one press
     /// that leaves its menu standing, because git may refuse it and the
     /// refusal has to land on the row that asked (`AppMenuItem.staysOpen`).
-    /// Only the plain form: `-D` and `Delete both` stand for nothing. Set
-    /// by the slot, spent by the branch answer that follows.
-    branch_delete_out: String,
+    /// Only the plain form: `-D` and `Delete both` stand for nothing.
+    ///
+    /// **The name and the id its write was accepted under, written down
+    /// together by the press** (`ops::BranchDeleteOut`, plain Rust whose
+    /// transitions run under `cargo test`): a drain can carry several
+    /// answers, and which of them this card's name belongs to is a thing
+    /// only the press still knows.
+    branch_delete_out: crate::ops::BranchDeleteOut,
     /// How git answered it: the branch whose plain delete git took, and
-    /// the one it turned down. The card that stayed up reads its own name
-    /// here and either goes or turns its row into `-D` (`RefBranchMenu`)
-    /// — whichever menu raised it, so nothing above the card has to know
-    /// which one is standing. **Kept until the next plain delete is
-    /// asked**, like the check's answer above and unlike the write group
-    /// below: a fetch answering in the same drain would rewrite a group
-    /// property before the card had seen it, and the card would be left
-    /// standing. `branch_delete_seq` is the `write_seq` the answer was
-    /// counted at, for a reader that has to know the answer in hand is
-    /// this one (`RepoPage`).
+    /// the one it turned down — the picture QML is handed, the way the
+    /// four `gone_*` are the delete's. The card that stayed up reads its
+    /// own name here and either goes or turns its row into `-D`
+    /// (`RefBranchMenu`) — whichever menu raised it, so nothing above the
+    /// card has to know which one is standing. **Kept until the next
+    /// plain delete is asked**, like the check's answer above and unlike
+    /// the write group below: the card reads it as an edge and may not
+    /// have been drawn yet when it arrives.
     branch_delete_landed: String,
     branch_delete_refused: String,
-    branch_delete_seq: i32,
+    /// Where that card's own answer stands in `write_answers`, or -1
+    /// where this notify carried none of it — how the page tells the
+    /// answer in hand from the one standing above, which no count of
+    /// answers could (`RepoPage.absorbBranchDelete`).
+    branch_delete_answer: i32,
     /// The rows a delete is standing in for, one name per list — what the
     /// sidebar's sections and the graph's chips are drawn without
     /// (デザイン規約 §消す操作は先に画面から消す).

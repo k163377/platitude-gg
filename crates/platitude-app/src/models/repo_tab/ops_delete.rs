@@ -21,29 +21,47 @@ impl RepoTab {
     /// forced form was already the answer to a refusal and stands for
     /// nothing.
     pub(super) fn branch_delete(&mut self, name: String, force: bool) {
-        if self.arm_branch_delete(&name, force) {
+        let asked = self.ask_session(|s| s.delete_branch(name.clone(), force));
+        let accepted = asked.map(platitude_core::OperationId::as_u64);
+        if !force && self.arm_branch_delete(&name, accepted) {
             // QML is told the last answer is gone, so a delete of a
             // re-made branch of the same name reads its own answer as a
             // change rather than as the old one standing.
             self.changed();
         }
-        let asked = self.ask_session(|s| s.delete_branch(name.clone(), force));
         self.took_away(&[(Row::Branch, &name)], asked);
     }
 
-    /// Writes the plain delete down as the question the next branch
-    /// answer is about, and takes the last answer down with it — the
-    /// check's beat (`look_up_branch_delete`). Says whether anything was
-    /// armed: the forced form arms nothing. Apart from the notify so a
-    /// test can hold it against `settle_write`.
-    pub(super) fn arm_branch_delete(&mut self, name: &str, force: bool) -> bool {
-        if force {
+    /// Writes the plain delete down as the question the next answer to
+    /// **that write** is about, and takes the last answer down with it —
+    /// the check's beat (`look_up_branch_delete`). Says whether the
+    /// picture QML draws from moved. Apart from the notify so a test can
+    /// hold it against `settle_write`.
+    pub(super) fn arm_branch_delete(&mut self, name: &str, accepted: Option<u64>) -> bool {
+        self.branch_delete_out.asked(name, accepted);
+        self.read_branch_delete_out()
+    }
+
+    /// Copies the picture the card is drawn from out of its owner, the
+    /// way the four `gone_*` are copied out of the delete's
+    /// ([`Self::stand_in`]). Says whether any of it moved.
+    pub(super) fn read_branch_delete_out(&mut self) -> bool {
+        let landed = self.branch_delete_out.landed().to_string();
+        let refused = self.branch_delete_out.refused().to_string();
+        let at = self
+            .branch_delete_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+        if landed == self.branch_delete_landed
+            && refused == self.branch_delete_refused
+            && at == self.branch_delete_answer
+        {
             return false;
         }
-        self.branch_delete_out = name.to_string();
-        self.branch_delete_landed = String::new();
-        self.branch_delete_refused = String::new();
-        self.branch_delete_seq = 0;
+        self.branch_delete_landed = landed;
+        self.branch_delete_refused = refused;
+        self.branch_delete_answer = at;
         true
     }
 

@@ -56,8 +56,10 @@ impl RepoTab {
         Notify = changed
     );
     // git's answer to the plain delete a card stayed up for, by name: the
-    // card reads its own and goes or turns its row (`RefBranchMenu`). The
-    // seq says which write's answer it is (`RepoPage`).
+    // card reads its own and goes or turns its row (`RefBranchMenu`).
+    // Where that answer stands in this notify — -1 where this notify
+    // carried none of it — is how the page tells the answer in hand from
+    // the one standing above (`ops::BranchDeleteOut`).
     qproperty!(
         "branchDeleteLanded",
         Member = branch_delete_landed,
@@ -69,8 +71,8 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!(
-        "branchDeleteSeq",
-        Member = branch_delete_seq,
+        "branchDeleteAnswer",
+        Member = branch_delete_answer,
         Notify = changed
     );
     // The rows a delete has taken off the screen, one name per list, for

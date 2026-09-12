@@ -27,6 +27,9 @@
 //! went away took the text and the pane with it, and there is nothing
 //! left to empty or to walk anybody off.
 
+mod branch_delete_out;
+#[cfg(test)]
+mod branch_delete_out_tests;
 mod press;
 #[cfg(test)]
 mod press_tests;
@@ -37,6 +40,7 @@ mod stash_out;
 #[cfg(test)]
 mod stash_out_tests;
 
+pub use branch_delete_out::BranchDeleteOut;
 pub use press::Press;
 pub use stand_in::{Row, Rows, StandIn};
 pub use stash_out::StashOut;

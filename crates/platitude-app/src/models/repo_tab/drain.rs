@@ -27,6 +27,8 @@ impl RepoTab {
         self.write_answers.clear();
         self.commit_out.new_notify();
         self.read_commit_out();
+        self.branch_delete_out.new_notify();
+        self.read_branch_delete_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -305,28 +307,6 @@ impl RepoTab {
             && !self.last_write_stopped
             && matches!(op.as_str(), "revert" | "cherry-pick" | "merge");
         self.write_seq += 1;
-        // The plain branch delete's own answer, for the card that stayed
-        // up to catch it, by the name it asked with. **Not part of the
-        // group above**: it stands until the next plain delete is asked
-        // (`branch_delete`), because a fetch answering in the same drain
-        // would rewrite a group property before the card had seen it and
-        // leave the card standing — the very thing it reads this for. The
-        // seq says which answer it was, for a reader that needs the answer
-        // in hand to be this one (`RepoPage`). A refusal that comes with a
-        // report is the report's to say (the page's notice bar) and turns
-        // no row; anything else git would not do is the `-D` question the
-        // card asks by turning its row.
-        if op == "branch" && !self.branch_delete_out.is_empty() {
-            let asked = std::mem::take(&mut self.branch_delete_out);
-            let (took, turned_down) = match (landed, reported) {
-                (true, _) => (asked, String::new()),
-                (false, false) => (String::new(), asked),
-                (false, true) => (String::new(), String::new()),
-            };
-            self.branch_delete_landed = took;
-            self.branch_delete_refused = turned_down;
-            self.branch_delete_seq = self.write_seq;
-        }
         // The answer as it came, kept whole: this is what an owner is
         // handed and what every reader waiting for one write by name
         // reads its meanings off (`write_answers`).
@@ -347,18 +327,24 @@ impl RepoTab {
         // Handed to whoever named this write at the press.
         //
         // **How much of an answer an owner takes is the owner's own.**
-        // Everything the page does with the editor's commit is
-        // `CommitOut`'s, so that answer stops there — a copy in the group
-        // below would have the page act on the one answer twice. The
-        // stash that took the working tree away is told only that its
-        // write landed, because the rest of its answer is still
-        // everybody's: the diff it left stale, and the refusal it might
-        // have been.
-        let answered_for = self.commit_out.answered(id, at);
-        self.stash_out.answered(id, !landed, head_seq);
-        if answered_for {
+        // Everything the page does with the editor's commit, and with the
+        // plain delete a card stayed up for, is the owner's — so those
+        // answers stop there, and a copy in the group below would have
+        // the page act on the one answer twice. The stash that took the
+        // working tree away is told only that its write landed, because
+        // the rest of its answer is still everybody's: the diff it left
+        // stale, and the refusal it might have been.
+        let mut answered_for = false;
+        if self.commit_out.answered(id, at) {
             self.read_commit_out();
-        } else {
+            answered_for = true;
+        }
+        if self.branch_delete_out.answered(id, at, !landed, reported) {
+            self.read_branch_delete_out();
+            answered_for = true;
+        }
+        self.stash_out.answered(id, !landed, head_seq);
+        if !answered_for {
             self.fold_into_group(&op, landed, at);
         }
         self.last_write_error = error;
