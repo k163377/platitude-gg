@@ -50,7 +50,14 @@ impl NavSectionModel {
                 // The commit makes the row clickable: the details pane
                 // then shows the stashed changes.
                 Entry::Stash(stash) => Value::Spelled(stash.oid.to_hex()),
-                Entry::Worktree { .. } | Entry::File { .. } => Value::Said(""),
+                // Where that checkout is standing, which is what a click
+                // on the row jumps to — the same answer a branch row
+                // gives, off the HEAD git listed with the entry. Empty
+                // on a bare entry, which has no commit out.
+                Entry::Worktree { entry, .. } => {
+                    Value::Said(entry.head_hex.as_deref().unwrap_or(""))
+                }
+                Entry::File { .. } => Value::Said(""),
             },
             Role::IsHead => Value::Flag(match of {
                 // By the name the one record reports (`head_name`), not

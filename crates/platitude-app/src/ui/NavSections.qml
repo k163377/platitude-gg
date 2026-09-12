@@ -179,7 +179,8 @@ ColumnLayout {
     }
 
     // git worktrees (checkouts); the changed-file lists live in the
-    // right pane's WIP view. Clicking one opens it as a new tab.
+    // right pane's WIP view. Clicking one goes to the commit that
+    // checkout is standing on, double-clicking opens it as a new tab.
     NavHeader {
         id: worktreeHead
         caption: qsTr("WORKTREES")
@@ -196,6 +197,7 @@ ColumnLayout {
         kindHint: "worktree"
         gestures: sections.gestures
         Layout.verticalStretchFactor: sections.sectionPull
+        onRefActivated: oidHex => sections.refActivated(oidHex)
     }
 
     NavHeader {

@@ -158,7 +158,8 @@ Item {
         visible: navRow.is_head && !navRow.folder
     }
     // The row a click last landed on. Without it the second click of the rename gesture would be aimed at nothing, and
-    // a click on a worktree row — which has nowhere to jump to — would look like it missed.
+    // a click on a row whose commit is already the one being read — a worktree standing where the graph already is —
+    // would look like it missed.
     Rectangle {
         id: chosenBox
         anchors.fill: parent
@@ -284,10 +285,10 @@ Item {
         } else if (navRow.kindHint === "wt") {
             navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path,
                                modifiers === undefined ? Qt.NoModifier : modifiers)
-        } else if (navRow.kindHint === "worktree") {
-            // Another repository: nothing here to jump to, so a click only takes the row (the double-click opens it as
-            // a tab).
         } else if (navRow.oid_hex !== "") {
+            // Every row that names a commit goes the one way, a worktree row with the rest of them: the commit its
+            // checkout is standing on (デザイン規約 §左メニューの所作). A bare entry names none and is the one row here that
+            // answers a click with nothing.
             navRow.refClicked(navRow.oid_hex)
         }
     }

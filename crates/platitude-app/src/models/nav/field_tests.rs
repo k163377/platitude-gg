@@ -190,23 +190,28 @@ fn the_short_sections_read_out_of_what_arrived() {
     assert_eq!(says(&model, 0, Role::Full), "stash@{0}");
     assert_eq!(says(&model, 0, Role::OidHex), oid("c").to_hex());
 
-    let entry = |path: &str, branch: &str| platitude_core::worktrees::WorktreeEntry {
-        path: path.to_string(),
-        branch: Some(branch.to_string()),
-        head_hex: None,
-        bare: false,
-        detached: false,
-        locked: false,
-        lock_reason: String::new(),
-        prunable: false,
-        prune_reason: String::new(),
+    let entry = |path: &str, branch: Option<&str>, head: Option<&str>| {
+        platitude_core::worktrees::WorktreeEntry {
+            path: path.to_string(),
+            branch: branch.map(str::to_string),
+            head_hex: head.map(|digit| oid(digit).to_hex()),
+            // The one entry git lists with no commit out is the bare
+            // one, and it carries no branch either.
+            bare: head.is_none(),
+            detached: false,
+            locked: false,
+            lock_reason: String::new(),
+            prunable: false,
+            prune_reason: String::new(),
+        }
     };
     let mut model = section(
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:\\work\\repo", "main"),
-                entry("C:\\work\\other", "topic"),
+                entry("C:\\work\\repo", Some("main"), Some("a")),
+                entry("C:\\work\\other", Some("topic"), Some("b")),
+                entry("C:\\work\\bare", None, None),
             ],
             current: "c:/work/other".to_string(),
         },
@@ -219,6 +224,12 @@ fn the_short_sections_read_out_of_what_arrived() {
     // The one this window is showing is marked, however git spelled it.
     assert!(flags(&model, 1, Role::IsHead));
     assert_eq!(model.head_row, 1);
+    // Where a click on the row lands: the commit that checkout is
+    // standing on, the same slot a branch row answers a jump out of
+    // (デザイン規約 §左メニューの所作).
+    assert_eq!(says(&model, 0, Role::OidHex), oid("a").to_hex());
+    assert_eq!(says(&model, 1, Role::OidHex), oid("b").to_hex());
+    assert_eq!(says(&model, 2, Role::OidHex), "");
 }
 
 /// The seat a worktree row opens with, and the words behind it — both
