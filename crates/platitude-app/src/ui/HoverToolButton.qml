@@ -31,8 +31,18 @@ ToolButton {
     readonly property color washColor:
         !hoverToolButtonSelf.enabled ? "transparent"
         : hoverToolButtonSelf.down ? Theme.bgPressed
-        : hoverToolButtonSelf.hovered || hoverToolButtonSelf.visualFocus ? Theme.bgHover
+        : hoverToolButtonSelf.lit || hoverToolButtonSelf.visualFocus ? Theme.bgHover
         : "transparent"
+
+    /// Stands in for the pointer, which headless cannot inject (`NavItemDelegate.tipPointedAt` and its kin). Read
+    /// where `hovered` is read and nowhere else, so a run lights what a hand lights — wash and tip together, never one
+    /// without the other.
+    property bool pointedAt: false
+    /// A hand is on this button, whichever of the two put it there.
+    readonly property bool lit: hoverToolButtonSelf.hovered || hoverToolButtonSelf.pointedAt
+    /// Automation: the tip this button raised is up. The attached tooltip waits out `tipDelayMs` before it stands, so
+    /// this is the one thing that says the words are on screen rather than merely asked for.
+    readonly property bool tipShown: hoverToolButtonSelf.ToolTip.visible
 
     // Said out loud rather than left to the platform. A Control with no ancestor claiming hover falls back to the
     // theme's `useHoverEffects` hint, which the offscreen platform answers with false (measured with qmltestrunner: the
@@ -48,7 +58,7 @@ ToolButton {
     /// replaces the one below.
     property string tip: ""
 
-    ToolTip.visible: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.hovered
+    ToolTip.visible: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.lit
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: hoverToolButtonSelf.tip
 

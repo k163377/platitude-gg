@@ -15,28 +15,29 @@ ActionButton {
     property bool busyLatched: false
     /// Fetches that failed in a row, whoever asked for them.
     readonly property int fails: fetchButton.curPage !== null ? fetchButton.curPage.pageTab.fetchFailures : 0
-    /// Enough of them that the timer was stopped. Only a hold on this button starts it again.
+    /// Enough of them that the timer was stopped. Only a press on this button starts it again.
     readonly property bool stopped: fetchButton.curPage !== null && fetchButton.curPage.pageTab.autoFetchSuspended
 
     kind: "fetch"
     text: fetchButton.stopped ? qsTr("Resume") : "fetch"
     code: !fetchButton.stopped
-    // Only the stopped step takes a colour for its word: a run of failures is said by the frame and the mark
-    // while the word stays plain (デザイン規約 §長押し — 警告の色は語ではなく 枠と印が持つ).
-    tone: fetchButton.stopped ? Theme.danger : Theme.textPrimary
-    // Read off the state rather than off `tone`: through the wait the word takes the disabled step like any
-    // word that cannot be pressed, and the frame, the ring and the mark are what still say this is the fetch
-    // that has been failing (デザイン規約 §暗く落とした段).
-    toneDim: fetchButton.stopped ? Theme.dangerDim
-             : fetchButton.fails > 0 ? Theme.warningDim
-             : Theme.textMuted
-    frameColor: fetchButton.stopped ? Theme.danger
-                : fetchButton.fails > 0 ? Theme.warning
-                : "transparent"
-    // Only while the word is still `fetch`: once it reads `Resume`, the word is the news.
-    alert: fetchButton.fails > 0 && !fetchButton.stopped
+    // The stopped step steps back rather than up: nothing is lost by starting the timer again, so the word and the
+    // icon go to `textSecondary` together and come up to full under a hand (デザイン規約 §リモートから取り込む). Every
+    // other step keeps the plain word — what failed is said by the mark (§長押し — 警告の色は語ではなく枠と印が持つ).
+    tone: fetchButton.stopped && !fetchButton.lit ? Theme.textSecondary : Theme.textPrimary
+    // Read off the state rather than off `tone`: through the wait the word takes the disabled step like any word
+    // that cannot be pressed, and the ring, the mark and the frame where there is one are what still say this is
+    // the fetch that has been failing (デザイン規約 §暗く落とした段).
+    toneDim: fetchButton.fails > 0 ? Theme.warningDim : Theme.textMuted
+    // Only the step that wants a hand wears a frame: a run the timer is still working through will come right on
+    // its own, so it says so with the mark alone (デザイン規約 §リモートから取り込む — 枠は手が要る段のもの).
+    frameColor: fetchButton.stopped ? Theme.warning : "transparent"
+    alert: fetchButton.fails > 0
     alertTone: Theme.warning
-    holdMs: fetchButton.stopped ? Metrics.holdMs : 0
+    // `Resume` is the wording the shared box is measured for, so it is the one with no air of its own to stand the
+    // mark in: one gap back puts the mark inside the frame rather than against it (デザイン規約 §リモートから取り込む
+    // — 箱を勝ち取った語の `!`).
+    alertTight: fetchButton.stopped
     // Whoever asked for it, the network shows here: a fetch on the timer turns the button the way a clicked one
     // does.
     busy: fetchButton.busyLatched
@@ -56,7 +57,7 @@ ActionButton {
         if (!fetchButton.enabled)
             return ""
         const what = fetchButton.stopped
-                     ? qsTr("Automatic fetching stopped after %n failure(s). Hold to start it again.", "",
+                     ? qsTr("Automatic fetching stopped after %n failure(s). Start it again.", "",
                             fetchButton.fails)
                      : qsTr("Fetch all remotes and prune deleted branches")
         const why = fetchButton.curPage.pageTab.autoFetchError
@@ -68,6 +69,12 @@ ActionButton {
                               ? qsTr("Automatically every %n minute(s)", "", AppBackend.autoFetchMinutes)
                               : qsTr("Automatic fetching is off"))
     }
-    onActivated: fetchButton.curPage.pageTab.fetch("")
-    onHeld: fetchButton.curPage.pageTab.resumeAutoFetch()
+    // One press, and the state decides which of the two it means: the stopped button clears the run and fetches on
+    // its own (`RepoTab::restart_auto_fetch`), so nothing here asks for a fetch as well.
+    onActivated: {
+        if (fetchButton.stopped)
+            fetchButton.curPage.pageTab.resumeAutoFetch()
+        else
+            fetchButton.curPage.pageTab.fetch("")
+    }
 }
