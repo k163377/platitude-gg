@@ -77,8 +77,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           delete-branch-go — whose first `--delete` is the
                           one git turns down —, commands-fail,
                           commands-fail-shut, commands-clear, fetch-fail,
-                          fetch-recover, fetch-resume, push-retry,
-                          remote-refused, tag-refused, push-outdated,
+                          fetch-recover, fetch-recover-held, fetch-resume,
+                          push-retry, remote-refused, tag-refused,
+                          push-outdated,
                           commit-refused, notice-over-diff, stale-part —
                           which refuses a write of its own, without git —,
                           rename-taken, fold-across-merge, fold-off-branch,

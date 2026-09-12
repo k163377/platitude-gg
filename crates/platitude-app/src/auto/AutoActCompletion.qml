@@ -48,7 +48,7 @@ QtObject {
                 "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-select", "commands-copy", "commands-sweep",
                 "commands-fail", "commands-clear",
-                "fetch-recover",
+                "fetch-recover", "fetch-recover-held",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
             // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
             // and a run held at the write barrier for one waits out the watchdog in silence.
@@ -207,7 +207,7 @@ QtObject {
                 // failure, recovery), but the page must never photograph their intermediate state before the
                 // window-level predicate has answered.
                 "open-fetches",
-                "open-picker", "commands-clear", "fetch-recover",
+                "open-picker", "commands-clear", "fetch-recover", "fetch-recover-held",
                 "clone-dialog", "clone-go", "clone-refused",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",

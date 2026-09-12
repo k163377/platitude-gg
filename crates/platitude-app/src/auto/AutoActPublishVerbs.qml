@@ -120,6 +120,12 @@ Item {
             // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
             // success takes down by itself.
             repoTab.fetch("pgg-no-such-remote")
+        } else if (act === "fetch-recover-held") {
+            // The same recovery over a panel the reader put up first, which the fetch may not take down again
+            // (デザイン規約 §git が言ったことを読む場所). The press goes in at the seat's own function — the `>_` calls this
+            // and nothing else — so a build where the press stopped reaching the rule ends with the panel gone.
+            page.toggleCommands()
+            repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-fail") {
             // The argument is how many failed fetches to run, so one verb reaches the warning shape and the stopped one
             // alike. The fetches are asked for by `fetchFailTimer`, which is also what ends the run.

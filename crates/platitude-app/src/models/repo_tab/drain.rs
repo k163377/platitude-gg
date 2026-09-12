@@ -291,6 +291,7 @@ impl RepoTab {
         self.write_stashed = landed && op == "stash";
         self.write_branch_op = op == "branch";
         self.write_pushed = op == "push";
+        self.write_fetched = op == "fetch";
         self.write_seq += 1;
         // The plain branch delete's own answer, for the card that stayed
         // up to catch it, by the name it asked with. **Not part of the

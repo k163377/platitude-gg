@@ -105,23 +105,35 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal,
-    // reads the mark, fires the fetch that can land, and reads the same mark again — the picture can only hold the
-    // quiet half.
+    // PGG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal to
+    // reach the band and raise the panel, reads the mark, fires the fetch that can land, and reads both again — the
+    // picture can only hold the quiet half.
+    //
+    // **`-held` is the same run over a panel the reader put up first** (the page opened it before the failing fetch),
+    // and the two are one timer because what they do is one thing: the answer they part on is the last `open=`, which
+    // is the panel going down for one and staying up for the other. The close happens inside the drain that zeroes
+    // the count, so a tick that sees the count zeroed is reading a decision already made — no wait of its own.
+    //
+    // The standing panel is a precondition of the branch that fetches and is read nowhere else (規約 §UI 自動化の因果性):
+    // for `fetch-recover` it would otherwise be this verb's own answer — the panel gone — barring the way to the
+    // report.
     SampleTimer {
         id: fetchRecoverActTimer
-        running: Harness.autoAct === "fetch-recover"
+        running: Harness.autoAct === "fetch-recover" || Harness.autoAct === "fetch-recover-held"
         property bool fetchRequested: false
         property bool was: false
         property bool hadLine: false
+        property bool wasOpen: false
         onTriggered: {
             if (window.curPage === null)
                 return
             if (!fetchRecoverActTimer.fetchRequested) {
-                if (!driver.commandsWrongSeen && !driver.errorLineSeen)
+                if ((!driver.commandsWrongSeen && !driver.errorLineSeen)
+                        || !window.curPage.commandsShown)
                     return
                 fetchRecoverActTimer.was = driver.commandsWrongSeen
                 fetchRecoverActTimer.hadLine = driver.errorLineSeen
+                fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
                 fetchRecoverActTimer.fetchRequested = true
                 window.curPage.pageTab.fetch("")
                 return
@@ -135,6 +147,7 @@ Item {
             Harness.report(
                 "fetch_recover was=" + fetchRecoverActTimer.was
                 + " hadline=" + fetchRecoverActTimer.hadLine
+                + " wasopen=" + fetchRecoverActTimer.wasOpen
                 + " wrong=" + window.curPage.commandsWrong
                 + " line=" + (window.curPage.pageTab.lastError !== "")
                 + " failures=" + window.curPage.pageTab.fetchFailures

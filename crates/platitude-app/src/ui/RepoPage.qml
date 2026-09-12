@@ -175,10 +175,14 @@ Item {
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
+            page.absorbFetchRecovery()
         }
         // Only the first failure of a run: an offline machine would otherwise re-raise the panel every interval (デザイン規約
         // §git が言ったことを読む場所).
         function onFetchFirstFailed() {
+            // What this raises is what a fetch that reaches the remote again takes back down (`absorbFetchRecovery`).
+            // Asked before the raise, because what the answer turns on is whether a panel was already standing.
+            commandsOwner.fetchRaises(page.commandsOpen)
             page.commandsOpen = true
         }
     }
@@ -1535,6 +1539,12 @@ Item {
             // answer rather than from the commands, because the ones that answer by their exit code do not raise it
             // themselves — and whether an operation built out of several of them failed is a question only its own
             // answer can settle.
+            //
+            // **A fetch answering here is not somebody else's news**: it is the same refusal the tab has already
+            // counted, lined and raised the panel once for, and taking the panel over on it would leave the reader's
+            // screen holding a failure that has since healed (`CommandsOwner`).
+            if (!repoTab.writeFetched)
+                commandsOwner.newsTakes()
             page.commandsOpen = true
             // A rename that did not happen has nothing to carry over.
             page.pendingRenameRemote = ""
@@ -1880,8 +1890,27 @@ Item {
     /// Whether the command log is up. Closed is the resting state: the `>_` at the foot of the left menu opens it, and
     /// a failed command raises it.
     property bool commandsOpen: false
+    // Who the panel standing belongs to — the one rule here that is about the **order** failures arrive in, which is
+    // why it is a component of its own with every order walked (`CommandsOwner` / `tst_commandsowner.qml`).
+    CommandsOwner {
+        id: commandsOwner
+    }
     function toggleCommands() {
+        commandsOwner.readerTakes()
         page.commandsOpen = !page.commandsOpen
+    }
+    /// Takes the panel down for its own two controls — `Clear` and the closing mark.
+    function shutCommands() {
+        commandsOwner.readerTakes()
+        page.commandsOpen = false
+    }
+    /// A fetch has reached the remote again, and the panel its failure raised goes down with the news
+    /// (デザイン規約 §git が言ったことを読む場所 — パネルを下ろす唯一の自動). **Read on every drain rather than off a
+    /// signal of its own**: the run of failures going back to zero *is* the recovery, and the tab holds both halves
+    /// of what the answer turns on.
+    function absorbFetchRecovery() {
+        if (commandsOwner.landingTakesItDown(repoTab.fetchFailures, repoTab.lastError !== ""))
+            page.commandsOpen = false
     }
     /// One mark for a failed command and for this tab's error line both. The page's rule, since the mark moves seats.
     readonly property bool commandsWrong: commandsModel.failed || repoTab.lastError !== ""
@@ -3048,7 +3077,7 @@ Item {
                     curPage: page
                     commandsModel: commandsModel
                     errorText: repoTab.lastError
-                    onCloseRequested: page.commandsOpen = false
+                    onCloseRequested: page.shutCommands()
                     onErrorCleared: repoTab.clearLastError()
                     onCopyRequested: text => clipboard.copy(text)
                 }
@@ -3057,9 +3086,10 @@ Item {
     }
 
     // A command the user asked for failed. Nothing else on screen says what git said, so the log comes up by itself and
-    // stays up — closing it is the reader's call, not the next success's. Unless this page asked for the refusal and
-    // turned it into a question: then the bar is already saying it, and the log would say it twice while pushing the
-    // graph out of the way.
+    // stays up — closing it is the reader's call, not the next success's (the one exception is the panel a failed
+    // fetch raised, which a fetch that lands takes back down: `absorbFetchRecovery`). Unless this page asked for the
+    // refusal and turned it into a question: then the bar is already saying it, and the log would say it twice while
+    // pushing the graph out of the way.
     //
     // And unless a write is in flight, whose own answer decides instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は
     // 「操作」の答えで下し、コマンド 1 本の終了コードでは下さない). One operation is several commands, so a non-zero one part
@@ -3081,6 +3111,8 @@ Item {
                 page.expectedRefusals--
                 return
             }
+            // Somebody else's news is going into the panel now, so a fetch that lands later leaves it standing.
+            commandsOwner.newsTakes()
             page.commandsOpen = true
         }
     }

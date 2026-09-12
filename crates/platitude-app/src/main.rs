@@ -120,6 +120,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/CommitRowMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/EolHoverCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandRowDelegate.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CommandsOwner.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandsPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandsTextSelect.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CommandsToggle.qml", "qt/qml/platitude");

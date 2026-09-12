@@ -145,6 +145,7 @@ impl RepoTab {
     qproperty!("writeStashed", Member = write_stashed, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
     qproperty!("writePushed", Member = write_pushed, Notify = changed);
+    qproperty!("writeFetched", Member = write_fetched, Notify = changed);
     // What a write that did not happen has to say for itself — the page
     // makes a notice out of these rather than an error
     // (デザイン規約 §答えの要らない報せ).

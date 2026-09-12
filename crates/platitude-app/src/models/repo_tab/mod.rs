@@ -263,6 +263,12 @@ pub struct RepoTab {
     /// toolbar button's push stays the flow's own slot to say
     /// (`PublishFlow.pushSentBranch`).
     write_pushed: bool,
+    /// The answer was a fetch, landed or not. A fetch that could not
+    /// reach the far side has already said so in the tab's own terms —
+    /// the button's count, the header's line, the panel raised once for
+    /// the run — so the page reads this to tell that news from another
+    /// report landing in the same panel (`CommandsOwner`).
+    write_fetched: bool,
     /// The write answers *this* notify carried, oldest first — the group
     /// above says only what the last of them was.
     ///

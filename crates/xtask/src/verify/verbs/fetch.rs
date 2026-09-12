@@ -68,13 +68,29 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // Recovery is the show, and the picture can only hold its quiet
     // half: a band that failed and healed ends the run looking like
-    // one that never failed at all. `was=`/`hadline=` are the red
-    // half — without them, a fetch that never failed raised no line,
-    // and taking down nothing would pass as recovery.
+    // one that never failed at all. `was=`/`hadline=`/`wasopen=` are
+    // the red half — without them, a fetch that never failed raised no
+    // line and no panel, and taking down nothing would pass as
+    // recovery. `open=false` is the panel that failure raised going
+    // down with it, which is the whole of what the reader asked for:
+    // a laptop that sleeps must not leave its news standing.
     Verb {
         name: "fetch-recover",
         when: &[],
-        plain: "fetch_recover was=true hadline=true wrong=false line=false failures=0",
+        plain: "fetch_recover was=true hadline=true wasopen=true wrong=false line=false failures=0 open=false",
+    },
+    // The other side of that one word, and the reason it is a pair: the
+    // reader's own panel, up before anything failed, which the same
+    // recovery must leave standing. `open=true` alone would pass on a
+    // run whose recovery never happened, so it is read beside the
+    // `wrong=`/`line=`/`failures=` the landing fetch cleared. The order
+    // the two panels came up in is the whole difference and no picture
+    // holds it — the orders themselves are walked in
+    // tests/qml/tst_commandsowner.qml.
+    Verb {
+        name: "fetch-recover-held",
+        when: &[],
+        plain: "fetch_recover was=true hadline=true wasopen=true wrong=false line=false failures=0 open=true",
     },
     // A run of failures cut short photographs the warning shape,
     // which is a real state and the one the short arguments are for

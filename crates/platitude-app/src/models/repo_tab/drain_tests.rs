@@ -176,6 +176,29 @@ fn a_push_answer_says_so_whichever_way_it_went() {
     assert!(settled("push", "! [rejected]").write_pushed);
 }
 
+/// The refused half is the one the page reads: a fetch that could not
+/// reach the far side has said so in the tab's own terms already, and
+/// the panel it raised stays the fetch's to take down again
+/// (`CommandsOwner`). A push answering the same way is somebody else's
+/// news in the same panel.
+#[test]
+fn a_fetch_answer_says_so_whichever_way_it_went() {
+    assert!(settled("fetch", "").write_fetched);
+    let mut tab = RepoTab::default();
+    // The run has raised its panel already, so this failure has no
+    // `fetch_first_failed` to emit — there is no proxy to emit it
+    // through here, and the refused half is what the page reads.
+    tab.fetch_log_raised = true;
+    tab.settle_write(
+        "fetch".into(),
+        "fatal: Could not read from remote".into(),
+        None,
+        0,
+    );
+    assert!(tab.write_fetched);
+    assert!(!settled("push", "! [rejected]").write_fetched);
+}
+
 #[test]
 fn a_landed_checkout_or_reset_moved_head() {
     assert!(settled("checkout", "").write_moved_head);
