@@ -26,13 +26,14 @@ Item {
     required property int depth
     required property bool folder
     required property bool eol_mark
+    /// The path the line-ending card is out for, handed down by the pane — the model keeps the words once rather than
+    /// on every row, and the card's own close is what clears it (`WipPane`). A row reads it to know the card standing
+    /// is **its** card (`eolCardOut`).
+    property string pointedEolPath: ""
     /// How far a local branch stands from its upstream, as of the last fetch. Zero on every other kind of row, and on
     /// a branch that is level with its upstream or has none — the row draws the arrows itself (`HeadTrack`).
     required property int ahead
     required property int behind
-    /// The pointed row's path, handed down by the pane — the model keeps the line-ending words once rather than on
-    /// every row, and a row checks the answer is its own before reading them (`eolPointedAt`).
-    property string pointedEolPath: ""
     /// The pointer arrived at, or left, a row carrying the mark.
     signal eolPointed(string path, bool on)
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
@@ -303,7 +304,39 @@ Item {
     }
     // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
     // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
-    onPointedChanged: if (navRow.eol_mark) navRow.eolPointed(navRow.fullName, navRow.pointed)
+    //
+    // **On a rest, the same one every other hover in this app opens after** (規約 §hover のツールチップ「通りすがりでは
+    // 開かない」): these rows stand in a list, and a hand crossing it passes over every marked one on the way. **The
+    // letting go is not on a rest** — what the pointer has left is not what a beat is for, and the card keeps its own
+    // (`WipPane.pointEol`).
+    //
+    // **The hand that comes back from the card is not asked again** (規約「出ているものの的へ戻る手は待たせない」): the
+    // card opens off the row's own bottom edge, so reading it takes the pointer off the row and returning puts it back.
+    // Rested on a second time, the card would go at `hoverKeepMs` and come back at `tipDelayMs` — a blink that
+    // punishes the ordinary way of reading what the row put out.
+    onPointedChanged: {
+        if (!navRow.eol_mark)
+            return
+        if (!navRow.pointed) {
+            eolRest.stop()
+            navRow.eolPointed(navRow.fullName, false)
+            return
+        }
+        if (navRow.eolCardOut)
+            navRow.eolPointed(navRow.fullName, true)
+        else
+            eolRest.restart()
+    }
+    // The rest itself. **It asks the row again when it runs out**: a delegate is recycled the moment its row scrolls
+    // off, so the one holding this timer need not be the row the hand was resting on.
+    Timer {
+        id: eolRest
+        interval: Metrics.tipDelayMs
+        onTriggered: {
+            if (navRow.eol_mark && navRow.pointed)
+                navRow.eolPointed(navRow.fullName, true)
+        }
+    }
     MouseArea {
         id: itemMouse
         anchors.fill: parent
@@ -401,17 +434,18 @@ Item {
         if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "remote")
             return full
         // A row carrying the line-ending mark has a card of its own, which names the path as its first line — two
-        // things opening off one pointer would sit on top of each other.
-        if (navRow.eolPointedAt)
+        // things opening off one pointer would sit on top of each other (規約 §hover のツールチップ「1 つのポインタが
+        // 開けるものは 1 つ」). **The mark is the test, not whether that card is out**: both open after the same rest, so
+        // a row that asked "is my card up yet?" would raise a tip in the turn before it was.
+        if (navRow.eol_mark)
             return ""
         // What is left is a file row: hover says the path, whatever the row shows and however wide the pane is
         // (デザイン規約 §hover のツールチップ).
         return full
     }
-    /// Whether the words on the model are this row's. Only one row can be pointed at, so they are kept once there
-    /// rather than on every row (`NavSectionModel::point_eol`), and the row has to check that the answer is its own
-    /// before reading it.
-    readonly property bool eolPointedAt: navRow.eol_mark && navRow.pointedEolPath === navRow.fullName
+    /// Whether the card standing is this row's. Only one row can have it, so the pane keeps the answer once and the
+    /// row weighs it against its own name before reading it (`NavSectionModel::point_eol`).
+    readonly property bool eolCardOut: navRow.eol_mark && navRow.pointedEolPath === navRow.fullName
     /// Whether the headless stand-in points at this row. The report still reads the ToolTip's own visible — the output
     /// side, as everywhere.
     /// **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, and -1 is also "the
