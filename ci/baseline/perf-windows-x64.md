@@ -279,7 +279,9 @@ invocation で撮っている**(各段が自分の較正 run と捨て run を�
 Qt 6.8 で Windows の既定が DirectWrite になり、旧 backend は QPA 引数
 `fontengine=gdi` で今も選べる。その `populateFamily` は `EnumFontFamiliesEx` で登録する
 だけでファイルを写像しないので、**歩きの代金がどこまで落ちるか**を同じ座りで背中合わせに
-撃った(席 c、コーパス token は上と同じ、DISPLAY2 180Hz、各 2 run + 較正 run):
+撃った(席 c、コーパス token は上と同じ、DISPLAY2 180Hz、各 2 run + 較正 run。
+**順は A → B で、B の後に撃った既定 backend の run が 305.9MB / 歩き +50.1MB** = A 側の
+水準に戻るので、差は座りの流れではない):
 
 | | 既定(DirectWrite) | `windows:fontengine=gdi` |
 |---|---|---|
