@@ -834,6 +834,15 @@ fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
         answered(SOMEBODY_ELSE, "fetch", ""),
     ]);
     assert!(tab.stash_out.ours());
+    let answer = tab
+        .write_answer_at(tab.stash_answer)
+        .expect("the press's own answer");
+    assert_eq!(answer.op, "stash");
+    assert!(
+        !answer.failed,
+        "and the file it left stale is read off that answer, \
+         not off a group the fetch behind it rewrites"
+    );
     assert!(
         tab.write_fetched,
         "while the group is the fetch's, being the last answer nobody named"
@@ -852,25 +861,40 @@ fn the_landing_stands_until_the_tree_is_read() {
         settled: true,
     }]);
     assert!(tab.stash_out.ours(), "nothing in between answered for it");
-    assert!(tab.stash_out.read(FENCE, EMPTIED));
+    assert_eq!(
+        tab.stash_answer, -1,
+        "while where it answered went with its own notify"
+    );
+    tab.stash_out.applied(FENCE, EMPTIED);
+    assert!(tab.stash_out.taken());
     assert!(
-        !tab.stash_out.read(FENCE, EMPTIED),
+        !tab.stash_out.taken(),
         "one press empties one tree, and the reading settles it"
     );
 }
 
 // A stash git would not make took no tree away, so the tree emptying
-// next emptied for some other reason.
+// next emptied for some other reason — but the words it was refused with
+// are still the press's own to say.
 #[test]
-fn a_refused_stash_claims_no_tree() {
+fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     let mut tab = tree_stashed();
     tab.absorb(vec![fenced(
         OURS,
         "stash",
         "error: Your local changes would be overwritten",
     )]);
-    assert!(!tab.stash_out.read(FENCE, EMPTIED));
-    assert!(tab.write_refused, "and the refusal is still the group's");
+    tab.stash_out.applied(FENCE, EMPTIED);
+    assert!(!tab.stash_out.taken());
+    assert!(
+        tab.write_answer_at(tab.stash_answer)
+            .is_some_and(|a| a.failed),
+        "the press's own answer says git would not do it"
+    );
+    assert!(
+        !tab.write_refused,
+        "so nothing is left over to say it twice"
+    );
 }
 
 // Every stash operation answers under the same word, so the answer alone
@@ -880,5 +904,28 @@ fn a_refused_stash_claims_no_tree() {
 fn somebody_elses_stash_answer_claims_no_tree() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![fenced(SOMEBODY_ELSE, "stash", "")]);
-    assert!(!tab.stash_out.read(FENCE, EMPTIED));
+    tab.stash_out.applied(FENCE, EMPTIED);
+    assert!(!tab.stash_out.taken());
+    assert_eq!(tab.stash_answer, -1);
+    assert!(
+        tab.write_stale_diff,
+        "and it falls to the group like any other nobody named"
+    );
+}
+
+// **The other order.** The status the press published can be applied
+// before the page has read the answer that says whose it was: the two
+// are drained apart. Dropped there, the tree emptying is gone — the next
+// status has no change to report, and the reader is left standing over a
+// pane describing a tree that is not there.
+#[test]
+fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
+    let mut tab = tree_stashed();
+    tab.stash_out.applied(FENCE, EMPTIED);
+    assert!(!tab.stash_out.taken(), "nothing to settle on yet");
+    tab.absorb(vec![fenced(OURS, "stash", "")]);
+    assert!(
+        tab.stash_out.taken(),
+        "the answer settles on the tree already read"
+    );
 }

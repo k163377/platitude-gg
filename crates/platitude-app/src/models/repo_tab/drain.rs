@@ -29,6 +29,8 @@ impl RepoTab {
         self.read_commit_out();
         self.branch_delete_out.new_notify();
         self.read_branch_delete_out();
+        self.stash_out.new_notify();
+        self.read_stash_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -327,13 +329,13 @@ impl RepoTab {
         // Handed to whoever named this write at the press.
         //
         // **How much of an answer an owner takes is the owner's own.**
-        // Everything the page does with the editor's commit, and with the
-        // plain delete a card stayed up for, is the owner's — so those
-        // answers stop there, and a copy in the group below would have
-        // the page act on the one answer twice. The stash that took the
-        // working tree away is told only that its write landed, because
-        // the rest of its answer is still everybody's: the diff it left
-        // stale, and the refusal it might have been.
+        // Everything the page does with the answer to a press that named
+        // its write is that press's own — the file it left stale, the
+        // words it was refused with, the boxes or the pane it puts down —
+        // so the answer stops there, and a copy in the group below would
+        // have the page act on the one answer twice. What is left over is
+        // the answers nobody named: the fetch on its timer, the write a
+        // page that has since gone away sent.
         let mut answered_for = false;
         if self.commit_out.answered(id, at) {
             self.read_commit_out();
@@ -343,7 +345,10 @@ impl RepoTab {
             self.read_branch_delete_out();
             answered_for = true;
         }
-        self.stash_out.answered(id, !landed, head_seq);
+        if self.stash_out.answered(id, at, !landed, head_seq) {
+            self.read_stash_out();
+            answered_for = true;
+        }
         if !answered_for {
             self.fold_into_group(&op, landed, at);
         }
@@ -357,6 +362,18 @@ impl RepoTab {
     fn read_commit_out(&mut self) {
         self.commit_answer = self
             .commit_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+    }
+
+    /// The same for the stash press that took the working tree away.
+    /// **The tree it is waiting for is not copied out** — that answer
+    /// exists only at the moment the page acts on a tree, and asking
+    /// spends it (`takeStashLanding`).
+    fn read_stash_out(&mut self) {
+        self.stash_answer = self
+            .stash_out
             .answer()
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1);

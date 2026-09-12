@@ -332,11 +332,18 @@ pub struct RepoTab {
     /// waiting for the reading where that tree turns out to be empty
     /// (`ops::StashOut`).
     ///
-    /// **Not a property**: what it says is asked for once, at the moment
-    /// a tree that has just emptied is being acted on, and asking spends
-    /// it (`takeStashLanding`). A binding would read an answer that is
+    /// **Two waits, and only one of them is a property.** Where its
+    /// answer stands is `stash_answer` below; whether the tree in front
+    /// of the page is the one that press emptied is asked for once, at
+    /// the moment the page acts on a tree, and asking spends it
+    /// (`takeStashLanding`) — a binding would read an answer that is
     /// gone by the time anything is drawn from it.
     stash_out: crate::ops::StashOut,
+    /// Where that press's own answer stands in `write_answers`, or -1
+    /// where this notify carried none of it. What the page does with it
+    /// is the same as with any other answer it was waiting for: read the
+    /// open file again, or say what git refused.
+    stash_answer: i32,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing

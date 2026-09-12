@@ -83,3 +83,45 @@ fn the_read_made_last_is_the_one_standing() {
     assert!(!read.taken(FENCE));
     assert!(read.taken(AFTERWARDS));
 }
+
+// **The other order.** The answer and the status are drained apart, so
+// the status the write published can be applied before the page has read
+// the answer that asks for the file. The read made then has nothing left
+// to suppress — and left standing, it would swallow the next status
+// instead, which is somebody editing the file in another window.
+#[test]
+fn a_status_that_arrived_first_leaves_no_read_standing() {
+    let mut read = DiffReread::default();
+    read.applied(FENCE);
+    assert!(
+        !read.taken(FENCE),
+        "nothing was waiting for it, and it read the file itself"
+    );
+    read.read_after(FENCE);
+    read.applied(AFTERWARDS);
+    assert!(
+        !read.taken(AFTERWARDS),
+        "the next status is somebody else's change, and it is news"
+    );
+}
+
+// The same the long way round: the status the write published arrives
+// while an older read is still standing, spends that one, and then the
+// new read finds it already applied.
+#[test]
+fn an_outside_change_after_the_reversed_pair_is_read_again() {
+    let mut read = DiffReread::default();
+    read.applied(FENCE);
+    read.read_after(FENCE);
+    assert!(!read.taken(AFTERWARDS), "read for the outside change");
+}
+
+// A status from before the fence says nothing about the write, so a read
+// made after it still stands and waits for the one that does.
+#[test]
+fn a_status_from_before_the_write_leaves_the_read_to_be_made() {
+    let mut read = DiffReread::default();
+    read.applied(IN_FLIGHT);
+    read.read_after(FENCE);
+    assert!(read.taken(FENCE));
+}

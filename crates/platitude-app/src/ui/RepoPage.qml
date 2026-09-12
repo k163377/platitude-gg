@@ -339,14 +339,27 @@ Item {
             // …and the commit moved what the two sides hold, so a diff left open on either is a picture of a file as
             // it was.
             page.readDiffForAnswer()
-        } else if (!page.reportRefusal(answer)) {
+        } else {
             // A rejected commit keeps its text — the boxes are the one thing on this page that cannot be read back
-            // off disk — and nothing else on screen says what git said, so the log comes up
-            // (デザイン規約 §git が言ったことを読む場所).
-            commandsOwner.newsTakes()
-            page.commandsOpen = true
+            // off disk — and what git said has nowhere else to go.
+            page.tellRefusal(answer)
         }
         page.commitAnswered(landed)
+    }
+    /// The answer to the stash press that took the working tree away — **its own answer**, out of the ones this
+    /// notify carried (`RepoTab.stashAnswer`, -1 where it carried none). The tree it emptied is a second wait of its
+    /// own, answered where the page acts on a tree (`leaveWipWhenDone`); this is the half that is over as soon as
+    /// git speaks.
+    function absorbStashAnswer() {
+        const answer = repoTab.stashAnswer
+        if (answer < 0)
+            return
+        if (repoTab.writeAnswerFailed(answer)) {
+            page.tellRefusal(answer)
+            return
+        }
+        // The entry took what was in the tree, so a diff left open on either side is a picture of a file as it was.
+        page.readDiffForAnswer()
     }
     /// What one answer that did not happen has to say for itself, whoever was waiting for it: somebody outside this
     /// application turned it down — a hook here or over there, a remote this end had only an older picture of.
@@ -372,6 +385,18 @@ Item {
         commandsModel.noteAnswered()
         page.writeReported(kind, remote, name)
         return true
+    }
+    /// The whole of what a press does with a refusal it has nothing else to answer with: the words come down as a
+    /// report where somebody outside wrote them, and where nobody did, the log comes up because nothing else on
+    /// screen says what git said (デザイン規約 §git が言ったことを読む場所).
+    ///
+    /// **The card that stayed up for a delete is the one exception** and calls `reportRefusal` alone — its row is
+    /// the answer, so there is nothing to raise over it.
+    function tellRefusal(answer) {
+        if (page.reportRefusal(answer))
+            return
+        commandsOwner.newsTakes()
+        page.commandsOpen = true
     }
     /// Automation: the editor's own commit has been answered and the boxes have been dealt with — **the one thing no
     /// picture can make**, since git answers before the reading that redraws the pane and the window photographs the
@@ -1526,6 +1551,13 @@ Item {
         page.absorbCommitAnswer()
         // …and for the plain delete a card stayed up for, which is the same arrangement one door along.
         page.absorbBranchDelete()
+        // …and for the stash that took the working tree away.
+        page.absorbStashAnswer()
+        // **The half of a press's pair that this notify completes.** The tree a stash emptied may already have been
+        // read — the status and this answer are drained apart — and then nothing else is coming to ask on its behalf.
+        // Asked with no edge of its own: the landing is the edge (`leaveWipWhenDone`), and where nothing is standing
+        // this reads as the poll it already ignores.
+        page.leaveWipWhenDone(false)
         // What is left over is the answers nobody named — **and its branches end it rather than this function**, so
         // no press's own answer can be skipped by a refusal somebody else's write came back with.
         page.absorbLeftoverAnswer()
@@ -2416,6 +2448,14 @@ Item {
     // background pass that moves rows under a reader may not also move their view
     // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
+    /// Whether the working tree the last status described has nothing left in it — **a tree nobody has read is not
+    /// one with nothing in it**, so every reader of this stands behind `workTree.loaded` (the counts start at zero,
+    /// which is this question's own picture of a job that is done. 規約 §UI 自動化の因果性).
+    ///
+    /// A property because two sides read it: the status that finds the tree empty, and the write answer that may be
+    /// the half completing a stash's pair (`leaveWipWhenDone`).
+    readonly property bool treeClean: workTree.stagedCount === 0 && workTree.unstagedCount === 0
+                                   && workTree.untrackedCount === 0 && workTree.conflictCount === 0
     /// What operation the last status named, so that its going away can be read as an edge rather than as a state.
     property string seenOpText: ""
     /// The WIP face has nothing left to hold the reader with. The working tree emptied: after a commit of our own that
@@ -2449,17 +2489,17 @@ Item {
         // status and never goes back (`WorkTreeModel`), so this stands in front of a page's opening moment alone.
         if (!workTree.loaded)
             return
-        const clean = workTree.stagedCount === 0 && workTree.unstagedCount === 0
-                   && workTree.untrackedCount === 0 && workTree.conflictCount === 0
         // Whether this window's own stash is what emptied it — asked of the press that made it, which is the only
-        // thing that still knows (`ops::StashOut`). **Asked of every status that can speak for that press, whichever
-        // way the tree went**: one that still has something in it settles the press too, since the stash plainly did
-        // not take that away, so nothing is left standing for a later emptying somebody else made. Asked before the
-        // conditions below, which are about the pane rather than about the tree.
-        const ourStash = repoTab.takeStashLanding(workTree.statusSeq, clean)
-        if (!clean)
+        // thing that still knows (`ops::StashOut`). **Asked from both sides of the pair**, because the status that
+        // finds the tree empty and the answer that says whose it was arrive in no fixed order; whichever comes
+        // second is the one this answers on, and the side that comes first asks and gets nothing.
+        const ourStash = repoTab.takeStashLanding()
+        if (!page.treeClean)
             return
-        if (!edge || !page.wipShown || workTree.opText !== "")
+        // **A landing of our own is an edge in itself.** `edge` keeps a poll that changed nothing under the reader
+        // from walking them off the face — the message box emptied by hand is the one that would do it — and it is
+        // not the question here, where the press itself is what moved.
+        if ((!edge && !ourStash) || !page.wipShown || workTree.opText !== "")
             return
         if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
             return
@@ -2757,6 +2797,11 @@ Item {
             // and the only one a clean stop ever moves (`leaveWipWhenDone`).
             const opGone = page.seenOpText !== "" && workTree.opText === ""
             page.seenOpText = workTree.opText
+            // **Written down before anything asks what it means.** A write's answer and the status it published are
+            // drained apart, so this may be the half that arrives first — and a status the presses waiting on one
+            // never hear about is a tree emptying, or a file moving, that nothing will account for.
+            if (workTree.loaded)
+                repoTab.noteTreeRead(workTree.statusSeq, page.treeClean)
             // The status that follows this window's own write: the file was read when the write answered, and this
             // report is the one that write published. Measured against the number the answer named for it
             // (`ops::DiffReread`) rather than against a count of answers — another write answering in between moves

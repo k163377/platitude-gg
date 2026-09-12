@@ -139,6 +139,10 @@ impl RepoTab {
     // so nothing on the page has to hold an id across the bridge or read
     // anything into which answer came last (`ops::Press`).
     qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
+    // …and where the stash press that took the working tree away
+    // answered. Its other wait — the tree itself — is asked for rather
+    // than watched (`takeStashLanding`).
+    qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
     // What is left over, classified in drain::settle_write — the page
     // reads meanings, never op names (app-ui.md). These describe the last
     // answer of this notify **nobody was waiting for by name**: a drain
@@ -782,26 +786,44 @@ impl RepoTab {
         self.note_listing_drawn();
     }
 
-    /// A status has arrived whose counts stand beside the report of HEAD
-    /// numbered `seen`, and `emptied` says whether they leave the working
-    /// tree with nothing in it: answers whether this window's own stash
-    /// is what emptied it, and settles the press either way
-    /// (`ops::StashOut`).
+    /// A status has been applied, whose counts stood beside the report of
+    /// HEAD numbered `seen` and left the working tree empty or not.
+    ///
+    /// **Written down before anything asks what it means**, because
+    /// either half of a pair can arrive first: the status a write
+    /// published can be applied before the page has read that write's
+    /// answer (the two are drained apart), and a status thrown away there
+    /// is a tree emptying nothing will ever account for
+    /// (`ops::StashOut`, `ops::DiffReread`).
     ///
     /// **The counts' own number, not HEAD's** (`WorkTreeModel.statusSeq`)
     /// — a report of HEAD arrives on its own as well, carrying no counts
-    /// at all, and read as an answer it would settle the press on the
-    /// tree as it was before the stash.
+    /// at all, and read as one of these it would speak for a tree it
+    /// never saw.
+    #[qslot]
+    fn note_tree_read(&mut self, seen: i32, emptied: bool) {
+        let Ok(seen) = u64::try_from(seen) else {
+            return;
+        };
+        self.stash_out.applied(seen, emptied);
+        self.diff_reread.applied(seen);
+    }
+
+    /// The page is acting on the working tree it has: answers whether
+    /// this window's own stash is what emptied it, and settles that press
+    /// (`ops::StashOut`).
+    ///
+    /// **Asked from both sides of the pair** — where a status lands and
+    /// where a write answers — because either can be the half that
+    /// completes it. It answers only once both are in, so the side that
+    /// arrives first asks and gets nothing.
     ///
     /// **Asked, not watched.** The question has an answer only at the
-    /// moment a status is being read, and asking it is what ends the
-    /// wait, so there is nothing here for a binding to follow.
+    /// moment the page is acting on a tree, and asking it is what ends
+    /// the wait, so there is nothing here for a binding to follow.
     #[qslot]
-    fn take_stash_landing(&mut self, seen: i32, emptied: bool) -> bool {
-        let Ok(seen) = u64::try_from(seen) else {
-            return false;
-        };
-        self.stash_out.read(seen, emptied)
+    fn take_stash_landing(&mut self) -> bool {
+        self.stash_out.taken()
     }
 
     /// The open file was read again because a write answered, so the
