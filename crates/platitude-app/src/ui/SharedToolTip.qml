@@ -69,6 +69,11 @@ Item {
     /// This part is taking it down, so the fall below is not one to argue with.
     property bool dropping: false
 
+    /// The target the box came out on, read off when it did. **What the beat is holding it for**: a hand walking into
+    /// the tip is walking into *this* target's, and an instance handed to another target is no longer the box that
+    /// hand was reaching for (`handOver`).
+    property Item standing: null
+
     /// Where the tip was opened beside, in `host` coordinates, and whether there was a hand to read it off. **Frozen
     /// when the tip comes out**: a seat that followed the pointer would slide out from under the hand walking into it.
     property real anchorX: 0
@@ -185,6 +190,7 @@ Item {
     function freeze() {
         shared.keeping = false
         keep.stop()
+        shared.standing = shared.sharedTip.parent
         shared.readAnchor()
         Qt.callLater(shared.settleAnchor)
     }
@@ -243,6 +249,13 @@ Item {
     function reopen() {
         if (!shared.keeping || shared.sharedTip.visible)
             return
+        // **Onto the target it came out on, and onto no other.** The fall this is answering and another target's ask
+        // arrive in either order, and the ask moves the instance before this runs: put back then, the box would come
+        // out on a row the hand has only just reached, with the rest it owes that row still counting (`handOver`).
+        if (shared.sharedTip.parent !== shared.standing) {
+            shared.keeping = false
+            return
+        }
         // **Without the rest.** The wait before a tip is the question "was that a hand going past, or one that meant
         // it?", and a tip that is already out has been answered (規約 §hover のツールチップ「出ているものの的へ戻る手は
         // 待たせない」). Put back through the delay it would still be counting when the beat below ran out, and the beat
@@ -251,6 +264,28 @@ Item {
         shared.sharedTip.delay = 0
         shared.sharedTip.open()
         keep.restart()
+    }
+
+    /// The instance was handed to another target while it stood. **Qt does not put the box out again for the new one**
+    /// — inside the same delivery that moved the pointer, `parent` and the words become the new target's, `visible`
+    /// never falls and the delay is never counted (measured, qmltestrunner). So a row the hand merely crossed into
+    /// wears a tip with no rest at all, and the reader sees a box that quietly began saying something else
+    /// (規約 §hover のツールチップ「隣の的への即時の移し替えは不採用」).
+    ///
+    /// The box goes down and the ask is made again, which is what starts the new target's own delay. **A turn later**,
+    /// for the reason `reopen` is: this runs from the middle of the attached property's own show, which has still to
+    /// write the words and make that ask. Nothing is drawn in between.
+    function handOver() {
+        const tip = shared.sharedTip
+        if (!tip.visible || tip.parent === shared.standing)
+            return
+        shared.drop()
+        // **Not weighed against the pointer.** `open()` on a delay counts rather than shows, and what asked for the
+        // tip is the site's own binding — still standing, hand or no hand (a run points at rows through the stand-ins,
+        // `handAcross`). A hand that has left the row says so through that same binding, and the close it brings
+        // stops the count.
+        if (tip.parent !== null)
+            tip.open()
     }
 
     property Timer keep: Timer {
@@ -272,7 +307,7 @@ Item {
     Connections {
         target: shared.sharedTip
         // A target letting go, and a target taking over. The first is answered with a beat rather than a close (see the
-        // component); the second is a new seat to read.
+        // component); the second with a close, because a target that has not been rested on is owed its rest.
         function onVisibleChanged() {
             if (shared.sharedTip.visible) {
                 if (!shared.keeping)
@@ -290,7 +325,7 @@ Item {
         }
         function onParentChanged() {
             if (shared.sharedTip.visible)
-                shared.freeze()
+                Qt.callLater(shared.handOver)
         }
     }
 
