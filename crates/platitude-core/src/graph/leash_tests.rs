@@ -34,12 +34,32 @@ fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect
     assert!(!wip_row_stands(&clean, &bisecting));
 }
 
+/// The map from commit to row holds commits. A synthetic row stands for
+/// work that is not an object — the all-zero id is git's own way of
+/// saying so — and an id that says "no object" is no address: more than
+/// one row can honestly carry it, and the two readers of the map
+/// (`row_of` for the commits refs point at, the out-of-order guard for a
+/// commit's parents) never ask about one.
+#[test]
+fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
+    let mut b = GraphBuilder::new();
+    let head = oid(1);
+    b.push_virtual(&head);
+    assert_eq!(b.row_of(&Oid::zero_like(&head)), None);
+    assert_eq!(b.tracked_oids(), 1, "only the lane waiting for HEAD");
+
+    let mut unborn = GraphBuilder::new();
+    unborn.push_virtual_root();
+    assert_eq!(unborn.row_of(&Oid::zero_unsized()), None);
+    assert_eq!(unborn.tracked_oids(), 0, "nothing to wait for either");
+}
+
 #[test]
 fn virtual_wip_row_takes_lane_zero_and_dashes_its_edge() {
     let mut pool = StrPool::new();
     let mut b = GraphBuilder::new();
     let head = oid(1);
-    let wip = b.push_virtual(&Oid::zero_like(&head), &head);
+    let wip = b.push_virtual(&head);
     assert_eq!((wip.row, wip.node_lane), (0, 0));
     assert!(
         wip.segments
@@ -75,7 +95,7 @@ fn a_merge_reaching_head_leaves_the_wip_leash_dashed() {
     let mut pool = StrPool::new();
     let mut b = GraphBuilder::new();
     let head = oid(2);
-    let wip = b.push_virtual(&Oid::zero_like(&head), &head);
+    let wip = b.push_virtual(&head);
     assert!(wip.segments.iter().all(|s| s.dashed));
 
     // Merge of the branch HEAD sits on: parents are the mainline (3)
@@ -191,7 +211,7 @@ fn duplicate_parent_merge_keeps_an_unrelated_leash_dashed() {
     let mut pool = StrPool::new();
     let mut b = GraphBuilder::new();
     let head = oid(2);
-    b.push_virtual(&Oid::zero_like(&head), &head);
+    b.push_virtual(&head);
 
     // Merge listing HEAD twice (git accepts duplicate parents).
     let merge = b.push(&commit(&mut pool, 1, &[2, 2]));
@@ -237,7 +257,7 @@ fn a_standing_merge_leashes_the_side_it_is_bringing_in() {
     let mut b = GraphBuilder::new();
     let head = oid(1);
     let theirs = oid(9);
-    let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[theirs]);
+    let wip = b.push_virtual_merging(&head, &[theirs]);
     assert_eq!((wip.row, wip.node_lane), (0, 0));
     let outs: Vec<(u16, bool)> = wip
         .segments
@@ -288,7 +308,7 @@ fn a_standing_merge_leashes_the_side_it_is_bringing_in() {
 fn an_octopus_leashes_every_side_separately() {
     let mut b = GraphBuilder::new();
     let head = oid(1);
-    let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[oid(8), oid(9)]);
+    let wip = b.push_virtual_merging(&head, &[oid(8), oid(9)]);
     let outs: Vec<u16> = wip
         .segments
         .iter()
@@ -308,11 +328,11 @@ fn an_octopus_leashes_every_side_separately() {
 fn a_side_already_leashed_does_not_get_a_second_lane() {
     let head = oid(1);
     let mut b = GraphBuilder::new();
-    let same = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[head]);
+    let same = b.push_virtual_merging(&head, &[head]);
     assert_eq!(same.width, 1, "the side is HEAD: {:?}", same.segments);
 
     let mut b = GraphBuilder::new();
-    let twice = b.push_virtual_merging(&Oid::zero_like(&head), &head, &[oid(9), oid(9)]);
+    let twice = b.push_virtual_merging(&head, &[oid(9), oid(9)]);
     assert_eq!(
         twice.width, 2,
         "one side, named twice: {:?}",

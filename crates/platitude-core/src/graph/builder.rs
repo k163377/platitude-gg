@@ -25,6 +25,15 @@ pub struct GraphBuilder {
     /// Lane indices currently expecting a given commit id.
     expects: HashMap<Oid, Vec<u16>>,
     /// Emitted commit id → row index (also serves the out-of-order guard).
+    ///
+    /// **Commits only** — a synthetic row is not filed here, and hands in
+    /// no id to be filed under. Its id is the all-zero one, which is
+    /// git's own spelling for "there is no object here": an id that says
+    /// a row has none is no address, and more than one row may honestly
+    /// carry it. Neither reader asks for one — the guard is only ever
+    /// asked about a *parent*, and a synthetic row is nobody's parent
+    /// (its edges are leashes), while `row_of` is asked about the commits
+    /// a ref points at.
     rows: HashMap<Oid, u32>,
     next_row: u32,
     next_color: u32,
@@ -188,19 +197,18 @@ impl GraphBuilder {
     /// only edge — drawn dashed — runs down to `parent` (HEAD). Feed it
     /// before the first real commit so the current chain keeps lane 0 and
     /// other tips shift right, exactly like a real commit would.
-    pub fn push_virtual(&mut self, oid: &Oid, parent: &Oid) -> GraphRow {
-        self.push_virtual_merging(oid, parent, &[])
+    pub fn push_virtual(&mut self, parent: &Oid) -> GraphRow {
+        self.push_virtual_merging(parent, &[])
     }
 
     /// The synthetic working-tree row of a branch with no commits yet: a
     /// node with nothing under it, the shape the first commit will have.
     /// Nothing is leashed — there is no tip to reach down to.
-    pub fn push_virtual_root(&mut self, oid: &Oid) -> GraphRow {
+    pub fn push_virtual_root(&mut self) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
         let color = self.take_color();
-        self.rows.insert(*oid, row);
         let width = lane + 1;
         self.max_width = self.max_width.max(width);
         GraphRow {
@@ -223,7 +231,7 @@ impl GraphBuilder {
     /// Same feeding rule as [`GraphBuilder::push_virtual`] — first, before
     /// any real commit — so HEAD keeps lane 0 and each incoming side takes
     /// the lane beside it that its own tip will arrive on.
-    pub fn push_virtual_merging(&mut self, oid: &Oid, parent: &Oid, incoming: &[Oid]) -> GraphRow {
+    pub fn push_virtual_merging(&mut self, parent: &Oid, incoming: &[Oid]) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
@@ -264,7 +272,6 @@ impl GraphBuilder {
                 dashed: true,
             });
         }
-        self.rows.insert(*oid, row);
         let mut width = lane + 1;
         for s in &segments {
             width = width.max(s.lane + 1);

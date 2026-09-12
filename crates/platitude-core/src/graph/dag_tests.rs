@@ -105,7 +105,7 @@ fn edges_are_continuous_across_rows_on_random_dags() {
             let sides: Vec<Oid> = (0..rng.below(4))
                 .map(|_| oid(1 + rng.below(u64::from(n)) as u8))
                 .collect();
-            let wip = b.push_virtual_merging(&Oid::zero_like(&head), &head, &sides);
+            let wip = b.push_virtual_merging(&head, &sides);
             if wip
                 .segments
                 .iter()

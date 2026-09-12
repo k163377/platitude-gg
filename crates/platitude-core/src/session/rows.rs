@@ -14,7 +14,7 @@ use super::*;
 /// to, so the node stands alone where the first commit will.
 pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_unsized();
-    let g = builder.push_virtual_root(&zero);
+    let g = builder.push_virtual_root();
     // Uncommitted work is on no remote, and there is no commit to ask about.
     let published = false;
     LogRow {
@@ -41,7 +41,7 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
 
 pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
-    let g = builder.push_virtual_merging(&zero, head, incoming);
+    let g = builder.push_virtual_merging(head, incoming);
     // Uncommitted work is on no remote, and there is no commit to ask about.
     let published = false;
     LogRow {
