@@ -38,8 +38,13 @@ use record::{Spent, Waited};
 pub(crate) use reuse::preserve_reader;
 use stamp::{CommitStamp, Store};
 
-use census::{Census, Shift};
+use census::Shift;
+// The census is read by the gate to choose verbs and by `verbs` to say
+// which verbs it never chooses, so the type and the file lister under it
+// stand where both can reach them.
+pub(crate) use census::Census;
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
+pub(crate) use graph::qml_files;
 pub(crate) use hooks::{SESSION, SKIP, install};
 
 pub fn run(args: &[String]) -> Result<(), String> {

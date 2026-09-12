@@ -182,6 +182,17 @@ const TAIL: &str = "  shipped [--no-build]
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
+  verbs
+      Which verbs the gate never runs. The gate runs the argument lines
+      the census holds, so a verb with no line there is one no change
+      re-photographs — however it would be judged if it ran. Counts both
+      sides off the tree: the names the harness compares PGG_AUTO_ACT
+      against (crates/platitude-app/src/auto), and the first word of each
+      census line. Prints the verbs with no line, and fails on a line no
+      verb answers — that one the gate still runs, and the run waits out
+      its whole ceiling saying nothing. Recording a missing verb is one
+      `verify-ui <line>` without --no-census.
+
   wedge-check
       Stops three runs on purpose and reads back what the parent could
       say about each. A run reaped at a ceiling is the one red nobody

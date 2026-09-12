@@ -7,6 +7,7 @@
 //! `screenshot saved=true` stderr line as the verdict.
 
 mod child;
+mod coverage;
 mod faults;
 mod options;
 mod outcome;
@@ -19,6 +20,7 @@ mod shim;
 mod verbs;
 mod wedge;
 
+pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
 pub(crate) use options::suite_words;
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
