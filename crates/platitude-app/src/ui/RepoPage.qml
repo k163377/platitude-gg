@@ -2761,8 +2761,7 @@ Item {
             // report is the one that write published. Measured against the number the answer named for it
             // (`ops::DiffReread`) rather than against a count of answers — another write answering in between moves
             // every counter without saying which tree this status describes, and a read already in flight when the
-            // write ended arrives with a number from before it. **The counts' own number**, because a report of HEAD
-            // arrives on its own as well and moves none of them.
+            // write ended arrives with a number from before it.
             const ours = repoTab.takeDiffRead(workTree.statusSeq)
             // Something outside this window moved the tree, so the rows on screen — and the fingerprint the next `+`
             // would be written against — are a picture of the file as it was. Pressing one then came back with git's
