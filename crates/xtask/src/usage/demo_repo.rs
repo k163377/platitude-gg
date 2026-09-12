@@ -143,6 +143,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   report: ordinary, detached, locked with a reason,
                   locked without one, one whose folder is gone, and one
                   whose folder and branch both run past the pane
+        worktree-detached  one linked copy, detached, with a commit made
+                  in it: the one shape where a working copy stands
+                  somewhere no branch, tag or remote reaches (nav-jump)
         pictures  a picture in every bucket the diff pane previews from:
                   a logo changed in the tree (art/logo.png), a vector
                   mark changed beside it (art/mark.svg — rows and

@@ -284,9 +284,15 @@ impl RepoSession {
             |s, workdir, cancel| async move {
                 let worktrees = crate::worktrees::load(&s.executor, &workdir, &cancel).await?;
                 // A working copy taken or given back moves no ref, so the
-                // join that marks the rows has to be asked for by name.
-                if s.note_worktree_holders(&worktrees, &workdir) {
+                // join that marks the rows has to be asked for by name —
+                // and a copy standing on no branch is a row of its own,
+                // which only the walk can put there.
+                let news = s.note_worktree_holders(&worktrees, &workdir);
+                if news.joins {
                     s.refresh_refs();
+                }
+                if news.walk {
+                    s.refresh_log();
                 }
                 Ok(SessionEvent::WorktreesLoaded { worktrees })
             },

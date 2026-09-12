@@ -36,10 +36,30 @@ pub(super) struct RefJoins<'a> {
     held: &'a WorktreeHolders,
 }
 
-/// Branches that a working copy other than this session's has out, by
-/// short name. Kept behind a name because it travels from the worktree
-/// read to the ref joins, which are two different reads.
-pub type WorktreeHolders = std::collections::HashSet<String>;
+/// What the working copies other than this session's are standing on, as
+/// of the last worktree read. Kept behind a name because it travels from
+/// that read to the ref joins and to the walk, which are three different
+/// reads.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct WorktreeHolders {
+    /// The branches they have out, by short name. What marks a row and a
+    /// chip as somewhere a move cannot go.
+    pub branches: std::collections::HashSet<String>,
+    /// The copies standing on no branch at all. **These carry their
+    /// commit**, because nothing else in the repository names it: a
+    /// branch is found again through the refs listing, and a detached
+    /// checkout is reachable from the worktree listing alone — which is
+    /// also why the walk has to be told about them (`walk_command`).
+    pub detached: Vec<DetachedCheckout>,
+}
+
+/// One working copy standing on no branch: the commit it is on, and the
+/// name the WORKTREES row shows for it (the last segment of its path).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetachedCheckout {
+    pub oid: Oid,
+    pub name: crate::Name,
+}
 
 impl<'a> RefJoins<'a> {
     pub(super) fn new(refs: &'a [RefEntry], held: &'a WorktreeHolders) -> Self {
@@ -80,7 +100,14 @@ impl<'a> RefJoins<'a> {
     /// Whether another working copy has this ref out. Only a local branch
     /// can be — a remote-tracking ref is nobody's checkout.
     fn held_elsewhere(&self, r: &RefEntry) -> bool {
-        r.kind == RefKind::LocalBranch && self.held.contains(r.short.as_str())
+        r.kind == RefKind::LocalBranch && self.held.branches.contains(r.short.as_str())
+    }
+
+    /// The working copies standing on no branch, for the chips that say
+    /// so. Off the same read the marks come from, so a copy cannot be a
+    /// mark on one row and missing from another.
+    fn detached(&self) -> &[DetachedCheckout] {
+        &self.held.detached
     }
 }
 
@@ -183,6 +210,29 @@ pub(super) fn build_label_map(
                 remote: String::new(),
                 // The marker for a detached HEAD names no branch, so
                 // there is none for another copy to be holding.
+                held_elsewhere: false,
+            },
+        ));
+    }
+    // The other working copies that are on no branch. A copy with one is
+    // already said by that branch's chip (`held_elsewhere`) — saying it
+    // twice on one row would be two answers to where that copy is — and
+    // this session's own is the marker above.
+    for copy in joins.detached() {
+        pairs.push((
+            copy.oid,
+            RefLabel {
+                text: copy.name.clone(),
+                kind: LabelKind::Worktree,
+                has_remote: false,
+                is_head: false,
+                // The copy is this repository's, and the name on the chip
+                // is the one its WORKTREES row shows.
+                here: true,
+                remote: String::new(),
+                // The flag is about a branch being out somewhere else,
+                // and this chip names no branch. What it draws instead is
+                // its own kind.
                 held_elsewhere: false,
             },
         ));
@@ -410,36 +460,77 @@ impl RepoSession {
     /// window already has out is a no-op, not a refusal, and marking it
     /// would put the mark on the row every reader is standing on.
     ///
-    /// Answers whether the set became a different one — the caller's cue
-    /// to re-read the refs. **Waiting for the next poll tick is not good
-    /// enough**: until the join runs again the rows offer a move git will
-    /// refuse, and a session's first worktree read lands *after* its
-    /// first refs read, so the window is exactly the moment somebody is
-    /// looking at a repository they have just opened (measured, a
-    /// run photographed a second in had no marks on it). The remote-tag
-    /// index asks for the same re-read on the same terms.
+    /// Answers which reads have to be asked again for it — the caller's
+    /// cue. **Waiting for the next poll tick is not good enough**: until
+    /// the join runs again the rows offer a move git will refuse, and a
+    /// session's first worktree read lands *after* its first refs read,
+    /// so the window is exactly the moment somebody is looking at a
+    /// repository they have just opened (measured, a run photographed a
+    /// second in had no marks on it). The remote-tag index asks for the
+    /// same re-read on the same terms.
     pub(super) fn note_worktree_holders(
         &self,
         worktrees: &[crate::worktrees::WorktreeEntry],
         workdir: &Path,
-    ) -> bool {
+    ) -> WorktreeNews {
         let here = same_path_key(&workdir.to_string_lossy());
-        let fresh: WorktreeHolders = worktrees
+        let mine = worktrees
             .iter()
-            .filter(|w| !w.bare && same_path_key(&w.path) != here)
-            .filter_map(|w| w.branch.clone())
-            .collect();
+            .filter(|w| !w.bare && same_path_key(&w.path) != here);
+        let mut fresh = WorktreeHolders::default();
+        for copy in mine {
+            match &copy.branch {
+                Some(branch) => {
+                    fresh.branches.insert(branch.clone());
+                }
+                // Nothing here names the commit but the entry itself, so
+                // the oid is carried along with the name the row shows.
+                // An entry git listed without a `HEAD` line is bare, and
+                // bare entries never reach this loop.
+                None => {
+                    if let Some(oid) = copy
+                        .head_hex
+                        .as_deref()
+                        .and_then(|hex| Oid::from_hex_str(hex.trim()).ok())
+                    {
+                        fresh.detached.push(DetachedCheckout {
+                            oid,
+                            name: shown_name(&copy.path),
+                        });
+                    }
+                }
+            }
+        }
+        // **In an order of their own, not git's.** What decides whether
+        // the graph is walked again is whether this list came out
+        // different (below), and the listing's order is the order of
+        // `.git/worktrees/` — so a set that merely came back shuffled
+        // would spend a whole `git log` over the history saying nothing
+        // (CLAUDE.md §性能予算). It settles the walk's arguments and the
+        // chips' order along with it.
+        fresh
+            .detached
+            .sort_by(|a, b| a.oid.cmp(&b.oid).then_with(|| a.name.cmp(&b.name)));
         // A poisoned lock is taken rather than given up on, the way the
-        // tag index's is: the set behind it is a snapshot, not a
+        // tag index's is: what is behind it is a snapshot, not a
         // half-written structure, and dropping it would take every mark
         // off the rows for the rest of the session.
         let mut held = relock(&self.worktree_holders);
         if **held == fresh {
-            return false;
+            return WorktreeNews::default();
         }
+        // **The walk is only re-asked for the copies it names itself.**
+        // A branch taken or given back moves no row — the commit is in
+        // the walk through the branch — so the chips are the whole of
+        // what changed, and re-walking for that repaints the graph over
+        // nothing (CLAUDE.md §性能予算).
+        let news = WorktreeNews {
+            joins: true,
+            walk: held.detached != fresh.detached,
+        };
         *held = Arc::new(fresh);
         self.worktree_gen.fetch_add(1, Ordering::SeqCst);
-        true
+        news
     }
 
     /// The set as the last worktree read left it, for the join that marks
@@ -447,6 +538,31 @@ impl RepoSession {
     pub(super) fn worktree_holders(&self) -> Arc<WorktreeHolders> {
         Arc::clone(&relock(&self.worktree_holders))
     }
+}
+
+/// What a worktree read changed, and so which reads have to run again.
+///
+/// Two answers rather than one because they cost differently: the joins
+/// are a pass over a listing already in hand, and the walk is a git
+/// process over the whole history.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(super) struct WorktreeNews {
+    /// The marks and the chips: something a working copy holds moved.
+    pub(super) joins: bool,
+    /// The rows themselves: a copy standing on no branch moved, and those
+    /// commits are in the graph only because the walk is told to name
+    /// them (`walk_command`).
+    pub(super) walk: bool,
+}
+
+/// What a working copy is called: the last segment of its path, which is
+/// what its WORKTREES row shows (`models::nav`). git prints these paths
+/// with its own separator, so both are cut on.
+fn shown_name(path: &str) -> crate::Name {
+    path.rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
+        .into()
 }
 
 /// How two spellings of one folder are compared. git prints worktree

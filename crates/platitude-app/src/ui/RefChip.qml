@@ -6,8 +6,10 @@ import platitude.ui
 // those others are is said behind the card, one sheet per colour, by the stack that seats this (`RefChipStack`) — this
 // file draws the card and nothing else. There are two things to read off the name and they get one channel each — the
 // frame carries the kind (local = accent, remote = secondary grey, detached HEAD = warning, which is a state rather
-// than a kind, tag = refTag with a fill behind it), and the name carries where the ref is: ordinary text for one that
-// is in this repository, grey for one that is only on the remote (デザイン規約 §ref の種別). The sidebar already reads that way
+// than a kind, a working copy standing here with no branch = the muted frame a branch another copy holds already
+// wears, with the same WORKTREES mark on it, tag = refTag with a fill behind it), and the name carries where the ref
+// is: ordinary text for one that is in this repository, grey for one that is only on the remote
+// (デザイン規約 §ref の種別). The sidebar already reads that way
 // — names in textPrimary, kind in the section icon — and on a graph row the name is the thing most worth reading, so it
 // is not the place to spend a colour on something the frame is already saying. The kind is the first record's own, not
 // something the caller sets: a row hands over everything on it in one list, branches ahead of tags, and the chip shows
@@ -22,12 +24,13 @@ Rectangle {
     /// the one place the name is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the
     /// lines are a single label inside a single border, so a wrapped name is one chip that got taller, not two chips.
     property bool wrapped: false
-    /// Nowhere a move can go: another working copy has this branch out and git refuses it outright (§無効). The words
-    /// drop to the muted colour, frame included, since the frame is how a branch chip is read at all — and the mark
-    /// beside them says where the branch went instead. **The record carries it**, so the chip reads the same wherever
-    /// it is drawn — nothing outside may dull one, or the same ref comes out in two colours on the two things that
-    /// draw it (the row and the card it unfolds into).
-    readonly property bool dulled: chip.recHeld
+    /// Nowhere a move can go, in the two shapes that come to: another working copy has this branch out and git
+    /// refuses it outright (§無効), or a working copy is standing here with no branch at all — which names nothing to
+    /// move onto in the first place. The words drop to the muted colour, frame included, since the frame is how a
+    /// chip is read at all — and the mark beside them says where the reader would find it instead. **The record
+    /// carries it**, so the chip reads the same wherever it is drawn — nothing outside may dull one, or the same ref
+    /// comes out in two colours on the two things that draw it (the row and the card it unfolds into).
+    readonly property bool dulled: chip.recHeld || chip.recKind === "W"
     /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
     /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
     /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
@@ -59,7 +62,7 @@ Rectangle {
     /// that is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
                                        + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
-                                       + (chip.recHeld ? chip.heldInk + Theme.spaceXs / 2 : 0)
+                                       + (chip.hasTree ? chip.heldInk + Theme.spaceXs / 2 : 0)
     /// What the frame's contents actually come to. `width` is this clamped to `maxWidth`, and whatever it runs over by
     /// is what the frame clips off its own right-hand end — so nothing inside may ask for more than the name's room
     /// leaves, which is the whole of what [`furnitureW`] is measured for (`tst_refstack.qml` holds it).
@@ -120,6 +123,15 @@ Rectangle {
     readonly property string recWhere: chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR open (規約 §グラフ行のダブルクリック — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
+    /// Whether the WORKTREES mark stands ahead of the name. Two records wear it and they are the two halves of one
+    /// fact — **a working copy is standing on this commit**: a branch another copy has out (which is also why nothing
+    /// can move onto it), and a copy that is on no branch at all, whose whole chip is that fact
+    /// (デザイン規約 §ref の種別). One mark, so a row never says it twice.
+    ///
+    /// **The same two records [`dulled`] is about**, and for the same reason: what wears this mark is what leads
+    /// nowhere. The two are spelled out separately because they are different questions — move the one and the
+    /// other moves with it.
+    readonly property bool hasTree: chip.recHeld || chip.recKind === "W"
     /// Every colour a record can wear, which is how many cards one commit's names can ever come to
     /// (`RefChipStack.maxSheets`). **The list, not a number** — a kind added below is counted here by adding it here.
     readonly property var kindKeys: ["head", "local", "held", "remote", "tag", "tagdim"]
@@ -136,6 +148,13 @@ Rectangle {
             return "remote"
         if (rec[0] === "H")
             return "head"
+        // A working copy standing here with no branch out reads as the branch chip a copy *does* hold: the same
+        // muted frame, the same mark, and a name in the same ink (デザイン規約 §ref の種別). The two say one thing —
+        // another copy is on this commit — and the graph already says it that way, so the marker joins that reading
+        // rather than opening a second one. **Which is also this key**: the sheets behind the card are one per
+        // colour (§重ね表示), and a key of its own over the same ink would draw two nobody can tell apart.
+        if (rec[0] === "W")
+            return "held"
         return "local"
     }
     /// A tag this repository does not hold keeps the tag hue and only drops a step (§暗く落とした段): still a tag, read
@@ -252,7 +271,7 @@ Rectangle {
         // away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
         // observed, measured 114 -> 110 -> 108).
         Item {
-            visible: chip.recHeld
+            visible: chip.hasTree
             // The seat is the ink, so the frame keeps its whole gap to the mark and the row's own half gap is all
             // that stands between the mark and the name.
             width: chip.heldInk

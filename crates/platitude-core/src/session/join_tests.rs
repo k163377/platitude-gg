@@ -182,7 +182,7 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     let refs = vec![branch("main", oid(1)), branch("feature/topic-a", oid(2))];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
-    held.insert("feature/topic-a".to_string());
+    held.branches.insert("feature/topic-a".to_string());
     let joins = RefJoins::new(&refs, &held);
 
     let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
@@ -204,6 +204,45 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
     assert!(map.labels_of(&oid(2), true)[0].held_elsewhere);
     assert!(!map.labels_of(&oid(1), true)[0].held_elsewhere);
+}
+
+/// A working copy standing on no branch is on the graph as a chip of its
+/// own — nothing else on the row can say it, since there is no ref there
+/// to carry the mark a held branch's chip wears.
+#[test]
+fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
+    let refs = vec![branch("main", oid(1)), tag("v1", oid(2), false)];
+    let remote_tags = index_of("origin", Vec::new());
+    let mut held = WorktreeHolders::default();
+    held.detached.push(super::joins::DetachedCheckout {
+        oid: oid(2),
+        name: crate::Name::const_new("spike"),
+    });
+    let joins = RefJoins::new(&refs, &held);
+    let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+
+    let run = map.labels_of(&oid(2), true);
+    let copy = run
+        .iter()
+        .find(|l| l.kind == LabelKind::Worktree)
+        .expect("the copy is on the row it is standing on");
+    assert_eq!(copy.text.as_str(), "spike");
+    assert!(!copy.held_elsewhere, "it names no branch to be holding");
+    // The commit a copy is not standing on carries no such chip.
+    assert!(
+        !map.labels_of(&oid(1), true)
+            .iter()
+            .any(|l| l.kind == LabelKind::Worktree)
+    );
+    // **Tags stay the tail of the run**, which is what lets the TAGS eye
+    // cut them off with a shorter slice: a chip sorted past them would go
+    // out with the tags it was never part of.
+    assert!(
+        map.labels_of(&oid(2), false)
+            .iter()
+            .any(|l| l.kind == LabelKind::Worktree),
+        "the eye takes the tag and leaves the working copy"
+    );
 }
 
 /// `set-url` moves no ref, so the URL's only road to the screen is the

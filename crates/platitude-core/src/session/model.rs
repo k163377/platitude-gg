@@ -41,6 +41,18 @@ pub enum LabelKind {
     Head,
     LocalBranch,
     RemoteBranch,
+    /// Another working copy is standing on this commit with no branch out
+    /// — a synthetic chip like `Head`, and the only thing that says the
+    /// commit is anybody's checkout (デザイン規約 §ref の種別). A copy that
+    /// does have a branch out is said by that branch's own chip instead
+    /// (`RefLabel::held_elsewhere`), so no commit ever carries both about
+    /// one copy.
+    ///
+    /// **Before `Tag` and not after it.** The tags of a commit are the
+    /// tail of its run, which is what lets the TAGS eye cut them off with
+    /// a shorter slice ([`LabelIndex::cut`]); a kind sorted past `Tag`
+    /// would go out with them.
+    Worktree,
     Tag,
 }
 

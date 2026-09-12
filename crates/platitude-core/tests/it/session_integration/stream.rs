@@ -235,6 +235,54 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     session.close();
 }
 
+/// A working copy standing on no branch, with a commit made in it. **The
+/// walk cannot find that commit on its own**: `git log` reads the HEAD of
+/// the tree it is run in and no other, and no branch, tag or remote
+/// points here — so the row is in the graph only because the worktree
+/// read names it (`note_worktree_holders` → `walk_command`), and the chip
+/// on it is the only thing that says whose it is (デザイン規約 §ref の種別).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "first");
+    repo.commit_file("a.txt", "two\n", "second");
+    let spike = repo.path.parent().expect("a parent").join("spike");
+    repo.git(&["worktree", "add", "--detach", &spike.to_string_lossy()]);
+    std::fs::write(spike.join("idea.txt"), "an idea\n").expect("write the spike's file");
+    repo.git_in(&spike, &["add", "idea.txt"]);
+    repo.git_in(&spike, &["commit", "-m", "spike: try the idea"]);
+    let only_theirs = repo.git_in(&spike, &["rev-parse", "HEAD"]);
+
+    let (sink, session) = open_unawaited(&repo);
+    // **The opening walk is not where this lands.** The first worktree
+    // read comes in behind the first walk, so what is being waited for is
+    // the walk that read asked for.
+    let seen = sink
+        .wait_for("the row the copy is standing on", |evs| {
+            let rows = crate::support::replay_graph(evs);
+            rows.values()
+                .find(|r| r.oid_hex == only_theirs)
+                .filter(|r| !r.labels.is_empty())
+                .cloned()
+        })
+        .await;
+    let chip = seen
+        .labels
+        .iter()
+        .find(|l| l.kind == platitude_core::session::LabelKind::Worktree)
+        .unwrap_or_else(|| panic!("no chip says whose copy it is: {:?}", seen.labels));
+    assert_eq!(
+        chip.text.as_str(),
+        "spike",
+        "the chip carries the copy's name"
+    );
+    assert!(
+        !chip.held_elsewhere,
+        "it names no branch, so there is none for anybody to be holding"
+    );
+    session.close();
+}
+
 /// A merge stopped in the working tree. The row for the uncommitted files
 /// is the merge commit it is about to become, so it draws that commit's
 /// fork: a dotted edge to HEAD and another to the side being brought in,

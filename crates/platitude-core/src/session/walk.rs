@@ -47,7 +47,13 @@ impl RepoSession {
         let pending_row = self.pending_commit();
         let incoming = pending_row.as_deref().unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs, incoming);
+        // Where the other working copies stand when they stand on no
+        // branch — off the worktree read, which is the only listing that
+        // names them (`note_worktree_holders`).
+        let standing = self.worktree_holders();
+        let detached = detached_oids(&standing);
+
+        let cmd = walk_command(workdir, options, &stash_refs, incoming, &detached);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -152,7 +158,11 @@ impl RepoSession {
             .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
             .unwrap_or_default();
 
-        let cmd = walk_command(workdir, options, &stash_refs, incoming);
+        // And the working copies standing on no branch (see stream_log).
+        let standing = self.worktree_holders();
+        let detached = detached_oids(&standing);
+
+        let cmd = walk_command(workdir, options, &stash_refs, incoming, &detached);
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
@@ -293,16 +303,24 @@ impl RepoSession {
     }
 }
 
+/// Where the other working copies stand when they stand on no branch, as
+/// the walk wants them.
+fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
+    standing.detached.iter().map(|copy| copy.oid).collect()
+}
+
 /// The walk both passes run: the same commits in the same order through
 /// the same window.
 ///
 /// A stash may vanish between the listing and the walk, so the oids that
-/// join it are asked for with `--ignore-missing`.
+/// join it are asked for with `--ignore-missing` — and so may a working
+/// copy, which is listed by a read of its own.
 fn walk_command(
     workdir: &std::path::Path,
     options: LogOptions,
     stash_refs: &HashMap<Oid, String>,
     incoming: &[Oid],
+    detached: &[Oid],
 ) -> GitCommand {
     let mut cmd = GitCommand::new()
         .cwd(workdir)
@@ -315,12 +333,23 @@ fn walk_command(
     if let Some(limit) = options.limit {
         cmd = cmd.arg(format!("--max-count={limit}"));
     }
-    // Stashes and the sides of a standing merge are named by id: neither
-    // is under `--branches` or `--remotes` (a merge of a tag, of
-    // `FETCH_HEAD`, or of a branch deleted since it stopped is reachable
-    // by nothing else), and the row that leashes them needs the node its
-    // dotted edge lands on.
-    let mut extra = stash_refs.keys().chain(incoming).peekable();
+    // Stashes, the sides of a standing merge, and the working copies
+    // standing on no branch are named by id: none of them is under
+    // `--branches` or `--remotes` (a merge of a tag, of `FETCH_HEAD`, or
+    // of a branch deleted since it stopped is reachable by nothing else,
+    // and a detached checkout is named by the worktree listing alone), and
+    // each is a row somebody can be sent to — the stash from its section,
+    // the merge side from the leash that lands on it, the checkout from
+    // its WORKTREES row (デザイン規約 §左メニューの所作).
+    //
+    // **`HEAD` here is this window's own.** Another copy's is not in the
+    // walk at all unless it is put there: `git log` reads the HEAD of the
+    // working tree it is run in and no other.
+    let mut extra = stash_refs
+        .keys()
+        .chain(incoming)
+        .chain(detached.iter())
+        .peekable();
     if extra.peek().is_some() {
         cmd = cmd.arg("--ignore-missing");
         for oid in extra {

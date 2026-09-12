@@ -117,7 +117,13 @@ fn a_copy_of_linked_worktrees_stands_on_its_own_paths() {
 /// check is that the presets under test hold nothing but metadata.
 #[test]
 fn only_gits_own_files_name_the_directory_they_were_built_in() {
-    for preset in ["tags", "worktrees", "stashes", "shallow"] {
+    for preset in [
+        "tags",
+        "worktrees",
+        "worktree-detached",
+        "stashes",
+        "shallow",
+    ] {
         let work = crate::demo::create(preset, None).expect("a run of the preset");
         let root = work.parent().expect("a run root");
         for path in naming(root, &run_leaf(&work)) {

@@ -71,3 +71,36 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
 
     Ok(())
 }
+
+/// A working copy standing where no ref reaches: detached, with a commit
+/// made in it. **That commit is in the graph only because the walk is
+/// told to name it** (`session::walk::walk_command`) — `git log` reads
+/// the HEAD of the tree it runs in and no other, and there is no branch,
+/// no tag and no remote pointing here.
+///
+/// Small on purpose: the subject is one row and the chip on it, and a
+/// preset with branches in it would leave the reader hunting for which
+/// row is the one with no ref.
+pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nOne copy is off on its own.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.commit("src/app.txt", "app v2\n", "feat: grow the app")?;
+
+    // Detached at the tip, and then a commit of its own: from here the
+    // only thing in the repository that names that commit is the
+    // worktree listing.
+    repo.git(&["worktree", "add", "--detach", "../spike"])?;
+    let spike = repo.root.join("spike");
+    std::fs::write(spike.join("idea.txt"), "an idea nobody named yet\n")
+        .map_err(|e| format!("writing the spike's file: {e}"))?;
+    repo.git_at(&spike, &["add", "idea.txt"])?;
+    repo.git_at(
+        &spike,
+        &["commit", "-m", "spike: try the idea in a detached checkout"],
+    )?;
+    Ok(())
+}

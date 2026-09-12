@@ -82,8 +82,8 @@ Item {
     // **The name this row draws**: the chip's own first record, whatever kind it is. What the spaced second click
     // changes, and what a right-click aims the menu's cards at — one answer, so the row cannot rename one name and
     // offer another. **Not `primaryRecord`** — that one answers "where does this row lead", and a tag leads nowhere
-    // while still being a name that can be changed (デザイン規約 §左メニューの所作). The HEAD marker names no ref, so
-    // it answers `""`.
+    // while still being a name that can be changed (デザイン規約 §左メニューの所作). The two markers name no ref — the
+    // detached HEAD and a working copy standing here — so they answer `""`.
     readonly property string renameRecord:
         rowItem.labelRecords.length > 0 && GitFacts.recordKind(rowItem.labelRecords[0]) !== ""
             ? rowItem.labelRecords[0] : ""

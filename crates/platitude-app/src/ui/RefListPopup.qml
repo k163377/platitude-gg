@@ -295,16 +295,18 @@ AppCard {
                 readonly property bool current:
                     refRow.modelData[0] === "L"
                     && GitFacts.recordName(refRow.modelData) === refList.currentBranch
-                // The detached-HEAD marker is the one row that is only a marker: nowhere to go and no ref to read. A
-                // branch another working copy has out is unavailable for the other reason there is — git refuses the
-                // move outright (§無効 is for what is actually unavailable, and this one is).
+                // The two markers are the rows that are only markers: nowhere to go and no ref to read — the detached
+                // HEAD, and a working copy standing on this commit with no branch of its own. A branch another
+                // working copy has out is unavailable for the other reason there is — git refuses the move outright
+                // (§無効 is for what is actually unavailable, and this one is).
                 //
-                // **Neither is said in the chip's colour here.** The held one already says it in its own record (a
-                // dulled frame and the `tree` mark, wherever it is drawn), and the marker's colour is a state rather
-                // than a kind: muting it here would make the same marker amber on the row and grey in the card it
-                // unfolds into. What this answers is the move and the menu, below.
+                // **None of it is said in the chip's colour here.** Two of the three already say it in their own
+                // record — a dulled frame and the `tree` mark, wherever they are drawn — and the detached HEAD's
+                // colour is a state rather than a kind: muting that one here would make the same marker amber on the
+                // row and grey in the card it unfolds into. What this answers is the move and the menu, below.
                 readonly property bool unavailable:
-                    refRow.modelData[0] === "H" || refRow.modelData[5] === "1"
+                    refRow.modelData[0] === "H" || refRow.modelData[0] === "W"
+                    || refRow.modelData[5] === "1"
                 readonly property bool leadsNowhere:
                     refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
 

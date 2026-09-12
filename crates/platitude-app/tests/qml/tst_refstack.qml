@@ -21,6 +21,9 @@ Item {
     readonly property string local2: "L00010hotfix"
     readonly property string held: "L00011spike"
     readonly property string remote: "R00000origin/preview"
+    /// A working copy standing on this commit with no branch out — a marker rather than a ref, and a colour of its
+    /// own (デザイン規約 §ref の種別).
+    readonly property string copy: "W00010rig"
     readonly property string tagHere: "T00010v1.0"
     readonly property string tagHere2: "T00010v1.1"
     readonly property string tagAway: "T01000v2.0"
@@ -103,6 +106,17 @@ Item {
             compare(stack.sheets, ["local"])
         }
 
+        // And a copy standing here with no branch reads as that same chip: another working copy is on this commit,
+        // said once and in one colour (デザイン規約 §ref の種別).
+        function test_a_copy_with_no_branch_reads_as_the_branch_a_copy_holds() {
+            stack.records = [root.copy]
+            compare(stack.sheets, [])
+            stack.records = [root.local2, root.copy]
+            compare(stack.sheets, ["held"])
+            stack.records = [root.held, root.copy, root.local2]
+            compare(stack.sheets, ["held", "local"], "the two are one colour, so one sheet")
+        }
+
         function test_the_detached_head_marker_is_its_own_colour() {
             stack.records = [root.head, root.current, root.tagHere]
             compare(stack.sheets, ["local", "tag"])
@@ -112,7 +126,9 @@ Item {
         // deepest row a detached HEAD can draw is one sheet per other colour.
         function test_every_colour_at_once_is_one_sheet_apiece() {
             stack.records = [root.head, root.current, root.local2, root.held,
-                             root.remote, root.tagHere, root.tagAway]
+                             root.remote, root.copy, root.tagHere, root.tagAway]
+            // **The working copy's marker adds no sheet of its own**: it wears the frame a branch another copy holds
+            // wears, and a sheet is a colour rather than a record (デザイン規約 §重ね表示).
             compare(stack.sheets, ["local", "held", "remote", "tag", "tagdim"])
             compare(stack.sheets.length, stack.maxSheets)
         }

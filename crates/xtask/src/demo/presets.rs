@@ -23,7 +23,7 @@ use super::scale::{
 use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tags};
-use super::worktrees::worktrees;
+use super::worktrees::{worktree_detached, worktrees};
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
     let mut preset: Option<&str> = None;
@@ -202,6 +202,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "widelate" => widelate(&mut repo)?,
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
+        "worktree-detached" => worktree_detached(&mut repo)?,
         "pictures" => pictures(&mut repo)?,
         "bigpicture" => bigpicture(&mut repo)?,
         "empty" => {}

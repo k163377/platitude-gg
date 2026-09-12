@@ -23,15 +23,17 @@ const FLAGS: usize = 5;
 /// the name, and — only when the ref was read off a remote — the field
 /// separator and the remotes it came from.
 ///
-/// The letter is `H`ead / `L`ocal / `R`emote / `T`ag; the flags, in order,
-/// are is-head, has-remote, has-PR (`pr` names the branches wearing it —
-/// the callers pass [`pr_set`], the preview until Phase 4),
-/// is-it-here and is-it-out-in-another-working-copy. The fourth is what
-/// the chip writes in the name's colour: a remote branch and a tag only a
-/// remote has are both somewhere else, and read the same way for it. The
-/// fifth is what makes the chip say a move cannot go here — it mutes and
-/// wears the WORKTREES mark (`RefChip.recHeld`), because git refuses a
-/// `switch` onto a branch another working copy holds (measured).
+/// The letter is `H`ead / `L`ocal / `R`emote / `W`orktree / `T`ag; the
+/// flags, in order, are is-head, has-remote, has-PR (`pr` names the
+/// branches wearing it — the callers pass [`pr_set`], the preview until
+/// Phase 4), is-it-here and is-it-out-in-another-working-copy. The
+/// fourth is what the chip writes in the name's colour: a remote branch
+/// and a tag only a remote has are both somewhere else, and read the same
+/// way for it. The fifth is what makes the chip say a move cannot go here
+/// — it mutes and wears the WORKTREES mark (`RefChip.recHeld`), because
+/// git refuses a `switch` onto a branch another working copy holds
+/// (measured); the `W` record says the same thing about a copy that has
+/// no branch to carry the flag, and is drawn the same way for it.
 ///
 /// **The flags are fixed-width and the name starts after them**
 /// ([`FLAGS`]), so adding one moves every reader; the test at the foot of
@@ -50,6 +52,7 @@ pub fn encode_labels(labels: &[RefLabel], pr: &std::collections::HashSet<String>
             LabelKind::Head => 'H',
             LabelKind::LocalBranch => 'L',
             LabelKind::RemoteBranch => 'R',
+            LabelKind::Worktree => 'W',
             LabelKind::Tag => 'T',
         });
         out.push(if l.is_head { '1' } else { '0' });
@@ -85,8 +88,9 @@ pub fn label_name_of(record: &str) -> &str {
 }
 
 /// The ref kind a chip record's letter names, in the word the menus
-/// branch on. The HEAD marker (and anything unrecognised) answers `""`:
-/// it names nothing to act on.
+/// branch on. The HEAD marker, the worktree marker (and anything
+/// unrecognised) answer `""`: they name no ref, so there is nothing to
+/// act on — a working copy is opened from its own row, not from a chip.
 pub fn label_kind_word(record: &str) -> &'static str {
     match record.as_bytes().first() {
         Some(b'L') => "branch",
@@ -371,6 +375,7 @@ mod tests {
         assert_eq!(label_kind_word("R01000origin/main\u{1e}origin"), "remote");
         assert_eq!(label_kind_word("T00010v1.0"), "tag");
         assert_eq!(label_kind_word("H10010HEAD"), "", "nothing to act on");
+        assert_eq!(label_kind_word("W00010spike"), "", "nor is a working copy");
         assert_eq!(label_kind_word(""), "");
         assert_eq!(
             label_name_of("R01000origin/main\u{1e}origin"),
