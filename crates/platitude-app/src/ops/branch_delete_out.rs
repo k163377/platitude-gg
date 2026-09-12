@@ -1,6 +1,8 @@
 //! The plain branch delete, and the card that stayed up for git's
 //! answer.
 
+use super::Press;
+
 /// The one press whose menu does not go with it: `git branch --delete`
 /// may be turned down, and the refusal has to land on the row that asked
 /// for it (`AppMenuItem.staysOpen`).
@@ -23,17 +25,16 @@
 /// stand for nothing.
 #[derive(Debug, Default)]
 pub struct BranchDeleteOut {
-    /// The branch the standing card asked about, and the id the queue
-    /// took its write under — zero while none is out.
+    /// The write the card is waiting on, by the id the queue accepted it
+    /// under — and where its answer stood in the notify that carried it.
+    press: Press,
+    /// The branch the standing card asked about, held until that answer
+    /// turns it into one of the two below.
     name: String,
-    waiting: u64,
     /// git's answer by that name: the branch it took, and the one it
     /// turned down. At most one of them is ever set.
     landed: String,
     refused: String,
-    /// Where that answer stands in the answers this notify carried, or
-    /// `None` where this notify carried none of it.
-    at: Option<usize>,
 }
 
 impl BranchDeleteOut {
@@ -50,17 +51,14 @@ impl BranchDeleteOut {
         self.landed = String::new();
         self.refused = String::new();
         self.name = name.to_string();
-        self.waiting = accepted.filter(|id| *id != 0).unwrap_or_default();
-        if self.waiting == 0 {
-            tracing::debug!("branch delete the queue took nothing for has no answer coming");
-        }
+        self.press.asked(accepted);
     }
 
     /// Puts down where the last notify's answer stood: this drain
     /// answers for itself. What git said is left standing — the card
     /// reads that as an edge, and may not have been drawn yet.
     pub fn new_notify(&mut self) {
-        self.at = None;
+        self.press.new_notify();
     }
 
     /// git answered a write, standing at `at` in this notify's answers.
@@ -72,10 +70,9 @@ impl BranchDeleteOut {
     /// refused, so the card has nothing to morph into and the words go
     /// to the page's notice bar instead (デザイン規約 §答えの要らない報せ).
     pub fn answered(&mut self, id: u64, at: usize, failed: bool, reported: bool) -> bool {
-        if self.waiting == 0 || self.waiting != id {
+        if !self.press.answered(id, at) {
             return false;
         }
-        self.waiting = 0;
         let asked = std::mem::take(&mut self.name);
         let (took, turned_down) = match (failed, reported) {
             (false, _) => (asked, String::new()),
@@ -84,7 +81,6 @@ impl BranchDeleteOut {
         };
         self.landed = took;
         self.refused = turned_down;
-        self.at = Some(at);
         true
     }
 
@@ -104,6 +100,6 @@ impl BranchDeleteOut {
     /// where this notify carried none.
     #[must_use]
     pub fn answer(&self) -> Option<usize> {
-        self.at
+        self.press.answer()
     }
 }

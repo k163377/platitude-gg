@@ -328,6 +328,18 @@ pub struct RepoTab {
     /// the question has an answer only at the moment a status is being
     /// read, and asking spends it (`takeDiffRead`).
     diff_reread: crate::ops::DiffReread,
+    /// The working tree as the page last put it on screen: the report of
+    /// HEAD its counts stood beside, and whether they left nothing in it
+    /// (`noteTreeRead`).
+    ///
+    /// **Kept here rather than in each wait.** It describes the screen
+    /// rather than any one press, and both of the waits above are
+    /// answered against it — held twice, the two could disagree about
+    /// the same status. Written down whether or not anything is waiting:
+    /// a status and the answer it belongs beside are drained apart, so
+    /// this is regularly the half that arrived first.
+    tree_seen: u64,
+    tree_emptied: bool,
     /// The stash this window pressed to take the working tree away,
     /// waiting for the reading where that tree turns out to be empty
     /// (`ops::StashOut`).

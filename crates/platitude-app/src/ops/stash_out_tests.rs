@@ -20,7 +20,7 @@ const IN_FLIGHT: u64 = 40;
 const FENCE: u64 = 41;
 const AFTERWARDS: u64 = 42;
 
-/// What the counts look like to [`StashOut::applied`].
+/// What the counts look like to [`StashOut::taken`].
 const EMPTIED: bool = true;
 const STILL_DIRTY: bool = false;
 
@@ -39,8 +39,7 @@ fn landed() -> StashOut {
 #[test]
 fn the_tree_that_empties_after_our_own_stash_is_ours() {
     let mut out = landed();
-    out.applied(FENCE, EMPTIED);
-    assert!(out.taken());
+    assert!(out.taken(FENCE, EMPTIED));
 }
 
 // **The status first.** The two travel feeds of their own and are
@@ -50,10 +49,15 @@ fn the_tree_that_empties_after_our_own_stash_is_ours() {
 #[test]
 fn a_tree_read_empty_before_the_answer_is_still_ours() {
     let mut out = pressed();
-    out.applied(FENCE, EMPTIED);
-    assert!(!out.taken(), "nothing to settle on until git answers");
+    assert!(
+        !out.taken(FENCE, EMPTIED),
+        "nothing to settle on until git answers"
+    );
     assert!(out.answered(OURS, 0, false, FENCE));
-    assert!(out.taken(), "and the answer settles on what was read");
+    assert!(
+        out.taken(FENCE, EMPTIED),
+        "and the answer settles on the tree already read"
+    );
 }
 
 // The answer stands from the write until a status that can speak for it
@@ -64,8 +68,7 @@ fn somebody_elses_answer_in_between_leaves_the_landing_standing() {
     let mut out = landed();
     assert!(!out.answered(SOMEBODY_ELSE, 1, false, AFTERWARDS));
     assert!(out.ours(), "the fetch answered for itself and nothing else");
-    out.applied(FENCE, EMPTIED);
-    assert!(out.taken());
+    assert!(out.taken(FENCE, EMPTIED));
 }
 
 // A read already out when the write ended still shows the tree as it
@@ -75,11 +78,9 @@ fn somebody_elses_answer_in_between_leaves_the_landing_standing() {
 #[test]
 fn a_status_from_before_the_write_settles_nothing() {
     let mut out = landed();
-    out.applied(IN_FLIGHT, STILL_DIRTY);
-    assert!(!out.taken());
+    assert!(!out.taken(IN_FLIGHT, STILL_DIRTY));
     assert!(out.ours(), "the status that can answer is still coming");
-    out.applied(FENCE, EMPTIED);
-    assert!(out.taken());
+    assert!(out.taken(FENCE, EMPTIED));
 }
 
 // …and it is the answer to *this* press that claims it: one arriving
@@ -100,8 +101,7 @@ fn an_answer_to_somebody_elses_write_claims_nothing() {
 fn a_stash_git_refused_took_no_tree_away() {
     let mut out = pressed();
     assert!(out.answered(OURS, 0, true, FENCE));
-    out.applied(FENCE, EMPTIED);
-    assert!(!out.taken());
+    assert!(!out.taken(FENCE, EMPTIED));
     assert_eq!(out.answer(), Some(0), "and the page still has to say it");
 }
 
@@ -111,11 +111,9 @@ fn a_stash_git_refused_took_no_tree_away() {
 #[test]
 fn a_tree_the_stash_did_not_empty_settles_the_press_all_the_same() {
     let mut out = landed();
-    out.applied(FENCE, STILL_DIRTY);
-    assert!(!out.taken());
+    assert!(!out.taken(FENCE, STILL_DIRTY));
     assert!(!out.ours());
-    out.applied(AFTERWARDS, EMPTIED);
-    assert!(!out.taken());
+    assert!(!out.taken(AFTERWARDS, EMPTIED));
 }
 
 // Once: the landing is spent by the status it answers for, so the next
@@ -124,10 +122,8 @@ fn a_tree_the_stash_did_not_empty_settles_the_press_all_the_same() {
 #[test]
 fn one_press_empties_one_tree() {
     let mut out = landed();
-    out.applied(FENCE, EMPTIED);
-    assert!(out.taken());
-    out.applied(AFTERWARDS, EMPTIED);
-    assert!(!out.taken());
+    assert!(out.taken(FENCE, EMPTIED));
+    assert!(!out.taken(AFTERWARDS, EMPTIED));
 }
 
 // A second press before the first tree was read is the one the landing
@@ -139,10 +135,11 @@ fn the_press_that_came_last_is_the_one_the_tree_answers_for() {
     out.asked(Some(SOMEBODY_ELSE));
     assert!(!out.ours(), "the standing landing went with the new press");
     assert!(out.answered(SOMEBODY_ELSE, 1, false, AFTERWARDS));
-    out.applied(FENCE, EMPTIED);
-    assert!(!out.taken(), "that press named a later report");
-    out.applied(AFTERWARDS, EMPTIED);
-    assert!(out.taken());
+    assert!(
+        !out.taken(FENCE, EMPTIED),
+        "that press named a later report"
+    );
+    assert!(out.taken(AFTERWARDS, EMPTIED));
 }
 
 // The queue takes nothing once the session is closed, so no answer is
@@ -153,8 +150,7 @@ fn a_press_the_queue_took_nothing_for_claims_no_tree() {
     let mut out = landed();
     out.asked(None);
     assert!(!out.answered(OURS, 0, false, FENCE));
-    out.applied(AFTERWARDS, EMPTIED);
-    assert!(!out.taken());
+    assert!(!out.taken(AFTERWARDS, EMPTIED));
 }
 
 // A tree emptying with nothing of ours out at all — somebody committed
@@ -163,8 +159,7 @@ fn a_press_the_queue_took_nothing_for_claims_no_tree() {
 fn a_tree_nobody_here_emptied_is_not_claimed() {
     let mut out = StashOut::default();
     assert!(!out.answered(OURS, 0, false, FENCE));
-    out.applied(AFTERWARDS, EMPTIED);
-    assert!(!out.taken());
+    assert!(!out.taken(AFTERWARDS, EMPTIED));
 }
 
 // Where the answer stood is the notify's own — the page reads the file
@@ -178,6 +173,5 @@ fn the_answers_place_goes_with_its_notify_and_the_wait_does_not() {
     out.new_notify();
     assert_eq!(out.answer(), None);
     assert!(out.ours(), "the tree it took away is still to be read");
-    out.applied(FENCE, EMPTIED);
-    assert!(out.taken());
+    assert!(out.taken(FENCE, EMPTIED));
 }

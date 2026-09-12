@@ -83,6 +83,8 @@ impl Default for RepoTab {
             stash_out: crate::ops::StashOut::default(),
             stash_answer: -1,
             diff_reread: crate::ops::DiffReread::default(),
+            tree_seen: 0,
+            tree_emptied: false,
             write_report_kind: String::new(),
             write_report_remote: String::new(),
             write_report_name: String::new(),
@@ -123,6 +125,46 @@ impl RepoTab {
         ) -> Option<platitude_core::OperationId>,
     ) -> Option<platitude_core::OperationId> {
         crate::hub::from_session(self.tab_id, f).flatten()
+    }
+
+    /// The page has put a status on screen: its counts stood beside the
+    /// report of HEAD numbered `seen`, and `emptied` says whether they
+    /// left the working tree with nothing in it.
+    ///
+    /// **Written down before anything asks what it means**, because a
+    /// status and the write answer it belongs beside are drained apart
+    /// and either can be the one already in hand. An older report is let
+    /// go: a report of HEAD arrives on its own as well, carrying no
+    /// counts, and the tree it would describe is one it never saw.
+    pub(super) fn tree_was_read(&mut self, seen: u64, emptied: bool) {
+        if seen < self.tree_seen {
+            return;
+        }
+        self.tree_seen = seen;
+        self.tree_emptied = emptied;
+    }
+
+    /// Whether this window's own stash is what emptied the tree the page
+    /// is acting on, settling that press (`ops::StashOut`). Asked from
+    /// both sides of the pair, so the half that arrives first asks and
+    /// gets nothing.
+    pub(super) fn stash_landing_taken(&mut self) -> bool {
+        self.stash_out.taken(self.tree_seen, self.tree_emptied)
+    }
+
+    /// Whether the re-read standing for a write already answers for the
+    /// status the page is reading, spending it where it does
+    /// (`ops::DiffReread`).
+    pub(super) fn diff_reread_taken(&mut self) -> bool {
+        self.diff_reread.taken(self.tree_seen)
+    }
+
+    /// The open file was read again for the answers this notify carried,
+    /// so the status the last of them publishes behind it is not news.
+    /// Nothing is armed where that status has already been read.
+    pub(super) fn read_diff_for_answers(&mut self) {
+        let after = self.write_answers.last().map_or(0, |a| a.head_seq);
+        self.diff_reread.read_after(after, self.tree_seen);
     }
 
     /// A fetch ended, whoever asked for it. Counts the ones that failed

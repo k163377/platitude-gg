@@ -805,8 +805,7 @@ impl RepoTab {
         let Ok(seen) = u64::try_from(seen) else {
             return;
         };
-        self.stash_out.applied(seen, emptied);
-        self.diff_reread.applied(seen);
+        self.tree_was_read(seen, emptied);
     }
 
     /// The page is acting on the working tree it has: answers whether
@@ -823,7 +822,7 @@ impl RepoTab {
     /// the wait, so there is nothing here for a binding to follow.
     #[qslot]
     fn take_stash_landing(&mut self) -> bool {
-        self.stash_out.taken()
+        self.stash_landing_taken()
     }
 
     /// The open file was read again because a write answered, so the
@@ -837,26 +836,19 @@ impl RepoTab {
     /// be the answer to.
     #[qslot]
     fn note_diff_read(&mut self) {
-        let after = self.write_answers.last().map_or(0, |a| a.head_seq);
-        self.diff_reread.read_after(after);
+        self.read_diff_for_answers();
     }
 
-    /// A status has arrived whose counts stand beside the report of HEAD
-    /// numbered `seen`: says whether the read standing here already
-    /// answers for it, and spends the read where it does.
+    /// The page is reading the status it has just been given: says
+    /// whether the re-read standing here already answers for it, and
+    /// spends the re-read where it does.
     ///
-    /// **The counts' own number** (`WorkTreeModel.statusSeq`), for the
-    /// reason the stash's landing takes it: a report of HEAD on its own
-    /// moves no counts, and spending the read on it would have the next
-    /// status read the same file over again.
-    ///
-    /// **Asked, not watched**, like the stash's landing beside it.
+    /// Measured against the tree as this tab last had it written down
+    /// (`noteTreeRead`), so the two never disagree about which status is
+    /// in hand. **Asked, not watched**, like the stash's landing.
     #[qslot]
-    fn take_diff_read(&mut self, seen: i32) -> bool {
-        let Ok(seen) = u64::try_from(seen) else {
-            return false;
-        };
-        self.diff_reread.taken(seen)
+    fn take_diff_read(&mut self) -> bool {
+        self.diff_reread_taken()
     }
 
     /// `git fetch --prune`; an empty remote fetches all of them.

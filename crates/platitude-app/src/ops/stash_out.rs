@@ -1,6 +1,8 @@
 //! The stash that took the working tree away, and the tree turning out
 //! to be empty behind it.
 
+use super::Press;
+
 /// One stash press that empties the working tree, from the press to the
 /// reading that shows the tree gone.
 ///
@@ -14,16 +16,13 @@
 ///
 /// **Neither half is allowed to arrive first.** The answer and the
 /// status travel feeds of their own and are drained apart, so either can
-/// be the one already in hand. Both are written down as they come
-/// ([`Self::answered`], [`Self::applied`]) and [`Self::taken`] answers
-/// off the pair — a press settled only from the status side loses the
-/// tree that emptied before its answer was read, and one settled only
-/// from the answer side loses it the other way round. The reader is left
-/// over a pane describing a tree that is gone either way.
-///
-/// **By id, never by turn**, because every stash operation answers under
-/// the same word — a pop pressed from the details band answers exactly
-/// like the push this is about, and a drop answers like both.
+/// be the one already in hand. The answer is written down as it comes
+/// and the tree is handed in as the page last read it ([`Self::taken`]),
+/// so whichever is second completes the pair — settled only from the
+/// status side, a press loses the tree that emptied before its answer
+/// was read; settled only from the answer side, it loses it the other
+/// way round. The reader is left over a pane describing a tree that is
+/// gone either way.
 ///
 /// **Which status can answer at all is a stamp.** The counts say which
 /// report of HEAD they were read beside (`WorkTreeModel.statusSeq`), and
@@ -39,25 +38,16 @@
 /// them, it would say "ours" about a tree somebody else emptied.
 #[derive(Debug, Default)]
 pub struct StashOut {
-    /// The write the tree is waiting on, as the bridge carries an
-    /// `OperationId` — zero while none is out.
-    waiting: u64,
+    /// The write that took the tree away, by the id the queue accepted
+    /// it under — and where its answer stood in the notify that carried
+    /// it, which is the page's cue to re-read the open file or to say
+    /// what git refused.
+    press: Press,
     /// That write landed and nothing has read the tree it left yet.
     ours: bool,
     /// The smallest report the counts can stand beside and still speak
     /// for that write; zero while no answer is standing.
     after: u64,
-    /// The newest report the counts on screen have stood beside, and
-    /// whether they left the tree with nothing in it — written down by
-    /// every status, so an answer arriving behind one can settle on it.
-    seen: u64,
-    seen_emptied: bool,
-    /// Where this press's own answer stands in the answers a notify
-    /// carried, or `None` where that notify carried none of it. **A
-    /// different wait from the tree's**: this one is the page's cue to
-    /// re-read the open file or to say what git refused, and it is put
-    /// down at the top of every drain.
-    at: Option<usize>,
 }
 
 impl StashOut {
@@ -65,26 +55,18 @@ impl StashOut {
     /// id.
     ///
     /// Whatever an earlier press left standing goes with it — the tree
-    /// emptying next is the work of the stash asked for last. Where the
-    /// queue accepted nothing (the session is closed) nothing is waited
-    /// for and nothing is claimed: no answer is coming, and a tree that
-    /// empties afterwards was emptied by somebody else.
+    /// emptying next is the work of the stash asked for last.
     pub fn asked(&mut self, accepted: Option<u64>) {
         self.ours = false;
         self.after = 0;
-        let Some(id) = accepted.filter(|id| *id != 0) else {
-            tracing::debug!("stash the queue took nothing for empties no tree of ours");
-            self.waiting = 0;
-            return;
-        };
-        self.waiting = id;
+        self.press.asked(accepted);
     }
 
-    /// Puts down where the last notify's answer stood: this drain
-    /// answers for itself. What the press is waiting for from the tree
-    /// is left alone — that wait outlives any number of notifies.
+    /// Puts down where the last notify's answer stood. What the press is
+    /// waiting for from the tree is left alone — that wait outlives any
+    /// number of notifies.
     pub fn new_notify(&mut self) {
-        self.at = None;
+        self.press.new_notify();
     }
 
     /// git answered a write, standing at `at` in this notify's answers
@@ -98,51 +80,39 @@ impl StashOut {
     /// way, since the file it left stale and the words it was refused
     /// with are nobody else's.
     pub fn answered(&mut self, id: u64, at: usize, failed: bool, after: u64) -> bool {
-        if self.waiting == 0 || self.waiting != id {
+        if !self.press.answered(id, at) {
             return false;
         }
-        self.waiting = 0;
         self.ours = !failed;
         self.after = after;
-        self.at = Some(at);
         true
     }
 
-    /// A status has been applied, whose counts stood beside the report
-    /// numbered `seen` and left the tree empty or not. Written down
-    /// whether or not an answer is standing: the answer may still be
-    /// coming, and this is the only record of what it would settle on.
-    pub fn applied(&mut self, seen: u64, emptied: bool) {
-        if seen < self.seen {
-            return;
-        }
-        self.seen = seen;
-        self.seen_emptied = emptied;
-    }
-
-    /// The page is acting on the tree it has: says whether this window's
-    /// own stash is what emptied it, and settles the press.
+    /// The page is acting on the working tree as it last read it: the
+    /// counts stood beside the report numbered `seen`, and `emptied` is
+    /// whether they left nothing in it.
     ///
-    /// **Answered off whichever half arrived second**, so the page asks
-    /// this both where a status lands and where a write answers. The
+    /// Says whether this window's own stash is what emptied it, and
+    /// settles the press. **Asked from both sides of the pair**, so the
+    /// page asks where a status lands and where a write answers; the
     /// first status that can speak for the press settles it either way —
     /// a tree that still has something in it settles it too, since the
     /// stash plainly did not take that away, and nothing is left
     /// standing for a later emptying somebody else made.
-    pub fn taken(&mut self) -> bool {
-        if !self.ours || self.after == 0 || self.seen < self.after {
+    pub fn taken(&mut self, seen: u64, emptied: bool) -> bool {
+        if !self.ours || self.after == 0 || seen < self.after {
             return false;
         }
         self.ours = false;
         self.after = 0;
-        self.seen_emptied
+        emptied
     }
 
     /// Where this press's own answer stands in this notify, or `None`
     /// where this notify carried none.
     #[must_use]
     pub fn answer(&self) -> Option<usize> {
-        self.at
+        self.press.answer()
     }
 
     /// Whether a landing is still standing, for the tests that ask what

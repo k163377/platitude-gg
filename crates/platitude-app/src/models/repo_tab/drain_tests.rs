@@ -865,10 +865,10 @@ fn the_landing_stands_until_the_tree_is_read() {
         tab.stash_answer, -1,
         "while where it answered went with its own notify"
     );
-    tab.stash_out.applied(FENCE, EMPTIED);
-    assert!(tab.stash_out.taken());
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(tab.stash_landing_taken());
     assert!(
-        !tab.stash_out.taken(),
+        !tab.stash_landing_taken(),
         "one press empties one tree, and the reading settles it"
     );
 }
@@ -884,8 +884,8 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
         "stash",
         "error: Your local changes would be overwritten",
     )]);
-    tab.stash_out.applied(FENCE, EMPTIED);
-    assert!(!tab.stash_out.taken());
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(!tab.stash_landing_taken());
     assert!(
         tab.write_answer_at(tab.stash_answer)
             .is_some_and(|a| a.failed),
@@ -904,8 +904,8 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
 fn somebody_elses_stash_answer_claims_no_tree() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![fenced(SOMEBODY_ELSE, "stash", "")]);
-    tab.stash_out.applied(FENCE, EMPTIED);
-    assert!(!tab.stash_out.taken());
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(!tab.stash_landing_taken());
     assert_eq!(tab.stash_answer, -1);
     assert!(
         tab.write_stale_diff,
@@ -921,11 +921,45 @@ fn somebody_elses_stash_answer_claims_no_tree() {
 #[test]
 fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
     let mut tab = tree_stashed();
-    tab.stash_out.applied(FENCE, EMPTIED);
-    assert!(!tab.stash_out.taken(), "nothing to settle on yet");
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(!tab.stash_landing_taken(), "nothing to settle on yet");
     tab.absorb(vec![fenced(OURS, "stash", "")]);
     assert!(
-        tab.stash_out.taken(),
+        tab.stash_landing_taken(),
         "the answer settles on the tree already read"
+    );
+}
+
+// …and the same drain brings somebody else's refusal, which is what the
+// group is left describing. **Everything the landing needs is in this
+// notify** — the tree was read before it and the answer is in it — so
+// the press is owed its exit here, and nothing is coming to ask again:
+// the status that would have is the one that already went by. Sequenced
+// off the group, the refusal's branch ends the whole of the page's
+// answer before the exit is reached, and the reader sits on a pane
+// describing a tree that is gone until something else moves.
+#[test]
+fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
+    let mut tab = tree_stashed();
+    tab.tree_was_read(FENCE, EMPTIED);
+    // A push rather than a fetch: a failed fetch raises
+    // `fetch_first_failed`, and a signal needs the proxy no unit test
+    // has. Which write it was changes nothing — the group's branch ends
+    // the page's answer on any refusal it is left describing.
+    tab.absorb(vec![
+        fenced(OURS, "stash", ""),
+        answered(SOMEBODY_ELSE, "push", "! [rejected]"),
+    ]);
+    assert!(
+        tab.write_refused,
+        "the group is the push's, and its branch returns early"
+    );
+    assert!(
+        tab.stash_landing_taken(),
+        "while the press's own exit is owed in this very notify"
+    );
+    assert!(
+        !tab.stash_landing_taken(),
+        "and owed once — nothing is left for a later status to pay again"
     );
 }

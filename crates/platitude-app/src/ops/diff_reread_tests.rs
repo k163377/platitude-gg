@@ -13,9 +13,13 @@ const IN_FLIGHT: u64 = 40;
 const FENCE: u64 = 41;
 const AFTERWARDS: u64 = 42;
 
+/// A page that has put no status on screen yet: the counts start beside
+/// no report at all.
+const NOTHING_READ: u64 = 0;
+
 fn read_for_a_write() -> DiffReread {
     let mut read = DiffReread::default();
-    read.read_after(FENCE);
+    read.read_after(FENCE, NOTHING_READ);
     read
 }
 
@@ -70,7 +74,7 @@ fn a_status_nothing_was_read_for_is_news() {
 #[test]
 fn a_write_that_named_no_report_claims_no_status() {
     let mut read = DiffReread::default();
-    read.read_after(0);
+    read.read_after(0, NOTHING_READ);
     assert!(!read.taken(AFTERWARDS));
 }
 
@@ -79,7 +83,7 @@ fn a_write_that_named_no_report_claims_no_status() {
 #[test]
 fn the_read_made_last_is_the_one_standing() {
     let mut read = read_for_a_write();
-    read.read_after(AFTERWARDS);
+    read.read_after(AFTERWARDS, NOTHING_READ);
     assert!(!read.taken(FENCE));
     assert!(read.taken(AFTERWARDS));
 }
@@ -92,28 +96,15 @@ fn the_read_made_last_is_the_one_standing() {
 #[test]
 fn a_status_that_arrived_first_leaves_no_read_standing() {
     let mut read = DiffReread::default();
-    read.applied(FENCE);
     assert!(
         !read.taken(FENCE),
         "nothing was waiting for it, and it read the file itself"
     );
-    read.read_after(FENCE);
-    read.applied(AFTERWARDS);
+    read.read_after(FENCE, FENCE);
     assert!(
         !read.taken(AFTERWARDS),
         "the next status is somebody else's change, and it is news"
     );
-}
-
-// The same the long way round: the status the write published arrives
-// while an older read is still standing, spends that one, and then the
-// new read finds it already applied.
-#[test]
-fn an_outside_change_after_the_reversed_pair_is_read_again() {
-    let mut read = DiffReread::default();
-    read.applied(FENCE);
-    read.read_after(FENCE);
-    assert!(!read.taken(AFTERWARDS), "read for the outside change");
 }
 
 // A status from before the fence says nothing about the write, so a read
@@ -121,7 +112,6 @@ fn an_outside_change_after_the_reversed_pair_is_read_again() {
 #[test]
 fn a_status_from_before_the_write_leaves_the_read_to_be_made() {
     let mut read = DiffReread::default();
-    read.applied(IN_FLIGHT);
-    read.read_after(FENCE);
+    read.read_after(FENCE, IN_FLIGHT);
     assert!(read.taken(FENCE));
 }

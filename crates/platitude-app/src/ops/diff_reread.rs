@@ -23,10 +23,11 @@
 /// **The status can arrive first.** The answer and the status travel
 /// feeds of their own and are drained apart, so the one the re-read
 /// would have answered for may be already applied by the time the page
-/// reads the file. Nothing is left standing then ([`Self::applied`] is
-/// what makes that knowable): what the wait was for has been and gone,
-/// and the next status to move the tree is somebody else's change —
-/// suppressed, it would leave their edit unread on screen.
+/// reads the file. Nothing is left standing then ([`Self::read_after`]
+/// is handed the newest status for exactly this): what the wait was for
+/// has been and gone, and the next status to move the tree is somebody
+/// else's change — suppressed, it would leave their edit unread on
+/// screen.
 ///
 /// **Spent by the status it answers for**, for the same reason.
 #[derive(Debug, Default)]
@@ -34,22 +35,12 @@ pub struct DiffReread {
     /// The first report of HEAD whose counts can speak for the write
     /// this file was read for; zero while no read is standing.
     after: u64,
-    /// The newest report the counts on screen have stood beside — every
-    /// status says which, whether or not a read was waiting for it.
-    seen: u64,
 }
 
 impl DiffReread {
-    /// A status has been applied, whose counts stood beside the report
-    /// numbered `seen`. Written down whether or not anything is waiting
-    /// for it: what has already been read is the one thing a read
-    /// arriving afterwards has to measure itself against.
-    pub fn applied(&mut self, seen: u64) {
-        self.seen = self.seen.max(seen);
-    }
-
     /// The file was read again for a write whose answer named `after` as
-    /// the first report whose counts can speak for it.
+    /// the first report whose counts can speak for it; `seen` is the
+    /// report the counts on screen last stood beside.
     ///
     /// **Nothing is left standing where that status has already been
     /// applied** — it read the file once itself, and the next status is
@@ -57,8 +48,8 @@ impl DiffReread {
     /// nothing to measure a status against, so the one behind it reads
     /// the file once more rather than skipping a read nobody can prove
     /// was already made.
-    pub fn read_after(&mut self, after: u64) {
-        self.after = if after == 0 || self.seen >= after {
+    pub fn read_after(&mut self, after: u64, seen: u64) {
+        self.after = if after == 0 || seen >= after {
             0
         } else {
             after
@@ -72,9 +63,6 @@ impl DiffReread {
     /// A report from before the fence answers for nothing and leaves the
     /// read standing — it describes the repository as it was, and the
     /// one that describes what the write left is still coming.
-    ///
-    /// **Writing the status down is [`Self::applied`]'s**, so that the
-    /// one arriving with nothing to answer for is still remembered.
     pub fn taken(&mut self, seen: u64) -> bool {
         if self.after == 0 || seen < self.after {
             return false;
