@@ -1,6 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached types alone — `ToolTip.toolTip` is how the badge's own sentence is read back
+// (rules-refs/app-ui.md carries what an unimported one answers).
+import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -40,7 +43,8 @@ Item {
             // The screen's other category, entered by the door the conflict menu and the app menu both use.
             page.gitSettingsRequested()
         } else if (act === "avatar-rest" || act === "avatar-hover"
-                   || act === "avatar-assign" || act === "avatar-badge") {
+                   || act === "avatar-assign" || act === "avatar-badge"
+                   || act === "avatar-tip") {
             // The first ordinary commit — row 0 is WIP.
             page.activateRow(graphModel.oidAt(1))
             if (act === "avatar-assign") {
@@ -48,6 +52,8 @@ Item {
                 avatarAssignTimer.start()
             } else if (act === "avatar-badge") {
                 avatarBadgeTimer.start()
+            } else if (act === "avatar-tip") {
+                avatarTipTimer.start()
             } else {
                 // The picture is of the details pane, which arrives a git
                 // subprocess later — the same wait avatar-badge takes; a
@@ -133,6 +139,35 @@ Item {
             if (avatarShownTimer.hovers)
                 detailsPane.avatarPointedAt = true
             renderedBarrier.begin()
+        }
+    }
+    // The badge's own sentence, which the pointer raises after `Metrics.tipDelayMs` and no picture of the badge
+    // carries: the shot is taken the frame the act ends, and the tip is not up yet. Read off the shared instance
+    // itself — the one thing that can also say the words on it, which is what this verb is here to read: the address
+    // the sentence names is handed over late (`%1`), and a run that only saw the box could not tell a filled sentence
+    // from an empty one.
+    SampleTimer {
+        id: avatarTipTimer
+        onTriggered: {
+            if (!driver.cardSettled)
+                return
+            avatarTipTimer.stop()
+            detailsPane.avatarPointedAt = true
+            avatarTipReport.start()
+        }
+    }
+    SampleTimer {
+        id: avatarTipReport
+        onTriggered: {
+            const tip = page.ToolTip.toolTip
+            if (!tip.visible)
+                return
+            avatarTipReport.stop()
+            Harness.report("avatar_tip tip=" + tip.visible
+                + " named=" + (detailsModel.authorEmail !== ""
+                               && tip.text.indexOf(detailsModel.authorEmail) >= 0)
+                + " text=" + tip.text)
+            driver.complete()
         }
     }
     // Automation: the details have to land before the author card can be worked, since it is that author the picture is

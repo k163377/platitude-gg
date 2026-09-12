@@ -15,7 +15,32 @@ use std::path::Path;
 /// Reads both halves of what a run is: a window shape is the verb's
 /// business, and an arrangement the opening would undo is the fixture's,
 /// so `presets` is asked as well as `verb`.
-pub(super) fn config(config_dir: &Path, verb: &str, presets: &[String]) -> Result<(), String> {
+pub(super) fn config(
+    config_dir: &Path,
+    verb: &str,
+    arg: &str,
+    presets: &[String],
+) -> Result<(), String> {
+    // A git the store names and the machine does not have. **Only a file
+    // can put the window here**: the screen stores a path it has just
+    // asked for a version, so nothing typed into it ends up in this
+    // state — what is photographed is a run that opened on a git that
+    // has since gone (`Hub::resolve_git` falls back to `PATH`, and the
+    // chapter is the only place that says so).
+    if verb == "settings-git-path" && arg == "stored-missing" {
+        let settings = config_dir.join("settings.toml");
+        // Forward slashes: this is TOML, where a Windows path's
+        // separators would be escapes.
+        let gone = config_dir.join("no-such-git.exe").display().to_string();
+        let gone = gone.replace('\\', "/");
+        std::fs::write(
+            &settings,
+            format!("version = 1\n\n[defaults]\ngit_path = \"{gone}\"\n"),
+        )
+        .map_err(|e| format!("could not write {}: {e}", settings.display()))?;
+        println!("seeded settings: a git that is not there ({gone})");
+    }
+
     // The verbs that need the configuration to say something before the
     // run starts: a window smaller than any floor the layout has. It is
     // what a file written before there was a floor looks like, and the
@@ -137,7 +162,7 @@ mod tests {
     #[test]
     fn the_preset_that_must_not_fetch_is_seeded_under_any_verb() {
         let dir = config_dir("seed-outrun");
-        super::config(&dir, "nav-tip", &["outrun".to_string()]).expect("the seed is written");
+        super::config(&dir, "nav-tip", "", &["outrun".to_string()]).expect("the seed is written");
         let settings = std::fs::read_to_string(dir.join("settings.toml"))
             .expect("a preset that must not fetch is given settings of its own");
         assert!(
@@ -155,7 +180,7 @@ mod tests {
     #[test]
     fn the_preset_whose_third_shape_a_fetch_would_answer_is_seeded_too() {
         let dir = config_dir("seed-unpublished");
-        super::config(&dir, "publish-taken", &["unpublished".to_string()])
+        super::config(&dir, "publish-taken", "", &["unpublished".to_string()])
             .expect("the seed is written");
         let settings = std::fs::read_to_string(dir.join("settings.toml"))
             .expect("a preset that must not fetch is given settings of its own");
@@ -172,7 +197,7 @@ mod tests {
     #[test]
     fn a_preset_with_nothing_to_lose_is_left_on_the_shipped_settings() {
         let dir = config_dir("seed-basic");
-        super::config(&dir, "nav-tip", &["basic".to_string()]).expect("nothing to seed");
+        super::config(&dir, "nav-tip", "", &["basic".to_string()]).expect("nothing to seed");
         assert!(
             !dir.join("settings.toml").exists(),
             "a preset that does not care about the opening's fetch was given settings anyway"

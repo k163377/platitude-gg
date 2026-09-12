@@ -208,7 +208,7 @@ QtObject {
                 "plan-details-held",
                 "op-exit-lands",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
-                "avatar-rest", "avatar-hover",
+                "avatar-rest", "avatar-hover", "avatar-tip",
                 "find", "find-next", "find-prev", "find-drop",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page must never photograph their intermediate state before the

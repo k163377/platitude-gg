@@ -147,13 +147,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
         resource_claims.push(claim);
     }
     println!("config dir: {}", config_dir.display());
-    seed::config(&config_dir, &opts.verb, &opts.preset)?;
+    seed::config(&config_dir, &opts.verb, &opts.arg, &opts.preset)?;
 
     let arg = match opts.arg.is_empty() {
         true => match body_for(&opts.verb) {
             Some(body) => body,
             None => folder_for(&opts.verb, &shot_dir, &path)?,
         },
+        // The seed is the whole of this one: the field is never typed
+        // into, so the app is handed the same nothing a bare run gets
+        // and photographs what the store put on screen (`seed::config`).
+        false if opts.verb == "settings-git-path" && opts.arg == "stored-missing" => String::new(),
         false => opts.arg.clone(),
     };
 

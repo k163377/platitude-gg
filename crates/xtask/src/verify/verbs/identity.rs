@@ -230,4 +230,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=3",
     },
+    // The badge's sentence names the address it is about, and the
+    // address is handed to it late (`%1`). A picture cannot answer
+    // that: an empty name leaves a box the same size with the same
+    // words up to the gap, so `named=` is the run's own reading of the
+    // tip against the author it was opened over.
+    Verb {
+        name: "avatar-tip",
+        when: &[],
+        plain: "avatar_tip tip=true named=true",
+    },
 ];
