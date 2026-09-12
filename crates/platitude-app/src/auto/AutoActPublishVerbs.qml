@@ -133,8 +133,19 @@ Item {
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             fetchFailTimer.start()
+        } else if (act === "fetch-hover") {
+            // A hand on each of the button's three live shapes, and the words it opens there. The argument is how many
+            // fetches to fail first — none, one, or enough to stop the timer — so the one verb walks the same three
+            // steps `fetch` and `fetch-fail` photograph without a hand on them.
+            acts.fetchFailRuns = Math.max(0, Number(arg))
+            acts.fetchPointAfter = true
+            if (acts.fetchFailRuns > 0) {
+                AppBackend.setAutoFetchMinutes(0)
+                AppBackend.setAutoFetchMinutes(5)
+            }
+            fetchFailTimer.start()
         } else if (act === "fetch-resume") {
-            // Long enough a run to stop the timer, so the hold has a stopped button to come down on.
+            // Long enough a run to stop the timer, so the press has a stopped button to land on.
             acts.fetchFailRuns = 3
             acts.fetchResumeAfter = true
             AppBackend.setAutoFetchMinutes(0)
@@ -276,10 +287,14 @@ Item {
             writeBarrier.start()
         }
     }
-    /// Automation: how long a run of failed fetches the verb asked for, and whether to hold the button that resumes
-    /// once it is there.
+    /// Automation: how long a run of failed fetches the verb asked for, and what to do to the button once it is
+    /// there — press the one that resumes, or stand a pointer on whichever shape the run came to rest in.
     property int fetchFailRuns: 0
     property bool fetchResumeAfter: false
+    property bool fetchPointAfter: false
+    /// Whether the word was at full before the hand went on — the half of `fetch-hover` that a picture taken with a
+    /// hand on the button cannot hold.
+    property bool fetchRestFull: false
     /// The run reached the length it was asked for. Kept apart from the length itself because resuming clears the
     /// count the tab keeps, and a run that read the length again would start a second one over the resumed button.
     property bool fetchRunDone: false
@@ -293,8 +308,8 @@ Item {
     /// process alone.
     property int fetchAskSeq: -1
     property int fetchAskFails: -1
-    /// The stopped button, read at the moment the hold's slot is fired. Resuming takes it down, and what
-    /// `fetch-resume` ends on is the button that came back — so the red half is kept here or it is lost.
+    /// The stopped button, read at the moment the press goes in. Resuming takes it down, and what `fetch-resume`
+    /// ends on is the button that came back — so the stopped half is kept here or it is lost.
     property bool fetchStopped: false
     /// The whole of a run of failed fetches and the resume on the end of it. Asking for the next fetch and judging
     /// that the run is over are the same owner, so the two cannot disagree about whether it is.
@@ -324,18 +339,49 @@ Item {
             }
             acts.fetchRunDone = true
             if (acts.fetchResumeAfter) {
+                // Read before the press, because the press is what takes them down.
+                const wasStopped = repoTab.autoFetchSuspended
+                const askedAt = repoTab.writeSeq
+                // The band's own button, not the slot behind it: the stopped button is the only thing in the product
+                // that asks for the timer back, and a run that called `resumeAutoFetch` directly would pass a build
+                // where the press stopped reaching it. It clears the run and fetches again by itself, so the ticks
+                // after this one wait for that fetch the way they waited for the rest.
+                if (!page.pageBand.fetchNow())
+                    return
                 acts.fetchResumeAfter = false
-                acts.fetchStopped = repoTab.autoFetchSuspended
-                acts.fetchAskSeq = repoTab.writeSeq
-                // The slot a hold on the stopped button fires (`TopBar` `onHeld`). It clears the run and fetches
-                // again by itself, so the ticks after this one wait for that fetch the way they waited for the rest.
-                repoTab.resumeAutoFetch()
+                acts.fetchStopped = wasStopped
+                acts.fetchAskSeq = askedAt
+                return
+            }
+            if (Harness.autoAct === "fetch-hover") {
+                if (acts.fetchPointAfter) {
+                    // The word at rest, read on the tick the run came to rest and before the hand goes on — half of
+                    // what this verb claims is what the button looks like with nobody pointing at it, and after the
+                    // press that half is gone.
+                    acts.fetchPointAfter = false
+                    acts.fetchRestFull = page.pageBand.fetchWordFull
+                    // The hand goes on where a real one is read (`HoverToolButton.pointedAt`), never on the colours
+                    // or the tip themselves.
+                    page.pageBand.fetchPointedAt = true
+                    return
+                }
+                // The tip waits out `tipDelayMs` before it stands, so the run is not over until the words are on
+                // screen. A button with nothing to say never gets here, which is `fetch-tip`'s side of the question.
+                if (!page.pageBand.fetchTipStanding)
+                    return
+                fetchFailTimer.stop()
+                Harness.report("fetch_hover tip=" + page.pageBand.fetchTipStanding
+                                  + " word=" + page.pageBand.fetchWordFull
+                                  + " rest=" + acts.fetchRestFull
+                                  + " stopped=" + repoTab.autoFetchSuspended
+                                  + " fails=" + repoTab.fetchFailures)
+                driver.complete()
                 return
             }
             fetchFailTimer.stop()
             if (Harness.autoAct === "fetch-resume")
-                // What the picture cannot hold: the button was stopped when the hold came down, and a fetch ran
-                // again after it. The one it ends on is a button back at work, which is the warning shape — the same
+                // What the picture cannot hold: the button was stopped when the press went in, and a fetch ran again
+                // after it. The one it ends on is a button back at work, which is the warning shape — the same
                 // picture `fetch-fail 1` takes.
                 Harness.report("fetch_resume stopped=" + acts.fetchStopped
                                   + " fetched=" + (repoTab.fetchFailures > 0)

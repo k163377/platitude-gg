@@ -117,10 +117,15 @@ Rectangle {
     readonly property string stashMode: stashButton.mode
     readonly property bool stashLive: stashButton.enabled
     /// Whether either action has a string to open under a pointer. **The string, not a ToolTip caught open** — a
-    /// pointer cannot be injected, and a disabled control takes hover and opens its attached ToolTip like any other
-    /// one (rules-refs/app-ui.md §hover), so what can be judged is whether there is anything to open.
+    /// disabled control takes hover and opens its attached ToolTip like any other one (rules-refs/app-ui.md §hover),
+    /// so what tells the two sides apart is whether there is anything to open (`fetch-tip`).
     readonly property bool stashTipShown: stashButton.tip !== ""
     readonly property bool fetchTipShown: fetchButton.tip !== ""
+    /// Automation: the pointer's stand-in on the fetch button, and the two things the button answers it with — the tip
+    /// standing (the words on screen, `tipDelayMs` waited out) and the word come back to full (`fetch-hover`).
+    property alias fetchPointedAt: fetchButton.pointedAt
+    readonly property bool fetchTipStanding: fetchButton.tipShown
+    readonly property bool fetchWordFull: Qt.colorEqual(fetchButton.fg, Theme.textPrimary)
     /// How the fetch button stands: how many fetches have failed, and whether it is wearing a frame. `framed` is
     /// read because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
     /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
@@ -134,6 +139,15 @@ Rectangle {
         if (!stashButton.enabled)
             return false
         stashButton.clicked()
+        return true
+    }
+    /// Automation: the Fetch button, pressed (`PGG_AUTO_ACT=fetch-resume`). Put in at the button for the reason
+    /// `stashNow` is: the stopped button is the one place that asks for the timer back, so a run that called the slot
+    /// behind it would pass a build where the press no longer reaches it. Answers whether the press went in.
+    function fetchNow() {
+        if (!fetchButton.enabled)
+            return false
+        fetchButton.clicked()
         return true
     }
     function completePushHold() {

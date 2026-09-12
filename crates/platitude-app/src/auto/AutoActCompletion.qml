@@ -227,7 +227,7 @@ QtObject {
                 "band-actions", "band-actions-none",
                 "band-actions-fold", "band-actions-alert", "old-git", "old-git-card",
                 "old-git-fold", "state", "middle-close", "open-again",
-                "force-push-hold", "fetch-busy", "fetch-fail", "fetch-resume", "fetch-tip",
+                "force-push-hold", "fetch-busy", "fetch-fail", "fetch-hover", "fetch-resume", "fetch-tip",
                 "stash-state",
                 "settings-tools", "settings-tools-loading", "settings-switch",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",

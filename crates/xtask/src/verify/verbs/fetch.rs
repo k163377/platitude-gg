@@ -104,6 +104,21 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::OneOf(&["", "1", "2"]), "fetch_fail stopped=false")],
         plain: "fetch_fail stopped=true",
     },
+    // A hand on each of the three live shapes. `tip=` is the words
+    // on screen rather than a string the button would hand over
+    // (`fetch-tip` judges that side), and `word=` beside `rest=` is
+    // the pair a picture cannot hold: the stopped shape is the one
+    // that steps its word back, so it is the one whose two halves
+    // have to differ. The counts ride after them unjudged for the
+    // reason `fetch-fail`'s do.
+    Verb {
+        name: "fetch-hover",
+        when: &[(
+            Arg::OneOf(&["3"]),
+            "fetch_hover tip=true word=true rest=false stopped=true",
+        )],
+        plain: "fetch_hover tip=true word=true rest=true stopped=false",
+    },
     // The resume on the end of such a run, whose whole show is over
     // before the picture is taken: what it ends on is a button back
     // at work, and that frames exactly like `fetch-fail 1`.
