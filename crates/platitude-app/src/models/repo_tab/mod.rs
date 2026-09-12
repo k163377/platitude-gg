@@ -263,11 +263,6 @@ pub struct RepoTab {
     write_moved_head: bool,
     /// A reword landed: the saved message is on its commit.
     write_reworded: bool,
-    /// A stash operation landed. Which one is not said — push, pop,
-    /// apply, drop and rename all answer as one — so a reader waiting on
-    /// a particular one finds its own answer by the id its press was
-    /// given (`WriteAnswer::id`; `RepoPage.absorbPopLabel`).
-    write_stashed: bool,
     /// The answer was about a branch (create / delete / rename),
     /// whichever way it went: what the page armed for one — a refusal to
     /// wear `-D`, a rename to carry to the remote — reads this beside
@@ -319,6 +314,15 @@ pub struct RepoTab {
     /// What git said about it is read off that answer, like every other
     /// reader that waits for one write by name.
     commit_answer: i32,
+    /// The stash this window pressed to take the working tree away,
+    /// waiting for the reading where that tree turns out to be empty
+    /// (`ops::StashOut`).
+    ///
+    /// **Not a property**: what it says is asked for once, at the moment
+    /// a tree that has just emptied is being acted on, and asking spends
+    /// it (`takeStashLanding`). A binding would read an answer that is
+    /// gone by the time anything is drawn from it.
+    stash_out: crate::ops::StashOut,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing

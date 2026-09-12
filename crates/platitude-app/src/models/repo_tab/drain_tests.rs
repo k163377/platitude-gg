@@ -317,8 +317,8 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
 #[test]
 fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "stash".into(), String::new(), None, 0, 0);
-    assert!(tab.write_stashed);
+    tab.settle_write(1, "reword".into(), String::new(), None, 0, 0);
+    assert!(tab.write_reworded);
     // Not a fetch: a failed fetch raises `fetch_first_failed`, and a
     // signal needs the proxy no unit test has.
     tab.settle_write(
@@ -329,7 +329,10 @@ fn every_answer_rewrites_the_whole_group() {
         0,
         0,
     );
-    assert!(!tab.write_stashed, "nothing armed survives the next answer");
+    assert!(
+        !tab.write_reworded,
+        "nothing armed survives the next answer"
+    );
     assert!(tab.write_refused);
     assert_eq!(tab.write_seq, 2);
 }
@@ -627,7 +630,7 @@ fn an_answer_is_found_by_the_id_its_press_was_given_whatever_came_in_between() {
         "a press that did not answer in this notify is not found"
     );
     assert!(
-        !tab.write_stashed,
+        tab.write_refused,
         "the group describes the last answer, which was the refusal"
     );
 }
@@ -763,7 +766,10 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     // …and it is reported once: the group is the stash's, so nothing the
     // page reads there can report the same refusal a second time.
     assert!(!tab.write_refused);
-    assert!(tab.write_stashed, "the landing beside it is still its own");
+    assert!(
+        tab.write_stale_diff,
+        "the landing beside it is still the group's own"
+    );
     assert_eq!(tab.write_report_kind, "");
 }
 
@@ -782,4 +788,96 @@ fn a_drain_whose_answer_had_an_owner_leaves_the_group_saying_nothing() {
         "the push's refusal was the last drain's news"
     );
     assert!(for_the_editor(&tab).is_some());
+}
+
+// ---- the stash that emptied the tree ---------------------------------
+
+/// The report of HEAD a write's answer names as the first whose counts
+/// can speak for what it left, and the tree those counts describe.
+const FENCE: u64 = 41;
+const EMPTIED: bool = true;
+
+/// One answer as the bridge carries it, naming that report.
+fn fenced(id: u64, op: &str, error: &str) -> TabMsg {
+    TabMsg::WriteState {
+        id,
+        op: op.into(),
+        running: false,
+        replays: false,
+        error: error.into(),
+        report: None,
+        head_seq: FENCE,
+        reads_from: 0,
+    }
+}
+
+/// A tab whose band press put the working tree away and is waiting for
+/// the reading that finds the tree gone (`ops_remote::stash_push` writes
+/// the id down at the press).
+fn tree_stashed() -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.stash_out.asked(Some(OURS));
+    tab
+}
+
+// The fetch running behind the press answers in the same drain, and it
+// is the one a property every answer rewrites is left describing: read
+// there, the tree emptying behind it is nobody's doing, the reader is
+// left standing over a pane that describes nothing, and the viewport
+// never follows the entry they just made.
+#[test]
+fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
+    let mut tab = tree_stashed();
+    tab.absorb(vec![
+        fenced(OURS, "stash", ""),
+        answered(SOMEBODY_ELSE, "fetch", ""),
+    ]);
+    assert!(tab.stash_out.ours());
+    assert!(
+        tab.write_fetched,
+        "while the group is the fetch's, being the last answer nobody named"
+    );
+}
+
+// …and it stands past the drains in between, because the status whose
+// counts find the tree empty is a feed of its own and arrives long after.
+#[test]
+fn the_landing_stands_until_the_tree_is_read() {
+    let mut tab = tree_stashed();
+    tab.absorb(vec![fenced(OURS, "stash", "")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, "fetch", "")]);
+    tab.absorb(vec![TabMsg::MergeTools {
+        names: Vec::new(),
+        settled: true,
+    }]);
+    assert!(tab.stash_out.ours(), "nothing in between answered for it");
+    assert!(tab.stash_out.read(FENCE, EMPTIED));
+    assert!(
+        !tab.stash_out.read(FENCE, EMPTIED),
+        "one press empties one tree, and the reading settles it"
+    );
+}
+
+// A stash git would not make took no tree away, so the tree emptying
+// next emptied for some other reason.
+#[test]
+fn a_refused_stash_claims_no_tree() {
+    let mut tab = tree_stashed();
+    tab.absorb(vec![fenced(
+        OURS,
+        "stash",
+        "error: Your local changes would be overwritten",
+    )]);
+    assert!(!tab.stash_out.read(FENCE, EMPTIED));
+    assert!(tab.write_refused, "and the refusal is still the group's");
+}
+
+// Every stash operation answers under the same word, so the answer alone
+// cannot say it was the press that emptied the tree: a pop pressed from
+// the details band lands in the same drain and looks identical.
+#[test]
+fn somebody_elses_stash_answer_claims_no_tree() {
+    let mut tab = RepoTab::default();
+    tab.absorb(vec![fenced(SOMEBODY_ELSE, "stash", "")]);
+    assert!(!tab.stash_out.read(FENCE, EMPTIED));
 }

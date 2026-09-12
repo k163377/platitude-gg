@@ -344,10 +344,19 @@ impl RepoTab {
             report_reason: reason,
         });
         let at = self.write_answers.len() - 1;
-        // Handed to the press that named this write, and no further: the
-        // page reads it where the owner holds it, and a copy in the group
-        // below would have the page act on the one answer twice.
-        if self.commit_out.answered(id, at) {
+        // Handed to whoever named this write at the press.
+        //
+        // **How much of an answer an owner takes is the owner's own.**
+        // Everything the page does with the editor's commit is
+        // `CommitOut`'s, so that answer stops there — a copy in the group
+        // below would have the page act on the one answer twice. The
+        // stash that took the working tree away is told only that its
+        // write landed, because the rest of its answer is still
+        // everybody's: the diff it left stale, and the refusal it might
+        // have been.
+        let answered_for = self.commit_out.answered(id, at);
+        self.stash_out.answered(id, !landed, head_seq);
+        if answered_for {
             self.read_commit_out();
         } else {
             self.fold_into_group(&op, landed, at);
@@ -385,7 +394,6 @@ impl RepoTab {
         self.write_refused = !landed;
         self.write_moved_head = landed && matches!(op, "checkout" | "reset");
         self.write_reworded = landed && op == "reword";
-        self.write_stashed = landed && op == "stash";
         self.write_branch_op = op == "branch";
         self.write_pushed = op == "push";
         self.write_fetched = op == "fetch";
@@ -407,7 +415,6 @@ impl RepoTab {
         self.write_stale_diff = false;
         self.write_moved_head = false;
         self.write_reworded = false;
-        self.write_stashed = false;
         self.write_branch_op = false;
         self.write_pushed = false;
         self.write_fetched = false;

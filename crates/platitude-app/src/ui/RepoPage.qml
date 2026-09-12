@@ -1482,11 +1482,6 @@ Item {
         // below for the same reason, and out of it altogether: the group that branch reads describes the answers
         // nobody was waiting for, and this one was waited for by name (`RepoTab.commitAnswer`).
         page.absorbCommitAnswer()
-        // Whether the working tree emptying next is this window's own doing — only a stash can empty a tree, so the
-        // count arriving at zero is what says it was one, and this only says whose. Read off every answer rather than
-        // armed and cleared, so nothing can be left standing for a later write to trip over; a refusal writes `false`
-        // the same way.
-        page.stashLanded = repoTab.writeStashed
         // What is left over is the answers nobody named — **and its branches end it rather than this function**, so
         // no press's own answer can be skipped by a refusal somebody else's write came back with.
         page.absorbLeftoverAnswer()
@@ -1517,9 +1512,8 @@ Item {
             // The write did not happen and something outside this application said so — a protected branch, a hook
             // over there or here, a remote this end had only an older picture of. Nothing here could have known
             // beforehand and nothing here can answer it, so what it said comes down as a report and the log stays
-            // where the reader left it (デザイン規約 §答えの要らない報せ). Ahead of the branch delete's own second move:
-            // `Delete both` is a branch write whose remote half is what the far side refused, and the row it would
-            // morph is about the half that landed.
+            // where the reader left it (デザイン規約 §答えの要らない報せ).
+            //
             // Anything but the name itself being turned down leaves the box nothing to answer, so it comes down the
             // way a landing takes it down — a half-finished rename most of all, where the row it was on is exactly
             // what could not be found.
@@ -2397,9 +2391,6 @@ Item {
     // background pass that moves rows under a reader may not also move their view
     // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
-    /// Whether the last write this window sent was a stash that landed — read where the working tree turns out to be
-    /// empty, which is the moment that says the entry took all of it (`leaveWipWhenDone`).
-    property bool stashLanded: false
     /// What operation the last status named, so that its going away can be read as an edge rather than as a state.
     property string seenOpText: ""
     /// The WIP face has nothing left to hold the reader with. The working tree emptied: after a commit of our own that
@@ -2433,16 +2424,20 @@ Item {
         // status and never goes back (`WorkTreeModel`), so this stands in front of a page's opening moment alone.
         if (!workTree.loaded)
             return
-        if (!edge || !page.wipShown || workTree.opText !== "")
-            return
         const clean = workTree.stagedCount === 0 && workTree.unstagedCount === 0
                    && workTree.untrackedCount === 0 && workTree.conflictCount === 0
+        // Whether this window's own stash is what emptied it — asked of the press that made it, which is the only
+        // thing that still knows (`ops::StashOut`). **Asked of every status that can speak for that press, whichever
+        // way the tree went**: one that still has something in it settles the press too, since the stash plainly did
+        // not take that away, so nothing is left standing for a later emptying somebody else made. Asked before the
+        // conditions below, which are about the pane rather than about the tree.
+        const ourStash = repoTab.takeStashLanding(workTree.statusSeq, clean)
         if (!clean)
             return
-        const ourStash = page.stashLanded
+        if (!edge || !page.wipShown || workTree.opText !== "")
+            return
         if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
             return
-        page.stashLanded = false
         page.wipShown = false
         page.pendingHeadSelect = true
         // The status this is read out of **is** the one that answers: the report of HEAD that came with it is already

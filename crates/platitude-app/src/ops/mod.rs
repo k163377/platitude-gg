@@ -23,8 +23,9 @@
 //! ([`StandIn::session_gone`]) — a different thing from the operation
 //! ending, because what a session numbered goes with it. What is waited
 //! for on behalf of one page's own boxes is that page's ([`Press`],
-//! kept on the tab model the editor was typed into): a page that went
-//! away took the text with it, and there is nothing left to empty.
+//! [`StashOut`], kept on the tab model the boxes belong to): a page that
+//! went away took the text and the pane with it, and there is nothing
+//! left to empty or to walk anybody off.
 
 mod press;
 #[cfg(test)]
@@ -32,6 +33,10 @@ mod press_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
+mod stash_out;
+#[cfg(test)]
+mod stash_out_tests;
 
 pub use press::Press;
 pub use stand_in::{Row, Rows, StandIn};
+pub use stash_out::StashOut;

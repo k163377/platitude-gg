@@ -13,15 +13,26 @@ impl RepoTab {
     /// the press still asks nothing, so nothing is gathered before the
     /// write; what is already written down is used (デザイン規約
     /// §変更を退避する). Empty leaves git to write its own `WIP on …`.
+    ///
+    /// **The press writes down the id it was accepted under**
+    /// (`ops::StashOut`): this is one of the two presses that can leave
+    /// the working tree with nothing in it, and the reading that finds it
+    /// empty comes long after the answer — by then, whose doing it was is
+    /// a thing only the press itself can still say.
     pub(super) fn stash_push(&mut self, message: String) {
         let options = platitude_core::stash::PushOptions {
             include_untracked: true,
             keep_index: false,
             staged_only: false,
         };
-        self.with_session(|s| s.stash_push(message.clone(), options, Vec::new()));
+        let asked = self.ask_session(|s| s.stash_push(message.clone(), options, Vec::new()));
+        self.stash_out
+            .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
+    /// The other one, over the gathered files only. It can empty the tree
+    /// as squarely as the whole-tree press — the rows gathered may be all
+    /// there were.
     pub(super) fn stash_chosen_paths(&mut self, message: String) {
         let paths = std::mem::take(&mut self.pending_paths);
         if paths.is_empty() {
@@ -32,7 +43,9 @@ impl RepoTab {
             keep_index: false,
             staged_only: false,
         };
-        self.with_session(|s| s.stash_push(message.clone(), options, paths.clone()));
+        let asked = self.ask_session(|s| s.stash_push(message.clone(), options, paths.clone()));
+        self.stash_out
+            .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
     pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String) {

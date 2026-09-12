@@ -156,7 +156,6 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeReworded", Member = write_reworded, Notify = changed);
-    qproperty!("writeStashed", Member = write_stashed, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
     qproperty!("writePushed", Member = write_pushed, Notify = changed);
     qproperty!("writeFetched", Member = write_fetched, Notify = changed);
@@ -778,6 +777,28 @@ impl RepoTab {
     #[qslot]
     fn listing_drawn(&mut self) {
         self.note_listing_drawn();
+    }
+
+    /// A status has arrived whose counts stand beside the report of HEAD
+    /// numbered `seen`, and `emptied` says whether they leave the working
+    /// tree with nothing in it: answers whether this window's own stash
+    /// is what emptied it, and settles the press either way
+    /// (`ops::StashOut`).
+    ///
+    /// **The counts' own number, not HEAD's** (`WorkTreeModel.statusSeq`)
+    /// — a report of HEAD arrives on its own as well, carrying no counts
+    /// at all, and read as an answer it would settle the press on the
+    /// tree as it was before the stash.
+    ///
+    /// **Asked, not watched.** The question has an answer only at the
+    /// moment a status is being read, and asking it is what ends the
+    /// wait, so there is nothing here for a binding to follow.
+    #[qslot]
+    fn take_stash_landing(&mut self, seen: i32, emptied: bool) -> bool {
+        let Ok(seen) = u64::try_from(seen) else {
+            return false;
+        };
+        self.stash_out.read(seen, emptied)
     }
 
     /// `git fetch --prune`; an empty remote fetches all of them.
