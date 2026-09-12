@@ -155,9 +155,16 @@ pub(super) struct WorktreeRead {
     pub(super) news: super::joins::WorktreeNews,
 }
 
-/// A queued write: what it is, and what to run.
+/// A queued write: what it is, where it stands in its working tree's
+/// order, and what to run.
 pub(super) struct WriteRequest {
     pub(super) operation: Operation,
+    /// Taken at acceptance and held until the request is done — `None`
+    /// for the lanes that take no place (`session::write_order`). It
+    /// travels with the request rather than being taken by the loop so
+    /// that a request the queue turns away gives its place straight back
+    /// by being dropped.
+    pub(super) place: Option<super::write_order::Place>,
     #[expect(
         clippy::type_complexity,
         reason = "a boxed async job needs its shape spelled out"

@@ -15,6 +15,11 @@
 //! guarantee. Every write refreshes afterwards — including a failed one,
 //! because a command that stops halfway (a conflicted merge, an interrupted
 //! rebase) has still changed the repository.
+//!
+//! One repository can have more than one session at a time — a tab closed
+//! mid-write outlives its page, and the tab reopened over it is a second
+//! session on the same index. The queue is the session's; the *order* it
+//! serves in belongs to the working tree (`session::write_order`).
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -94,6 +99,7 @@ mod state;
 mod state_tests;
 mod walk;
 mod write;
+mod write_order;
 
 pub use auto_fetch::OpenFetch;
 pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
@@ -122,6 +128,7 @@ use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Operation, Reread,
     Shared, WorktreeRead, WriteRequest,
 };
+use write_order::WriteOrder;
 
 use crate::operation::{Lane, OperationId, OperationKind};
 

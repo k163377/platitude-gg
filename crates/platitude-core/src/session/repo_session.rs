@@ -187,6 +187,16 @@ pub struct RepoSession {
     pub(super) worktrees_read: ReadFlight<WorktreeRead>,
     /// Submission end of the write queue (see the module docs).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
+    /// The order this working tree's local writes run in, shared with
+    /// every other session on the same tree (`session::write_order`).
+    /// `None` until the repository is open, because which tree it is is
+    /// not known before that — and nothing can be asked for either.
+    pub(super) write_order: Mutex<Option<Arc<WriteOrder>>>,
+    /// Held while a write takes its place in that order and goes into the
+    /// queue above, so the two can never disagree about which write came
+    /// first ([`RepoSession::write`] says what disagreeing would cost).
+    /// Nothing else about a write is under it.
+    pub(super) accepting: Mutex<()>,
     /// Time budget for fetch / push. Persisted as the settings key
     /// `network_timeout_secs`; only the settings dialog's input field is
     /// missing (実装計画 §7).
@@ -300,9 +310,56 @@ impl RepoSession {
     /// slow in proportion to the work. What stops is intake — nothing
     /// sent after the close is accepted — and the network-paced requests
     /// in the tail, which die on this cancel as always. Idempotent.
+    ///
+    /// **The places those writes hold in the working tree's order are
+    /// not given up** (`session::write_order`): they are what a session
+    /// opened over this one queues behind, and giving them back here
+    /// would be the overtaking this close is not allowed to cause. What
+    /// is given up is the reading half — this session is off the list of
+    /// pages the tree reports to, and lets go of what it had drawn.
     pub fn close(&self) {
         self.root_cancel.cancel();
         self.preview_files.remove_all();
+        if let Some(order) = self.write_order() {
+            order.leave(self);
+        }
+        self.forget_the_screens_copy();
+    }
+
+    /// This working tree's write order, once the repository is open.
+    pub(super) fn write_order(&self) -> Option<Arc<WriteOrder>> {
+        relock(&self.write_order).clone()
+    }
+
+    /// Puts this session on its working tree's order, and on the list of
+    /// pages told when a write lands in that tree.
+    ///
+    /// Before the `Opened` event on purpose: that event is what lets the
+    /// consumer ask for a write, and a write accepted with no order
+    /// installed would take no place in the tree's queue.
+    pub(super) fn join_write_order(self: &Arc<Self>, info: &RepoInfo) {
+        let order = write_order::of(&info.git_dir);
+        order.join(self);
+        *relock(&self.write_order) = Some(order);
+    }
+
+    /// Lets go of what this session read for a page that is gone.
+    ///
+    /// A close is not the end of the session: a local write let run on
+    /// holds it alive to the last (`Hub::park_writes_of`), and on a
+    /// repository the size of the budget's these are the largest things
+    /// in the process — the drawn graph, and the refs snapshot and remote
+    /// tag index behind its chips. Nothing left here reads them: a closed
+    /// session makes no reads behind its writes, and what they leave is
+    /// read by whichever session holds the tree next.
+    /// Replaced rather than emptied, every one of them: `clear()` keeps a
+    /// collection's buckets, which is most of what a full one costs.
+    fn forget_the_screens_copy(&self) {
+        *self.lock_shared() = Shared::default();
+        *relock(&self.last_snapshot) = None;
+        *relock(&self.lex_cache) = None;
+        *relock(&self.remote_tag_index) = Arc::new(RemoteTagIndex::default());
+        *relock(&self.eol_baselines) = HashMap::new();
     }
 
     /// The pane closed: the picture files the last diff read wrote are

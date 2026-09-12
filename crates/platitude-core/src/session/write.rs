@@ -16,6 +16,34 @@
 //! command spawned under the request, so a consumer waiting on its own
 //! write matches the id and infers nothing from the order answers arrive
 //! in (`crate::operation`).
+//!
+//! **One queue per session, one order per working tree.** A session
+//! closed mid-write keeps that write running, and a tab reopened over it
+//! opens a second session on the same index. Acceptance therefore takes
+//! the write a place in the tree's order as well as an id
+//! (`session::write_order`), and the queue runs a request only once that
+//! place comes up — so what the tree does is the order the asks were made
+//! in, across sessions and not only within one:
+//!
+//! * a write accepted by the closed session runs before anything the new
+//!   one accepts, however long it has to be waited out;
+//! * a write accepted by the new session runs after every one already
+//!   accepted, and no local write of either is ever lost or killed;
+//! * the reads a poll takes stay out of the tree for the whole of any
+//!   write on it, this session's or another's
+//!   ([`RepoSession::tree_write`]), and are taken again the moment that
+//!   write lands ([`RepoSession::tell_the_tree`]);
+//! * **the reads an opening makes are not held back** — a tab has to
+//!   paint, and holding them would leave it on "loading" for as long as
+//!   somebody else's rebase takes. They can therefore read a tree
+//!   mid-write; what makes that safe is the line above, since the new
+//!   session is on the tree's list from the moment it opens
+//!   (`join_write_order`, before the `Opened` event). So the last
+//!   reading any session holds is always one taken after the last write
+//!   on that tree;
+//! * the reads *behind* a write are the writing session's own, and a
+//!   closed session makes none — its page is gone, and the session that
+//!   holds the tree next is the one that reads what it left.
 
 use super::*;
 
@@ -42,19 +70,43 @@ impl RepoSession {
         Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
         let operation = Operation::new(kind, after);
-        let request = WriteRequest {
-            operation,
-            run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
-        };
-        // Counted before it is sent, so the count can never trail the
-        // queue: the loop's decrement pairs with exactly one increment.
         let local = operation.lane == Lane::Local;
-        if local {
-            self.local_writes.fetch_add(1, Ordering::SeqCst);
-        }
-        // Enqueueing is synchronous, so the queue order is the order the UI
-        // asked in. Sending only fails once the loop has ended.
-        if self.write_tx.send(request).is_err() {
+        // The place in the working tree's order is taken here, inside the
+        // call that hands the id back, so two sessions on one tree are
+        // ordered by when each accepted: a tab opened over a write still
+        // running cannot step in front of it, and neither can the writes
+        // it goes on to accept (`session::write_order`). Only the local
+        // lane takes one — a push or a fetch touches no index and dies
+        // with the session that asked for it.
+        //
+        // **Taken and queued under one lock.** The loop serves this queue
+        // in order and every request waits for its own place, so a pair
+        // accepted the other way round would leave the loop holding a
+        // place behind a request in its own queue — waiting on the write
+        // it is itself the only one that can run, for good. Two callers
+        // asking at once is all that would take.
+        let sent = {
+            let _accepting = relock(&self.accepting);
+            let place = local
+                .then(|| self.write_order())
+                .flatten()
+                .map(|order| order.take_place());
+            // Counted before it is sent, so the count can never trail the
+            // queue: the loop's decrement pairs with exactly one increment.
+            if local {
+                self.local_writes.fetch_add(1, Ordering::SeqCst);
+            }
+            // Enqueueing is synchronous, so the queue order is the order
+            // the UI asked in. Sending only fails once the loop has ended.
+            self.write_tx.send(WriteRequest {
+                operation,
+                place,
+                run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
+            })
+        };
+        // A refused request is dropped here with its place, which is how
+        // a tree stops waiting for a write nobody will run.
+        if sent.is_err() {
             if local {
                 self.local_writes.fetch_sub(1, Ordering::SeqCst);
             }
@@ -64,12 +116,47 @@ impl RepoSession {
         Some(operation.id)
     }
 
-    /// The write the queue is serving right now, refreshes included —
-    /// `None` between requests. What the poll's gate reads
-    /// ([`RepoSession::refresh_poll`]), and what a task running under the
+    /// The write **this session's** queue is serving right now, refreshes
+    /// included — `None` between requests. What a task running under the
     /// queue reads to speak about itself (`note_landing`).
     pub(super) fn running_write(&self) -> Option<Operation> {
         *relock(&self.write_running)
+    }
+
+    /// The write being run in this **working tree**, by this session or
+    /// by another sharing it — what the poll's gate reads
+    /// ([`RepoSession::refresh_poll`]).
+    ///
+    /// A tab reopened over a close's tail is a different session looking
+    /// at the same index, and a status read taken between a rebase's
+    /// steps says the tree is mid-rebase — a banner offering to abort
+    /// something that is still being done. The tree's own answer is the
+    /// one to gate on (`session::write_order`).
+    ///
+    /// The network lanes take no place in that order, so this session's
+    /// own write is still what says a push or a fetch is out.
+    pub(super) fn tree_write(&self) -> Option<Operation> {
+        match self.write_order() {
+            Some(order) => order.running().or_else(|| self.running_write()),
+            None => self.running_write(),
+        }
+    }
+
+    /// Tells every other session on this working tree to read it again:
+    /// a write it did not make has just landed there, and its own polls
+    /// have been keeping out of the tree for as long as that write held
+    /// the front ([`Self::tree_write`]).
+    ///
+    /// Called once the place is back, never before — a session told to
+    /// look while the tree still says it is being written skips the tick
+    /// it was woken for.
+    fn tell_the_tree(self: &Arc<Self>) {
+        let Some(order) = self.write_order() else {
+            return;
+        };
+        for reader in order.others(self) {
+            reader.refresh_poll();
+        }
     }
 
     /// Runs queued writes one at a time, in submission order.
@@ -114,21 +201,37 @@ impl RepoSession {
         // through so the screen can count them out; the gate reads the
         // kind off what is held here.
         *relock(&self.write_running) = Some(operation);
+        // The request carries its place in the working tree's order and
+        // gives it back by ending, so the tree is free from here on.
         self.run_write(request).await;
         *relock(&self.write_running) = None;
         if operation.lane == Lane::Local {
             self.local_writes.fetch_sub(1, Ordering::SeqCst);
+            self.tell_the_tree();
         }
     }
 
     async fn run_write(self: &Arc<Self>, request: WriteRequest) {
-        let WriteRequest { operation, run } = request;
+        let WriteRequest {
+            operation,
+            place,
+            run,
+        } = request;
         let Operation {
             id,
             kind,
             lane,
             after,
         } = operation;
+        // The working tree's turn, before anything is said about the
+        // write: `WriteStarted` means git is running it, and a write held
+        // behind one another session asked for first is not running yet
+        // (`session::write_order`). The place is held to the end of this
+        // function — the reads behind the write included, which is the
+        // same tail this session's own poll is kept out of.
+        if let Some(place) = &place {
+            place.granted(operation).await;
+        }
         let Some(info) = self.repo_info() else {
             // The id went out at acceptance, so the boundaries are owed:
             // a caller holding it waits for them, and nothing else would
@@ -239,7 +342,18 @@ impl RepoSession {
             }
         };
 
-        let failed = self.settle_after(operation, rebuild_graph).await;
+        // A session closed mid-write reads nothing behind it. The reads
+        // are the expensive half — on a repository the size of the
+        // budget's, the refs and the graph rebuild — and they would
+        // publish into a page that has gone, through a sink that has been
+        // retired (`Hub::release_tab`). What the write left is read by
+        // whichever session holds the tree next, which is queued behind
+        // this very place (`session::write_order`).
+        let failed = if self.root_cancel.is_cancelled() {
+            Vec::new()
+        } else {
+            self.settle_after(operation, rebuild_graph).await
+        };
         self.sink
             .event(SessionEvent::WriteSettled { id, kind, failed });
     }

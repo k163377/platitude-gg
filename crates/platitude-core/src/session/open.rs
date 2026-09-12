@@ -92,6 +92,8 @@ impl RepoSession {
             stash_read: ReadFlight::default(),
             worktrees_read: ReadFlight::default(),
             write_tx,
+            write_order: Mutex::new(None),
+            accepting: Mutex::new(()),
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             config_stamp: Mutex::new(None),
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
@@ -119,6 +121,12 @@ impl RepoSession {
                 Ok(info) => {
                     let workdir = info.workdir.clone();
                     s.set_info(info.clone());
+                    // Before the event that lets a write be asked for:
+                    // the tree this session shares its writes with is
+                    // only known now, and a write accepted with no order
+                    // installed would take no place in it
+                    // (`session::write_order`).
+                    s.join_write_order(&info);
                     s.sink.event(SessionEvent::Opened { info });
                     // The network before the reads: a round trip is the
                     // longest thing an opening starts, and starting it

@@ -1,8 +1,8 @@
 //! Writes go through the session's queue: one at a time, and a failure is
 //! reported and refreshed like any other.
 
-use crate::support::TestRepo;
 use crate::support::session::{opened, write_result};
+use crate::support::{TestRepo, barrier_hook};
 use platitude_core::OperationKind;
 use platitude_core::session::SessionEvent;
 
@@ -314,17 +314,6 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
         "and is still where it was"
     );
     session.close();
-}
-
-/// The body of a hook that holds its commit until `release` exists — a
-/// causal barrier, so "git was still running when X happened" is
-/// arranged rather than raced (`TestRepo::write_hook` is the installer).
-/// The internal cap only keeps an orphaned hook from outliving the suite.
-fn barrier_hook(release: &std::path::Path) -> String {
-    let release = release.to_string_lossy().replace('\\', "/");
-    format!(
-        "i=0\nwhile [ ! -f \"{release}\" ]; do\n  i=$((i+1))\n  [ \"$i\" -gt 6000 ] && exit 1\n  sleep 0.1\ndone\n"
-    )
 }
 
 /// A close loses nothing the queue was already asked for. The running

@@ -444,6 +444,15 @@ impl RepoSession {
     /// still going, so a slow repository polls less often instead of
     /// stacking reads up.
     ///
+    /// **Any write of that working tree, not only this session's**
+    /// ([`RepoSession::tree_write`]). A tab closed mid-write keeps the
+    /// write running and a tab reopened over it is a new session on the
+    /// same index, which would otherwise read the tree between a
+    /// rebase's steps and publish it as where the repository stands. The
+    /// session that finishes such a write calls this on the others, so a
+    /// tick skipped for somebody else's write is taken the moment it
+    /// lands rather than at the next tick of the clock.
+    ///
     /// **Except under a write that replays**
     /// ([`OperationKind::replays_history`]).
     /// Those stand for as long as the range is deep — seconds, and past
@@ -469,7 +478,7 @@ impl RepoSession {
 
     fn start_refresh_poll(self: &Arc<Self>) -> RefreshTask {
         if self
-            .running_write()
+            .tree_write()
             .is_some_and(|write| !write.kind.replays_history())
         {
             tracing::trace!("poll skipped: a write is running");

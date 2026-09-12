@@ -23,4 +23,5 @@ mod rebuild;
 mod standing_op;
 mod stream;
 mod window;
+mod write_order;
 mod write_queue;

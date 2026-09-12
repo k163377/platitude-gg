@@ -278,6 +278,18 @@ impl TestRepo {
     }
 }
 
+/// A hook body that holds git where it stands until `release` exists.
+///
+/// The only way a test can have a write provably still running while it
+/// drives everything around it: a sleep would put time in place of the
+/// fact, and the fact wanted here is that git has not returned yet.
+pub fn barrier_hook(release: &std::path::Path) -> String {
+    let release = release.to_string_lossy().replace('\\', "/");
+    format!(
+        "i=0\nwhile [ ! -f \"{release}\" ]; do\n  i=$((i+1))\n  [ \"$i\" -gt 6000 ] && exit 1\n  sleep 0.1\ndone\n"
+    )
+}
+
 /// The opened [`platitude_core::repo::RepoInfo`] of a test repository —
 /// what every write API takes instead of a bare path.
 pub async fn info(repo: &TestRepo) -> platitude_core::repo::RepoInfo {

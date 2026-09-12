@@ -191,6 +191,13 @@ impl Hub {
     /// memory report is told to forget this tab's models — their last
     /// reported footprints describe objects that no longer exist.
     ///
+    /// **A write still running does not hold any of it back.** The close
+    /// keeps the session alive to the end of that write, but the session
+    /// lets go of what it had drawn as it closes and reads nothing behind
+    /// the write — the graph and the refs of a repository this size are
+    /// the largest things in the process, and there is no page left to
+    /// publish them to (`RepoSession::close`).
+    ///
     /// Does nothing to a tab that has no session, which is the normal
     /// case for a tab nobody has looked at yet.
     pub fn release_tab(&mut self, id: i32) {
@@ -263,6 +270,15 @@ impl Hub {
     /// Read after the close on purpose: once the cancel has landed no new
     /// write can start, so a count of zero here means the queue is done —
     /// a loop with nothing left ends on its own and needs no watching.
+    ///
+    /// **Only the waiting is the hub's.** What that tail means for the
+    /// next session on the same repository is not: the working tree holds
+    /// the order its writes run in, and the session a reselected tab opens
+    /// joins it by the directory git named, not by the tab it was opened
+    /// for (`platitude_core::session::write_order`). So a reopen queues
+    /// behind this write wherever it was opened from, a second tab on
+    /// another repository waits for none of it, and a hub holding no
+    /// handle at all would still get the order right.
     fn park_writes_of(&mut self, session: &Arc<RepoSession>) {
         if session.local_writes_pending() == 0 {
             return;
