@@ -374,8 +374,12 @@ HoverToolButton {
                 // the row's `spacing` on both sides of itself, and the two spacers either end share out what is
                 // left — so the mark came to rest half a gap left of its cell's middle while the gap the word was
                 // not in hung to the right of it (measured: 2px in a 36px cell, on all three of the band's
-                // buttons). Everything read off this label is read off its bindings, which an item out of the
-                // layout goes on answering.
+                // buttons; centred to the pixel on all three after). Everything read off this label is read off its
+                // bindings, which an item out of the layout goes on answering.
+                //
+                // **This cannot unfold the button**: `wordRoom` is what decides the fold, and it is arithmetic on
+                // the cell's width, the padding and the seat — never a reading of the row this label is in. A fold
+                // answered by what the row came out at would give the word its room back by hiding it.
                 visible: !actionBtn.folded
                 text: actionBtn.text
                 code: actionBtn.code
