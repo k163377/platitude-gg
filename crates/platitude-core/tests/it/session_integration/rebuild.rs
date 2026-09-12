@@ -239,7 +239,7 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| {
-            matches!(e, SessionEvent::RefsLoaded { snapshot }
+            matches!(e, SessionEvent::RefsLoaded { snapshot, .. }
                 if snapshot.tags.iter().any(|t| t.short == "v2"))
         },
         move || {
@@ -251,7 +251,7 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
         events
             .iter()
             .any(|event| {
-                matches!(event, SessionEvent::RefsLoaded { snapshot }
+                matches!(event, SessionEvent::RefsLoaded { snapshot, .. }
                     if snapshot.tags.iter().any(|tag| tag.short == "v2"))
             })
             .then_some(())

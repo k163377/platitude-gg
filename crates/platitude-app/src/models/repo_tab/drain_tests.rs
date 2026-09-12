@@ -103,7 +103,7 @@ fn an_answer_nobody_asked_for_is_dropped() {
 
 fn settled(op: &str, error: &str) -> RepoTab {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, op.into(), error.into(), None, 0);
+    tab.settle_write(1, op.into(), error.into(), None, 0, 0);
     tab
 }
 
@@ -159,7 +159,7 @@ fn a_merge_that_stopped_does_not_claim_the_tip() {
     // The stop arrives before the answer that ends the write
     // (`TabMsg::WriteStopped`), so the flag is already standing.
     tab.last_write_stopped = true;
-    tab.settle_write(1, "merge".into(), String::new(), None, 0);
+    tab.settle_write(1, "merge".into(), String::new(), None, 0, 0);
     assert!(!tab.write_at_tip, "nothing landed at the tip to go to");
 }
 
@@ -194,6 +194,7 @@ fn a_fetch_answer_says_so_whichever_way_it_went() {
         "fetch".into(),
         "fatal: Could not read from remote".into(),
         None,
+        0,
         0,
     );
     assert!(tab.write_fetched);
@@ -230,6 +231,7 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
             "Cannot delete a protected branch".into(),
         )),
         0,
+        0,
     );
     assert!(tab.write_refused, "nothing happened over there");
     assert_eq!(tab.write_report_kind, "delete");
@@ -239,7 +241,7 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
-    tab.settle_write(1, "push".into(), String::new(), None, 0);
+    tab.settle_write(1, "push".into(), String::new(), None, 0, 0);
     assert_eq!(tab.write_report_kind, "");
     assert_eq!(tab.write_report_reason, "");
 }
@@ -259,6 +261,7 @@ fn a_refused_send_is_told_apart_from_a_refused_delete() {
             "main",
             "Changes must be made through a pull request.".into(),
         )),
+        0,
         0,
     );
     assert_eq!(tab.write_report_kind, "update");
@@ -281,6 +284,7 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
             "Updates were rejected because the remote contains work that you do not have.".into(),
         )),
         0,
+        0,
     );
     assert_eq!(tab.write_report_kind, "outdated");
     assert_eq!(tab.write_report_remote, "origin");
@@ -294,6 +298,7 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
             ReportKind::Commit,
             "lint found 1 problem".into(),
         )),
+        0,
         0,
     );
     assert_eq!(tab.write_report_kind, "commit");
@@ -311,7 +316,7 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
 #[test]
 fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "stash".into(), String::new(), None, 0);
+    tab.settle_write(1, "stash".into(), String::new(), None, 0, 0);
     assert!(tab.write_stashed);
     // Not a fetch: a failed fetch raises `fetch_first_failed`, and a
     // signal needs the proxy no unit test has.
@@ -320,6 +325,7 @@ fn every_answer_rewrites_the_whole_group() {
         "checkout".into(),
         "fatal: invalid reference".into(),
         None,
+        0,
         0,
     );
     assert!(!tab.write_stashed, "nothing armed survives the next answer");
@@ -342,6 +348,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
             error: String::new(),
             report: None,
             head_seq: 0,
+            reads_from: 0,
         },
         TabMsg::WriteState {
             id: 1,
@@ -351,6 +358,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
             error: String::new(),
             report: None,
             head_seq: 0,
+            reads_from: 0,
         },
         TabMsg::WriteState {
             id: 1,
@@ -360,6 +368,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
             error: String::new(),
             report: None,
             head_seq: 0,
+            reads_from: 0,
         },
     ]
 }
@@ -404,7 +413,7 @@ fn the_runs_answer_keeps_the_stop_that_was_its_own() {
 #[test]
 fn each_answer_carries_the_seq_it_was_counted_at() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "push".into(), String::new(), None, 0);
+    tab.settle_write(1, "push".into(), String::new(), None, 0, 0);
     let before = tab.write_seq;
     tab.absorb(a_run_and_the_fetch_behind_it());
     let seqs: Vec<i32> = tab.write_answers.iter().map(|a| a.seq).collect();
@@ -425,6 +434,7 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
             error: String::new(),
             report: None,
             head_seq: 0,
+            reads_from: 0,
         },
         TabMsg::WriteState {
             id: 1,
@@ -434,6 +444,7 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
             error: String::new(),
             report: None,
             head_seq: 0,
+            reads_from: 0,
         },
     ]);
     assert!(!tab.write_at_tip, "the group describes the fetch");
@@ -467,7 +478,7 @@ fn a_drain_with_no_write_answer_publishes_none() {
 fn a_plain_delete_git_took_names_the_branch_for_the_card_to_go_on() {
     let mut tab = RepoTab::default();
     tab.arm_branch_delete("feature", false);
-    tab.settle_write(1, "branch".into(), String::new(), None, 0);
+    tab.settle_write(1, "branch".into(), String::new(), None, 0, 0);
     assert_eq!(tab.branch_delete_landed, "feature");
     assert_eq!(tab.branch_delete_refused, "");
 }
@@ -482,6 +493,7 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
         "error: the branch 'feature' is not fully merged".into(),
         None,
         0,
+        0,
     );
     assert_eq!(tab.branch_delete_refused, "feature");
     assert_eq!(tab.branch_delete_landed, "");
@@ -493,7 +505,7 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
 fn the_forced_delete_stands_for_nothing() {
     let mut tab = RepoTab::default();
     tab.arm_branch_delete("feature", true);
-    tab.settle_write(1, "branch".into(), String::new(), None, 0);
+    tab.settle_write(1, "branch".into(), String::new(), None, 0, 0);
     assert_eq!(tab.branch_delete_landed, "");
     assert_eq!(tab.branch_delete_refused, "");
 }
@@ -503,13 +515,14 @@ fn the_forced_delete_stands_for_nothing() {
 #[test]
 fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "branch".into(), String::new(), None, 0);
+    tab.settle_write(1, "branch".into(), String::new(), None, 0, 0);
     assert_eq!(tab.branch_delete_landed, "");
     tab.settle_write(
         1,
         "branch".into(),
         "error: not fully merged".into(),
         None,
+        0,
         0,
     );
     assert_eq!(tab.branch_delete_refused, "");
@@ -523,10 +536,10 @@ fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
 fn the_delete_answer_stands_until_the_next_plain_delete_is_asked() {
     let mut tab = RepoTab::default();
     tab.arm_branch_delete("feature", false);
-    tab.settle_write(1, "branch".into(), String::new(), None, 0);
+    tab.settle_write(1, "branch".into(), String::new(), None, 0, 0);
     assert_eq!(tab.branch_delete_seq, tab.write_seq);
-    tab.settle_write(1, "fetch".into(), String::new(), None, 0);
-    tab.settle_write(1, "branch".into(), String::new(), None, 0);
+    tab.settle_write(1, "fetch".into(), String::new(), None, 0, 0);
+    tab.settle_write(1, "branch".into(), String::new(), None, 0, 0);
     assert_eq!(tab.branch_delete_landed, "feature", "the answer stands");
     assert_ne!(
         tab.branch_delete_seq, tab.write_seq,
@@ -554,6 +567,7 @@ fn a_refusal_with_a_report_turns_no_row() {
             "refused".into(),
         )),
         0,
+        0,
     );
     assert_eq!(tab.branch_delete_refused, "");
     assert_eq!(tab.branch_delete_landed, "");
@@ -570,6 +584,7 @@ fn stash_answered(id: u64, error: &str) -> TabMsg {
         error: error.into(),
         report: None,
         head_seq: 0,
+        reads_from: 0,
     }
 }
 

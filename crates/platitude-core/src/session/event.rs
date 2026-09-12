@@ -113,6 +113,19 @@ pub enum SessionEvent {
     /// (`JetBrains/kotlin`: 45,782 tags).
     RefsLoaded {
         snapshot: Arc<RefsSnapshot>,
+        /// When the pass that sent this looked at the repository
+        /// (`Standing::stamp`, taken before git is spawned) — **not when
+        /// it arrived**. What a consumer holding rows off the screen for
+        /// a write measures against that write's
+        /// [`reads_from`](Self::WriteFinished): at or above it, this
+        /// listing saw what the write left; below it, the listing was
+        /// already in flight and says nothing about the write.
+        ///
+        /// The snapshot beside it may be the pointer an earlier pass
+        /// published (an unmoved repository rebuilds nothing), and this
+        /// still names this pass — the question it answers is when the
+        /// repository was looked at, not when these rows were built.
+        looked: u64,
     },
     StatusLoaded {
         status: WorkTreeStatus,
@@ -292,6 +305,13 @@ pub enum SessionEvent {
     },
     StashesLoaded {
         stashes: Vec<StashEntry>,
+        /// When this listing looked, read the way
+        /// [`RefsLoaded::looked`](Self::RefsLoaded) is. The stash has a
+        /// stamp of its own because it has a read of its own, behind its
+        /// own flight and after the graph is rebuilt: a consumer that
+        /// measured a dropped entry against the refs' stamp would put the
+        /// row back for the whole of that rebuild.
+        looked: u64,
     },
     WorktreesLoaded {
         worktrees: Vec<crate::worktrees::WorktreeEntry>,
@@ -411,12 +431,22 @@ pub enum SessionEvent {
     /// numbered at or above it — whichever of the two reaches it first.
     /// Its own number, not the write's id: reads nobody asked for move it
     /// too.
+    ///
+    /// `reads_from` is the same fence for the consumers that wait on a
+    /// **listing** instead: the smallest stamp a read that looked after
+    /// this write can carry, against which [`RefsLoaded`](Self::RefsLoaded)
+    /// and [`StashesLoaded`](Self::StashesLoaded) name when they looked.
+    /// A consumer showing rows as already gone measures by it — the
+    /// listing already in flight when the write ended says nothing about
+    /// the write, and counting arrivals cannot tell the two apart once
+    /// they are travelling separate feeds.
     WriteFinished {
         id: OperationId,
         kind: OperationKind,
         error: Option<String>,
         report: Option<crate::report::WriteReport>,
         head_seq: u64,
+        reads_from: u64,
     },
     /// The reads the write invalidated have been made — the last of its
     /// three boundaries, after which nothing more is said under this id

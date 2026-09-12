@@ -276,7 +276,7 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
             _ => false,
         })?;
         evs[done..].iter().find_map(|e| match e {
-            SessionEvent::RefsLoaded { snapshot } => Some((**snapshot).clone()),
+            SessionEvent::RefsLoaded { snapshot, .. } => Some((**snapshot).clone()),
             _ => None,
         })
     })
@@ -337,7 +337,7 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
     let opening = sink
         .wait_for("the first RefsLoaded", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } if !snapshot.tags.is_empty() => {
+                SessionEvent::RefsLoaded { snapshot, .. } if !snapshot.tags.is_empty() => {
                     Some(snapshot.clone())
                 }
                 _ => None,
@@ -403,7 +403,7 @@ async fn asked_past_busy(session: &Arc<RepoSession>) -> RemoteTagRefreshOutcome 
 async fn tags_loaded(sink: &CaptureSink, pred: impl Fn(&[TagItem]) -> bool) {
     sink.wait_for("the remote-tag snapshot", |events| {
         events.iter().any(|event| {
-            matches!(event, SessionEvent::RefsLoaded { snapshot } if pred(&snapshot.tags))
+            matches!(event, SessionEvent::RefsLoaded { snapshot, .. } if pred(&snapshot.tags))
         }).then_some(())
     })
     .await;

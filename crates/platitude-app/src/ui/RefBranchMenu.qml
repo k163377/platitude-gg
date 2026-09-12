@@ -52,10 +52,12 @@ AppMenu {
     readonly property string refusedDelete: branchCard.repoTab.branchDeleteRefused
     readonly property string landedDelete: branchCard.repoTab.branchDeleteLanded
 
-    /// What the page answers for: the delete git may still refuse opens a question there, and the row taken off the
-    /// list ahead of git's answer is the page's list (デザイン規約 §消す操作は先に画面から消す).
+    /// What the page answers for: the delete git may still refuse opens a question there.
+    ///
+    /// The row taken off the list ahead of git's answer is not one of them — that goes with the write, out of the
+    /// same slot, so this card never writes the page's state to say it pressed something
+    /// (`ops_delete`, デザイン規約 §消す操作は先に画面から消す).
     signal deleteRequested(string kind, string id, string name, string oidHex)
-    signal deleting(string kind, string id)
     /// Which remote branch this one is measured against — the page opens the question, because the bar it stands in
     /// is the one every other question in the window stands in (`UpstreamFlow`). The remote branch this one already
     /// speaks for goes with it: that is where the question opens, and it is read here while the row still answers to
@@ -178,7 +180,6 @@ AppMenu {
         const remote = GitFacts.remoteOfRef(remoteRef, branchCard.repoTab.remoteNames)
         if (remote === "")
             return
-        branchCard.deleting("remote", remoteRef)
         branchCard.repoTab.deleteRemoteBranch(
             remote, GitFacts.branchOfRef(remoteRef, branchCard.repoTab.remoteNames))
     }
@@ -264,7 +265,6 @@ AppMenu {
             if (remoteRow) {
                 branchCard.deleteRemoteNow(state.refId)
             } else {
-                branchCard.deleting("branch", state.refId)
                 branchCard.repoTab.deleteBranch(state.refId, true)
             }
         }
@@ -315,8 +315,6 @@ AppMenu {
             if (remote === "")
                 return
             // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
-            branchCard.deleting("branch", state.refId)
-            branchCard.deleting("remote", c)
             branchCard.repoTab.deleteBranchEverywhere(
                 state.refId, remote,
                 GitFacts.branchOfRef(c, branchCard.repoTab.remoteNames),

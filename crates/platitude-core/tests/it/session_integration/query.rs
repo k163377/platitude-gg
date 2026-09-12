@@ -298,7 +298,7 @@ async fn a_detached_head_is_still_read_correctly() {
     let head = sink
         .wait_for("the refs snapshot", |evs| {
             evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => snapshot.head.clone(),
+                SessionEvent::RefsLoaded { snapshot, .. } => snapshot.head.clone(),
                 _ => None,
             })
         })
@@ -330,7 +330,7 @@ async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
             .iter()
             .rev()
             .find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => Some(Arc::clone(snapshot)),
+                SessionEvent::RefsLoaded { snapshot, .. } => Some(Arc::clone(snapshot)),
                 _ => None,
             })
             .expect("a snapshot")
@@ -510,7 +510,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     sink.wait_for("the global mark in the snapshot", |evs| {
         evs.iter()
             .any(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => snapshot
+                SessionEvent::RefsLoaded { snapshot, .. } => snapshot
                     .push_default
                     .as_ref()
                     .is_some_and(|marked| marked.remote == "fork" && !marked.local),

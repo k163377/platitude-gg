@@ -113,11 +113,6 @@ Item {
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`).
     signal upstreamRequested(string branch, string counterpart)
-    /// A ref this menu has just asked git to delete, so the window can show it as gone while the write is out
-    /// (デザイン規約 §消す操作は先に画面から消す). One per ref — `Delete both` names two. `kind` is `branch` / `remote` /
-    /// `tag`, `id` what git knows it by. Raised beside the write rather than instead of it: the rows the page owns
-    /// (`deleteRequested`, `dropStashRequested`) take themselves away where they are answered.
-    signal deleting(string kind, string id)
     /// The menu went away — with it goes a refused delete's offer, and the stacked list it may have been standing on is
     /// the pointer's to answer for again.
     signal dismissed()
@@ -255,7 +250,6 @@ Item {
             branchesModel: refRowMenu.branchesModel
             worktreesModel: refRowMenu.worktreesModel
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
-            onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
             onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
         }
         AppMenuSeparator {}
@@ -269,7 +263,6 @@ Item {
             tagsModel: refRowMenu.tagsModel
             canBranchHere: refRowMenu.canBranchHere
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
-            onDeleting: (kind, id) => refRowMenu.deleting(kind, id)
         }
     }
 }

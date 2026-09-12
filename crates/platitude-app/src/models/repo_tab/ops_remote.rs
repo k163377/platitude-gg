@@ -51,37 +51,6 @@ impl RepoTab {
         self.with_session(|s| s.check_branch_delete(branch.clone()));
     }
 
-    /// `git branch --delete` (`-D` under `force`). The plain form is the
-    /// one press whose menu stays up for git's answer, so which branch it
-    /// was about is kept until that answer comes (`settle_write`); the
-    /// forced form was already the answer to a refusal and stands for
-    /// nothing.
-    pub(super) fn branch_delete(&mut self, name: String, force: bool) {
-        if self.arm_branch_delete(&name, force) {
-            // QML is told the last answer is gone, so a delete of a
-            // re-made branch of the same name reads its own answer as a
-            // change rather than as the old one standing.
-            self.changed();
-        }
-        self.with_session(|s| s.delete_branch(name.clone(), force));
-    }
-
-    /// Writes the plain delete down as the question the next branch
-    /// answer is about, and takes the last answer down with it — the
-    /// check's beat (`look_up_branch_delete`). Says whether anything was
-    /// armed: the forced form arms nothing. Apart from the notify so a
-    /// test can hold it against `settle_write`.
-    pub(super) fn arm_branch_delete(&mut self, name: &str, force: bool) -> bool {
-        if force {
-            return false;
-        }
-        self.branch_delete_out = name.to_string();
-        self.branch_delete_landed = String::new();
-        self.branch_delete_refused = String::new();
-        self.branch_delete_seq = 0;
-        true
-    }
-
     pub(super) fn branch_push(
         &mut self,
         remote: String,
@@ -100,23 +69,6 @@ impl RepoTab {
             force,
         };
         self.with_session(|s| s.push(spec.clone()));
-    }
-
-    pub(super) fn branch_delete_everywhere(
-        &mut self,
-        branch: String,
-        remote: String,
-        remote_branch: String,
-        force: bool,
-    ) {
-        self.with_session(|s| {
-            s.delete_branch_everywhere(
-                branch.clone(),
-                remote.clone(),
-                remote_branch.clone(),
-                force,
-            );
-        });
     }
 
     /// Asked on every selection and answered by a git of its own. The

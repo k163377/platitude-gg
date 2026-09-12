@@ -34,6 +34,10 @@ impl Default for RepoTab {
             branch_delete_landed: String::new(),
             branch_delete_refused: String::new(),
             branch_delete_seq: 0,
+            gone_branch: String::new(),
+            gone_remote: String::new(),
+            gone_tag: String::new(),
+            gone_stash: String::new(),
             signature_wanted: String::new(),
             author_name: String::new(),
             author_email: String::new(),
@@ -106,19 +110,18 @@ impl RepoTab {
     }
 
     /// Asks the session for a write and answers with the id it was
-    /// accepted under, as the bridge carries it — zero where there is no
-    /// session to ask or the session took nothing (it is closed), which
-    /// no accepted write is ever numbered (`OperationId::next`). The
-    /// page holds this id to find its own answer (`RepoPage.pendingPopId`).
+    /// accepted under — nothing where there is no session to ask or the
+    /// session took nothing (it is closed). **An id is a promise of an
+    /// answer**, so whoever waits for one waits on this and nothing else:
+    /// the page holding it across the bridge (`RepoPage.pendingPopId`),
+    /// and the rows a delete took off the screen (`ops::StandIn`).
     pub(super) fn ask_session(
         &self,
         f: impl FnOnce(
             &Arc<platitude_core::session::RepoSession>,
         ) -> Option<platitude_core::OperationId>,
-    ) -> i32 {
-        crate::hub::from_session(self.tab_id, f)
-            .flatten()
-            .map_or(0, |id| bridge_id(id.as_u64()))
+    ) -> Option<platitude_core::OperationId> {
+        crate::hub::from_session(self.tab_id, f).flatten()
     }
 
     /// A fetch ended, whoever asked for it. Counts the ones that failed

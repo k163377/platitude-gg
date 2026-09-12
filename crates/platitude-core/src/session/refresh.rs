@@ -127,7 +127,10 @@ impl RepoSession {
                 if seen == Some(inputs)
                     && let Some(held) = self.published_snapshot()
                 {
-                    self.sink.event(SessionEvent::RefsLoaded { snapshot: held });
+                    self.sink.event(SessionEvent::RefsLoaded {
+                        snapshot: held,
+                        looked,
+                    });
                     // The refs are part of `inputs`, so they are where
                     // they were: nothing to walk, nothing to re-ask.
                     return Reread::Same;
@@ -148,6 +151,7 @@ impl RepoSession {
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
+                    looked,
                 });
                 // Last, and not before the snapshot: the chip diff is read
                 // and sent under the graph lock (see `apply_refs`), and
@@ -249,10 +253,18 @@ impl RepoSession {
             let published = s
                 .stash_read
                 .run(move || async move {
+                    // Stamped before git is spawned, the way the refs pass
+                    // is: what it orders is when the repository was looked
+                    // at, which is what a consumer holding a dropped row
+                    // off the screen measures the write against
+                    // (`Standing::stamp`).
+                    let looked = session.standing.stamp();
                     let cancel = session.root_cancel.clone();
                     match stash::load(&session.executor, &workdir, &cancel).await {
                         Ok(stashes) => {
-                            session.sink.event(SessionEvent::StashesLoaded { stashes });
+                            session
+                                .sink
+                                .event(SessionEvent::StashesLoaded { stashes, looked });
                             true
                         }
                         Err(e) => {

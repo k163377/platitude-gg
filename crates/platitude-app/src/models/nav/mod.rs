@@ -77,9 +77,11 @@ pub struct NavSectionModel {
     /// Not the same thing as `filter`: a filtered-out row is still one of
     /// the section's rows and is still counted, where one of these is
     /// being shown as though the delete had already landed, `total`
-    /// included. The page puts a name in when the write goes out and
-    /// takes it back out when the write is refused or the refs it moved
-    /// have arrived (`RepoPage.showGone` / `RepoPage.showBack`).
+    /// included. A name goes in when the write goes out and comes back
+    /// out when that write is refused or the reading it invalidated has
+    /// arrived — which of the two, and for which write, is decided away
+    /// from here (`ops::StandIn`); the page only hands over what it was
+    /// told to draw without.
     hidden: Vec<String>,
     total: i32,
     /// Rows on screen — what filtering, folding and the run leave shown.
@@ -158,7 +160,7 @@ pub struct NavSectionModel {
     last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
     refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
-    stash_feed: Option<Arc<Feed<Vec<platitude_core::stash::StashEntry>>>>,
+    stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
     tab_id: i32,
 }

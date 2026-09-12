@@ -785,7 +785,6 @@ Item {
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-            onDeleting: (kind, id) => page.showGone(kind, id)
             // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
             // whether it stays now is the pointer's to answer again.
             onDismissed: rowHost.settleRefList()
@@ -937,16 +936,17 @@ Item {
     // the long one and which `busyCount` does not cover (ci/baseline/code-costs-windows-x64.md). Left to those, the
     // row sits there through all of it with nothing to say whether the press even landed.
     //
+    // **Which rows those are, and how long they stay, is not decided here.** The press, the wait and the put-down are
+    // one operation and belong to one owner (`ops::StandIn`, held per tab by the hub so it outlives this page); the
+    // four names below are the picture it leaves, and all this page does with them is hand each one to the list that
+    // draws it. The owner answers by the id the queue accepted the write under, so nothing here counts writes.
+    //
     // One key per kind, because a delete touches at most one of each; `Delete both` is the one that touches two.
     // Empty means nothing is being shown as gone, which is also what a refusal goes back to.
-    property string goneBranch: ""
-    property string goneRemote: ""
-    property string goneTag: ""
-    property string goneStash: ""
-    /// The write count the rows were taken away at. **The reading that puts them back has to be one that came after
-    /// the write answered** — a listing already queued when the press landed says nothing about the delete, and read
-    /// as though it did it would put the row straight back under the hand that had just taken it away.
-    property int goneAtSeq: -1
+    readonly property string goneBranch: repoTab.goneBranch
+    readonly property string goneRemote: repoTab.goneRemote
+    readonly property string goneTag: repoTab.goneTag
+    readonly property string goneStash: repoTab.goneStash
     /// The chips that go with the rows are the graph model's to key and pack (`GraphModel.setGone` /
     /// `encode::gone_keys`): the names cross the bridge as they are. A dropped stash has no chip: it is a row of the
     /// graph rather than a name on one, and a row only leaves with the walk.
@@ -973,60 +973,10 @@ Item {
     /// repository answers in tens of milliseconds, which is over before the picture is grabbed. Asked for before the
     /// press rather than off it, so what holds the row up is a standing decision and not a second edge to get right
     /// (verify-ui スキル §壊れない動詞の実装と反復).
+    ///
+    /// **Held by withholding the news, not by overruling the owner**: the two readings below are what the owner puts
+    /// the rows down on, so a run that wants the in-between simply does not tell it they arrived.
     property bool holdGoneRows: false
-
-    /// Takes a row away before git has answered for it. `id` is what git is being asked to delete, which is also what
-    /// the row is keyed by — so a refusal puts back exactly what was taken.
-    function showGone(kind, id) {
-        page.goneAtSeq = repoTab.writeSeq
-        if (kind === "branch")
-            page.goneBranch = id
-        else if (kind === "remote")
-            page.goneRemote = id
-        else if (kind === "tag")
-            page.goneTag = id
-        else if (kind === "stash")
-            page.goneStash = id
-        page.goneShown(kind, id)
-    }
-    /// Automation: a row was stood in for, and which one. An automation-only exposure, the same one `GraphPane.view`
-    /// is (app-ui.md) — the four `gone*` names below say what is standing in, not that this is the moment it started.
-    signal goneShown(string kind, string id)
-    /// Puts every one of them back: git refused, and what it refused is still there.
-    ///
-    /// **Only for the answer to the write that took them away** — `goneAtSeq` is read before the write goes out, so
-    /// its own answer is the next one. The queue is serial across the refreshes as well (`session::write` serves a
-    /// request whole, the stash and worktree listings included, before it says the write is settled), so nothing
-    /// taken away by an earlier write can still be standing when a later one answers.
-    ///
-    /// **What it cannot tell apart is the composite.** `Delete both` deletes locally and then pushes, and a remote
-    /// half that failed answers with the same one error as a local half git would not do — so a landed local delete
-    /// is put back here too, until the refs read takes it away again (rules-refs/app-ui.md).
-    function showBack() {
-        if (repoTab.writeSeq !== page.goneAtSeq + 1)
-            return
-        page.goneBranch = ""
-        page.goneRemote = ""
-        page.goneTag = ""
-        page.goneStash = ""
-    }
-    /// Whether a listing arriving now is one that can answer for the delete.
-    readonly property bool goneAnswered:
-        page.goneAtSeq >= 0 && repoTab.writeSeq > page.goneAtSeq && !page.holdGoneRows
-    /// The refs the delete moved have arrived, so what the sidebar and the chips now hold is the truth — whichever
-    /// way it went, nothing is being stood in for any more. **The stash is not one of them**: its listing is asked
-    /// for after the graph is rebuilt rather than beside the refs (`session::write`), so it has a word of its own.
-    function refsProvedGone() {
-        if (!page.goneAnswered)
-            return
-        page.goneBranch = ""
-        page.goneRemote = ""
-        page.goneTag = ""
-    }
-    function stashesProvedGone() {
-        if (page.goneAnswered)
-            page.goneStash = ""
-    }
 
     /// Whether the delete this page was last asked for went out to git, or was dropped before it did. **Both
     /// entrances end here** — the left row's card and the graph row's — and a signal carries no answer back to
@@ -1045,15 +995,14 @@ Item {
             return
         // A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than
         // guessed at beforehand (デザイン規約 §左メニューの所作). Which branch the answer is about is the tab's to keep,
-        // and the card that asked reads it there (`RefBranchMenu`).
+        // and the card that asked reads it there (`RefBranchMenu`); the row leaves the screen at the press, which is
+        // the same slot's doing (`ops_delete`).
         page.expectedRefusals++
-        page.showGone("branch", id)
         repoTab.deleteBranch(id, false)
         page.deleteRowAsked = true
     }
     /// Held, not asked (デザイン規約 §長押し).
     function dropStashNow(ref) {
-        page.showGone("stash", ref)
         repoTab.dropStash(ref)
         if (page.selectedStashRef === ref)
             page.selectedStashRef = ""
@@ -1181,7 +1130,6 @@ Item {
             onDropStashRequested: selector => page.dropStashNow(selector)
             // The branch card's own three, answered exactly where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
-            onDeleting: (kind, id) => page.showGone(kind, id)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
             // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
             // whether it stays now is the pointer's to answer again.
@@ -1476,14 +1424,15 @@ Item {
             // Nothing moved, so nothing is coming to the screen for a move to be recognised by: pressing again is the
             // reader's to do, and this is the one put-down `moveLanding` cannot wait for a landing for.
             page.moveLanding = ""
-            // Whatever the window took away for this write is still there — git would not do it, or could not reach
-            // the far side to. Put back before anything below answers for the refusal, so the row the question is
-            // about is on screen when the question is (デザイン規約 §消す操作は先に画面から消す).
-            page.showBack()
-            // The rows on screen are not the file any more — drifted bytes are the one thing the fingerprint refuses
-            // on, and the tally watch below cannot always catch the drift that caused it (an outside change that moves
-            // no bucket count moves no tally), so left alone the same press would be refused again for as long as the
-            // reader cared to try. The refusal's answer is the fresh file.
+            // Whatever the window took away for this write is already back: the rows are the delete's own owner to
+            // put down, and it did so on the answer itself — before this notify went out, so the row the question is
+            // about is on screen when the question is (`ops_delete::delete_answered`).
+            //
+            // The rows in the diff are the other thing a refusal leaves standing, and they are not the file any more
+            // — drifted bytes are the one thing the fingerprint refuses on, and the tally watch below cannot always
+            // catch the drift that caused it (an outside change that moves no bucket count moves no tally), so left
+            // alone the same press would be refused again for as long as the reader cared to try. The refusal's
+            // answer is the fresh file.
             if (repoTab.writeStaleDiff) {
                 page.diffReadAt = repoTab.writeSeq
                 page.reloadDiff()
@@ -2634,9 +2583,30 @@ Item {
             // The listing is the half a move onto a branch that was not there waits on: the status behind the write
             // already has HEAD on it, and until this arrives the screen still says no such branch (`moveLanding`).
             page.absorbMoveLanding()
-            // The listing the delete was waiting on: the rows it took away are gone from the model itself now, so the
-            // window stops standing in for it (デザイン規約 §消す操作は先に画面から消す).
-            page.refsProvedGone()
+            page.listingDrawn()
+        }
+    }
+    /// A list has drawn what it was handed, and a delete may have been waiting on that list's own row — so **every
+    /// one of them says it**, not just the branches section above. The three refs sections are handed one snapshot
+    /// and draw it on three separate turns (`ops::Applied`), and the stash has a listing of its own; the row each
+    /// answers for is its own, so **which list this came from is not passed on** — it could only be passed on
+    /// wrongly. Said rather than decided, because what a listing proves is the delete's owner to work out
+    /// (`ops_delete::note_listing_drawn`). Withheld while a run is holding the in-between open for a picture
+    /// (`holdGoneRows`).
+    function listingDrawn() {
+        if (!page.holdGoneRows)
+            repoTab.listingDrawn()
+    }
+    Connections {
+        target: remotesModel
+        function onRefsSettled() {
+            page.listingDrawn()
+        }
+    }
+    Connections {
+        target: tagsModel
+        function onRefsSettled() {
+            page.listingDrawn()
         }
     }
     Connections {
@@ -2655,7 +2625,7 @@ Item {
     Connections {
         target: stashesModel
         function onStashesSettled() {
-            page.stashesProvedGone()
+            page.listingDrawn()
         }
     }
     /// The `WorkTreeModel.treeRevision` the open diff was last read against — the counts of the four buckets are what

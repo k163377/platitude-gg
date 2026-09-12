@@ -43,6 +43,10 @@ impl RepoTab {
     pub(super) fn attach_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
         self.state = "loading".into();
+        // Before the notify, so the first frame this page draws already
+        // leaves out whatever a delete on this tab is standing in for
+        // (`ops_delete::read_stand_in`).
+        self.read_stand_in();
         self.changed();
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, invoker);

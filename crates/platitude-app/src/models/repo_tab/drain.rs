@@ -154,6 +154,7 @@ impl RepoTab {
                     error,
                     report,
                     head_seq,
+                    reads_from,
                 } => {
                     if running {
                         self.busy_count += 1;
@@ -167,7 +168,7 @@ impl RepoTab {
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(id, op, error, report, head_seq);
+                        self.settle_write(id, op, error, report, head_seq, reads_from);
                     }
                 }
             }
@@ -229,6 +230,7 @@ impl RepoTab {
         error: String,
         report: Option<platitude_core::WriteReport>,
         head_seq: u64,
+        reads_from: u64,
     ) {
         self.busy_count = (self.busy_count - 1).max(0);
         if self.busy_count == 0 {
@@ -282,6 +284,12 @@ impl RepoTab {
         }
         let landed = error.is_empty();
         self.write_refused = !landed;
+        // The rows a delete took off the screen, answered by name rather
+        // than by turn: what answered in between is somebody else's, and
+        // this is the only thing that puts them back. `reads_from` goes
+        // with it — the listings that take the rows away for good are
+        // measured against it, not counted (`ops_delete::delete_answered`).
+        self.delete_answered(id, !landed, reads_from);
         // A landed write moved what the two sides hold; a refused stage,
         // unstage or discard was refused *because* the rows on screen
         // drifted (the fingerprint refuses on nothing else). Both mean

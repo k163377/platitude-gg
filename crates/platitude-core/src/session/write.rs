@@ -137,13 +137,15 @@ impl RepoSession {
             // repository today, so this says something has gone wrong
             // rather than something ordinary.
             tracing::debug!(?operation, "write refused: no repository is open");
+            let fence = self.standing.fence();
             self.sink.event(SessionEvent::WriteStarted { id, kind });
             self.sink.event(SessionEvent::WriteFinished {
                 id,
                 kind,
                 error: Some("no repository is open".to_string()),
                 report: None,
-                head_seq: self.standing.fence(),
+                head_seq: fence.head_seq,
+                reads_from: fence.reads_from,
             });
             self.sink.event(SessionEvent::WriteSettled {
                 id,
@@ -181,7 +183,7 @@ impl RepoSession {
         // fence answers travels with the write's answer, so a consumer
         // landing on "the repository as the write left it" arms on the
         // report the write is owed by name rather than by counting.
-        let head_seq = self.standing.fence();
+        let fence = self.standing.fence();
         let rebuild_graph = match result {
             Ok(()) => {
                 self.sink.event(SessionEvent::WriteFinished {
@@ -189,7 +191,8 @@ impl RepoSession {
                     kind,
                     error: None,
                     report: None,
-                    head_seq,
+                    head_seq: fence.head_seq,
+                    reads_from: fence.reads_from,
                 });
                 matches!(after, AfterWrite::Graph | AfterWrite::Refs)
             }
@@ -205,7 +208,8 @@ impl RepoSession {
                     kind,
                     error: Some(error.to_string()),
                     report: None,
-                    head_seq,
+                    head_seq: fence.head_seq,
+                    reads_from: fence.reads_from,
                 });
                 self.sink.event(SessionEvent::WriteSettled {
                     id,
@@ -225,7 +229,8 @@ impl RepoSession {
                     kind,
                     error: Some(error.to_string()),
                     report,
-                    head_seq,
+                    head_seq: fence.head_seq,
+                    reads_from: fence.reads_from,
                 });
                 // A half-finished command still changed the repository
                 // (conflicted merge, interrupted rebase, partial apply),
@@ -317,7 +322,8 @@ impl RepoSession {
         // reads a listing asks for included: the settled boundary below is
         // only worth sending once they have all published, and a listing
         // still in flight when the next write answers is what let a
-        // refusal put a dropped stash back on screen (`RepoPage.showBack`).
+        // refusal put a dropped stash back on screen (the application
+        // stands rows in until a listing proves them gone).
         let mut listings = Vec::new();
         if !tree_only {
             if !refs_moved {

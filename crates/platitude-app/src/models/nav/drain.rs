@@ -24,8 +24,17 @@ impl NavSectionModel {
             // in.
             for msg in feed.drain() {
                 match msg {
-                    RefsMsg::Snapshot(snapshot) => {
+                    RefsMsg::Snapshot { snapshot, looked } => {
                         settled = true;
+                        // **Said at the moment this list applies it**, and
+                        // said with the stamp of the read rather than of
+                        // the arrival: whoever is holding rows off the
+                        // screen for a write has to tell a listing that
+                        // saw what the write left from one that was
+                        // already in flight when it ended, and the two
+                        // reach here down separate feeds in no fixed
+                        // order (`ops::StandIn`).
+                        crate::hub::listing_applied(self.tab_id, &self.section, looked);
                         // The first snapshot is news whatever it holds:
                         // the default selection is waiting on
                         // `refsLoaded`, and a section that is legitimately
@@ -91,10 +100,13 @@ impl NavSectionModel {
         }
         let mut stashes_arrived = false;
         if let Some(feed) = self.stash_feed.clone()
-            && let Some(stashes) = feed.drain().pop()
+            && let Some(list) = feed.drain().pop()
         {
             stashes_arrived = true;
-            arrived |= self.take(Source::Stashes(stashes));
+            // The same, for the listing a dropped row waits on — its own
+            // read, with its own stamp (see the refs above).
+            crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
+            arrived |= self.take(Source::Stashes(list.entries));
         }
         if arrived {
             // `total` is settled by the arrange below, which is the one

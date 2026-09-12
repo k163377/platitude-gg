@@ -78,6 +78,29 @@ pub(super) struct Standing {
     inner: Mutex<Inner>,
 }
 
+/// What a write's end hands its own answer: the two numbers a consumer
+/// can wait on that write by, neither of them the write's id.
+///
+/// **Both mean "at or above, and it looked after the write"** — they
+/// order different things and cannot be compared with each other. A
+/// consumer waiting on what the write left arms on one of them and is
+/// answered by the first report or listing numbered at or above it,
+/// whichever order that and the write's answer reach it in.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Fence {
+    /// The smallest number the first report of HEAD after this write can
+    /// carry ([`NEXT_HEAD_SEQ`]). Reads nobody asked for move it too.
+    pub head_seq: u64,
+    /// The smallest stamp a read that looked after this write can have
+    /// ([`Standing::stamp`], taken before git is spawned). What a
+    /// consumer waiting for a **listing** made after the write measures
+    /// against: the listing's own stamp says when it looked, so one
+    /// already in flight when the write ended is told from one the write
+    /// is answered by — which counting arrivals cannot do, since the two
+    /// travel separate feeds and are applied in no fixed order.
+    pub reads_from: u64,
+}
+
 #[derive(Default)]
 struct Inner {
     /// HEAD as the newest read that reported it left it. `None` until one
@@ -159,17 +182,16 @@ impl Standing {
     /// for the repository after it, and the next read that reports is the
     /// one a consumer waiting on this write is owed ([`HeadOffer::Settled`]).
     ///
-    /// Answers the smallest number that report can carry: every report
-    /// accepted after this moment is numbered above every one accepted
-    /// before it, so a consumer holding a report numbered at or above the
-    /// answer holds one that looked after the write — whichever order the
-    /// write's answer and that report reach it in.
-    pub(super) fn fence(&self) -> u64 {
+    /// Answers both numbers a consumer can wait on it by ([`Fence`]).
+    pub(super) fn fence(&self) -> Fence {
         let at = self.stamp();
         let mut inner = self.lock();
         inner.fence = at;
         inner.fenced = true;
-        NEXT_HEAD_SEQ.load(Ordering::SeqCst) + 1
+        Fence {
+            head_seq: NEXT_HEAD_SEQ.load(Ordering::SeqCst) + 1,
+            reads_from: at,
+        }
     }
 
     /// Whether a read stamped `at` may still speak for the repository —
@@ -378,7 +400,7 @@ mod tests {
         let before = standing.stamp();
         let first = number(standing.offer_head(before, &on("main", 1)));
         let polling = standing.stamp();
-        let owed = standing.fence();
+        let owed = standing.fence().head_seq;
         assert!(
             owed > first,
             "the report the write is owed is numbered above every one before it"
@@ -419,12 +441,34 @@ mod tests {
         );
     }
 
+    /// The other half of the same fence, for the consumers that wait on a
+    /// **listing** rather than on a report of HEAD: the stamp says when a
+    /// read looked, so one already in flight when the write ended is below
+    /// the fence and one begun after it is at or above — which is the only
+    /// thing that tells the two apart once they are travelling separate
+    /// feeds and arriving in no fixed order.
+    #[test]
+    fn a_listing_that_looked_before_the_write_ended_is_below_the_fence() {
+        let standing = Standing::default();
+        let in_flight = standing.stamp();
+        let fence = standing.fence();
+        let afterwards = standing.stamp();
+        assert!(
+            in_flight < fence.reads_from,
+            "a read that began before the write ended cannot speak for what it left"
+        );
+        assert!(
+            afterwards >= fence.reads_from,
+            "and one that began after it can"
+        );
+    }
+
     #[test]
     fn a_report_after_a_write_that_moved_head_is_a_move_not_a_settling() {
         let standing = Standing::default();
         let at = standing.stamp();
         let first = number(standing.offer_head(at, &on("main", 1)));
-        let owed = standing.fence();
+        let owed = standing.fence().head_seq;
         let at = standing.stamp();
         let moved = standing.offer_head(at, &on("main", 2));
         assert!(matches!(moved, HeadOffer::Moved { .. }));
@@ -444,7 +488,7 @@ mod tests {
         let a = number(one.offer_head(one.stamp(), &on("main", 1)));
         let b = number(two.offer_head(two.stamp(), &on("main", 1)));
         assert!(b > a);
-        let owed = one.fence();
+        let owed = one.fence().head_seq;
         let c = number(two.offer_head(two.stamp(), &on("main", 2)));
         assert!(
             c >= owed,

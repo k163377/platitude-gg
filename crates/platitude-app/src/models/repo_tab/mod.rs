@@ -15,6 +15,7 @@ mod drain;
 mod drain_tests;
 mod ops_config;
 mod ops_conflict;
+mod ops_delete;
 mod ops_remote;
 mod ops_stage;
 mod qobject;
@@ -121,6 +122,19 @@ pub struct RepoTab {
     branch_delete_landed: String,
     branch_delete_refused: String,
     branch_delete_seq: i32,
+    /// The rows a delete is standing in for, one name per list — what the
+    /// sidebar's sections and the graph's chips are drawn without
+    /// (デザイン規約 §消す操作は先に画面から消す).
+    ///
+    /// **A copy, and the machine is elsewhere.** When they go and when
+    /// they come back is decided by `ops::StandIn`, which the hub holds
+    /// per tab so a write outlives the page drawing it; these four are
+    /// the picture it leaves, kept here so a QML binding reads a plain
+    /// member and never reaches into the hub for it (`ops_delete`).
+    gone_branch: String,
+    gone_remote: String,
+    gone_tag: String,
+    gone_stash: String,
     /// The commit the standing `checkSignature` is about — **the
     /// question, where `signature_oid` and its three are the answer**.
     ///

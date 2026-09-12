@@ -73,6 +73,14 @@ impl RepoTab {
         Member = branch_delete_seq,
         Notify = changed
     );
+    // The rows a delete has taken off the screen, one name per list, for
+    // the lists and the chips to draw without (デザイン規約
+    // §消す操作は先に画面から消す). When they go and when they come back is
+    // `ops::StandIn`'s — QML is handed the picture, not the decision.
+    qproperty!("goneBranch", Member = gone_branch, Notify = changed);
+    qproperty!("goneRemote", Member = gone_remote, Notify = changed);
+    qproperty!("goneTag", Member = gone_tag, Notify = changed);
+    qproperty!("goneStash", Member = gone_stash, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -595,7 +603,8 @@ impl RepoTab {
         self.with_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
     }
 
-    /// Deletes a local branch. Without `force`, git refuses an unmerged one
+    /// Deletes a local branch, and takes its row off the screen behind the
+    /// press (`ops_delete`). Without `force`, git refuses an unmerged one
     /// — and that answer is the menu's to catch, so the plain form is
     /// written down first (`branch_delete`).
     #[qslot]
@@ -637,20 +646,18 @@ impl RepoTab {
         self.with_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
     }
 
-    /// `git push <remote> --delete refs/tags/<tag>`. Fully qualified,
-    /// because a bare name a branch shares over there is refused and
-    /// neither is deleted (measured — `remote::delete_remote_tag`).
+    /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
+    /// leaves with it — true where only the remote had the name
+    /// (`ops_delete::remote_tag_delete`).
     #[qslot]
-    fn delete_remote_tag(&mut self, remote: String, tag: String) {
-        self.with_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));
+    fn delete_remote_tag(&mut self, remote: String, tag: String, row_goes: bool) {
+        self.remote_tag_delete(remote, tag, row_goes);
     }
 
-    /// `git tag --delete` and then the remote's copy, as one queued
-    /// write: the local half first, so a pair that stops part-way never
-    /// leaves the name gone from the remote and still in the sidebar.
+    /// Both copies of a tag, as one queued write.
     #[qslot]
     fn delete_tag_everywhere(&mut self, tag: String, remote: String) {
-        self.with_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone()));
+        self.tag_delete_everywhere(tag, remote);
     }
 
     /// Renames a tag. git has none, so core builds it out of a new name on
@@ -663,7 +670,7 @@ impl RepoTab {
     /// Deletes a tag: only the name goes.
     #[qslot]
     fn delete_tag(&mut self, name: String) {
-        self.with_session(|s| s.delete_tag(name.clone()));
+        self.tag_delete(name);
     }
 
     /// Renames a stash entry. Built the same way, out of a re-store and a
@@ -700,7 +707,8 @@ impl RepoTab {
     /// (`writeAnswerIndex`); zero where no session took it.
     #[qslot]
     fn pop_stash(&self, selector: String) -> i32 {
-        self.ask_session(|s| s.stash_pop(selector.clone()))
+        let asked = self.ask_session(|s| s.stash_pop(selector.clone()));
+        asked.map_or(0, |id| bridge_id(id.as_u64()))
     }
 
     /// `git stash apply` on the given selector (keeps the stash). No id
@@ -711,10 +719,20 @@ impl RepoTab {
         self.with_session(|s| s.stash_apply(selector.clone()));
     }
 
-    /// `git stash drop` (destructive).
+    /// `git stash drop` (destructive): the entry's row goes at the press.
     #[qslot]
     fn drop_stash(&mut self, selector: String) {
-        self.with_session(|s| s.stash_drop(selector.clone()));
+        self.stash_drop(selector);
+    }
+
+    /// One of the sidebar's lists has drawn a reading. What that proves
+    /// about a delete out at the press is the tab's to decide
+    /// (`ops_delete::note_listing_drawn`) — this is the page saying only
+    /// that a list has caught up, and not which one: every row answers
+    /// off the list that draws it.
+    #[qslot]
+    fn listing_drawn(&mut self) {
+        self.note_listing_drawn();
     }
 
     /// `git fetch --prune`; an empty remote fetches all of them.
@@ -838,7 +856,7 @@ impl RepoTab {
     /// `git push <remote> --delete <branch>` (destructive).
     #[qslot]
     fn delete_remote_branch(&mut self, remote: String, branch: String) {
-        self.with_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
+        self.remote_branch_delete(remote, branch);
     }
 
     /// `git branch --delete` (`-D` under `force`) and then

@@ -497,7 +497,7 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     sink.wait_for("the remote in the snapshot", |evs| {
         evs.iter()
             .any(|e| match e {
-                SessionEvent::RefsLoaded { snapshot } => {
+                SessionEvent::RefsLoaded { snapshot, .. } => {
                     snapshot.remote_names.iter().any(|n| n == "origin")
                 }
                 _ => false,

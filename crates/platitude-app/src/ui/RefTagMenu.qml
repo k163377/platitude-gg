@@ -29,8 +29,6 @@ AppMenu {
 
     /// The box a name is typed into, which the page owns.
     signal tagHereRequested(string oidHex)
-    /// The row taken off the list ahead of git's answer (デザイン規約 §消す操作は先に画面から消す).
-    signal deleting(string kind, string id)
 
     /// The automation's handles into these rows, passed on through `RefRowMenu` (app-ui.md).
     readonly property alias tagHereItem: refTagHereItem
@@ -52,6 +50,10 @@ AppMenu {
         property bool canDelete: false
         property bool canDeleteRemoteTag: false
         property bool canDeleteTagEverywhere: false
+        /// Whether the name is only over there, so the sidebar's row goes with the remote copy rather than keeping
+        /// its seat and losing the badge (`refRemoteTagDeleteItem`). Read as the menu opens with the rest of what its
+        /// rows stand on (app-ui.md §メニューの行が読む状態).
+        property bool tagOnlyThere: false
     }
 
     /// Opens on that tag, if the row names one. `oidHex` is the commit the card stands on — the one a name would be
@@ -70,8 +72,10 @@ AppMenu {
             state.canDelete = false
             state.canDeleteRemoteTag = false
             state.canDeleteTagEverywhere = false
+            state.tagOnlyThere = false
             return
         }
+        state.tagOnlyThere = tagMenu.tagsModel.tagSides(full) === "remote"
         // Which sides of the name exist, which is what tells the three delete rows apart. The lookup is the model's;
         // what the rows may offer on it is core's rule (offers::ref_menu).
         const offers = GitFacts.refMenuOffers(
@@ -154,7 +158,6 @@ AppMenu {
         holdTone: Theme.danger
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleting("tag", state.refId)
             tagMenu.repoTab.deleteTag(state.refId)
         }
     }
@@ -177,10 +180,9 @@ AppMenu {
         onHeld: {
             tagMenu.dismiss()
             // A name only the remote had leaves the sidebar with it; one held here keeps its row and loses the badge,
-            // which the read after the write brings back (デザイン規約 §消す操作は先に画面から消す).
-            if (!state.canDeleteTagEverywhere)
-                tagMenu.deleting("tag", state.refId)
-            tagMenu.repoTab.deleteRemoteTag(state.pushRemote, state.refId)
+            // which the read after the write brings back (デザイン規約 §消す操作は先に画面から消す). Which of the two
+            // this row is, is the row's own reading — the write cannot tell from a remote and a name.
+            tagMenu.repoTab.deleteRemoteTag(state.pushRemote, state.refId, state.tagOnlyThere)
         }
     }
     // A composite of two commands is no one command, so words rather than a chip — the same row the branch table
@@ -196,7 +198,6 @@ AppMenu {
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleting("tag", state.refId)
             tagMenu.repoTab.deleteTagEverywhere(state.refId, state.pushRemote)
         }
     }

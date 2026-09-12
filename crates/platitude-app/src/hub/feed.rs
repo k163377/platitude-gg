@@ -172,7 +172,7 @@ pub struct Feeds {
     pub status_nav_conflicts: Arc<Feed<StatusMsg>>,
     pub status_nav_unstaged: Arc<Feed<StatusMsg>>,
     pub status_nav_staged: Arc<Feed<StatusMsg>>,
-    pub stash: Arc<Feed<Vec<StashEntry>>>,
+    pub stash: Arc<Feed<super::StashList>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
     pub details: Arc<Feed<DetailsMsg>>,
     pub diff: Arc<Feed<DiffMsg>>,

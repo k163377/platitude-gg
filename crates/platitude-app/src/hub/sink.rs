@@ -144,7 +144,7 @@ impl SessionSink for BridgeSink {
                     published,
                 });
             }
-            SessionEvent::RefsLoaded { snapshot } => {
+            SessionEvent::RefsLoaded { snapshot, looked } => {
                 // The tab hears about its remotes only when the snapshot
                 // is a new one: a quiet tick republishes the same
                 // pointer, and waking every binding on the tab for it is
@@ -164,15 +164,17 @@ impl SessionSink for BridgeSink {
                             .is_some_and(|marked| marked.local),
                     });
                 }
-                self.feeds
-                    .refs_branches
-                    .push_coalescing(RefsMsg::Snapshot(Arc::clone(&snapshot)));
-                self.feeds
-                    .refs_remotes
-                    .push_coalescing(RefsMsg::Snapshot(Arc::clone(&snapshot)));
+                self.feeds.refs_branches.push_coalescing(RefsMsg::Snapshot {
+                    snapshot: Arc::clone(&snapshot),
+                    looked,
+                });
+                self.feeds.refs_remotes.push_coalescing(RefsMsg::Snapshot {
+                    snapshot: Arc::clone(&snapshot),
+                    looked,
+                });
                 self.feeds
                     .refs_tags
-                    .push_coalescing(RefsMsg::Snapshot(snapshot));
+                    .push_coalescing(RefsMsg::Snapshot { snapshot, looked });
             }
             SessionEvent::StatusLoaded {
                 status,
@@ -229,7 +231,12 @@ impl SessionSink for BridgeSink {
                 .feeds
                 .op_progress
                 .push_replace(OpProgressMsg { op_state, progress }),
-            SessionEvent::StashesLoaded { stashes } => self.feeds.stash.push_replace(stashes),
+            SessionEvent::StashesLoaded { stashes, looked } => {
+                self.feeds.stash.push_replace(crate::hub::StashList {
+                    entries: stashes,
+                    looked,
+                })
+            }
             SessionEvent::WorktreesLoaded { worktrees } => {
                 self.feeds.worktrees.push_replace(worktrees)
             }
@@ -481,6 +488,7 @@ impl SessionSink for BridgeSink {
                     error: String::new(),
                     report: None,
                     head_seq: 0,
+                    reads_from: 0,
                 });
             }
             SessionEvent::WriteFinished {
@@ -489,6 +497,7 @@ impl SessionSink for BridgeSink {
                 error,
                 report,
                 head_seq,
+                reads_from,
             } => {
                 // A write that did not happen and has something to say
                 // for itself is not an error of this window's: the page
@@ -511,6 +520,7 @@ impl SessionSink for BridgeSink {
                     error: error.unwrap_or_default(),
                     report,
                     head_seq,
+                    reads_from,
                 });
             }
         }

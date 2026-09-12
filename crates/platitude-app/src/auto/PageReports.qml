@@ -36,6 +36,25 @@ Item {
             Harness.report("force_delete_offered branch=" + reports.refusedDelete)
     }
 
+    /// A row is being stood in for while git is asked to delete it, and which one — read off what the window is
+    /// actually drawing without (`ops::StandIn`, through `RepoTab`) rather than off the press, so the line says a row
+    /// left the screen and not merely that something was asked for. One name per list, and a delete touches at most
+    /// one of each, so the four edges never say the same row twice.
+    readonly property string goneBranch: reports.repoTab.goneBranch
+    readonly property string goneRemote: reports.repoTab.goneRemote
+    readonly property string goneTag: reports.repoTab.goneTag
+    readonly property string goneStash: reports.repoTab.goneStash
+
+    function noteGone(kind, id) {
+        if (id !== "")
+            Harness.report("gone_shown kind=" + kind + " id=" + id)
+    }
+
+    onGoneBranchChanged: reports.noteGone("branch", reports.goneBranch)
+    onGoneRemoteChanged: reports.noteGone("remote", reports.goneRemote)
+    onGoneTagChanged: reports.noteGone("tag", reports.goneTag)
+    onGoneStashChanged: reports.noteGone("stash", reports.goneStash)
+
     Connections {
         target: reports.page
 
@@ -44,9 +63,6 @@ Item {
         }
         function onRenameRemoteAsked(from, to) {
             Harness.report("rename_remote_asked from=" + from + " to=" + to)
-        }
-        function onGoneShown(kind, id) {
-            Harness.report("gone_shown kind=" + kind + " id=" + id)
         }
         // What the write was about is still on the tab when this goes out — the page clears its own standing
         // questions, not the tab's report of the answer.

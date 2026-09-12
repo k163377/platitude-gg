@@ -9,6 +9,7 @@ mod harness;
 mod hub;
 mod logsink;
 mod models;
+mod ops;
 mod urlpath;
 mod winframe;
 

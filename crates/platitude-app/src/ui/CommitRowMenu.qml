@@ -90,11 +90,10 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
-    /// The branch card's three, passed straight up: the delete git may still refuse is the page's question, the row
-    /// taken off the list ahead of the answer is the page's list (デザイン規約 §消す操作は先に画面から消す), and the upstream is
-    /// answered in the page's one question bar (`UpstreamFlow`).
+    /// The branch card's two, passed straight up: the delete git may still refuse is the page's question, and the
+    /// upstream is answered in the page's one question bar (`UpstreamFlow`). The row taken off the list ahead of the
+    /// answer is neither — that leaves with the write itself (`ops_delete`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
-    signal deleting(string kind, string id)
     signal upstreamRequested(string branch, string counterpart)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
@@ -345,7 +344,6 @@ Item {
             branchesModel: rowMenu.branchesModel
             worktreesModel: rowMenu.worktreesModel
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
-            onDeleting: (kind, id) => rowMenu.deleting(kind, id)
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
         }
         AppMenuSeparator {}
@@ -361,7 +359,6 @@ Item {
             tagsModel: rowMenu.tagsModel
             canBranchHere: rowMenu.canBranchHere
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
-            onDeleting: (kind, id) => rowMenu.deleting(kind, id)
         }
     }
 }

@@ -52,7 +52,7 @@ async fn open_streams_the_full_pipeline() {
 
     sink.wait_for("RefsLoaded", |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::RefsLoaded { snapshot } => {
+            SessionEvent::RefsLoaded { snapshot, .. } => {
                 let locals: Vec<&str> = snapshot.locals.iter().map(|b| b.short.as_str()).collect();
                 assert_eq!(locals, vec!["main", "side"], "sorted locals");
                 assert!(snapshot.locals[0].is_head);
@@ -80,7 +80,7 @@ async fn open_streams_the_full_pipeline() {
 
     sink.wait_for("StashesLoaded", |evs| {
         evs.iter().find_map(|e| match e {
-            SessionEvent::StashesLoaded { stashes } => {
+            SessionEvent::StashesLoaded { stashes, .. } => {
                 assert_eq!(stashes.len(), 1);
                 assert!(stashes[0].message.contains("wip stash"));
                 Some(())

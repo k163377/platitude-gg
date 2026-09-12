@@ -40,10 +40,10 @@ mod tabs;
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
     CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, HeadMsg, OpProgressMsg, PickMsg, PlanMsg,
-    RefsMsg, StateMsg, StatusMsg, TabMsg,
+    RefsMsg, StashList, StateMsg, StatusMsg, TabMsg,
 };
 pub use prefs::AvatarUrls;
-pub use tabs::{from_session, with_session};
+pub use tabs::{from_session, listing_applied, stand_in, with_session};
 
 /// The commit message typed into a tab and not committed yet.
 ///
@@ -79,6 +79,13 @@ struct Tab {
     /// Held across a release, because it is the only thing here that
     /// cannot be read again.
     draft: Draft,
+    /// The rows a delete has taken off the screen and the write they are
+    /// waiting on (`ops::StandIn`). Held here for the reason the draft is:
+    /// a page is built for the tab in front and taken down behind it, and
+    /// an operation that is still out is not over because the component
+    /// drawing it went away. Let go with the session, which is the one
+    /// thing that does end it (`Hub::release_tab`).
+    stand_in: crate::ops::StandIn,
 }
 
 /// Application-wide state living on the Qt main thread.

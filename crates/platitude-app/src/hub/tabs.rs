@@ -103,6 +103,7 @@ impl Hub {
                 feeds: Arc::new(Feeds::default()),
                 sink: None,
                 draft: Draft::default(),
+                stand_in: crate::ops::StandIn::default(),
             },
         );
         Some(id)
@@ -208,6 +209,14 @@ impl Hub {
             sink.retire();
         }
         tab.feeds.release_all();
+        // The rows a delete took off the screen go back with it, and so
+        // do the readings the lists had drawn: the answer that would have
+        // put the rows back is this session's, a retired sink is exactly
+        // what keeps it out of the next page, and the numbers those
+        // readings were stamped with are this session's own count
+        // (`ops::StandIn::session_gone`). What the next session reads is
+        // the truth either way.
+        tab.stand_in.session_gone();
         self.park_writes_of(&session);
         crate::harness::memprobe::forget(id);
         tracing::info!(tab = id, "released repository tab");
@@ -363,6 +372,44 @@ pub fn from_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) -> O
 /// back to the page asks through [`from_session`] instead.
 pub fn with_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) {
     from_session(tab_id, f);
+}
+
+/// Moves a tab's delete along and answers with the rows it leaves showing
+/// as gone (`ops::StandIn`) — none at all for a tab this hub does not
+/// have, which is also the right picture for one.
+///
+/// **The caller is handed the rows rather than the machine**: the borrow
+/// is over before this returns, so the copy a property is read from is
+/// never taken while the hub is held (the re-entrant borrow the bridge
+/// panics on — 規約 §Qt Bridges の要点).
+/// The sidebar section called `section` has **applied** a listing to its
+/// rows, stamped as the read that made it was taken
+/// (`session::Standing::stamp`).
+///
+/// **Recorded, not acted on, and only for that section's own rows.**
+/// Which write it answers for — if any — is the stand-in's to decide when
+/// the page says a list has drawn (`ops::StandIn::look_again`); all this
+/// says is what one list is now showing, which is the only thing a
+/// section can speak for. The three refs sections are handed the same
+/// read and draw it on three separate turns, so each is written down
+/// under its own row (`ops::Row::drawn_by`) and a section that stands
+/// nothing in is not written down at all.
+pub fn listing_applied(tab_id: i32, section: &str, at: u64) {
+    let Some(row) = crate::ops::Row::drawn_by(section) else {
+        return;
+    };
+    stand_in(tab_id, |gone| gone.listing_applied(row, at));
+}
+
+pub fn stand_in(tab_id: i32, f: impl FnOnce(&mut crate::ops::StandIn)) -> crate::ops::Rows {
+    Hub::with(|hub| match hub.tabs.get_mut(&tab_id) {
+        Some(tab) => {
+            f(&mut tab.stand_in);
+            tab.stand_in.rows().clone()
+        }
+        None => crate::ops::Rows::default(),
+    })
+    .unwrap_or_default()
 }
 
 fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {

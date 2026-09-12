@@ -88,6 +88,13 @@ pub enum TabMsg {
         /// the write is running. What a landing on the write's tip arms
         /// on (`WorkTreeModel.headSeq`).
         head_seq: u64,
+        /// The smallest stamp a listing that looked after this write can
+        /// carry (`SessionEvent::WriteFinished::reads_from`); 0 while the
+        /// write is running. What rows held off the screen for the write
+        /// are put down on — the listings travel feeds of their own and
+        /// are applied in no fixed order against this one, so arriving is
+        /// not evidence and only the stamp is (`ops::StandIn`).
+        reads_from: u64,
     },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {
@@ -226,13 +233,34 @@ pub enum StateMsg {
     },
 }
 
+/// What the stashes section is handed: the entries, and when the read
+/// that listed them looked (`SessionEvent::StashesLoaded`).
+///
+/// The stash is read behind a flight of its own, after the graph is
+/// rebuilt, so it carries a stamp of its own: a dropped row measured
+/// against the refs' listing would come back for the whole of that
+/// rebuild.
+#[derive(Debug)]
+pub struct StashList {
+    pub entries: Vec<StashEntry>,
+    pub looked: u64,
+}
+
 /// What a sidebar refs section is handed: the snapshot its rows are, and
 /// — for the branches section — where HEAD stands, so the row it
 /// highlights and the stand-in it rides are the one record's
 /// (`session::standing`) rather than the snapshot's own reading.
 #[derive(Debug)]
 pub enum RefsMsg {
-    Snapshot(Arc<RefsSnapshot>),
+    Snapshot {
+        snapshot: Arc<RefsSnapshot>,
+        /// When the pass that read this looked at the repository
+        /// (`SessionEvent::RefsLoaded::looked`) — **not when the section
+        /// applied it**, which is later and, across three sections, three
+        /// different moments. A consumer holding rows off the screen for
+        /// a write measures this against the write's `reads_from`.
+        looked: u64,
+    },
     Head(HeadMsg),
 }
 
