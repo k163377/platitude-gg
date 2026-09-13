@@ -173,7 +173,7 @@ QtObject {
                 "corner", "graph-step", "graph-step-edge", "graph-step-far",
                 "graph-step-named", "graph-step-dirty", "graph-step-diff", "graph-step-hold",
                 "diff-step",
-                "diff-step-edge", "changes-step", "changes-step-edge", "wip-step",
+                "diff-step-edge", "changes-step", "changes-step-edge", "wip-step", "wip-embedded",
                 "changes-fold", "changes-unfold",
                 "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away",
                 "text-bar", "text-bar-away", "middle-scroll",

@@ -10,6 +10,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
       print its path. Presets:
         basic     branches + remote (ahead) + tags + stash + dirty WIP
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
+        embedded  two repositories of their own in the working copy, one
+                  with a commit and one without — the entries git answers
+                  with as `vendor/nest/` and will not open
         eol       all four line-ending cases, in a directory of LF files
         clashing  two branches that will not merge cleanly, unmerged yet
                   (also the pick that will not copy cleanly)

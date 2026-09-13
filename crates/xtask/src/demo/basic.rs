@@ -107,6 +107,53 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Repositories of their own, sitting in the working copy — the entries
+/// git answers `status` with as one `vendor/nest/` because it will not
+/// cross into them, whatever it is asked about untracked files.
+///
+/// Both cases are here, because the pane has a different thing to say
+/// about each: `vendor/nest` has a commit, which is what a stage of the
+/// row would point at, and `vendor/fresh` has none, which is what `git
+/// add` refuses on. The loose file beside them is the contrast — a plain
+/// new directory is opened and listed file by file, and never an entry of
+/// its own.
+pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository with others in it.\n",
+        "docs: start the readme",
+    )?;
+    repo.write("vendor/loose.txt", "in this repository\n")?;
+    for (name, commit) in [("nest", true), ("fresh", false)] {
+        let dir = repo.work.join("vendor").join(name);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        repo.git_at(&dir, &["init", "-b", "main"])?;
+        repo.write(
+            &format!("vendor/{name}/inside.txt"),
+            "another repository's\n",
+        )?;
+        if commit {
+            repo.git_at(&dir, &["add", "--", "inside.txt"])?;
+            // The identity is this one repository's, given on the command
+            // rather than configured: nothing here reads the other
+            // repository's settings, and one commit is all it is for.
+            repo.git_at(
+                &dir,
+                &[
+                    "-c",
+                    "user.name=Demo User",
+                    "-c",
+                    "user.email=demo@example.com",
+                    "commit",
+                    "-m",
+                    "feat: the commit a pointer would name",
+                ],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// All four line-ending cases at once, in a directory with a house style.
 ///
 /// The neighbours are what makes the two estimated cases sayable: three

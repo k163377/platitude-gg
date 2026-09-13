@@ -30,6 +30,7 @@ Item {
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
+    readonly property var diffPane: driver.diffPane
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var commitMenuState: driver.commitMenuState
     readonly property var stashDeleteItem: driver.stashDeleteItem
@@ -151,6 +152,13 @@ Item {
                 driver.popWanted = GitFacts.stashLabel(stashesModel.nameAt(0))
                 page.popStash(commitMenuState.menuStashRef)
             }
+        } else if (act === "wip-embedded") {
+            // The row of a repository of its own — the one file row whose pane answers with a sentence instead of a
+            // patch, because git will not open what is behind it (core `details::embedded`). The argument is the row,
+            // `<path>` with the trailing slash git spells such an entry with.
+            page.showWip()
+            embeddedTimer.path = arg === "" ? "vendor/nest/" : arg
+            embeddedTimer.begin()
         } else if (act === "wip") {
             page.showWip()
         } else if (act === "wip-lanes") {
@@ -264,6 +272,41 @@ Item {
     QtObject {
         id: commitAnswer
         property bool armed: false
+    }
+    // The row a repository of its own puts in the list, chosen the way a hand chooses one: the row's own signal, which
+    // is where a click lands (a pane called past it would leave the report proving nothing). Two beats, because the row
+    // is not there on the tick the pane opens — the status behind it arrives first.
+    //
+    // What is waited for is the pane having an answer about this path. A diff with no rows and none coming is settled
+    // when the model can say what stands there instead (`DiffPane.diffSettled`), and that is the whole of the picture.
+    SampleTimer {
+        id: embeddedTimer
+        property string path: ""
+        property bool clicked: false
+        function begin() {
+            embeddedTimer.clicked = false
+            embeddedTimer.start()
+        }
+        onTriggered: {
+            if (!embeddedTimer.clicked) {
+                const row = wipPane.filesWalk.rowFor("untracked", embeddedTimer.path)
+                if (!row)
+                    return
+                embeddedTimer.clicked = true
+                row.fileClicked("untracked", embeddedTimer.path, "", Qt.NoModifier)
+                return
+            }
+            if (!page.diffShown || page.diffPath !== embeddedTimer.path || !diffPane.diffSettled())
+                return
+            embeddedTimer.stop()
+            // `sha8=` is the commit a stage of the row would point at, empty where that repository has no commit yet
+            // — the two sentences the pane has for this row.
+            Harness.report("wip_embedded path=" + page.diffPath
+                              + " embedded=" + diffPane.diffModel.embedded
+                              + " rows=" + diffPane.view.count
+                              + " sha8=" + diffPane.diffModel.embeddedSha8)
+            driver.complete()
+        }
     }
     // The lanes of the uncommitted row, in the tokens its delegate paints from. A lane is a stroke a couple of pixels
     // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.

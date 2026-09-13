@@ -23,6 +23,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=false lit=true focused=true",
     },
+    // The row of a repository of its own. There is no patch behind it and
+    // never will be — git does not cross into another repository — so
+    // `embedded=true` is the pane having an answer about the path at all,
+    // and `rows=0` says it is not one made of a diff. Which of the two
+    // sentences it is rides in `sha8=`, which the argument decides: the
+    // commit a stage would point at, or empty where that repository has
+    // none yet.
+    Verb {
+        name: "wip-embedded",
+        when: &[],
+        plain: "embedded=true rows=0",
+    },
     // And the end it stops at rather than wraps past, the same shape
     // `diff-step-edge` reads: the walk asks for ten files, runs out, and
     // the rest answer false. `moved=true` beside it is what tells this

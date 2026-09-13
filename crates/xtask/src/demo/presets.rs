@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
-    basic, detached, dirty, eol, noremote, one_commit, plan, rewrite_merge, shallow, stashes,
+    basic, detached, dirty, embedded, eol, noremote, one_commit, plan, rewrite_merge, shallow,
+    stashes,
 };
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
@@ -125,6 +126,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
     match preset {
         "basic" => basic(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
+        "embedded" => embedded(&mut repo)?,
         "eol" => eol(&mut repo)?,
         "clashing" => clashing(&mut repo)?,
         "revert-clashes" => revert_clashes(&mut repo)?,
