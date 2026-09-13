@@ -37,6 +37,7 @@ paths:
 ## 非同期・並行テストの実装方針
 
 - **正しさは時間ではなく因果で待つ** — 完了イベント、join handle、ack、barrier、世代番号、最終状態のいずれかを本体が返し、テストは「要求した処理」が終わった後だけ assert する。イベントが reader / lock / queue の途中で送られるなら、それ自体を完了扱いせず owner の返却まで待つ。操作が成功してもイベントを出さない経路には明示的な完了境界を足す(`RefreshTask` / `RefreshOutcome` / `RemoteTagRefreshTask`)。タイマは手で進めて、その tick の ack を待つ(`RepoSession::auto_fetch_ticker`)
+- **待つ述語は、待っている当の物だけが満たせる形にする** — 人向けのレポートの部分一致で到着や完了を待たない。見出しや定型句が同じ語を含んでいると、**その物が生まれる前に真になる**(実測: 空の台帳でも `0 landing(s) in line` と言うので、`"landing"` を探す待ちは常に即真 → 部屋を先に別の unit が取り、相互待ちで天井まで行った)。**到着は当人が言う**(`--queued` の語 / ack / 完了イベント)。レポートを読むしかない時は、その行だけが持つ形で照合し、見出しが満たせないことを確かめる
 - **「もう起きない」を sleep / quiet window で証明しない** — quiet は「止まった」と「遅い」を区別できず、余剰性能が落ちた時だけ偽陽性になる。無変更・exactly-once・二重起動無しは、対象操作の完了後に件数または状態を読む。完了境界を作れない時はテストを先に弱めず、実装の観測可能性を直す
 - **baseline は開始条件を列挙して待つ** — `Opened` は path を受理しただけで、その後の refs / status / log は未完了。snapshot event も reader 内から送られ、その後に graph refresh を要求し得る。測定対象に先行処理を混ぜないよう `opening_snapshots` → `wait_for_snapshot_reads` → tracked graph refresh → **追い出した pass の停止**(`wait_for_graph_passes` — 要求は前の pass を cancel するだけで、cancel は止まった証拠ではない)→ 着地した pass の順で閉じる(`CaptureSink::opened_graph_gen`)
 - **競合の相手は手で目的の地点まで進める** — `yield_now` / sleep / 大量反復で「もう門に居るはず」を作らない。テストが所有する future は `crate::wait::poll_once`(統合スイートは双子の `support::wait::poll_once`)で 1 回だけ poll して最初の待ち地点(門・読みの中)で止め、`Pending` を確かめてから相手を解放する(`state_tests` / `read_flight` の tests、`session_integration` の diff の読み)。spawn した相手には本体が到着を言う境界を持たせる(`ReadFlight::wait_for_askers`)

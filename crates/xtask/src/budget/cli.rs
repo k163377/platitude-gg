@@ -1,6 +1,7 @@
 //! `cargo xtask budget` — what the machine is doing, said to a person,
 //! and the hold the suite takes from a process of its own.
 
+use std::cell::Cell;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -33,14 +34,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// `cargo xtask budget hold …` — one unit's ticket, taken from a process
 /// of this machine's own so that the priority, the exclusion and the
 /// death of a holder can be watched between real processes rather than
-/// between threads. Says one word when it is admitted, and holds until a
-/// file appears: the test drives both edges, and no clock is in it.
+/// between threads. Says one word when it has joined the queue
+/// (`--queued`) and one when it is admitted (`--say`), and holds until a
+/// file appears: the test drives every edge, and no clock is in it.
 fn hold(args: &[String]) -> Result<(), String> {
     let mut dir = crate::tree::workspace_root();
     let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
     let mut rank = Rank::Normal;
     let (mut seat, mut what) = ("held".to_string(), "hold".to_string());
     let (mut say, mut until, mut turn) = (None, None, false);
+    let mut queued: Option<PathBuf> = None;
     let mut child_until: Option<PathBuf> = None;
     let mut at = 0;
     while let Some(arg) = args.get(at) {
@@ -61,6 +64,7 @@ fn hold(args: &[String]) -> Result<(), String> {
             "--seat" => seat = next(&mut at)?,
             "--what" => what = next(&mut at)?,
             "--say" => say = Some(PathBuf::from(next(&mut at)?)),
+            "--queued" => queued = Some(PathBuf::from(next(&mut at)?)),
             "--until" => until = Some(PathBuf::from(next(&mut at)?)),
             "--child-until" => child_until = Some(PathBuf::from(next(&mut at)?)),
             "--landing" => rank = Rank::Landing,
@@ -72,16 +76,31 @@ fn hold(args: &[String]) -> Result<(), String> {
     }
     let until = until.ok_or("budget hold needs --until <file>: the word to let go")?;
     let pool = Pool::of(&dir, jobs)?;
-    let held = if turn {
-        pool.turn(&seat, &what)?
-    } else {
-        pool.admit(&Ask {
-            weight,
-            rank,
-            seat: &seat,
-            what: &what,
-        })?
+    // The arrival, said by this unit at the instant its ticket is in the
+    // ledger. A closure says nothing back, so what it could not write is
+    // kept here and answered for after the wait it was said during.
+    let unwritten: Cell<Option<String>> = Cell::new(None);
+    let arrived = || {
+        if let Some(path) = &queued
+            && let Err(error) = std::fs::write(path, format!("{}\n", std::process::id()))
+        {
+            unwritten.set(Some(format!("could not write {}: {error}", path.display())));
+        }
     };
+    let ask = Ask {
+        weight,
+        rank,
+        seat: &seat,
+        what: &what,
+    };
+    let held = if turn {
+        pool.turn_arriving(&seat, &what, &arrived)?
+    } else {
+        pool.admit_arriving(&ask, &arrived)?
+    };
+    if let Some(error) = unwritten.take() {
+        return Err(error);
+    }
     // A child of this unit, standing in for the cargo or the container a
     // step starts: the ledger is told its number, so a test can kill
     // this holder and watch the room stay held until the child goes

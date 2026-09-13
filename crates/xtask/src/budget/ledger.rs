@@ -139,22 +139,52 @@ impl Pool {
         self.turn_polled(seat, what, &|| {})
     }
 
+    /// The same, saying so the instant this landing is in the ledger.
+    pub(crate) fn turn_arriving(
+        &self,
+        seat: &str,
+        what: &str,
+        arrived: &dyn Fn(),
+    ) -> Result<Admitted, String> {
+        self.queued(&Ask::turn(seat, what), true, arrived, &|| {})
+    }
+
     pub(super) fn turn_polled(
         &self,
         seat: &str,
         what: &str,
         polled: &dyn Fn(),
     ) -> Result<Admitted, String> {
-        self.queued(
-            &Ask {
-                weight: 0,
-                rank: Rank::Landing,
-                seat,
-                what,
-            },
-            true,
-            polled,
-        )
+        self.queued(&Ask::turn(seat, what), true, &|| {}, polled)
+    }
+
+    /// Takes a ticket, saying so the instant this unit is in the ledger
+    /// — before it is admitted, and whether or not it ever is.
+    ///
+    /// **What arrival is, and why it is said by the unit itself.** A
+    /// process that wants to know another has joined the queue — the
+    /// suite, driving several holders against one budget — can only read
+    /// that off the ledger's own report, and the report says what the
+    /// machine is doing in words a person reads: an empty ledger still
+    /// says "0 landing(s) in line". A reader matching a word in it is
+    /// answered by a unit that has not started, and lets go of the room
+    /// it was holding for one that is not in the queue yet — which is
+    /// admission in the wrong order, and then a deadlock for as long as
+    /// the test's ceiling (`tests/gate/budget.rs`). So the arrival is a
+    /// word from the unit, said once, at the one instant its ticket is
+    /// readable by everybody.
+    pub(crate) fn admit_arriving(
+        &self,
+        ask: &Ask<'_>,
+        arrived: &dyn Fn(),
+    ) -> Result<Admitted, String> {
+        if self.carried {
+            // Nothing joins the queue, so the arrival is the whole of
+            // it: this unit is under its parent's ticket and running.
+            arrived();
+            return Ok(Admitted::carried());
+        }
+        self.queued(ask, false, arrived, &|| {})
     }
 
     pub(super) fn admit_polled(
@@ -165,13 +195,19 @@ impl Pool {
         if self.carried {
             return Ok(Admitted::carried());
         }
-        self.queued(ask, false, polled)
+        self.queued(ask, false, &|| {}, polled)
     }
 
     /// The one loop both a unit's ticket and a landing's turn go round:
     /// register, then look at the ledger under its lock until the rule
     /// hands this one the machine.
-    fn queued(&self, ask: &Ask<'_>, turn: bool, polled: &dyn Fn()) -> Result<Admitted, String> {
+    fn queued(
+        &self,
+        ask: &Ask<'_>,
+        turn: bool,
+        arrived: &dyn Fn(),
+        polled: &dyn Fn(),
+    ) -> Result<Admitted, String> {
         std::fs::create_dir_all(&self.dir)
             .map_err(|e| format!("could not make {}: {e}", self.dir.display()))?;
         let (seq, held, paths) = self.register(ask, turn)?;
@@ -182,6 +218,9 @@ impl Pool {
             _lock: Some(held),
             waited: Duration::ZERO,
         };
+        // Said after `register` has let the ledger's lock go, so that
+        // whoever hears it can read the queue this unit is standing in.
+        arrived();
         let mut wait = Wait::new(
             format!("the machine's budget for {}", ask.what),
             Budget::of(QUIET_CEILING, WHOLE_CEILING),

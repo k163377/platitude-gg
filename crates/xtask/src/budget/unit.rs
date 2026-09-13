@@ -93,6 +93,18 @@ pub(crate) struct Ask<'a> {
     pub what: &'a str,
 }
 
+impl<'a> Ask<'a> {
+    /// A landing's turn: none of the machine, at the landings' own rank.
+    pub(crate) fn turn(seat: &'a str, what: &'a str) -> Ask<'a> {
+        Ask {
+            weight: 0,
+            rank: Rank::Landing,
+            seat,
+            what,
+        }
+    }
+}
+
 /// A ticket held for as long as this stands, and how long it took to get
 /// — the wait for other units to finish, zero when there was room at the
 /// first look (the microseconds of reading the ledger are not a wait).
