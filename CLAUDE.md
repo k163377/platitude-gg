@@ -32,7 +32,7 @@
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
 - **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。**席は選ばない・与えられる**: `cargo xtask seat`(引数なし)が空き席を lock して letter と path を返すので、それを EnterWorktree に渡す(`seats` は状況を読む道具で、座る判断には使わない)。未マージの席は続きの仕事以外触らない。全席詰まりなら増設せず報告。**席は land が返す** — main へ反映した時点で letter は roster に戻り、そのまま作業を続ければ次の編集で claim が戻る(取られていたら `cargo xtask seat` をもう一度)。land しない終わり方で返すのは `cargo xtask seat release`。寝落ちの SessionEnd では claim は残る。**完了しても main へは戻さない**(§Git 運用)
 - **残件はチップに逃がさない** — 検証・掃除・後追いの修正はこのセッションの仕事。**チップは別セッションでしかできない物だけ**(別マシン・実ウィンドウ・このセッションでは得られない判断)で、書き残すだけなら `internal-docs/P<n>-確認事項.md` へ。**触っているファイルを claim するチップは deny**(出口は `hook pre-chip` / `hook stop` の文)
-- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PGG_ALLOW_GUI=1 cargo xtask launch`。掴まれた exe・二重起動ゲートは `kill`(どちらも自ツリーの居残りだけを扱う)。**窓のビルドがどのツリーのものかは右下が名乗る**
+- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの終了後も残るアプリプロセスや exe の使用中状態は `cargo xtask kill` で解消する(対象は自ツリーの残存プロセスのみ)。**窓のビルドがどのツリーのものかは右下が名乗る**
 
 ## Rust 規約
 
@@ -63,7 +63,7 @@
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
-- 性能 4 項目のうち**メモリが予算超過**(判定行の max で数 MB。正体は絵文字 1 文字が呼ぶフォントのフォールバック探索)。数値・計測条件・読み方は [実測記録](ci/baseline/perf-windows-x64.md) が正(計測対象は `cargo xtask corpus` が生成する合成リポジトリ。撃ち方は同記録 §計測条件)。改善の残件は P3-確認事項 §app
+- 性能 4 項目のうち**メモリが予算超過**(判定行の max で数 MB。正体は絵文字 1 文字が呼ぶフォントのフォールバック探索)。数値・計測条件・読み方は [実測記録](ci/baseline/perf-windows-x64.md) が正(計測対象は `cargo xtask corpus` が生成する合成リポジトリ。実行手順は同記録 §計測条件)。改善の残件は P3-確認事項 §app
 - CI(3OS + 完全オフライン job)は記述済み・**push するまで実行しない**。初回検証と軽量 / 完全性の分割は [P5-確認事項.md](internal-docs/P5-確認事項.md) §3.5、ネットワーク非通信の証明は [実装計画.md](internal-docs/実装計画.md) §11
 - mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 

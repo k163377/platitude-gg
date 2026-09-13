@@ -143,7 +143,7 @@ fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     let dirty = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(!dirty.contains(" (kept)"), "{dirty}");
     assert!(
-        dirty.contains("graph cache bypass: uncommitted or untracked files"),
+        dirty.contains("graph cache not used: uncommitted or untracked files"),
         "{dirty}"
     );
 }

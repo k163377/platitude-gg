@@ -1,7 +1,7 @@
 //! The kill guard: a reap aimed by image name takes every seat's runs and
 //! the user's own window with it.
 
-use super::KILL_ESCAPE;
+use super::PROCESS_STOP_APPROVAL_FLAG;
 use super::payload::string_field;
 
 /// PreToolUse(Bash|PowerShell): a kill aimed at the app by image name
@@ -11,7 +11,7 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
     };
-    if command.contains(KILL_ESCAPE) || !broad_kill(&command) {
+    if command.contains(PROCESS_STOP_APPROVAL_FLAG) || !broad_kill(&command) {
         return Ok(false);
     }
     println!(
@@ -23,7 +23,7 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
          `cargo xtask kill` reaps exactly those (processes whose exe lives \
          under this tree) and nothing else. If the user asked to kill the \
          others in so many words, run the same command again with \
-         {KILL_ESCAPE}=1 in front of it.\"}}}}"
+         {PROCESS_STOP_APPROVAL_FLAG}=1 in front of it.\"}}}}"
     );
     Ok(true)
 }

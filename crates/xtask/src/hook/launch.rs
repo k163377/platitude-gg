@@ -2,7 +2,7 @@
 //! something from the sessions beside this one, and a launch someone reads
 //! the output of takes the turn it was started from.
 
-use super::WINDOW_ESCAPE;
+use super::GUI_APPROVAL_FLAG;
 use super::git::{unquote, xtask_verb};
 use super::payload::{bool_field, string_field};
 use crate::seats::worktree_root;
@@ -17,7 +17,7 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
     };
-    // Held to before the escape and outside any worktree: the escape records
+    // Checked before the approval flag and outside any worktree: the flag records
     // that the user asked for a window, not that the session may stop
     // answering, and a launch takes the turn wherever it is started from.
     if reads_the_launch(&command) {
@@ -55,7 +55,7 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
         );
         return Ok(true);
     }
-    if command.contains(WINDOW_ESCAPE) {
+    if command.contains(GUI_APPROVAL_FLAG) {
         return Ok(false);
     }
     let cwd = string_field(input, "cwd").unwrap_or_default();
@@ -74,7 +74,7 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
          user asked for a real window in so many words, run the same command \
          again with {}=1 in front of it.\"}}}}",
         objections.join("; "),
-        WINDOW_ESCAPE
+        GUI_APPROVAL_FLAG
     );
     Ok(true)
 }

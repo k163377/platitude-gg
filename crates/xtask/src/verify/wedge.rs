@@ -1,5 +1,6 @@
-//! What a run that stopped answering is asked, once there is nothing left
-//! to ask it.
+//! Diagnostics for an unresponsive application started by this verification runner.
+//! Reports concern the current test run and its output directory; process cleanup
+//! remains owned by the runner that started the application.
 //!
 //! A run reaped at the parent's ceiling used to leave one word —
 //! `TIMED OUT` — and the next one to happen started from there again

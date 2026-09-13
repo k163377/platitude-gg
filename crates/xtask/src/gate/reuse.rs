@@ -287,7 +287,7 @@ pub(crate) fn graph_of(dir: &Path) -> Result<Loaded, String> {
             return Ok(Loaded {
                 graph: super::graph::build(dir)?,
                 reused: false,
-                note: format!("bypass: {why}"),
+                note: format!("not used: {why}"),
             });
         }
     };

@@ -1,5 +1,9 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`).
 //!
+//! These repository workflow checks govern user-authorized Git operations,
+//! application launches, and process cleanup. Main updates also require a
+//! permit derived from the user message; an approval flag alone is insufficient.
+//!
 //! Wired from .claude/settings.json. Each handler reads the hook's JSON
 //! payload from stdin and answers on stdout; printing nothing means "no
 //! objection".
@@ -24,16 +28,16 @@ mod write;
 /// move. It rides in the command itself so the transcript records the ask;
 /// whether the user made it is the permit's to say (`permit`), read off
 /// the user's own message.
-const MAIN_ESCAPE: &str = "PGG_ALLOW_MAIN";
+const MAIN_APPROVAL_FLAG: &str = "PGG_ALLOW_MAIN";
 
 /// The same, for an instruction that asked for a rebase.
-const REBASE_ESCAPE: &str = "PGG_ALLOW_REBASE";
+const REBASE_APPROVAL_FLAG: &str = "PGG_ALLOW_REBASE";
 
 /// The same, for an instruction that asked for a real window.
-const WINDOW_ESCAPE: &str = "PGG_ALLOW_GUI";
+const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
 
-/// The same, for an instruction that asked to kill runs beyond this tree.
-const KILL_ESCAPE: &str = "PGG_ALLOW_KILL";
+/// The same, for an instruction that approved stopping processes outside this worktree.
+const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");

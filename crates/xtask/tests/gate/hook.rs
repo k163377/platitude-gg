@@ -32,7 +32,7 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     // value; git runs the hook for it, and it must pass with no stamp.
     sb.git_ok(&sb.repo, &["reset", "-q", "--hard", "HEAD"]);
 
-    // The user's own way past, which the Claude hook denies to sessions.
+    // The manual test-skip control, which the Claude hook denies to sessions.
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nskipped\n");
     sb.git_ok(&sb.repo, &["add", "-A"]);
     sb.git(
@@ -60,7 +60,7 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
 
 /// The gate is held over sessions and over nobody else: without the mark
 /// in the environment a direct commit on main and a rewind both go
-/// through, with no stamp anywhere and no escape spelled. That git is
+/// through, with no stamp anywhere and no manual test-skip flag. That git is
 /// the user's — a terminal of their own, an IDE, a window they are
 /// clicking in — and an IDE's has no cargo on PATH to reach a verdict
 /// with either.

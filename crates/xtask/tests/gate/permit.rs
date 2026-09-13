@@ -43,7 +43,7 @@ fn says(sb: &Sandbox, text: &str) -> String {
     )
 }
 
-/// The session runs the sanctioned landing, escape and all, from the seat.
+/// The session runs the sanctioned landing, approval flag and all, from the seat.
 fn lands(sb: &Sandbox) -> String {
     hook(
         sb,

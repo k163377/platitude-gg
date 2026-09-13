@@ -3,7 +3,7 @@
 
 use super::commit::primary_commit_denied;
 use super::payload::string_field;
-use super::{MAIN_ESCAPE, REBASE_ESCAPE, permit};
+use super::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG, permit};
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
@@ -30,27 +30,27 @@ pub(super) fn pre_git(input: &str) -> Result<Verdict, String> {
         return Ok(Verdict::Clear);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
-    if gate_escape_denied(&command) {
+    if gate_control_change_denied(&command) {
         return Ok(Verdict::Refused);
     }
-    // Each rule keeps its own escape, so asking for one is not asking for
+    // Each operation has its own approval flag, so asking for one is not asking for
     // the others: a merge the user called for still may not rebase.
     match guarded_git(input, &command, &cwd) {
         Verdict::Clear => {}
         verdict => return Ok(verdict),
     }
-    if !command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd) {
+    if !command.contains(MAIN_APPROVAL_FLAG) && primary_commit_denied(&command, &cwd) {
         return Ok(Verdict::Refused);
     }
     Ok(Verdict::Clear)
 }
 
 /// The two names that decide whether refs/heads/main answers to the gate
-/// at all: its escape, and the mark that tells a session's git from the
+/// at all: its manual skip flag, and the mark that tells a session's git from the
 /// user's. A session that spells either is stepping around the pre-merge
 /// tests, which is the one thing the gate exists to make impossible
 /// (internal-docs/反映前テストの機械化.md).
-fn gate_escape_denied(command: &str) -> bool {
+fn gate_control_change_denied(command: &str) -> bool {
     let names = [crate::gate::SKIP, crate::gate::SESSION];
     let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
         return false;
@@ -59,10 +59,10 @@ fn gate_escape_denied(command: &str) -> bool {
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
          \"{name} decides whether refs/heads/main answers to the gate ({} is the user's own \
-         way past it, {} is how the gate knows a session's git from the user's), so a \
+         manual test-skip control, {} is how the gate knows a session's git from the user's), so a \
          session may spell neither. Run `cargo xtask gate` (or `land`, which gates on the \
-         way) and let the stamp open main; if the gate is wrong about what it owes, say so \
-         and leave the escape to the user.\"}}}}",
+         way) and require a passing stamp for main. If validation appears incorrect, stop \
+         and report the validation error to the user.\"}}}}",
         crate::gate::SKIP,
         crate::gate::SESSION
     );
@@ -71,15 +71,15 @@ fn gate_escape_denied(command: &str) -> bool {
 
 /// Putting a branch onto main and rewriting the branch under the session
 /// are both the user's call (CLAUDE.md Git 運用). Prints the refusal and
-/// says so. A landing with its escape in front is answered by the permit:
-/// the escape says the session believes the user asked, the permit says
+/// says so. A landing with an approval flag is checked against the permit:
+/// the flag declares that the user asked; the permit independently checks
 /// whether the user did, in the user's own message.
 fn guarded_git(input: &str, command: &str, cwd: &str) -> Verdict {
     let Some(guarded) = guarded_call(command) else {
         return Verdict::Clear;
     };
-    let escaped = command.contains(guarded.offence.escape());
-    if escaped && guarded.offence == Offence::Rebase {
+    let approval_declared = command.contains(guarded.offence.approval_flag());
+    if approval_declared && guarded.offence == Offence::Rebase {
         return Verdict::Clear;
     }
     let dir = guarded.dir.unwrap_or(cwd);
@@ -98,7 +98,7 @@ fn guarded_git(input: &str, command: &str, cwd: &str) -> Verdict {
     {
         return Verdict::Clear;
     }
-    if escaped {
+    if approval_declared {
         return if permit::landing_denied(input, guarded.what) {
             Verdict::Refused
         } else {
@@ -135,10 +135,10 @@ enum Offence {
 
 impl Offence {
     /// What a command carries to say this rule's exception was asked for.
-    fn escape(&self) -> &'static str {
+    fn approval_flag(&self) -> &'static str {
         match self {
-            Offence::LandsOnMain { .. } => MAIN_ESCAPE,
-            Offence::Rebase => REBASE_ESCAPE,
+            Offence::LandsOnMain { .. } => MAIN_APPROVAL_FLAG,
+            Offence::Rebase => REBASE_APPROVAL_FLAG,
         }
     }
 
@@ -159,13 +159,13 @@ impl Offence {
                  the work on its branch and report it as ready to merge instead. \
                  If the user did ask for this one — in their latest message, \
                  which is where the hook reads the ask (反映) — run \
-                 `{MAIN_ESCAPE}=1 cargo xtask land <branch>` — it works from any \
+                 `{MAIN_APPROVAL_FLAG}=1 cargo xtask land <branch>` — it works from any \
                  session, worktree ones included, and reads where main actually \
                  is before it moves anything; a hand-typed merge inherits \
-                 whatever HEAD the primary checkout happens to be on. Should \
-                 the permission layer refuse the env-prefixed form, the \
-                 PowerShell spelling `$env:{MAIN_ESCAPE}='1'; cargo xtask land \
-                 <branch>` says the same thing."
+                 whatever HEAD the primary checkout happens to be on. For \
+                 PowerShell, the equivalent environment-variable syntax is \
+                 `$env:{MAIN_APPROVAL_FLAG}='1'; cargo xtask land \
+                 <branch>`. This syntax does not grant approval or change execution permissions."
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
@@ -175,7 +175,7 @@ impl Offence {
                  branch. A merged seat starts over with `git reset --hard main`, \
                  which is not a rebase and needs nothing. If the user did ask \
                  for this one, run the same command again with \
-                 {REBASE_ESCAPE}=1 in front of it."
+                 {REBASE_APPROVAL_FLAG}=1 in front of it."
             ),
         }
     }
@@ -187,7 +187,7 @@ impl Offence {
 /// rewrites whichever branch it runs on.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
-    // The sanctioned landing verb is still a landing: the escape in front
+    // The sanctioned landing verb is still a landing: the approval flag
     // is what says the user asked for this one.
     if xtask_verb(&tokens, "land") {
         return Some(GuardedGit {

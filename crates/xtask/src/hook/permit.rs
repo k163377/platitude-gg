@@ -93,7 +93,7 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
     store(&path, &permit);
 }
 
-/// PreToolUse: whether `what` — a command that writes main, escape and
+/// PreToolUse: whether `what` — a command that writes main, approval flag and
 /// all — is refused for want of a permit. Prints the refusal when it is.
 pub(super) fn landing_denied(input: &str, what: &str) -> bool {
     let permit = permit_path(input).and_then(|path| load(&path));

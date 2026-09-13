@@ -1,7 +1,7 @@
 //! The commit guard: the primary checkout is where this repository is
 //! read, and every commit of it rides a worktree branch.
 
-use super::MAIN_ESCAPE;
+use super::MAIN_APPROVAL_FLAG;
 use super::git::unquote;
 use super::launch::resolve;
 use crate::seats::worktree_root;
@@ -40,7 +40,7 @@ pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
          redo the edit there, and report the branch as ready to merge. If \
          the user asked for this direct commit in so many words, run the \
          same command again with {}=1 in front of it.\"}}}}",
-        MAIN_ESCAPE
+        MAIN_APPROVAL_FLAG
     );
     true
 }
