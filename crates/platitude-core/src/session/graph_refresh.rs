@@ -300,6 +300,18 @@ pub enum RemoteTagRefreshOutcome {
     Busy,
     /// The repository is not open any more.
     Unavailable,
+    /// A remote that was asked did not answer, so what is held is not
+    /// what the remotes carry.
+    ///
+    /// **The one answer that cannot be read off anything downstream.**
+    /// A read nothing answered publishes no snapshot, no badge and no
+    /// event — the same silence as a read that found nothing new — so a
+    /// caller waiting for the badge to change has nothing to fail on and
+    /// spends its whole budget on a machine whose git cannot reach the
+    /// remote at all. The failure itself is still nobody's to act on (a
+    /// badge is not worth failing a fetch for), and this says so to the
+    /// one caller that asked to be told.
+    Unanswered,
     /// The remotes answered with the readings already held.
     Unchanged,
     /// The remote-tag index moved and a refs repaint was requested.

@@ -386,6 +386,22 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
 /// there first. Only two can: the opening's catch-up and the interval's.
 /// A third refusal is a slot nobody lets go, and is said by name.
 async fn asked_past_busy(session: &Arc<RepoSession>) -> RemoteTagRefreshOutcome {
+    let outcome = asked_past_busy_answered(session).await;
+    // A remote that would not answer publishes nothing, and every wait
+    // after this one would spend its whole budget on that silence. Said
+    // here, where the session has just answered for it.
+    assert_ne!(
+        outcome,
+        RemoteTagRefreshOutcome::Unanswered,
+        "a remote these repositories own did not answer its `ls-remote` — the machine's git \
+         cannot reach a path beside them, so nothing downstream can publish a badge"
+    );
+    outcome
+}
+
+/// The same, for the one test whose subject is a remote that answers
+/// nothing.
+async fn asked_past_busy_answered(session: &Arc<RepoSession>) -> RemoteTagRefreshOutcome {
     for _ in 0..3 {
         let outcome = crate::support::wait::bounded(
             "the tracked remote-tag read",
@@ -411,6 +427,35 @@ async fn tags_loaded(sink: &CaptureSink, pred: impl Fn(&[TagItem]) -> bool) {
 
 fn some_tag_has_a_remote(tags: &[TagItem]) -> bool {
     tags.iter().any(|t| t.has_remote)
+}
+
+/// A remote that would not answer is said, and not left as the silence a
+/// read that found nothing new leaves.
+///
+/// **The two are the same downstream** — no event, no snapshot, no badge
+/// — so a caller waiting for the badge to change has nothing to fail on
+/// and spends its whole budget on a machine whose git cannot reach the
+/// remote. Nothing is failed for it: the readings the remotes that did
+/// answer gave are kept, which is what the badge is drawn from.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_that_would_not_answer_is_named_rather_than_left_silent() {
+    let (_bare, mut work, _root, _head) = tag_scenario();
+    work.git(&[
+        "remote",
+        "add",
+        "nowhere",
+        "file:///nowhere/there-is-no-such-repository.git",
+    ]);
+    let (sink, session) = opened_recording(&work).await;
+    session.set_auto_fetch(Some(Duration::from_secs(600)));
+
+    assert_eq!(
+        asked_past_busy_answered(&session).await,
+        RemoteTagRefreshOutcome::Unanswered
+    );
+    // And the remote that did answer is still read: what one remote
+    // would not say is not a reason to drop what the others did.
+    tags_loaded(&sink, some_tag_has_a_remote).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

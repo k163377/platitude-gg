@@ -9,6 +9,18 @@
 
 use super::*;
 
+/// What one pass over the remotes' tags established.
+#[derive(Debug, Default)]
+pub(super) struct RemoteTagsRead {
+    /// Whether what the remotes carry moved — the caller's reason to
+    /// republish, and nobody else's business.
+    pub moved: bool,
+    /// What was asked and did not answer, named with what git said.
+    /// Empty where everything asked answered, including where there was
+    /// nothing to ask.
+    pub unread: Vec<String>,
+}
+
 impl RepoSession {
     /// The fetch, and then the one thing it cannot leave behind: where the
     /// remotes keep their tags.
@@ -33,12 +45,18 @@ impl RepoSession {
 
     /// Records what each remote advertises under `refs/tags/`.
     ///
-    /// Reports nothing upwards. A badge is not worth failing a fetch that
+    /// **Fails nothing.** A badge is not worth failing a fetch that
     /// worked, and a remote that could not be reached keeps the answer it
     /// last gave instead of dropping every cloud it accounted for — which
     /// is what `refs/remotes/` does for branches on its own.
-    /// Answers whether what the remotes carry moved — the caller's reason
-    /// to republish, and nobody else's business.
+    ///
+    /// **It does say what it could not read, all the same**
+    /// ([`RemoteTagsRead::unread`]) — the two are told apart here, where
+    /// the difference is known, and the tracked catch-up carries it out
+    /// as the one answer no reader downstream can reach
+    /// ([`RemoteTagRefreshOutcome::Unanswered`], which is where that is
+    /// written). Nothing on the fire-and-forget path reads it, so the
+    /// silence upwards is unchanged.
     pub(super) async fn read_remote_tags(
         &self,
         exec: &GitExecutor,
@@ -46,18 +64,22 @@ impl RepoSession {
         only: Option<&str>,
         timeout: std::time::Duration,
         cancel: &CancellationToken,
-    ) -> bool {
+    ) -> RemoteTagsRead {
         let remotes = match self.remotes(workdir, cancel).await {
             Ok(read) => read.list,
             Err(error) => {
                 tracing::debug!(%error, "remote tags: the remotes could not be listed");
-                return false;
+                return RemoteTagsRead {
+                    moved: false,
+                    unread: vec![format!("the remote list: {error}")],
+                };
             }
         };
         // Only the remotes that actually answered are replaced. One that
         // could not be reached keeps the readings it last gave, which is
         // what `refs/remotes/` does for branches on its own.
         let mut answered: Vec<crate::Name> = Vec::new();
+        let mut unread: Vec<String> = Vec::new();
         let mut fresh: Vec<(crate::Name, Oid, bool, crate::Name)> = Vec::new();
         for r in &remotes {
             if only.is_some_and(|wanted| wanted != r.name) {
@@ -72,13 +94,19 @@ impl RepoSession {
                             .map(|t| (t.name, t.commit, t.annotated, remote.clone())),
                     );
                 }
-                Err(error) if error.is_cancelled() => return false,
+                // Cancellation is the session going away, not a remote
+                // that would not answer: nobody is left to be told.
+                Err(error) if error.is_cancelled() => return RemoteTagsRead::default(),
                 Err(error) => {
                     tracing::debug!(remote = %r.name, %error, "remote tags: unreadable");
+                    unread.push(format!("{}: {error}", r.name));
                 }
             }
         }
-        self.remerge_remote_tags(&remotes, &answered, fresh)
+        RemoteTagsRead {
+            moved: self.remerge_remote_tags(&remotes, &answered, fresh),
+            unread,
+        }
     }
 
     /// Rebuilds the index with `fresh` in place of what `answered` said

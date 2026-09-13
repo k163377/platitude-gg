@@ -407,16 +407,28 @@ impl RepoSession {
                 return;
             };
             let cancel = s.root_cancel.clone();
-            let moved = s
+            let read = s
                 .read_remote_tags(&s.exec_background, &workdir, None, timeout, &cancel)
                 .await;
             let outcome = if cancel.is_cancelled() {
                 RemoteTagRefreshOutcome::Cancelled
-            } else if moved {
-                s.refresh_refs();
-                RemoteTagRefreshOutcome::Changed
             } else {
-                RemoteTagRefreshOutcome::Unchanged
+                if read.moved {
+                    s.refresh_refs();
+                }
+                if read.unread.is_empty() {
+                    if read.moved {
+                        RemoteTagRefreshOutcome::Changed
+                    } else {
+                        RemoteTagRefreshOutcome::Unchanged
+                    }
+                } else {
+                    // Said ahead of what did move: what moved is on the
+                    // refs this asked for, and this is the answer no
+                    // reader of those can reach.
+                    tracing::debug!(unread = ?read.unread, "remote tags: not every remote answered");
+                    RemoteTagRefreshOutcome::Unanswered
+                }
             };
             // `outcome()` closes ownership as well as the read: an immediate
             // following request must not race the old permit's destructor.
