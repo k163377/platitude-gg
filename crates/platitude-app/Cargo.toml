@@ -30,7 +30,16 @@ qtbridge = "0.2"
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
-tracing-subscriber = "0.3"
+# The stderr subscriber (`init_tracing`). Two of the default features
+# have no caller here. `ansi`: that stream is never coloured, and
+# `with_ansi(false)` stays callable without the feature — which is the
+# documented way to make the escapes impossible rather than merely
+# unasked for. `tracing-log`: nothing in the tree logs through `log`,
+# and that feature is what makes `init()` install the `log` bridge, so a
+# dependency that logs that way goes unheard until it is back on. Off,
+# the two take three crates with them (measured: nu-ansi-term,
+# tracing-log, log — 16KB off the shipped binary).
+tracing-subscriber = { version = "0.3", default-features = false, features = ["smallvec", "fmt", "std"] }
 
 [lints]
 workspace = true

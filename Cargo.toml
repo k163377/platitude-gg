@@ -23,7 +23,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "t
 # keeps serde_derive/syn out of the build (measured: 14 -> 8 crates, -38KB).
 toml = "1"
 tokio-util = "0.7"
-tracing = "0.1"
+# Logging only — the `warn!` / `info!` macros. `attributes`, the other
+# half of the default, is off: nothing writes `#[instrument]`, so the
+# feature's whole content is a proc-macro crate compiled for no caller —
+# a cost in build time, not in bytes: nothing of it reaches the binary.
+# The first `#[instrument]` means turning it back on.
+tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 # **The task runner is optimised even in a debug build.** `cargo xtask`
 # runs the dev profile (`.cargo/config.toml`), and xtask is not a
