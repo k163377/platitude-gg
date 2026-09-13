@@ -353,6 +353,11 @@ pub async fn load(
     // `-uall` pins untracked listing against user config and expands a new
     // directory into its files; `-unormal` would collapse it to one `dir/`
     // entry, which has no per-file diff to stage hunks or lines from.
+    //
+    // **A repository of its own inside the working copy stays one `dir/`
+    // entry** whatever is asked here: its files are that repository's, and
+    // git stops at the boundary (`status_integration`). A reader that cuts
+    // paths on `/` meets the trailing one there and nowhere else.
     let cmd = GitCommand::new().cwd(workdir).args([
         "status",
         "--porcelain=v2",

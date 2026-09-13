@@ -31,6 +31,7 @@ mod rename_integration;
 mod session_integration;
 mod stage_integration;
 mod stash_integration;
+mod status_integration;
 mod tag_integration;
 mod upstream_integration;
 mod worktree_state;
