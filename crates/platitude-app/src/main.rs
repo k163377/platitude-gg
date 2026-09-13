@@ -387,7 +387,11 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
                 .lock_path()
                 .as_deref()
                 .and_then(std::path::Path::parent)
-                .map(|dir| dir.display().to_string())
+                // Spelled for the screen: the gate prints this one so a
+                // reader can tell two builds apart, and a directory the
+                // OS handed over is the last road a native separator
+                // reaches the window by (デザイン規約 §パスの区切り).
+                .map(|dir| crate::urlpath::shown_path(&dir.display().to_string()))
                 .unwrap_or_default();
             tracing::warn!(store = %held, "another platitude-gg is using these settings");
             (Store::ephemeral(), held, None)
