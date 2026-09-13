@@ -696,15 +696,16 @@ fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
 
 /// What the record a stopped run leaves is made of, on both sides of the
 /// pipe: the stations and the trail the app writes, the teardown that
-/// passes them, and the parent that reads them back
-/// (`verify::faults`).
-fn record_of_a_wedge() -> [String; 6] {
+/// passes them, and the parent that reads them back and looks at what
+/// still stands (`verify::faults`).
+fn record_of_a_wedge() -> [String; 7] {
     let (app, xtask) = (app(), "crates/xtask/src/verify");
     [
         format!("{app}/src/harness/deadline.rs"),
         format!("{app}/src/main.rs"),
         format!("{app}/src/hub/life.rs"),
         format!("{xtask}/wedge.rs"),
+        format!("{xtask}/look.rs"),
         format!("{xtask}/faults.rs"),
         format!("{xtask}/outcome.rs"),
     ]

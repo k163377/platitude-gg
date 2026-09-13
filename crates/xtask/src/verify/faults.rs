@@ -19,7 +19,7 @@
 //! it. The observed pair had no way to be told apart, which is what this
 //! is for.
 //!
-//! **And the parent's own look at a stopped run** (`super::wedge::look_at`),
+//! **And the parent's own look at a stopped run** (`super::look::look_at`),
 //! which is a process too and can stall like any other: the fourth case
 //! orders that stall (`--fault-stall-look`) and reads back that the look
 //! was ended at its ceiling, said so, and that the app was still reaped

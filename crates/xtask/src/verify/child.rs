@@ -76,7 +76,7 @@ pub(super) struct Ran {
     /// What a look at the app while it still stood could say — its
     /// threads, and a dump of it where one could be taken — for a run
     /// reaped at the ceiling; empty for one that ended itself
-    /// (`super::wedge::look_at`).
+    /// (`super::look::look_at`).
     pub(super) looked: Vec<String>,
 }
 
@@ -127,8 +127,8 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         }
         // Taken while the app still stands, since past `exiting` the
         // trail has run out and these are the only witnesses left
-        // (`super::wedge::look_at`).
-        looked = super::wedge::look_at(
+        // (`super::look::look_at`).
+        looked = super::look::look_at(
             child.id(),
             start.shot_dir,
             start.opts.fault_hang.is_empty(),

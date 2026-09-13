@@ -73,7 +73,7 @@ pub(super) struct Options {
     pub(super) fault_hold_save: String,
     /// Stall the parent's own look at a run reaped at the ceiling: the
     /// thread listing is a process that does nothing for longer than the
-    /// listing's ceiling (`super::wedge::look_at`). Nothing of the app's
+    /// listing's ceiling (`super::look::look_at`). Nothing of the app's
     /// — the one fault that is the runner's — and the fourth shape
     /// `wedge-check` drives: a diagnostic that ran out of time, ended,
     /// said so, and still followed by the app's reaping and the verdict.
