@@ -100,14 +100,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     };
     let seat_dir = std::path::Path::new(&seat.path);
     phases.target(seat_dir, &branch);
-    let dirty = git_query(&seat.path, &["status", "--porcelain"]).unwrap_or_default();
-    if !dirty.is_empty() {
-        return Err(format!(
-            "{} has uncommitted changes — what would land is not what is there. Commit or \
-             stash first:\n{dirty}",
-            seat.path
-        ));
-    }
+    settle_the_tree(&seat.path, &branch)?;
     // The landings' own queue, taken before anything of this one runs
     // and held to the end: one landing at a time goes through rebase,
     // gate, census and fast-forward, in the order they arrived
@@ -149,6 +142,29 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     release_claim(&here, &trees, &branch);
     phases.mark("hook, board and claim");
     Ok(())
+}
+
+/// What would land is what stands committed in the seat, so nothing else
+/// may stand there — except the census a gate or a verb run in the seat
+/// rewrote since its last commit, a generated file the landing commits
+/// as it commits its own gate's rewrite (`gate_in_the_seat`).
+fn settle_the_tree(seat: &str, branch: &str) -> Result<(), String> {
+    let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
+    if census_alone(&dirty) {
+        commit_census(seat)?;
+        println!(
+            "{} was rewritten in {seat} before this landing: committed on {branch}",
+            crate::gate::CENSUS_FILE
+        );
+        return Ok(());
+    }
+    if dirty.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "{seat} has uncommitted changes — what would land is not what is there. Commit or \
+         stash first:\n{dirty}"
+    ))
 }
 
 /// Free only the seat's build slot: the primary's verdict runs from
@@ -282,6 +298,12 @@ fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> 
 /// one sessions wrote by hand for it before the landing did.
 const CENSUS_COMMIT: &str = "chore(xtask): the verb census as the land's gate rewrote it";
 
+/// Whether a seat's `status --porcelain` says the census, modified in the
+/// working tree, is the whole of what stands uncommitted.
+fn census_alone(dirty: &str) -> bool {
+    dirty.trim() == format!("M {}", crate::gate::CENSUS_FILE)
+}
+
 /// Commits the census the gate's verbs rewrote, and nothing beside it:
 /// the gate ran over a clean tree, so the rewrite is the whole of what
 /// can stand — and anything else standing there is refused, because a
@@ -289,7 +311,7 @@ const CENSUS_COMMIT: &str = "chore(xtask): the verb census as the land's gate re
 fn commit_census(seat: &str) -> Result<(), String> {
     let census = crate::gate::CENSUS_FILE;
     let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
-    if dirty.trim() != format!("M {census}") {
+    if !census_alone(&dirty) {
         return Err(format!(
             "the gate left more than {census} changed in {seat}, and a landing commits the \
              census alone:\n{dirty}"

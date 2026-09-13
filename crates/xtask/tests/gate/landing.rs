@@ -242,6 +242,31 @@ fn land_commits_the_census_its_gate_rewrote() {
     );
 }
 
+/// A census a gate or a verb run in the seat rewrote before the landing
+/// is the landing's to commit, as its own gate's rewrite is: a seat
+/// dirty with that one generated file is not a seat refused.
+#[test]
+fn land_commits_a_census_the_seat_was_holding_dirty() {
+    let sb = Sandbox::new("land-census-dirty");
+    sb.write_refs(&sb.seat, 22);
+    let before = sb.commit_all(&sb.seat, "feat(core): twenty-two", &[]);
+    let census = std::fs::read_to_string(sb.seat.join("crates/xtask/verb-census.txt"))
+        .expect("the census in the seat");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        &format!("{census}stash --preset extra\tDriver Main\n"),
+    );
+    let (ok, text) = sb.land("worktree-a");
+    assert!(ok && text.contains("before this landing"), "{text}");
+    assert_eq!(
+        sb.git_ok(&sb.seat, &["log", "-1", "--format=%s"]),
+        "chore(xtask): the verb census as the land's gate rewrote it"
+    );
+    assert_eq!(sb.git_ok(&sb.seat, &["rev-parse", "HEAD~1"]), before);
+    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
+}
+
 /// A landed seat goes back to the roster: the branch is on main and the
 /// tree is at main's tip, so the letter is free for whoever asks next
 /// without anybody having to say the words (CLAUDE.md ビルド・テスト).
