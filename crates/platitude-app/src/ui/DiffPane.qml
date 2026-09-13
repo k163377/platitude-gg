@@ -322,7 +322,9 @@ Rectangle {
     /// rows at all.
     function diffSettled() {
         const m = diffPane.diffModel
-        return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "")
+        // `embedded` is the one answer that is not rows and never will be: git will not open a repository of its own,
+        // so what the pane has to show for that row is the line about it (`DiffFileNotices`).
+        return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded)
     }
     /// Automation: a settled read is not yet a picture on screen — the decode is asynchronous — so a verb that
     /// photographs the preview waits for the pictures too (`DiffFileNotices.picturesSettled`).

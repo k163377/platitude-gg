@@ -416,7 +416,11 @@ pub enum DiffMsg {
     Loaded {
         target: DiffTarget,
         patches: Arc<Vec<FilePatch>>,
-        preview: Option<FilePreview>,
+        /// Boxed because it is most of this message: the sides carry a
+        /// path and a size each, and a feed holding several of these
+        /// would pay that for every message on it — including the
+        /// colours, which have no preview at all.
+        preview: Option<Box<FilePreview>>,
         /// Fingerprint of the diff's source bytes; selections carry it
         /// back so a partial write can refuse a drifted diff.
         fingerprint: u64,
@@ -425,6 +429,10 @@ pub enum DiffMsg {
         /// What changed inside each row (`intraline`) — rides with the
         /// rows, not behind them like the colours.
         marks: Arc<platitude_core::intraline::IntraMarks>,
+        /// The commit a stage of this row would point at, for the one row
+        /// that has no patch: a repository of its own inside the working
+        /// copy (`details::embedded`).
+        embedded: Option<platitude_core::details::Embedded>,
     },
     /// Colours for the lines of the diff named by `target`, addressed the
     /// way the rows are. Never arrives for a diff nobody is on.

@@ -24,6 +24,7 @@ fn rows(path: &str, fingerprint: u64) -> DiffMsg {
         fingerprint,
         endings: None,
         marks: Arc::default(),
+        embedded: None,
     }
 }
 

@@ -119,6 +119,8 @@ impl DiffModel {
             self.is_new_file = false;
             self.is_combined = false;
             self.unmerged = false;
+            self.embedded = false;
+            self.embedded_sha8 = String::new();
             self.widest_no = 0;
             self.widest_lines = String::new();
             self.forget_selection();

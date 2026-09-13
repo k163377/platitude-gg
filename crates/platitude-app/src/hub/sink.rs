@@ -273,6 +273,7 @@ impl SessionSink for BridgeSink {
                 fingerprint,
                 endings,
                 marks,
+                embedded,
             } => {
                 // Kept rather than replaced, unlike every other feed here:
                 // rows and colours are two messages of one diff, and two
@@ -283,10 +284,11 @@ impl SessionSink for BridgeSink {
                 self.feeds.diff.push(DiffMsg::Loaded {
                     target,
                     patches,
-                    preview,
+                    preview: preview.map(Box::new),
                     fingerprint,
                     endings,
                     marks,
+                    embedded,
                 });
             }
             SessionEvent::DiffColoured {

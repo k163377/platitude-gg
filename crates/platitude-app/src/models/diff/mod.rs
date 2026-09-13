@@ -132,6 +132,15 @@ pub struct DiffModel {
     /// two sides is gone, so there is no third thing to compare. There are
     /// no rows, and the absence is the answer rather than a failure.
     unmerged: bool,
+    /// The path is a repository of its own sitting in the working copy.
+    /// git will not open it, so there are no rows and never will be; what
+    /// the pane says instead is what a stage of it would record
+    /// (`platitude_core::details::embedded`).
+    embedded: bool,
+    /// The commit that stage would point at, as the 8 characters every
+    /// other hash on screen is shown by. Empty where the repository has
+    /// no commit yet — which is also the case `git add` refuses.
+    embedded_sha8: String,
     loading: bool,
     /// Whether the colours for the rows on screen have arrived and been
     /// laid over them. False from the moment a file is asked for, and it

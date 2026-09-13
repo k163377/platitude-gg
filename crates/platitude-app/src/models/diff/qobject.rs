@@ -17,6 +17,8 @@ impl DiffModel {
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
     qproperty!("isCombined", Member = is_combined, Notify = changed);
     qproperty!("unmerged", Member = unmerged, Notify = changed);
+    qproperty!("embedded", Member = embedded, Notify = changed);
+    qproperty!("embeddedSha8", Member = embedded_sha8, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
     qproperty!("coloured", Member = coloured, Notify = changed);
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
@@ -269,6 +271,8 @@ impl DiffModel {
         self.is_new_file = false;
         self.is_combined = false;
         self.unmerged = false;
+        self.embedded = false;
+        self.embedded_sha8 = String::new();
         self.loading = false;
         self.fingerprint = String::new();
         self.coloured = false;
@@ -314,6 +318,7 @@ impl DiffModel {
                     fingerprint,
                     endings,
                     marks,
+                    embedded,
                     ..
                 } => {
                     self.loading = false;
@@ -321,9 +326,16 @@ impl DiffModel {
                     self.is_new_file = is_new_file(&patches);
                     self.is_combined = is_combined(&patches);
                     self.unmerged = is_unmerged_only(&patches);
+                    self.embedded = embedded.is_some();
+                    // The same 8 characters every other hash on screen is
+                    // shown by; empty for a repository with no commit yet.
+                    self.embedded_sha8 = match embedded {
+                        Some(platitude_core::details::Embedded::On(oid)) => oid.short_hex(8),
+                        _ => String::new(),
+                    };
                     self.fingerprint = format!("{fingerprint:016x}");
                     self.apply_endings(endings.as_ref());
-                    self.apply_preview(preview.as_ref());
+                    self.apply_preview(preview.as_deref());
                     self.shown_has_preview = preview.is_some();
                     self.shown = Some(patches);
                     self.shown_marks = marks;

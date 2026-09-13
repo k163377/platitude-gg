@@ -91,6 +91,21 @@ ColumnLayout {
         oldSize: notices.diffModel.previewOldSize
         newSize: notices.diffModel.previewNewSize
     }
+    // -- a git repository of its own, sitting in the working copy. git will not open it, so there is no patch here and
+    //    never will be. The line names the thing and says which commit it stands on — the same commit staging the row
+    //    would record (core `details::embedded`). **What that costs is git's to say**, not this line's: the warning and
+    //    the hint land in the command log the moment the row is staged (デザイン規約 §作業コピーの中の別リポジトリ / §長さ). The
+    //    binary notice's seat and voice, like the others here.
+    Label {
+        visible: notices.diffModel.embedded
+        Layout.margins: Theme.spaceSm
+        Layout.fillWidth: true
+        elide: Text.ElideRight
+        text: notices.diffModel.embeddedSha8 !== ""
+            ? qsTr("Embedded git repository · on %1").arg(notices.diffModel.embeddedSha8)
+            : qsTr("Embedded git repository · no commits yet")
+        color: Theme.textMuted
+    }
     // -- a diff whose body is empty. git prints headers and no hunks for a rename that changed nothing, for a mode-only
     //    change and for an empty file added, and a pane that answers all three with a blank frame reads as one that
     //    failed to load. The binary notice's seat and voice: one line about the file rather than about anything in it.
@@ -99,8 +114,8 @@ ColumnLayout {
     //    show, and git is not asked a second question to find out why.
     Label {
         visible: notices.rowCount === 0 && !notices.diffModel.loading && !notices.diffModel.isBinary
-                 && !notices.diffModel.unmerged && notices.diffModel.previewKind === ""
-                 && notices.diffModel.title !== ""
+                 && !notices.diffModel.unmerged && !notices.diffModel.embedded
+                 && notices.diffModel.previewKind === "" && notices.diffModel.title !== ""
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
         elide: Text.ElideRight
