@@ -209,6 +209,9 @@ fn clock(took: std::time::Duration) -> String {
 /// running one.
 const INFLIGHT: &str = "xtask-inflight-";
 
+/// Where cargo writes the binary the slot is linked to.
+const DEPS: &str = "deps";
+
 /// Frees the cargo build slot this process occupies, when the slot is one
 /// of `trees`'.
 ///
@@ -220,11 +223,18 @@ const INFLIGHT: &str = "xtask-inflight-";
 /// being one that cannot be replaced, before its first step. (The hook's
 /// verdict builds nothing here: it runs from `target/hooks`, a slot of
 /// its own.) Renaming one is allowed on both systems, so this process
-/// moves out of the name and runs on from the copy beside it — which
-/// usually goes at once, Windows included: cargo's slot is a hard link
-/// to the binary in `deps/`, and a link the loader is running can be
-/// unlinked while the other link stands. What is left standing where it
-/// cannot (a slot cargo copied rather than linked) waits for the next
+/// moves out of the name and runs on from the copy beside it.
+///
+/// **Out of every name this image answers to, not just the one it was
+/// started from.** cargo writes the binary under `deps/` with a hash in
+/// its name and hard-links the slot to it, so the image the loader holds
+/// stands under two names and the linker's next `CREATE_ALWAYS` is
+/// refused at whichever of them is still there. Freeing the slot alone
+/// leaves the link step of the gate's first `cargo build -p xtask` to
+/// stop at the other (`LNK1104`), which is a landing that has already
+/// rebased and cannot go on ([`names_of_this_image`]).
+///
+/// What is left standing where it cannot be moved waits for the next
 /// landing's sweep. Silent when this binary is in nobody's way; a move
 /// that fails says so rather than leaving the cargo error it was meant to
 /// explain to arrive unannounced.
@@ -236,26 +246,79 @@ fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     }
     let dir = exe.parent()?;
     sweep(dir);
-    let mut aside = dir.join(format!("{INFLIGHT}{}", std::process::id()));
-    if let Some(extension) = exe.extension() {
-        aside.set_extension(extension);
+    sweep(&dir.join(DEPS));
+    let mut stood = Vec::new();
+    let mut freed = Vec::new();
+    for (at, name) in names_of_this_image(&exe, dir).iter().enumerate() {
+        match step_aside(name, at) {
+            Ok(()) => freed.push(name.display().to_string()),
+            Err(why) => stood.push(format!("{} ({why})", name.display())),
+        }
     }
-    if let Err(why) = std::fs::rename(&exe, &aside) {
+    if !stood.is_empty() {
         return Some(format!(
-            "note: this task runner is still standing in {} ({why}) — a step that has to rebuild \
-             it there will stop at the running image.",
-            exe.display()
+            "note: this task runner is still standing in {} — a step that has to rebuild it there \
+             will stop at the running image.",
+            stood.join(", ")
         ));
     }
-    let _ = std::fs::remove_file(&aside);
     Some(format!(
         "stepped out of {} — the landing rebuilds the task runner there, and a running image \
          cannot be replaced.",
-        exe.display()
+        freed.join(", ")
     ))
 }
 
-/// Takes away what earlier landings left in the slot's directory —
+/// Every name in this tree's build directory that cargo writes this
+/// binary under: the slot the run was started from, and the hashed names
+/// in `deps/` the slot is linked to.
+///
+/// **Named rather than identified.** Asking the file system which entry
+/// is this very file wants an inode, and Windows only offers one through
+/// an unstable interface; the names are cargo's own and confined to one
+/// tree's build directory, which answers the same question. A hash that
+/// is not the one in use is an older build of this binary, and taking
+/// the name away costs the link cargo is about to make anyway.
+fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut names = vec![exe.to_path_buf()];
+    let Ok(entries) = std::fs::read_dir(dir.join(DEPS)) else {
+        return names;
+    };
+    for entry in entries.flatten() {
+        if cargo_writes_this_binary_at(&entry.file_name().to_string_lossy()) {
+            names.push(entry.path());
+        }
+    }
+    names
+}
+
+/// Whether a name in `deps/` is one cargo writes this binary under:
+/// `xtask` or `xtask-<hash>`, carrying the platform's executable suffix
+/// and nothing else — the `.d` and `.pdb` beside it are not images, and
+/// an aside an earlier landing left is already swept.
+fn cargo_writes_this_binary_at(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(std::env::consts::EXE_SUFFIX) else {
+        return false;
+    };
+    (stem == "xtask" || stem.starts_with("xtask-"))
+        && !stem.contains('.')
+        && !name.starts_with(INFLIGHT)
+}
+
+/// Moves one name off the image and takes the name away. `at` keeps the
+/// asides apart where this image answers to more than one name.
+fn step_aside(name: &std::path::Path, at: usize) -> Result<(), std::io::Error> {
+    let dir = name.parent().unwrap_or(name);
+    let mut aside = dir.join(format!("{INFLIGHT}{}-{at}", std::process::id()));
+    if let Some(extension) = name.extension() {
+        aside.set_extension(extension);
+    }
+    std::fs::rename(name, &aside)?;
+    let _ = std::fs::remove_file(&aside);
+    Ok(())
+}
+
+/// Takes away what earlier landings left in a slot's directory —
 /// whichever of them the system will part with now.
 fn sweep(dir: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(dir) else {

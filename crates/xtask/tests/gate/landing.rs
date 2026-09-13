@@ -90,11 +90,20 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
 
+    // The slot as cargo leaves it: the image is written under `deps/`
+    // with a hash in its name, and the slot is a *hard link* to it. Both
+    // names are the linker's to replace on the next build, and a running
+    // image is refused under whichever of them is still there — so a
+    // landing that freed only the one it was started from would have the
+    // gate's first `cargo build -p xtask` stop at the other.
     let slot = sb.seat.join("target").join("debug");
-    std::fs::create_dir_all(&slot).expect("the build slot");
+    let deps = slot.join("deps");
+    std::fs::create_dir_all(&deps).expect("the build slot");
     let suffix = std::env::consts::EXE_SUFFIX;
+    let linked = deps.join(format!("xtask-a1b2c3d4e5f60718{suffix}"));
+    std::fs::copy(EXE, &linked).expect("the runner cargo wrote");
     let running = slot.join(format!("xtask{suffix}"));
-    std::fs::copy(EXE, &running).expect("the runner in the slot");
+    std::fs::hard_link(&linked, &running).expect("the slot cargo links to it");
     let left_behind = slot.join(format!("xtask-inflight-424242{suffix}"));
     std::fs::write(&left_behind, b"an earlier landing's image").expect("what Windows leaves");
 
@@ -104,6 +113,11 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     assert!(
         !running.exists(),
         "the slot the gate's cargo has to write is still taken:\n{text}"
+    );
+    assert!(
+        !linked.exists(),
+        "the name under `deps/` the slot was linked to is still the running image's, and the \
+         link step of the gate's first build is refused there:\n{text}"
     );
     assert!(
         !left_behind.exists(),
