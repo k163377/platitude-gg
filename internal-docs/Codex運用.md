@@ -115,7 +115,7 @@ cwd と `turn_context.model` を確認。`event_msg/token_count/info` の最後�
 **予防は失敗後のunlockではなく、取得前のidentity bridge**。IDがない場合は呼ばない。
 各shellは環境変数を引き継ぐとは限らないため、必要な呼び出しごとにbridgeする。
 共有アプリPIDや短命なshell PIDを所有者にしない。session IDだけのclaimには終了時の
-生存判定がないので、landしない終了時は同じIDで `cargo xtask seat release` を行う。
+生存判定がないので、landしない終了時は同じIDで <!--cmd:seat.release-->`cargo xtask seat release` を行う。
 未マージのcommit/dirtyはallocatorが引き続き保護する。
 
 ## 既存ファイルの変更提案（未実施）

@@ -40,11 +40,11 @@ cargo xtask seat
 Use the current task ID, never another session's ID. Do not invent `CLAUDE_PID`,
 use a short-lived shell PID, or use the shared desktop PID. Do not set `CLAUDECODE`.
 Keep `seat` argumentless; report its letter, branch, and absolute path immediately.
-Work only in the assigned tree. Apply the same identity bridge for `seat release`.
+Work only in the assigned tree. Apply the same identity bridge for <!--call:seat.release-->`seat release`.
 Follow `CLAUDE.md` for release, rebase, GUI launch, and land authorization.
 Before reporting a seat released, verify the unlock result and the worktree's
 lock state. A successful land is not proof of release: another or anonymous
-claim may remain. End without landing via `seat release`; committed work remains
+claim may remain. End without landing via <!--call:seat.release-->`seat release`; committed work remains
 on its branch and is still excluded from allocation until merged or discarded.
 
 If assignment fails, do not equate its generic message with a full roster. Check

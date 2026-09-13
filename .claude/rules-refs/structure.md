@@ -43,6 +43,18 @@
 - **`ui/GraphPane.qml` は出せる部品を全部出してある**(`GraphList` / `GraphFind` / `AskBar` / `NoticeBar` / `GraphRowWalk` / `GraphColumnMetrics` / `GraphColumnDividers` / `GraphLanePan` / `GraphLaneBar` / `GraphHeadPin` / `MiddleAutoScroll` / `GraphEmptyState`)。残っているのは**席の宣言と、ページ⇄子の転送**そのもの(alias と 1〜3 行の関数)で、**更に切り出せば転送が 1 段増えて全体では長くなる**。**席を持つ側だけは 1 つに居なければならない**理由も 2 つ在る: 上端の 2 本のバーとリストは互いの `bottom` に繋がっており(報せ → 質問 → 一覧)、hover を測る `HoverHandler` はペイン自身に置く決まり(app-ui.md)
 - **`ui/WipPane.qml` の残りは選択・ステージ・EOL 指しの機構** — 部品化済み(MessageEditor / OpExitCard / TreeViewToggle / **一覧の下の塊ぜんぶ = `WipCommitBlock`**)の外に残る全員が `wipList.itemAtIndex` 走査とデリゲート再利用前提の鍵(`<bucket>:<path>`)を共有し、`RepoPage`(`chosenRows` = menuFileCount)と自動化(`chooseOnly` / `rowAt` / `rowFor` / `pointEol`)がその API を直接叩く — **これ以上は list と鍵の渡し直し配線だけが増える**。EOL のカードと閉じ待ち(`eolAsked` / `eolKeep`)も同じ側: 席は `rowFor(path)` の行とペイン自身の座標で決まり、行とコミットボタンの 2 つの呼び手がそこを共有している
 
+## コマンドの正本(`cargo xtask docs` が読む。規約本体は rules/structure.md §共通化)
+
+- **宣言は実装モジュールの中**(`crates/xtask/src/command.rs` の `Command` を `pub(crate) static` で置き、そのモジュールの `COMMANDS` に並べる)。`crates/xtask/src/commands.rs` は所有者の索引だけで、定義を持たない — **1 コマンドの構文・用途・実行場所・前提条件・許可の参照先が 1 箇所**
+- **許可は参照であって再実装ではない** — `Permission::Escape` は hook の const(`hook::APPROVAL_FLAGS`)をそのまま持ち、`Permission::Permit` は `hook::permit` の判断を指すだけ。**宣言は実行許可ではない**(走ってよいかは常に hook がその場で判断する)
+- **id は操作の名前で、綴りではない** — verb の改名・モジュール移動・用途の書き換えで変えない。2 つの操作が同じ id を持たない。台帳は `crates/xtask/command-ids.txt`(`--sync` が書く。id が消えれば diff の削除行 + 赤)
+- **文書側の記法は 3 段**: 実行形(escape 付き・verb の後に語がある)は `` `<!--cmd:<id>-->` `` を直前に置き、続く inline code を `--sync` が書く / **`cargo xtask` を省く節**(CLAUDE.md ビルド・テストが宣言済み)は `` `<!--call:<id>-->` `` で call だけを書かせる — **escape 付きのコマンドに省略形は無い**(flag が落ちると許可が見えなくなるので拒む)/ 単なる名指し(`cargo xtask <verb>` だけ)は素のまま — verb が実在するかだけ見る。**id だけを書いて実行方法が読めない形にしない**
+- **Rust 側は型付きの参照**(`crate::gui::KILL.line()` / `.instruction()`)。deny 文・エラー文の中にコマンド行を書かない
+- **どのファイルを読むかは `docs/commands.rs` の `ROOTS` / `LOOSE` / `USAGE` / `DISPATCH` が持つ**(ここに書き写さない。`cargo xtask docs` の PASS 行が読んだ数を言う)。**理由が要る側だけここに書く** — コメント行と `#[cfg(test)]` 以降と `crates/xtask/tests/` を除くのは、コメントは生成できず、テストの行は judge への入力そのものだから。`ci/baseline` は起きた run の記録、`ci` / `packaging` は変数で組むシェル
+- **限界**(明示): **宣言に無い option の組み合わせは「例」**として verb しか見ない・前置き無しの 1 語は常に対象外(英語と区別できない)・fence の中は書き換えない(複合シェル行に marker は置けない)— 自然言語やシェルを完全に解析するものではない
+- **追加**: モジュールに `static` を足して `COMMANDS` に並べ、<!--cmd:docs.sync-->`cargo xtask docs --sync` で台帳を書き、usage ページにその verb の節を書く(option は節の中で名前を出す — 出ていなければ `docs` が赤くなる)
+- **改名・廃止**: 専用の変更として、文書・スキル・ソース・`.claude/settings.json`・hook の全参照を動かしてから `--sync`。過去の記録(ci/baseline・確認事項の履歴)は書き換えない
+
 ## 分割しない判断(閾値超過の理由の台帳 — 行が消えたら分割済み)
 
 - **この見出しの節は `cargo xtask structure` が機械で読む** — **ファイルの恒久免除になるのは行頭が `- **` + バッククォート付きパスの箇条書きだけ**(パス後方一致)。fn 単位の項のようにパスを文中で挙げるだけの行は免除にならない。太字を落とすと免除が外れて count が赤くなる(失敗の向きはこちら側で正しい)。見出し文字列を変えると免除が全部外れる(節が無い時はツールがエラーで止まる)。範囲は次の `## ` 見出しまで

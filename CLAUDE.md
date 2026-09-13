@@ -11,7 +11,7 @@
 - **依存(crate)と意匠素材の追加・変更は、ライセンス確認と人の許可が必須**。git 実装とネットワーク通信の依存は禁止(git 操作はシステム git のサブプロセス、通信は git コマンド経由のみ)。許可集合・例外・手順は [依存とライセンス.md](internal-docs/依存とライセンス.md)
 - UI はダークテーマ(青系)のみ。文言は英語のみ・ハードコード禁止(`qsTr()` 必須)
 - **内部コマンドと UI 表記は分ける** — 内部は最新 git の適切なコマンド(`switch` / `restore` 等)、UI 文言は「その操作が何をするか」で選ぶ。正本は [デザイン規約.md](internal-docs/デザイン規約.md) の用語表・§git 用語のコード表記
-- UI の値は `Theme.qml` / `Metrics.qml` のトークンのみ(**値の正本はこの 2 ファイル**。なぜその値かはトークンの隣に書く)。使い分けは [デザイン規約.md](internal-docs/デザイン規約.md) の該当 § を引き、**数値を検討・微調整しない**(表の値の列はソースからの引用 — `cargo xtask docs --sync` が書く)。数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
+- UI の値は `Theme.qml` / `Metrics.qml` のトークンのみ(**値の正本はこの 2 ファイル**。なぜその値かはトークンの隣に書く)。使い分けは [デザイン規約.md](internal-docs/デザイン規約.md) の該当 § を引き、**数値を検討・微調整しない**(表の値の列はソースからの引用 — <!--cmd:docs.sync-->`cargo xtask docs --sync` が書く)。数値・色・フォント名の直書き禁止。トークンの追加・変更には人間の承認が必要
 
 ## 技術スタック
 
@@ -24,15 +24,15 @@
 前提: Qt(qtbridge の要求以上)+ C++ ツールチェーン、Qt の `bin`(`qmake`)が PATH に(Ubuntu のディストリ Qt は `QMAKE=qmake6`、macOS は `DYLD_FRAMEWORK_PATH` に Qt の `lib`)。
 開発は debug ビルド。**`--release` は性能計測と起動確認だけ**だが、release でないと QML(exe 埋め込み)が反映されない。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**: **1 日常** = `gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木からテストを機械が選んで両 OS で回し、緑を commit にスタンプする — `land` と git hook がそのスタンプを要求)/ **3 フル** = `gate --all` + `linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時)。
+**確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木からテストを機械が選んで両 OS で回し、緑を commit にスタンプする — `land` と git hook がそのスタンプを要求)/ **3 フル** = `gate --all` + <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時)。
 
 **Done の基準は `gate` の PASS**。UI 配線の Done は **gate が選んだ動詞が両 OS で PASS し、両方の PNG を目視するまで**(手順・動詞表・罠は verify-ui スキルを必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(監視しない。手順と罠は verify-ui スキル §起動 fast path)。Done の基準は不変で、段 2 はユーザーが検証・反映を指示した時に走らせる
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ。最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
-- **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。**席は選ばない・与えられる**: `cargo xtask seat`(引数なし)が空き席を lock して letter と path を返すので、それを EnterWorktree に渡す(`seats` は状況を読む道具で、座る判断には使わない)。未マージの席は続きの仕事以外触らない。全席詰まりなら増設せず報告。**席は land が返す** — main へ反映した時点で letter は roster に戻り、そのまま作業を続ければ次の編集で claim が戻る(取られていたら `cargo xtask seat` をもう一度)。land しない終わり方で返すのは `cargo xtask seat release`。寝落ちの SessionEnd では claim は残る。**完了しても main へは戻さない**(§Git 運用)
+- **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。**席は選ばない・与えられる**: `cargo xtask seat`(引数なし)が空き席を lock して letter と path を返すので、それを EnterWorktree に渡す(`seats` は状況を読む道具で、座る判断には使わない)。未マージの席は続きの仕事以外触らない。全席詰まりなら増設せず報告。**席は land が返す** — main へ反映した時点で letter は roster に戻り、そのまま作業を続ければ次の編集で claim が戻る(取られていたら `cargo xtask seat` をもう一度)。land しない終わり方で返すのは <!--cmd:seat.release-->`cargo xtask seat release`。寝落ちの SessionEnd では claim は残る。**完了しても main へは戻さない**(§Git 運用)
 - **残件はチップに逃がさない** — 検証・掃除・後追いの修正はこのセッションの仕事。**チップは別セッションでしかできない物だけ**(別マシン・実ウィンドウ・このセッションでは得られない判断)で、書き残すだけなら `internal-docs/P<n>-確認事項.md` へ。**触っているファイルを claim するチップは deny**(出口は `hook pre-chip` / `hook stop` の文)
-- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ `PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの終了後も残るアプリプロセスや exe の使用中状態は `cargo xtask kill` で解消する(対象は自ツリーの残存プロセスのみ)。**窓のビルドがどのツリーのものかは右下が名乗る**
+- **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの終了後も残るアプリプロセスや exe の使用中状態は `cargo xtask kill` で解消する(対象は自ツリーの残存プロセスのみ)。**窓のビルドがどのツリーのものかは右下が名乗る**
 
 ## Rust 規約
 
@@ -57,7 +57,7 @@
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)。force push しない
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。指示があった時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
-- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示があり、下記の完了確認が済んだら `cargo xtask land <branch>`**(land 自身が席で rebase → gate → fast-forward する。main を書く git はセッションからは常に deny — land 一択)。**許可は発話 1 回 = main が動く land 1 回** — hook が「反映」を含むユーザー発話で開き、main を動かした land が閉じ、次の発話で消える(反映され / 反映済 / 反映前 / 未反映 / 反映漏れ / 反映するな は開かない。止まった land は許可を消費しないので、直してそのまま撃ち直す)。無ければ deny されるので「マージ可」で止まる
+- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示があり、下記の完了確認が済んだら <!--cmd:land.branch-->`cargo xtask land <branch>`**(land 自身が席で rebase → gate → fast-forward する。main を書く git はセッションからは常に deny — land 一択)。**許可は発話 1 回 = main が動く land 1 回** — hook が「反映」を含むユーザー発話で開き、main を動かした land が閉じ、次の発話で消える(反映され / 反映済 / 反映前 / 未反映 / 反映漏れ / 反映するな は開かない。止まった land は許可を消費しないので、直してそのまま撃ち直す)。無ければ deny されるので「マージ可」で止まる
 - **反映は依頼範囲の修正と確認を完了してから** — 適用中の指示・レビュー指摘・必要な docs 更新を照合し、既知の残件を完了して commit する。レビュー・検証はバックグラウンド分も結果を受け取り、指摘の対応と再確認が済むまで land を待つ。未実施の修正・確認を反映後に予定しない。最終 gate は land 内に集約する。外部確認・判断を待てない範囲変更はユーザーと合意する。**反映後に初めて判明した不備も修正・検証を続ける** — 席の所有権を確認して積み、未反映の branch/SHA と残件を報告する。再反映の許可待ちを修正停止や完了扱いの理由にしない。詳細は [反映前の完了確認](internal-docs/反映前テストの機械化.md#反映前の完了確認)
 - **本体 checkout への直コミットはしない** — ドキュメントも設定も規約も、その場でユーザーが本体への直接の変更を許可したケース以外は全部席で進める
 
@@ -70,7 +70,7 @@
 
 ## 規約の置き場所と本ファイルの運用
 
-- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。置き場所は冒頭の索引のとおり: 全セッション共通の不変条件 → 本ファイル(**15KB 以下を維持**)/ core・app・分割 → `.claude/rules/`(**本体は不変条件だけ。各論は `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行で追記** — `.claude/rules/` 配下は再帰スキャンで常時ロードされるため参照ファイルを置かない)/ 検証手順・動詞 → verify-ui スキル / 機械で守れる禁止事項 → `.claude/settings.json` の hooks(実体は xtask の `hook <event>`。ビルド先は `--profile hooks` = 席のビルドロックを待たない。理由は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md) §hook)
+- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。置き場所は冒頭の索引のとおり: 全セッション共通の不変条件 → 本ファイル(**15KB 以下を維持**)/ core・app・分割 → `.claude/rules/`(**本体は不変条件だけ。各論は `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行で追記** — `.claude/rules/` 配下は再帰スキャンで常時ロードされるため参照ファイルを置かない)/ 検証手順・動詞 → verify-ui スキル / 機械で守れる禁止事項 → `.claude/settings.json` の hooks(実体は xtask の <!--call:hook.event-->`hook <event>`。ビルド先は `--profile hooks` = 席のビルドロックを待たない。理由は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md) §hook)
 - コードから読み取れるアーキテクチャ説明は書かない。罠と決定事項のみ。**規約は動詞を言い、手順は hook の deny 文と分割先が言う** — 同じ手順を本ファイルに写さない
 - **バージョン番号をハードコードしない** — 依存は Cargo.toml / ロックファイル、製品要件は [実装計画.md](internal-docs/実装計画.md) が正(方針は「最新から開始」)
 - **増え続けるもの(機能一覧・確認事項・実測値)は本ファイルに置かない**。索引だけを置き、実体は分割先へ
