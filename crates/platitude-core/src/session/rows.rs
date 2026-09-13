@@ -34,6 +34,7 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
         labels: Vec::new(),
         stash_ref: String::new(),
         published,
+        carried: None,
         // The edges this row draws are leashes, not parenthood.
         parents: Box::default(),
     }
@@ -61,6 +62,7 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
         labels: Vec::new(),
         stash_ref: String::new(),
         published,
+        carried: None,
         // As above: the dashed edges to HEAD and to each incoming side
         // are drawn, not walked.
         parents: Box::default(),
@@ -233,5 +235,66 @@ fn make_row(
         published,
         // Sifted, so a stash carries the one edge it draws (`sift_batch`).
         parents: commit.parents.clone(),
+        carried: None,
+    }
+}
+
+/// The rows the other working copies get, handed out as the walk reaches
+/// what each of them is standing on.
+///
+/// **A row stands above every synthetic row landing on the same commit**
+/// — uncommitted work is what is about to become a commit and a stash is
+/// not, so it is asked for at whichever arrives first: the
+/// commit itself, or a stash built on it. Not "directly above the
+/// commit": a stash on the same commit sorts above it by date, and the
+/// row would come out under it.
+///
+/// **A copy whose commit the walk never reaches draws nothing.** The rows
+/// are handed out by the walk rather than laid over it afterwards, so a
+/// HEAD outside the window is a row that simply never comes.
+pub(super) struct CarriedRows(Vec<crate::session::Carried>);
+
+impl CarriedRows {
+    pub(super) fn new(carried: &[crate::session::Carried]) -> Self {
+        Self(carried.to_vec())
+    }
+
+    /// The rows owed to a stream entry, in the order the listing had them.
+    /// Each copy is handed out once: the anchor is the commit a row lands
+    /// on, and a stash asks with the base it was built on.
+    pub(super) fn take_for(
+        &mut self,
+        item: &StreamItem,
+        builder: &mut GraphBuilder,
+    ) -> Vec<LogRow> {
+        let anchor = match item.stash_ref {
+            Some(_) => match item.meta.parents.first() {
+                Some(base) => *base,
+                None => return Vec::new(),
+            },
+            None => item.meta.oid,
+        };
+        let mut out = Vec::new();
+        // `retain` rather than a filter: a copy handed out here is gone
+        // from the set, so a stash and its base cannot both draw it.
+        self.0.retain(|wip| {
+            if wip.head != anchor {
+                return true;
+            }
+            let mut row = wip_row(&wip.head, &[], builder);
+            row.labels = vec![RefLabel {
+                text: wip.name.clone(),
+                kind: LabelKind::Worktree,
+                has_remote: false,
+                is_head: false,
+                here: true,
+                remote: String::new(),
+                held_elsewhere: false,
+            }];
+            row.carried = Some(wip.clone());
+            out.push(row);
+            false
+        });
+        out
     }
 }

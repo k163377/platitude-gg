@@ -62,6 +62,7 @@ impl RowPrint {
             published,
             stash_ref,
             parents,
+            carried,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
         row.hash(&mut h);
@@ -93,6 +94,16 @@ impl RowPrint {
         // warnings would stay as they were.
         published.hash(&mut h);
         parents.hash(&mut h);
+        // A copy over there staging one more file moves nothing else on
+        // its row — the id is the all-zero one whatever it is holding.
+        if let Some(carried) = carried {
+            carried.name.hash(&mut h);
+            carried.head.hash(&mut h);
+            let k = &carried.kinds;
+            (k.added, k.modified, k.deleted).hash(&mut h);
+            (k.renamed, k.copied, k.conflicted).hash(&mut h);
+        }
+        carried.is_some().hash(&mut h);
         h.finish()
     }
 
@@ -164,6 +175,7 @@ mod tests {
             stash_ref: String::new(),
             published: false,
             parents: Box::from([oid('b')]),
+            carried: None,
         };
         let print = RowPrint::of(&base);
 
@@ -188,6 +200,19 @@ mod tests {
             ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
             ("published", Box::new(|r| r.published = true)),
             ("parents", Box::new(|r| r.parents = Box::from([oid('c')]))),
+            (
+                "carried",
+                Box::new(|r| {
+                    r.carried = Some(crate::session::Carried {
+                        name: "wt".into(),
+                        head: oid('d'),
+                        kinds: crate::status::Kinds {
+                            modified: 1,
+                            ..crate::status::Kinds::default()
+                        },
+                    })
+                }),
+            ),
         ];
         for (field, change) in moved {
             let mut row = base.clone();

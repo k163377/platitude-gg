@@ -60,6 +60,7 @@ use crate::tag;
 mod author;
 mod auto_fetch;
 mod build;
+mod carried;
 mod chips;
 mod details_read;
 mod eol;
@@ -102,6 +103,7 @@ mod write;
 mod write_order;
 
 pub use auto_fetch::OpenFetch;
+pub use carried::Carried;
 pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
 pub use event::SessionEvent;
 use feed::CommandFeed;

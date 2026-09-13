@@ -508,5 +508,8 @@ impl RepoSession {
         self.refresh_status();
         self.refresh_stashes();
         self.refresh_worktrees();
+        // The window coming back is the moment the other copies are most
+        // likely to have moved, so their own tick is not waited out.
+        self.refresh_carried();
     }
 }

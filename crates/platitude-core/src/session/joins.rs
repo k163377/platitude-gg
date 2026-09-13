@@ -558,7 +558,7 @@ pub(super) struct WorktreeNews {
 /// What a working copy is called: the last segment of its path, which is
 /// what its WORKTREES row shows (`models::nav`). git prints these paths
 /// with its own separator, so both are cut on.
-fn shown_name(path: &str) -> crate::Name {
+pub(super) fn shown_name(path: &str) -> crate::Name {
     path.rsplit(['/', '\\'])
         .find(|part| !part.is_empty())
         .unwrap_or(path)
@@ -568,6 +568,6 @@ fn shown_name(path: &str) -> crate::Name {
 /// How two spellings of one folder are compared. git prints worktree
 /// paths its own way and the session holds the platform's, which differ
 /// in separator on Windows and in case on both Windows and macOS.
-fn same_path_key(path: &str) -> String {
+pub(super) fn same_path_key(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }

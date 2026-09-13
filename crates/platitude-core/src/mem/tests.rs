@@ -59,6 +59,7 @@ fn nested_rows_add_up() {
         stash_ref: String::new(),
         published: false,
         parents: Box::from([crate::Oid::from_hex_str(&"1".repeat(40)).unwrap()]),
+        carried: None,
     };
     let nested = 70 + size_of::<crate::Oid>();
     assert_eq!(row.heap_bytes(), nested);

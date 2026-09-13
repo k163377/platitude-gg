@@ -253,4 +253,14 @@ pub struct LogRow {
     /// half no single row's mark can answer
     /// ([`crate::publish::range_rewrites_published`]).
     pub parents: Box<[Oid]>,
+    /// The other working copy this row is about, where it is not this
+    /// window's own. `None` on every commit, on a stash, and on this
+    /// window's own uncommitted row.
+    ///
+    /// **This is the row's identity, not a flag.** Every uncommitted row
+    /// carries the all-zero id — git's own way of saying there is no
+    /// object here, which is true of all of them — so what tells two of
+    /// them apart is the copy each is about, and the one this window is
+    /// open on is the one with nothing here (`session::carried`).
+    pub carried: Option<super::Carried>,
 }

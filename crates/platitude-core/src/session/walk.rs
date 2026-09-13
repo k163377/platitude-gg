@@ -58,6 +58,7 @@ impl RepoSession {
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut sifter = Sifter::new(&stash_refs);
+        let mut carried = super::rows::CarriedRows::new(&self.carried());
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
         let mut totals = LogTotals {
@@ -91,7 +92,7 @@ impl RepoSession {
                 if pending.len() >= threshold {
                     let items = sifter.take(&mut pending);
                     first_sent = true;
-                    self.emit_rows(generation, &items, parser.pool(), &mut totals);
+                    self.emit_rows(generation, &items, parser.pool(), &mut totals, &mut carried);
                 }
             })
             .await;
@@ -104,7 +105,7 @@ impl RepoSession {
             .map_err(|e| unreadable_walk(e.to_string()))?;
         if !pending.is_empty() {
             let items = sifter.take(&mut pending);
-            self.emit_rows(generation, &items, parser.pool(), &mut totals);
+            self.emit_rows(generation, &items, parser.pool(), &mut totals, &mut carried);
         }
         totals.walked = sifter.walked;
         Ok(totals)
@@ -167,6 +168,7 @@ impl RepoSession {
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut sifter = Sifter::new(&stash_refs);
+        let mut carried = super::rows::CarriedRows::new(&self.carried());
         let mut parse_error: Option<String> = None;
 
         let result = self
@@ -181,6 +183,9 @@ impl RepoSession {
                     return;
                 }
                 for item in &sifter.take(&mut pending) {
+                    for row in carried.take_for(item, builder) {
+                        out.push(row);
+                    }
                     let row = item.row(parser.pool(), builder, marks);
                     totals.note_row(&item.meta.oid, row.published);
                     out.push(row);
@@ -194,6 +199,9 @@ impl RepoSession {
             .finish()
             .map_err(|e| unreadable_walk(e.to_string()))?;
         for item in &sifter.take(&mut pending) {
+            for row in carried.take_for(item, builder) {
+                out.push(row);
+            }
             let row = item.row(parser.pool(), builder, marks);
             totals.note_row(&item.meta.oid, row.published);
             out.push(row);
@@ -282,6 +290,7 @@ impl RepoSession {
         batch: &[StreamItem],
         pool: &crate::model::StrPool,
         totals: &mut LogTotals,
+        carried: &mut super::rows::CarriedRows,
     ) {
         let tags = self.tags_shown();
         let Some(mut guard) = self.store_shared() else {
@@ -294,6 +303,9 @@ impl RepoSession {
         let mut rows = Vec::with_capacity(batch.len());
         for item in batch {
             let shared = &mut *shared;
+            for row in carried.take_for(item, &mut shared.builder) {
+                rows.push(row);
+            }
             let mut row = item.row(pool, &mut shared.builder, &mut shared.publish_marks);
             totals.note_row(&item.meta.oid, row.published);
             let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
