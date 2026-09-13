@@ -235,7 +235,22 @@ impl GraphBuilder {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
-        let color = self.take_color();
+        // **A row drawn here may not spend a palette slot that reaches
+        // nobody.** Where a lane is already waiting for the commit this
+        // one leashes to — another copy standing where this window
+        // stands, a stash taken on the same commit — the commit comes out
+        // in that lane's colour whatever this row takes, so a fresh one
+        // would be handed to no chain at all and move every chain opened
+        // after it one step along the palette (`take_color` is a round
+        // robin). Measured against the demo's own shape: a second row on
+        // HEAD moved two chains under it (`leash_tests`). Where nothing
+        // waits yet, the commit is a tip and this row is taking the
+        // colour that tip would have taken, which is what it then
+        // inherits — the shape this window's own row has always had.
+        let color = match self.color_waiting_for(parent) {
+            Some(borrowed) => borrowed,
+            None => self.take_color(),
+        };
         let mut segments = Vec::new();
         for (i, state) in self.lanes.iter().enumerate() {
             let Some(state) = state else { continue };
@@ -309,6 +324,19 @@ impl GraphBuilder {
             .filter(|l| !self.is_leash(**l))
             .min_by_key(|l| (l.abs_diff(near), **l))
             .copied()
+    }
+
+    /// Whether a lane carries a synthetic leash rather than real history.
+    /// The colour the commit a row lands on will come out in, where a
+    /// lane is already waiting for that commit.
+    ///
+    /// A commit takes the lowest lane that was waiting for it
+    /// ([`Self::push_with_edge_style`]), so that lane's colour is the one
+    /// it will be drawn in — and a leash that borrows it is drawn beside
+    /// its own chain rather than beside a colour nothing else uses.
+    fn color_waiting_for(&self, parent: &Oid) -> Option<u8> {
+        let lane = self.expects.get(parent)?.iter().min()?;
+        Some(self.lane_color(*lane))
     }
 
     /// Whether a lane carries a synthetic leash rather than real history.

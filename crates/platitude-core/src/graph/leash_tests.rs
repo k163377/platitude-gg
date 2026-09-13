@@ -54,6 +54,71 @@ fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
     assert_eq!(unborn.tracked_oids(), 0, "nothing to wait for either");
 }
 
+/// **Another working copy going dirty may not repaint history.** Its row
+/// is drawn above the commit that copy is standing on, and every commit
+/// on screen has to come out in the lane and the colour it had without
+/// it: a copy picked up on window focus would otherwise re-colour chains
+/// under the reader's eyes (デザイン規約 / P3-確認事項 §別 worktree の未
+/// コミット行).
+///
+/// Both ends of the walk are covered — a commit a lane is already waiting
+/// for (`08`, the branch's own tip is below it) and one nothing waits for
+/// (`09`, a tip of its own).
+#[test]
+fn a_row_for_another_copy_moves_no_lane_and_no_colour() {
+    fn lanes_and_colours(insert_above: &[u8]) -> Vec<(u8, u16, u8)> {
+        let mut pool = StrPool::new();
+        let mut b = GraphBuilder::new();
+        // **The demo's own shape, in the order the walk emits it**
+        // (`demo-repo basic`, read off `git log --date-order` with the
+        // tips the walk is given): this window's row, the stash on HEAD,
+        // HEAD, the remote-only tip that is HEAD's *sibling*, their
+        // shared parent, the topic branch, and the trunk under both.
+        b.push_virtual(&oid(2));
+        let history = [
+            (commit(&mut pool, 1, &[2]), true),
+            (commit(&mut pool, 2, &[3]), false),
+            (commit(&mut pool, 4, &[3]), false),
+            (commit(&mut pool, 3, &[5]), false),
+            (commit(&mut pool, 6, &[7]), false),
+            (commit(&mut pool, 7, &[5]), false),
+            (commit(&mut pool, 5, &[8]), false),
+            (commit(&mut pool, 8, &[]), false),
+        ];
+        let mut out = Vec::new();
+        for (c, is_stash) in &history {
+            let id = c.oid.as_bytes()[0];
+            if insert_above.contains(&id) {
+                b.push_virtual(&c.oid);
+            }
+            let row = b.push_with_edge_style(c, *is_stash);
+            out.push((id, row.node_lane, row.node_color));
+        }
+        out
+    }
+    let plain = lanes_and_colours(&[]);
+    assert_eq!(
+        lanes_and_colours(&[4]),
+        plain,
+        "a row over the sibling tip moved the history under it"
+    );
+    assert_eq!(
+        lanes_and_colours(&[6]),
+        plain,
+        "a row over the topic tip moved the history under it"
+    );
+    assert_eq!(
+        lanes_and_colours(&[4, 6]),
+        plain,
+        "two rows moved the history under them"
+    );
+    assert_eq!(
+        lanes_and_colours(&[2]),
+        plain,
+        "a row over HEAD, where this window's own row already leashes, moved it"
+    );
+}
+
 #[test]
 fn virtual_wip_row_takes_lane_zero_and_dashes_its_edge() {
     let mut pool = StrPool::new();
