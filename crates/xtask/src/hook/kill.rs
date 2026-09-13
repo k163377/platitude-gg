@@ -20,10 +20,11 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
          \"This kill reaches by image name, so it takes every seat's runs \
          and the user's own window with it. The exe lock and the \
          second-instance gate both come from THIS tree's own stale run: \
-         `cargo xtask kill` reaps exactly those (processes whose exe lives \
-         under this tree) and nothing else. If the user asked to kill the \
-         others in so many words, run the same command again with \
-         {PROCESS_STOP_APPROVAL_FLAG}=1 in front of it.\"}}}}"
+         `{}` reaps exactly those (processes whose exe lives under this \
+         tree) and nothing else. If the user asked to kill the others in so \
+         many words, run the same command again with \
+         {PROCESS_STOP_APPROVAL_FLAG}=1 in front of it.\"}}}}",
+        crate::gui::KILL.line()
     );
     Ok(true)
 }

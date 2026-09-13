@@ -68,12 +68,13 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
          \"Starting the app this way from a worktree takes something the \
          sessions beside it need: {}. Headless verification takes nothing: \
-         use `cargo xtask verify-ui <verb>` or `cargo xtask linux verify-ui \
-         <verb>`; those commands provide the automation and parent kill guard. \
-         Offscreen QPA alone does not supervise a raw app process. If the \
-         user asked for a real window in so many words, run the same command \
-         again with {}=1 in front of it.\"}}}}",
+         use {} or `{}`; those commands provide the automation and parent \
+         kill guard. Offscreen QPA alone does not supervise a raw app \
+         process. If the user asked for a real window in so many words, run \
+         the same command again with {}=1 in front of it.\"}}}}",
         objections.join("; "),
+        crate::verify::UI.instruction(),
+        crate::linux::VERIFY.line(),
         GUI_APPROVAL_FLAG
     );
     Ok(true)
@@ -144,12 +145,12 @@ fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
                 .to_string(),
         );
     }
-    objections.push(
+    objections.push(format!(
         "it launches the app without a parent watchdog; offscreen QPA alone \
-         does not bound the process lifetime — use `cargo xtask verify-ui \
-         <verb>` or `cargo xtask linux verify-ui <verb>`"
-            .to_string(),
-    );
+         does not bound the process lifetime — use `{}` or `{}`",
+        crate::verify::UI.line(),
+        crate::linux::VERIFY.line()
+    ));
     if let Some(exe) = launch.exe {
         let resolved = resolve(cwd, exe);
         if !resolved.to_lowercase().starts_with(&root.to_lowercase()) {

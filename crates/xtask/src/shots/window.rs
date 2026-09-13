@@ -108,7 +108,10 @@ pub(super) fn how_to_see_it(board: &Path) -> String {
             "a window is open (seat {}) — F5 there and read from the top down",
             open.named_seat()
         ),
-        None => "no window open yet — `cargo xtask shots open` opens the one".to_string(),
+        None => format!(
+            "no window open yet — `{}` opens the one",
+            super::OPEN.line()
+        ),
     }
 }
 

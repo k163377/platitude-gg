@@ -129,14 +129,15 @@ impl Offence {
         match self {
             Offence::WritesMain { .. } | Offence::Landing => format!(
                 "{what} would write refs/heads/main by hand, and a session does not — \
-                 whatever stands in front of the line. `cargo xtask land <branch>` is the \
-                 one way a branch reaches main (CLAUDE.md Git 運用): it rebases the branch \
-                 in its seat, gates it, fast-forwards main where main actually is (a \
-                 hand-typed merge inherits whatever HEAD the primary checkout happens to \
-                 be on), and runs only on the permit the user's own message opened by \
-                 asking for it (反映). If the user asked for this landing, run `cargo \
-                 xtask land <branch>`; otherwise leave the work on its branch and report \
-                 it as ready to merge."
+                 whatever stands in front of the line. {} is the one way a branch reaches \
+                 main (CLAUDE.md Git 運用): it rebases the branch in its seat, gates it, \
+                 fast-forwards main where main actually is (a hand-typed merge inherits \
+                 whatever HEAD the primary checkout happens to be on), and runs only on \
+                 the permit the user's own message opened by asking for it (反映). If the \
+                 user asked for this landing, run `{}`; otherwise leave the work on its \
+                 branch and report it as ready to merge.",
+                crate::land::LAND.instruction(),
+                crate::land::LAND.line()
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \

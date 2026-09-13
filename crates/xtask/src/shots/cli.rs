@@ -169,11 +169,11 @@ fn add(args: &[String]) -> Result<(), String> {
             // reaches for it is told where the board is read instead of
             // "unknown option".
             "--open" => {
-                return Err(
+                return Err(format!(
                     "shots add: --open is gone — the board is read in one window, \
-                            already open or opened once with `cargo xtask shots open`"
-                        .to_string(),
-                );
+                     already open or opened once with `{}`",
+                    super::OPEN.line()
+                ));
             }
             other if other.starts_with("--") => {
                 return Err(format!("shots add: unknown flag {other}"));
