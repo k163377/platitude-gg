@@ -9,9 +9,8 @@
 //!   that stopped before main moved (a dirty seat, a red gate, a rebase
 //!   that halted) fulfilled nothing, and the ask stands until one does;
 //! * it asked, and a landing moved main on it — spent. The land verb
-//!   writes this at the fast-forward (`landed`). Whatever is committed
-//!   after that is content the user has not asked to see on main, and a
-//!   second landing is refused until the user asks again;
+//!   writes this at the fast-forward (`landed`). Corrections can still
+//!   be finished and verified, but a second landing needs another ask;
 //! * it did not ask — closed. A correction, an answer to a question, an
 //!   approval of something else: none carries an earlier ask forward. A
 //!   message that asks again opens it again.
@@ -80,8 +79,8 @@ struct Permit {
 }
 
 /// UserPromptSubmit: the user's message opens or closes the permit; a
-/// prompt that is not the user's leaves it as it stands. Nothing is
-/// printed — the answer is given when a landing asks for it.
+/// prompt that is not the user's leaves it as it stands. An open ask
+/// supplies the completion check before the session starts landing.
 pub(super) fn prompt_submit(input: &str, prompt: &str) {
     if !is_the_users_own(prompt) {
         return;
@@ -99,6 +98,22 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
         excerpt: excerpt(prompt),
     };
     store(&path, &permit);
+    if permit.standing == Standing::Open {
+        println!(
+            "Before landing, reconcile the current request and earlier applicable instructions \
+             with the work on the branch: implementation, review findings, necessary docs and \
+             verification. Read the relevant session record if context is missing. Wait for \
+             all requested reviews and checks, including background tasks, to complete; read \
+             their results, resolve findings and finish required rechecks before invoking land. \
+             Starting a check, silence or elapsed time is not completion. Finish and \
+             commit known remaining work before `cargo xtask land`; a clean tree or green gate \
+             alone does not establish completeness. If a required decision or external check \
+             is unavailable, report it before landing and obtain agreement on the reduced scope. \
+             When the work is complete, land directly; its gate performs the final verification. \
+             If a necessary correction is discovered after landing, finish and verify it in a \
+             claimed seat, then report its unlanded branch/SHA and request another landing."
+        );
+    }
 }
 
 /// PreToolUse: whether `what` — the landing verb — is refused for want
@@ -124,19 +139,34 @@ pub(crate) fn landed(dir: &str, session: &str) {
     }
 }
 
-/// Stop: the ask this turn ends without meeting, for the user's eyes —
-/// the latest message asked for main and no landing has moved it. The
-/// caller says it only over a seat still ahead of main; over an empty
-/// one there is nothing left to land, whatever the message said.
+/// Stop: distinguish an unfulfilled landing from work left after one.
+/// Dirty files count even when HEAD is already on main; they have not
+/// reached the gate's committed-tip standing yet.
 pub(super) fn unmet(input: &str) -> Option<String> {
     let permit = load(&permit_path(input)?)?;
-    (permit.standing == Standing::Open).then(|| {
-        format!(
+    if permit.standing == Standing::Closed {
+        return None;
+    }
+    let cwd = string_field(input, "cwd")?;
+    let ahead = crate::seats::commits_in(&cwd, "main..HEAD")?;
+    let dirty = crate::seats::dirty_lines(&cwd)?;
+    if ahead == 0 && dirty == 0 {
+        return None;
+    }
+    let remaining = format!("{ahead} commit(s) not on main and {dirty} uncommitted file(s)");
+    Some(match permit.standing {
+        Standing::Open => format!(
             "permit: the user's message 「{}」 ({}) asked for main (反映), and this turn ends \
-             without a landing having moved it — the work is still on its branch.",
+             without a landing having moved it — {remaining} remain in {cwd}.",
             permit.excerpt,
             ago(permit.asked_at)
-        )
+        ),
+        Standing::Spent => format!(
+            "permit: work remains after the landing: {remaining} in {cwd}. Finish necessary \
+             corrections and verification, report the unlanded branch/SHA and remaining work, \
+             and request another landing; do not report the whole request as landed."
+        ),
+        Standing::Closed => return None,
     })
 }
 
@@ -167,8 +197,9 @@ fn asks_for_main(prompt: &str) -> bool {
 /// The refusal, by what the permit says. Every form ends the same way,
 /// because the way out is the same: the branch stays, the user reads.
 fn refusal(what: &str, permit: Option<&Permit>) -> String {
-    let report = "Leave the work on its branch, report it as ready to merge \
-                  (「worktree-<seat> に積んだ。マージ可」) and end the turn";
+    let report = "Finish necessary corrections and verification in a claimed seat. Leave the \
+                  work on its branch and report the unlanded branch/SHA and any remaining work; \
+                  say マージ可 only when the work is complete and the gate passed";
     match permit {
         Some(Permit {
             standing: Standing::Spent,
@@ -176,8 +207,7 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
             excerpt,
         }) => format!(
             "{what} would move main a second time on one message. The user's message \
-             「{excerpt}」 ({}) asked for one landing, and that landing moved main; whatever \
-             has been committed since is content the user has not asked to see there. \
+             「{excerpt}」 ({}) asked for one landing, and that landing moved main. \
              {report}; the user's next 反映 opens the next landing.",
             ago(*asked_at)
         ),

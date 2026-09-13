@@ -82,16 +82,14 @@ fn stop(input: &str) -> Result<(), String> {
         }
     }
     let cwd = payload::string_field(input, "cwd").unwrap_or_default();
-    let Some(standing) = crate::gate::standing(&cwd) else {
-        return Ok(());
-    };
-    // Said only over a seat still ahead of main: that is work the user is
-    // waiting to see land, where an empty seat has nothing left to.
-    let message = [permit::unmet(input), Some(standing)]
+    let message = [permit::unmet(input), crate::gate::standing(&cwd)]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
         .join(" ");
+    if message.is_empty() {
+        return Ok(());
+    }
     println!("{{\"systemMessage\":\"{}\"}}", payload::printable(&message));
     Ok(())
 }

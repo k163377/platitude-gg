@@ -21,7 +21,7 @@ const CONTAINERS: [&str; 2] = ["プレビュー", "preview"];
 
 /// UserPromptSubmit: plain stdout becomes this turn's context. The
 /// message is also what the landing permit answers to (`permit`), so it
-/// goes there first — that one prints nothing.
+/// goes there first to supply the pre-landing completion check.
 pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
     let Some(prompt) = string_field(input, "prompt") else {
         return Ok(());

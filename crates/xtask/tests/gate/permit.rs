@@ -66,6 +66,94 @@ fn lands(sb: &Sandbox) -> String {
     shell(sb, &sb.seat, "cargo xtask land worktree-a")
 }
 
+fn stop(sb: &Sandbox) -> String {
+    hook(
+        sb,
+        "stop",
+        &format!(
+            "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"stop_hook_active\":true}}",
+            forward(&sb.seat)
+        ),
+    )
+}
+
+#[test]
+fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
+    let sb = Sandbox::new("permit-ready");
+    let note = says(&sb, "直してmain反映");
+    assert!(
+        note.contains("Before landing")
+            && note.contains("review findings")
+            && note.contains("background tasks")
+            && note.contains("rechecks before invoking land"),
+        "{note}"
+    );
+    assert_eq!(says(&sb, "ここも直して"), "");
+    assert_eq!(
+        says(&sb, "<task-notification>main反映</task-notification>"),
+        ""
+    );
+}
+
+#[test]
+fn necessary_corrections_after_landing_remain_possible_and_visible() {
+    let mut sb = Sandbox::new("permit-correction");
+    let seat = sb.root.join(".claude/worktrees/a");
+    std::fs::create_dir_all(seat.parent().expect("seat parent")).expect("seat directory");
+    sb.git_ok(
+        &sb.repo,
+        &["worktree", "move", &forward(&sb.seat), &forward(&seat)],
+    );
+    sb.seat = seat;
+    sb.write_refs(&sb.seat, 22);
+    sb.commit_all(&sb.seat, "feat(core): twenty-two", &[]);
+    says(&sb, "main反映");
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(ok, "{text}");
+    assert_eq!(stop(&sb), "", "a clean landing leaves no work");
+    assert_eq!(shell(&sb, &sb.seat, "cargo xtask seat"), "");
+    sb.git_ok(
+        &sb.repo,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            &format!("claude-seat {SESSION}"),
+            &forward(&sb.seat),
+        ],
+    );
+    let path = sb.seat.join("crates/platitude-core/src/refs.rs");
+    let edit = hook(
+        &sb,
+        "pre-write",
+        &format!(
+            "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"tool_input\":{{\"file_path\":\"{}\"}}}}",
+            forward(&sb.seat),
+            forward(&path)
+        ),
+    );
+    assert_eq!(edit, "", "a necessary correction is still allowed");
+    sb.write_refs(&sb.seat, 23);
+    let dirty = stop(&sb);
+    assert!(
+        dirty.contains("after the landing") && dirty.contains("uncommitted"),
+        "{dirty}"
+    );
+    assert_eq!(shell(&sb, &sb.seat, "git commit -m fix"), "");
+    sb.commit_all(&sb.seat, "fix(core): twenty-three", &[]);
+    let committed = stop(&sb);
+    assert!(
+        committed.contains("after the landing") && committed.contains("1 commit"),
+        "{committed}"
+    );
+    let refused = lands(&sb);
+    assert!(
+        refused.contains("second time") && refused.contains("Finish"),
+        "{refused}"
+    );
+    assert_ne!(sb.main_sha(), sb.head(&sb.seat));
+}
+
 #[test]
 fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next() {
     let sb = Sandbox::new("permit");
@@ -81,7 +169,7 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
 
     // The user asks: the command goes through — and through again after
     // a landing that moved nothing, since the ask stands unmet.
-    assert_eq!(says(&sb, "OK main反映"), "");
+    assert!(says(&sb, "OK main反映").contains("Before landing"));
     assert_eq!(lands(&sb), "");
     sb.write(
         &sb.seat,
