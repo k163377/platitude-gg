@@ -494,14 +494,17 @@ Item {
             if (!tip.visible)
                 return
             stop()
-            // `unique=` rather than the names themselves as the judged claim: what a name comes out as is spelled with
-            // the platform's own separator, and no two tabs reading alike is the rule either way (`verify/verbs.rs`).
+            // `unique=` is the rule the strip is run against — no two tabs reading alike (`verify/verbs.rs`) — and
+            // `native=` is the spelling: a path on screen is punctuated with `/` on every platform
+            // (規約 §パスの区切り), so a backslash in a name **or in the hover beside it** is Windows having
+            // spelled one its own way. The two are read as one claim because they are the same path twice.
             const titles = tabProbe.tabTitles()
             const names = titles.split(",")
             Harness.report(
                 "tab_names tabs=" + topBar.bandTabCount
                 + " pointed=" + tabNameActTimer.pointed
                 + " unique=" + names.every((name, at) => names.indexOf(name) === at)
+                + " native=" + (names.some(name => name.includes("\\")) || tip.text.includes("\\"))
                 + " tip=" + tip.visible
                 + " titles=" + titles
                 + " said=" + tip.text)

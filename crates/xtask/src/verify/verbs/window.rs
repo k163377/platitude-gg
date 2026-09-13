@@ -85,16 +85,17 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "sessions=1 folded=true log=true empty=true back=true wip=true",
     },
     // A strip of namesakes, and the path the hand asks for on top of
-    // it. `unique=` rather than the names themselves: a name is spelled
-    // with the platform's own separator, so the two machines cannot be
-    // held to one string — what both have to answer is that no two tabs
-    // read alike. `tip=` is the hover, which the strip's own picture
-    // cannot hold (it comes out on the overlay), and a run whose tip
-    // never opened photographs a perfectly ordinary band.
+    // it. `unique=` is what both machines have to answer: no two tabs
+    // read alike. `native=false` is the other half — a path on screen is
+    // punctuated with `/` wherever it runs (規約 §パスの区切り), so a
+    // backslash in a name or in the hover beside it is Windows having
+    // spelled one its own way. `tip=` is the hover, which the strip's own
+    // picture cannot hold (it comes out on the overlay), and a run whose
+    // tip never opened photographs a perfectly ordinary band.
     Verb {
         name: "tab-name",
         when: &[],
-        plain: "unique=true tip=true",
+        plain: "unique=true native=false tip=true",
     },
     // Which tab was carried and where it came to rest. A strip whose
     // order merely changed passes with any two tabs swapped, and one
