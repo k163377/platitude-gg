@@ -57,6 +57,24 @@ pub fn path_leaf(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
+/// A path spelled the way the screen spells one: `/`, which is what git
+/// answers with and what the settings file is written in
+/// (デザイン規約 §パスの区切り).
+///
+/// **Only Windows has anything to fold.** A backslash is a folder
+/// boundary there and an ordinary letter of a name everywhere else, so
+/// folding one on the other two platforms would rename the folder rather
+/// than respell it. The two prefixes that mean their backslashes to
+/// Windows itself are left alone for the reason `repo_key` leaves them:
+/// rewriting `\\?\` addresses somewhere else.
+pub fn shown_path(path: &str) -> String {
+    #[cfg(windows)]
+    if !path.starts_with(r"\\?\") && !path.starts_with(r"\\.\") {
+        return path.replace('\\', "/");
+    }
+    path.to_string()
+}
+
 /// Converts a local path to a `file:` URL for QML. Empty for a path with
 /// no root: a dialog cannot be opened at a folder that is not one.
 fn path_to_file_url(path: &Path) -> String {
@@ -129,6 +147,37 @@ fn hex_val(c: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The screen is handed `/` however the path arrived, so the same
+    /// repository reads the same on all three platforms.
+    #[test]
+    fn a_path_is_shown_with_the_separator_git_answers_with() {
+        assert_eq!(shown_path("C:/Users/dev/repo"), "C:/Users/dev/repo");
+        assert_eq!(shown_path("/home/dev/repo"), "/home/dev/repo");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_path_is_respelled_for_the_screen() {
+        assert_eq!(shown_path(r"C:\Users\dev\repo"), "C:/Users/dev/repo");
+    }
+
+    /// The prefix means its backslashes to Windows itself: respelling it
+    /// addresses somewhere else.
+    #[cfg(windows)]
+    #[test]
+    fn a_verbatim_prefix_keeps_the_backslashes_it_is_made_of() {
+        assert_eq!(shown_path(r"\\?\C:\repo"), r"\\?\C:\repo");
+        assert_eq!(shown_path(r"\\.\C:\repo"), r"\\.\C:\repo");
+    }
+
+    /// Off Windows a backslash is a letter of the name, so folding one
+    /// would name a folder that is not there.
+    #[cfg(not(windows))]
+    #[test]
+    fn a_backslash_is_left_where_it_is_part_of_a_name() {
+        assert_eq!(shown_path(r"/home/dev/we\ird"), r"/home/dev/we\ird");
+    }
 
     #[test]
     fn the_leaf_is_the_last_segment_whichever_separator_wrote_it() {

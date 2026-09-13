@@ -7,7 +7,7 @@
 //! one thing on its own and another once its namesake is opened.
 
 use std::collections::HashMap;
-use std::path::{Component, MAIN_SEPARATOR_STR, Path};
+use std::path::{Component, Path};
 
 /// Names every open repository, in the order they were handed over.
 ///
@@ -62,8 +62,13 @@ pub(super) fn names_for(paths: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// The last `depth` segments of a path, joined the way the platform
-/// spells one.
+/// The last `depth` segments of a path, joined with `/`.
+///
+/// **The separator is `/` on every platform** (デザイン規約 §パスの区切り):
+/// git answers `C:/Users/…` on Windows too, so the hover standing beside
+/// this name is already spelled that way, and a name punctuated with the
+/// host's own separator would be the one string in the strip saying the
+/// same path a second way.
 ///
 /// A name grown as far as the path itself answers with **the path as it
 /// was given** rather than with its segments put back together: the
@@ -74,7 +79,7 @@ fn name_at(segments: &[String], depth: usize, whole: &str) -> String {
     if depth == 0 || depth >= segments.len() {
         return whole.to_string();
     }
-    segments[segments.len() - depth..].join(MAIN_SEPARATOR_STR)
+    segments[segments.len() - depth..].join("/")
 }
 
 /// The named parts of a path, root and separators dropped.
@@ -82,8 +87,10 @@ fn name_at(segments: &[String], depth: usize, whole: &str) -> String {
 /// Read through `Path` rather than split on a character, so each platform
 /// says for itself what separates one segment from the next: a backslash
 /// is a folder boundary on Windows and an ordinary letter of a name
-/// everywhere else. The prefix comes along as a segment of its own —
-/// `C:` against `D:` is the only thing telling two drives' `repo` apart.
+/// everywhere else. **Only the reading follows the platform** — what the
+/// pieces are put back together with does not ([`name_at`]). The prefix
+/// comes along as a segment of its own — `C:` against `D:` is the only
+/// thing telling two drives' `repo` apart.
 fn segments(path: &str) -> Vec<String> {
     Path::new(path.trim())
         .components()
@@ -99,8 +106,10 @@ fn segments(path: &str) -> Vec<String> {
 mod tests {
     use super::names_for;
 
-    /// Joined the way the platform spells a path, so the expectations
-    /// below read as paths on the machine running them.
+    /// An input path spelled the way the platform running the test does,
+    /// so what the strip is handed is what a path arrives as there.
+    /// **The names expected below are written with `/`** whichever that
+    /// is — the separator in a name does not follow the host.
     fn path(parts: &[&str]) -> String {
         parts.join(std::path::MAIN_SEPARATOR_STR)
     }
@@ -121,7 +130,7 @@ mod tests {
         let two = path(&["", "src", "bar", "repo"]);
         assert_eq!(
             names_for(&[&one, &two]),
-            vec![path(&["foo", "repo"]), path(&["bar", "repo"])]
+            vec!["foo/repo".to_string(), "bar/repo".to_string()]
         );
     }
 
@@ -133,7 +142,7 @@ mod tests {
         let two = path(&["", "src", "2", "foo", "repo"]);
         assert_eq!(
             names_for(&[&one, &two]),
-            vec![path(&["1", "foo", "repo"]), path(&["2", "foo", "repo"])]
+            vec!["1/foo/repo".to_string(), "2/foo/repo".to_string()]
         );
     }
 
@@ -147,8 +156,8 @@ mod tests {
         assert_eq!(
             names_for(&[&one, &two, &three]),
             vec![
-                path(&["1", "foo", "repo"]),
-                path(&["2", "foo", "repo"]),
+                "1/foo/repo".to_string(),
+                "2/foo/repo".to_string(),
                 "solo".to_string()
             ]
         );
@@ -165,9 +174,9 @@ mod tests {
         assert_eq!(
             names_for(&[&one, &two, &three]),
             vec![
-                path(&["a", "foo", "repo"]),
-                path(&["b", "foo", "repo"]),
-                path(&["bar", "repo"])
+                "a/foo/repo".to_string(),
+                "b/foo/repo".to_string(),
+                "bar/repo".to_string()
             ]
         );
     }
@@ -193,6 +202,18 @@ mod tests {
         let bare = path(&["", "src", "repo"]);
         let slashed = format!("{bare}{}", std::path::MAIN_SEPARATOR);
         assert_eq!(names_for(&[&slashed]), vec!["repo".to_string()]);
+    }
+
+    /// A name is punctuated with `/` whichever separator the path it was
+    /// cut from arrived in, so the same two repositories are called the
+    /// same thing on all three platforms.
+    #[cfg(windows)]
+    #[test]
+    fn a_grown_name_is_spelled_with_forward_slashes() {
+        assert_eq!(
+            names_for(&[r"C:\src\foo\repo", r"C:\src\bar\repo"]),
+            vec!["foo/repo".to_string(), "bar/repo".to_string()]
+        );
     }
 
     /// Two drives, one folder name: the prefix is a segment, so the

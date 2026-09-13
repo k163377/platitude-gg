@@ -121,7 +121,7 @@ impl TabsModel {
                 } => {
                     tracing::info!(path = %path.display(), kind, "picked folder refused");
                     self.open_rejected(
-                        path.to_string_lossy().into_owned(),
+                        crate::urlpath::shown_path(&path.to_string_lossy()),
                         kind.to_string(),
                         message,
                         near,
@@ -137,9 +137,13 @@ impl TabsModel {
     /// the strip moves to the tab holding it (デザイン規約 §タブの所作).
     #[qslot]
     fn open_repository_path(&mut self, path: String) {
-        // Trimmed once, here, so the string the tab keeps is the one it
-        // was compared by.
-        let path = path.trim().to_string();
+        // Trimmed and spelled once, here, so the string the tab keeps is
+        // the one it was compared by — and the one the hover reads out
+        // (デザイン規約 §パスの区切り). Every road in hands over `/`
+        // already (git answers with it, `repo_key` writes it, the picker
+        // keeps it); the fold is what keeps the one that does not from
+        // reaching the strip.
+        let path = crate::urlpath::shown_path(path.trim());
         let path_buf = std::path::PathBuf::from(&path);
         if path_buf.as_os_str().is_empty() {
             return;
@@ -187,8 +191,13 @@ impl TabsModel {
         // copy: the tab already holding that repository, whatever the
         // shifting below does to the count.
         let mut wanted_held: Option<usize> = None;
-        for (position, path) in saved.paths.iter().enumerate() {
-            let path_buf = std::path::PathBuf::from(path);
+        for (position, saved_path) in saved.paths.iter().enumerate() {
+            // Spelled for the screen on the way in, the same as the road
+            // the picker takes (`open_repository_path`): the file is
+            // written with `/` but nothing stops a hand from writing one
+            // that is not, and the hover reads out whatever the tab kept.
+            let path = crate::urlpath::shown_path(saved_path);
+            let path_buf = std::path::PathBuf::from(&path);
             if !path_buf.is_dir() {
                 tracing::info!(path = %path, "restored tab dropped: not there any more");
                 // Everything after it shifts left, and the active one with
@@ -202,7 +211,7 @@ impl TabsModel {
             // one repository twice, and the two entries need not be
             // spelled alike. Putting both back would restore the very
             // thing opening now declines to make.
-            if let Some(held) = self.position_of(path) {
+            if let Some(held) = self.position_of(&path) {
                 tracing::info!(path = %path, "restored tab dropped: already open");
                 if position == saved.active {
                     wanted_held = Some(held);
@@ -211,14 +220,14 @@ impl TabsModel {
                 }
                 continue;
             }
-            let title = title_of(path);
+            let title = title_of(&path);
             let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(path_buf)) else {
                 continue;
             };
             self.push(TabItem {
                 tab_id,
                 title,
-                repo_path: path.clone(),
+                repo_path: path,
             });
         }
         // Once, with the whole strip standing: a name settled against
