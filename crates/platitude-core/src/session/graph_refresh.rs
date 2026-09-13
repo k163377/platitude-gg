@@ -485,10 +485,25 @@ impl RepoSession {
         drop(self.start_refresh_poll());
     }
 
-    /// Takes the read owed, if one is — called where a poll hands the
-    /// slot back, which is the moment a refused one can be served.
-    fn take_the_read_owed(self: &Arc<Self>) {
-        if self.read_owed.load(Ordering::SeqCst) {
+    /// Takes the read owed, if one is — called wherever the reason it was
+    /// refused has just gone: a poll handing the slot back, and a write of
+    /// this session's ending (`write::serve`).
+    ///
+    /// **Both, because either can be the last one.** A read asked for
+    /// while this session was reading is refused for the slot and comes
+    /// back at the poll's tail; if a write of its own had started by
+    /// then, that try is refused too — and a write's own landing tells
+    /// the *other* sessions, never itself, so without this the read would
+    /// have nowhere left to come from. A write that moved only the index
+    /// reads no refs behind it, so nothing else would notice either.
+    ///
+    /// **A session that keeps nothing owes nothing.** One asked for
+    /// before its close still has the flag standing, and its parked write
+    /// ends after it ([`Hub::park_writes_of`]) — taking it there would
+    /// spend a refs read and a status read on a page that is gone, which
+    /// is the very pair the close stops paying for (`write::run_write`).
+    pub(super) fn take_the_read_owed(self: &Arc<Self>) {
+        if self.read_owed.load(Ordering::SeqCst) && self.keeps_what_it_reads() {
             drop(self.start_refresh_poll());
         }
     }

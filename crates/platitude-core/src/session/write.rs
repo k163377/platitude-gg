@@ -33,8 +33,9 @@
 //!   write on it, this session's or another's
 //!   ([`RepoSession::tree_write`]), and are taken again the moment that
 //!   write lands ([`RepoSession::tell_the_tree`]) — as a read the
-//!   session owes, so one asked for while it was already reading is
-//!   served when that read ends rather than dropped;
+//!   session owes, so one asked for while it was already reading, or
+//!   while a write of its own was out, is served when that read or that
+//!   write ends rather than dropped;
 //! * **the reads an opening makes are not held back** — a tab has to
 //!   paint, and holding them would leave it on "loading" for as long as
 //!   somebody else's rebase takes. They can therefore read a tree
@@ -224,6 +225,11 @@ impl RepoSession {
         if operation.kind.writes_here() {
             self.tell_the_tree();
         }
+        // And this session is told by nobody, so it asks itself: a read it
+        // was refused while this write was out has no other place left to
+        // be taken from ([`RepoSession::take_the_read_owed`]). Whatever
+        // the lane — a push owes the same read a commit does.
+        self.take_the_read_owed();
     }
 
     async fn run_write(self: &Arc<Self>, request: WriteRequest) {

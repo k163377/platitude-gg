@@ -1,15 +1,18 @@
-//! Two sessions, one working tree: what a tab closed mid-write and
-//! reopened over it may and may not do (`session::write_order`), and what
-//! the closed one lets go of while its write runs on.
+//! Two sessions, one working tree (`session::write_order`): the order
+//! their writes run in, what each may read while the other is writing,
+//! and what a session closed mid-write lets go of.
 //!
-//! Every test here holds the first session's commit inside a `pre-commit`
-//! hook for the whole of what follows, so "the close was still writing"
-//! is arranged rather than raced.
+//! **Every step is held open by a barrier rather than timed** — a write
+//! by a hook git waits in, a stage by a clean filter, a read by a parked
+//! sink delivery — so "this had provably not happened yet" is arranged
+//! rather than raced. Where the barrier *is* the arrangement, it is read
+//! back as well: a filter that silently does not hold makes a test green
+//! for the wrong reason.
 
 use std::sync::Arc;
 
 use crate::support::session::{opened, pass_of, write_answer, write_settled};
-use crate::support::{TestRepo, barrier_hook};
+use crate::support::{TestRepo, barrier_filter, barrier_hook};
 use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
 
 /// A repository with one commit, a file staged for a second, and a hook
@@ -360,6 +363,141 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
                     .then_some(())
             },
         )
+        .await;
+
+    reader.close();
+    writer.close();
+}
+
+/// A read this session owes is taken when **its own** write ends too, not
+/// only when a poll does.
+///
+/// The tail of a poll is one place a refused read can be served, and on
+/// its own it is not enough. A session reading when the news arrives is
+/// refused once for being busy, and refused again at that tail if a write
+/// of its own has started meanwhile — and after that nothing would take
+/// it: the write's own `tell_the_tree` speaks to the *other* sessions,
+/// and a write that only moved the index reads no refs behind itself
+/// ([`AfterWrite::Tree`]). The branch the other session made would stand
+/// missing until something else happened to ask.
+///
+/// Every step is held open by a barrier rather than timed — the poll by a
+/// parked delivery, the stage by a clean filter — and the poll's whole
+/// task is waited out through the graph pass it holds, so the second
+/// refusal has provably happened before the stage is let go.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
+    let (_origin, mut repo) = crate::support::remote::origin_and_clone();
+    let held = repo.path.join("stage-release");
+    repo.git(&["config", "filter.hold.clean", &barrier_filter(&held)]);
+    repo.git(&["config", "filter.hold.required", "true"]);
+    repo.write_file(".gitattributes", "held.txt filter=hold\n");
+    repo.write_file("held.txt", "content\n");
+    // The barrier is the whole arrangement, so both halves of it are read
+    // back: a filter that is not wired makes the stage instant and the
+    // test green for the wrong reason.
+    assert_eq!(
+        repo.git(&["check-attr", "filter", "--", "held.txt"]),
+        "held.txt: filter: hold",
+        "the clean filter is wired to the path"
+    );
+    assert_eq!(
+        repo.git(&["config", "--get", "filter.hold.clean"]),
+        barrier_filter(&held),
+        "and the filter itself is the barrier"
+    );
+
+    let (reader_sink, reader) = opened(&repo).await;
+    reader_sink.opening_settled(&reader).await;
+    let (writer_sink, writer) = opened(&repo).await;
+    writer_sink.opening_settled(&writer).await;
+
+    // (1) The reader is held inside a read of its own.
+    let (release, parked) = std::sync::mpsc::channel::<()>();
+    reader_sink.hook_once(
+        |e| matches!(e, SessionEvent::RefsLoaded { .. }),
+        move || {
+            let _ = parked.recv();
+        },
+    );
+    let polled = reader.refresh_poll_tracked();
+
+    // (2) The news arrives and is refused for being busy. The push is the
+    // witness that the branch's own `tell_the_tree` is behind us, and it
+    // writes nothing here, so it wakes nobody itself.
+    let late = writer
+        .create_branch("late".into(), None, false)
+        .expect("the branch was accepted");
+    write_settled(&writer_sink, late).await;
+    let pushed = writer
+        .push(platitude_core::remote::PushSpec {
+            remote: "origin".into(),
+            local: "late".into(),
+            remote_branch: "late".into(),
+            set_upstream: false,
+            force: platitude_core::remote::PushForce::None,
+        })
+        .expect("the push was accepted");
+    writer_sink
+        .wait_for("the writer's loop moved on to the next request", |evs| {
+            evs.iter()
+                .any(|e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == pushed))
+                .then_some(())
+        })
+        .await;
+
+    // (3) A write of the reader's own, held inside git by the filter.
+    let staged = reader
+        .stage_paths(vec!["held.txt".into()])
+        .expect("the stage was accepted");
+    reader_sink
+        .wait_for("the stage reached git", |evs| {
+            evs.iter()
+                .any(|e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == staged))
+                .then_some(())
+        })
+        .await;
+
+    // (4) The poll ends and tries what it owes — refused again, because
+    // the stage is provably still inside the filter. Waiting the pass out
+    // waits the poll's whole task out, that try included.
+    drop(release);
+    let parked_poll =
+        crate::support::wait::bounded("the parked poll answers", polled.outcome()).await;
+    assert!(
+        parked_poll.landed(),
+        "the poll that was parked is the one that read, not one the slot turned away: {parked_poll:?}"
+    );
+    crate::support::wait::bounded(
+        "the poll's task ends, so the read it was owed has been refused twice",
+        reader.wait_for_graph_passes(),
+    )
+    .await;
+
+    // (5) Only the reader's own write is left to take it. The stage is
+    // still inside git at this point — the premise of everything above,
+    // so it is read rather than assumed.
+    assert_eq!(
+        reader_sink.count(|e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == staged)),
+        0,
+        "the stage is still held by the filter"
+    );
+    std::fs::write(&held, b"go").expect("release the filter");
+    assert_eq!(
+        write_answer(&reader_sink, staged).await,
+        None,
+        "the stage landed, so the barrier was a barrier and not a broken filter"
+    );
+    reader_sink
+        .wait_for("the reader reads the branch it was twice refused", |evs| {
+            evs.iter()
+                .filter_map(|e| match e {
+                    SessionEvent::RefsLoaded { snapshot, .. } => Some(snapshot),
+                    _ => None,
+                })
+                .any(|snapshot| snapshot.locals.iter().any(|b| b.short == "late"))
+                .then_some(())
+        })
         .await;
 
     reader.close();

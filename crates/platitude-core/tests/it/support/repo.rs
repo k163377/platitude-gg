@@ -290,6 +290,34 @@ pub fn barrier_hook(release: &std::path::Path) -> String {
     )
 }
 
+/// A clean filter that holds `git add` where it stands until `release`
+/// exists, then hands the content through unchanged.
+///
+/// The staging counterpart of [`barrier_hook`], and the only one there
+/// is: `git add` runs no hook, and a write that only touches the index
+/// is exactly the one whose follow-up reads leave the refs alone. Wired
+/// with `git config filter.<name>.clean` and a `.gitattributes` line.
+/// A clean filter that holds `git add` where it stands until `release`
+/// exists, then hands the content through unchanged.
+///
+/// The staging counterpart of [`barrier_hook`], and the only one there
+/// is: `git add` runs no hook, and a write that only touches the index is
+/// exactly the one whose follow-up reads leave the refs alone. Wire it
+/// with `filter.<name>.clean` **and `filter.<name>.required`** — without
+/// the second, a filter git cannot run is one it warns about, stages the
+/// raw bytes for and exits 0 from, which is a barrier that silently
+/// is not one.
+///
+/// **It spins rather than sleeps**: the shell git runs a filter in has no
+/// `sleep` on the PATH the suite hands it, and a loop that calls one
+/// leaves through its cap at once instead of waiting.
+pub fn barrier_filter(release: &std::path::Path) -> String {
+    let release = release.to_string_lossy().replace('\\', "/");
+    format!(
+        "i=0; until [ -f \"{release}\" ]; do i=$((i+1)); [ \"$i\" -gt 200000000 ] && exit 1; done; cat"
+    )
+}
+
 /// The opened [`platitude_core::repo::RepoInfo`] of a test repository —
 /// what every write API takes instead of a bare path.
 pub async fn info(repo: &TestRepo) -> platitude_core::repo::RepoInfo {
