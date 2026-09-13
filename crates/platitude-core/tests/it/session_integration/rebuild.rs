@@ -163,6 +163,12 @@ async fn background_refresh_swaps_only_on_change() {
 #[tokio::test(flavor = "multi_thread")]
 async fn an_external_ref_move_rebuilds_the_graph() {
     let (mut repo, sink, session, baseline) = settled_graph().await;
+    // Where the opening ends in the record. Whether its own stream got
+    // as far as starting before the tracked refresh took it over is the
+    // scheduler's to decide (`a_rebuild_taken_over_before_it_started_never_walks`
+    // is the shape where it did not), so the streams counted below are
+    // the ones after this mark.
+    let opened_at = sink.events.lock().unwrap().len();
 
     let quiet_refs = sink.count(|event| matches!(event, SessionEvent::RefsLoaded { .. }));
     session.refresh_refs();
@@ -199,9 +205,9 @@ async fn an_external_ref_move_rebuilds_the_graph() {
         events[..].iter().collect::<Vec<_>>()
     );
     assert_eq!(
-        log_starts(&events[..]),
-        1,
-        "the rebuild replaced in place; only opening resets and streams"
+        log_starts(&events[opened_at..]),
+        0,
+        "the rebuild replaced in place: nothing has streamed since the opening"
     );
     drop(events);
     session.close();
