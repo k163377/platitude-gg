@@ -57,8 +57,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           word the trail names it with: starting,
                           event-loop, left-event-loop, settings-flush,
                           tabs-closing, writes-joining, runtime-stopping,
-                          run-dir-clearing, hub-down, exiting. A run that
-                          cannot pass; what `wedge-check` drives.
+                          run-dir-clearing, hub-down, qt-tearing-down,
+                          exiting. A run that cannot pass; what
+                          `wedge-check` drives.
         --fault-no-deadline
                           start it with no deadline thread, so it leaves
                           no wedge.txt however it is stopped — the shape a

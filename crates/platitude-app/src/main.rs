@@ -312,6 +312,20 @@ fn main() {
     let restart = Hub::with(|hub| hub.restart_wanted()).unwrap_or(false);
     Hub::shutdown();
     harness::station(harness::Station::HubDown);
+    // Qt is taken down here, on this thread, with every thread of its
+    // own still running to answer: the engine first — the window, the
+    // scene graph and its render thread, every QML object — then the
+    // application, with the platform plugin and the graphics device.
+    // After the hub, so that nothing is left pushing at the objects as
+    // they go. `exit` would leave all of it standing, and on Windows
+    // `ExitProcess` ends every other thread where it stands before the
+    // loaded libraries are given their detach: Qt's own static teardown
+    // would then run against a render thread ended mid-frame, and a
+    // lock that thread died holding is waited on for good, by a process
+    // with nothing left running to say so (`harness::deadline`,
+    // internal-docs/P3-確認事項.md §check ハング調査で残った観察).
+    harness::station(harness::Station::QtTearingDown);
+    drop(app);
     if restart {
         // **The lock goes first, by name.** It is held for the length of
         // the run and `std::process::exit` runs no destructor, so a
@@ -325,7 +339,8 @@ fn main() {
     // exit ends every other thread before the loaded libraries are given
     // their detach, so a process that hangs in one of those has nothing
     // left running to report it and only the trail names this step
-    // (`harness::deadline`).
+    // (`harness::deadline`). What the detach finds is a process with Qt
+    // already gone, above.
     harness::station(harness::Station::Exiting);
     std::process::exit(code);
 }

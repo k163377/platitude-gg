@@ -112,15 +112,22 @@ pub(crate) enum Station {
     WritesJoining = 5,
     RuntimeStopping = 6,
     RunDirClearing = 7,
-    /// The hub is down and only the exit is left.
+    /// The hub is down; Qt is still standing.
     HubDown = 8,
+    /// Dropping the QML engine and the Qt application, on the main
+    /// thread, with every thread of Qt's own still running to answer:
+    /// the window, the scene graph and its render thread, then the
+    /// platform plugin and the graphics device. What `main` does before
+    /// the exit so that the exit finds nothing of Qt's left to take down
+    /// (`main`).
+    QtTearingDown = 9,
     /// Inside `std::process::exit`, which is the one step no report can
     /// come back from: on Windows `ExitProcess` ends every other thread —
     /// the one below among them — before the loaded libraries are given
     /// their detach, so a process that hangs in one of those hangs with
     /// nothing left running to say so. Only the trail can name it, which
     /// is the whole reason this station is in the list.
-    Exiting = 9,
+    Exiting = 10,
 }
 
 impl Station {
@@ -128,7 +135,7 @@ impl Station {
     /// decodes by and what the tests walk. A station added to the enum
     /// is added here too — [`Station::name`] stops compiling until the
     /// enum is walked, and this is the list beside it.
-    const ALL: [Station; 10] = [
+    const ALL: [Station; 11] = [
         Self::Starting,
         Self::EventLoop,
         Self::LeftEventLoop,
@@ -138,6 +145,7 @@ impl Station {
         Self::RuntimeStopping,
         Self::RunDirClearing,
         Self::HubDown,
+        Self::QtTearingDown,
         Self::Exiting,
     ];
 
@@ -152,6 +160,7 @@ impl Station {
             Self::RuntimeStopping => "stopping the runtime",
             Self::RunDirClearing => "clearing the run directory",
             Self::HubDown => "the hub is down",
+            Self::QtTearingDown => "tearing Qt down",
             Self::Exiting => "exiting",
         }
     }
@@ -172,6 +181,7 @@ impl Station {
             Self::RuntimeStopping => "runtime-stopping",
             Self::RunDirClearing => "run-dir-clearing",
             Self::HubDown => "hub-down",
+            Self::QtTearingDown => "qt-tearing-down",
             Self::Exiting => "exiting",
         }
     }
@@ -462,9 +472,9 @@ fn judge(now: Duration, standing: Duration, last_look: Duration) -> Look {
 
 /// Says where the process stood and ends it.
 ///
-/// **The parent's reaping still stands behind this.** `exit` runs the
-/// process's own teardown, and a thread wedged holding what that needs
-/// can hold this too; the harness's kill guard is what covers that
+/// **The parent's reaping still stands behind this.** What is ended here
+/// is wedged by definition, and [`terminate`] runs none of its teardown; the
+/// harness's kill guard covers a process the kernel would not end
 /// (`xtask::verify::child`).
 fn end_it(clock: Instant, shot_dir: &str, ended: &Ended) {
     let report = report(clock, shot_dir, ended);
@@ -475,7 +485,66 @@ fn end_it(clock: Instant, shot_dir: &str, ended: &Ended) {
             tracing::error!(%error, "the wedge report could not be written beside the pictures");
         }
     }
-    std::process::exit(WEDGED);
+    terminate(WEDGED);
+}
+
+/// Ends the process with `code` and no teardown at all.
+///
+/// **Never `std::process::exit` from here.** The thread this runs on is
+/// the one that outlived a wedge, and the wedged thread is still holding
+/// whatever it wedged on. On Windows `exit` is `ExitProcess`, which ends
+/// every other thread where it stands and then gives the loaded
+/// libraries their detach — where a destructor that waits on that lock
+/// waits for good, in a process with nothing left running to say so, and
+/// the code below never reaches the parent. On unix `exit` runs the
+/// atexit handlers beside the threads still running. The report above
+/// is on stderr and on the disk already, unbuffered on both roads
+/// (`crate::logsink`, `std::fs::write`), so nothing this skips is owed.
+#[cfg(windows)]
+#[expect(
+    unsafe_code,
+    reason = "TerminateProcess has no safe binding, and one signature does not earn a \
+              dependency (winframe::win32 says the same)"
+)]
+fn terminate(code: i32) -> ! {
+    // SAFETY: both calls are plain integer arguments to functions that
+    // take no memory; the handle is the pseudo-handle for this process,
+    // which needs no closing.
+    unsafe {
+        TerminateProcess(GetCurrentProcess(), code.unsigned_abs());
+    }
+    // Only where the kernel refused, which leaves the exit that can
+    // hang — and a parent that reaps it anyway.
+    std::process::exit(code)
+}
+
+// SAFETY: the signatures are transcribed from the Win32 headers
+// (processthreadsapi.h); the arguments are a handle and an integer.
+#[cfg(windows)]
+#[expect(unsafe_code, reason = "as above")]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetCurrentProcess() -> *mut std::ffi::c_void;
+    fn TerminateProcess(process: *mut std::ffi::c_void, code: u32) -> i32;
+}
+
+/// The same off the C library: `_exit` is the exit that runs nothing.
+#[cfg(unix)]
+#[expect(
+    unsafe_code,
+    reason = "_exit has no safe binding, and one signature does not earn a dependency"
+)]
+fn terminate(code: i32) -> ! {
+    // SAFETY: one integer argument to a function that does not return.
+    unsafe { _exit(code) }
+}
+
+// SAFETY: the signature is transcribed from unistd.h; the argument is an
+// integer and the call does not return.
+#[cfg(unix)]
+#[expect(unsafe_code, reason = "as above")]
+unsafe extern "C" {
+    fn _exit(code: i32) -> !;
 }
 
 /// The whole of what the process can still say about itself. One moment
