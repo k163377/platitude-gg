@@ -23,6 +23,7 @@ AutoScrollBar 1.0 AutoScrollBar.qml
 AvatarAssignRow 1.0 AvatarAssignRow.qml
 AvatarButton 1.0 AvatarButton.qml
 CardText 1.0 CardText.qml
+CarriedPane 1.0 CarriedPane.qml
 ChangeIcon 1.0 ChangeIcon.qml
 ClipboardHelper 1.0 ClipboardHelper.qml
 CloneDialog 1.0 CloneDialog.qml

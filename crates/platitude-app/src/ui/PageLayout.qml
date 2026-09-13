@@ -57,7 +57,9 @@ QtObject {
         if (layout.page.blank)
             return
         layout.repoTab.setTagsShown(AppBackend.startTagsShown())
-        layout.wipPane.setTreeView(AppBackend.startWipTree())
+        // The page's, not the pane's: the choice holds for the lists of another working copy as well, and those are
+        // the page's to hand the pane (`RepoPage.setWipTreeView`).
+        layout.page.setWipTreeView(AppBackend.startWipTree())
         layout.detailsModel.setTreeView(AppBackend.startDetailsTree())
     }
 

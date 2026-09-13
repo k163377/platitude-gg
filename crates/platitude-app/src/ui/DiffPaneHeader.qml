@@ -15,6 +15,14 @@ Rectangle {
     /// whether a write is running (`DiffPane`).
     required property bool fromWorkTree
     required property bool staged
+    /// Whether the file is this window's own to write (`DiffPane.writable`). **The word does not stand where it is
+    /// not** — a file read out of another working copy is read the way a commit's file is, and a commit's diff has
+    /// no whole-file word either (デザイン規約 §別の作業コピーを読む).
+    required property bool writable
+    /// The copy the file belongs to, where it is not this window's. **Said in front of the path**: this band is the
+    /// only thing on screen while a diff is open that can say whose file is being read, and the pane that named the
+    /// copy is behind the diff.
+    required property string copyName
     required property bool conflicted
     required property bool busy
 
@@ -24,6 +32,9 @@ Rectangle {
     /// Whether the band ran out of room for the path and is showing the tail of it. The output side, and the half a
     /// picture of a wide pane cannot answer.
     readonly property alias cut: titleField.clipped
+    /// Automation: whether the file's own word is there to press, read off the button rather than off what was
+    /// handed in — a report built from `writable` would go green with the button unwired (app-ui.md §UI 自動化の因果性).
+    readonly property bool stageOffered: stageFileButton.visible && stageFileButton.enabled
 
     signal stageFileRequested()
     signal closeRequested()
@@ -62,6 +73,25 @@ Rectangle {
                 visible: header.title !== ""
                 tint: Theme.textSecondary
             }
+            // Whose file, where it is not this window's. **Before the path and outside the field**: the path is a
+            // value the reader takes away (`titleField`), and a copy's name pasted with it would be a path nothing
+            // can open. Its own cut, so a long name loses its middle rather than the file's.
+            //
+            // **A quarter of the band at most**, because the path is what the band is for: a copy can be named
+            // anything, and left to take what it asks for it would push the file it is about off the end.
+            CutName {
+                visible: header.copyName !== ""
+                Layout.maximumWidth: header.width / 4
+                Layout.preferredHeight: Theme.rowHeight
+                text: header.copyName
+                pixelSize: Theme.fontMd
+                weight: Font.DemiBold
+                color: Theme.textMuted
+            }
+            DotMark {
+                visible: header.copyName !== ""
+                tint: Theme.textSecondary
+            }
             // The file, in a field the reader can take away with them (規約 §右のペインの字は掴める): this band is
             // where the eye already is while the diff is being read, and the path here is the same one the list's
             // own row hands over from its hover.
@@ -88,7 +118,8 @@ Rectangle {
         // colour word in the view — the hunks' wait for the pointer — which is what puts the scopes back in order:
         // staging a file is the larger of the two.
         ActionButton {
-            visible: header.fromWorkTree
+            id: stageFileButton
+            visible: header.fromWorkTree && header.writable
             // The same `git add` on a conflicted file is not a staging at all — it is how git is told the conflict has
             // been dealt with, so the word says that instead (デザイン規約 §diff の中のステージ).
             text: header.conflicted ? qsTr("Mark resolved")

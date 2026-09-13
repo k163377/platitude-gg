@@ -64,11 +64,9 @@ ColumnLayout {
 
     /// Tree or flat paths, for the whole pane. One choice, three lists: the toggle in the header band is about how the
     /// working tree is shown, not about one bucket of it.
-    function setTreeView(tree) {
-        wipPane.conflictsModel.setTreeView(tree)
-        wipPane.worktreeModel.setTreeView(tree)
-        wipPane.stagedModel.setTreeView(tree)
-    }
+    /// **The page applies it**, because the choice outlives this pane: the pane another working copy's changes are
+    /// read in has the same toggle, and a reader who chose paths here expects paths there (`RepoPage.setWipTreeView`).
+    signal treeViewChosen(bool tree)
 
     /// Automation: run one of the stopped operation's held rows to its end, named by its flag (`OpExitCard`).
     function completeOpExit(code) {
@@ -679,7 +677,7 @@ ColumnLayout {
             Item { Layout.fillWidth: true }
             TreeViewToggle {
                 treeView: wipPane.worktreeModel.treeView
-                onChosen: tree => wipPane.setTreeView(tree)
+                onChosen: tree => wipPane.treeViewChosen(tree)
             }
         }
     }

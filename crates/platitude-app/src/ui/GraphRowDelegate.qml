@@ -396,10 +396,16 @@ Item {
     /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
     /// click in at the row itself rather than at a copy of what the row would have decided.
     function leftClick(held, modifiers) {
-        // Another copy's row answers to nothing: no selection, so the pane that stages and commits is never opened
-        // in front of a tree this window is not on (P3-確認事項 §別 worktree の未コミット行).
-        if (rowItem.carried)
+        // Another copy's row selects like any other — **what it opens is that copy, read-only** (P3-確認事項
+        // §別 worktree の未コミット行). Which copy is the row's own answer and not the id's: every uncommitted row
+        // carries git's all-zero id, so the page is handed the row number (`RepoPage.openWipFor`).
+        //
+        // A modifier is not a choice here for the reason this window's own row is not one: the choice is of commits,
+        // and these rows are not commits. The plain click below is what a held one comes to.
+        if (rowItem.carried) {
+            rowItem.claimRow(Qt.NoModifier)
             return
+        }
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
         // **A click that is building a choice is not a click on a name.** The gesture that opens the name box is two
         // plain clicks spaced apart (`ReclickGesture`); a held Ctrl or Shift says the hand is picking commits, and

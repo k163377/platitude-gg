@@ -110,6 +110,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/BandStateMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/BandWidest.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CardText.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/CarriedPane.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorCard.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/CoAuthorLine.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ChosenCommitRow.qml", "qt/qml/platitude");

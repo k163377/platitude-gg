@@ -29,12 +29,23 @@ Rectangle {
     property int sideColorTheirs: -1
     // A write is running: staging buttons disable.
     property bool busy: false
+    /// Whether the file on screen is this window's own to write. **A file read out of another working copy is read
+    /// the way a commit's file is** (デザイン規約 §別の作業コピーを読む): the whole-file word does not stand, and
+    /// neither do the seats a hunk and a line put out under the hand. Nothing here is disabled, because nothing here
+    /// is offered — staging is an act in the copy that holds the index, and the pane behind this one is the door.
+    property bool writable: true
+    /// The copy the file was read from, where it is not this window's — said in the band, in front of the path,
+    /// because while a diff is open the band is the only thing on screen that can say whose file this is.
+    property string copyName: ""
     /// Whether this diff has pieces worth naming. A file the repository is seeing for the first time has none: its one
     /// hunk is the whole file, so `Stage hunk` would be the header's `Stage file` said again in a smaller voice
     /// (デザイン規約 §diff の中のステージ). A conflicted file has none either, for a different reason: its diff compares the
     /// working tree against **both** sides at once, and that shape is not a patch — `git apply` refuses it, and so does
     /// core (`stage::refuse_combined`). What stays in either case is the one word in the header.
-    readonly property bool partial: diffPane.fromWorkTree && !diffPane.diffModel.isNewFile && !diffPane.combined
+    /// A third reason there are none: the file is another working copy's. Nothing can be taken out of it from here,
+    /// so the hunk's row and the line's gutter close to the plain gap they close to on a commit's diff.
+    readonly property bool partial: diffPane.fromWorkTree && diffPane.writable
+                                    && !diffPane.diffModel.isNewFile && !diffPane.combined
 
     // ---- a conflicted file's diff -----------------------------------
     /// This diff has more than one old side, so every row carries a marker
@@ -260,6 +271,12 @@ Rectangle {
     /// ground under the last row is a place only a coordinate can name (`PGG_AUTO_ACT=diff-sweep`). Handed over whole,
     /// the way the view is: four forwards here would be four more lines of this file saying nothing.
     readonly property alias textHand: textPick
+    /// Automation: whether the band's own word would take a press (`DiffPaneHeader.stageOffered`), and whether a hunk
+    /// or a line puts a seat out at all. The two halves of "nothing here stages" — a file read out of another working
+    /// copy answers false to both (`carried-read`).
+    readonly property alias stageOffered: paneHeader.stageOffered
+    readonly property bool piecesOffered: diffPane.partial
+    /// Automation: the pointer's stand-in on that word, and what it says under one.
     /// Automation: the band's own hand — the one the path at the top is dragged over from the air beside it. Handed
     /// over whole for the reason `textHand` is (`PGG_AUTO_ACT=diff-band-sweep`).
     readonly property alias headerHand: paneHeader.pad
@@ -374,6 +391,8 @@ Rectangle {
             staged: diffPane.staged
             conflicted: diffPane.conflicted
             busy: diffPane.busy
+            writable: diffPane.writable
+            copyName: diffPane.copyName
             onStageFileRequested: diffPane.stageFileRequested()
             onCloseRequested: diffPane.closeRequested()
         }

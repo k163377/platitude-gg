@@ -156,6 +156,11 @@ Item {
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
     function showWip() {
+        // **This face is this window's tree unless something says otherwise**, and the one thing that says so is the
+        // row being read (`openWipFor`, the only caller that puts a copy back afterwards). Every other road here — a
+        // stopped operation landing, the default selection, the verbs — is about this tree, and any of them arriving
+        // while a copy was on screen would otherwise leave the copy's files under this tree's selection.
+        page.dropCarried()
         page.wipShown = true
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
@@ -166,6 +171,81 @@ Item {
         // back to the current one for the highlight there (`GraphRowDelegate.selected`).
         page.chooseOnly("")
         page.closeDiff()
+    }
+
+    // ---- which working copy the WIP pane is about ---------------------
+    //
+    // **Every uncommitted row carries git's all-zero id**, this window's own included: that spelling is git saying
+    // there is no object here, and it is as true of a copy's row as of ours (P3-確認事項 §別 worktree の未コミット行).
+    // So which copy a row is about is the row's, not the id's — and it is the predicate the whole read-only pane hangs
+    // off: **empty means this window's own tree, and only then can anything here be written.**
+    property string carriedPath: ""
+    property string carriedName: ""
+    /// Whether the pane may write what it is showing. One property, read all the way down: the buckets' whole-bucket
+    /// buttons, the rows' marks, the commit block, the band's stash, and the diff's own staging
+    /// (デザイン規約 §無効).
+    readonly property bool wipWritable: page.carriedPath === ""
+    /// **The list the right pane is showing**, whichever pane that is: this window's own unstaged run, or the one
+    /// folded list another copy's changes are shown as (`CarriedPane`). Everything this page asks about the files on
+    /// screen is asked of it, so the copy being read is chosen in one place and the questions below do not each have
+    /// to know. The two panes agree on what it can answer — which bucket holds a path, what is beside it, where a
+    /// rename came from — because both lists are built from the whole of one status (`models::nav::Source::files`).
+    readonly property var wipUnstaged: page.wipWritable ? worktreeModel : carriedModel
+    /// Tree or flat paths, for both trios at once: the choice is the pane's, not one list's, so stepping onto another
+    /// copy and back keeps it — and what is saved at close is the one answer either trio would give.
+    function setWipTreeView(tree) {
+        conflictsModel.setTreeView(tree)
+        worktreeModel.setTreeView(tree)
+        stagedModel.setTreeView(tree)
+        carriedModel.setTreeView(tree)
+    }
+    /// Opens the WIP pane on whichever working copy row `row` is — this window's own, or another copy's.
+    function openWipFor(row) {
+        const at = row >= 0 ? graphModel.carriedPath(row) : ""
+        // Already the copy being read: a second click on that row has nothing new to ask for, and clearing the pane
+        // would close the file opened from it under the hand that clicked.
+        if (at !== "" && at === page.carriedPath) {
+            page.wipShown = true
+            return
+        }
+        // The light in the list names a file of the copy being left — a name the copy arriving may well have too.
+        // Stepping between our own row and itself is not a step, and keeps the light where it was.
+        if (at !== page.carriedPath)
+            wipPane.clearChoice()
+        page.showWip()
+        if (at !== "")
+            page.standOnCopy(at, graphModel.carriedName(row))
+    }
+    /// Points the pane at one copy and asks for its files — the read behind the pane, which the copies' tick then
+    /// keeps current for as long as it stands open (`pollCarried`).
+    function standOnCopy(at, name) {
+        page.carriedPath = at
+        page.carriedName = name
+        repoTab.readCarriedStatus(at, name)
+    }
+    /// The pane is about this window's own tree again — every road to a commit and to our own row comes through here.
+    function dropCarried() {
+        page.carriedPath = ""
+        page.carriedName = ""
+    }
+    /// Follows the copy being read across a graph pass, and lets go of it where the copy has gone clean and taken its
+    /// row with it. **Addressed by the copy, not by the row number**: the rows move under a rebuild, and every one of
+    /// them answers to the same all-zero id.
+    function settleCarriedAfterPass() {
+        if (page.carriedPath === "")
+            return
+        const row = graphModel.carriedRowOf(page.carriedPath)
+        if (row >= 0) {
+            page.selectedRow = row
+            graphPane.setCurrentRow(row)
+            return
+        }
+        // Nothing to show and nothing to stand on: the copy committed, or put its changes away. The pane falls back
+        // the way it does when the row being read goes from under it — to whatever this page would have opened on.
+        page.dropCarried()
+        page.wipShown = false
+        page.selectedOid = ""
+        page.trySelectDefault()
     }
 
     // ---- commit editor -------------------------------------------
@@ -315,6 +395,9 @@ Item {
     // **The id the queue took it under is written down by the slot itself** (`ops::Press`), so nothing here holds
     // one and the answer below is found without reading anything into what else came back.
     function commitNow() {
+        // The button is down while the pane is another copy's (`WipCommitBlock`); this is the belt under it.
+        if (!page.wipWritable)
+            return
         repoTab.commit(wipPane.outgoingSubject, wipPane.outgoingBody, page.amending, wipPane.resetAuthor)
     }
     /// The answer to that commit, whichever way it went — **its own answer**, out of the ones this notify carried
@@ -1457,6 +1540,7 @@ Item {
             detailsPane: detailsPane,
             diffPane: diffPane,
             wipPane: wipPane,
+            carriedPane: carriedPane,
             planSeat: planSeat,
             gitCorner: gitCorner,
             refMenuSeat: refMenuSeat,
@@ -1767,7 +1851,7 @@ Item {
         page.diffPath = path
         page.diffOrigPath = origPath
         page.diffFromWt = kind !== "commit"
-        page.diffChange = kind === "conflicts" ? worktreeModel.changeOf(path) : ""
+        page.diffChange = kind === "conflicts" ? page.wipUnstaged.changeOf(path) : ""
         // The list's light names the file being read. A click had already made this row the whole of the choice, so
         // what this catches is the pane moving itself — the commit's list needs no such line, its light *is* the path
         // being read (`DetailsPane.readPath`).
@@ -1775,6 +1859,10 @@ Item {
             wipPane.readOne(kind, path)
         if (kind === "commit")
             page.askCommitDiff(path, origPath)
+        else if (page.carriedPath !== "")
+            // The contents have to be readable even where nothing here can be written: the read is the ordinary one,
+            // aimed at the copy the rows came from (`RepoSession::load_carried_diff`).
+            diffModel.requestCarried(page.carriedPath, kind, path, origPath)
         else
             diffModel.requestWorkTree(kind, path, origPath)
         page.diffShown = true
@@ -1811,6 +1899,9 @@ Item {
     // Stages (or unstages) one hunk, or one line of it. The indices address the diff currently on screen, so the pane
     // is reloaded afterwards: once the patch is applied the rows have moved.
     function stageSelection(hunk, line) {
+        // The seats these come from are not offered on another copy's file (`DiffPane.partial`); this is the belt.
+        if (!page.wipWritable)
+            return
         // The shown diff's fingerprint rides along: the write refuses to apply the indices to bytes that drifted since
         // this was read.
         //
@@ -1827,6 +1918,8 @@ Item {
     /// was held down, which is the whole of the asking (デザイン規約 §その他の操作). A line cannot be thrown away on its own — the
     /// hunk is the smallest piece — though it can still be staged on its own, which loses nothing.
     function discardHunkNow(hunk) {
+        if (!page.wipWritable)
+            return
         // Armed by the answer, for the reason `stageSelection` gives.
         page.diffAwaits = repoTab.discardSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, -1,
                                                    diffModel.fingerprint)
@@ -1839,9 +1932,9 @@ Item {
     /// other one and the place it left is not in the list to be read.
     property string diffNeighbour: ""
     function noteDiffNeighbour() {
-        if (!page.diffShown || page.diffKind === "commit" || !worktreeModel.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || !page.wipUnstaged.holdsPath(page.diffKind, page.diffPath))
             return
-        page.diffNeighbour = worktreeModel.besidePath(page.diffKind, page.diffPath)
+        page.diffNeighbour = page.wipUnstaged.besidePath(page.diffKind, page.diffPath)
     }
     /// Everything the open diff's file had on the side being read has gone over — staged, unstaged, thrown away,
     /// committed. The reader is left standing on it, so the pane moves rather than closing (デザイン規約 §diff の中のステージ):
@@ -1858,20 +1951,20 @@ Item {
     /// still renders as its whole content, a picture has no rows either way). Asked here, the answers below are read
     /// from the very change that said the file moved.
     function followEmptySide() {
-        if (!page.diffShown || page.diffKind === "commit" || worktreeModel.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || page.wipUnstaged.holdsPath(page.diffKind, page.diffPath))
             return
         const cut = page.diffNeighbour.indexOf(":")
         if (cut > 0) {
             const bucket = page.diffNeighbour.substring(0, cut)
             const path = page.diffNeighbour.substring(cut + 1)
-            if (worktreeModel.holdsPath(bucket, path)) {
-                page.openDiff(bucket, path, worktreeModel.origOf(path))
+            if (page.wipUnstaged.holdsPath(bucket, path)) {
+                page.openDiff(bucket, path, page.wipUnstaged.origOf(path))
                 return
             }
         }
-        const moved = worktreeModel.bucketOf(page.diffPath)
+        const moved = page.wipUnstaged.bucketOf(page.diffPath)
         if (moved !== "") {
-            page.openDiff(moved, page.diffPath, worktreeModel.origOf(page.diffPath))
+            page.openDiff(moved, page.diffPath, page.wipUnstaged.origOf(page.diffPath))
             return
         }
         page.closeDiff()
@@ -1901,7 +1994,9 @@ Item {
     /// there left the line missing from both sides on screen. The caller already knows the write
     /// was one that moves the tree (`absorbWriteResult`), so being open is the whole of the condition.
     function reloadDiff() {
-        if (!page.diffShown || page.diffKind === "commit")
+        // Nothing this window writes moves another copy's file, so a copy's diff is never re-read from here — its own
+        // tick is what keeps it current (`pollCarried`).
+        if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable)
             return
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
@@ -1922,7 +2017,25 @@ Item {
     function pollDiff() {
         if (!page.diffShown || page.diffKind === "commit" || page.diffSettling)
             return false
+        // A copy's file is re-read on the copies' tick, and aimed at the copy — sent through this one it would read
+        // *this* window's file of that name and hand it to a pane showing somebody else's (`pollCarried`).
+        if (!page.wipWritable)
+            return false
         return diffModel.refreshWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
+    }
+    /// The copies' own tick over the copy being read: its file list, and the file open from it. **Off the page's tick**
+    /// for the reason the rows' tallies are — a `status` of another tree is not a price the ten-second tick can pay
+    /// (`RepoSession::refresh_carried`).
+    ///
+    /// Answers whether it asked for anything, for the automation to latch on: the file's re-read is answered with
+    /// silence unless the bytes moved, the same way the page's own tick is.
+    function pollCarried() {
+        if (page.carriedPath === "")
+            return false
+        repoTab.readCarriedStatus(page.carriedPath, page.carriedName)
+        if (page.diffShown && page.diffKind !== "commit" && !diffModel.loading)
+            diffModel.refreshCarried(page.carriedPath, page.diffKind, page.diffPath, page.diffOrigPath)
+        return true
     }
 
     function closeDiff() {
@@ -2076,6 +2189,13 @@ Item {
     NavSectionModel { id: conflictsModel }
     NavSectionModel { id: worktreeModel }
     NavSectionModel { id: stagedModel }
+    // The same three again, for the copy the pane shows when the row being read is another working copy's
+    // (`page.carriedPath`). **A second set rather than the same one retold**: this window's own status arrives on its
+    // own tick whether or not anybody is reading another copy, and one set of lists would lose the copy's rows to it
+    // every ten seconds — and lose the reader's place in them with it.
+    // The list another working copy's changes are shown as — **one**, where this window's own tree is three: the
+    // split those three stand for is the index's, and nothing here can move that copy's index (`CarriedPane`).
+    NavSectionModel { id: carriedModel }
     NavSectionModel { id: worktreesModel }
     NavSectionModel { id: stashesModel }
     NavSectionModel { id: tagsModel }
@@ -2196,6 +2316,7 @@ Item {
         conflictsModel.attachWorktree(page.tab_id, "conflicts")
         worktreeModel.attachWorktree(page.tab_id, "unstaged")
         stagedModel.attachWorktree(page.tab_id, "staged")
+        carriedModel.attachCarried(page.tab_id)
         worktreesModel.attachSection(page.tab_id, "worktrees")
         stashesModel.attachSection(page.tab_id, "stashes")
         tagsModel.attachSection(page.tab_id, "tags")
@@ -2211,8 +2332,11 @@ Item {
         if (page.visible && repoTab.state === "open") {
             repoTab.refreshQuick()
             // The window coming back is the moment an outside change is most likely to be waiting, so the file on
-            // screen is asked as well rather than waiting out the rest of the tick.
+            // screen is asked as well rather than waiting out the rest of the tick — and where the pane is standing
+            // on another copy, that copy is what the file belongs to (`pollCarried` reads one, not every copy: the
+            // rest are the slow tick's, which is the whole reason they are on one).
             page.pollDiff()
+            page.pollCarried()
         }
     }
 
@@ -2234,7 +2358,12 @@ Item {
         interval: Metrics.copiesIntervalMs
         repeat: true
         running: page.onScreen && page.visible && repoTab.state === "open"
-        onTriggered: repoTab.refreshCarried()
+        onTriggered: {
+            repoTab.refreshCarried()
+            // And the one being read, file by file — the tallies above are all the rows need, and the pane needs the
+            // list behind them (`pollCarried`).
+            page.pollCarried()
+        }
     }
     // The badge counting a running replay out. Its own tick because it asks its own question: two file reads off the
     // git directory, no process, so it can run at a rate a number is worth watching at — where the tick above carries
@@ -2505,6 +2634,11 @@ Item {
         // status and never goes back (`WorkTreeModel`), so this stands in front of a page's opening moment alone.
         if (!workTree.loaded)
             return
+        // **A pane about another working copy is not this tree's face.** What is on screen is that copy's changes, and
+        // they are still there whatever this tree has just finished — so nobody is walked off it. The landing below
+        // is left armed rather than taken: the moment it is about is the reader coming back to their own row.
+        if (!page.wipWritable)
+            return
         // Whether this window's own stash is what emptied it — asked of the press that made it, which is the only
         // thing that still knows (`ops::StashOut`). **Asked from both sides of the pair**, because the status that
         // finds the tree empty and the answer that says whose it was arrive in no fixed order; whichever comes
@@ -2633,11 +2767,14 @@ Item {
             page.chosenAnchorOid = oidHex
         }
         // **The working tree's row is not a hash**, so nothing below can be skipped for it the way it can for a
-        // commit: what it shows is whatever the tree is now.
+        // commit: what it shows is whatever the tree is now. Which tree is the row's own answer — several copies can
+        // have a row here and they all wear the same all-zero id (`openWipFor`).
         if (GitFacts.wipOid(oidHex)) {
-            page.showWip()
+            page.openWipFor(row)
             return
         }
+        // A commit is nobody's working copy, so the pane stops being about one.
+        page.dropCarried()
         // The commit already open. **Everything below is of this commit and has been asked once**: the details and the
         // signature are answers to a hash, and a hash cannot have changed under the same row — asking again spends a
         // `git show` and a gpg run per click for an answer already on screen (the find bar says the same of landing
@@ -2721,6 +2858,9 @@ Item {
                 page.rememberAnchor()
                 // A stopped operation lands on the working tree's own row, which this pass is what puts there.
                 page.tryPendingWipSelect()
+                // Another copy's row moves under a rebuild the way a commit's does, and goes away when that copy
+                // commits — neither of which its all-zero id can say (`settleCarriedAfterPass`).
+                page.settleCarriedAfterPass()
                 if (page.pendingHeadSelect) {
                     page.tryPendingHeadSelect()
                 } else if (page.selectedOid !== "") {
@@ -2845,7 +2985,9 @@ Item {
         }
     }
     Connections {
-        target: worktreeModel
+        // Whichever trio the pane is showing: the file the diff is on belongs to the copy those rows came from, and
+        // so does the side the pane would move to when it runs out (`followEmptySide`).
+        target: page.wipUnstaged
         function onChanged() {
             // The file the diff is on is still where it was, so this is the last moment its neighbour can be read (see
             // `noteDiffNeighbour`) — and the change that takes it off the side being read is the one that moves the
@@ -3033,9 +3175,14 @@ Item {
                             staged: page.diffStaged
                             conflicted: page.diffKind === "conflicts"
                             conflictChange: page.diffChange
-                            // The two swap over during a rebase; the model is where that is already answered.
-                            sideOurs: workTree.sideOurs
-                            sideTheirs: workTree.sideTheirs
+                            // Read where the file is, and staged only where this window is the one holding it.
+                            writable: page.wipWritable
+                            copyName: page.carriedName
+                            // The two swap over during a rebase; the model is where that is already answered. What
+                            // *this* window is in the middle of, so a copy's conflicted file falls back to git's own
+                            // two words the way its rows do (`WipBucketPane`).
+                            sideOurs: page.wipWritable ? workTree.sideOurs : ""
+                            sideTheirs: page.wipWritable ? workTree.sideTheirs : ""
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling
@@ -3100,15 +3247,33 @@ Item {
                         z: 1
                     }
 
+                    // Another working copy's changes are a pane of their own rather than this one with its controls
+                    // switched off (デザイン規約 §別の作業コピーを読む): what a reader can do with them is read them,
+                    // which is what the commit pane is already shaped for.
+                    CarriedPane {
+                        id: carriedPane
+                        anchors.fill: parent
+                        visible: page.wipShown && !page.wipWritable
+                        copyName: page.carriedName
+                        files: carriedModel
+                        readBucket: page.diffFromWt ? page.diffKind : ""
+                        readPath: page.diffFromWt ? page.diffPath : ""
+                        menuStanding: page.menuStanding
+                        onTreeViewChosen: tree => page.setWipTreeView(tree)
+                        onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
+                        onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
+                    }
+
                     WipPane {
                         id: wipPane
                         anchors.fill: parent
-                        visible: page.wipShown
+                        visible: page.wipShown && page.wipWritable
                         repoTab: repoTab
                         workTree: workTree
                         worktreeModel: worktreeModel
                         conflictsModel: conflictsModel
                         stagedModel: stagedModel
+                        onTreeViewChosen: tree => page.setWipTreeView(tree)
                         amending: page.amending
                         headPublished: page.headPublished
                         menuStanding: page.menuStanding

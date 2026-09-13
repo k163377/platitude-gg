@@ -13,6 +13,9 @@ Rectangle {
     required property int count
     /// Whether the list below is showing the tree.
     required property bool treeView
+    /// What the band calls them. The default is the commit's word; the pane that reads another working copy heads the
+    /// same list with the word that window's own pane uses, because they are the same kind of thing.
+    property string caption: qsTr("CHANGES")
 
     signal chosen(bool tree)
 
@@ -24,7 +27,7 @@ Rectangle {
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
-            text: qsTr("CHANGES")
+            text: changesBand.caption
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
             color: Theme.textSecondary

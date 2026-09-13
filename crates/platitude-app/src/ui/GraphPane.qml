@@ -284,7 +284,7 @@ Rectangle {
         graphModel: graphArea.graphModel
         asking: askBar.open
         // The walk names the commit it landed on, not the row — the page looks that one up.
-        onActivated: oidHex => graphArea.rowActivated(oidHex, -1, Qt.NoModifier)
+        onActivated: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow, Qt.NoModifier)
     }
     function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }

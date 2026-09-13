@@ -29,8 +29,11 @@ ActionButton {
     // own write.
     // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
     // own button, and fetch is the only other door left open.
+    // And held down while the pane is reading another working copy: this is the one button outside that pane that
+    // acts on the very changes it is listing, and a press here would set aside *this* window's rather than the ones
+    // on screen (P3-確認事項 §別 worktree の未コミット行).
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
-             && !stashButton.curPage.planShown
+             && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {
         // Nothing open, or another git command already out. Neither is about stashing, and both are said on
         // this band already (デザイン規約 §無効). Said out loud because a disabled control still takes hover and
@@ -40,6 +43,10 @@ ActionButton {
         // The freeze names itself: a tree that could be stashed looks no different while a plan stands over it.
         if (stashButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — until it closes, the only write is its run button")
+        // The pane names the copy it is reading, but not what this button would have done — and the files on screen
+        // are exactly the ones a reader would expect a press here to reach.
+        if (!stashButton.curPage.wipWritable)
+            return qsTr("Reading another working copy — this sets aside this window's changes")
         // The three that *are* about the working tree each name what is missing (デザイン規約 §hover のツールチップ).
         // They speak where the fetch button's refusals stay silent, because the reason is not on screen the way
         // `REMOTES 0` is: a tree with conflicts in it looks exactly like one that could be stashed, and the
