@@ -398,6 +398,7 @@ mod tests {
             elapsed: Duration::from_secs(602),
             quiet_for: None,
             reaped: None,
+            looked: Vec::new(),
         }
     }
 

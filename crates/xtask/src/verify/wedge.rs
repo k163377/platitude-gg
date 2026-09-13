@@ -27,6 +27,7 @@
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
 /// What a process its own deadline thread ended exits with, and the file
@@ -38,6 +39,8 @@ use std::time::Duration;
 const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
 const TRAIL_FILE: &str = "stations.txt";
+#[cfg(windows)]
+const DUMP_FILE: &str = "app.dmp";
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).
@@ -118,6 +121,7 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
     if let Some(under) = &ran.reaped {
         lines.push(format!("  under the app: {under}"));
     }
+    lines.extend(ran.looked.iter().cloned());
     lines.push(format!(
         "  pictures on disk: {}",
         match shots.is_empty() {
@@ -132,6 +136,227 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
     ));
     lines.push(format!("  {}", lanes_line()));
     lines
+}
+
+/// What only a look at the process can say once the trail has run out,
+/// taken while the app still stands. Past `exiting` the exit has ended
+/// every thread but the one it runs on before the loaded libraries are
+/// given their detach, so **one thread alive is a process inside its
+/// exit** and several is one that never got there. And on Windows a dump
+/// of it, for the frame that stands still — unless the stop was ordered
+/// (`--fault-hang`), whose cause needs no dump.
+pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool) -> Vec<String> {
+    let mut lines = vec![match threads_of(pid) {
+        Ok(threads) => format!(
+            "  threads at the ceiling: {} alive — {}",
+            threads.len(),
+            listed(&threads)
+        ),
+        Err(why) => format!("  threads at the ceiling: could not be listed — {why}"),
+    }];
+    if unordered {
+        lines.push(dump_of(pid, shot_dir));
+    }
+    lines
+}
+
+/// The threads a listing answered with, or why it could not answer —
+/// worded for the line under the verdict.
+#[cfg(windows)]
+fn listing(out: std::process::Output) -> Result<Vec<String>, String> {
+    if !out.status.success() {
+        return Err(format!("the listing exited {}", out.status));
+    }
+    let threads: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+    if threads.is_empty() {
+        return Err("the listing answered with no threads".to_string());
+    }
+    Ok(threads)
+}
+
+/// The first few threads on one line; the rest are counted.
+fn listed(threads: &[String]) -> String {
+    const SHOWN: usize = 8;
+    let shown = threads
+        .iter()
+        .take(SHOWN)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if threads.len() > SHOWN {
+        format!("{shown}, … {} more", threads.len() - SHOWN)
+    } else {
+        shown
+    }
+}
+
+/// The listing, from a PowerShell of its own: every thread's number,
+/// its state, what it waits on, its description — what Rust and Qt name
+/// their threads by: `tokio-rt-worker`, `QSGRenderThread`,
+/// `pgg-deadline` — the module it started in, which names the system's
+/// own threads (`ntdll.dll` for the thread pool, `WINMM.dll` for a
+/// timer), and the processor time it has had. A survivor of the
+/// teardown is told from the system's idle threads by the two in the
+/// middle, which `Get-Process` does not carry: each is one Win32 call,
+/// made from C# the way the dump is ([`DUMP_SCRIPT`]). A thread that
+/// could not be opened is listed by its number alone, as `-@?`.
+#[cfg(windows)]
+const LISTING_SCRIPT: &str = "Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PggThreads {
+    [DllImport(\"kernel32.dll\", SetLastError = true)] static extern IntPtr OpenThread(uint access, bool inherit, uint tid);
+    [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport(\"kernel32.dll\", SetLastError = true)] static extern int GetThreadDescription(IntPtr handle, out IntPtr description);
+    [DllImport(\"kernel32.dll\")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport(\"ntdll.dll\")] static extern int NtQueryInformationThread(IntPtr handle, int kind, out IntPtr info, int length, IntPtr returned);
+    public static string Describe(uint tid) {
+        IntPtr handle = OpenThread(0x0040 | 0x0800, false, tid);
+        if (handle == IntPtr.Zero) return \"|\";
+        IntPtr description; string name = \"\";
+        if (GetThreadDescription(handle, out description) >= 0) { name = Marshal.PtrToStringUni(description); LocalFree(description); }
+        IntPtr start; string at = \"\";
+        if (NtQueryInformationThread(handle, 9, out start, IntPtr.Size, IntPtr.Zero) == 0) at = start.ToInt64().ToString();
+        CloseHandle(handle);
+        return name + \"|\" + at;
+    }
+}
+'@
+$process = Get-Process -Id PGG_PID
+$modules = @()
+try { foreach ($module in $process.Modules) { $modules += [pscustomobject]@{ Name = $module.ModuleName; Base = $module.BaseAddress.ToInt64(); End = $module.BaseAddress.ToInt64() + $module.ModuleMemorySize } } } catch {}
+foreach ($thread in $process.Threads) {
+    $described = [PggThreads]::Describe([uint32]$thread.Id).Split('|')
+    $name = $described[0]; if ($name -eq '') { $name = '-' }
+    $in = '?'
+    if ($described[1] -ne '') { $start = [int64]$described[1]; $module = $modules | Where-Object { $start -ge $_.Base -and $start -lt $_.End } | Select-Object -First 1; if ($module) { $in = $module.Name } else { $in = 'unmapped' } }
+    $waiting = ''; if ($thread.ThreadState -eq 'Wait') { $waiting = $thread.WaitReason }
+    '{0} {1} {2} {3}@{4} cpu={5}ms' -f $thread.Id, $thread.ThreadState, $waiting, $name, $in, [int]$thread.TotalProcessorTime.TotalMilliseconds
+}";
+
+/// Every thread of the process ([`LISTING_SCRIPT`]). Windows has no way
+/// to this in std, and the one it has is the same PowerShell the reaper
+/// reads its process tree from (`crate::reap`).
+#[cfg(windows)]
+fn threads_of(pid: u32) -> Result<Vec<String>, String> {
+    let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    listing(crate::subprocess::run_captured(&mut command)?)
+}
+
+/// The same off `/proc`: the thread's name is there as well, which says
+/// whose it is — a tokio worker, the deadline thread, a render thread.
+#[cfg(unix)]
+fn threads_of(pid: u32) -> Result<Vec<String>, String> {
+    let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
+        .map_err(|error| format!("/proc/{pid}/task could not be read: {error}"))?;
+    let mut threads = Vec::new();
+    for task in tasks.flatten() {
+        let dir = task.path();
+        let tid = task.file_name().to_string_lossy().into_owned();
+        let comm = std::fs::read_to_string(dir.join("comm")).unwrap_or_default();
+        let stat = std::fs::read_to_string(dir.join("stat")).unwrap_or_default();
+        // The state is the field after the command's closing parenthesis,
+        // which can itself hold spaces.
+        let state = stat
+            .rsplit_once(')')
+            .and_then(|(_, rest)| rest.split_whitespace().next())
+            .unwrap_or("?");
+        let wchan = std::fs::read_to_string(dir.join("wchan")).unwrap_or_default();
+        threads.push(format!(
+            "{tid} {state} {} wchan={}",
+            comm.trim(),
+            wchan.trim()
+        ));
+    }
+    if threads.is_empty() {
+        return Err(format!("/proc/{pid}/task lists no threads"));
+    }
+    Ok(threads)
+}
+
+/// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
+/// its own, the way the listing is taken. Full memory, the handles and
+/// the thread information ([`DUMP_KIND`]): what
+/// a stopped exit is read off is the one thread's stack, `~*k` in
+/// WinDbg, and what it holds is in the memory behind it.
+///
+/// **Not `rundll32 comsvcs.dll,MiniDump`**, the dumper every Windows
+/// has on hand. What it writes here is a file whose header claims the
+/// whole memory and holds none of it, under an ACL that names SYSTEM
+/// and Administrators alone — a dump its own taker cannot open
+/// (internal-docs/P3-確認事項.md §次の 1 回で何が読めるか). A file
+/// PowerShell creates is the owner's, like any other.
+///
+/// `PGG_PID` and `PGG_PATH` are filled in by [`dump_of`]; the path is
+/// inside a single-quoted literal, which a temp path has no quote to
+/// break. The process exits with the Win32 error of the call, zero for
+/// a dump written.
+#[cfg(windows)]
+const DUMP_SCRIPT: &str = "Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public static class PggDump {
+    [DllImport(\"dbghelp.dll\", SetLastError = true)]
+    static extern bool MiniDumpWriteDump(IntPtr process, uint pid, IntPtr file, int kind, \
+     IntPtr exception, IntPtr user, IntPtr callback);
+    public static int Write(int pid, string path, int kind) {
+        var process = System.Diagnostics.Process.GetProcessById(pid);
+        using (var file = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None)) {
+            return MiniDumpWriteDump(process.Handle, (uint)pid, file.SafeFileHandle.DangerousGetHandle(), \
+             kind, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero) ? 0 : Marshal.GetLastWin32Error();
+        }
+    }
+}
+'@
+exit [PggDump]::Write(PGG_PID, 'PGG_PATH', PGG_KIND)";
+
+/// `MINIDUMP_TYPE` (minidumpapiset.h): `MiniDumpWithFullMemory` |
+/// `MiniDumpWithHandleData` | `MiniDumpWithThreadInfo`.
+#[cfg(windows)]
+const DUMP_KIND: u32 = 0x2 | 0x4 | 0x1000;
+
+/// A minidump of the process beside its pictures ([`DUMP_SCRIPT`]).
+#[cfg(windows)]
+fn dump_of(pid: u32, shot_dir: &Path) -> String {
+    let path = shot_dir.join(DUMP_FILE);
+    let script = DUMP_SCRIPT
+        .replace("PGG_PID", &pid.to_string())
+        .replace("PGG_PATH", &path.to_string_lossy())
+        .replace("PGG_KIND", &DUMP_KIND.to_string());
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    match crate::subprocess::run_captured(&mut command) {
+        Ok(out) if out.status.success() => match std::fs::metadata(&path) {
+            Ok(meta) => format!(
+                "  a dump of the app: {} ({} MB) — WinDbg: `!analyze -v`, then `~*k` for the thread that stands",
+                path.display(),
+                meta.len() / (1024 * 1024)
+            ),
+            Err(error) => format!(
+                "  no dump: the dumper answered but left nothing at {} ({error})",
+                path.display()
+            ),
+        },
+        // The Win32 error of the call, or PowerShell's own one where the
+        // type never compiled.
+        Ok(out) => format!("  no dump: MiniDumpWriteDump exited {}", out.status),
+        Err(error) => format!("  no dump: {error}"),
+    }
+}
+
+/// Nothing on the other systems: a core needs a debugger the container
+/// does not carry, and the thread list above names what waits where.
+#[cfg(not(windows))]
+fn dump_of(_pid: u32, _shot_dir: &Path) -> String {
+    "  no dump on this system: the threads above are the whole of the look".to_string()
 }
 
 /// The stations the run reached, as the one line to print under any red
@@ -445,6 +670,80 @@ mod tests {
         Counted, TRAIL_FILE, account, at_a_ceiling, clear_any_account, held_in, stopped_in, trail,
     };
 
+    /// A small process that stands still for as long as a test needs to
+    /// look at it: on Windows `ping`, counting off seconds against the
+    /// loopback, since there is no `sleep`.
+    #[cfg(windows)]
+    fn stand_in() -> std::process::Command {
+        let mut command = std::process::Command::new("ping");
+        command.args(["-n", "600", "127.0.0.1"]);
+        command
+    }
+
+    /// The dump is one a person can open: written by the call itself, so
+    /// the memory is behind the header and the file is its owner's to
+    /// read — neither of which `comsvcs.dll,MiniDump` gives (`dump_of`).
+    /// Taken of the stand-in, which is small and stands still.
+    #[cfg(windows)]
+    #[test]
+    fn a_dump_of_a_standing_process_is_written_and_readable() {
+        let dir = lanes("dump");
+        let mut standing = stand_in()
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .expect("a process to dump");
+
+        let line = super::dump_of(standing.id(), &dir);
+
+        // Ended before anything is asserted, so a red leaves nothing
+        // standing.
+        standing
+            .kill()
+            .and_then(|()| standing.wait())
+            .expect("the stand-in ended");
+        assert!(line.starts_with("  a dump of the app:"), "{line}");
+        let dump = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .open(dir.join(super::DUMP_FILE))
+            .expect("the dump opens for its owner");
+        let len = dump.metadata().expect("the dump's size").len();
+        // Full memory is the images and the heap, which is orders past a
+        // header with the stacks alone.
+        assert!(len > 1024 * 1024, "{len} bytes is a header, not a dump");
+        drop(dump);
+        std::fs::remove_dir_all(&dir).expect("the dump is its owner's to remove");
+    }
+
+    /// The listing names what the numbers alone could not — the thread's
+    /// description and the module it started in — which is how a
+    /// survivor of the teardown is told from the system's idle threads.
+    /// The stand-in's main thread starts in its own image.
+    #[cfg(windows)]
+    #[test]
+    fn a_listing_names_the_threads_of_a_standing_process() {
+        let mut standing = stand_in()
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .expect("a process to list");
+
+        let listed = super::threads_of(standing.id());
+
+        standing
+            .kill()
+            .and_then(|()| standing.wait())
+            .expect("the stand-in ended");
+        let threads = listed.expect("the stand-in's threads");
+        assert!(!threads.is_empty());
+        for line in &threads {
+            assert!(line.contains('@') && line.contains(" cpu="), "{line}");
+        }
+        assert!(
+            threads.iter().any(|line| line.contains("@ping.exe")),
+            "{threads:?}"
+        );
+    }
+
     /// A lanes directory of this test's own.
     fn lanes(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("pgg-wedge-{name}-{}", std::process::id()));
@@ -482,6 +781,7 @@ mod tests {
             elapsed: Duration::from_secs(140),
             quiet_for: Some(Duration::from_secs(138)),
             reaped: None,
+            looked: Vec::new(),
         }
     }
 

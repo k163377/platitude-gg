@@ -62,6 +62,11 @@ pub(super) struct Ran {
     /// running, counted (`reap::Reaped::line`). `None` for a run that
     /// ended itself.
     pub(super) reaped: Option<String>,
+    /// What a look at the app while it still stood could say — its
+    /// threads, and a dump of it where one could be taken — for a run
+    /// reaped at the ceiling; empty for one that ended itself
+    /// (`super::wedge::look_at`).
+    pub(super) looked: Vec<String>,
 }
 
 /// Starts the app, waits it out, and answers with everything it said.
@@ -91,11 +96,17 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
 
     let mut timed_out = false;
     let mut reaped = None;
+    let mut looked = Vec::new();
     let status = loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             break Some(status);
         }
         if wait.look_again("its exit").is_err() {
+            // Taken while the app still stands, since past `exiting` the
+            // trail has run out and these are the only witnesses left
+            // (`super::wedge::look_at`).
+            looked =
+                super::wedge::look_at(child.id(), start.shot_dir, start.opts.fault_hang.is_empty());
             // The app takes the git it was waiting on with it — a hook
             // that never returns, a fetch to nowhere — which `reap`
             // reaches by walking from the app rather than leaving it to
@@ -137,6 +148,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         elapsed,
         quiet_for: spoke_at.map(|at| elapsed.saturating_sub(at)),
         reaped,
+        looked,
     })
 }
 

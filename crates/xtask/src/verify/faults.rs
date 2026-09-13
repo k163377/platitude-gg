@@ -102,6 +102,7 @@ const CASES: &[Case] = &[
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
+            "threads at the ceiling:",
         ],
         forbids: &["auto-act watchdog expired"],
     },
