@@ -1950,6 +1950,10 @@ Item {
     readonly property alias pageWip: wipPane
     /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
+    /// The graph's rows themselves. Automation only, and for the same reason `pageWip` is exposed: a window-level
+    /// verb asks one page for a row and reads the answer in the window (`carried-open` opens another working copy in
+    /// a tab of its own, which is a question about two pages).
+    readonly property alias pageGraphPane: graphPane
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
     /// what the band's fetch button is allowed to be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded
@@ -3003,6 +3007,9 @@ Item {
                             }
                             onRowMenuOpenRequested: (oidHex, record) => page.openRowMenu(oidHex, record)
                             onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
+                            // The same door the WORKTREES row opens: the copy's own tab, where its changes are read
+                            // and staged.
+                            onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
                             onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                             namingRefused: page.graphNameRefusedWhy !== ""

@@ -292,7 +292,19 @@ impl GraphModel {
         usize::try_from(row)
             .ok()
             .and_then(|row| self.carried.get(&row))
-            .cloned()
+            .map(|carried| carried.tally.clone())
+            .unwrap_or_default()
+    }
+
+    /// Where the working copy a row is about lives — what a double-click
+    /// on it opens in a tab of its own, which is where its changes can be
+    /// read and staged. Empty for every other row.
+    #[qslot]
+    fn carried_path(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.carried.get(&row))
+            .map(|carried| carried.path.clone())
             .unwrap_or_default()
     }
 
@@ -302,8 +314,8 @@ impl GraphModel {
     fn carried_name(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
-            .and_then(|row| self.carried_names.get(&row))
-            .cloned()
+            .and_then(|row| self.carried.get(&row))
+            .map(|carried| carried.name.clone())
             .unwrap_or_default()
     }
 

@@ -23,6 +23,24 @@ mod stream;
 use item::{GraphRowItem, to_row_item};
 use marks::RowMark;
 
+/// What a row of another working copy's uncommitted work answers when the
+/// delegate asks about it: whose it is, where it is, and the six tallies
+/// it says beside the words.
+///
+/// **Beside the items rather than in them** — fifteen fields is the
+/// ceiling the model macro allows and every one is spent
+/// (`GraphRowItem`), and these rows are a handful where the window is
+/// thousands.
+#[derive(Default, Clone)]
+struct CarriedRow {
+    name: String,
+    /// Where the copy is — what the row opens in a tab of its own, which
+    /// is where its changes can be read and staged.
+    path: String,
+    /// The six, comma-separated in the order the row draws them.
+    tally: String,
+}
+
 #[derive(Default)]
 pub struct GraphModel {
     rows: Vec<GraphRowItem>,
@@ -37,8 +55,7 @@ pub struct GraphModel {
     /// item** — fifteen is the ceiling the model macro allows and all of
     /// them are spent, and these rows are a handful where the window is
     /// thousands (`GraphModel::carried_tally`).
-    carried: std::collections::HashMap<usize, String>,
-    carried_names: std::collections::HashMap<usize, String>,
+    carried: std::collections::HashMap<usize, CarriedRow>,
     /// Bumped every time those two are written. **A delegate's answer
     /// about them is a slot call, and a slot call is not made again
     /// because the map behind it was rewritten** — a row spliced into a

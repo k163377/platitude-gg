@@ -31,6 +31,8 @@ Rectangle {
     /// A row was double-clicked. `record` is the chip it shows (kind + flags + name); empty when the row shows no
     /// branch at all.
     signal rowSwitchRequested(string oidHex, string record)
+    /// Another working copy's uncommitted row was opened (see `GraphList`).
+    signal carriedOpenRequested(string path)
     /// The chip whose stacked list the page has out (null when none). Rows read it back through the view: a hand that
     /// walked down into the list and comes back to this chip is not opening anything, so it is not made to sit out the
     /// opening rest again.
@@ -399,6 +401,7 @@ Rectangle {
         onRowMenuRequested: (oidHex, record) => graphArea.rowMenuOpenRequested(oidHex, record)
         onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
         onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
+        onCarriedOpenRequested: path => graphArea.carriedOpenRequested(path)
         onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)

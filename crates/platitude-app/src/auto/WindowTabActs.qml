@@ -225,6 +225,58 @@ Item {
         }
     }
 
+    // Another working copy's uncommitted row opens that copy in a tab of its own — the door to the changes it is
+    // about, since this window's panes read this window's tree. Window-level because a tab is what it lands in.
+    SampleTimer {
+        id: carriedOpenTimer
+        running: Harness.autoAct === "carried-open"
+        property bool asked: false
+        property int beforeCount: -1
+        property string wanted: ""
+        /// The first row of somebody else's uncommitted work, or -1 while the graph has none. Off the model, which is
+        /// what says whose a row is — a row off screen has no delegate to ask.
+        function carriedRow(graph) {
+            for (let row = 0; row < graph.rowTotal; row++) {
+                if (graph.carriedName(row) !== "")
+                    return row
+            }
+            return -1
+        }
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0)
+                return
+            if (!carriedOpenTimer.asked) {
+                const row = carriedOpenTimer.carriedRow(page.pageGraph)
+                if (row < 0)
+                    return
+                // Through the row itself: the item is the real handler's own, and a run that called the page instead
+                // would go green with the row's own decision never taken (verify-ui §壊れない動詞).
+                const item = page.pageGraphPane.view.itemAtIndex(row)
+                if (item === null)
+                    return
+                carriedOpenTimer.wanted = page.pageGraph.carriedPath(row)
+                carriedOpenTimer.beforeCount = pageRepeater.count
+                if (item.doubleClick(Qt.NoModifier) !== true)
+                    return
+                carriedOpenTimer.asked = true
+                return
+            }
+            // The tab is there and showing its repository: a page still opening looks the same whichever copy it is.
+            if (pageRepeater.count !== carriedOpenTimer.beforeCount + 1)
+                return
+            const front = window.curPage
+            if (front === null || front.pageTab.state !== "open"
+                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
+                return
+            stop()
+            Harness.report("carried_open tabs=" + pageRepeater.count
+                              + " grew=" + (pageRepeater.count === carriedOpenTimer.beforeCount + 1)
+                              + " wanted=" + carriedOpenTimer.wanted)
+            window.finishAutoAct()
+        }
+    }
+
     // Reopening an existing path must select its tab without adding one.
     SampleTimer {
         id: openAgainTimer

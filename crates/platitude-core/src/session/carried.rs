@@ -28,6 +28,11 @@ pub struct Carried {
     /// The name the row's chip shows — the last segment of the path, the
     /// same one the WORKTREES row uses (`joins::shown_name`).
     pub name: crate::Name,
+    /// Where that copy is, as git printed it. **What the row opens**: the
+    /// changes themselves are read in the copy they belong to, by opening
+    /// it in a tab of its own — the same door the WORKTREES row is, and
+    /// the only one that can stage and commit in the tree it is about.
+    pub path: String,
     /// The commit the row leashes down to: that copy's HEAD. The row is
     /// drawn where that commit lands, so a copy whose HEAD the walk never
     /// reached draws nothing at all.
@@ -91,6 +96,7 @@ pub(super) async fn read_all(
         let cancel = cancel.clone();
         let path = std::path::PathBuf::from(&entry.path);
         let name = crate::session::joins::shown_name(&entry.path);
+        let shown_path = entry.path.clone();
         let head = entry
             .head_hex
             .as_deref()
@@ -107,6 +113,7 @@ pub(super) async fn read_all(
                 at,
                 Carried {
                     name,
+                    path: shown_path,
                     head,
                     kinds: Kinds::of(&status),
                 },

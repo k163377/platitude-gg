@@ -69,6 +69,16 @@ pub(super) const TABLE: &[Verb] = &[
     // everything else on that page was thrown away and read again;
     // `wip=` is the pane holding them being the one on screen, which
     // is the half of "kept" that a report about text alone misses.
+    // Another working copy's uncommitted row opening that copy. `grew=`
+    // is the whole claim — the picture of a second tab showing a
+    // repository is the same picture whichever door opened it, and a row
+    // that did nothing leaves the run to the ceiling rather than to a
+    // red line.
+    Verb {
+        name: "carried-open",
+        when: &[],
+        plain: "carried_open tabs=2 grew=true",
+    },
     Verb {
         name: "tab-carry",
         when: &[],

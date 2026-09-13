@@ -34,7 +34,6 @@ impl GraphModel {
         self.parent_oids.clear();
         self.index.clear();
         self.carried.clear();
-        self.carried_names.clear();
         self.carried_revision = self.carried_revision.wrapping_add(1);
     }
 
@@ -55,13 +54,15 @@ impl GraphModel {
                 let k = &carried.kinds;
                 self.carried.insert(
                     self.marks.len(),
-                    format!(
-                        "{},{},{},{},{},{}",
-                        k.added, k.modified, k.deleted, k.renamed, k.copied, k.conflicted
-                    ),
+                    super::CarriedRow {
+                        name: carried.name.to_string(),
+                        path: carried.path.clone(),
+                        tally: format!(
+                            "{},{},{},{},{},{}",
+                            k.added, k.modified, k.deleted, k.renamed, k.copied, k.conflicted
+                        ),
+                    },
                 );
-                self.carried_names
-                    .insert(self.marks.len(), carried.name.to_string());
                 self.carried_revision = self.carried_revision.wrapping_add(1);
             }
             self.parent_oids.extend(row.parents.iter().copied());

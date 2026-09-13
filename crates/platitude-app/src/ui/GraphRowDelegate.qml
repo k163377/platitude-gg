@@ -333,10 +333,7 @@ Item {
     /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
     /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
     /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
-    /// **Never on another copy's row**: a band under the pointer promises the row answers to it, and this one does
-    /// nothing at all (P3-確認事項 §別 worktree の未コミット行).
-    readonly property bool lit: !rowItem.carried
-                                && (rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip)
+    readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
 
     // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
     // opening where it lands flashes one card out and back per row (規約 §hover のツールチップ). **Only one of the two is
@@ -427,9 +424,16 @@ Item {
     /// write that lands ticks later, so nothing on screen says at the moment of the press whether the row took the
     /// gesture or turned it down.
     function doubleClick(modifiers) {
-        // As above — and this one is the door to `switch`, which is the last thing another copy's row may offer.
-        if (rowItem.carried)
-            return
+        // **Another copy's row opens that copy**, in a tab of its own — the same door the WORKTREES row is
+        // (`SidebarRowGestures.activateRow`). The changes are read where they live: this window's panes read this
+        // window's tree, and a copy's own tab is the only place its files can be staged and committed as well as
+        // read (P3-確認事項 §別 worktree の未コミット行).
+        if (rowItem.carried) {
+            const path = rowItem.ListView.view.model.carriedPath(rowItem.index)
+            if (path !== "")
+                rowItem.ListView.view.carriedOpenRequested(path)
+            return true
+        }
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
         // **A held double-click is two selection presses, not a double-click** (デザイン規約 §複数のコミットを選ぶ).
         // Qt hands the pair over as a double whatever the hand was holding, and the modifier with it — measured,

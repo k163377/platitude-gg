@@ -98,6 +98,7 @@ impl RowPrint {
         // its row — the id is the all-zero one whatever it is holding.
         if let Some(carried) = carried {
             carried.name.hash(&mut h);
+            carried.path.hash(&mut h);
             carried.head.hash(&mut h);
             let k = &carried.kinds;
             (k.added, k.modified, k.deleted).hash(&mut h);
@@ -205,6 +206,7 @@ mod tests {
                 Box::new(|r| {
                     r.carried = Some(crate::session::Carried {
                         name: "wt".into(),
+                        path: "/tmp/wt".into(),
                         head: oid('d'),
                         kinds: crate::status::Kinds {
                             modified: 1,

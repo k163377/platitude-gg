@@ -149,6 +149,9 @@ AppListView {
     /// where it draws none — what the menu's cards are aimed at (デザイン規約 §グラフ行の右クリック).
     signal rowMenuRequested(string oidHex, string record)
     signal rowSwitchRequested(string oidHex, string record)
+    /// Another working copy's uncommitted row was opened: that copy is to be shown in a tab of its own, which is where
+    /// its changes are read and staged.
+    signal carriedOpenRequested(string path)
     /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
     /// being changed. `record` is the chip's first one, whatever kind it names.
     signal rowRenameRequested(string oidHex, string record)
