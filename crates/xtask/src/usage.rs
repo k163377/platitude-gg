@@ -124,7 +124,7 @@ commands:
       timeout, so a silent hang fails by test name instead of sitting
       until the CI kill. Second step of `check`; subsecond on its own.
 
-  docs
+  docs [--sync]
       The three ways an edit to internal-docs, .claude/rules,
       .claude/rules-refs or CLAUDE.md tears a block off the list it
       belonged to: a line left at a bullet's indent under a block that
@@ -145,6 +145,15 @@ commands:
       about the one file an edit just landed in, which is where a tear is
       cheapest to undo: the turn that made it is the only one that still
       knows what the line meant to say.
+
+      It also holds what those documents quote: the value cells of
+      デザイン規約 against Theme.qml and Metrics.qml, and the command
+      lines against the catalogue the modules declare
+      (.claude/rules-refs/structure.md §コマンドの正本).
+      options:
+        --sync        write what is generated. Everything it writes is
+                      also said, so the drift reaches the person who has
+                      to decide which side was wrong
 
   qmltest
       The QtTest files under crates/platitude-app/tests/qml, run through
@@ -406,7 +415,9 @@ const TAIL: &str = "  shipped [--no-build]
       Two are neither, and both stay in the container on Linux too.
       `bare` builds the release workspace-wide and starts it on an Ubuntu
       carrying only what a package would declare, which is the only check
-      that the thing runs somewhere it was not built. `offline` is CI's
+      that the thing runs somewhere it was not built; `bare --discover`
+      works that package list out again rather than reading the one that
+      stands. `offline` is CI's
       offline-test job run here: it builds the app with the harness and
       the test binaries, then runs ci/offline-test.sh — the suite plus the
       offscreen smoke — in a container with no network at all, which is

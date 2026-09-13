@@ -56,10 +56,22 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use crate::command::{self, Permission, Where};
 use crate::locks::Locked;
 use crate::note::{field, now_secs};
 use crate::subprocess::common_git_dir;
 use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
+
+pub(crate) static STILL: command::Command = command::Command {
+    id: "still.standing",
+    call: "still",
+    purpose: "whether a measurement holds the machine still, and which builds are under way",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&STILL];
 
 /// Set on every child a verb here starts ([`step`]), so the child neither
 /// announces a build its parent already announced nor waits on a hold

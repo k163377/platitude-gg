@@ -7,8 +7,7 @@
 //! them show only once rendered, and the third only to a reader who knows
 //! how this tree writes a heading. What that costs is a sentence that no
 //! longer reads and a rule nobody applies, so the count is over the
-//! documents that are read as rules — internal-docs, .claude/rules,
-//! .claude/rules-refs and CLAUDE.md.
+//! documents that are read as rules ([`ROOTS`] and [`LOOSE`]).
 //!
 //! Each is a shape this file's own history has actually taken:
 //!
@@ -29,9 +28,32 @@
 //! how a sentence is built are the writer's, and a machine that had an
 //! opinion on either would be answering a question nobody asked it.
 
+mod commands;
 mod tokens;
 
 use std::path::{Path, PathBuf};
+
+use crate::command::{self, Permission, Where};
+
+pub(crate) static CHECK: command::Command = command::Command {
+    id: "docs.check",
+    call: "docs",
+    purpose: "the rule documents' torn blocks, quoted values and command spans",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static SYNC: command::Command = command::Command {
+    id: "docs.sync",
+    call: "docs --sync",
+    purpose: "write the generated cells and spans from the sources they quote",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&CHECK, &SYNC];
 
 /// The trees whose markdown is read, and the one file outside them.
 const ROOTS: [&str; 3] = ["internal-docs", ".claude/rules", ".claude/rules-refs"];
@@ -51,9 +73,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let root = crate::tree::workspace_root();
     let quoted = quote(&root, sync)?;
+    let held = commands::hold(&root).and_then(|held| written(&root, held, sync))?;
     let mut files = Vec::new();
     for dir in ROOTS {
-        collect(&root.join(dir), &mut files)?;
+        under(&root.join(dir), "md", &mut files)?;
     }
     files.extend(LOOSE.iter().map(|name| root.join(name)));
     files.sort();
@@ -77,6 +100,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for finding in &quoted.findings {
         println!("docs: {}: {finding}", tokens::DOCUMENT);
     }
+    for finding in held.writable.iter().chain(&held.findings) {
+        println!("docs: {finding}");
+    }
 
     let mut wrong: Vec<String> = Vec::new();
     if !torn.is_empty() {
@@ -91,21 +117,68 @@ pub fn run(args: &[String]) -> Result<(), String> {
         wrong.push(format!(
             "{} value cell(s) that do not quote the source: the values live in Theme.qml and \
              Metrics.qml, and the document prints what they say — change the value there and run \
-             `cargo xtask docs --sync`",
-            quoted.findings.len()
+             `{}`",
+            quoted.findings.len(),
+            SYNC.line()
+        ));
+    }
+    if !held.writable.is_empty() {
+        wrong.push(format!(
+            "{} generated command reference(s) that do not quote the catalogue: a command is \
+             declared beside the code that runs it, and `{}` writes what quotes it — change \
+             the declaration, not the copy",
+            held.writable.len(),
+            SYNC.line()
+        ));
+    }
+    if !held.findings.is_empty() {
+        wrong.push(format!(
+            "{} command reference(s) no sync can answer: a reference to an id nobody \
+             declares, a line written out where a reference belongs, or a verb one list \
+             carries and another does not",
+            held.findings.len()
         ));
     }
     if wrong.is_empty() {
         println!(
             "docs: {} markdown files scanned, every block still in the list it belongs to, {} \
-             value cell(s) quoting Theme.qml and Metrics.qml — PASS",
+             value cell(s) quoting Theme.qml and Metrics.qml, {} command span(s) and {} \
+             mention(s) quoting the catalogue — PASS",
             files.len(),
-            quoted.cells
+            quoted.cells,
+            held.spans,
+            held.mentions
         );
         Ok(())
     } else {
         Err(wrong.join("; and "))
     }
+}
+
+/// Write what the catalogue owns, when asked to.
+///
+/// The same order the value cells are held in: `--sync` writes, and the
+/// findings are still said, so that drift reaches the person who has to
+/// decide whether the declaration was the side that was wrong.
+fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::Held, String> {
+    if !sync || held.rewritten.is_empty() {
+        return Ok(held);
+    }
+    for (path, text) in &held.rewritten {
+        std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        println!(
+            "docs: {} rewritten — its command references now quote the catalogue",
+            path.strip_prefix(root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/")
+        );
+    }
+    Ok(commands::Held {
+        writable: Vec::new(),
+        rewritten: Vec::new(),
+        ..held
+    })
 }
 
 /// Hold the design document's value cells to the sources, writing them
@@ -337,14 +410,16 @@ fn is_bullet(bare: &str) -> bool {
     digits > 0 && bare[digits..].starts_with(['.', ')']) && bare[digits + 1..].starts_with(' ')
 }
 
-fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+/// Every file under `dir` with that extension, however deep. Both halves
+/// of this check walk a tree for one kind of file, and the command half
+/// walks two.
+pub(crate) fn under(dir: &Path, extension: &str, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
-        let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
-        let path = entry.path();
+        let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
         if path.is_dir() {
-            collect(&path, out)?;
-        } else if path.extension().is_some_and(|ext| ext == "md") {
+            under(&path, extension, out)?;
+        } else if path.extension().is_some_and(|ext| ext == extension) {
             out.push(path);
         }
     }

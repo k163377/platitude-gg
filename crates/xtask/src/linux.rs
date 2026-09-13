@@ -46,7 +46,37 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::command::{self, Permission, Where};
 use crate::keepsakes;
+
+pub(crate) static RUN: command::Command = command::Command {
+    id: "linux.run",
+    call: "linux <command>",
+    purpose: "run a command against this checkout on Ubuntu, in the container",
+    run_in: Where::Seat,
+    needs: &["docker running (on Linux the command runs where it stands)"],
+    permission: Permission::Plain,
+};
+
+pub(crate) static VERIFY: command::Command = command::Command {
+    id: "linux.verify",
+    call: "linux verify-ui <verb>",
+    purpose: "the same headless run on the other OS",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static BARE: command::Command = command::Command {
+    id: "linux.bare",
+    call: "linux bare --discover",
+    purpose: "whether the app runs on an Ubuntu carrying only the declared dependencies",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &BARE];
 
 mod bare;
 mod offline;

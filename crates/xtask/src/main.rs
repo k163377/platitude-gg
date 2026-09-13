@@ -8,6 +8,8 @@ mod app_env;
 mod app_out;
 mod budget;
 mod check;
+mod command;
+mod commands;
 mod corpus;
 mod demo;
 mod deny;

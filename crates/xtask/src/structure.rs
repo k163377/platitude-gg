@@ -41,6 +41,19 @@ mod popups;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static STRUCTURE: command::Command = command::Command {
+    id: "structure.lengths",
+    call: "structure",
+    purpose: "the per-file length backstop, and what the tree spends on comments",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&STRUCTURE];
+
 /// The length past which a file's design is the question, in code lines
 /// (.claude/rules/structure.md §長さの閾値). It is clippy's proposed
 /// `too_many_lines_in_file` default, counted the way that lint counts.

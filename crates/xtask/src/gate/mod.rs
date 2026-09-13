@@ -39,6 +39,70 @@ pub(crate) use reuse::preserve_reader;
 use stamp::{CommitStamp, Store};
 
 use census::Shift;
+
+use crate::command::{self, Permission, Where};
+
+/// 段 2: what a branch owes main, chosen by machine. The tier `land`
+/// runs for itself, and the one a session runs before reporting.
+pub(crate) static PREMERGE: command::Command = command::Command {
+    id: "gate.premerge",
+    call: "gate",
+    purpose: "the pre-merge tests the branch's diff owes, both OSes",
+    run_in: Where::Seat,
+    needs: &["a committed branch — the reach is read off the diff against main"],
+    permission: Permission::Plain,
+};
+
+/// 段 1: the same selection with no container behind it.
+pub(crate) static DAILY: command::Command = command::Command {
+    id: "gate.daily",
+    call: "gate --host-only",
+    purpose: "the daily tier: the host half, no container",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+/// 段 3: every file counted as changed, and the stamps ignored. Without
+/// `--fresh` a stamped tree runs almost nothing.
+pub(crate) static FULL: command::Command = command::Command {
+    id: "gate.full",
+    call: "gate --all --fresh",
+    purpose: "stage 3: every step owed, stamps ignored",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static VERDICT: command::Command = command::Command {
+    id: "gate.verdict",
+    call: "gate verdict <old> <new>",
+    purpose: "the reference-transaction hook's question: may main move here",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static INSTALL: command::Command = command::Command {
+    id: "gate.install",
+    call: "gate install",
+    purpose: "point core.hooksPath at the gate's reference-transaction hook",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static DEPS: command::Command = command::Command {
+    id: "gate.deps",
+    call: "gate deps",
+    purpose: "the reach graph itself: what a change reaches, and how",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] =
+    &[&PREMERGE, &DAILY, &FULL, &VERDICT, &INSTALL, &DEPS];
 // The census is read by the gate to choose verbs and by `verbs` to say
 // which verbs it never chooses, so the type and the file lister under it
 // stand where both can reach them.

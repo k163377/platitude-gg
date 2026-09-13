@@ -24,7 +24,19 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::command::{self, Permission, Where};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
+
+pub(crate) static QMLTEST: command::Command = command::Command {
+    id: "qmltest.run",
+    call: "qmltest",
+    purpose: "the QtTest files, run by Qt's own runner",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&QMLTEST];
 
 /// The tests, the module they import, and where both ends are staged.
 const TESTS: &str = "crates/platitude-app/tests/qml";

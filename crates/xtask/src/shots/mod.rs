@@ -33,6 +33,28 @@ pub(crate) use board::{record, record_dir, shown};
 pub(crate) use cli::run;
 pub(crate) use sweep::{seat_freed, seat_reused};
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static OPEN: command::Command = command::Command {
+    id: "shots.open",
+    call: "shots open",
+    purpose: "the board's one window — already open, it is one F5 from the latest run",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static PRUNE: command::Command = command::Command {
+    id: "shots.prune",
+    call: "shots prune",
+    purpose: "take this seat's runs off the board when its own rules will not",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&OPEN, &PRUNE];
+
 /// One `add`: the pictures taken for one thing, under the name that says
 /// what to look at in them.
 pub(crate) struct Run {

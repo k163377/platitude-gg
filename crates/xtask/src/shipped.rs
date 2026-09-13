@@ -25,7 +25,19 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::app_out::collect;
+use crate::command::{self, Permission, Where};
 use crate::wait::{LOOK_AGAIN, stood};
+
+pub(crate) static SHIPPED: command::Command = command::Command {
+    id: "shipped.build",
+    call: "shipped",
+    purpose: "the build without the verification harness — the one nobody else makes",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&SHIPPED];
 
 /// How long the window is watched standing. The engine reports a failed
 /// load during `load_qml_from_file`, which is before the event loop

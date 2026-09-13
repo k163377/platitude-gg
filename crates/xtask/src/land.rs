@@ -20,6 +20,7 @@
 //! allows onto a stamped commit and nothing else. History stays linear,
 //! and a landed seat already stands at main's tip.
 
+use crate::command::{self, Permission, Where};
 use crate::gate::Gated;
 use crate::seats::{
     Held, Identity, SEAT_CLAIM, Standing, WorktreeBlock, same_tree, standing, worktree_blocks,
@@ -28,6 +29,17 @@ use crate::subprocess::git_query;
 
 mod record;
 use record::Phases;
+
+pub(crate) static LAND: command::Command = command::Command {
+    id: "land.branch",
+    call: "land <branch>",
+    purpose: "rebase, gate and fast-forward main onto a branch — the one sanctioned way",
+    run_in: Where::Seat,
+    needs: &["the branch checked out in a seat, with nothing uncommitted"],
+    permission: Permission::Permit,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&LAND];
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut phases = Phases::start();

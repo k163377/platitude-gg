@@ -1,0 +1,38 @@
+# Every declared command id, written by `cargo xtask docs --sync` and read by `cargo xtask docs`.
+# A tripwire, not a catalogue: no command text, and the rule it serves is
+# .claude/rules-refs/structure.md §コマンドの正本.
+
+app.kill
+app.launch
+budget.standing
+check.stage2
+corpus.build
+demo.repo
+deny.policy
+docs.check
+docs.sync
+gate.daily
+gate.deps
+gate.full
+gate.install
+gate.premerge
+gate.verdict
+hook.event
+land.branch
+linux.bare
+linux.run
+linux.verify
+perf.measure
+qmltest.run
+seat.release
+seat.roster
+seat.take
+shipped.build
+shots.open
+shots.prune
+still.standing
+structure.lengths
+verify.ui
+verify.verbs
+verify.wedge
+waits.audit

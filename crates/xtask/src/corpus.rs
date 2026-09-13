@@ -38,6 +38,19 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static CORPUS: command::Command = command::Command {
+    id: "corpus.build",
+    call: "corpus",
+    purpose: "generate the synthetic repository the performance record is measured against",
+    run_in: Where::Seat,
+    needs: &["room for the generated repository, and the minutes it takes"],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&CORPUS];
+
 /// The directory name, ignored and beside the primary checkout's `.git`
 /// like the shot board and the chip ledger: one for all six seats, in
 /// the project rather than outside it, and never inside a seat's own

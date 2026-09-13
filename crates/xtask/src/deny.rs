@@ -18,6 +18,19 @@
 
 use std::process::Command;
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static DENY: command::Command = command::Command {
+    id: "deny.policy",
+    call: "deny",
+    purpose: "the dependency policy of deny.toml, against the tree standing here",
+    run_in: Where::Either,
+    needs: &["cargo-deny on PATH"],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&DENY];
+
 /// The checks that read only what is here: the resolved graph
 /// (`Cargo.lock`) and the policy (`deny.toml`).
 const OFFLINE_CHECKS: [&str; 3] = ["bans", "sources", "licenses"];

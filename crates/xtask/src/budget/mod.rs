@@ -90,6 +90,19 @@ mod queue;
 mod tests;
 mod unit;
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static BUDGET: command::Command = command::Command {
+    id: "budget.standing",
+    call: "budget",
+    purpose: "what the machine's one budget is doing, and the queue behind it",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&BUDGET];
+
 pub use cli::run;
 pub(crate) use ledger::{Pool, probe};
 pub(crate) use queue::Rank;

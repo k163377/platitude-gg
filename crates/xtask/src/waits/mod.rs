@@ -63,6 +63,19 @@ use std::path::{Path, PathBuf};
 
 use source::Purpose;
 
+use crate::command::{self, Permission, Where};
+
+pub(crate) static WAITS: command::Command = command::Command {
+    id: "waits.audit",
+    call: "waits",
+    purpose: "no test takes a stretch of clock for an answer",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&WAITS];
+
 /// A statement that breaks a rule.
 #[derive(Debug)]
 struct Finding {

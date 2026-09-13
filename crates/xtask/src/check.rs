@@ -18,7 +18,19 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::command::{self, Permission, Where};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
+
+pub(crate) static STAGE_TWO: command::Command = command::Command {
+    id: "check.stage2",
+    call: "check",
+    purpose: "stage 2 in full, the host and the container in parallel",
+    run_in: Where::Seat,
+    needs: &["a --verb line for each verb the change touches"],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&STAGE_TWO];
 
 /// How long a step may say nothing before it is killed and named. Silence,
 /// not wall time: the long steps (a first container image build, a release

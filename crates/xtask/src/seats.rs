@@ -10,6 +10,10 @@
 
 use std::time::{Duration, SystemTime};
 
+mod commands;
+
+pub(crate) use commands::COMMANDS;
+
 /// The reusable worktree seats. Sessions rotate through these six instead
 /// of minting a name per topic — a topical worktree is never reused, so
 /// every one paid a cold target/ build and kept the gigabytes afterwards

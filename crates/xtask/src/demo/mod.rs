@@ -20,4 +20,17 @@ mod worktrees;
 
 pub(crate) use presets::claim_root;
 pub use presets::{create, create_named, run};
+
+use crate::command::{self, Permission, Where};
+
+pub(crate) static DEMO_REPO: command::Command = command::Command {
+    id: "demo.repo",
+    call: "demo-repo <preset>",
+    purpose: "a throwaway repository in a known state, printed as its path",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&DEMO_REPO];
 pub(crate) use scale::pasted;

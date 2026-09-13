@@ -86,10 +86,27 @@ mod warmth;
 
 use std::time::Duration;
 
+use crate::command::{self, Permission, Where};
 use measure::measure;
 use options::{Options, parse};
 use reading::Reading;
 use report::{mb, report};
+
+/// The escape is read here through [`window_allowed`], not by the hook
+/// alone: a run told to stay offscreen needs no window and no ask.
+pub(crate) static PERF: command::Command = command::Command {
+    id: "perf.measure",
+    call: "perf --repo <path>",
+    purpose: "the four budget numbers, measured against a repository",
+    run_in: Where::Seat,
+    needs: &[
+        "a repository to measure against",
+        "the machine still — the run refuses load that was not the application",
+    ],
+    permission: Permission::Escape(crate::hook::GUI_APPROVAL_FLAG),
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&PERF];
 
 /// How often the samplers look, and how often the wait in
 /// [`measure`] comes round.

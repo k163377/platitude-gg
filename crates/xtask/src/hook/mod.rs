@@ -36,10 +36,30 @@ const MAIN_APPROVAL_FLAG: &str = "PGG_ALLOW_MAIN";
 const REBASE_APPROVAL_FLAG: &str = "PGG_ALLOW_REBASE";
 
 /// The same, for an instruction that asked for a real window.
-const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
+pub(crate) const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
 
 /// The same, for an instruction that approved stopping processes outside this worktree.
 const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
+
+/// Every escape this hook reads — the four above and nothing else, which
+/// is what a flag spelled elsewhere is held to.
+pub(crate) const APPROVAL_FLAGS: [&str; 4] = [
+    MAIN_APPROVAL_FLAG,
+    REBASE_APPROVAL_FLAG,
+    GUI_APPROVAL_FLAG,
+    PROCESS_STOP_APPROVAL_FLAG,
+];
+
+pub(crate) static HOOK: crate::command::Command = crate::command::Command {
+    id: "hook.event",
+    call: "hook <event>",
+    purpose: "the Claude Code hook handler, wired from .claude/settings.json",
+    run_in: crate::command::Where::Either,
+    needs: &["the hook payload on stdin — the harness runs this, not a session"],
+    permission: crate::command::Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&crate::command::Command] = &[&HOOK];
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let event = args.first().map(String::as_str).unwrap_or("");

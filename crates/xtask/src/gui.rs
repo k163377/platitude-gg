@@ -20,7 +20,28 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::command::{self, Permission, Where};
 use crate::wait::{LOOK_AGAIN, stood};
+
+pub(crate) static KILL: command::Command = command::Command {
+    id: "app.kill",
+    call: "kill",
+    purpose: "reap this tree's app processes, and nobody else's",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static LAUNCH: command::Command = command::Command {
+    id: "app.launch",
+    call: "launch",
+    purpose: "start the app in a real window and confirm it outlived its first second",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Escape(crate::hook::GUI_APPROVAL_FLAG),
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&KILL, &LAUNCH];
 
 /// How long a window just started is watched before it is called
 /// launched: long enough for a Qt platform plugin failure to have ended
