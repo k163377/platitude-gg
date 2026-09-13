@@ -496,9 +496,8 @@ impl SessionSink for BridgeSink {
             SessionEvent::WriteStarted { id, kind } => {
                 self.feeds.tab.push(TabMsg::WriteState {
                     id: id.as_u64(),
-                    op: kind.label().to_string(),
+                    kind,
                     running: true,
-                    replays: kind.replays_history(),
                     error: String::new(),
                     report: None,
                     head_seq: 0,
@@ -528,9 +527,8 @@ impl SessionSink for BridgeSink {
                 }
                 self.feeds.tab.push(TabMsg::WriteState {
                     id: id.as_u64(),
-                    op: kind.label().to_string(),
+                    kind,
                     running: false,
-                    replays: kind.replays_history(),
                     error: error.unwrap_or_default(),
                     report,
                     head_seq,

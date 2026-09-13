@@ -295,7 +295,7 @@ impl RepoTab {
     #[qslot]
     fn write_answer_op(&self, index: i32) -> String {
         self.write_answer_at(index)
-            .map(|a| a.op.clone())
+            .map(|a| a.kind.label().to_string())
             .unwrap_or_default()
     }
 

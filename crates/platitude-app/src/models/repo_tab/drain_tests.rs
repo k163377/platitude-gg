@@ -2,6 +2,7 @@
 //! saying (`drain::settle_write` / `settle_signature`).
 
 use super::*;
+use platitude_core::OperationKind as K;
 
 /// Two commits out of the `co-authors` demo repository, named here
 /// because the wedge below was measured on them: row 3 is the one the
@@ -101,9 +102,9 @@ fn an_answer_nobody_asked_for_is_dropped() {
     assert_eq!(tab.signature_oid, "");
 }
 
-fn settled(op: &str, error: &str) -> RepoTab {
+fn settled(kind: K, error: &str) -> RepoTab {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, op.into(), error.into(), None, 0, 0);
+    tab.settle_write(1, kind, error.into(), None, 0, 0);
     tab
 }
 
@@ -117,14 +118,14 @@ fn at_tip(tab: &RepoTab) -> bool {
 
 #[test]
 fn a_landed_stage_leaves_the_shown_diff_stale() {
-    let tab = settled("stage", "");
+    let tab = settled(K::Stage, "");
     assert!(!tab.write_refused);
     assert!(tab.write_stale_diff);
 }
 
 #[test]
 fn a_refused_stage_is_the_drifted_rows_own_answer() {
-    let tab = settled("stage", "error: patch does not apply");
+    let tab = settled(K::Stage, "error: patch does not apply");
     assert!(tab.write_refused);
     assert!(
         tab.write_stale_diff,
@@ -137,21 +138,21 @@ fn a_refused_stage_is_the_drifted_rows_own_answer() {
 // answer falls to the group like any other nobody named.
 #[test]
 fn a_commit_nobody_waits_for_falls_to_the_group() {
-    let tab = settled("commit", "nothing to commit, working tree clean");
+    let tab = settled(K::Commit, "nothing to commit, working tree clean");
     assert!(tab.write_refused);
     assert!(!tab.write_stale_diff, "a refusal asks for no re-read");
     assert_eq!(tab.commit_answer, -1);
 
-    let tab = settled("commit", "");
+    let tab = settled(K::Commit, "");
     assert!(tab.write_stale_diff);
     assert!(!at_tip(&tab), "the landing is the editor's, not a tip jump");
 }
 
 #[test]
 fn a_merge_that_landed_answers_at_the_tip() {
-    assert!(at_tip(&settled("merge", "")));
-    assert!(at_tip(&settled("cherry-pick", "")));
-    assert!(!at_tip(&settled("merge", "fatal: refusing to merge")));
+    assert!(at_tip(&settled(K::Merge, "")));
+    assert!(at_tip(&settled(K::CherryPick, "")));
+    assert!(!at_tip(&settled(K::Merge, "fatal: refusing to merge")));
 }
 
 #[test]
@@ -160,15 +161,15 @@ fn a_merge_that_stopped_does_not_claim_the_tip() {
     // The stop arrives before the answer that ends the write
     // (`TabMsg::WriteStopped`), so the flag is already standing.
     tab.last_write_stopped = true;
-    tab.settle_write(1, "merge".into(), String::new(), None, 0, 0);
+    tab.settle_write(1, K::Merge, String::new(), None, 0, 0);
     assert!(!at_tip(&tab), "nothing landed at the tip to go to");
 }
 
 #[test]
 fn a_branch_answer_says_so_whichever_way_it_went() {
-    assert!(settled("branch", "").write_branch_op);
-    assert!(settled("branch", "error: not fully merged").write_branch_op);
-    assert!(!settled("tag", "").write_branch_op);
+    assert!(settled(K::Branch, "").write_branch_op);
+    assert!(settled(K::Branch, "error: not fully merged").write_branch_op);
+    assert!(!settled(K::Tag, "").write_branch_op);
 }
 
 // ---- the toolbar's push ----------------------------------------------
@@ -190,8 +191,8 @@ fn push_pressed() -> RepoTab {
 fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words() {
     let mut tab = push_pressed();
     tab.absorb(vec![
-        answered(OURS, "push", "! [rejected] topic -> topic (fetch first)"),
-        answered(SOMEBODY_ELSE, "fetch", ""),
+        answered(OURS, K::Push, "! [rejected] topic -> topic (fetch first)"),
+        answered(SOMEBODY_ELSE, K::Fetch, ""),
     ]);
     assert_eq!(tab.push_answer, 0, "the press's own answer, by id");
     assert_eq!(tab.push_answer_branch, "topic");
@@ -214,7 +215,7 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     let mut tab = push_pressed();
     tab.absorb(vec![reported(
         OURS,
-        "push",
+        K::Push,
         "! [rejected] topic -> topic (fetch first)",
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::Outdated,
@@ -246,8 +247,8 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
     let mut tab = push_pressed();
     tab.push_out.asked(Some(SOMEBODY_ELSE), "other".into());
     tab.absorb(vec![
-        answered(OURS, "push", ""),
-        answered(SOMEBODY_ELSE, "push", "! [rejected]"),
+        answered(OURS, K::Push, ""),
+        answered(SOMEBODY_ELSE, K::Push, "! [rejected]"),
     ]);
     assert_eq!(
         tab.push_answer, 1,
@@ -267,7 +268,7 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
 #[test]
 fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     let mut tab = RepoTab::default();
-    tab.absorb(vec![answered(SOMEBODY_ELSE, "push", "! [rejected]")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Push, "! [rejected]")]);
     assert_eq!(tab.push_answer, -1);
     assert!(tab.write_refused);
     assert_eq!(tab.last_write_error, "! [rejected]");
@@ -279,7 +280,7 @@ fn a_push_nobody_here_pressed_for_falls_to_the_group() {
 #[test]
 fn the_push_answer_is_this_notifys_own() {
     let mut tab = push_pressed();
-    tab.absorb(vec![answered(OURS, "push", "! [rejected]")]);
+    tab.absorb(vec![answered(OURS, K::Push, "! [rejected]")]);
     assert_eq!(tab.push_answer, 0);
     tab.absorb(vec![TabMsg::MergeTools {
         names: Vec::new(),
@@ -299,7 +300,7 @@ fn the_push_answer_is_this_notifys_own() {
 /// news in the same panel.
 #[test]
 fn a_fetch_answer_says_so_whichever_way_it_went() {
-    assert!(settled("fetch", "").write_fetched);
+    assert!(settled(K::Fetch, "").write_fetched);
     let mut tab = RepoTab::default();
     // The run has raised its panel already, so this failure has no
     // `fetch_first_failed` to emit — there is no proxy to emit it
@@ -307,27 +308,27 @@ fn a_fetch_answer_says_so_whichever_way_it_went() {
     tab.fetch_log_raised = true;
     tab.settle_write(
         1,
-        "fetch".into(),
+        K::Fetch,
         "fatal: Could not read from remote".into(),
         None,
         0,
         0,
     );
     assert!(tab.write_fetched);
-    assert!(!settled("push", "! [rejected]").write_fetched);
+    assert!(!settled(K::Push, "! [rejected]").write_fetched);
 }
 
 #[test]
 fn a_landed_checkout_or_reset_moved_head() {
-    assert!(settled("checkout", "").write_moved_head);
-    assert!(settled("reset", "").write_moved_head);
-    assert!(!settled("checkout", "fatal: invalid reference").write_moved_head);
+    assert!(settled(K::Checkout, "").write_moved_head);
+    assert!(settled(K::Reset, "").write_moved_head);
+    assert!(!settled(K::Checkout, "fatal: invalid reference").write_moved_head);
 }
 
 #[test]
 fn a_landed_reword_carries_the_saved_message() {
-    assert!(settled("reword", "").write_reworded);
-    assert!(!settled("reword", "fatal: bad revision").write_reworded);
+    assert!(settled(K::Reword, "").write_reworded);
+    assert!(!settled(K::Reword, "fatal: bad revision").write_reworded);
 }
 
 /// The far side keeping a branch is a report, not a failure of this
@@ -338,7 +339,7 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     let mut tab = RepoTab::default();
     tab.settle_write(
         1,
-        "push".into(),
+        K::Push,
         "`git push` exited with code 1: remote: error: Cannot delete a protected branch".into(),
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::RemoteDelete,
@@ -357,7 +358,7 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
-    tab.settle_write(1, "push".into(), String::new(), None, 0, 0);
+    tab.settle_write(1, K::Push, String::new(), None, 0, 0);
     assert_eq!(tab.write_report_kind, "");
     assert_eq!(tab.write_report_reason, "");
 }
@@ -369,7 +370,7 @@ fn a_refused_send_is_told_apart_from_a_refused_delete() {
     let mut tab = RepoTab::default();
     tab.settle_write(
         1,
-        "push".into(),
+        K::Push,
         "! [remote rejected]".into(),
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::RemoteUpdate,
@@ -391,7 +392,7 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     let mut tab = RepoTab::default();
     tab.settle_write(
         1,
-        "push".into(),
+        K::Push,
         "! [rejected] (fetch first)".into(),
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::Outdated,
@@ -408,7 +409,7 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
 
     tab.settle_write(
         1,
-        "commit".into(),
+        K::Commit,
         "`git commit` exited with code 1".into(),
         Some(platitude_core::WriteReport::local(
             ReportKind::Commit,
@@ -432,13 +433,13 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
 #[test]
 fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "reword".into(), String::new(), None, 0, 0);
+    tab.settle_write(1, K::Reword, String::new(), None, 0, 0);
     assert!(tab.write_reworded);
     // Not a fetch: a failed fetch raises `fetch_first_failed`, and a
     // signal needs the proxy no unit test has.
     tab.settle_write(
         1,
-        "checkout".into(),
+        K::Checkout,
         "fatal: invalid reference".into(),
         None,
         0,
@@ -461,8 +462,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
         TabMsg::WriteStopped,
         TabMsg::WriteState {
             id: 1,
-            replays: false,
-            op: "rebase".into(),
+            kind: K::Rebase,
             running: false,
             error: String::new(),
             report: None,
@@ -471,8 +471,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
         },
         TabMsg::WriteState {
             id: 1,
-            replays: false,
-            op: "fetch".into(),
+            kind: K::Fetch,
             running: true,
             error: String::new(),
             report: None,
@@ -481,8 +480,7 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
         },
         TabMsg::WriteState {
             id: 1,
-            replays: false,
-            op: "fetch".into(),
+            kind: K::Fetch,
             running: false,
             error: String::new(),
             report: None,
@@ -505,10 +503,10 @@ fn every_answer_in_one_drain_is_published_not_just_the_last() {
         !tab.last_write_stopped,
         "the fetch starting took the stop back down"
     );
-    let ops: Vec<&str> = tab.write_answers.iter().map(|a| a.op.as_str()).collect();
+    let ops: Vec<K> = tab.write_answers.iter().map(|a| a.kind).collect();
     assert_eq!(
         ops,
-        ["rebase", "fetch"],
+        [K::Rebase, K::Fetch],
         "both answers, in the order they came"
     );
 }
@@ -532,7 +530,7 @@ fn the_runs_answer_keeps_the_stop_that_was_its_own() {
 #[test]
 fn each_answer_carries_the_seq_it_was_counted_at() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, "push".into(), String::new(), None, 0, 0);
+    tab.settle_write(1, K::Push, String::new(), None, 0, 0);
     let before = tab.write_seq;
     tab.absorb(a_run_and_the_fetch_behind_it());
     let seqs: Vec<i32> = tab.write_answers.iter().map(|a| a.seq).collect();
@@ -547,8 +545,7 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     tab.absorb(vec![
         TabMsg::WriteState {
             id: 1,
-            replays: false,
-            op: "merge".into(),
+            kind: K::Merge,
             running: false,
             error: String::new(),
             report: None,
@@ -557,8 +554,7 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
         },
         TabMsg::WriteState {
             id: 1,
-            replays: false,
-            op: "fetch".into(),
+            kind: K::Fetch,
             running: false,
             error: String::new(),
             report: None,
@@ -567,13 +563,13 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
         },
     ]);
     assert!(!at_tip(&tab), "the answer that came last is the fetch's");
-    let landed: Vec<&str> = tab
+    let landed: Vec<K> = tab
         .write_answers
         .iter()
         .filter(|a| a.at_tip)
-        .map(|a| a.op.as_str())
+        .map(|a| a.kind)
         .collect();
-    assert_eq!(landed, ["merge"]);
+    assert_eq!(landed, [K::Merge]);
 }
 
 // A drain that brought no write answer says so, rather than leaving the
@@ -608,8 +604,8 @@ fn card_standing() -> RepoTab {
 fn a_plain_delete_git_took_names_the_branch_over_the_fetch_behind_it() {
     let mut tab = card_standing();
     tab.absorb(vec![
-        answered(OURS, "branch", ""),
-        answered(SOMEBODY_ELSE, "fetch", ""),
+        answered(OURS, K::Branch, ""),
+        answered(SOMEBODY_ELSE, K::Fetch, ""),
     ]);
     assert_eq!(tab.branch_delete_landed, "feature");
     assert_eq!(tab.branch_delete_refused, "");
@@ -625,7 +621,7 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
     let mut tab = card_standing();
     tab.absorb(vec![answered(
         OURS,
-        "branch",
+        K::Branch,
         "error: the branch 'feature' is not fully merged",
     )]);
     assert_eq!(tab.branch_delete_refused, "feature");
@@ -640,7 +636,7 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
 #[test]
 fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
     let mut tab = RepoTab::default();
-    tab.absorb(vec![answered(OURS, "branch", "error: not fully merged")]);
+    tab.absorb(vec![answered(OURS, K::Branch, "error: not fully merged")]);
     assert_eq!(tab.branch_delete_refused, "");
     assert!(
         tab.write_refused,
@@ -655,9 +651,9 @@ fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
 #[test]
 fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     let mut tab = card_standing();
-    tab.absorb(vec![answered(OURS, "branch", "")]);
+    tab.absorb(vec![answered(OURS, K::Branch, "")]);
     assert!(tab.branch_delete_answer >= 0);
-    tab.absorb(vec![answered(SOMEBODY_ELSE, "fetch", "")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
     assert_eq!(tab.branch_delete_landed, "feature", "the answer stands");
     assert_eq!(
         tab.branch_delete_answer, -1,
@@ -675,7 +671,7 @@ fn a_refusal_with_a_report_turns_no_row() {
     let mut tab = card_standing();
     tab.absorb(vec![reported(
         OURS,
-        "branch",
+        K::Branch,
         "remote: refused",
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::RemoteDelete,
@@ -695,12 +691,11 @@ fn a_refusal_with_a_report_turns_no_row() {
 
 /// One answer as the bridge carries it, under the id its press was
 /// given, with something to report or without.
-fn reported(id: u64, op: &str, error: &str, report: Option<platitude_core::WriteReport>) -> TabMsg {
+fn reported(id: u64, kind: K, error: &str, report: Option<platitude_core::WriteReport>) -> TabMsg {
     TabMsg::WriteState {
         id,
-        op: op.into(),
+        kind,
         running: false,
-        replays: false,
         error: error.into(),
         report,
         head_seq: 0,
@@ -708,12 +703,12 @@ fn reported(id: u64, op: &str, error: &str, report: Option<platitude_core::Write
     }
 }
 
-fn answered(id: u64, op: &str, error: &str) -> TabMsg {
-    reported(id, op, error, None)
+fn answered(id: u64, kind: K, error: &str) -> TabMsg {
+    reported(id, kind, error, None)
 }
 
 fn stash_answered(id: u64, error: &str) -> TabMsg {
-    answered(id, "stash", error)
+    answered(id, K::Stash, error)
 }
 
 // Two stash answers in one drain — an apply that landed and the pop
@@ -812,11 +807,11 @@ fn for_the_editor(tab: &RepoTab) -> Option<&WriteAnswer> {
 fn the_editors_commit_answers_over_the_fetch_behind_it() {
     let mut tab = editor_pressed();
     tab.absorb(vec![
-        answered(OURS, "commit", ""),
-        answered(SOMEBODY_ELSE, "fetch", ""),
+        answered(OURS, K::Commit, ""),
+        answered(SOMEBODY_ELSE, K::Fetch, ""),
     ]);
     let answer = for_the_editor(&tab).expect("the editor's own answer");
-    assert_eq!(answer.op, "commit");
+    assert_eq!(answer.kind, K::Commit);
     assert!(!answer.failed, "git wrote the commit");
     assert!(
         tab.write_fetched,
@@ -830,11 +825,11 @@ fn the_editors_commit_answers_over_the_fetch_behind_it() {
 fn the_order_the_two_came_back_in_is_not_read_into() {
     let mut tab = editor_pressed();
     tab.absorb(vec![
-        answered(SOMEBODY_ELSE, "fetch", ""),
-        answered(OURS, "commit", ""),
+        answered(SOMEBODY_ELSE, K::Fetch, ""),
+        answered(OURS, K::Commit, ""),
     ]);
     let answer = for_the_editor(&tab).expect("the editor's own answer");
-    assert_eq!(answer.op, "commit");
+    assert_eq!(answer.kind, K::Commit);
     assert!(!answer.failed);
     assert!(tab.write_fetched);
 }
@@ -845,9 +840,9 @@ fn the_order_the_two_came_back_in_is_not_read_into() {
 #[test]
 fn the_editor_is_told_once() {
     let mut tab = editor_pressed();
-    tab.absorb(vec![answered(OURS, "commit", "")]);
+    tab.absorb(vec![answered(OURS, K::Commit, "")]);
     assert!(for_the_editor(&tab).is_some());
-    tab.absorb(vec![answered(SOMEBODY_ELSE, "fetch", "")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
     assert_eq!(tab.commit_answer, -1, "this drain carried none of it");
     tab.absorb(vec![TabMsg::MergeTools {
         names: Vec::new(),
@@ -866,14 +861,14 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     tab.absorb(vec![
         reported(
             OURS,
-            "commit",
+            K::Commit,
             "`git commit` exited with code 1",
             Some(platitude_core::WriteReport::local(
                 ReportKind::Commit,
                 "lint found 1 problem".into(),
             )),
         ),
-        answered(SOMEBODY_ELSE, "stash", ""),
+        answered(SOMEBODY_ELSE, K::Stash, ""),
     ]);
     let answer = for_the_editor(&tab).expect("the editor's own answer");
     assert!(answer.failed, "a rejected commit keeps the editor's text");
@@ -896,9 +891,9 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
 #[test]
 fn a_drain_whose_answer_had_an_owner_leaves_the_group_saying_nothing() {
     let mut tab = editor_pressed();
-    tab.absorb(vec![answered(SOMEBODY_ELSE, "push", "! [rejected]")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Push, "! [rejected]")]);
     assert!(tab.write_refused);
-    tab.absorb(vec![answered(OURS, "commit", "")]);
+    tab.absorb(vec![answered(OURS, K::Commit, "")]);
     assert!(
         !tab.write_refused,
         "the push's refusal was the last drain's news"
@@ -914,12 +909,11 @@ const FENCE: u64 = 41;
 const EMPTIED: bool = true;
 
 /// One answer as the bridge carries it, naming that report.
-fn fenced(id: u64, op: &str, error: &str) -> TabMsg {
+fn fenced(id: u64, kind: K, error: &str) -> TabMsg {
     TabMsg::WriteState {
         id,
-        op: op.into(),
+        kind,
         running: false,
-        replays: false,
         error: error.into(),
         report: None,
         head_seq: FENCE,
@@ -945,14 +939,14 @@ fn tree_stashed() -> RepoTab {
 fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
     let mut tab = tree_stashed();
     tab.absorb(vec![
-        fenced(OURS, "stash", ""),
-        answered(SOMEBODY_ELSE, "fetch", ""),
+        fenced(OURS, K::Stash, ""),
+        answered(SOMEBODY_ELSE, K::Fetch, ""),
     ]);
     assert!(tab.stash_out.ours());
     let answer = tab
         .write_answer_at(tab.stash_answer)
         .expect("the press's own answer");
-    assert_eq!(answer.op, "stash");
+    assert_eq!(answer.kind, K::Stash);
     assert!(
         !answer.failed,
         "and the file it left stale is read off that answer, \
@@ -969,8 +963,8 @@ fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
 #[test]
 fn the_landing_stands_until_the_tree_is_read() {
     let mut tab = tree_stashed();
-    tab.absorb(vec![fenced(OURS, "stash", "")]);
-    tab.absorb(vec![answered(SOMEBODY_ELSE, "fetch", "")]);
+    tab.absorb(vec![fenced(OURS, K::Stash, "")]);
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
     tab.absorb(vec![TabMsg::MergeTools {
         names: Vec::new(),
         settled: true,
@@ -996,7 +990,7 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     let mut tab = tree_stashed();
     tab.absorb(vec![fenced(
         OURS,
-        "stash",
+        K::Stash,
         "error: Your local changes would be overwritten",
     )]);
     tab.tree_was_read(FENCE, EMPTIED);
@@ -1018,7 +1012,7 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
 #[test]
 fn somebody_elses_stash_answer_claims_no_tree() {
     let mut tab = RepoTab::default();
-    tab.absorb(vec![fenced(SOMEBODY_ELSE, "stash", "")]);
+    tab.absorb(vec![fenced(SOMEBODY_ELSE, K::Stash, "")]);
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(!tab.stash_landing_taken());
     assert_eq!(tab.stash_answer, -1);
@@ -1038,7 +1032,7 @@ fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
     let mut tab = tree_stashed();
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(!tab.stash_landing_taken(), "nothing to settle on yet");
-    tab.absorb(vec![fenced(OURS, "stash", "")]);
+    tab.absorb(vec![fenced(OURS, K::Stash, "")]);
     assert!(
         tab.stash_landing_taken(),
         "the answer settles on the tree already read"
@@ -1062,8 +1056,8 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     // has. Which write it was changes nothing — the group's branch ends
     // the page's answer on any refusal it is left describing.
     tab.absorb(vec![
-        fenced(OURS, "stash", ""),
-        answered(SOMEBODY_ELSE, "push", "! [rejected]"),
+        fenced(OURS, K::Stash, ""),
+        answered(SOMEBODY_ELSE, K::Push, "! [rejected]"),
     ]);
     assert!(
         tab.write_refused,

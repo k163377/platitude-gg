@@ -160,9 +160,8 @@ impl RepoTab {
                 TabMsg::WriteStopped => self.last_write_stopped = true,
                 TabMsg::WriteState {
                     id,
-                    op,
+                    kind,
                     running,
-                    replays,
                     error,
                     report,
                     head_seq,
@@ -174,13 +173,16 @@ impl RepoTab {
                         // write's answer, and only that answer knows what
                         // to make of it (`write_running`).
                         self.write_running = true;
-                        self.replaying = replays;
-                        self.busy_op = op;
+                        self.replaying = kind.replays_history();
+                        // The word the band reads (`busyOp`), made here
+                        // and nowhere earlier: what the bridge carries is
+                        // the kind itself.
+                        self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
                         self.last_write_stopped = false;
                     } else {
-                        self.settle_write(id, op, error, report, head_seq, reads_from);
+                        self.settle_write(id, kind, error, report, head_seq, reads_from);
                     }
                 }
             }
@@ -245,7 +247,7 @@ impl RepoTab {
     pub(super) fn settle_write(
         &mut self,
         id: u64,
-        op: String,
+        kind: OperationKind,
         error: String,
         report: Option<platitude_core::WriteReport>,
         head_seq: u64,
@@ -265,7 +267,7 @@ impl RepoTab {
         // group: a report is the answer's own, and a drain can bring
         // several.
         let reported = report.is_some();
-        let (kind, remote, name, reason) = match report {
+        let (report_kind, remote, name, reason) = match report {
             Some(report) => (
                 match report.kind {
                     ReportKind::RemoteDelete => "delete",
@@ -294,7 +296,7 @@ impl RepoTab {
         // A fetch the user asked for counts the same way the timer's do:
         // what the button says is about fetching, not about who started
         // it.
-        if op == "fetch" {
+        if kind == OperationKind::Fetch {
             self.fetch_settled(&error, true);
         }
         let landed = error.is_empty();
@@ -309,7 +311,10 @@ impl RepoTab {
         // (`last_write_stopped`, raised by the message before this one).
         let at_tip = landed
             && !self.last_write_stopped
-            && matches!(op.as_str(), "revert" | "cherry-pick" | "merge");
+            && matches!(
+                kind,
+                OperationKind::Revert | OperationKind::CherryPick | OperationKind::Merge
+            );
         self.write_seq += 1;
         // The answer as it came, kept whole: this is what an owner is
         // handed and what every reader waiting for one write by name
@@ -317,13 +322,13 @@ impl RepoTab {
         self.write_answers.push(WriteAnswer {
             id,
             seq: self.write_seq,
-            op: op.clone(),
+            kind,
             stopped: self.last_write_stopped,
             failed: !landed,
             error: error.clone(),
             at_tip,
             head_seq,
-            report_kind: kind,
+            report_kind,
             report_remote: remote,
             report_name: name,
             report_reason: reason,
@@ -357,7 +362,7 @@ impl RepoTab {
             answered_for = true;
         }
         if !answered_for {
-            self.fold_into_group(&op, landed, at);
+            self.fold_into_group(kind, landed, at);
         }
         self.last_write_error = error;
     }
@@ -405,18 +410,28 @@ impl RepoTab {
     /// its top ([`Self::clear_write_group`]), so a notify carrying none
     /// of these says so rather than leaving the last one up to be read a
     /// second time.
-    fn fold_into_group(&mut self, op: &str, landed: bool, at: usize) {
+    fn fold_into_group(&mut self, kind: OperationKind, landed: bool, at: usize) {
         // A landed write moved what the two sides hold; a refused stage,
         // unstage or discard was refused *because* the rows on screen
         // drifted (the fingerprint refuses on nothing else). Both mean
         // the shown diff no longer describes the file.
-        self.write_stale_diff = matches!(op, "stage" | "unstage" | "discard")
-            || (landed && matches!(op, "commit" | "stash"));
+        self.write_stale_diff = matches!(
+            kind,
+            OperationKind::Stage | OperationKind::Unstage | OperationKind::Discard
+        ) || (landed
+            && matches!(kind, OperationKind::Commit | OperationKind::Stash));
         self.write_refused = !landed;
-        self.write_moved_head = landed && matches!(op, "checkout" | "reset");
-        self.write_reworded = landed && op == "reword";
-        self.write_branch_op = op == "branch";
-        self.write_fetched = op == "fetch";
+        self.write_moved_head =
+            landed && matches!(kind, OperationKind::Checkout | OperationKind::Reset);
+        self.write_reworded = landed && kind == OperationKind::Reword;
+        // The delete that reaches over to the remote answers as a branch
+        // op the way its label reads: the row it took was a branch's
+        // either way.
+        self.write_branch_op = matches!(
+            kind,
+            OperationKind::Branch | OperationKind::DeleteBranchEverywhere
+        );
+        self.write_fetched = kind == OperationKind::Fetch;
         // The report travels on the answer; the group shows the one that
         // came with the answer it is describing.
         let Some(answer) = self.write_answers.get(at) else {

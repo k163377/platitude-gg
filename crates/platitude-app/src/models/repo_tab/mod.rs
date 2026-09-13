@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use platitude_core::ReportKind;
+use platitude_core::{OperationKind, ReportKind};
 use qtbridge::{QObjectHolder, qobject};
 
 use crate::hub::{Feed, Hub, TabMsg};
@@ -428,7 +428,10 @@ pub struct RepoTab {
 struct WriteAnswer {
     id: u64,
     seq: i32,
-    op: String,
+    /// Which write, as the queue named it — the type itself, so what an
+    /// answer means is matched on it and the word QML reads is made
+    /// from it at the slot and nowhere earlier (`writeAnswerOp`).
+    kind: OperationKind,
     stopped: bool,
     failed: bool,
     /// git's own words where it was refused, empty where it landed —

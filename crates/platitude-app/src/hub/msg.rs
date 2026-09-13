@@ -58,7 +58,7 @@ pub enum TabMsg {
     /// git stopped part-way through the write in flight and left the
     /// operation standing. Arrives before the `WriteState` that ends that
     /// write, so the answer the page reads already knows it — and which
-    /// write it was is that answer's own `op`, not repeated here.
+    /// write it was is that answer's own `kind`, not repeated here.
     WriteStopped,
     /// A write command started / ended. A failed write also arrives as an
     /// `OpError`, so the existing error surface needs no special case;
@@ -75,12 +75,13 @@ pub enum TabMsg {
         /// (`platitude_core::OperationId`) — what a reader waiting on its
         /// own write matches, whatever answered in between.
         id: u64,
-        op: String,
+        /// Which write — the queue's own kind, carried as it is
+        /// (`platitude_core::OperationKind`). What an answer means is
+        /// read off it on this side of the bridge (`drain::settle_write`),
+        /// and the word QML shows is made from it there and nowhere
+        /// earlier.
+        kind: platitude_core::OperationKind,
         running: bool,
-        /// Whether the write replays history a commit at a time — the
-        /// kind's own answer (`OperationKind::replays_history`), carried
-        /// so the page holds its doors down without classifying the label.
-        replays: bool,
         error: String,
         report: Option<platitude_core::WriteReport>,
         /// The smallest number the first report of HEAD after this write
