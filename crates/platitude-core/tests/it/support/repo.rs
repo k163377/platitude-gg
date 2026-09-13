@@ -294,13 +294,6 @@ pub fn barrier_hook(release: &std::path::Path) -> String {
 /// exists, then hands the content through unchanged.
 ///
 /// The staging counterpart of [`barrier_hook`], and the only one there
-/// is: `git add` runs no hook, and a write that only touches the index
-/// is exactly the one whose follow-up reads leave the refs alone. Wired
-/// with `git config filter.<name>.clean` and a `.gitattributes` line.
-/// A clean filter that holds `git add` where it stands until `release`
-/// exists, then hands the content through unchanged.
-///
-/// The staging counterpart of [`barrier_hook`], and the only one there
 /// is: `git add` runs no hook, and a write that only touches the index is
 /// exactly the one whose follow-up reads leave the refs alone. Wire it
 /// with `filter.<name>.clean` **and `filter.<name>.required`** — without

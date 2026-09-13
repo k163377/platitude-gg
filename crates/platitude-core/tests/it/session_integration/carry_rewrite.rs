@@ -392,8 +392,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
         head.clone(),
     );
     // The sink records before it runs the hook, so this is answered by the
-    // very delivery that is holding the write — and it is the test's own
-    // root future, which is the only thing that may wait while parked.
+    // very delivery that is holding the write.
     sink.wait_for("the carry reaching its stash", |events| {
         events.iter().any(reached_the_stash).then_some(())
     })

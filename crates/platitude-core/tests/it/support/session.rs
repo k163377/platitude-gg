@@ -93,36 +93,36 @@ impl CaptureSink {
     /// so a hook that parks holds the reader there while the test drives
     /// the rest.
     ///
-    /// A parked hook blocks the worker thread its reader runs on, and
-    /// tokio leaves a task queued there queued: whatever has to run
-    /// meanwhile must be started from the test's own thread, not from
-    /// inside the hook.
+    /// A parked hook blocks the thread it runs on, and the runtime is
+    /// told so: the delivery runs the hook under `block_in_place`, which
+    /// hands the worker's core — its queue and its turn at the I/O driver
+    /// — to another thread for as long as the hook stands. **Without that
+    /// the park takes the driver's attendant with it.** The worker that
+    /// polled the driver and woke only this reader runs the reader itself
+    /// and tells nobody; the other workers sleep until a task is scheduled
+    /// from outside the runtime, and on Linux nothing ever is — child
+    /// exits (pidfd), pipe output and the suite's own `Patience` timers all
+    /// wait in an epoll nobody calls, so the binary sits at 0% CPU until
+    /// the CI kill. Windows survives the same park because a child's exit
+    /// arrives from a thread of its own and wakes a sleeper (measured in
+    /// the container: three git zombies under the test binary, every
+    /// worker on the condvar, and one wake from a plain thread let the
+    /// test run to green).
     ///
-    /// And while parked, **only the test's own root future may wait for
-    /// an event that has not been recorded yet** (the sink records before
-    /// it runs the hook). The delivery that fires the hook wakes the
-    /// waiters watching the sink, and a woken *spawned task* can land in
-    /// the parked worker's LIFO slot — the one place stealing never
-    /// reaches. Such a wait for a future event is then held captive by
-    /// the very park it is supposed to release: no task runs, no timer
-    /// serves the captive `Patience`, and the binary sits at 0% CPU until
-    /// the CI kill. measured: a hook parked on the opening refs delivery
-    /// plus a spawned wait for the tag-inclusive swap deadlocked exactly
-    /// so in the container, deterministically, while passing on Windows.
-    /// The root future is the one exception because its waker unparks the
-    /// test thread directly instead of scheduling onto a worker — an
-    /// implementation property of the runtime, so a wait that can be
-    /// phrased over recorded events still should be.
+    /// The sink records before it runs the hook, so a wait phrased over
+    /// recorded events sees the event that parked. The hook itself must
+    /// not await anything: it runs inside a sink call, on a thread the
+    /// runtime has been told to forget.
     pub fn hook_once(
         &self,
         when: impl Fn(&SessionEvent) -> bool + Send + 'static,
         run: impl FnOnce() + Send + 'static,
     ) {
-        // The parked worker is the premise, so it is asserted where it is
-        // created: with a single worker nobody is left to drive the test,
-        // and the failure would be a silent livelock instead of a name.
-        // The default worker count is the machine's — the test declares
-        // its own (`worker_threads = 2`).
+        // `block_in_place` refuses a current-thread runtime, and a hook
+        // that parks needs a second thread to carry the session anyway:
+        // asserted where the hook is armed, so the failure has a name
+        // rather than a silent livelock. The default worker count is the
+        // machine's — a test may declare its own (`worker_threads = 2`).
         let workers = tokio::runtime::Handle::current().metrics().num_workers();
         assert!(
             workers >= 2,
@@ -285,8 +285,11 @@ impl SessionSink for CaptureSink {
             .send_modify(|generation| *generation = generation.wrapping_add(1));
         // Outside both locks: a parked hook must not hold the recording
         // shut, or the events it is waiting on could never be written.
+        // And under `block_in_place`, so the worker this thread was gives
+        // its core to another thread instead of taking the I/O driver's
+        // attendance down with it (`hook_once`).
         if let Some(run) = run {
-            run();
+            tokio::task::block_in_place(run);
         }
     }
 }
