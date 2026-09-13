@@ -418,6 +418,16 @@ pub async fn file_diff_raw(
     target: &DiffTarget,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
+    // A path git spells with a trailing `/` is a directory it would not
+    // open — a repository of its own inside the working copy — and there
+    // is no patch of it to ask for: `--no-index` against a directory
+    // answers `Could not access` and prints nothing (measured). What the
+    // row has to say instead is [`embedded`].
+    if let DiffTarget::Untracked { path } = target
+        && path.ends_with('/')
+    {
+        return Ok(Vec::new());
+    }
     let base = GitCommand::new().cwd(workdir).args(DIFF_SHAPE_ARGS);
     let cmd = match target {
         DiffTarget::Commit {
@@ -512,6 +522,70 @@ pub async fn file_diff_raw(
     };
     let out = executor.run(cmd, cancel).await?;
     Ok(out.stdout)
+}
+
+/// What a stage of a directory git would not open would record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Embedded {
+    /// The commit the index entry would point at — the HEAD of the
+    /// repository sitting there.
+    On(Oid),
+    /// A repository with no commit yet. `git add` refuses such a path
+    /// (`does not have a commit checked out`), so there is nothing this
+    /// repository could record for it (measured).
+    Unborn,
+}
+
+/// What the one entry git answers with for a repository inside the
+/// working copy (`vendor/nest/`) is standing on.
+///
+/// A `git add` of that path writes a **gitlink**: one index entry of mode
+/// 160000 naming the commit that repository's HEAD is on, and never the
+/// files under it, which belong to that repository (measured). So the
+/// commit is the whole of what this repository would keep of it.
+///
+/// **The answer counts only when it came from that directory.**
+/// `rev-parse` walks up, so asked in a directory that is *not* a
+/// repository of its own it answers with the repository above — whose
+/// HEAD has nothing to do with the row (measured: a plain directory
+/// answered with the outer repository's HEAD). `--show-prefix` rides
+/// along and says which happened, in git's own terms rather than by
+/// comparing two spellings of a path: empty is the root of the work tree
+/// the answer came from, and anything else is the way down to the
+/// directory asked about from a repository further up. `None` is what a
+/// caller gets for every path this cannot be said about.
+///
+/// The exit code is the answer, not a failure: 128 is what an unborn
+/// HEAD comes back as, and it is nothing for the command log to raise
+/// itself over — this is only ever asked about a path git itself
+/// declined to open. Both lines are printed either way (measured).
+pub async fn embedded(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Option<Embedded> {
+    let cmd = GitCommand::new()
+        .cwd(workdir.join(path))
+        .answers_by_code(128)
+        .args(["rev-parse", "--show-prefix", "HEAD"]);
+    let out = executor.run_unchecked(cmd, cancel).await.ok()?;
+    let text = out.stdout_utf8();
+    let mut lines = text.lines();
+    if !lines.next()?.trim().is_empty() {
+        return None;
+    }
+    // The second line is the commit where there is one, and the literal
+    // `HEAD` back again where there is not (measured).
+    Some(
+        match lines
+            .next()
+            .and_then(|l| Oid::from_hex(l.trim().as_bytes()).ok())
+        {
+            Some(oid) => Embedded::On(oid),
+            None => Embedded::Unborn,
+        },
+    )
 }
 
 #[cfg(test)]

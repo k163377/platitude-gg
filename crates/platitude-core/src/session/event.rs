@@ -356,6 +356,10 @@ pub enum SessionEvent {
         /// costs milliseconds, and where a change is is the first thing a
         /// reader looks for.
         marks: Arc<crate::intraline::IntraMarks>,
+        /// For the one row that has no patch at all — a repository of its
+        /// own inside the working copy — the commit a stage of it would
+        /// point at (`details::embedded`). `None` for every other target.
+        embedded: Option<crate::details::Embedded>,
     },
     /// Syntax colours for the lines of a diff that has already been sent.
     ///

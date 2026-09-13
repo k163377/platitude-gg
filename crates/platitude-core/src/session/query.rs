@@ -216,7 +216,7 @@ impl RepoSession {
         // Only for a language something can be said about — otherwise
         // it is a process spent on a file nobody will colour.
         let wants_source = crate::highlight::knows(preview::target_path(&target));
-        let (diff, endings, source) = tokio::join!(
+        let (diff, endings, source, embedded) = tokio::join!(
             async {
                 match known {
                     Some(raw) => Ok(raw),
@@ -230,6 +230,19 @@ impl RepoSession {
                 match wants_source {
                     true => preview::source_text(&self.executor, &workdir, &target, &cancel).await,
                     false => None,
+                }
+            },
+            // A directory git would not open has no patch to wait for,
+            // and the commit a stage of it would point at is what the
+            // pane says in its place (`details::embedded`). Beside the
+            // others for the same reason they are: it is the whole of
+            // what that row has to show.
+            async {
+                match &target {
+                    DiffTarget::Untracked { path } if path.ends_with('/') => {
+                        details::embedded(&self.executor, &workdir, path, &cancel).await
+                    }
+                    _ => None,
                 }
             },
         );
@@ -287,6 +300,7 @@ impl RepoSession {
                     fingerprint,
                     endings,
                     marks,
+                    embedded,
                 });
                 self.paint_diff(target, patches, source, epoch);
                 DiffReadOutcome::Sent
