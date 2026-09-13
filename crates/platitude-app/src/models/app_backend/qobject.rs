@@ -89,6 +89,31 @@ impl AppBackend {
     );
     qproperty!("autoFetchMaxMinutes", Member = auto_fetch_max, Constant);
     qproperty!(
+        "gitConcurrency",
+        Member = git_concurrency,
+        Notify = settings_changed
+    );
+    qproperty!("gitConcurrencyMax", Member = git_concurrency_max, Constant);
+    qproperty!(
+        "gitConcurrencyDefault",
+        Member = git_concurrency_default,
+        Constant
+    );
+    qproperty!(
+        "copiesIntervalSecs",
+        Member = copies_interval_secs,
+        Notify = settings_changed
+    );
+    qproperty!("copiesIntervalMin", Member = copies_interval_min, Constant);
+    qproperty!("copiesIntervalMax", Member = copies_interval_max, Constant);
+    // The page's tick binds to this: the same setting in the unit a
+    // `Timer` takes, so no arithmetic stands in the binding.
+    qproperty!(
+        "copiesIntervalMs",
+        Member = copies_interval_ms,
+        Notify = settings_changed
+    );
+    qproperty!(
         "initialCommits",
         Member = initial_commits,
         Notify = settings_changed
@@ -206,6 +231,16 @@ impl AppBackend {
     #[qslot]
     fn set_initial_commits(&mut self, commits: i32) {
         self.apply_initial_commits(commits);
+    }
+
+    #[qslot]
+    fn set_git_concurrency(&mut self, concurrency: i32) {
+        self.apply_git_concurrency(concurrency);
+    }
+
+    #[qslot]
+    fn set_copies_interval_secs(&mut self, secs: i32) {
+        self.apply_copies_interval_secs(secs);
     }
 
     /// Records which git this computer runs — a path, or empty for

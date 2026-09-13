@@ -7,11 +7,15 @@
 //! may not ride that tick — and a window kept open beside another copy
 //! is what these rows are for, so it may not wait for somebody to click
 //! the window either. Hence a slower tick of its own
-//! (`Metrics.copiesIntervalMs`), a cap on how many run at once, and a
-//! pass that drops the next tick rather than stacking
-//! ([`RepoSession::refresh_carried`]). The listing that says which copies
-//! there are is the cheap half and rides the page's tick; this is the
-//! expensive one (CLAUDE.md §性能予算).
+//! (`settings::Defaults::copies_interval_secs`), a pass that drops the
+//! next tick rather than stacking ([`RepoSession::refresh_carried`]),
+//! and a cap on how many run at once that is not this module's: the
+//! reads go out on the session's background handle, and the slots
+//! serve them after anything somebody is waiting on and keep them out
+//! of the click's reserve (`process::Slots`,
+//! ci/baseline/git-slots-windows-x64.md).
+//! The listing that says which copies there are is the cheap half and
+//! rides the page's tick; this is the expensive one (CLAUDE.md §性能予算).
 
 use std::path::Path;
 
@@ -43,21 +47,45 @@ pub struct Carried {
     pub kinds: Kinds,
 }
 
-/// How many of those reads run at once.
-///
-/// **The cap's job is to keep this window's own reads from waiting**, not
-/// to get the other rows up quickly: a focus fires this window's status
-/// and refs beside these, and those are what somebody is looking at.
-/// **Ordering them instead is what may not be done** — letting this
-/// window's status go first by waiting on its flight made a ring, and the
-/// opening pass sat on the graph's loading spinner (observed). What keeps
-/// the machine for the reader is this cap and the separate tick, not a
-/// wait. Four is the number to start from — the wall clock behind it is
-/// still to be measured (ci/baseline/perf-windows-x64.md §未取得).
-const AT_ONCE: usize = 4;
+/// Seconds between passes over the other copies, for a fresh settings
+/// file: three of the page's own ticks. Provisional until the
+/// measurement in ci/baseline/git-slots-windows-x64.md has been taken.
+pub const COPIES_INTERVAL_DEFAULT_SECS: u32 = 30;
 
-/// Reads every other working copy's status, capped at [`AT_ONCE`] at a
-/// time, and keeps the ones with something to show.
+/// The shortest interval offered: a `status` per copy every few seconds
+/// is already a machine spent on rows nobody is reading.
+pub const COPIES_INTERVAL_MIN_SECS: u32 = 5;
+
+/// The longest — an hour, the way the auto-fetch ceiling is one.
+pub const COPIES_INTERVAL_MAX_SECS: u32 = 3600;
+
+/// The interval that will actually run, for a number a person asked
+/// for. Zero is off — the rows are not read at all — and anything else
+/// is held between the floor and the ceiling. The one place the range
+/// is applied, for the reason `auto_fetch_minutes` is the one place its
+/// ceiling is: the settings screen and a hand-written `settings.toml`
+/// write the same field.
+#[must_use]
+pub fn copies_interval_secs(asked: u32) -> u32 {
+    if asked == 0 {
+        0
+    } else {
+        asked.clamp(COPIES_INTERVAL_MIN_SECS, COPIES_INTERVAL_MAX_SECS)
+    }
+}
+
+/// Reads every other working copy's status and keeps the ones with
+/// something to show.
+///
+/// **How many run at once is the slots' to say**, not this function's:
+/// every read is asked for at once on the background handle, and the
+/// slots admit as many as the half outside the click's reserve allows,
+/// after whatever this window's reader is waiting on (`process::Slots`).
+/// Ordering them
+/// behind this window's own reads by waiting on those instead is what
+/// may not be done — that made a ring, and the opening pass sat on the
+/// graph's loading spinner (observed); the cap keeps the machine for the
+/// reader without a wait.
 ///
 /// **What makes this safe to point at somebody else's tree is already
 /// standing**: every invocation carries `--no-optional-locks` and
@@ -88,10 +116,9 @@ pub(super) async fn read_all(
     if mine.is_empty() {
         return Vec::new();
     }
-    let permits = std::sync::Arc::new(tokio::sync::Semaphore::new(AT_ONCE));
+    let started = std::time::Instant::now();
     let mut set = tokio::task::JoinSet::new();
     for (at, entry) in mine.iter().enumerate() {
-        let permits = std::sync::Arc::clone(&permits);
         let executor = executor.clone();
         let cancel = cancel.clone();
         let path = std::path::PathBuf::from(&entry.path);
@@ -102,8 +129,6 @@ pub(super) async fn read_all(
             .as_deref()
             .and_then(|hex| Oid::from_hex_str(hex.trim()).ok());
         set.spawn(async move {
-            // A closed semaphore is the runtime going down; nothing to read.
-            let _permit = permits.acquire_owned().await.ok()?;
             let head = head?;
             let status = crate::status::load(&executor, &path, &cancel).await.ok()?;
             if !status.is_dirty() {
@@ -129,6 +154,16 @@ pub(super) async fn read_all(
             found.push(wip);
         }
     }
+    // The pass as the measurement reads it: how many copies were read,
+    // and the wall clock the slots let them through in
+    // (ci/baseline/git-slots-windows-x64.md).
+    tracing::info!(
+        copies = mine.len(),
+        carrying = found.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        slots = ?executor.slots().report(),
+        "carried pass"
+    );
     // **In the listing's order, not the order they answered.** What the
     // rows are compared against to decide whether the graph is walked
     // again is this list, and a set that merely came back shuffled would
@@ -142,12 +177,12 @@ impl super::RepoSession {
     /// Reads what the other copies are carrying, and asks for the rebuild
     /// if it came back different.
     ///
-    /// **On a cadence of its own** (`Metrics.copiesIntervalMs`), apart
-    /// from the listing that rides the page's tick: the listing is one
-    /// process and nothing else, while this is a whole `status` per copy.
-    /// A window kept open beside another copy is what these rows are for,
-    /// so they may not wait for somebody to click it — and they may not
-    /// ride a ten-second tick either
+    /// **On a cadence of its own** (`settings::Defaults::copies_interval_secs`),
+    /// apart from the listing that rides the page's tick: the listing is
+    /// one process and nothing else, while this is a whole `status` per
+    /// copy. A window kept open beside another copy is what these rows
+    /// are for, so they may not wait for somebody to click it — and they
+    /// may not ride a ten-second tick either
     /// (ci/baseline/poll-cost-windows-x64.md).
     ///
     /// **Off the worktree pass as well.** What waits on that pass is the
@@ -157,8 +192,15 @@ impl super::RepoSession {
     ///
     /// **One at a time**: on a big tree with several copies a pass can
     /// outlast the interval, and the next tick is dropped rather than
-    /// queued, the way the page's own poll drops its own.
+    /// queued, the way the page's own poll drops its own. **Nobody is
+    /// waiting on any of it**, so the whole pass goes out on the
+    /// background handle: served after the reader's own commands, kept
+    /// out of the click's reserve, and taken back out of the queue with
+    /// the session if it closes first (`process::Slots`).
     pub fn refresh_carried(self: &std::sync::Arc<Self>) {
+        if !self.copies_read.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         let Some(workdir) = self.workdir() else {
             return;
         };
@@ -173,10 +215,11 @@ impl super::RepoSession {
             // The listing again rather than the one the worktree pass
             // read: one process and 23ms of it (measured), against keeping
             // a second copy of the listing in step with that pass.
-            let Ok(worktrees) = crate::worktrees::load(&s.executor, &workdir, &cancel).await else {
+            let Ok(worktrees) = crate::worktrees::load(&s.exec_background, &workdir, &cancel).await
+            else {
                 return;
             };
-            let carried = read_all(&s.executor, &worktrees, &workdir, &cancel).await;
+            let carried = read_all(&s.exec_background, &worktrees, &workdir, &cancel).await;
             if s.note_carried(carried) {
                 // The rebuild a status that moved this tree asks for:
                 // these rows are drawn by the walk and by nothing else.
@@ -227,6 +270,20 @@ impl super::RepoSession {
         });
     }
 
+    /// Whether the other copies are read at all — the settings' "never"
+    /// (`settings::Defaults::copies_interval_secs` = 0), which the
+    /// page's tick honours on its own and which this makes hold for the
+    /// reads an opening and a focus fire as well (`refresh_quick`).
+    /// Turned off, the rows already drawn come down with it: what they
+    /// said is a reading nobody will take again.
+    pub fn set_copies_read(self: &std::sync::Arc<Self>, read: bool) {
+        self.copies_read
+            .store(read, std::sync::atomic::Ordering::SeqCst);
+        if !read && self.note_carried(Vec::new()) {
+            self.refresh_log();
+        }
+    }
+
     /// The set as the last read left it, for the walk that draws it.
     pub(super) fn carried(&self) -> std::sync::Arc<Vec<Carried>> {
         match self.carried.lock() {
@@ -260,4 +317,25 @@ impl super::RepoSession {
 /// Whether the entry has a working tree that can be dirty at all.
 fn carries_a_tree(entry: &WorktreeEntry) -> bool {
     !entry.bare && !entry.prunable
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_interval_one_number_stands_for() {
+        assert_eq!(copies_interval_secs(0), 0, "zero is off");
+        assert_eq!(
+            copies_interval_secs(1),
+            COPIES_INTERVAL_MIN_SECS,
+            "under the floor is the floor"
+        );
+        assert_eq!(copies_interval_secs(30), 30);
+        assert_eq!(
+            copies_interval_secs(COPIES_INTERVAL_MAX_SECS + 1),
+            COPIES_INTERVAL_MAX_SECS,
+            "past the ceiling is the ceiling"
+        );
+    }
 }

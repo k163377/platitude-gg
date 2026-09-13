@@ -47,7 +47,15 @@ impl CommandObserver for Spawns {
         seen.len() as u64
     }
 
-    fn finished(&self, _id: u64, _end: CommandEnd, _elapsed_ms: u64, _message: &str) {}
+    fn finished(
+        &self,
+        _id: u64,
+        _end: CommandEnd,
+        _waited_ms: u64,
+        _elapsed_ms: u64,
+        _message: &str,
+    ) {
+    }
 }
 
 fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {

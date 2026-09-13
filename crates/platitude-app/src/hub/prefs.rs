@@ -69,6 +69,36 @@ impl Hub {
         }
     }
 
+    /// Records how many git processes the application runs at once and
+    /// puts it in force — on the one set of slots every session shares,
+    /// so nothing has to be reapplied per tab
+    /// (`platitude_core::process::Slots`). Written out at once.
+    ///
+    /// Takes a number that has already been through
+    /// `process::concurrency`, which is where the range lives.
+    pub fn set_git_concurrency(&mut self, concurrency: u32) {
+        self.settings.defaults.git_concurrency = concurrency;
+        self.executor
+            .slots()
+            .set_limits(platitude_core::process::Limits::of(concurrency));
+        self.save_settings_now();
+    }
+
+    /// Records how often the other working copies of a repository are
+    /// read for uncommitted work, and puts the one half of it the
+    /// sessions hold in force — whether they are read at all
+    /// (`RepoSession::set_copies_read`); the interval itself is the
+    /// page's tick's to read off `AppBackend` (`RepoPage`). Written out
+    /// at once.
+    ///
+    /// Takes a number that has already been through
+    /// `session::copies_interval_secs`, which is where the range lives.
+    pub fn set_copies_interval_secs(&mut self, secs: u32) {
+        self.settings.defaults.copies_interval_secs = secs;
+        self.reapply_settings();
+        self.save_settings_now();
+    }
+
     /// Records which git this computer runs. Empty is whichever one
     /// `PATH` resolves.
     ///

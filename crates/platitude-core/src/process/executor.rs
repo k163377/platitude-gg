@@ -1,5 +1,6 @@
 //! Running what [`GitCommand`] describes: the executor, its fixed
-//! arguments and environment (the child supervision is [`super::child`]).
+//! arguments and environment, and the slot every spawn waits for (the
+//! child supervision is [`super::child`], the slots [`super::slots`]).
 
 use std::ffi::OsString;
 use std::process::Stdio;
@@ -13,6 +14,7 @@ use super::child::{ChildOutcome, run_child};
 use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
+use super::slots::{GroupKey, Lead, Priority, Shared, Slots, WayIn};
 use crate::error::GitError;
 use crate::operation::OperationId;
 
@@ -28,6 +30,10 @@ mod tests;
 /// (`operation::Lane::Local`) — a local write is waited out to
 /// completion, because killing git mid-write loses what it was writing
 /// and a local git is only ever slow in proportion to the work.
+///
+/// **Counted from the spawn, not from the ask**: the time a command
+/// spends waiting for a slot is the application's, and a budget that
+/// counted it would kill a healthy git for the queue in front of it.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(windows)]
@@ -92,6 +98,12 @@ const FIXED_ENV: [(&str, &str); 4] = [
 ];
 
 /// Spawns git subprocesses. Cheap to clone; shared across sessions.
+///
+/// **Every clone waits in the same slots** ([`Slots`], shared by
+/// `Arc`): the application makes one set and hands it to the handle it
+/// spawns everything through ([`GitExecutor::scheduled`]), and every
+/// session, screen and dialog clones that handle. A bare executor caps
+/// nothing, which is what a test wants of one.
 #[derive(Clone)]
 pub struct GitExecutor {
     program: Arc<OsString>,
@@ -116,6 +128,14 @@ pub struct GitExecutor {
     /// ([`GitExecutor::without_stock_timeouts`]); commands that named
     /// their own budget keep it either way.
     stock_timeout: Option<Duration>,
+    /// Where every spawn waits its turn ([`super::slots`]).
+    slots: Arc<Slots>,
+    /// Who is waiting on the commands run through this handle — what
+    /// the slots serve first, and what they cap ([`Priority`]). Carried
+    /// on the handle for the reason `kept` is: the session hands out a
+    /// handle for the reads nobody is waiting on
+    /// ([`GitExecutor::background`]), and the callers stay unaware.
+    priority: Priority,
 }
 
 impl std::fmt::Debug for GitExecutor {
@@ -126,6 +146,7 @@ impl std::fmt::Debug for GitExecutor {
             .field("observed", &self.observer.is_some())
             .field("kept", &self.kept)
             .field("operation", &self.operation)
+            .field("priority", &self.priority)
             .finish()
     }
 }
@@ -161,6 +182,8 @@ impl GitExecutor {
             kept: Kept::Unasked,
             operation: None,
             stock_timeout: Some(DEFAULT_TIMEOUT),
+            slots: Arc::new(Slots::unbounded()),
+            priority: Priority::Interactive,
         }
     }
 
@@ -207,6 +230,41 @@ impl GitExecutor {
         self
     }
 
+    /// Runs everything through `slots` — the application's one set,
+    /// installed on the handle before it is cloned into anything, so
+    /// there is no clone that waits elsewhere. A handle that was never
+    /// given one caps nothing.
+    #[must_use]
+    pub fn scheduled(mut self, slots: Arc<Slots>) -> Self {
+        self.slots = slots;
+        self
+    }
+
+    /// A handle whose commands nobody is waiting on: the reads a session
+    /// makes on a timer of its own, served after the interactive ones
+    /// and kept out of the click's reserve ([`Priority::Background`]).
+    /// Buffered
+    /// runs through it that ask the same question over the same tree
+    /// share one process while the first is still queued
+    /// ([`super::slots`]).
+    #[must_use]
+    pub fn background(mut self) -> Self {
+        self.priority = Priority::Background;
+        self
+    }
+
+    #[must_use]
+    pub fn priority(&self) -> Priority {
+        self.priority
+    }
+
+    /// The slots this handle waits in: for the application to move the
+    /// limits and read the report.
+    #[must_use]
+    pub fn slots(&self) -> &Arc<Slots> {
+        &self.slots
+    }
+
     /// Returns a handle that reports its invocations to `observer`.
     /// `kept` is what the log makes of them.
     pub fn observed(&self, observer: Arc<dyn CommandObserver>, kept: Kept) -> Self {
@@ -217,6 +275,8 @@ impl GitExecutor {
             kept,
             operation: self.operation,
             stock_timeout: self.stock_timeout,
+            slots: Arc::clone(&self.slots),
+            priority: self.priority,
         }
     }
 
@@ -280,17 +340,19 @@ impl GitExecutor {
     }
 
     /// Runs to completion; the caller inspects the exit code itself.
+    ///
+    /// Through a background handle, an identical command still queued
+    /// for another caller answers this one too, and no second process
+    /// is spawned ([`GitExecutor::background`]).
     pub async fn run_unchecked(
         &self,
         cmd: GitCommand,
         cancel: &CancellationToken,
     ) -> Result<GitOutput, GitError> {
-        let mut stdout = Vec::new();
-        let mut out = self
-            .execute(&cmd, cancel, &mut |chunk| stdout.extend_from_slice(chunk))
-            .await?;
-        out.stdout = stdout;
-        Ok(out)
+        if self.priority == Priority::Background {
+            return self.run_shared(&cmd, cancel).await;
+        }
+        self.run_buffered(&cmd, cancel, None).await
     }
 
     /// Streams stdout to `on_stdout` chunk by chunk (arbitrary boundaries).
@@ -302,7 +364,7 @@ impl GitExecutor {
         on_stdout: &mut (dyn FnMut(&[u8]) + Send),
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
-        let out = self.execute(&cmd, cancel, on_stdout).await?;
+        let out = self.execute(&cmd, cancel, on_stdout, None).await?;
         if out.code != 0 {
             return Err(GitError::Failed {
                 command: described,
@@ -311,6 +373,84 @@ impl GitExecutor {
             });
         }
         Ok(out)
+    }
+
+    async fn run_buffered(
+        &self,
+        cmd: &GitCommand,
+        cancel: &CancellationToken,
+        lead: Option<&mut Lead>,
+    ) -> Result<GitOutput, GitError> {
+        let mut stdout = Vec::new();
+        let mut out = self
+            .execute(
+                cmd,
+                cancel,
+                &mut |chunk| stdout.extend_from_slice(chunk),
+                lead,
+            )
+            .await?;
+        out.stdout = stdout;
+        Ok(out)
+    }
+
+    /// The buffered run of a background handle: lead, or follow a
+    /// leader still queued with the same command. A follower whose
+    /// leader left without an answer — cancelled, or unwound — asks
+    /// again, and leads if nobody else is queued by then; its own token
+    /// ends the wait the way it ends any other.
+    async fn run_shared(
+        &self,
+        cmd: &GitCommand,
+        cancel: &CancellationToken,
+    ) -> Result<GitOutput, GitError> {
+        loop {
+            match self.slots.lead_or_follow(self.group_key(cmd)) {
+                WayIn::Lead(mut lead) => {
+                    let outcome = self.run_buffered(cmd, cancel, Some(&mut lead)).await;
+                    match Shared::of(&outcome) {
+                        Some(shared) => lead.answer(shared),
+                        // Cancelled: the followers were not, and are told
+                        // nothing — dropping the lead is what tells them.
+                        None => drop(lead),
+                    }
+                    return outcome;
+                }
+                WayIn::Follow(told) => {
+                    tokio::select! {
+                        biased;
+                        () = cancel.cancelled() => {
+                            return Err(GitError::Cancelled {
+                                command: cmd.describe(),
+                            });
+                        }
+                        answer = told => match answer {
+                            Ok(shared) => {
+                                tracing::debug!(command = %cmd.describe(), "git answered by a shared run");
+                                return shared.outcome();
+                            }
+                            Err(_) => {
+                                tracing::debug!(command = %cmd.describe(), "the shared run left without an answer; asking again");
+                            }
+                        },
+                    }
+                }
+            }
+        }
+    }
+
+    fn group_key(&self, cmd: &GitCommand) -> GroupKey {
+        GroupKey {
+            program: (*self.program).clone(),
+            cwd: cmd.cwd.clone(),
+            args: cmd.args.clone(),
+            env: self
+                .env
+                .iter()
+                .cloned()
+                .chain(cmd.env.iter().cloned())
+                .collect(),
+        }
     }
 
     /// The process command for `cmd`: program, arguments, the layered
@@ -342,17 +482,24 @@ impl GitExecutor {
         command
     }
 
+    /// One command, from the ask to the reap: the wait for a slot, the
+    /// spawn, and the child's run. The observer hears of it at the ask —
+    /// a row is owed from the moment the reader pressed, whether or not
+    /// the queue in front of it is empty — and at the end, with the wait
+    /// and the run told apart.
+    ///
+    /// `lead` is the group a background run answers for: told of the
+    /// spawn as it happens, which is the instant an identical ask stops
+    /// being able to share this run.
     async fn execute(
         &self,
         cmd: &GitCommand,
         cancel: &CancellationToken,
         on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+        mut lead: Option<&mut Lead>,
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
-        let mut command = self.assemble(cmd);
-
-        tracing::debug!(command = %described, "spawning git");
-        let started = Instant::now();
+        let asked = Instant::now();
         let watch = match self.observer.as_ref() {
             Some(o) if o.records(self.kept) => Some((
                 o,
@@ -365,14 +512,50 @@ impl GitExecutor {
             )),
             _ => None,
         };
-        let report = |end: CommandEnd, message: &str| {
+        let report = |end: CommandEnd, waited: Duration, ran: Duration, message: &str| {
             if let Some((observer, id)) = &watch {
-                observer.finished(*id, end, started.elapsed().as_millis() as u64, message);
+                observer.finished(
+                    *id,
+                    end,
+                    waited.as_millis() as u64,
+                    ran.as_millis() as u64,
+                    message,
+                );
             }
         };
 
+        // The wait is the token's to end, the same as the run: a
+        // selection that moved on or a screen that closed takes its
+        // queued command with it, and nothing is spawned for it.
+        let slot = tokio::select! {
+            biased;
+            () = cancel.cancelled() => None,
+            slot = self.slots.acquire(self.priority, cmd.pace) => slot,
+        };
+        let Some(_slot) = slot else {
+            tracing::debug!(command = %described, "git cancelled while waiting for a slot");
+            report(CommandEnd::Cancelled, asked.elapsed(), Duration::ZERO, "");
+            return Err(GitError::Cancelled { command: described });
+        };
+        let waited = asked.elapsed();
+        if let Some(lead) = &mut lead {
+            lead.spawning();
+        }
+        let mut command = self.assemble(cmd);
+
+        tracing::debug!(
+            command = %described,
+            waited_ms = waited.as_millis() as u64,
+            "spawning git"
+        );
+        let started = Instant::now();
         let mut child = command.spawn().map_err(|source| {
-            report(CommandEnd::Failed, &source.to_string());
+            report(
+                CommandEnd::Failed,
+                waited,
+                started.elapsed(),
+                &source.to_string(),
+            );
             if source.kind() == std::io::ErrorKind::NotFound
                 && cmd.cwd.as_ref().is_none_or(|d| d.is_dir())
             {
@@ -384,6 +567,10 @@ impl GitExecutor {
                 }
             }
         })?;
+        // What starting the process cost on its own — the part of a
+        // round trip that is the machine's and not git's, and on Windows
+        // the larger part (ci/baseline/code-costs-windows-x64.md).
+        let spawned = started.elapsed();
 
         let budget = match cmd.timeout {
             TimeBudget::Stock => self.stock_timeout,
@@ -393,18 +580,49 @@ impl GitExecutor {
         let outcome = run_child(&mut child, budget, cancel, on_stdout)
             .await
             .map_err(|source| {
-                report(CommandEnd::Failed, &source.to_string());
+                report(
+                    CommandEnd::Failed,
+                    waited,
+                    started.elapsed(),
+                    &source.to_string(),
+                );
                 GitError::Io {
                     command: described.clone(),
                     source,
                 }
             })?;
 
+        let clocks = Clocks {
+            waited,
+            started,
+            spawned,
+        };
+        Self::ended(cmd, described, outcome, budget, clocks, &report)
+    }
+
+    /// What the child's end comes to: the log line, the observer's
+    /// report with the wait and the run told apart, and the answer or
+    /// the error.
+    fn ended(
+        cmd: &GitCommand,
+        described: String,
+        outcome: ChildOutcome,
+        budget: Option<Duration>,
+        clocks: Clocks,
+        report: &dyn Fn(CommandEnd, Duration, Duration, &str),
+    ) -> Result<GitOutput, GitError> {
+        let Clocks {
+            waited,
+            started,
+            spawned,
+        } = clocks;
         match outcome {
             ChildOutcome::Finished { code, stderr } => {
                 tracing::debug!(
                     command = %described,
                     code,
+                    waited_ms = waited.as_millis() as u64,
+                    spawn_ms = spawned.as_millis() as u64,
                     elapsed_ms = started.elapsed().as_millis() as u64,
                     "git finished"
                 );
@@ -416,6 +634,8 @@ impl GitExecutor {
                     } else {
                         CommandEnd::Exited(code)
                     },
+                    waited,
+                    started.elapsed(),
                     String::from_utf8_lossy(&stderr).trim_end(),
                 );
                 Ok(GitOutput {
@@ -426,7 +646,7 @@ impl GitExecutor {
             }
             ChildOutcome::TimedOut => {
                 tracing::warn!(command = %described, "git timed out; killed");
-                report(CommandEnd::TimedOut, "");
+                report(CommandEnd::TimedOut, waited, started.elapsed(), "");
                 Err(GitError::TimedOut {
                     command: described,
                     // `unwrap_or` only for the error message: TimedOut cannot
@@ -436,9 +656,18 @@ impl GitExecutor {
             }
             ChildOutcome::Cancelled => {
                 tracing::debug!(command = %described, "git cancelled; killed");
-                report(CommandEnd::Cancelled, "");
+                report(CommandEnd::Cancelled, waited, started.elapsed(), "");
                 Err(GitError::Cancelled { command: described })
             }
         }
     }
+}
+
+/// The three moments of one command the end is told against: what it
+/// waited for a slot, when it was spawned, and what the spawn itself
+/// took.
+struct Clocks {
+    waited: Duration,
+    started: Instant,
+    spawned: Duration,
 }

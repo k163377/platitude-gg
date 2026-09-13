@@ -35,7 +35,8 @@ pub async fn list_tags(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["ls-remote", "--tags", "--", remote])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
     Ok(parse_ls_remote_tags(&out.stdout))
 }
@@ -73,7 +74,8 @@ pub async fn push_tag(
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain"])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     if !expect.is_empty() {
         cmd = cmd.arg(format!("--force-with-lease=refs/tags/{tag}:{expect}"));
     }
@@ -123,7 +125,8 @@ pub async fn delete_remote_tag(
             remote,
             &format!("refs/tags/{tag}"),
         ])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {

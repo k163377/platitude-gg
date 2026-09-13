@@ -109,6 +109,26 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "answered=false offers=false held=false restart=false state=missing",
     },
+    // The process chapter's two boxes, typed and read back out of the
+    // store. **Nothing here is a picture**: a box holding a number and a
+    // box whose edit never landed frame the same, and the interval the
+    // page's tick reads is in a unit no box shows — so the store's answer
+    // is the line. With no argument both boxes are emptied: the default
+    // count — which is the machine's own, a third of its threads, so the
+    // line says `default=true` rather than a number a container would
+    // answer differently — and the copies never read (`copies_ms=0` is
+    // what stops the tick).
+    Verb {
+        name: "settings-processes",
+        // Three, not a number the machine could default to: the floor is
+        // two and the ceiling eight, and the line has to be able to say
+        // `default=false` on every machine the run is taken on.
+        when: &[(
+            Arg::Is("3:10"),
+            "git_processes concurrency=3 default=false copies_secs=10 copies_ms=10000",
+        )],
+        plain: "default=true copies_secs=0 copies_ms=0",
+    },
     // The way out taken over a git waiting to be applied. **Nothing here
     // is a picture**: a screen that stayed is drawn exactly like one
     // nobody asked to close, and the four halves of the claim are the way

@@ -204,6 +204,32 @@ pub(super) fn text(table: &Table, key: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
+/// How many git processes run at once. Anything that is not a count
+/// falls back like every other key here; a number outside the range is
+/// the nearest end of it, and `process::concurrency` is what says so, so
+/// the file and the settings screen cannot decide it differently.
+pub(super) fn concurrency(table: &Table, key: &str) -> Option<u32> {
+    table
+        .get(key)
+        .and_then(Value::as_integer)
+        .filter(|v| *v >= 0)
+        .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
+        .map(crate::process::concurrency)
+}
+
+/// Seconds between passes over the other working copies: `0` is off, and
+/// anything else sits between the floor and the ceiling
+/// `session::copies_interval_secs` puts around it — the one place the
+/// range is decided, for the reason `minutes` has one.
+pub(super) fn copies_interval(table: &Table, key: &str) -> Option<u32> {
+    table
+        .get(key)
+        .and_then(Value::as_integer)
+        .filter(|v| *v >= 0)
+        .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
+        .map(crate::session::copies_interval_secs)
+}
+
 pub(super) fn timeout_secs(table: &Table, key: &str) -> Option<u64> {
     table
         .get(key)

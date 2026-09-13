@@ -105,10 +105,13 @@ pub async fn verify_commit(
             key: String::new(),
         });
     }
-    let cmd =
-        GitCommand::new()
-            .cwd(workdir)
-            .args(["log", "-1", "-z", "--format=%G?%x00%GS%x00%GK", rev]);
+    // Paced by gpg or ssh-keygen and whatever agent they reach for, not
+    // by this machine: the slot it sits in is never the click's
+    // (`process::Pace`).
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["log", "-1", "-z", "--format=%G?%x00%GS%x00%GK", rev])
+        .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
     let text = out.stdout_utf8();
     let mut fields = text.split('\0');

@@ -18,10 +18,19 @@ impl Hub {
             "settings store"
         );
         let chosen = resolve_git(&runtime, &settings.defaults.git_path);
+        // The one set of slots this process runs git in, installed on
+        // the handle before anything clones it: every session, screen
+        // and dialog spawns through a clone of this executor, so the cap
+        // the settings name is the whole application's
+        // (`platitude_core::process::Slots`).
+        let slots = Arc::new(platitude_core::process::Slots::new(
+            platitude_core::process::Limits::of(settings.defaults.git_concurrency),
+        ));
+        let executor = chosen.executor.scheduled(slots);
         HUB.with(|h| {
             *h.borrow_mut() = Some(Hub {
                 runtime: Some(runtime),
-                executor: chosen.executor,
+                executor,
                 git_program: chosen.program,
                 restart_wanted: false,
                 tabs: HashMap::new(),

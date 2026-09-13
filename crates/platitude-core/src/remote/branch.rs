@@ -37,7 +37,8 @@ pub async fn branch_tip(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["ls-remote", "--heads", "--end-of-options", remote, &refname])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
     // A remote that has nothing to say answers with an empty stdout and
     // exit 0, so the absence is in the output rather than in the code.
@@ -102,7 +103,8 @@ pub async fn delete_remote_branch(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain", "--delete", "--", remote, branch])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {

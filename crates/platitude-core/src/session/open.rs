@@ -47,10 +47,14 @@ impl RepoSession {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
         let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
         let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
+        let watched = |kept: Kept| executor.observed(Arc::clone(&observer), kept);
         let session = Arc::new(Self {
-            executor: executor.observed(Arc::clone(&observer), Kept::Unasked),
-            exec_user: executor.observed(Arc::clone(&observer), Kept::Asked),
-            exec_unasked_fetch: executor.observed(observer, Kept::UnaskedUnlessItFails),
+            executor: watched(Kept::Unasked),
+            exec_background: watched(Kept::Unasked).background(),
+            exec_user: watched(Kept::Asked),
+            // Nobody asked for these fetches, so they wait behind the
+            // ones somebody did (`process::Priority::Background`).
+            exec_unasked_fetch: watched(Kept::UnaskedUnlessItFails).background(),
             commands,
             runtime: runtime.clone(),
             sink,
@@ -90,6 +94,7 @@ impl RepoSession {
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             read_owed: std::sync::atomic::AtomicBool::new(false),
             carried_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            copies_read: std::sync::atomic::AtomicBool::new(true),
             refs_read: ReadFlight::default(),
             status_read: ReadFlight::default(),
             stash_read: ReadFlight::default(),

@@ -19,7 +19,8 @@ pub async fn fetch(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["fetch", "--prune"])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     let cmd = match remote {
         Some(name) => cmd.args(["--", name]),
         None => cmd.arg("--all"),

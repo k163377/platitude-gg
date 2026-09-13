@@ -7,6 +7,14 @@ pub struct RepoSession {
     /// Reads and refreshes: recorded in the command log only while
     /// background recording is on.
     pub(super) executor: GitExecutor,
+    /// The reads nobody is waiting on — the other copies' status, the
+    /// walk behind a chip, the remote tags — on the handle the slots
+    /// serve last and keep out of the click's reserve
+    /// (`process::Priority::Background`). Off the log like `executor`.
+    /// **Not the poll's own reads**: what the front page shows is what
+    /// somebody is looking at, and those reads are single-flight already
+    /// (`ReadFlight`), so a slot is all they need.
+    pub(super) exec_background: GitExecutor,
     /// The queue's handle: everything run through it is something the
     /// user asked for, and is always recorded.
     pub(super) exec_user: GitExecutor,
@@ -204,6 +212,10 @@ pub struct RepoSession {
     /// can outlast its interval, and stacking them is what the cap is
     /// there to prevent.
     pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
+    /// Whether the other copies are read at all (`set_copies_read`):
+    /// the settings' "never", which has to hold for the reads an opening
+    /// and a focus fire, not only for the page's tick.
+    pub(super) copies_read: std::sync::atomic::AtomicBool,
     /// One in flight per snapshot, for the reads a repository can be asked
     /// for from more than one place at once (see [`ReadFlight`]). Each
     /// answers its callers with what they act on: whether the refs or

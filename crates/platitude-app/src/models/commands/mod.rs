@@ -136,6 +136,20 @@ fn humanize(ms: i64) -> String {
     }
 }
 
+/// What a row shows for time: what the process took and, where the
+/// command waited for a slot first, that wait beside it. Two numbers
+/// because they blame two different things — a slow git, or an
+/// application busy with everything else — and read as one they would
+/// blame the wrong one. A command that waited for nothing says only
+/// what it took, which is most rows.
+fn spent(elapsed_ms: i64, waited_ms: i64) -> String {
+    if waited_ms > 0 {
+        format!("{} (queued {})", humanize(elapsed_ms), humanize(waited_ms))
+    } else {
+        humanize(elapsed_ms)
+    }
+}
+
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl CommandsModel {
     qproperty!("running", Member = running, Notify = changed);
@@ -324,6 +338,7 @@ impl CommandsModel {
                     code,
                     note,
                     answered,
+                    waited_ms,
                     elapsed_ms,
                     message,
                 } => {
@@ -348,7 +363,7 @@ impl CommandsModel {
                                 (false, Some(code)) => format!("exit {code}"),
                                 (false, None) => note,
                             },
-                            duration: humanize(elapsed_ms),
+                            duration: spent(elapsed_ms, waited_ms),
                             output: message,
                             ..row
                         },
@@ -413,5 +428,12 @@ mod tests {
         assert_eq!(humanize(1000), "1.00 s");
         assert_eq!(humanize(1425), "1.42 s");
         assert_eq!(humanize(63_500), "63.50 s");
+    }
+
+    #[test]
+    fn a_wait_for_a_slot_is_shown_beside_the_run_and_only_when_there_was_one() {
+        assert_eq!(spent(84, 0), "84 ms");
+        assert_eq!(spent(84, 120), "84 ms (queued 120 ms)");
+        assert_eq!(spent(1425, 2000), "1.42 s (queued 2.00 s)");
     }
 }

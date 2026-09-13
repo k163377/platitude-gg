@@ -43,6 +43,42 @@ impl AppBackend {
         self.settings_changed();
     }
 
+    /// Sets how many git processes the application runs at once. The
+    /// range is core's to apply (`process::concurrency`) — the field this
+    /// writes is the one a hand-written `settings.toml` writes, so a
+    /// range spelled out here as well would be a second answer to the
+    /// same question. Zero (the blank input) is the default rather than
+    /// a third meaning: no git at all is not something a box can ask for.
+    pub(super) fn apply_git_concurrency(&mut self, concurrency: i32) {
+        let asked = match concurrency.max(0).unsigned_abs() {
+            0 => platitude_core::process::default_concurrency(),
+            count => platitude_core::process::concurrency(count),
+        };
+        let concurrency = asked as i32;
+        if self.git_concurrency == concurrency {
+            return;
+        }
+        self.git_concurrency = concurrency;
+        Hub::with(|hub| hub.set_git_concurrency(asked));
+        self.settings_changed();
+    }
+
+    /// Sets how often the other working copies are read for uncommitted
+    /// work, in seconds. Zero (the blank input) turns it off, and the
+    /// floor and ceiling are core's (`session::copies_interval_secs`),
+    /// for the reason the interval above leaves its range to core.
+    pub(super) fn apply_copies_interval_secs(&mut self, secs: i32) {
+        let asked = platitude_core::session::copies_interval_secs(secs.max(0).unsigned_abs());
+        let secs = asked as i32;
+        if self.copies_interval_secs == secs {
+            return;
+        }
+        self.copies_interval_secs = secs;
+        self.copies_interval_ms = secs.saturating_mul(1000);
+        Hub::with(|hub| hub.set_copies_interval_secs(asked));
+        self.settings_changed();
+    }
+
     /// The settings screen has just opened: the path it is about to show
     /// gets asked for its version.
     ///

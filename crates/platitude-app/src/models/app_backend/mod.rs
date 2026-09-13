@@ -113,6 +113,22 @@ pub struct AppBackend {
     auto_fetch_minutes: i32,
     /// Ceiling the settings input enforces.
     auto_fetch_max: i32,
+    /// How many git processes run at once, application-wide for the
+    /// reason the interval is: the answer is about this machine
+    /// (`platitude_core::process::Slots`). The ceiling and what an
+    /// empty box falls back to are core's, held here for the input.
+    git_concurrency: i32,
+    git_concurrency_max: i32,
+    git_concurrency_default: i32,
+    /// How often the other working copies of a repository are read for
+    /// uncommitted work, in seconds; 0 is off. The floor and ceiling are
+    /// core's (`session::copies_interval_secs`). The page's tick reads
+    /// the same number in milliseconds (`copies_interval_ms`), computed
+    /// here so the timer binds to a property rather than to arithmetic.
+    copies_interval_secs: i32,
+    copies_interval_min: i32,
+    copies_interval_max: i32,
+    copies_interval_ms: i32,
     /// Commits a graph opens with; 0 is the whole history, which the
     /// screen asks for with a box rather than a number. Application-wide
     /// for the same reason the interval is: the answer is about how much

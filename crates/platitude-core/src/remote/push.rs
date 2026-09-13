@@ -176,7 +176,8 @@ pub async fn push(
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain"])
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     if spec.set_upstream {
         cmd = cmd.arg("--set-upstream");
     }

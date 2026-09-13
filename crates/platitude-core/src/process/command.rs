@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use super::slots::Pace;
 use crate::operation::OperationId;
 
 /// Wraps a path from git's own output so git reads it back as that exact
@@ -86,7 +87,13 @@ pub trait CommandObserver: Send + Sync + 'static {
     fn started(&self, display: &str, full: &str, kept: Kept, operation: Option<OperationId>)
     -> u64;
 
-    fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str);
+    /// The command ended. `waited_ms` is what it spent in the queue for
+    /// a slot before anything was spawned (`super::slots`), `elapsed_ms`
+    /// what the process itself took from the spawn to the reap — kept
+    /// apart, so a slow answer can be read as a slow git or as a busy
+    /// application. A command cancelled while it waited ends with no
+    /// process at all: `Cancelled`, its wait, and nothing run.
+    fn finished(&self, id: u64, end: CommandEnd, waited_ms: u64, elapsed_ms: u64, message: &str);
 }
 
 /// A command's time budget: the stock default — resolved by the executor,
@@ -112,6 +119,9 @@ pub struct GitCommand {
     pub(super) env: Vec<(OsString, OsString)>,
     /// The non-zero exit code this command answers by, where it has one.
     pub(super) answer_code: Option<i32>,
+    /// What sets the command's pace, which is which pool of slots it
+    /// waits for ([`super::slots`]).
+    pub(super) pace: Pace,
 }
 
 impl GitCommand {
@@ -122,7 +132,19 @@ impl GitCommand {
             timeout: TimeBudget::Stock,
             env: Vec::new(),
             answer_code: None,
+            pace: Pace::Here,
         }
+    }
+
+    /// Marks a command paced by something other than this machine — the
+    /// far end of a network connection, a credential helper's prompt, a
+    /// person in another program — so the slot it sits in is never one
+    /// of the click's reserve ([`super::slots::Pace`]). Set
+    /// by the builders that know: the fetches, pushes and `ls-remote`s,
+    /// the clone, the merge tool, the signature check that runs gpg.
+    pub fn paced_elsewhere(mut self) -> Self {
+        self.pace = Pace::Elsewhere;
+        self
     }
 
     /// Marks the exit code this command answers with rather than fails on,
@@ -190,7 +212,10 @@ impl Default for GitCommand {
     }
 }
 
-#[derive(Debug, Default)]
+/// `Clone` for the one reader that hands an answer to more than one
+/// asker — two identical background reads sharing a run
+/// (`super::slots`); nothing else copies output.
+#[derive(Debug, Default, Clone)]
 pub struct GitOutput {
     /// Exit code; `-1` when the process was terminated by a signal.
     pub code: i32,

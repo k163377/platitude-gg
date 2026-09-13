@@ -103,7 +103,10 @@ mod write;
 mod write_order;
 
 pub use auto_fetch::OpenFetch;
-pub use carried::Carried;
+pub use carried::{
+    COPIES_INTERVAL_DEFAULT_SECS, COPIES_INTERVAL_MAX_SECS, COPIES_INTERVAL_MIN_SECS, Carried,
+    copies_interval_secs,
+};
 pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
 pub use event::SessionEvent;
 use feed::CommandFeed;

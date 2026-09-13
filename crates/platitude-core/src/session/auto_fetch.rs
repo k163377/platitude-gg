@@ -408,7 +408,7 @@ impl RepoSession {
             };
             let cancel = s.root_cancel.clone();
             let moved = s
-                .read_remote_tags(&s.executor, &workdir, None, timeout, &cancel)
+                .read_remote_tags(&s.exec_background, &workdir, None, timeout, &cancel)
                 .await;
             let outcome = if cancel.is_cancelled() {
                 RemoteTagRefreshOutcome::Cancelled

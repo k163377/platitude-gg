@@ -248,6 +248,8 @@ mod tests {
                 network_timeout_secs: 300,
                 initial_commits: Some(4000),
                 git_path: "C:/tools/git/cmd/git.exe".into(),
+                git_concurrency: 8,
+                copies_interval_secs: 45,
             },
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();

@@ -78,7 +78,10 @@ pub async fn mergetool(
         .arg(format!("--tool={tool}"))
         .arg("--")
         .args(paths.iter().map(|p| literal_pathspec(p)))
-        .no_timeout();
+        .no_timeout()
+        // Paced by the person in the tool, so the slot it sits in for
+        // as long as they take is never the click's (`process::Pace`).
+        .paced_elsewhere();
     executor.run(cmd, cancel).await.map(drop)
 }
 

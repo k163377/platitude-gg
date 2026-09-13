@@ -71,6 +71,14 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
+/// The interval the settings hold for reading the other working copies,
+/// as the screen and the tick carry it. Read twice at construction —
+/// once in seconds for the box, once in milliseconds for the timer.
+fn copies_interval_secs() -> i32 {
+    Hub::with(|hub| hub.settings().defaults.copies_interval_secs as i32)
+        .unwrap_or(platitude_core::session::COPIES_INTERVAL_DEFAULT_SECS as i32)
+}
+
 impl Default for AppBackend {
     fn default() -> Self {
         // The one thing here a run can change is the shape the window
@@ -98,6 +106,14 @@ impl Default for AppBackend {
             auto_fetch_minutes: Hub::with(|hub| hub.settings().defaults.auto_fetch_minutes as i32)
                 .unwrap_or(platitude_core::session::AUTO_FETCH_DEFAULT_MINUTES as i32),
             auto_fetch_max: platitude_core::session::AUTO_FETCH_MAX_MINUTES as i32,
+            git_concurrency: Hub::with(|hub| hub.settings().defaults.git_concurrency as i32)
+                .unwrap_or(platitude_core::process::default_concurrency() as i32),
+            git_concurrency_max: platitude_core::process::MAX_CONCURRENCY as i32,
+            git_concurrency_default: platitude_core::process::default_concurrency() as i32,
+            copies_interval_secs: copies_interval_secs(),
+            copies_interval_min: platitude_core::session::COPIES_INTERVAL_MIN_SECS as i32,
+            copies_interval_max: platitude_core::session::COPIES_INTERVAL_MAX_SECS as i32,
+            copies_interval_ms: copies_interval_secs().saturating_mul(1000),
             initial_commits: Hub::with(|hub| hub.settings().defaults.initial_commits)
                 .unwrap_or(Some(platitude_core::session::DEFAULT_LOG_LIMIT))
                 .map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX)),

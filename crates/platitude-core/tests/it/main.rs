@@ -29,6 +29,7 @@ mod remote_integration;
 mod remote_tags_integration;
 mod rename_integration;
 mod session_integration;
+mod slots;
 mod stage_integration;
 mod stash_integration;
 mod status_integration;

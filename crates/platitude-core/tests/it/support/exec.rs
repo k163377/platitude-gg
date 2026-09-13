@@ -124,7 +124,14 @@ impl CommandObserver for Log {
         rows.push((display.to_string(), None));
         rows.len() as u64 - 1
     }
-    fn finished(&self, id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
+    fn finished(
+        &self,
+        id: u64,
+        end: CommandEnd,
+        _waited_ms: u64,
+        _elapsed_ms: u64,
+        _message: &str,
+    ) {
         let mut rows = self.0.lock().unwrap();
         if let Some(row) = rows.get_mut(id as usize) {
             row.1 = Some(end);
@@ -197,7 +204,14 @@ impl CommandObserver for Ends {
     ) -> u64 {
         0
     }
-    fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, _message: &str) {
+    fn finished(
+        &self,
+        _id: u64,
+        end: CommandEnd,
+        _waited_ms: u64,
+        _elapsed_ms: u64,
+        _message: &str,
+    ) {
         self.0.lock().unwrap().push(end);
     }
 }
@@ -236,7 +250,14 @@ impl CommandObserver for Said {
     ) -> u64 {
         0
     }
-    fn finished(&self, _id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {
+    fn finished(
+        &self,
+        _id: u64,
+        end: CommandEnd,
+        _waited_ms: u64,
+        _elapsed_ms: u64,
+        message: &str,
+    ) {
         self.0.lock().unwrap().push((end, message.to_string()));
     }
 }

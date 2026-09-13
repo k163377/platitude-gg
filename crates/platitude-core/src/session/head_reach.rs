@@ -92,7 +92,7 @@ impl RepoSession {
             let _permit = permit;
             let cancel = s.root_cancel.clone();
             match reachable::reached_without_branch(
-                &s.executor,
+                &s.exec_background,
                 &workdir,
                 &hold.tip.to_hex(),
                 &hold.branch,
@@ -169,7 +169,7 @@ impl RepoSession {
             };
             let cancel = s.head_published_read.begin(&s.root_cancel);
             let range = publish::only(&oid.to_hex());
-            match publish::state_of(&s.executor, &workdir, &range, &cancel).await {
+            match publish::state_of(&s.exec_background, &workdir, &range, &cancel).await {
                 Ok(state) => s.publish_head_published(HeadPublished {
                     oid: Some(oid),
                     published: state.rewrites_published(),

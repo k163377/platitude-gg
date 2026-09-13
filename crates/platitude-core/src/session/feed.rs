@@ -137,7 +137,7 @@ impl crate::process::CommandObserver for CommandFeed {
         id
     }
 
-    fn finished(&self, id: u64, end: CommandEnd, elapsed_ms: u64, message: &str) {
+    fn finished(&self, id: u64, end: CommandEnd, waited_ms: u64, elapsed_ms: u64, message: &str) {
         let held = relock(&self.held).remove(&id);
         if let Some(held) = held {
             if !said_no(end) {
@@ -157,6 +157,7 @@ impl crate::process::CommandObserver for CommandFeed {
         self.sink.event(SessionEvent::CommandFinished {
             id,
             end,
+            waited_ms,
             elapsed_ms,
             message: message.to_string(),
         });

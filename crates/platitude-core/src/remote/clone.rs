@@ -34,7 +34,8 @@ pub async fn clone(
         .args(["clone", "--"])
         .arg(url)
         .arg(into)
-        .timeout(timeout);
+        .timeout(timeout)
+        .paced_elsewhere();
     // Only where there is one to stand in: a destination at a root has
     // none, and a working directory that is not there fails the spawn
     // before git can say anything about the clone.

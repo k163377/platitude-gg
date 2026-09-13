@@ -339,6 +339,10 @@ pub enum CommandMsg {
         /// The code is an answer this command was asked for, so the row
         /// is not a failure however it exited.
         answered: bool,
+        /// What the command waited for a slot before it was spawned —
+        /// the application's time, shown apart from git's
+        /// (`platitude_core::process::Slots`).
+        waited_ms: i64,
         elapsed_ms: i64,
         message: String,
     },

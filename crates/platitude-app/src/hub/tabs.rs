@@ -438,6 +438,10 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
 fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
+    // The interval itself is the page's tick's to read (`RepoPage`);
+    // what the session takes is whether the other copies are read at
+    // all, so "never" holds for an opening and a focus too.
+    session.set_copies_read(applied.copies_interval_secs > 0);
     // Restarts the walk when it changes something, and on the way in it
     // changes nothing that has to be walked twice: a session this new has
     // no workdir yet, so the restart returns without a pass and the

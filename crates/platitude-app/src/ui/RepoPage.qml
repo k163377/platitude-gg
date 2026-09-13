@@ -2351,13 +2351,13 @@ Item {
         running: page.onScreen && page.visible && repoTab.state === "open"
         onTriggered: page.pollRepo()
     }
-    // What the other working copies are carrying, on a tick of its own because it costs a `status` each (see the
-    // token). Same conditions as the tick above: being on screen is what drives it, since a window kept open beside
-    // another copy is what these rows are for.
+    // What the other working copies are carrying, on a tick of its own because it costs a `status` each — how often
+    // is the reader's to set (`AppBackend.copiesIntervalMs`, zero for never). Same conditions as the tick above:
+    // being on screen is what drives it, since a window kept open beside another copy is what these rows are for.
     Timer {
-        interval: Metrics.copiesIntervalMs
+        interval: AppBackend.copiesIntervalMs
         repeat: true
-        running: page.onScreen && page.visible && repoTab.state === "open"
+        running: page.onScreen && page.visible && repoTab.state === "open" && AppBackend.copiesIntervalMs > 0
         onTriggered: {
             repoTab.refreshCarried()
             // And the one being read, file by file — the tallies above are all the rows need, and the pane needs the

@@ -11,6 +11,8 @@ name = "Ada Lovelace"
 
 [defaults]
 auto_fetch_minutes = 5
+copies_interval_secs = 45
+git_concurrency = 8
 git_path = "C:/tools/git/cmd/git.exe"
 initial_commits = 4000
 network_timeout_secs = 300

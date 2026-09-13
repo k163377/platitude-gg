@@ -197,6 +197,37 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=settings-processes: the application category's `GIT PROCESSES` chapter, with both boxes typed. The
+    // argument is `<commands>:<seconds>`, either half empty for what an emptied box means (the default, and never).
+    //
+    // **The picture cannot judge this one either.** A box holding `8` and a box whose edit was never applied frame
+    // the same, and what the page's tick reads is the interval in milliseconds, which no box shows — so the store's
+    // own answer is reported, in both units, and the line is what is judged.
+    //
+    // Typed through the pane's own door (`SettingsAppPane.autoTypeProcesses` = text, then the edit being finished
+    // with), never by writing the properties — that would photograph the wiring cut (規約 §UI 自動化の因果性).
+    SampleTimer {
+        id: processesTimer
+        running: Harness.autoAct === "settings-processes"
+        /// Both boxes have been typed; the tick after is the store's answer.
+        property bool acted: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("app")
+                return
+            }
+            if (!processesTimer.acted) {
+                const halves = Harness.autoActArg.split(":")
+                acts.appPane.autoTypeProcesses(halves[0] || "", halves.length > 1 ? halves[1] : "")
+                processesTimer.acted = true
+                return
+            }
+            processesTimer.stop()
+            Harness.report("git_processes " + acts.appPane.processesTally())
+            window.finishAutoAct()
+        }
+    }
+
     // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
     // typed is the second git this run was staged with (`--other-git`), which is what the way out has to run into.
     //

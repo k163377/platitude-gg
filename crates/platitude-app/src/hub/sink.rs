@@ -331,6 +331,7 @@ impl SessionSink for BridgeSink {
             SessionEvent::CommandFinished {
                 id,
                 end,
+                waited_ms,
                 elapsed_ms,
                 message,
             } => {
@@ -347,6 +348,7 @@ impl SessionSink for BridgeSink {
                     code,
                     note,
                     answered: matches!(end, CommandEnd::Answered(_)),
+                    waited_ms: waited_ms as i64,
                     elapsed_ms: elapsed_ms as i64,
                     message,
                 });

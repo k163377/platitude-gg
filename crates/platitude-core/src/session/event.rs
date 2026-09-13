@@ -523,6 +523,12 @@ pub enum SessionEvent {
     CommandFinished {
         id: u64,
         end: CommandEnd,
+        /// What the command spent waiting for a slot before it was
+        /// spawned (`process::Slots`) — the application's time, told
+        /// apart from git's below so a slow row can be read as one or
+        /// the other.
+        waited_ms: u64,
+        /// What the process took, from the spawn to the reap.
         elapsed_ms: u64,
         /// git's own output on the way out (stderr), or the reason it
         /// never ran. Empty when it said nothing.

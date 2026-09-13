@@ -129,7 +129,7 @@ impl CommandObserver for Recorder {
         id
     }
 
-    fn finished(&self, id: u64, end: CommandEnd, _elapsed_ms: u64, message: &str) {
+    fn finished(&self, id: u64, end: CommandEnd, _waited_ms: u64, _elapsed_ms: u64, message: &str) {
         let mut seen = self.seen.lock().unwrap();
         if let Some(entry) = seen.get_mut(id as usize) {
             entry.2 = end;

@@ -239,7 +239,7 @@ QtObject {
                 "stash-state",
                 "settings-tools", "settings-tools-loading", "settings-switch",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",
-                "settings-git-leave",
+                "settings-git-leave", "settings-processes",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
     }
 }

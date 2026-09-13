@@ -3,7 +3,10 @@
 use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
-use super::toml::{clamp_to_i64, initial_commits, minutes, sub_table, text, timeout_secs};
+use super::toml::{
+    clamp_to_i64, concurrency, copies_interval, initial_commits, minutes, sub_table, text,
+    timeout_secs,
+};
 
 /// The values a person decided once and every repository is opened with,
 /// read from and written back to the `[defaults]` table this is named
@@ -37,6 +40,17 @@ pub struct Defaults {
     /// what asks the binary itself, and a value that answers nothing is
     /// still what the reader wrote down.
     pub git_path: String,
+    /// How many git processes the application runs at once, in every
+    /// repository — the cap the slots every session shares are set to
+    /// (`process::Limits::of`). About the machine, like the interval:
+    /// a laptop and a workstation want different numbers, and no
+    /// repository does.
+    pub git_concurrency: u32,
+    /// Seconds between passes over the other working copies of a
+    /// repository for uncommitted work — one `git status` per copy per
+    /// pass, so the number is about what the machine is asked to do in
+    /// the background (`session::carried`). Zero is off.
+    pub copies_interval_secs: u32,
 }
 
 impl Default for Defaults {
@@ -46,6 +60,8 @@ impl Default for Defaults {
             network_timeout_secs: crate::remote::DEFAULT_NETWORK_TIMEOUT.as_secs(),
             initial_commits: Some(crate::session::DEFAULT_LOG_LIMIT),
             git_path: String::new(),
+            git_concurrency: crate::process::default_concurrency(),
+            copies_interval_secs: crate::session::COPIES_INTERVAL_DEFAULT_SECS,
         }
     }
 }
@@ -79,6 +95,10 @@ impl Settings {
                 initial_commits: initial_commits(t, "initial_commits")
                     .unwrap_or(fallback.initial_commits),
                 git_path: text(t, "git_path").unwrap_or(fallback.git_path),
+                git_concurrency: concurrency(t, "git_concurrency")
+                    .unwrap_or(fallback.git_concurrency),
+                copies_interval_secs: copies_interval(t, "copies_interval_secs")
+                    .unwrap_or(fallback.copies_interval_secs),
             },
             None => fallback,
         };
@@ -117,6 +137,16 @@ impl Settings {
         defaults.insert(
             "git_path".into(),
             Value::String(self.defaults.git_path.clone()),
+        );
+        defaults.insert(
+            "git_concurrency".into(),
+            Value::Integer(self.defaults.git_concurrency.into()),
+        );
+        // Off is written as `0`, the way the fetch interval writes it: a
+        // key left out would read as the default, which is on.
+        defaults.insert(
+            "copies_interval_secs".into(),
+            Value::Integer(self.defaults.copies_interval_secs.into()),
         );
         root.insert("defaults".into(), Value::Table(defaults));
 
@@ -298,6 +328,64 @@ network_timeout_secs = 9
     #[test]
     fn a_git_path_that_is_not_a_string_falls_back_to_the_default() {
         assert_eq!(git_path_from("[defaults]\ngit_path = 7\n"), "");
+    }
+
+    fn defaults_from(text: &str) -> Defaults {
+        Settings::from_table(&text.parse::<Table>().expect("parse")).defaults
+    }
+
+    /// The process count keeps its range whichever door it came through:
+    /// zero and everything past the ceiling are the nearest number that
+    /// runs anything, and a value that is not a count falls back.
+    #[test]
+    fn a_process_count_is_held_to_its_range_and_survives_a_round_trip() {
+        assert_eq!(
+            defaults_from("[defaults]\ngit_concurrency = 0\n").git_concurrency,
+            1
+        );
+        assert_eq!(
+            defaults_from("[defaults]\ngit_concurrency = 1000\n").git_concurrency,
+            crate::process::MAX_CONCURRENCY
+        );
+        assert_eq!(
+            defaults_from("[defaults]\ngit_concurrency = \"many\"\n").git_concurrency,
+            Defaults::default().git_concurrency
+        );
+        let settings = Settings {
+            defaults: Defaults {
+                git_concurrency: 8,
+                ..Defaults::default()
+            },
+            ..Settings::default()
+        };
+        assert_eq!(Settings::from_table(&settings.to_table()), settings);
+    }
+
+    /// Off is `0` in the file and comes back as off; a number under the
+    /// floor is the floor, so a file that asks for a `status` per copy
+    /// every second gets the shortest interval offered instead.
+    #[test]
+    fn the_copies_interval_keeps_off_and_its_floor_through_the_file() {
+        assert_eq!(
+            defaults_from("[defaults]\ncopies_interval_secs = 0\n").copies_interval_secs,
+            0
+        );
+        assert_eq!(
+            defaults_from("[defaults]\ncopies_interval_secs = 1\n").copies_interval_secs,
+            crate::session::COPIES_INTERVAL_MIN_SECS
+        );
+        let settings = Settings {
+            defaults: Defaults {
+                copies_interval_secs: 0,
+                ..Defaults::default()
+            },
+            ..Settings::default()
+        };
+        assert_eq!(
+            Settings::from_table(&settings.to_table()),
+            settings,
+            "off survives a round trip"
+        );
     }
 
     /// A number that is not a count at all falls back on its own, so one

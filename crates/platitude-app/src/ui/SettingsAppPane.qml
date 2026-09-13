@@ -215,9 +215,28 @@ ColumnLayout {
         pane.applyGitPath()
     }
 
+    /// The door a run types the process chapter through: both boxes, each the way a hand leaves it — the text, then
+    /// the edit being finished with. Either half empty is what an emptied box means: the default, and off.
+    function autoTypeProcesses(concurrency, copiesSecs) {
+        concurrencyField.text = concurrency
+        pane.applyConcurrency()
+        copiesField.text = copiesSecs
+        pane.applyCopies()
+    }
+    /// What the store holds for that chapter, as the run reports it: the count the slots are set to and whether it is
+    /// this machine's default (the number itself is the machine's — a third of its threads), and the interval in both
+    /// units, since the tick reads the milliseconds and the box the seconds.
+    function processesTally() {
+        return "concurrency=" + AppBackend.gitConcurrency
+               + " default=" + (AppBackend.gitConcurrency === AppBackend.gitConcurrencyDefault)
+               + " copies_secs=" + AppBackend.copiesIntervalSecs + " copies_ms=" + AppBackend.copiesIntervalMs
+    }
+
     /// Puts the fields back to what the store says, for the screen that just opened.
     function load() {
         fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
+        concurrencyField.text = String(AppBackend.gitConcurrency)
+        copiesField.text = AppBackend.copiesIntervalSecs > 0 ? String(AppBackend.copiesIntervalSecs) : ""
         wholeHistoryBox.checked = AppBackend.initialCommits === 0
         commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
         gitPathField.text = AppBackend.gitPath
@@ -248,6 +267,16 @@ ColumnLayout {
     function applyFetch() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
     }
+    // An empty field is the default here rather than off — no git at all is not something a box can ask for — and
+    // the placeholder is that number. Written from here for the reason the interval is: a validator with a floor
+    // calls an empty string unacceptable, so `onEditingFinished` never fires for one.
+    function applyConcurrency() {
+        AppBackend.setGitConcurrency(concurrencyField.text === "" ? 0 : Number(concurrencyField.text))
+    }
+    // The same off switch the fetch interval has: empty is never.
+    function applyCopies() {
+        AppBackend.setCopiesIntervalSecs(copiesField.text === "" ? 0 : Number(copiesField.text))
+    }
     // Two controls, one value: the box asks for no window at all (core's `0`), and the field answers only while the
     // box is clear. Written from here for the same reason the interval is — a validator with a floor calls an empty
     // string unacceptable, so `onEditingFinished` never fires for one, and an emptied field would otherwise never be
@@ -268,6 +297,8 @@ ColumnLayout {
     /// window that went down because somebody closed a settings screen would be a restart nobody pressed.
     function applyFields() {
         pane.applyFetch()
+        pane.applyConcurrency()
+        pane.applyCopies()
         pane.applyCommits()
         pane.applyGitPath()
     }
@@ -437,6 +468,72 @@ ColumnLayout {
                 }
                 Label {
                     text: qsTr("minutes")
+                    color: Theme.textSecondary
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+    }
+
+    // What the machine is asked to do at once and in the background: how many git commands may run together, and how
+    // often the other working copies of a repository are read for uncommitted work. Beside the fetch interval because
+    // they are the same kind of answer — about this machine and the person at it, not about one repository
+    // (規約 §設定の画面).
+    SettingsSection {
+        enabled: !AppBackend.gitPathOffersRestart
+        caption: qsTr("GIT PROCESSES")
+        HelpText {
+            text: qsTr("How many git commands run at once, in every repository. Whatever you are waiting on goes first and always finds room: the reads made in the background, and anything waiting on a network or another program, never take more than half between them. %1 is the most.")
+                  .arg(AppBackend.gitConcurrencyMax)
+        }
+        LabeledField {
+            caption: qsTr("At once")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                FormField {
+                    id: concurrencyField
+                    implicitWidth: 160
+                    // What an empty field will be read as, shown rather than explained.
+                    placeholderText: String(AppBackend.gitConcurrencyDefault)
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: 1
+                        top: AppBackend.gitConcurrencyMax
+                    }
+                    onEditingFinished: pane.applyConcurrency()
+                    onAccepted: pane.accepted()
+                }
+                Label {
+                    text: qsTr("commands")
+                    color: Theme.textSecondary
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+        HelpText {
+            text: qsTr("The repository's other working copies are read for uncommitted work on a tick of their own — one git status per copy. Empty means never; %1 seconds is the shortest interval.")
+                  .arg(AppBackend.copiesIntervalMin)
+        }
+        LabeledField {
+            caption: qsTr("Other copies every")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                FormField {
+                    id: copiesField
+                    implicitWidth: 160
+                    placeholderText: qsTr("never")
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.copiesIntervalMin
+                        top: AppBackend.copiesIntervalMax
+                    }
+                    onEditingFinished: pane.applyCopies()
+                    onAccepted: pane.accepted()
+                }
+                Label {
+                    text: qsTr("seconds")
                     color: Theme.textSecondary
                 }
                 Item { Layout.fillWidth: true }
