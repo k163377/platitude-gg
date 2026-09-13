@@ -5,6 +5,9 @@
 //! own ([`crate::verify::run`] passes it in); this side allows it
 //! [`GRACE_MS`] beyond that and then reaps, so a wedged GUI cannot hold
 //! the run open. The ceiling is the run's, the wait is `crate::wait`'s.
+//! The one run ended before its ceiling is the one ordered to hold at a
+//! station with no deadline thread to end it: the trail says when it is
+//! there, and it is reaped on that word ([`ordered_hold`]).
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -52,7 +55,15 @@ pub(super) struct Ran {
     pub(super) out_at: Vec<Duration>,
     pub(super) err_at: Vec<Duration>,
     pub(super) status: Option<std::process::ExitStatus>,
+    /// Whether this side reaped the app — at the ceiling, or at the
+    /// station it was ordered to hold at ([`Self::held_at`]). A run that
+    /// ended itself, its own deadline thread included, is `false` here.
     pub(super) timed_out: bool,
+    /// The station the app was found held at, for the run ordered to
+    /// hold there with no deadline thread of its own ([`ordered_hold`]):
+    /// what the reaping was on the word of, rather than the ceiling.
+    /// `None` for every other run.
+    pub(super) held_at: Option<String>,
     pub(super) elapsed: Duration,
     /// How long the app had said nothing when the run ended. `None` where
     /// it never said anything at all — the whole run is the silence then.
@@ -95,37 +106,49 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let stderr = child.stderr.take().map(crate::app_out::collect);
 
     let mut timed_out = false;
+    let mut held_at = None;
     let mut reaped = None;
     let mut looked = Vec::new();
+    let ordered = ordered_hold(start.opts);
     let status = loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             break Some(status);
         }
-        if wait.look_again("its exit").is_err() {
-            // Taken while the app still stands, since past `exiting` the
-            // trail has run out and these are the only witnesses left
-            // (`super::wedge::look_at`).
-            looked = super::wedge::look_at(
-                child.id(),
-                start.shot_dir,
-                start.opts.fault_hang.is_empty(),
-                start.opts.fault_stall_look,
-            );
-            // The app takes the git it was waiting on with it — a hook
-            // that never returns, a fetch to nowhere — which `reap`
-            // reaches by walking from the app rather than leaving it to
-            // the step's own ceiling. The app is left in this runner's
-            // own group, so that a signal aimed at the runner from
-            // outside (a Ctrl-C, the step's group kill) ends it here
-            // instead of leaving it holding this run's store lock until
-            // its own watchdog fires. What ran out is reported off the
-            // run itself (`super::wedge`: the ceiling, the silence, what
-            // went with it), so the wait's own words are not repeated.
-            let (under, ended) = crate::reap::reap(&mut child);
-            reaped = Some(under.line());
-            timed_out = true;
-            break ended;
+        // A run ordered to hold at a station, with no deadline thread of
+        // its own, is this side's to end — and the trail says when it is
+        // there. The hold never returns, so every second between that
+        // mark and the ceiling would be wall clock paid for no answer
+        // (`ordered_hold`).
+        let held = ordered.filter(|station| {
+            super::wedge::last_station(start.shot_dir).as_deref() == Some(*station)
+        });
+        if held.is_none() && wait.look_again("its exit").is_ok() {
+            continue;
         }
+        // Taken while the app still stands, since past `exiting` the
+        // trail has run out and these are the only witnesses left
+        // (`super::wedge::look_at`).
+        looked = super::wedge::look_at(
+            child.id(),
+            start.shot_dir,
+            start.opts.fault_hang.is_empty(),
+            start.opts.fault_stall_look,
+        );
+        // The app takes the git it was waiting on with it — a hook
+        // that never returns, a fetch to nowhere — which `reap`
+        // reaches by walking from the app rather than leaving it to
+        // the step's own ceiling. The app is left in this runner's
+        // own group, so that a signal aimed at the runner from
+        // outside (a Ctrl-C, the step's group kill) ends it here
+        // instead of leaving it holding this run's store lock until
+        // its own watchdog fires. What ran out is reported off the
+        // run itself (`super::wedge`: the ceiling, the silence, what
+        // went with it), so the wait's own words are not repeated.
+        let (under, ended) = crate::reap::reap(&mut child);
+        reaped = Some(under.line());
+        timed_out = true;
+        held_at = held.map(str::to_string);
+        break ended;
     };
 
     let join =
@@ -149,11 +172,23 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         err_lines: err.lines,
         status,
         timed_out,
+        held_at,
         elapsed,
         quiet_for: spoke_at.map(|at| elapsed.saturating_sub(at)),
         reaped,
         looked,
     })
+}
+
+/// The station a run was ordered to hold at where no deadline thread will
+/// end it there: the one run this side ends on the trail's word rather
+/// than the ceiling's. **The ceiling stays, as the backstop** — a run
+/// that never reaches its station is still reaped at it. A hold with the
+/// deadline thread up is left to the thread: what that case reads is the
+/// account the thread writes, which a reaping from here would forestall
+/// (`super::faults`).
+fn ordered_hold(opts: &Options) -> Option<&str> {
+    (opts.fault_no_deadline && !opts.fault_hang.is_empty()).then_some(opts.fault_hang.as_str())
 }
 
 /// The environment one run hands the app: where it reads its git identity

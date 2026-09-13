@@ -195,7 +195,14 @@ pub(super) fn announce(
         ),
         outcome.saved,
         outcome.write_failures,
-        if timed_out { ", TIMED OUT" } else { "" },
+        // Reaped where it was ordered to hold, or at the ceiling: two
+        // different ends, and the words `wedge-check` reads them by
+        // (`super::faults`).
+        match (&ran.held_at, timed_out) {
+            (Some(station), _) => format!(", HELD AT {station}"),
+            (None, true) => ", TIMED OUT".to_string(),
+            (None, false) => String::new(),
+        },
     );
     // A run ended by a ceiling is the one that says nothing for itself:
     // the app's own account of where it stood, and what only the parent
@@ -395,6 +402,7 @@ mod tests {
             err_at: Vec::new(),
             status: code.map(exit_status),
             timed_out,
+            held_at: None,
             elapsed: Duration::from_secs(602),
             quiet_for: None,
             reaped: None,

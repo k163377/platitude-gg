@@ -45,15 +45,23 @@ const TRAIL_FILE: &str = "stations.txt";
 const DUMP_FILE: &str = "app.dmp";
 
 /// How long a look at the app may take: the listing is one PowerShell
-/// start and one query (a walk of `/proc` elsewhere, which takes no
-/// process at all), the dump writes the process's whole memory to disk.
-/// **Ceilings on the diagnostics, never on the run**: what they bound is
-/// a diagnostic that stalls, and the answer to one is the line that says
-/// it did — the app is reaped and the run reported the same either way
-/// ([`bounded`]).
+/// start and one query, the dump writes the process's whole memory to
+/// disk. Both Windows-only — elsewhere the listing is a walk of `/proc`,
+/// which takes no process and so has nothing to bound. **Ceilings on the
+/// diagnostics, never on the run**: what they bound is a diagnostic that
+/// stalls, and the answer to one is the line that says it did — the app
+/// is reaped and the run reported the same either way ([`bounded`]).
+#[cfg(windows)]
 const LISTING_CEILING: Duration = Duration::from_secs(15);
 #[cfg(windows)]
 const DUMP_CEILING: Duration = Duration::from_secs(60);
+/// The ceiling a look ordered to stall is ended at (`--fault-stall-look`).
+/// The stand-in never answers, so any height ends it, and what the case
+/// reads back is the ending and the words — never the height. Kept apart
+/// from [`LISTING_CEILING`], which is set for a listing that does answer,
+/// on a loaded machine; this one is only wall clock the check would pay
+/// for nothing.
+const STALLED_LOOK_CEILING: Duration = Duration::from_secs(1);
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).
@@ -96,13 +104,18 @@ pub(super) fn at_a_ceiling(ran: &super::child::Ran) -> bool {
 /// Everything the parent can still say about a run that stopped
 /// answering, as the lines to print under the verdict.
 pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf]) -> Vec<String> {
-    let mut lines = vec![match ran.timed_out {
-        true => format!(
+    let mut lines = vec![match (&ran.held_at, ran.timed_out) {
+        (Some(station), _) => format!(
+            "  the run was reaped at `{station}`, the station it was ordered to hold at, after \
+             {:.1}s — the app was still standing there, with no deadline thread to end it",
+            ran.elapsed.as_secs_f32()
+        ),
+        (None, true) => format!(
             "  the run was reaped at the ceiling after {:.1}s — the app was still standing and \
              had not ended itself",
             ran.elapsed.as_secs_f32()
         ),
-        false => format!(
+        (None, false) => format!(
             "  the app ended itself at its own deadline after {:.1}s",
             ran.elapsed.as_secs_f32()
         ),
@@ -164,12 +177,17 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 /// a dumper waiting on the process it dumps — is ended, said to have
 /// been, and the run goes on to reap the app and report it. `stalled`
 /// orders that stall (`--fault-stall-look`): the listing is a process
-/// that does nothing for longer than the ceiling, so what the parent
-/// says about a look that ran out of time can be checked rather than
-/// waited for (`super::faults`).
+/// that never answers, ended at a ceiling of its own
+/// ([`STALLED_LOOK_CEILING`]), so what the parent says about a look that
+/// ran out of time can be checked rather than waited for
+/// (`super::faults`).
 pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool) -> Vec<String> {
     let threads = if stalled {
-        listing(bounded("the thread listing", stand_in(), LISTING_CEILING))
+        listing(bounded(
+            "the thread listing",
+            stand_in(),
+            STALLED_LOOK_CEILING,
+        ))
     } else {
         threads_of(pid)
     };
@@ -564,6 +582,14 @@ fn stopped_in(shot_dir: &Path) -> Option<String> {
     ))
 }
 
+/// The last station the trail records, read while the run still stands:
+/// what the run ordered to hold at a station is ended on the word of
+/// (`super::child::ordered_hold`). Nothing where there is no trail yet,
+/// or nothing in it parses.
+pub(super) fn last_station(shot_dir: &Path) -> Option<String> {
+    read_trail(shot_dir).ok()?.pop().map(|(_, station)| station)
+}
+
 /// The trail as pairs of seconds and station, in the order they were
 /// reached. Read errors are kept apart from an empty file.
 ///
@@ -821,7 +847,7 @@ mod tests {
 
     use super::{
         Answer, Counted, TRAIL_FILE, account, at_a_ceiling, bounded, clear_any_account, held_in,
-        listing, stand_in, stopped_in, trail,
+        last_station, listing, stand_in, stopped_in, trail,
     };
 
     /// A diagnostic that stands past its ceiling is ended there and said
@@ -1007,6 +1033,7 @@ mod tests {
             err_at: vec![Duration::from_secs(2)],
             status: code.map(exit_status),
             timed_out,
+            held_at: None,
             elapsed: Duration::from_secs(140),
             quiet_for: Some(Duration::from_secs(138)),
             reaped: None,
@@ -1115,6 +1142,39 @@ mod tests {
         assert!(said.contains("left no wedge.txt"), "{said}");
         assert!(said.contains("silent for the last 138.0s"), "{said}");
         assert!(said.contains("app.png overlay.png"), "{said}");
+    }
+
+    /// A run reaped where it was ordered to hold says so, apart from one
+    /// reaped at the ceiling: the words are what `wedge-check` reads back
+    /// (`super::super::faults`).
+    #[test]
+    fn a_run_reaped_where_it_was_held_names_the_station() {
+        let dir = lanes("held-at");
+        let mut held = ran(true, None);
+        held.held_at = Some("exiting".to_string());
+
+        let said = account(&dir, &held, &[]).join("\n");
+
+        assert!(
+            said.contains("reaped at `exiting`, the station it was ordered to hold at"),
+            "{said}"
+        );
+        assert!(!said.contains("reaped at the ceiling"), "{said}");
+    }
+
+    /// The station a held run is ended on the word of is read off the
+    /// trail as it grows: nothing before there is one, the last that
+    /// parsed once there is, and never a torn tail.
+    #[test]
+    fn the_last_station_is_read_off_the_trail_as_it_grows() {
+        let dir = lanes("last-station");
+        assert_eq!(last_station(&dir), None);
+        std::fs::write(dir.join(TRAIL_FILE), "").expect("an empty trail");
+        assert_eq!(last_station(&dir), None);
+        std::fs::write(dir.join(TRAIL_FILE), "0.0s starting\n2.4s exiting\n").expect("a trail");
+        assert_eq!(last_station(&dir).as_deref(), Some("exiting"));
+        std::fs::write(dir.join(TRAIL_FILE), "0.0s starting\n2.4s exi").expect("a torn trail");
+        assert_eq!(last_station(&dir).as_deref(), Some("starting"));
     }
 
     /// What the app wrote down about itself is the first thing to read:

@@ -33,12 +33,21 @@ use std::time::Instant;
 /// act reaches the same stations by its own watchdog.
 const VERB: &str = "band";
 
-/// The ceiling the two held runs are given. Above what the verb costs on
-/// a loaded machine, so the act completes and the hold is past it; and
-/// small, because a held run is paid in wall clock — this one plus the
-/// parent's grace for the reaped case, plus ten seconds for the case that
-/// ends itself (`super::child`, `harness::deadline`).
+/// The ceiling the held run with its deadline thread up is given. Above
+/// what the verb costs on a loaded machine, so the act completes and the
+/// hold is past it; and small, because that case is paid in wall clock —
+/// this plus the ten seconds the thread waits past it before it looks
+/// (`harness::deadline`). The one race left here: a verb that outruns
+/// this on a busier machine reads as an aborted act.
 const HELD_MS: &str = "4000";
+
+/// The ceiling the two held runs with no deadline thread are given. **A
+/// backstop, not what they cost**: the parent ends those on the trail's
+/// word, the moment the station they were ordered to hold at is on the
+/// disk (`super::child::ordered_hold`), so this is only what a run that
+/// never gets there pays — and wide enough that no loaded machine reaches
+/// it with the act still under way.
+const BACKSTOP_MS: &str = "60000";
 
 /// The ceiling the turning run is given. Long enough that the verb runs
 /// and the loop goes on turning after it — **the ceiling is not what
@@ -95,7 +104,7 @@ const CASES: &[Case] = &[
                 the observed shape, where nothing inside the process can report",
         args: &[
             "--watchdog-ms",
-            HELD_MS,
+            BACKSTOP_MS,
             "--fault-hang",
             "exiting",
             "--fault-no-deadline",
@@ -103,12 +112,16 @@ const CASES: &[Case] = &[
         wants: &[
             "auto_act complete=band",
             "screenshot saved=true",
-            "TIMED OUT",
+            "HELD AT exiting",
+            "the station it was ordered to hold at",
             "the stations it reached:",
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
+            // The listing answered, not only the heading it is under:
+            // this is the shape the next occurrence is read from.
             "threads at the ceiling:",
+            " alive — ",
         ],
         forbids: &["auto-act watchdog expired"],
     },
@@ -141,7 +154,7 @@ const CASES: &[Case] = &[
                 ceiling, and the app is still reaped and the run reported",
         args: &[
             "--watchdog-ms",
-            HELD_MS,
+            BACKSTOP_MS,
             "--fault-hang",
             "exiting",
             "--fault-no-deadline",
@@ -150,7 +163,8 @@ const CASES: &[Case] = &[
         wants: &[
             "auto_act complete=band",
             "screenshot saved=true",
-            "TIMED OUT",
+            "HELD AT exiting",
+            "the station it was ordered to hold at",
             "the stations it reached:",
             "> exiting ",
             "threads at the ceiling: could not be listed",
@@ -239,7 +253,48 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{CASES, TURNING_MS, VERB};
+    use super::{BACKSTOP_MS, CASES, HELD_MS, TURNING_MS, VERB};
+
+    /// The two runs with no deadline thread are ended on the trail's word
+    /// and never at their ceiling, so the ceiling they carry is the
+    /// backstop and the words they want are a hold's, not a timeout's.
+    /// The one whose thread is up keeps the ceiling it is paid in.
+    #[test]
+    fn the_runs_with_no_deadline_are_read_as_held_and_carry_only_a_backstop() {
+        let mut seen = 0;
+        for case in CASES
+            .iter()
+            .filter(|case| case.args.contains(&"--fault-no-deadline"))
+        {
+            seen += 1;
+            assert!(case.args.contains(&BACKSTOP_MS), "{}", case.shape);
+            assert!(!case.args.contains(&HELD_MS), "{}", case.shape);
+            assert!(case.wants.contains(&"HELD AT exiting"), "{}", case.shape);
+            assert!(!case.wants.contains(&"TIMED OUT"), "{}", case.shape);
+        }
+        assert_eq!(seen, 2);
+        let own = CASES
+            .iter()
+            .find(|case| {
+                case.wants
+                    .contains(&"the app's own account: wedged in `exiting`")
+            })
+            .expect("the case with the thread up");
+        assert!(own.args.contains(&HELD_MS));
+        assert!(!own.args.contains(&"--fault-no-deadline"));
+    }
+
+    /// The listing that answers is asserted to have answered: the observed
+    /// shape is read from it, and a case that wanted only the heading
+    /// would pass on a listing that never came back.
+    #[test]
+    fn the_observed_shape_reads_a_listing_that_answered() {
+        let observed = CASES
+            .iter()
+            .find(|case| case.wants.contains(&"left no wedge.txt"))
+            .expect("the observed shape");
+        assert!(observed.wants.contains(&" alive — "));
+    }
 
     #[test]
     fn an_aborted_act_is_not_a_completed_act_held_at_exit() {
@@ -338,7 +393,7 @@ mod tests {
             "ran out of time",
             "was ended",
             "under the app:",
-            "TIMED OUT",
+            "HELD AT",
         ] {
             assert!(
                 stalled.wants.iter().any(|said| said.contains(want)),

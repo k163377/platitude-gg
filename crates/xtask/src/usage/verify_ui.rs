@@ -65,7 +65,11 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           no wedge.txt however it is stopped — the shape a
                           run held past `exiting` has anyway, since the
                           exit ends every other thread before the loaded
-                          libraries are given their detach
+                          libraries are given their detach. With
+                          `--fault-hang`, the run is reaped the moment the
+                          trail says it reached that station (the verdict
+                          reads HELD AT); the ceiling is only the backstop
+                          behind that
         --fault-hold-act  swallow the verb's completion, so the act runs,
                           the loop goes on turning and only the ceiling
                           ends the run. The third shape `wedge-check`
@@ -73,12 +77,12 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           on its own: a ceiling that outruns a completion
                           here loses to it on a busier machine
         --fault-stall-look
-                          stall the runner's own look at a run reaped at
-                          the ceiling: the thread listing is a process
-                          that never answers, so the listing's ceiling
-                          ends it. The fourth shape `wedge-check` drives —
-                          the diagnostic ran out of time and the app was
-                          still reaped and reported
+                          stall the runner's own look at a run it reaps:
+                          the thread listing is a process that never
+                          answers, ended at a short ceiling of its own.
+                          The fourth shape `wedge-check` drives — the
+                          diagnostic ran out of time and the app was still
+                          reaped and reported
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run
