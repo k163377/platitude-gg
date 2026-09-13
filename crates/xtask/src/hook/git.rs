@@ -3,27 +3,46 @@
 
 use super::commit::primary_commit_denied;
 use super::payload::string_field;
-use super::{MAIN_ESCAPE, REBASE_ESCAPE};
+use super::{MAIN_ESCAPE, REBASE_ESCAPE, permit};
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
+
+/// What the git guard made of a shell line.
+#[derive(Debug, PartialEq)]
+pub(super) enum Verdict {
+    /// Printed a refusal; the guards after it stay quiet.
+    Refused,
+    /// A command that writes main, let through on the user's permit —
+    /// which the caller spends once every other guard has let it pass.
+    Landing,
+    /// Nothing here to hold back.
+    Clear,
+}
 
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the
 /// user asks for it in so many words (CLAUDE.md Git 運用) — landing a
 /// branch on main, rewriting a branch under the session, and committing
 /// anything at all from the primary checkout. Answers whether it refused,
-/// so the guard after it stays quiet when it did.
-pub(super) fn pre_git(input: &str) -> Result<bool, String> {
+/// so the guard after it stays quiet when it did, and whether it let a
+/// landing through.
+pub(super) fn pre_git(input: &str) -> Result<Verdict, String> {
     let Some(command) = string_field(input, "command") else {
-        return Ok(false);
+        return Ok(Verdict::Clear);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
     if gate_escape_denied(&command) {
-        return Ok(true);
+        return Ok(Verdict::Refused);
     }
     // Each rule keeps its own escape, so asking for one is not asking for
     // the others: a merge the user called for still may not rebase.
-    Ok(guarded_git_denied(&command, &cwd)
-        || (!command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd)))
+    match guarded_git(input, &command, &cwd) {
+        Verdict::Clear => {}
+        verdict => return Ok(verdict),
+    }
+    if !command.contains(MAIN_ESCAPE) && primary_commit_denied(&command, &cwd) {
+        return Ok(Verdict::Refused);
+    }
+    Ok(Verdict::Clear)
 }
 
 /// The two names that decide whether refs/heads/main answers to the gate
@@ -52,13 +71,16 @@ fn gate_escape_denied(command: &str) -> bool {
 
 /// Putting a branch onto main and rewriting the branch under the session
 /// are both the user's call (CLAUDE.md Git 運用). Prints the refusal and
-/// says so.
-fn guarded_git_denied(command: &str, cwd: &str) -> bool {
+/// says so. A landing with its escape in front is answered by the permit:
+/// the escape says the session believes the user asked, the permit says
+/// whether the user did, in the user's own message.
+fn guarded_git(input: &str, command: &str, cwd: &str) -> Verdict {
     let Some(guarded) = guarded_call(command) else {
-        return false;
+        return Verdict::Clear;
     };
-    if command.contains(guarded.offence.escape()) {
-        return false;
+    let escaped = command.contains(guarded.offence.escape());
+    if escaped && guarded.offence == Offence::Rebase {
+        return Verdict::Clear;
     }
     let dir = guarded.dir.unwrap_or(cwd);
     // Any git that cannot answer is git we are not guarding: a throwaway
@@ -66,22 +88,29 @@ fn guarded_git_denied(command: &str, cwd: &str) -> bool {
     // often as not and rebases freely, and the command would fail here
     // anyway if the path is not a repository at all.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
-        return false;
+        return Verdict::Clear;
     };
     if !session_repo.eq_ignore_ascii_case(&target_repo) {
-        return false;
+        return Verdict::Clear;
     }
     if guarded.offence.only_from_main()
         && git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() != Some("main")
     {
-        return false;
+        return Verdict::Clear;
+    }
+    if escaped {
+        return if permit::landing_denied(input, guarded.what) {
+            Verdict::Refused
+        } else {
+            Verdict::Landing
+        };
     }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{}\"}}}}",
         guarded.offence.reason(guarded.what)
     );
-    true
+    Verdict::Refused
 }
 
 /// A git command in a shell line that a rule holds back.
@@ -128,7 +157,8 @@ impl Offence {
                 "{what} would put commits on main, and main moves only when the \
                  user asks for it in so many words (CLAUDE.md Git 運用). Leave \
                  the work on its branch and report it as ready to merge instead. \
-                 If the user did ask for this one, run \
+                 If the user did ask for this one — in their latest message, \
+                 which is where the hook reads the ask (反映) — run \
                  `{MAIN_ESCAPE}=1 cargo xtask land <branch>` — it works from any \
                  session, worktree ones included, and reads where main actually \
                  is before it moves anything; a hand-typed merge inherits \

@@ -19,6 +19,11 @@ target/
 # session that wrote it ends.
 .chips/
 
+# The landing permit (hook permit): one file per session, beside this
+# .git so a seat's landing reads what the prompt hook wrote wherever the
+# session sat. Opened by the user's message, spent by one landing.
+.permits/
+
 # IDE / editors
 .idea/
 *.iml

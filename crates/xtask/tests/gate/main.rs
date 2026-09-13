@@ -27,5 +27,6 @@ mod budget;
 mod chips;
 mod hook;
 mod landing;
+mod permit;
 mod selection;
 mod stamps;

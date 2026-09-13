@@ -19,11 +19,14 @@ const ASKS: [&str; 2] = ["レビュー", "review"];
 /// a prompt asks for a review when it holds more asks than containers.
 const CONTAINERS: [&str; 2] = ["プレビュー", "preview"];
 
-/// UserPromptSubmit: plain stdout becomes this turn's context.
+/// UserPromptSubmit: plain stdout becomes this turn's context. The
+/// message is also what the landing permit answers to (`permit`), so it
+/// goes there first — that one prints nothing.
 pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
     let Some(prompt) = string_field(input, "prompt") else {
         return Ok(());
     };
+    super::permit::prompt_submit(input, &prompt);
     if asks_for_review(&prompt) {
         println!(
             "{}",

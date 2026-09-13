@@ -426,7 +426,9 @@ const TAIL: &str = "  shipped [--no-build]
   land [<branch>]
       Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
       the pre-shell hook asks for PGG_ALLOW_MAIN=1 in front, which is how
-      the transcript records that the user asked). In the branch's own
+      the transcript records the ask, and lets it through only on the
+      permit the user's latest message opened by saying 反映 — one
+      message, one landing). In the branch's own
       worktree: rebases it onto main when it is behind (a rebase that
       stops is walked back), runs `gate` there — cached steps are not
       paid twice, and a census the verbs rewrote is committed as

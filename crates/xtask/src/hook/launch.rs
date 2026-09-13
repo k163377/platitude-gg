@@ -12,10 +12,10 @@ use crate::seats::worktree_root;
 /// is on the screen, and an unsupervised process can hold the exe against
 /// the next build's link. Offscreen QPA alone is not a parent kill guard.
 /// Only worktree sessions are held to it — a launch in the primary checkout
-/// is the user's own (CLAUDE.md ビルド・テスト).
-pub(super) fn pre_launch(input: &str) -> Result<(), String> {
+/// is the user's own (CLAUDE.md ビルド・テスト). Answers whether it refused.
+pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
-        return Ok(());
+        return Ok(false);
     };
     // Held to before the escape and outside any worktree: the escape records
     // that the user asked for a window, not that the session may stop
@@ -35,7 +35,7 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
              is nothing to trim — run it on its own, report, and end the \
              turn.\"}}}}"
         );
-        return Ok(());
+        return Ok(true);
     }
     // Same reason from the other side: a background task keeps the session
     // busy while it runs and wakes the agent again when it lands, and a
@@ -53,15 +53,15 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
              (raise the tool's timeout if the release build needs it), report, \
              and end the turn.\"}}}}"
         );
-        return Ok(());
+        return Ok(true);
     }
     if command.contains(WINDOW_ESCAPE) {
-        return Ok(());
+        return Ok(false);
     }
     let cwd = string_field(input, "cwd").unwrap_or_default();
     let objections = launch_objections(&command, &cwd);
     if objections.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
@@ -76,7 +76,7 @@ pub(super) fn pre_launch(input: &str) -> Result<(), String> {
         objections.join("; "),
         WINDOW_ESCAPE
     );
-    Ok(())
+    Ok(true)
 }
 
 /// Whether `command` puts a reader on `cargo xtask launch`'s output. The
