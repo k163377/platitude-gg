@@ -43,6 +43,12 @@ pub(super) struct Outcome {
     /// photograph the frame it paints out past the screen.
     pub(super) must_say: Option<&'static str>,
     pub(super) said: bool,
+    /// Whether the identity a held save wrote is in the run's own
+    /// gitconfig, read once the app has ended — the witness outside the
+    /// app that the exit waited for the save (`quit-save-held`,
+    /// `super::shim::held_save_landed`). `None` for every verb with no
+    /// such witness.
+    pub(super) held_save_landed: Option<bool>,
 }
 
 impl Outcome {
@@ -54,6 +60,7 @@ impl Outcome {
             && !self.write_sank_it()
             && !self.store_refused
             && (self.must_say.is_none() || self.said)
+            && self.held_save_landed.is_none_or(|landed| landed)
     }
 
     /// Whether the failing writes are what the verdict turns on — the one
@@ -63,8 +70,13 @@ impl Outcome {
     }
 }
 
-/// What the run's own lines make of it.
-pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> Outcome {
+/// What the run's own lines make of it — and, for the one verb that has
+/// one, what the witness on disk says (`config` is the run's gitconfig).
+pub(super) fn judge(
+    opts: &super::options::Options,
+    ran: &super::child::Ran,
+    config: &std::path::Path,
+) -> Outcome {
     let (status, err_lines, out_lines, timed_out) =
         (&ran.status, &ran.err_lines, &ran.out_lines, ran.timed_out);
 
@@ -99,6 +111,7 @@ pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> 
                 .chain(out_lines.iter())
                 .any(|l| l.contains(wanted))
         }),
+        held_save_landed: super::shim::held_save_landed(&opts.verb, config),
     }
 }
 
@@ -114,6 +127,40 @@ pub(super) fn judge(opts: &super::options::Options, ran: &super::child::Ran) -> 
 /// the ceiling's, and the account under it is the fuller reading.
 pub(super) fn loop_was_turning(outcome: &Outcome, ran: &super::child::Ran) -> bool {
     outcome.watchdog_expired && !super::wedge::at_a_ceiling(ran)
+}
+
+/// The pictures the run left, named, and filed on the board as the run
+/// goes rather than when somebody remembers: the seat is read from the
+/// working directory there, so a picture that is registered is a picture
+/// that says which tree took it. A pass is not the condition — a failing
+/// run's picture is the one most worth looking at.
+fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut shots: Vec<PathBuf> = std::fs::read_dir(shot_dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "png"))
+                .collect()
+        })
+        .unwrap_or_default();
+    shots.sort();
+    for shot in &shots {
+        println!("shot: {}", shot.display());
+    }
+    if !shots.is_empty() && !opts.no_board {
+        let label = if opts.label.is_empty() {
+            format!("{} {}", opts.verb, opts.arg).trim().to_string()
+        } else {
+            opts.label.clone()
+        };
+        match crate::shots::record(&label, &opts.verb, &shots) {
+            Ok(page) => println!("board: {}", crate::shots::shown(&page)),
+            // The board is not what this run is judging. Say the reason
+            // and let the verdict stand on the pictures themselves.
+            Err(message) => println!("board: not updated ({message})"),
+        }
+    }
+    shots
 }
 
 /// Prints what the run said, files its pictures on the board, and gives
@@ -135,36 +182,7 @@ pub(super) fn announce(
     for line in err_lines.iter().chain(out_lines.iter()) {
         println!("  | {line}");
     }
-    let mut shots: Vec<PathBuf> = std::fs::read_dir(shot_dir)
-        .map(|it| {
-            it.flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|e| e == "png"))
-                .collect()
-        })
-        .unwrap_or_default();
-    shots.sort();
-    for shot in &shots {
-        println!("shot: {}", shot.display());
-    }
-    // Onto the board as the run goes, not when somebody remembers: the
-    // seat is read from the working directory there, so a picture that
-    // is registered is a picture that says which tree took it. A pass is
-    // not the condition — a failing run's picture is the one most worth
-    // looking at.
-    if !shots.is_empty() && !opts.no_board {
-        let label = if opts.label.is_empty() {
-            format!("{} {}", opts.verb, opts.arg).trim().to_string()
-        } else {
-            opts.label.clone()
-        };
-        match crate::shots::record(&label, &opts.verb, &shots) {
-            Ok(page) => println!("board: {}", crate::shots::shown(&page)),
-            // The board is not what this run is judging. Say the reason
-            // and let the verdict stand on the pictures themselves.
-            Err(message) => println!("board: not updated ({message})"),
-        }
-    }
+    let shots = filed_shots(opts, shot_dir);
 
     println!(
         "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",
@@ -195,6 +213,19 @@ pub(super) fn announce(
             "  the run never said `{wanted}` — and this verb's picture reads the same \
              whether it should have or not."
         );
+    }
+    // Said either way: the pass is the witness having been read, and a
+    // reader who sees the line knows what was read.
+    match outcome.held_save_landed {
+        Some(true) => println!(
+            "  witness on disk: the identity the held save wrote is in the run's gitconfig \
+             — the exit waited for the save"
+        ),
+        Some(false) => println!(
+            "  witness on disk: the identity the held save wrote is NOT in the run's gitconfig \
+             — the process ended without waiting for the save, or the save did not land"
+        ),
+        None => {}
     }
     if outcome.watchdog_expired {
         println!(
@@ -257,7 +288,27 @@ mod tests {
         store_refused: false,
         must_say: None,
         said: true,
+        held_save_landed: None,
     };
+
+    /// The witness on disk is the verdict for the one verb that has it:
+    /// a run that printed every line it should have and left the run's
+    /// gitconfig without the identity is a process that ended before its
+    /// save wrote, and that is the failure the verb is for.
+    #[test]
+    fn the_held_saves_witness_on_disk_decides_where_it_exists() {
+        let waited = Outcome {
+            held_save_landed: Some(true),
+            ..WELL
+        };
+        assert!(waited.passed());
+        let left = Outcome {
+            held_save_landed: Some(false),
+            ..WELL
+        };
+        assert!(!left.passed());
+        assert!(WELL.passed(), "and every other verb has no such witness");
+    }
 
     /// A run's settings are its own — nothing else knows the directory —
     /// so a store that came back held means two runs were handed one, and

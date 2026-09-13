@@ -66,6 +66,11 @@ pub(super) struct Options {
     /// the ceiling instead: a ceiling that beats the completion on this
     /// machine loses to it on a busier one (`super::faults`).
     pub(super) fault_hold_act: bool,
+    /// Hold every configuration save the app makes until the station
+    /// this names (`PGG_FAULT_HOLD_SAVE`), so a close can land on one
+    /// provably out and the exit can be read joining it. Armed on its
+    /// own for the verb whose subject that is (`super::child`).
+    pub(super) fault_hold_save: String,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
     /// run unless one is named, so a headless run never reads or writes
@@ -203,6 +208,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         fault_hang: String::new(),
         fault_no_deadline: false,
         fault_hold_act: false,
+        fault_hold_save: String::new(),
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -259,6 +265,12 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--fault-no-deadline" => opts.fault_no_deadline = true,
             "--fault-hold-act" => opts.fault_hold_act = true,
+            "--fault-hold-save" => {
+                opts.fault_hold_save = it
+                    .next()
+                    .ok_or("--fault-hold-save needs a station (e.g. writes-joining)")?
+                    .clone();
+            }
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }

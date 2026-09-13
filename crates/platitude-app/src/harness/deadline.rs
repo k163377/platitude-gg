@@ -161,7 +161,7 @@ impl Station {
     /// (`xtask::verify::faults`). One vocabulary for the two so that a
     /// check can ask for a station by the name it will read back;
     /// [`Station::name`] stays the prose the report is written in.
-    fn slug(self) -> &'static str {
+    pub(super) fn slug(self) -> &'static str {
         match self {
             Self::Starting => "starting",
             Self::EventLoop => "event-loop",
@@ -249,6 +249,10 @@ pub(crate) fn at(station: Station) {
     let reached = clock.elapsed();
     STOOD.store(Stood { station, reached }.pack(), Ordering::Relaxed);
     leave_a_mark(station, reached);
+    // The saves a run asked to be held let go here, where this is the
+    // station it named — before a hold at the same station, which never
+    // returns.
+    super::faults::release_saves_at(station);
     hold_here(station);
 }
 

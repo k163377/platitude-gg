@@ -212,7 +212,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         repos: &repos,
         opts: &opts,
     })?;
-    let verdict = outcome::judge(&opts, &ran);
+    let verdict = outcome::judge(&opts, &ran, &config);
     // A passing run tells the census what it showed, so the gate can pick
     // this line by itself the next time one of those components changes
     // (gate::census). Only a run somebody can type again is recorded, and

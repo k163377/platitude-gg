@@ -97,3 +97,79 @@ pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
 /// A build without the harness has no fault to raise, and raises none.
 #[cfg(not(feature = "automation"))]
 pub(crate) fn fail_graph_pass(_tab_id: i32, _step: &str) {}
+
+/// The configuration saves a run asked to be held (`PGG_FAULT_HOLD_SAVE`):
+/// every save the hub spawns waits here until the station the knob names
+/// is reached, and the count of the ones waiting is what QML reads to
+/// know the save a close is about to land on is provably out
+/// (`PGG_AUTO_ACT=quit-save-held`).
+#[cfg(feature = "automation")]
+mod held_saves {
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    static WAITING: AtomicUsize = AtomicUsize::new(0);
+    static RELEASED: AtomicBool = AtomicBool::new(false);
+    static LET_GO: OnceLock<tokio::sync::Notify> = OnceLock::new();
+
+    fn let_go() -> &'static tokio::sync::Notify {
+        LET_GO.get_or_init(tokio::sync::Notify::new)
+    }
+
+    pub(super) async fn hold() {
+        WAITING.fetch_add(1, Ordering::SeqCst);
+        loop {
+            // Armed before the flag is read, so a release that lands
+            // between the read and the wait is not missed.
+            let told = let_go().notified();
+            if RELEASED.load(Ordering::SeqCst) {
+                break;
+            }
+            told.await;
+        }
+        WAITING.fetch_sub(1, Ordering::SeqCst);
+    }
+
+    pub(super) fn release() {
+        RELEASED.store(true, Ordering::SeqCst);
+        let_go().notify_waiters();
+    }
+
+    pub(super) fn waiting() -> usize {
+        WAITING.load(Ordering::SeqCst)
+    }
+}
+
+/// Where a run asked for the saves to be held, the hold; everywhere else
+/// nothing at all (`Hub::spawn_save`).
+pub(crate) async fn held_save() {
+    #[cfg(feature = "automation")]
+    {
+        if super::knobs().fault_hold_save.is_empty() {
+            return;
+        }
+        tracing::info!(target: "bench", "fault: a configuration save is held");
+        held_saves::hold().await;
+    }
+}
+
+/// The station reached lets the held saves go, where it is the one the
+/// run named (`harness::deadline::at`).
+#[cfg(feature = "automation")]
+pub(crate) fn release_saves_at(station: super::Station) {
+    if super::knobs().fault_hold_save != station.slug() {
+        return;
+    }
+    tracing::info!(target: "bench", "fault: the held saves let go at `{}`", station.slug());
+    held_saves::release();
+}
+
+/// A build without the harness holds no save, and has none to let go.
+#[cfg(not(feature = "automation"))]
+pub(crate) fn release_saves_at(_station: super::Station) {}
+
+/// How many saves are standing at the hold.
+#[cfg(feature = "automation")]
+pub(crate) fn held_saves() -> usize {
+    held_saves::waiting()
+}

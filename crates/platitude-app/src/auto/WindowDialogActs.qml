@@ -438,6 +438,41 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=quit-save-held: the close that arrives while a configuration save the application itself asked
+    // for is out — the identity the dialog just took (typed and submitted by `WindowIdentityActs`), held by the run
+    // (`--fault-hold-save`, armed for this verb by xtask) until the shutdown joins it. The save goes through no
+    // session, so what turns the close away here is the quit gate's own clause for the hub's saves
+    // (`Hub::writes_settled`), and the picture is the wait dialog over a window with nothing else running.
+    //
+    // The verb ends on that picture. What follows is the run's own exit through the gate's yield (`WindowQuitGate`):
+    // the shutdown reaches `writes-joining` with the save still held, the hold lets go at that station, the two
+    // `git config` writes land, the join returns and the process ends — which xtask reads off the run's own
+    // gitconfig afterwards (`verify::outcome`), the one witness that stands outside the app.
+    SampleTimer {
+        id: quitSaveTimer
+        running: Harness.autoAct === "quit-save-held"
+        property bool closed: false
+        onTriggered: {
+            if (!quitSaveTimer.closed) {
+                // Pressed only once the save stands at the hold, so the close lands on a save provably out.
+                if (!AppBackend.identityBusy || Harness.heldSaves() === 0)
+                    return
+                quitSaveTimer.closed = true
+                window.close()
+                return
+            }
+            if (!quitWaitDialog.opened)
+                return
+            stop()
+            Harness.report("quit_save dialog=" + quitWaitDialog.opened
+                + " window=" + window.visible
+                + " vetoes=" + quitWaitDialog.vetoes
+                + " busy=" + AppBackend.identityBusy
+                + " held=" + Harness.heldSaves())
+            window.finishAutoAct()
+        }
+    }
+
     // PGG_AUTO_ACT=gate-sweep: the same screen `solo` photographs, with its words taken from the air around them
     // (規約 §右のペインの字は掴める). **This is the surface with no way out to the log** — the gate stands before any
     // repository is open, so git's own answer and the path of the build already holding the settings are the whole of

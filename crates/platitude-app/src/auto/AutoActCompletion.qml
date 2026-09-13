@@ -225,6 +225,9 @@ QtObject {
                 // answer, and `quit-locked` waits the landing out in its own sampler — a write barrier in front of
                 // either would hold the shot for an answer the verb is about the absence of.
                 "quit-waits", "quit-locked",
+                // The same wait over a save the hub holds rather than a session's write: photographed with the
+                // save still held, and the exit that joins it is the run's own, after the picture.
+                "quit-save-held",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",

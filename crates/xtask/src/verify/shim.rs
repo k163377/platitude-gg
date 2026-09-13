@@ -2,7 +2,7 @@
 //! `--version` old, and the identity the screen begins from.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 /// Set on the app when `--old-git` asks for one: the version a copy of this
@@ -132,7 +132,13 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
         // is the one state that raises it without a save having to fail
         // first, and the repository keeps its own `user.*` so everything
         // else on the page goes on working.
-        "identity" | "badges" | "badges-hover" | "badges-hover-early" => Some(""),
+        // `quit-save-held` needs the screen up for the save it holds:
+        // the dialog's own submit is the save the close lands on.
+        "identity"
+        | "badges"
+        | "badges-hover"
+        | "badges-hover-early"
+        | super::child::HELD_SAVE_VERB => Some(""),
         // `identity-tip` walks the same half-landed save and then closes
         // the dialog on it: the badge the tooltip belongs to only stands
         // while the identity is half of what was asked for.
@@ -153,6 +159,22 @@ pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
         _ if arg.is_empty() => IDENTITY_ASKED,
         _ => arg,
     }
+}
+
+/// Whether the identity the held save wrote is in `config`, read once
+/// the app has ended — `None` for every verb with no such witness
+/// (`super::child::HELD_SAVE_VERB`). What is looked for is the name and
+/// the address the dialog was told to type, so a save that half landed
+/// answers false as well. **The one witness outside the app**: a
+/// process that ended before its save had written could still have
+/// printed every line the run is judged on.
+pub(super) fn held_save_landed(verb: &str, config: &Path) -> Option<bool> {
+    if verb != super::child::HELD_SAVE_VERB {
+        return None;
+    }
+    let (name, email) = IDENTITY_ASKED.split_once('|')?;
+    let text = std::fs::read_to_string(config).unwrap_or_default();
+    Some(text.contains(&format!("name = {name}")) && text.contains(&format!("email = {email}")))
 }
 
 #[cfg(test)]

@@ -77,7 +77,9 @@ impl Hub {
             // The identity saves beside the sessions' writes: a `git
             // config` half way through its pair is the one thing worse
             // than either whole (`hub::saves`).
-            writes.extend(hub.saves.take_all());
+            let saves = hub.saves.take_all();
+            let saves_joined = saves.len();
+            writes.extend(saves);
             for (_, tab) in hub.tabs.drain() {
                 if let Some(session) = tab.session {
                     session.close();
@@ -100,6 +102,9 @@ impl Hub {
                         }
                     }
                 });
+                // For the run that holds a save on purpose to read this
+                // (`quit-save-held`): the join is over, and so are they.
+                crate::harness::said(&format!("writes_joined saves={saves_joined}"));
                 crate::harness::station(crate::harness::Station::RuntimeStopping);
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
@@ -126,7 +131,12 @@ impl Hub {
         let Some(handle) = self.runtime_handle() else {
             return false;
         };
-        self.saves.hold(handle.spawn(save));
+        // Where a run asked for the saves to be held, this is the hold
+        // (`harness::held_save`); every other build goes straight on.
+        self.saves.hold(handle.spawn(async move {
+            crate::harness::held_save().await;
+            save.await;
+        }));
         true
     }
 

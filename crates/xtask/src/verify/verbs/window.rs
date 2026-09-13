@@ -58,6 +58,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "quit_lock dialog=true window=true escape=false vetoes=2 landed=true",
     },
+    // The same close over a save the application itself asked for — the
+    // identity the dialog took — held by the run until the shutdown
+    // joins it. `held=1` is the save standing at the hold when the close
+    // landed, `vetoes=1` the gate turning it away for that one save with
+    // no session writing. The other half of the claim, that the exit
+    // then waited for the save, is not a line the app can print: it is
+    // read off the run's own gitconfig once the process has ended
+    // (`super::shim::held_save_landed`).
+    Verb {
+        name: "quit-save-held",
+        when: &[],
+        plain: "quit_save dialog=true window=true vetoes=1 busy=true held=1",
+    },
     // What a tab switch carries and what it drops, in one line
     // because neither half means anything alone. `sessions=1` with
     // two tabs open is the release itself — the tab left behind is

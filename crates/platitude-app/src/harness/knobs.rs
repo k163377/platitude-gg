@@ -67,6 +67,13 @@ pub(crate) struct Knobs {
     /// since a ceiling short enough to beat a completion on one machine
     /// is one the completion beats on another.
     pub fault_hold_act: bool,
+    /// `PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
+    /// spawns until the station this names is reached
+    /// (`harness::deadline`), so a close can be photographed landing on a
+    /// save provably out and the shutdown can be read joining one
+    /// (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty: no
+    /// save is held.
+    pub fault_hold_save: String,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
@@ -168,6 +175,7 @@ fn read() -> Knobs {
         fault_hang: text("PGG_FAULT_HANG"),
         fault_no_deadline: on("PGG_FAULT_NO_DEADLINE"),
         fault_hold_act: on("PGG_FAULT_HOLD_ACT"),
+        fault_hold_save: text("PGG_FAULT_HOLD_SAVE"),
         select: on("PGG_AUTO_SELECT"),
         scroll: on("PGG_AUTO_SCROLL"),
         perf: on("PGG_AUTO_PERF"),
@@ -234,7 +242,10 @@ mod tests {
         );
         assert_eq!(knobs.watchdog_ms, 0);
         assert!(
-            knobs.fault_hang.is_empty() && !knobs.fault_no_deadline && !knobs.fault_hold_act,
+            knobs.fault_hang.is_empty()
+                && !knobs.fault_no_deadline
+                && !knobs.fault_hold_act
+                && knobs.fault_hold_save.is_empty(),
             "a run nobody is driving is held by nothing, keeps its own deadline, and finishes what it starts"
         );
         assert!(

@@ -143,5 +143,13 @@ impl Harness {
     fn open_session_count(&self) -> i32 {
         Hub::with(|hub| i32::try_from(hub.sessions().len()).unwrap_or(i32::MAX)).unwrap_or(0)
     }
+
+    /// How many configuration saves are standing at the hold a run asked
+    /// for (`PGG_FAULT_HOLD_SAVE`): what says the save a close is about to
+    /// land on is provably out (`WindowDialogActs`, `quit-save-held`).
+    #[qslot]
+    fn held_saves(&self) -> i32 {
+        i32::try_from(super::faults::held_saves()).unwrap_or(i32::MAX)
+    }
 }
 qml_register!(Harness, "Harness", singleton = true);

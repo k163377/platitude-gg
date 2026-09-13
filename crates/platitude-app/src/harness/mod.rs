@@ -24,8 +24,20 @@ mod perf_probe;
 mod singleton;
 
 pub(crate) use deadline::{Station, at as station, watch as watch_deadline};
-pub(crate) use faults::{fail_graph_pass, pass_hooks};
+pub(crate) use faults::{fail_graph_pass, held_save, pass_hooks};
 pub(crate) use knobs::knobs;
+
+/// A line for the verdict a run is read off, said from the product's own
+/// path: the moment a step nobody at a window can see is over, such as
+/// the shutdown's join of the saves. Nothing in a build without the
+/// harness, which has nobody reading.
+#[cfg(feature = "automation")]
+pub(crate) fn said(message: &str) {
+    tracing::info!(target: "bench", "{message}");
+}
+
+#[cfg(not(feature = "automation"))]
+pub(crate) fn said(_message: &str) {}
 
 /// Starts the clock every measurement is taken against.
 ///

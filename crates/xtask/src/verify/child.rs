@@ -189,6 +189,18 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.fault_hold_act {
         cmd.env("PGG_FAULT_HOLD_ACT", "1");
     }
+    // The saves held until a station where a run asked for it — and,
+    // unasked, for the verb whose subject that is: its identity save is
+    // held until the shutdown joins it, which is what the run reads
+    // (`super::verbs::window`).
+    let hold_save = if opts.fault_hold_save.is_empty() && opts.verb == HELD_SAVE_VERB {
+        HELD_SAVE_STATION
+    } else {
+        opts.fault_hold_save.as_str()
+    };
+    if !hold_save.is_empty() {
+        cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
+    }
     // The two the staged copy reads to be a git: what to answer
     // `--version` with, and who to hand the rest to. Both are set on the
     // app, so every git it starts inherits them — which is how the copy
@@ -235,13 +247,23 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     // theirs, and this is what the dialog standing on it is told to do.
     if identity_seed(&opts.verb).is_some() {
         cmd.env("PGG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
-        if opts.verb == "identity-half" || opts.verb == "identity-tip" {
+        if opts.verb == "identity-half"
+            || opts.verb == "identity-tip"
+            || opts.verb == HELD_SAVE_VERB
+        {
             cmd.env("PGG_AUTO_IDENTITY_SAVE", "1");
         }
     }
 
     Ok(cmd)
 }
+
+/// The verb whose subject is the exit waiting for a configuration save
+/// the hub holds, and the station its save is held until: the one the
+/// shutdown reaches as it starts joining the writes still out
+/// (`Hub::shutdown`), so the join is what lets the save go.
+pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
+const HELD_SAVE_STATION: &str = "writes-joining";
 
 /// Whether this verb's subject is a second process finding the settings
 /// held. Every other run has a store nobody else can be in — its config
