@@ -71,6 +71,13 @@ pub(super) struct Options {
     /// provably out and the exit can be read joining it. Armed on its
     /// own for the verb whose subject that is (`super::child`).
     pub(super) fault_hold_save: String,
+    /// Stall the parent's own look at a run reaped at the ceiling: the
+    /// thread listing is a process that does nothing for longer than the
+    /// listing's ceiling (`super::wedge::look_at`). Nothing of the app's
+    /// — the one fault that is the runner's — and the fourth shape
+    /// `wedge-check` drives: a diagnostic that ran out of time, ended,
+    /// said so, and still followed by the app's reaping and the verdict.
+    pub(super) fault_stall_look: bool,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
     /// run unless one is named, so a headless run never reads or writes
@@ -209,6 +216,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
         fault_no_deadline: false,
         fault_hold_act: false,
         fault_hold_save: String::new(),
+        fault_stall_look: false,
         shot_dir: None,
         config_dir: None,
         restore: false,
@@ -271,6 +279,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .ok_or("--fault-hold-save needs a station (e.g. writes-joining)")?
                     .clone();
             }
+            "--fault-stall-look" => opts.fault_stall_look = true,
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }
@@ -400,6 +409,19 @@ mod tests {
         assert!(asked.allow_write_failure);
         assert_eq!(asked.verb, "fetch-fail");
         assert_eq!(asked.arg, "3");
+    }
+
+    /// The one fault that is the runner's own rather than the app's: it
+    /// changes nothing about what the app shows, so the census line is
+    /// whatever the verb's is.
+    #[test]
+    fn a_stalled_look_is_asked_for_and_leaves_the_census_alone() {
+        let plain = parse(&["band".to_string()]).expect("verb only");
+        assert!(!plain.fault_stall_look);
+        let asked =
+            parse(&["band".to_string(), "--fault-stall-look".to_string()]).expect("verb and fault");
+        assert!(asked.fault_stall_look);
+        assert_eq!(asked.census_line(), plain.census_line());
     }
 
     /// The fault that makes a run stop answering, and the census line it

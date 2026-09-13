@@ -27,8 +27,10 @@
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
 use std::time::Duration;
+
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// What a process its own deadline thread ended exits with, and the file
 /// it leaves beside the pictures. Spelled again rather than shared:
@@ -41,6 +43,17 @@ const REPORT_FILE: &str = "wedge.txt";
 const TRAIL_FILE: &str = "stations.txt";
 #[cfg(windows)]
 const DUMP_FILE: &str = "app.dmp";
+
+/// How long a look at the app may take: the listing is one PowerShell
+/// start and one query (a walk of `/proc` elsewhere, which takes no
+/// process at all), the dump writes the process's whole memory to disk.
+/// **Ceilings on the diagnostics, never on the run**: what they bound is
+/// a diagnostic that stalls, and the answer to one is the line that says
+/// it did — the app is reaped and the run reported the same either way
+/// ([`bounded`]).
+const LISTING_CEILING: Duration = Duration::from_secs(15);
+#[cfg(windows)]
+const DUMP_CEILING: Duration = Duration::from_secs(60);
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).
@@ -145,8 +158,22 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 /// exit** and several is one that never got there. And on Windows a dump
 /// of it, for the frame that stands still — unless the stop was ordered
 /// (`--fault-hang`), whose cause needs no dump.
-pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool) -> Vec<String> {
-    let mut lines = vec![match threads_of(pid) {
+///
+/// **Every look is bounded and ended at its ceiling** ([`bounded`]): a
+/// diagnostic that stalls — a PowerShell that never gets past its start,
+/// a dumper waiting on the process it dumps — is ended, said to have
+/// been, and the run goes on to reap the app and report it. `stalled`
+/// orders that stall (`--fault-stall-look`): the listing is a process
+/// that does nothing for longer than the ceiling, so what the parent
+/// says about a look that ran out of time can be checked rather than
+/// waited for (`super::faults`).
+pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool) -> Vec<String> {
+    let threads = if stalled {
+        listing(bounded("the thread listing", stand_in(), LISTING_CEILING))
+    } else {
+        threads_of(pid)
+    };
+    let mut lines = vec![match threads {
         Ok(threads) => format!(
             "  threads at the ceiling: {} alive — {}",
             threads.len(),
@@ -160,23 +187,129 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool) -> Vec<String>
     lines
 }
 
+/// What a bounded diagnostic came back with.
+#[derive(Debug)]
+enum Answer {
+    /// It ended on its own: how, and what it wrote to stdout.
+    Ended { status: ExitStatus, stdout: String },
+    /// It stood past its ceiling and was ended here, after this long —
+    /// or could not be, which is said rather than assumed, with the pid
+    /// that may then still be running.
+    OutOfTime {
+        pid: u32,
+        after: Duration,
+        ended: Result<(), String>,
+    },
+    /// It could not be started, or asked after.
+    Unstarted(String),
+}
+
+/// Runs `command` to its end or to `ceiling`, whichever comes first, and
+/// says which. A diagnostic past its ceiling is ended and waited for
+/// before this answers, so what comes after it — the reaping of the app
+/// — never runs beside a dumper still holding the process open.
+///
+/// Stdout is drained on a thread of its own ([`crate::app_out`]), so a
+/// listing longer than a pipe cannot block the child. On the ceiling the
+/// thread is left to end with the pipe: what it read is not wanted, and
+/// a pipe a child of the ended one still holds would hold the join.
+fn bounded(what: &str, mut command: Command, ceiling: Duration) -> Answer {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return Answer::Unstarted(format!("{what} could not be started: {error}")),
+    };
+    let stdout = child.stdout.take().map(crate::app_out::collect);
+    let mut wait = Wait::new(what, Budget::whole(ceiling), LOOK_AGAIN);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let stdout = stdout
+                    .and_then(|reader| reader.join().ok())
+                    .map(|said| said.lines.join("\n"))
+                    .unwrap_or_default();
+                return Answer::Ended { status, stdout };
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Answer::Unstarted(format!("{what} could not be asked after: {error}"));
+            }
+        }
+        if wait.look_again("its exit").is_err() {
+            // Asking it to end is only asking; the wait is what says the process is
+            // gone, and either failing is carried out as the answer.
+            let ended = child
+                .kill()
+                .and_then(|()| child.wait())
+                .map(|_| ())
+                .map_err(|error| error.to_string());
+            return Answer::OutOfTime {
+                pid: child.id(),
+                after: wait.elapsed(),
+                ended,
+            };
+        }
+    }
+}
+
 /// The threads a listing answered with, or why it could not answer —
-/// worded for the line under the verdict.
+/// worded for the line under the verdict, and the same words whichever
+/// system's listing it was.
+fn listing(answer: Answer) -> Result<Vec<String>, String> {
+    match answer {
+        Answer::Ended { status, stdout } if status.success() => {
+            let threads: Vec<String> = stdout
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_string)
+                .collect();
+            if threads.is_empty() {
+                return Err("the listing answered with no threads".to_string());
+            }
+            Ok(threads)
+        }
+        Answer::Ended { status, .. } => Err(format!("the listing exited {status}")),
+        Answer::OutOfTime {
+            after,
+            ended: Ok(()),
+            ..
+        } => Err(format!(
+            "the listing ran out of time after {:.1}s and was ended",
+            after.as_secs_f32()
+        )),
+        Answer::OutOfTime {
+            pid,
+            after,
+            ended: Err(error),
+        } => Err(format!(
+            "the listing ran out of time after {:.1}s and could not be ended ({error}); pid {pid} \
+             may still be running",
+            after.as_secs_f32()
+        )),
+        Answer::Unstarted(why) => Err(why),
+    }
+}
+
+/// A process that stands in for a diagnostic that stalls: one that does
+/// nothing for longer than any ceiling here, so that the ceiling is what
+/// ends it. What every system has on hand — on Windows `ping`, counting
+/// off seconds against the loopback, since there is no `sleep`.
 #[cfg(windows)]
-fn listing(out: std::process::Output) -> Result<Vec<String>, String> {
-    if !out.status.success() {
-        return Err(format!("the listing exited {}", out.status));
-    }
-    let threads: Vec<String> = String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect();
-    if threads.is_empty() {
-        return Err("the listing answered with no threads".to_string());
-    }
-    Ok(threads)
+fn stand_in() -> Command {
+    let mut command = Command::new("ping");
+    command.args(["-n", "600", "127.0.0.1"]);
+    command
+}
+
+#[cfg(not(windows))]
+fn stand_in() -> Command {
+    let mut command = Command::new("sleep");
+    command.arg("600");
+    command
 }
 
 /// The first few threads on one line; the rest are counted.
@@ -247,7 +380,7 @@ fn threads_of(pid: u32) -> Result<Vec<String>, String> {
     let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-    listing(crate::subprocess::run_captured(&mut command)?)
+    listing(bounded("the thread listing", command, LISTING_CEILING))
 }
 
 /// The same off `/proc`: the thread's name is there as well, which says
@@ -282,8 +415,8 @@ fn threads_of(pid: u32) -> Result<Vec<String>, String> {
 }
 
 /// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
-/// its own, the way the listing is taken. Full memory, the handles and
-/// the thread information ([`DUMP_KIND`]): what
+/// its own — a process, so the ceiling can end it ([`bounded`]). Full
+/// memory, the handles and the thread information ([`DUMP_KIND`]): what
 /// a stopped exit is read off is the one thread's stack, `~*k` in
 /// WinDbg, and what it holds is in the memory behind it.
 ///
@@ -333,8 +466,8 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
         .replace("PGG_KIND", &DUMP_KIND.to_string());
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-    match crate::subprocess::run_captured(&mut command) {
-        Ok(out) if out.status.success() => match std::fs::metadata(&path) {
+    match bounded("the dump", command, DUMP_CEILING) {
+        Answer::Ended { status, .. } if status.success() => match std::fs::metadata(&path) {
             Ok(meta) => format!(
                 "  a dump of the app: {} ({} MB) — WinDbg: `!analyze -v`, then `~*k` for the thread that stands",
                 path.display(),
@@ -347,8 +480,28 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
         },
         // The Win32 error of the call, or PowerShell's own one where the
         // type never compiled.
-        Ok(out) => format!("  no dump: MiniDumpWriteDump exited {}", out.status),
-        Err(error) => format!("  no dump: {error}"),
+        Answer::Ended { status, .. } => {
+            format!("  no dump: MiniDumpWriteDump exited {status}")
+        }
+        // What a dumper ended half way left is not a dump, and a file by
+        // that name would be opened as one.
+        Answer::OutOfTime { pid, after, ended } => format!(
+            "  no dump: the dumper ran out of time after {:.1}s and {}; {}",
+            after.as_secs_f32(),
+            match ended {
+                Ok(()) => "was ended".to_string(),
+                Err(error) =>
+                    format!("could not be ended ({error}) — pid {pid} may still be running"),
+            },
+            match std::fs::remove_file(&path) {
+                Ok(()) => "what it had written was removed".to_string(),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound =>
+                    "it had written nothing".to_string(),
+                Err(error) =>
+                    format!("what it had written could not be removed ({error}) and is not a dump"),
+            }
+        ),
+        Answer::Unstarted(why) => format!("  no dump: {why}"),
     }
 }
 
@@ -667,17 +820,78 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        Counted, TRAIL_FILE, account, at_a_ceiling, clear_any_account, held_in, stopped_in, trail,
+        Answer, Counted, TRAIL_FILE, account, at_a_ceiling, bounded, clear_any_account, held_in,
+        listing, stand_in, stopped_in, trail,
     };
 
-    /// A small process that stands still for as long as a test needs to
-    /// look at it: on Windows `ping`, counting off seconds against the
-    /// loopback, since there is no `sleep`.
-    #[cfg(windows)]
-    fn stand_in() -> std::process::Command {
-        let mut command = std::process::Command::new("ping");
-        command.args(["-n", "600", "127.0.0.1"]);
-        command
+    /// A diagnostic that stands past its ceiling is ended there and said
+    /// to have been. Whether it is gone is asked of the machine, not of
+    /// the answer.
+    #[test]
+    fn a_diagnostic_that_stalls_is_ended_at_its_ceiling() {
+        // The stand-in stalls on purpose and the ceiling is what ends it;
+        // the verdict is that it was ended, never how long that took.
+        let ceiling = Duration::from_millis(300);
+
+        let answer = bounded("a stalled listing", stand_in(), ceiling);
+
+        let Answer::OutOfTime { pid, after, ended } = answer else {
+            panic!("the stand-in answered: {answer:?}");
+        };
+        assert_eq!(ended, Ok(()), "ended and waited for");
+        assert!(after >= ceiling, "{after:?}");
+        assert!(
+            !crate::subprocess::process_exists(pid),
+            "pid {pid} still stands"
+        );
+    }
+
+    /// A diagnostic that ends on its own answers with its exit and what
+    /// it wrote, whole — the listing is read off exactly that.
+    #[test]
+    fn a_diagnostic_that_answers_is_carried_whole() {
+        let answer = bounded("an echo", says_one(), Duration::from_secs(60));
+
+        let Answer::Ended { status, stdout } = answer else {
+            panic!("the echo did not end: {answer:?}");
+        };
+        assert!(status.success(), "{status}");
+        assert_eq!(stdout.trim(), "one");
+        assert_eq!(
+            listing(Answer::Ended { status, stdout }),
+            Ok(vec!["one".to_string()])
+        );
+    }
+
+    /// The words a stalled listing is reported by, which `wedge-check`
+    /// reads back from the whole run (`super::super::faults`): a change
+    /// here is a change there.
+    #[test]
+    fn a_listing_out_of_time_says_so_and_whether_it_was_ended() {
+        let ended = listing(Answer::OutOfTime {
+            pid: 7,
+            after: Duration::from_secs(15),
+            ended: Ok(()),
+        })
+        .expect_err("out of time is no listing");
+        assert_eq!(
+            ended,
+            "the listing ran out of time after 15.0s and was ended"
+        );
+        let standing = listing(Answer::OutOfTime {
+            pid: 7,
+            after: Duration::from_secs(15),
+            ended: Err("refused".to_string()),
+        })
+        .expect_err("out of time is no listing");
+        assert!(
+            standing.contains("could not be ended (refused)"),
+            "{standing}"
+        );
+        assert!(
+            standing.contains("pid 7 may still be running"),
+            "{standing}"
+        );
     }
 
     /// The dump is one a person can open: written by the call itself, so
@@ -742,6 +956,21 @@ mod tests {
             threads.iter().any(|line| line.contains("@ping.exe")),
             "{threads:?}"
         );
+    }
+
+    /// A process that says `one` and ends.
+    #[cfg(windows)]
+    fn says_one() -> std::process::Command {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/c", "echo", "one"]);
+        command
+    }
+
+    #[cfg(not(windows))]
+    fn says_one() -> std::process::Command {
+        let mut command = std::process::Command::new("sh");
+        command.args(["-c", "echo one"]);
+        command
     }
 
     /// A lanes directory of this test's own.

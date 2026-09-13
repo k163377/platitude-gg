@@ -105,8 +105,12 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
             // Taken while the app still stands, since past `exiting` the
             // trail has run out and these are the only witnesses left
             // (`super::wedge::look_at`).
-            looked =
-                super::wedge::look_at(child.id(), start.shot_dir, start.opts.fault_hang.is_empty());
+            looked = super::wedge::look_at(
+                child.id(),
+                start.shot_dir,
+                start.opts.fault_hang.is_empty(),
+                start.opts.fault_stall_look,
+            );
             // The app takes the git it was waiting on with it — a hook
             // that never returns, a fetch to nowhere — which `reap`
             // reaches by walking from the app rather than leaving it to

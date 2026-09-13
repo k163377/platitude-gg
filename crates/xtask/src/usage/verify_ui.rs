@@ -72,6 +72,13 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           drives, and the one a short ceiling cannot make
                           on its own: a ceiling that outruns a completion
                           here loses to it on a busier machine
+        --fault-stall-look
+                          stall the runner's own look at a run reaped at
+                          the ceiling: the thread listing is a process
+                          that never answers, so the listing's ceiling
+                          ends it. The fourth shape `wedge-check` drives —
+                          the diagnostic ran out of time and the app was
+                          still reaped and reported
         --shot-dir <dir>  screenshot directory (default: temp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per
                           run by default; name one to carry what a run

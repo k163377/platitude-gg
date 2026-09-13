@@ -18,6 +18,12 @@
 //! turned its loop the whole time and answers with the walk that proves
 //! it. The observed pair had no way to be told apart, which is what this
 //! is for.
+//!
+//! **And the parent's own look at a stopped run** (`super::wedge::look_at`),
+//! which is a process too and can stall like any other: the fourth case
+//! orders that stall (`--fault-stall-look`) and reads back that the look
+//! was ended at its ceiling, said so, and that the app was still reaped
+//! and the run still reported after it.
 
 use std::time::Instant;
 
@@ -80,9 +86,9 @@ impl Case {
     }
 }
 
-/// The two mouths, and the one that is only half of a mouth: a hold with
+/// The two mouths, the one that is only half of a mouth — a hold with
 /// the deadline thread still up, which is what says the two records agree
-/// when both can be written.
+/// when both can be written — and the parent's own look, stalled.
 const CASES: &[Case] = &[
     Case {
         shape: "finished its act, then held past the exit with no deadline thread — \
@@ -129,6 +135,32 @@ const CASES: &[Case] = &[
             "event-loop ",
         ],
         forbids: &["auto_act complete=band"],
+    },
+    Case {
+        shape: "held past the exit with the look at it stalled — the listing is ended at its own \
+                ceiling, and the app is still reaped and the run reported",
+        args: &[
+            "--watchdog-ms",
+            HELD_MS,
+            "--fault-hang",
+            "exiting",
+            "--fault-no-deadline",
+            "--fault-stall-look",
+        ],
+        wants: &[
+            "auto_act complete=band",
+            "screenshot saved=true",
+            "TIMED OUT",
+            "the stations it reached:",
+            "> exiting ",
+            "threads at the ceiling: could not be listed",
+            "the listing ran out of time after",
+            "and was ended",
+            "under the app:",
+            "pictures on disk:",
+        ],
+        // A listing that came back is a stall that did not happen.
+        forbids: &["auto-act watchdog expired", " alive — "],
     },
 ];
 
@@ -286,6 +318,34 @@ mod tests {
                 && !turning.args.contains(&"--fault-no-deadline"),
             "a held run cannot turn its loop, and one with no deadline leaves nothing to read"
         );
+    }
+
+    /// The parent's own diagnostics are bounded, and the bound has to be
+    /// seen working from outside: a look that stalls is ended at its
+    /// ceiling and said to have been, and the run still reaches the
+    /// reaping and the verdict. Ordered on the observed shape itself, so
+    /// that the look is the only thing that differs from it.
+    #[test]
+    fn one_case_stalls_the_look_and_still_reaps_the_app() {
+        let stalled = CASES
+            .iter()
+            .find(|case| case.args.contains(&"--fault-stall-look"))
+            .expect("the stalled look");
+        assert!(stalled.args.contains(&"--fault-hang"));
+        assert!(stalled.args.contains(&"--fault-no-deadline"));
+        for want in [
+            "could not be listed",
+            "ran out of time",
+            "was ended",
+            "under the app:",
+            "TIMED OUT",
+        ] {
+            assert!(
+                stalled.wants.iter().any(|said| said.contains(want)),
+                "{want}"
+            );
+        }
+        assert!(stalled.forbids.contains(&" alive — "));
     }
 
     /// The verb is beside the point and has to stay cheap: a case is
