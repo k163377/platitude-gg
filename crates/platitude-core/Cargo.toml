@@ -13,8 +13,11 @@ tokio-util.workspace = true
 tracing.workspace = true
 # Reading and rewriting the pictures a person assigns to an author
 # (`picture`). Pure Rust and no build script that wants a C compiler, so
-# the three-OS build and the offline job stay as they are — which is why
-# png's `zlib-rs` feature must stay off: it is what would pull one in.
+# the three-OS build and the offline job stay as they are. What would
+# pull one in sits a level down, in flate2: the backends under its
+# `any_c_zlib` (`zlib`, `zlib-ng`, `cloudflare_zlib`) link a C zlib
+# through libz-sys or libz-ng-sys. png's `zlib-rs` feature is not one of
+# them — it picks flate2's Rust port.
 png = "0.18"
 zune-jpeg = "0.5"
 zune-core = "0.5"

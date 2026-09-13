@@ -135,7 +135,9 @@ DPR 3.2 まで耐える)。20 人ぶんで 5.0MB = 300MB 予算の 1.7%。
 選べる。**C ツールチェーンも要らない**: build script は `crc32fast` の 1 つだけで
 rustc を叩くのみ、`cc` / `libz-sys` / `pkg-config` / `libc` は木に居ない。ただし
 **`flate2` の feature は固定する** —— 既定の `rust_backend`(miniz_oxide)から
-`zlib-rs` / `libz-sys` へ倒すと C が入る。
+`zlib` / `zlib-ng` / `cloudflare_zlib`(libz-sys / libz-ng-sys)へ倒すと C が
+入る。**`zlib-rs` はこの側ではない** — 純 Rust の移植で、png の同名 feature が
+選ぶのもこれ。
 
 **webp / bmp / gif / heic / avif を入口から外した**のはこの値段のためだけではない:
 HEIC は HEVC のプール(Access Advance / Via LA)が現役で、**許容ライセンスの純 Rust
