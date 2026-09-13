@@ -76,10 +76,16 @@ pub struct RepoSession {
     /// diff view alone. A read for some other target therefore reads as
     /// "not the one held", which is the safe direction — it publishes.
     ///
+    /// **The copy it was read from is part of the key.** The same path in
+    /// another working copy is another file, and the pane reads those too
+    /// (`RepoSession::load_carried_diff`); keyed by target alone, a poll
+    /// of this tree would match a fingerprint taken from somebody else's
+    /// bytes and call the file unmoved.
+    ///
     /// Written where the event goes out rather than where the bytes are
     /// read: recording a fingerprint the pane never received would leave
     /// it stale for as long as the file stayed that way.
-    pub(super) last_diff: Mutex<Option<(DiffTarget, u64)>>,
+    pub(super) last_diff: Mutex<Option<(PathBuf, DiffTarget, u64)>>,
     /// Lexer states remembered down the file the last diff's colours
     /// were read against (`highlight::LexCache`) — what lets the re-read
     /// after every partial stage start near its hunks instead of at
@@ -116,6 +122,16 @@ pub struct RepoSession {
     /// for the rare pass that could not read it off its rows
     /// ([`RepoSession::settle_head_published`]).
     pub(super) head_published_read: Latest,
+    /// One read of another working copy's files at a time: the pane shows
+    /// one copy, and a reader walking down the rows would otherwise leave
+    /// a whole `status` running behind each row they passed
+    /// ([`RepoSession::read_carried_status`]).
+    ///
+    /// It is also what settles the answers against each other. These are
+    /// reads of different trees, so they take different times, and the
+    /// pane holding whichever finished last would be showing the copy the
+    /// reader stepped off.
+    pub(super) carried_read: Latest,
     /// Line-ending baselines already sampled, keyed by (directory,
     /// extension) — what a house style is scoped to, and what makes the
     /// second file opened in a directory cost nothing.

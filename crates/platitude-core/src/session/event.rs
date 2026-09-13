@@ -127,6 +127,22 @@ pub enum SessionEvent {
         /// repository was looked at, not when these rows were built.
         looked: u64,
     },
+    /// What another working copy is holding, read because somebody is
+    /// looking at its row (`RepoSession::read_carried_status`).
+    ///
+    /// **Its own event and not [`SessionEvent::StatusLoaded`].** That one
+    /// is this window's tree — the commit box, the band, the graph's own
+    /// row and the counts a write is settled against all hang off it, and
+    /// a copy's status arriving there would move every one of them.
+    CarriedStatusLoaded {
+        /// The copy this is about; the pane reads it back to know whose
+        /// changes it is showing, and a read that lands after the reader
+        /// moved on is dropped by it.
+        path: String,
+        /// The name the header says — the copy's own, not this tree's.
+        name: String,
+        status: WorkTreeStatus,
+    },
     StatusLoaded {
         status: WorkTreeStatus,
         /// The number of the report of HEAD this status stands beside —

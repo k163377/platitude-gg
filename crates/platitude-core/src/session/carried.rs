@@ -115,7 +115,9 @@ pub(super) async fn read_all(
                     name,
                     path: shown_path,
                     head,
-                    kinds: Kinds::of(&status),
+                    // Counted once per path, because the pane the row
+                    // leads to lists paths (`Kinds::folded`).
+                    kinds: Kinds::folded(&status),
                 },
             ))
         });
@@ -180,6 +182,48 @@ impl super::RepoSession {
                 // these rows are drawn by the walk and by nothing else.
                 s.refresh_log();
             }
+        });
+    }
+
+    /// Reads what one other working copy is holding, for the pane that is
+    /// about to show it.
+    ///
+    /// **A read of its own, aimed at the copy somebody is looking at.**
+    /// The tick above keeps the rows' tallies current for every copy;
+    /// this is the file list behind one row, asked for when that row is
+    /// selected — so a pane opened on a copy shows what it holds now
+    /// rather than what it held at the last tick.
+    ///
+    /// Nothing here can write: the pane it feeds has every write control
+    /// down while it is showing another copy, and the only door into that
+    /// copy's own writes is its own tab.
+    ///
+    /// **One at a time, and the last ask wins** (`carried_read`): these
+    /// are reads of different trees, so two of them are not a race the
+    /// clock settles fairly — the answer about the row the reader has
+    /// stepped off must not be the one left on screen.
+    ///
+    /// **Outside [`AT_ONCE`]**, so a tick where a copy's pane is open
+    /// stands one read more than the cap: the copy being read pays twice,
+    /// once for its row's tallies and once for the pane's file list.
+    /// Whether the two can be one read is part of the measurement the cap
+    /// itself is waiting on (ci/baseline/perf-windows-x64.md §未取得).
+    pub fn read_carried_status(self: &std::sync::Arc<Self>, path: String, name: String) {
+        let s = std::sync::Arc::clone(self);
+        let cancel = self.carried_read.begin(&self.root_cancel);
+        self.runtime.spawn(async move {
+            let at = std::path::PathBuf::from(&path);
+            let Ok(status) = crate::status::load(&s.executor, &at, &cancel).await else {
+                return;
+            };
+            // Asked again after the read: cancelling is cooperative, so a
+            // read that had already worked its answer out can arrive here
+            // behind the ask that passed it.
+            if cancel.is_cancelled() {
+                return;
+            }
+            s.sink
+                .event(crate::session::SessionEvent::CarriedStatusLoaded { path, name, status });
         });
     }
 

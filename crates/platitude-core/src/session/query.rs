@@ -104,6 +104,33 @@ impl RepoSession {
         self.runtime.spawn(self.read_diff(target));
     }
 
+    /// The same read aimed at another working copy: one of the files the
+    /// read-only pane is listing (`RepoSession::read_carried_status`).
+    ///
+    /// **The same read, not a second one.** Everything a diff is made of
+    /// is already asked of a working copy by path — the patch, the source
+    /// the colours are read against, the picture a binary side is shown
+    /// as, what git's settings there say about line endings — so the only
+    /// thing that made this window's own read its own was where it was
+    /// aimed. It shares the pane's epoch with the ordinary reads, which
+    /// is what settles the two against each other: a click onto this
+    /// window's own file passes a carried read still in flight, and the
+    /// reverse.
+    ///
+    /// Nothing here can be staged from. The pane the diff lands in has
+    /// every write control down while it is showing another copy, and
+    /// below that the fingerprint a partial stage is verified against is
+    /// recorded under the copy it was read from (`last_diff`), so a
+    /// selection carried over from here matches nothing in this tree.
+    pub fn load_carried_diff(self: &Arc<Self>, at: String, target: DiffTarget) {
+        let s = Arc::clone(self);
+        let workdir = PathBuf::from(at);
+        let epoch = self.claim_diff_epoch();
+        self.runtime.spawn(async move {
+            s.publish_diff(workdir, target, None, epoch).await;
+        });
+    }
+
     /// The same read as a future the caller drives, which is both its
     /// completion boundary and the only way to hold one open: the read
     /// this returns is the pane's newest from the moment it is asked for,
@@ -143,41 +170,52 @@ impl RepoSession {
     /// the fingerprint that says it is the one already on screen. Only a
     /// file that really moved pays for the rest of a read.
     pub fn refresh_diff(self: &Arc<Self>, target: DiffTarget) {
-        drop(self.start_refresh_diff(target));
+        drop(self.refresh_diff_tracked(target));
     }
 
     /// The same re-read with its completion boundary, for tests and for
     /// callers that have to tell "nothing moved" from "not finished".
     pub fn refresh_diff_tracked(self: &Arc<Self>, target: DiffTarget) -> DiffRefreshTask {
-        self.start_refresh_diff(target)
-    }
-
-    fn start_refresh_diff(self: &Arc<Self>, target: DiffTarget) -> DiffRefreshTask {
         let Some(workdir) = self.workdir() else {
             return DiffRefreshTask::ready(DiffReadOutcome::Unavailable);
         };
+        self.start_refresh_diff(workdir, target)
+    }
+
+    /// The same re-read aimed at another working copy, for the read-only
+    /// pane's own tick ([`Self::load_carried_diff`]).
+    pub fn refresh_carried_diff(self: &Arc<Self>, at: String, target: DiffTarget) {
+        drop(self.start_refresh_diff(PathBuf::from(at), target));
+    }
+
+    fn start_refresh_diff(
+        self: &Arc<Self>,
+        workdir: PathBuf,
+        target: DiffTarget,
+    ) -> DiffRefreshTask {
         let s = Arc::clone(self);
         let (finished, task) = DiffRefreshTask::pending();
         self.runtime.spawn(async move {
             let cancel = s.root_cancel.clone();
-            let outcome =
-                match details::file_diff_raw(&s.executor, &workdir, &target, &cancel).await {
-                    Err(e) => {
-                        s.fail("diff", e);
-                        DiffReadOutcome::Failed
-                    }
-                    Ok(raw) if s.diff_seen(&target) == Some(details::fingerprint(&raw)) => {
-                        DiffReadOutcome::Unchanged
-                    }
-                    Ok(raw) => {
-                        // Claimed only now, and not before the read above: a
-                        // tick that found the file where it left it must not
-                        // take the epoch from the read a click has in flight
-                        // (see `diff_epoch`).
-                        let epoch = s.claim_diff_epoch();
-                        s.publish_diff(workdir, target, Some(raw), epoch).await
-                    }
-                };
+            let outcome = match details::file_diff_raw(&s.executor, &workdir, &target, &cancel)
+                .await
+            {
+                Err(e) => {
+                    s.fail("diff", e);
+                    DiffReadOutcome::Failed
+                }
+                Ok(raw) if s.diff_seen(&workdir, &target) == Some(details::fingerprint(&raw)) => {
+                    DiffReadOutcome::Unchanged
+                }
+                Ok(raw) => {
+                    // Claimed only now, and not before the read above: a
+                    // tick that found the file where it left it must not
+                    // take the epoch from the read a click has in flight
+                    // (see `diff_epoch`).
+                    let epoch = s.claim_diff_epoch();
+                    s.publish_diff(workdir, target, Some(raw), epoch).await
+                }
+            };
             if finished.send(outcome).is_err() {
                 tracing::trace!("diff re-read completion was not observed");
             }
@@ -292,7 +330,7 @@ impl RepoSession {
                 self.preview_files.sweep_before(epoch);
                 // Noted before the event and not after it: what the next
                 // re-read compares against is what the pane was handed.
-                self.note_diff(&target, fingerprint);
+                self.note_diff(&workdir, &target, fingerprint);
                 self.sink.event(SessionEvent::DiffLoaded {
                     target: target.clone(),
                     patches: Arc::clone(&patches),
@@ -317,18 +355,19 @@ impl RepoSession {
         self.diff_epoch.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    /// The fingerprint the pane was last handed for `target`, or `None`
-    /// when what it holds is a diff of something else.
-    fn diff_seen(&self, target: &DiffTarget) -> Option<u64> {
+    /// The fingerprint the pane was last handed for `target` in `workdir`,
+    /// or `None` when what it holds is a diff of something else — another
+    /// file, or the same path in another working copy.
+    fn diff_seen(&self, workdir: &Path, target: &DiffTarget) -> Option<u64> {
         let slot = relock(&self.last_diff);
         slot.as_ref()
-            .filter(|(held, _)| held == target)
-            .map(|(_, fingerprint)| *fingerprint)
+            .filter(|(from, held, _)| from == workdir && held == target)
+            .map(|(_, _, fingerprint)| *fingerprint)
     }
 
-    fn note_diff(&self, target: &DiffTarget, fingerprint: u64) {
+    fn note_diff(&self, workdir: &Path, target: &DiffTarget, fingerprint: u64) {
         let mut slot = relock(&self.last_diff);
-        *slot = Some((target.clone(), fingerprint));
+        *slot = Some((workdir.to_path_buf(), target.clone(), fingerprint));
     }
 
     /// Works out the colours for a diff already on its way to the pane and

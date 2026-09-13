@@ -75,6 +75,7 @@ impl RepoSession {
             signature_read: Latest::default(),
             remote_branch_read: Latest::default(),
             head_published_read: Latest::default(),
+            carried_read: Latest::default(),
             eol_baselines: Mutex::new(HashMap::new()),
             eol_normalises: Derived::default(),
             remotes: Derived::default(),

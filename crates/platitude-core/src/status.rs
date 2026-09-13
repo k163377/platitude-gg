@@ -166,9 +166,13 @@ impl Counts {
 
 /// How many rows of each change kind the working-tree list holds.
 ///
-/// **Rows, not files.** One file changed on both sides is listed twice —
-/// once under the index and once under the working tree — and these count
-/// what the pane lists, so the row's tally and the list agree by
+/// **Counted the way the list that row leads to is built** — which is two
+/// different ways, because there are two lists. This window's own pane
+/// splits a path into the sides it changed on, so [`Kinds::of`] counts
+/// rows: one file changed on both sides is listed twice, once under the
+/// index and once under the working tree. Another copy's pane cannot move
+/// that index and so does not split it, and [`Kinds::folded`] counts one
+/// per path to match. Either way the row's tally and the list agree by
 /// construction. The kinds are the same letters the file rows carry, read
 /// the same way (`models::nav` builds a row per side; `ChangeIcon` reads
 /// the letter).
@@ -199,6 +203,36 @@ impl Kinds {
                     kinds.take(*staged);
                     kinds.take(*unstaged);
                 }
+            }
+        }
+        kinds
+    }
+
+    /// The same six counted **once per path**, for a list that shows one
+    /// row per path rather than one per side.
+    ///
+    /// **A tally counts what its own list shows.** The pane this feeds is
+    /// another working copy's, where the split into sides is the index's
+    /// and the index is not this window's to move, so its list folds the
+    /// two letters into one row ([`Kinds::of`] counts the rows of the
+    /// pane that does not). A row whose tally disagreed with the list it
+    /// leads to would be the graph saying one thing and the pane another
+    /// about the same tree.
+    pub fn folded(status: &WorkTreeStatus) -> Self {
+        let mut kinds = Self::default();
+        for item in &status.items {
+            match item {
+                StatusItem::Unmerged { .. } => kinds.conflicted += 1,
+                StatusItem::Untracked { .. } => kinds.added += 1,
+                // The index's letter where it has one: a file added to it
+                // and then edited again is an addition, because that is
+                // what this copy has that its last commit has not.
+                StatusItem::Tracked {
+                    staged, unstaged, ..
+                } => kinds.take(match *staged == '.' {
+                    true => *unstaged,
+                    false => *staged,
+                }),
             }
         }
         kinds

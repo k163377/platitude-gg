@@ -1054,3 +1054,117 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     .expect("the stage after the pair is not refused as stale");
     session.close();
 }
+
+/// The pane reads another working copy's files, and the two copies name
+/// their files the same way — so the file a read was of is the copy it was
+/// read from as well as the path.
+///
+/// **What goes wrong with the path alone**: the re-read of *this* window's
+/// file compares against the fingerprint the pane was last handed, finds
+/// the other copy's, and calls a file that has moved unmoved. The pane then
+/// holds rows nobody will replace for as long as the file stays that way.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    repo.write_file("f.txt", "ours\n");
+    let other = repo.path.parent().expect("a parent").join("other-copy");
+    repo.git(&["worktree", "add", "--detach", &other.to_string_lossy()]);
+    std::fs::write(other.join("f.txt"), "theirs\n").expect("write the copy's file");
+
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let target = DiffTarget::Unstaged {
+        path: "f.txt".to_string(),
+    };
+
+    // Ours, then the copy's — a reader stepping from this window's own row
+    // onto another copy's.
+    session.load_diff(target.clone());
+    diffs_reach(&sink, "f.txt", 1).await;
+    session.load_carried_diff(other.to_string_lossy().to_string(), target.clone());
+    diffs_reach(&sink, "f.txt", 2).await;
+    let published = diffs_of(&sink, "f.txt");
+    assert_ne!(
+        published[0], published[1],
+        "the two copies hold different bytes under that name"
+    );
+
+    // Our own file is typed over into what the copy holds, which is the
+    // whole arrangement: the bytes it reads as now are the ones the copy's
+    // read recorded. Keyed by the path alone, the re-read below matches
+    // that record and calls our file unmoved — and the pane is left
+    // holding the copy's rows for as long as the file stays this way.
+    repo.write_file("f.txt", "theirs\n");
+    assert_eq!(
+        crate::support::wait::bounded(
+            "the tracked diff refresh",
+            session.refresh_diff_tracked(target).outcome()
+        )
+        .await,
+        DiffReadOutcome::Sent,
+        "the re-read of our file was answered against the copy's fingerprint"
+    );
+    assert_eq!(
+        diffs_of(&sink, "f.txt").len(),
+        3,
+        "the re-read published nothing for the reader to be handed"
+    );
+    session.close();
+}
+
+/// The copies are different trees, so their reads take different times —
+/// and the pane shows one copy. A reader stepping from one row to the next
+/// must not be left holding the copy they stepped off.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\n", "root");
+    let first = repo.path.parent().expect("a parent").join("first-copy");
+    let second = repo.path.parent().expect("a parent").join("second-copy");
+    repo.git(&["worktree", "add", "--detach", &first.to_string_lossy()]);
+    repo.git(&["worktree", "add", "--detach", &second.to_string_lossy()]);
+    std::fs::write(first.join("f.txt"), "first\n").expect("write the first copy's file");
+    std::fs::write(second.join("f.txt"), "second\n").expect("write the second copy's file");
+
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let at = |p: &std::path::Path| p.to_string_lossy().to_string();
+    session.read_carried_status(at(&first), "first-copy".to_string());
+    session.read_carried_status(at(&second), "second-copy".to_string());
+
+    let carried = sink
+        .wait_for("the copy the pane is showing", |events| {
+            events
+                .iter()
+                .filter_map(|e| match e {
+                    SessionEvent::CarriedStatusLoaded { name, .. } => Some(name.clone()),
+                    _ => None,
+                })
+                .next_back()
+        })
+        .await;
+    assert_eq!(
+        carried, "second-copy",
+        "the read the reader stepped off was left on screen"
+    );
+    // And it is passed before it starts, rather than racing to arrive
+    // first: the second ask takes the slot on the caller's own thread, so
+    // the copy stepped off spends no `status` at all (`session::latest`).
+    let names: Vec<String> = sink
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::CarriedStatusLoaded { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        names,
+        vec!["second-copy".to_string()],
+        "the copy the reader stepped off answered as well"
+    );
+    session.close();
+}

@@ -30,6 +30,37 @@ fn a_file_changed_on_both_sides_is_two_rows() {
     assert_eq!(kinds.total(), 2);
 }
 
+/// The same file counted for the pane that does not split it in two —
+/// another working copy's, where the index is not this window's to move.
+///
+/// **The row and the list have to agree.** The row is the way into that
+/// pane, so a tally counting sides over a list showing paths would be the
+/// graph saying one number and the pane another about one tree.
+#[test]
+fn a_file_changed_on_both_sides_is_one_row_folded() {
+    let bytes = z(&[
+        &format!("# branch.oid {SHA}"),
+        &format!("1 MM N... 100644 100644 100644 {H1} {H2} both.txt"),
+        // Added to the index and then written again: the index's letter
+        // is the one that says what this copy has that HEAD has not.
+        &format!("1 AM N... 000000 100644 100644 {H1} {H2} new.txt"),
+        "? fresh.txt",
+        &format!("u UU N... 100644 100644 100644 100644 {H1} {H2} {H2} clash.txt"),
+    ]);
+    let status = parse_status(&bytes).unwrap();
+    assert_eq!(
+        Kinds::folded(&status),
+        Kinds {
+            added: 2,
+            modified: 1,
+            conflicted: 1,
+            ..Kinds::default()
+        }
+    );
+    // And this window's own pane goes on counting the sides it lists.
+    assert_eq!(Kinds::of(&status).total(), 6);
+}
+
 #[test]
 fn every_kind_lands_where_its_letter_says() {
     let bytes = z(&[
