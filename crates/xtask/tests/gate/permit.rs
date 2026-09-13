@@ -1,11 +1,15 @@
-//! The landing permit: a command that writes main goes through on the
-//! user's own message, once, and not on the message after it.
+//! The landing permit: the landing verb goes through on the user's own
+//! message, once — and the once is a landing that moved main, not an
+//! attempt. Git of the session's own never writes main at all.
 
 use std::fs::File;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use crate::support::{EXE, Sandbox, output_past_a_busy_image};
+
+/// The session every payload here comes from, and the land runs as.
+const SESSION: &str = "gate-permit";
 
 /// What `hook <event>` prints for `payload`. Empty is the hook's way of
 /// saying it has no objection.
@@ -36,43 +40,69 @@ fn says(sb: &Sandbox, text: &str) -> String {
         sb,
         "prompt-submit",
         &format!(
-            "{{\"session_id\":\"gate-permit\",\"cwd\":\"{}\",\
+            "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\
              \"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"{text}\"}}",
             forward(&sb.seat)
         ),
     )
 }
 
-/// The session runs the sanctioned landing, approval flag and all, from the seat.
-fn lands(sb: &Sandbox) -> String {
+/// The session runs a shell line from `dir`, through the pre-shell hook.
+fn shell(sb: &Sandbox, dir: &Path, command: &str) -> String {
     hook(
         sb,
         "pre-shell",
         &format!(
-            "{{\"session_id\":\"gate-permit\",\"cwd\":\"{}\",\
+            "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\
              \"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Bash\",\
-             \"tool_input\":{{\"command\":\"PGG_ALLOW_MAIN=1 cargo xtask land worktree-a\"}}}}",
-            forward(&sb.seat)
+             \"tool_input\":{{\"command\":\"{command}\"}}}}",
+            forward(dir)
         ),
     )
 }
 
+/// The session runs the sanctioned landing from the seat.
+fn lands(sb: &Sandbox) -> String {
+    shell(sb, &sb.seat, "cargo xtask land worktree-a")
+}
+
 #[test]
-fn a_landing_runs_on_the_users_message_once_and_not_on_the_next() {
+fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next() {
     let sb = Sandbox::new("permit");
+    sb.write_refs(&sb.seat, 21);
+    sb.commit_all(&sb.seat, "feat(core): twenty-one", &[]);
 
     // Nobody has asked: refused, and the refusal names the word that asks.
     let unasked = lands(&sb);
     assert!(
-        unasked.contains("\"deny\"") && unasked.contains("反映"),
+        unasked.contains("\"deny\"") && unasked.contains("反映") && unasked.contains("No message"),
         "{unasked}"
     );
 
-    // The user asks: the same command goes through, and once only.
+    // The user asks: the command goes through — and through again after
+    // a landing that moved nothing, since the ask stands unmet.
     assert_eq!(says(&sb, "OK main反映"), "");
     assert_eq!(lands(&sb), "");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/extra.rs",
+        "// unsaved\n",
+    );
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(!ok && text.contains("uncommitted"), "{text}");
+    assert_eq!(lands(&sb), "", "a landing that stopped spent nothing");
+    std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
+
+    // The landing that moves main spends it: the next on the same
+    // message is refused, and says why.
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(ok, "{text}");
+    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
     let twice = lands(&sb);
-    assert!(twice.contains("second time"), "{twice}");
+    assert!(
+        twice.contains("second time") && twice.contains("OK main反映"),
+        "{twice}"
+    );
 
     // A correction after the ask closes it, and the refusal quotes it.
     says(&sb, "直してmain反映");
@@ -87,7 +117,42 @@ fn a_landing_runs_on_the_users_message_once_and_not_on_the_next() {
     says(&sb, "反映されてない部分がある、直して");
     assert!(lands(&sb).contains("does not ask"));
 
-    // Asking again opens it again.
+    // Asking again opens it again, and what is not the user's message —
+    // the context a summary carries back, a tagged event — leaves it as
+    // it stands.
     says(&sb, "直してmain反映");
     assert_eq!(lands(&sb), "");
+    says(
+        &sb,
+        "This session is being continued from a previous conversation that ran out of \
+         context. The user said: ここも直して",
+    );
+    says(
+        &sb,
+        "<task-notification>the agent is done</task-notification>",
+    );
+    assert_eq!(lands(&sb), "");
+}
+
+/// Git of the session's own never writes main, whatever stands in front
+/// of the line, permit or no permit: the landing verb is the one way,
+/// and the refusal names it.
+#[test]
+fn a_sessions_own_git_does_not_write_main_on_any_flag() {
+    let sb = Sandbox::new("permit-git");
+    says(&sb, "main反映");
+    for command in [
+        "git merge --ff-only worktree-a",
+        "PGG_ALLOW_MAIN=1 git merge --ff-only worktree-a",
+        "git push . worktree-a:main",
+        "git update-ref refs/heads/main worktree-a",
+    ] {
+        let refused = shell(&sb, &sb.repo, command);
+        assert!(
+            refused.contains("\"deny\"") && refused.contains("cargo xtask land <branch>"),
+            "{command}: {refused}"
+        );
+    }
+    // A merge in the seat lands on the seat's own branch, not on main.
+    assert_eq!(shell(&sb, &sb.seat, "git merge --ff-only some-branch"), "");
 }

@@ -425,13 +425,15 @@ const TAIL: &str = "  shipped [--no-build]
 
   land [<branch>]
       Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
-      the pre-shell hook asks for PGG_ALLOW_MAIN=1 in front, which is how
-      the transcript records the ask, and lets it through only on the
-      permit the user's latest message opened by saying 反映 — one
-      message, one landing). In the branch's own
-      worktree: rebases it onto main when it is behind (a rebase that
-      stops is walked back), runs `gate` there — cached steps are not
-      paid twice, and a census the verbs rewrote is committed as
+      the pre-shell hook lets it through only on the permit the user's
+      latest message opened by saying 反映, and the fast-forward is what
+      spends that permit — one message, one landing that moved main; a
+      landing that stops short spends nothing). In the branch's own
+      worktree: commits a census a gate or a verb run there left dirty
+      (that one generated file, nothing else), rebases the branch onto
+      main when it is behind (a rebase that stops is walked back), runs
+      `gate` there — cached steps are not paid twice, and a census the
+      verbs rewrote is committed as
       `chore(xtask): the verb census as the land's gate rewrote it` and
       gated once more (a second rewrite stops the landing for a person
       to read) — and only then fast-forwards main, in the primary

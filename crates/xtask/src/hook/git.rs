@@ -1,48 +1,34 @@
-//! The git a shell line may not run unasked: landing a branch on main,
-//! and rewriting the branch under the session.
+//! The git a shell line may not run unasked: writing main, and rewriting
+//! the branch under the session.
 
 use super::commit::primary_commit_denied;
-use super::payload::string_field;
+use super::payload::{deny, string_field};
 use super::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG, permit};
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
-/// What the git guard made of a shell line.
-#[derive(Debug, PartialEq)]
-pub(super) enum Verdict {
-    /// Printed a refusal; the guards after it stay quiet.
-    Refused,
-    /// A command that writes main, let through on the user's permit —
-    /// which the caller spends once every other guard has let it pass.
-    Landing,
-    /// Nothing here to hold back.
-    Clear,
-}
-
 /// PreToolUse(Bash|PowerShell): the git this repository holds until the
-/// user asks for it in so many words (CLAUDE.md Git 運用) — landing a
+/// user asks for it in so many words (CLAUDE.md Git 運用) — putting a
 /// branch on main, rewriting a branch under the session, and committing
 /// anything at all from the primary checkout. Answers whether it refused,
-/// so the guard after it stays quiet when it did, and whether it let a
-/// landing through.
-pub(super) fn pre_git(input: &str) -> Result<Verdict, String> {
+/// so the guard after it stays quiet when it did.
+pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
-        return Ok(Verdict::Clear);
+        return Ok(false);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
     if gate_control_change_denied(&command) {
-        return Ok(Verdict::Refused);
+        return Ok(true);
     }
-    // Each operation has its own approval flag, so asking for one is not asking for
-    // the others: a merge the user called for still may not rebase.
-    match guarded_git(input, &command, &cwd) {
-        Verdict::Clear => {}
-        verdict => return Ok(verdict),
+    if guarded_git_denied(input, &command, &cwd) {
+        return Ok(true);
     }
+    // The commit guard's one exception rides the command: the user asked,
+    // in so many words, for a commit in the primary checkout.
     if !command.contains(MAIN_APPROVAL_FLAG) && primary_commit_denied(&command, &cwd) {
-        return Ok(Verdict::Refused);
+        return Ok(true);
     }
-    Ok(Verdict::Clear)
+    Ok(false)
 }
 
 /// The two names that decide whether refs/heads/main answers to the gate
@@ -55,32 +41,32 @@ fn gate_control_change_denied(command: &str) -> bool {
     let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
         return false;
     };
-    println!(
-        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-         \"{name} decides whether refs/heads/main answers to the gate ({} is the user's own \
+    deny(&format!(
+        "{name} decides whether refs/heads/main answers to the gate ({} is the user's own \
          manual test-skip control, {} is how the gate knows a session's git from the user's), so a \
          session may spell neither. Run `cargo xtask gate` (or `land`, which gates on the \
          way) and require a passing stamp for main. If validation appears incorrect, stop \
-         and report the validation error to the user.\"}}}}",
+         and report the validation error to the user.",
         crate::gate::SKIP,
         crate::gate::SESSION
-    );
+    ));
     true
 }
 
-/// Putting a branch onto main and rewriting the branch under the session
-/// are both the user's call (CLAUDE.md Git 運用). Prints the refusal and
-/// says so. A landing with an approval flag is checked against the permit:
-/// the flag declares that the user asked; the permit independently checks
-/// whether the user did, in the user's own message.
-fn guarded_git(input: &str, command: &str, cwd: &str) -> Verdict {
+/// Putting a branch on main and rewriting the branch under the session
+/// are both the user's call (CLAUDE.md Git 運用). The landing verb goes
+/// through on the user's permit, and nothing else does: a session does
+/// not write refs/heads/main with git of its own, whatever it puts in
+/// front of the line. A rebase carries its own approval flag.
+fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     let Some(guarded) = guarded_call(command) else {
-        return Verdict::Clear;
+        return false;
     };
-    let approval_declared = command.contains(guarded.offence.approval_flag());
-    if approval_declared && guarded.offence == Offence::Rebase {
-        return Verdict::Clear;
+    if guarded.offence == Offence::Landing {
+        return permit::landing_denied(input, guarded.what);
+    }
+    if guarded.offence == Offence::Rebase && command.contains(REBASE_APPROVAL_FLAG) {
+        return false;
     }
     let dir = guarded.dir.unwrap_or(cwd);
     // Any git that cannot answer is git we are not guarding: a throwaway
@@ -88,29 +74,18 @@ fn guarded_git(input: &str, command: &str, cwd: &str) -> Verdict {
     // often as not and rebases freely, and the command would fail here
     // anyway if the path is not a repository at all.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
-        return Verdict::Clear;
+        return false;
     };
     if !session_repo.eq_ignore_ascii_case(&target_repo) {
-        return Verdict::Clear;
+        return false;
     }
     if guarded.offence.only_from_main()
         && git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() != Some("main")
     {
-        return Verdict::Clear;
+        return false;
     }
-    if approval_declared {
-        return if permit::landing_denied(input, guarded.what) {
-            Verdict::Refused
-        } else {
-            Verdict::Landing
-        };
-    }
-    println!(
-        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
-         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"{}\"}}}}",
-        guarded.offence.reason(guarded.what)
-    );
-    Verdict::Refused
+    deny(&guarded.offence.reason(guarded.what));
+    true
 }
 
 /// A git command in a shell line that a rule holds back.
@@ -125,47 +100,43 @@ struct GuardedGit<'a> {
 /// Which rule the command runs into.
 #[derive(Debug, PartialEq)]
 enum Offence {
-    /// Writes refs/heads/main. `only_from_main` is whether it reaches main
-    /// only while main is the checked-out branch — a refspec or a forced
-    /// update names main from anywhere.
-    LandsOnMain { only_from_main: bool },
+    /// `cargo xtask land`: the one way a branch reaches main, which the
+    /// permit answers for.
+    Landing,
+    /// Writes refs/heads/main with git of the session's own.
+    /// `only_from_main` is whether it reaches main only while main is the
+    /// checked-out branch — a refspec or a forced update names main from
+    /// anywhere.
+    WritesMain { only_from_main: bool },
     /// Rewrites the branch it runs on, whichever branch that is.
     Rebase,
 }
 
 impl Offence {
-    /// What a command carries to say this rule's exception was asked for.
-    fn approval_flag(&self) -> &'static str {
-        match self {
-            Offence::LandsOnMain { .. } => MAIN_APPROVAL_FLAG,
-            Offence::Rebase => REBASE_APPROVAL_FLAG,
-        }
-    }
-
     fn only_from_main(&self) -> bool {
         matches!(
             self,
-            Offence::LandsOnMain {
+            Offence::WritesMain {
                 only_from_main: true
             }
         )
     }
 
+    /// The refusal for what a session may not run at all. The landing
+    /// verb's answer is the permit's, and the one here is what a
+    /// hand-written main would get in its place.
     fn reason(&self, what: &str) -> String {
         match self {
-            Offence::LandsOnMain { .. } => format!(
-                "{what} would put commits on main, and main moves only when the \
-                 user asks for it in so many words (CLAUDE.md Git 運用). Leave \
-                 the work on its branch and report it as ready to merge instead. \
-                 If the user did ask for this one — in their latest message, \
-                 which is where the hook reads the ask (反映) — run \
-                 `{MAIN_APPROVAL_FLAG}=1 cargo xtask land <branch>` — it works from any \
-                 session, worktree ones included, and reads where main actually \
-                 is before it moves anything; a hand-typed merge inherits \
-                 whatever HEAD the primary checkout happens to be on. For \
-                 PowerShell, the equivalent environment-variable syntax is \
-                 `$env:{MAIN_APPROVAL_FLAG}='1'; cargo xtask land \
-                 <branch>`. This syntax does not grant approval or change execution permissions."
+            Offence::WritesMain { .. } | Offence::Landing => format!(
+                "{what} would write refs/heads/main by hand, and a session does not — \
+                 whatever stands in front of the line. `cargo xtask land <branch>` is the \
+                 one way a branch reaches main (CLAUDE.md Git 運用): it rebases the branch \
+                 in its seat, gates it, fast-forwards main where main actually is (a \
+                 hand-typed merge inherits whatever HEAD the primary checkout happens to \
+                 be on), and runs only on the permit the user's own message opened by \
+                 asking for it (反映). If the user asked for this landing, run `cargo \
+                 xtask land <branch>`; otherwise leave the work on its branch and report \
+                 it as ready to merge."
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
@@ -187,14 +158,12 @@ impl Offence {
 /// rewrites whichever branch it runs on.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
-    // The sanctioned landing verb is still a landing: the approval flag
-    // is what says the user asked for this one.
+    // The sanctioned landing verb is a landing: the permit is what says
+    // the user asked for this one.
     if xtask_verb(&tokens, "land") {
         return Some(GuardedGit {
             dir: None,
-            offence: Offence::LandsOnMain {
-                only_from_main: false,
-            },
+            offence: Offence::Landing,
             what: "`cargo xtask land`",
         });
     }
@@ -229,11 +198,11 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             .take_while(|token| !matches!(**token, "&&" | "||" | ";" | "|" | "git"))
             .copied()
             .collect();
-        let lands = |only_from_main| Offence::LandsOnMain { only_from_main };
+        let writes = |only_from_main| Offence::WritesMain { only_from_main };
         let guarded = match *subcommand {
             // --abort and --quit walk a merge back; they never move the branch on.
             "merge" if !arguments.iter().any(|a| matches!(*a, "--abort" | "--quit")) => {
-                Some(("`git merge`", lands(true)))
+                Some(("`git merge`", writes(true)))
             }
             // The same two exits walk a rebase back. Every other form moves
             // the rewrite on, --continue and --skip included: a rebase that
@@ -242,7 +211,7 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
                 Some(("`git rebase`", Offence::Rebase))
             }
             "push" | "fetch" | "pull" if arguments.iter().any(|a| writes_main(a)) => {
-                Some(("A refspec writing main", lands(false)))
+                Some(("A refspec writing main", writes(false)))
             }
             "pull" if arguments.iter().any(|a| matches!(*a, "--rebase" | "-r")) => {
                 Some(("`git pull --rebase`", Offence::Rebase))
@@ -253,10 +222,10 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
                     .any(|a| matches!(*a, "-f" | "--force" | "-M"))
                     && arguments.iter().any(|a| is_main_ref(a)) =>
             {
-                Some(("Forcing the main branch", lands(false)))
+                Some(("Forcing the main branch", writes(false)))
             }
             "update-ref" if arguments.iter().any(|a| is_main_ref(a)) => {
-                Some(("Updating refs/heads/main", lands(false)))
+                Some(("Updating refs/heads/main", writes(false)))
             }
             _ => None,
         };
@@ -289,15 +258,32 @@ pub(super) fn unquote(token: &str) -> &str {
 }
 
 /// Whether the line invokes `cargo xtask <verb>` (or the unaliased
-/// `cargo run -p xtask -- <verb>`): a bare `xtask` token whose next
-/// positional token is the verb. A quoted mention keeps its quote
-/// character on the token and does not match.
+/// `cargo run -p xtask -- <verb>`), anywhere in it: the verb is the first
+/// positional token after `xtask` when `cargo` stands right before it,
+/// or the token after the `--` that ends cargo's own options when `run`
+/// does. `cargo test -p xtask land` names a test filter, not the verb.
+/// A quoted mention keeps its quote character on the token and does not
+/// match.
 pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
-    let mut after = tokens.iter().skip_while(|token| **token != "xtask");
-    after.next().is_some()
-        && after
-            .find(|token| !token.starts_with('-'))
-            .is_some_and(|token| *token == verb)
+    tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| **token == "xtask")
+        .any(|(at, _)| {
+            let before = &tokens[..at];
+            let mut after = tokens[at + 1..].iter();
+            let first = if before.last() == Some(&"cargo") {
+                after.find(|token| !token.starts_with('-'))
+            } else if before.contains(&"run") {
+                after
+                    .by_ref()
+                    .find(|token| **token == "--")
+                    .and_then(|_| after.next())
+            } else {
+                None
+            };
+            first.is_some_and(|token| *token == verb)
+        })
 }
 
 #[cfg(test)]
@@ -313,7 +299,11 @@ mod tests {
             "git branch -f main worktree-labels",
             "git update-ref refs/heads/main worktree-labels",
         ] {
-            assert!(guarded_call(command).is_some(), "{command}");
+            assert!(
+                guarded_call(command)
+                    .is_some_and(|r| matches!(r.offence, Offence::WritesMain { .. })),
+                "{command}"
+            );
         }
     }
 
@@ -377,28 +367,32 @@ mod tests {
         let refspec = guarded_call("git push . HEAD:main");
         assert_eq!(
             refspec.map(|r| r.offence),
-            Some(Offence::LandsOnMain {
+            Some(Offence::WritesMain {
                 only_from_main: false
             })
         );
     }
 
     #[test]
-    fn flags_the_landing_verb_and_reads_its_raw_form_too() {
+    fn flags_the_landing_verb_wherever_the_line_reaches_it() {
         for command in [
             "cargo xtask land",
             "cargo xtask land worktree-a",
+            "PGG_ALLOW_MAIN=1 cargo xtask land worktree-a",
             "cargo run --quiet -p xtask -- land worktree-a",
+            "cargo build -p xtask && cargo xtask land worktree-a",
         ] {
-            let landing = guarded_call(command);
-            assert!(
-                landing.as_ref().is_some_and(|r| r.what.contains("land")),
+            assert_eq!(
+                guarded_call(command).map(|r| r.offence),
+                Some(Offence::Landing),
                 "{command}"
             );
         }
         for command in [
             "cargo xtask seats",
             "cargo xtask launch",
+            "cargo test -p xtask land",
+            "cargo test -p xtask -- land",
             "git commit -m \"xtask land notes\"",
         ] {
             assert!(guarded_call(command).is_none(), "{command}");

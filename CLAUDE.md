@@ -57,7 +57,7 @@
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)。force push しない
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。指示があった時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
-- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `PGG_ALLOW_MAIN=1 cargo xtask land <branch>`**(fast path と同格。land 自身が席で rebase → gate → fast-forward する。それ以外の main への書き込みは hook が止める)。**許可は発話 1 回 = land 1 回** — hook が「反映」を含むユーザー発話で開き、land 1 回で閉じ、次の発話で消える(反映され / 反映済 / 反映前 / 未反映 / 反映漏れ / 反映するな は開かない)。無ければ deny されるので「マージ可」で止まる
+- **main を動かすのもその場でユーザーが指示した時だけ**。セッションは `worktree-<席>` に積んだまま「マージ可」と報告して終わる。**反映の指示を受けたら即 `cargo xtask land <branch>`**(fast path と同格。land 自身が席で rebase → gate → fast-forward する。main を書く git はセッションからは常に deny — land 一択)。**許可は発話 1 回 = main が動く land 1 回** — hook が「反映」を含むユーザー発話で開き、main を動かした land が閉じ、次の発話で消える(反映され / 反映済 / 反映前 / 未反映 / 反映漏れ / 反映するな は開かない。止まった land は許可を消費しないので、直してそのまま撃ち直す)。無ければ deny されるので「マージ可」で止まる
 - **本体 checkout への直コミットはしない** — ドキュメントも設定も規約も、その場でユーザーが本体への直接の変更を許可したケース以外は全部席で進める
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**

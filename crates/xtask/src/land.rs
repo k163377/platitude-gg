@@ -6,10 +6,11 @@
 //! detached HEAD or a stray branch turns "merge into main" into a
 //! fast-forward of the wrong thing, or strands the commits off every
 //! branch (both observed). This verb reads where main actually is and
-//! picks the safe move; the pre-shell hook still demands PGG_ALLOW_MAIN
-//! in front of it, so the transcript records the ask, and lets it through
-//! only on the permit the user's own latest message opened (hook/permit.rs)
-//! — one message, one landing.
+//! picks the safe move; the pre-shell hook lets it through only on the
+//! permit the user's own latest message opened (hook/permit.rs), and the
+//! fast-forward here is what spends that permit — one message, one
+//! landing that moved main, and a landing that stopped short spent
+//! nothing.
 //!
 //! The order is the gate's (internal-docs/反映前テストの機械化.md): a
 //! branch behind main is rebased onto it in its own worktree first, then
@@ -130,6 +131,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     }
     phases.mark("fast-forward (verdict included)");
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
+    // The permit this landing ran on is spent here and not at the hook:
+    // a landing that stopped before this line moved nothing.
+    crate::hook::permit::landed(&here, &Identity::current(None).session);
     // Again, now that main carries what it carries: git runs the copy
     // beside .git, and a landing that changed the script would otherwise
     // leave the old copy answering until some later session start.

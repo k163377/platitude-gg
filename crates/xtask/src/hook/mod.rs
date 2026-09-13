@@ -1,8 +1,10 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`).
 //!
-//! These repository workflow checks govern user-authorized Git operations,
-//! application launches, and process cleanup. Main updates also require a
-//! permit derived from the user message; an approval flag alone is insufficient.
+//! The git this repository holds until the user asks for it — a landing,
+//! a rebase, a commit in the primary checkout — and the launches, kills,
+//! seats and chips a session may not handle unasked. Main moves on the
+//! permit the user's own message opens (`permit`), and on nothing a
+//! session types.
 //!
 //! Wired from .claude/settings.json. Each handler reads the hook's JSON
 //! payload from stdin and answers on stdout; printing nothing means "no
@@ -18,16 +20,16 @@ mod greeting;
 mod kill;
 mod launch;
 mod payload;
-mod permit;
+pub(crate) mod permit;
 mod review;
 mod seat;
 mod still;
 mod write;
 
-/// What a command carries to say an explicit instruction asked for main to
-/// move. It rides in the command itself so the transcript records the ask;
-/// whether the user made it is the permit's to say (`permit`), read off
-/// the user's own message.
+/// What a command carries to say the user asked, in so many words, for a
+/// commit in the primary checkout — the one exception the commit guard
+/// makes (`commit`). A landing carries nothing of the kind: the permit
+/// answers for it, read off the user's own message.
 const MAIN_APPROVAL_FLAG: &str = "PGG_ALLOW_MAIN";
 
 /// The same, for an instruction that asked for a rebase.
@@ -65,9 +67,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// list is numbered, then what the reply says it is leaving behind
 /// without putting it anywhere — and only while this turn has an ask
 /// left: a block is put once, or the answer to it is met by the same
-/// block again. When they have nothing to say, the seat's gate standing
-/// goes to the user as a system message — a seat reported before its tip
-/// was gated is what the user reads there.
+/// block again. When they have nothing to say, the seat's standing goes
+/// to the user as a system message: the ask for main this turn leaves
+/// unmet, if the user's message made one, and where the seat's gate
+/// stands — a seat reported before its tip was gated is what the user
+/// reads there.
 fn stop(input: &str) -> Result<(), String> {
     if payload::bool_field(input, "stop_hook_active") != Some(true) {
         if chips::numbering(input)? {
@@ -78,12 +82,17 @@ fn stop(input: &str) -> Result<(), String> {
         }
     }
     let cwd = payload::string_field(input, "cwd").unwrap_or_default();
-    if let Some(standing) = crate::gate::standing(&cwd) {
-        println!(
-            "{{\"systemMessage\":\"{}\"}}",
-            standing.replace('"', "'").replace('\n', " ")
-        );
-    }
+    let Some(standing) = crate::gate::standing(&cwd) else {
+        return Ok(());
+    };
+    // Said only over a seat still ahead of main: that is work the user is
+    // waiting to see land, where an empty seat has nothing left to.
+    let message = [permit::unmet(input), Some(standing)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("{{\"systemMessage\":\"{}\"}}", payload::printable(&message));
     Ok(())
 }
 
@@ -106,22 +115,10 @@ fn session_end(input: &str) -> Result<(), String> {
 /// decision per call — two JSON objects on stdout is not a payload — so the
 /// guards run in order and the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
-    let landing = match git::pre_git(input)? {
-        git::Verdict::Refused => return Ok(()),
-        git::Verdict::Landing => true,
-        git::Verdict::Clear => false,
-    };
-    if still::pre_shell(input)?
+    let _refused = git::pre_git(input)?
+        || still::pre_shell(input)?
         || attribution::pre_comment(input)?
         || kill::pre_kill(input)?
-        || launch::pre_launch(input)?
-    {
-        return Ok(());
-    }
-    // Nothing refused: a landing goes through, and the permit it goes
-    // through on is spent now — a land that stops still ran on it.
-    if landing {
-        permit::spend(input);
-    }
+        || launch::pre_launch(input)?;
     Ok(())
 }
