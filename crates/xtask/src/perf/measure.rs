@@ -141,7 +141,7 @@ fn command(
         .env("PATH", path)
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PGG_CONFIG_DIR", config_dir)
-        .env("PGG_LOG", "info")
+        .env("PGG_LOG", &opts.log)
         // Which graphics device and backend Qt chose, said by Qt itself.
         // Two runs on different adapters are not each other's control, and
         // this machine has more than one (ci/baseline/perf-windows-x64.md).

@@ -28,16 +28,23 @@ pub(super) fn open_run(
 ) -> Result<(PathBuf, std::fs::File, std::fs::File), String> {
     let config = directory.join("config");
     std::fs::create_dir(&config).map_err(|e| e.to_string())?;
-    std::fs::write(
-        config.join("settings.toml"),
-        "version = 1\n\n[defaults]\nauto_fetch_minutes = 0\n",
-    )
-    .map_err(|e| e.to_string())?;
+    std::fs::write(config.join("settings.toml"), settings_file(opts)).map_err(|e| e.to_string())?;
     std::fs::write(config.join("state.toml"), state_file(opts, screen))
         .map_err(|e| e.to_string())?;
     let log = std::fs::File::create(directory.join("app.log")).map_err(|e| e.to_string())?;
     let samples = std::fs::File::create(directory.join("memory.csv")).map_err(|e| e.to_string())?;
     Ok((config, log, samples))
+}
+
+/// The settings every run is measured under: no fetch while it is timed,
+/// and whatever `--setting` named on top — written after, so a run that
+/// asks for the interval back gets it.
+fn settings_file(opts: &Options) -> String {
+    let mut text = String::from("version = 1\n\n[defaults]\nauto_fetch_minutes = 0\n");
+    for (key, value) in &opts.settings {
+        text.push_str(&format!("{key} = {value}\n"));
+    }
+    text
 }
 
 /// The window's place and size, and — for a build with no harness in it —

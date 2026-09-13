@@ -89,6 +89,18 @@ pub(super) struct Options {
     /// a person has in front. What that renderer's numbers are is the
     /// report's to say (`perf::report`).
     pub(super) software: bool,
+    /// `[defaults]` keys written into the run's `settings.toml` as given
+    /// (`--setting key=value`, repeatable): what an A/B over a setting —
+    /// the git concurrency, the copies interval — is driven by. The value
+    /// is copied verbatim, so a number is a number and a string carries
+    /// its own quotes.
+    pub(super) settings: Vec<(String, String)>,
+    /// The app's log level (`PGG_LOG`), `info` unless `--log` says
+    /// otherwise: `debug` is what the per-command breakdown — the wait
+    /// for a slot, the spawn, the run — is printed at
+    /// (`process::executor`), and a run taken to read it is not a budget
+    /// run.
+    pub(super) log: String,
 }
 
 impl Options {
@@ -156,6 +168,8 @@ fn defaults() -> Options {
         at: String::new(),
         limits: Limits::default(),
         software: false,
+        settings: Vec::new(),
+        log: "info".into(),
     }
 }
 
@@ -229,6 +243,22 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--at" => opts.at = value()?,
             "--allow-noisy" => opts.limits = Limits::OPEN,
             "--software" => opts.software = true,
+            "--log" => {
+                let level = value()?;
+                if !["error", "warn", "info", "debug", "trace"].contains(&level.as_str()) {
+                    return Err("--log takes error, warn, info, debug or trace".into());
+                }
+                opts.log = level;
+            }
+            "--setting" => {
+                let given = value()?;
+                let (key, value) = given.split_once('=').ok_or("--setting takes key=value")?;
+                if key.trim().is_empty() || value.trim().is_empty() {
+                    return Err("--setting takes key=value".into());
+                }
+                opts.settings
+                    .push((key.trim().to_string(), value.trim().to_string()));
+            }
             other => return Err(format!("unknown option: {other}")),
         }
         i += 1;

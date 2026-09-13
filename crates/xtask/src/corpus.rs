@@ -28,6 +28,7 @@
 //! and the next `corpus` builds it again — to the same object ids,
 //! because the dates and the strings are fixed (`shape`).
 
+mod probe;
 mod remotes;
 mod shape;
 mod stream;
@@ -51,10 +52,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let mut force = false;
     let mut path = None;
     let mut reference = None;
+    let mut copies = None;
+    let mut probe = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--force" => force = true,
+            "--probe" => probe = true,
             "--path" => {
                 i += 1;
                 path = Some(PathBuf::from(
@@ -67,13 +71,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--against needs a repository")?,
                 ));
             }
+            "--copies" => {
+                i += 1;
+                copies =
+                    Some(args.get(i).and_then(|n| n.parse::<usize>().ok()).ok_or(
+                        "--copies takes how many working copies to stand beside the corpus",
+                    )?);
+            }
             other => return Err(format!("corpus does not take {other:?}")),
         }
         i += 1;
     }
     if let Some(other) = reference {
-        if force || path.is_some() {
-            return Err("--against only reads; it takes neither --force nor --path".to_string());
+        if force || path.is_some() || copies.is_some() {
+            return Err(
+                "--against only reads; it takes neither --force, --path nor --copies".to_string(),
+            );
         }
         return against(&other);
     }
@@ -90,7 +103,69 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let _busy = crate::still::busy(&crate::tree::workspace_root(), "corpus")?;
         build(&at)?;
     }
+    if let Some(copies) = copies {
+        stand_copies(&at, copies)?;
+    }
+    if probe {
+        return probe::run(&at, &copy_path(&at, 1));
+    }
     report(&at)
+}
+
+/// Where the `nth` working copy of the corpus at `at` stands
+/// (`stand_copies`).
+fn copy_path(at: &Path, nth: usize) -> PathBuf {
+    let name = at
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    at.with_file_name(format!("{name}-copy-{nth}"))
+}
+
+/// The other working copies the slots measurement reads beside the
+/// corpus (ci/baseline/git-slots-windows-x64.md): `count` linked
+/// working trees of it, each holding one untracked file so the pass
+/// that reads them has a row to find, and named for their number beside
+/// the corpus (`<corpus>-copy-<n>`, ignored like the corpus itself).
+///
+/// **Each on a branch of its own (`pgg-copy-<n>`), not detached.** A
+/// copy standing on no branch is a row only the walk can draw
+/// (`session::joins::WorktreeNews`), so the opening's listing asks for a
+/// rebuild that takes the opening stream over before its first chunk —
+/// and a run the harness cannot see the walk of is no reading at all.
+/// The branches are refs, so **the corpus token moves by eight**: a run
+/// against a corpus with copies is compared with runs against the same,
+/// and the record says which token it was taken under. Taking the
+/// copies down puts the token back (`git worktree remove` each, then
+/// `git branch -D pgg-copy-<n>`).
+///
+/// A copy already standing is kept and only put on its branch where it
+/// is detached — a `checkout -b` at the same commit moves no file. One
+/// asked for beyond what stands is added; none is ever taken away here.
+fn stand_copies(at: &Path, count: usize) -> Result<(), String> {
+    for nth in 1..=count {
+        let copy = copy_path(at, nth);
+        let copy_text = copy.to_string_lossy().replace('\\', "/");
+        let branch = format!("pgg-copy-{nth}");
+        if !copy.join(".git").exists() {
+            println!("standing copy {nth}: {copy_text}");
+            git(at, &["worktree", "add", "-b", &branch, &copy_text, "HEAD"])?;
+            // One untracked file: the cheapest dirt there is, and enough
+            // for the read to count the copy as carrying something.
+            std::fs::write(
+                copy.join(format!("carried-by-copy-{nth}.txt")),
+                format!("copy {nth}\n"),
+            )
+            .map_err(|e| format!("could not dirty {copy_text}: {e}"))?;
+            continue;
+        }
+        let standing = git(&copy, &["symbolic-ref", "-q", "--short", "HEAD"]).unwrap_or_default();
+        if standing.trim().is_empty() {
+            println!("putting copy {nth} on {branch}");
+            git(&copy, &["checkout", "-b", &branch])?;
+        }
+    }
+    Ok(())
 }
 
 /// Whether `--force` may delete this directory.
@@ -456,7 +531,13 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
 fn report(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;
-    let counted = refs.lines().filter(|l| !l.is_empty()).count();
+    // The copies' branches (`stand_copies`) are refs of this generator's
+    // own making, not of the corpus's shape: counted out here, and still
+    // in the token, which is what a run is compared under.
+    let counted = refs
+        .lines()
+        .filter(|l| !l.is_empty() && !l.contains(" refs/heads/pgg-copy-"))
+        .count();
     holds_its_shape(commits.trim(), counted, at)?;
     println!("corpus: {}", at.display());
     println!(
@@ -539,8 +620,13 @@ fn diffs(at: &Path) -> Result<(), String> {
     let mut opened: Vec<&str> = Vec::new();
     let mut here = 0;
     let mut first = None;
+    // The two newest rows with a file to open, as `perf --cases` takes
+    // them: what a run that has to keep clicking while something else
+    // runs — the slots measurement — is driven with.
+    let mut cases: Vec<(String, String)> = Vec::new();
+    let mut commit = "";
     for line in raw.lines() {
-        if line.starts_with("commit ") {
+        if let Some(oid) = line.strip_prefix("commit ") {
             if here > 0 {
                 counts.push(here);
                 if let Some(oid) = first {
@@ -549,6 +635,7 @@ fn diffs(at: &Path) -> Result<(), String> {
             }
             here = 0;
             first = None;
+            commit = oid;
         } else if let Some(fields) = line.strip_prefix(':') {
             here += 1;
             // `:<srcmode> <dstmode> <srcsha> <dstsha> <status>\t<path>`,
@@ -559,6 +646,12 @@ fn diffs(at: &Path) -> Result<(), String> {
                     .split_whitespace()
                     .nth(3)
                     .filter(|oid| !oid.bytes().all(|byte| byte == b'0'));
+                if first.is_some()
+                    && cases.len() < 2
+                    && let Some((_, path)) = fields.split_once('\t')
+                {
+                    cases.push((commit.to_string(), path.to_string()));
+                }
             }
         }
     }
@@ -567,6 +660,10 @@ fn diffs(at: &Path) -> Result<(), String> {
         if let Some(oid) = first {
             opened.push(oid);
         }
+    }
+    println!("  perf cases (the two newest rows with a file to open, as --cases takes them):");
+    for (name, (oid, path)) in ["newest", "second"].iter().zip(&cases) {
+        println!("    {name}\t{oid}\t{path}\traw");
     }
     let mut bytes = sizes(at, &opened)?;
     counts.sort_unstable();
