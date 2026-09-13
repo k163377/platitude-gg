@@ -171,10 +171,125 @@ fn a_branch_answer_says_so_whichever_way_it_went() {
     assert!(!settled("tag", "").write_branch_op);
 }
 
+// ---- the toolbar's push ----------------------------------------------
+
+/// The button pressed: the push went to the queue under `OURS`, for
+/// `topic`.
+fn push_pressed() -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.push_out.asked(Some(OURS), "topic".into());
+    tab
+}
+
+// A push that git turned down and the fetch that landed behind it come
+// back in one drain. The answer is handed to the press by id, with the
+// branch it was sent for and git's own words for that one — and the
+// fetch is what is left over for the group, so the page's leftover
+// branch reads a fetch that landed, not a push that was refused.
 #[test]
-fn a_push_answer_says_so_whichever_way_it_went() {
-    assert!(settled("push", "").write_pushed);
-    assert!(settled("push", "! [rejected]").write_pushed);
+fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words() {
+    let mut tab = push_pressed();
+    tab.absorb(vec![
+        answered(OURS, "push", "! [rejected] topic -> topic (fetch first)"),
+        answered(SOMEBODY_ELSE, "fetch", ""),
+    ]);
+    assert_eq!(tab.push_answer, 0, "the press's own answer, by id");
+    assert_eq!(tab.push_answer_branch, "topic");
+    assert!(tab.write_answers[0].failed);
+    assert_eq!(
+        tab.write_answers[0].error, "! [rejected] topic -> topic (fetch first)",
+        "the words are the answer's own"
+    );
+    assert!(!tab.write_refused, "the group is the fetch's, which landed");
+    assert!(tab.write_fetched);
+}
+
+// A push the far side turned down with a reason of its own — this end
+// was behind it — is handed to the press with that reason on the answer,
+// where the page reads it into the bar (`RepoPage.absorbPushAnswer`).
+// The group stays put: the report is the answer's own, and a copy there
+// would have the page say it twice.
+#[test]
+fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
+    let mut tab = push_pressed();
+    tab.absorb(vec![reported(
+        OURS,
+        "push",
+        "! [rejected] topic -> topic (fetch first)",
+        Some(platitude_core::WriteReport::on_remote(
+            ReportKind::Outdated,
+            "origin",
+            "topic",
+            "fetch first".into(),
+        )),
+    )]);
+    assert_eq!(tab.push_answer, 0);
+    let answer = &tab.write_answers[0];
+    assert!(answer.failed);
+    assert_eq!(answer.report_kind, "outdated");
+    assert_eq!(answer.report_remote, "origin");
+    assert_eq!(answer.report_name, "topic");
+    assert_eq!(answer.report_reason, "fetch first");
+    assert!(
+        !tab.write_refused,
+        "the report is the answer's, not the group's"
+    );
+    assert_eq!(tab.write_report_kind, "");
+}
+
+// Two presses in a row — the reader switched branches and pushed again
+// before the first came back — answer in one drain. Only the press still
+// waited for is handed its answer; the other is nobody's and folds into
+// the group, and neither is handled twice or lost.
+#[test]
+fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
+    let mut tab = push_pressed();
+    tab.push_out.asked(Some(SOMEBODY_ELSE), "other".into());
+    tab.absorb(vec![
+        answered(OURS, "push", ""),
+        answered(SOMEBODY_ELSE, "push", "! [rejected]"),
+    ]);
+    assert_eq!(
+        tab.push_answer, 1,
+        "the second press's answer, not the first's"
+    );
+    assert_eq!(tab.push_answer_branch, "other");
+    assert!(tab.write_answers[1].failed);
+    assert!(
+        !tab.write_refused,
+        "the first press's answer is the leftover, and it landed"
+    );
+}
+
+// A push nobody here pressed for — a remote branch's rename, which
+// answers as a push, or a page that has since gone — has no button
+// waiting: its answer falls to the group like any other nobody named.
+#[test]
+fn a_push_nobody_here_pressed_for_falls_to_the_group() {
+    let mut tab = RepoTab::default();
+    tab.absorb(vec![answered(SOMEBODY_ELSE, "push", "! [rejected]")]);
+    assert_eq!(tab.push_answer, -1);
+    assert!(tab.write_refused);
+    assert_eq!(tab.last_write_error, "! [rejected]");
+}
+
+// The answer's place is the notify's own: the drain after the one that
+// carried it says the press is not answered here, so the page cannot
+// act on the same refusal twice.
+#[test]
+fn the_push_answer_is_this_notifys_own() {
+    let mut tab = push_pressed();
+    tab.absorb(vec![answered(OURS, "push", "! [rejected]")]);
+    assert_eq!(tab.push_answer, 0);
+    tab.absorb(vec![TabMsg::MergeTools {
+        names: Vec::new(),
+        settled: true,
+    }]);
+    assert_eq!(tab.push_answer, -1);
+    assert_eq!(
+        tab.push_answer_branch, "topic",
+        "the branch outlives the answer, for the refusal remembered against it"
+    );
 }
 
 /// The refused half is the one the page reads: a fetch that could not

@@ -31,6 +31,8 @@ impl RepoTab {
         self.read_branch_delete_out();
         self.stash_out.new_notify();
         self.read_stash_out();
+        self.push_out.new_notify();
+        self.read_push_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -318,6 +320,7 @@ impl RepoTab {
             op: op.clone(),
             stopped: self.last_write_stopped,
             failed: !landed,
+            error: error.clone(),
             at_tip,
             head_seq,
             report_kind: kind,
@@ -347,6 +350,10 @@ impl RepoTab {
         }
         if self.stash_out.answered(id, at, !landed, head_seq) {
             self.read_stash_out();
+            answered_for = true;
+        }
+        if self.push_out.answered(id, at) {
+            self.read_push_out();
             answered_for = true;
         }
         if !answered_for {
@@ -379,6 +386,17 @@ impl RepoTab {
             .unwrap_or(-1);
     }
 
+    /// The same for the toolbar's push: where its answer stands, and the
+    /// branch that press was sent for.
+    fn read_push_out(&mut self) {
+        self.push_answer = self
+            .push_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+        self.push_answer_branch = self.push_out.branch().to_string();
+    }
+
     /// One answer nobody was waiting for by name, folded into the group
     /// the page reads when any answer will do.
     ///
@@ -398,7 +416,6 @@ impl RepoTab {
         self.write_moved_head = landed && matches!(op, "checkout" | "reset");
         self.write_reworded = landed && op == "reword";
         self.write_branch_op = op == "branch";
-        self.write_pushed = op == "push";
         self.write_fetched = op == "fetch";
         // The report travels on the answer; the group shows the one that
         // came with the answer it is describing.
@@ -419,7 +436,6 @@ impl RepoTab {
         self.write_moved_head = false;
         self.write_reworded = false;
         self.write_branch_op = false;
-        self.write_pushed = false;
         self.write_fetched = false;
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();

@@ -444,6 +444,17 @@ Item {
         // The entry took what was in the tree, so a diff left open on either side is a picture of a file as it was.
         page.readDiffForAnswer()
     }
+    /// The answer to the toolbar's push — **its own answer**, out of the ones this notify carried
+    /// (`RepoTab.pushAnswer`, -1 where it carried none). The button's mark is the flow's to work out
+    /// (`PublishFlow.noteWriteAnswer`); what git said is the page's, said the way every press's refusal is said —
+    /// a far side that explained itself comes down as a report, one that did not raises the log (`tellRefusal`).
+    /// A push that landed asks nothing of the page: what it moved comes back as refs.
+    function absorbPushAnswer() {
+        const answer = repoTab.pushAnswer
+        if (answer < 0 || !repoTab.writeAnswerFailed(answer))
+            return
+        page.tellRefusal(answer)
+    }
     /// What one answer that did not happen has to say for itself, whoever was waiting for it: somebody outside this
     /// application turned it down — a hook here or over there, a remote this end had only an older picture of.
     /// Nothing here could have known beforehand and nothing here can answer it, so what they said comes down as a
@@ -1626,6 +1637,8 @@ Item {
         page.diffAwaits = false
         // A push this button sent has come back; what it means for the toolbar's button is the flow's to work out.
         publishFlow.noteWriteAnswer()
+        // …and what git said about it is the page's to say, off the same answer.
+        page.absorbPushAnswer()
         // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
         // landings, above the refusal branch and its early returns.
         page.absorbPopLabel()

@@ -275,11 +275,6 @@ pub struct RepoTab {
     /// wear `-D`, a rename to carry to the remote — reads this beside
     /// its own state.
     write_branch_op: bool,
-    /// The answer was a push, landed or not. A remote branch's rename
-    /// and delete answer under the same name, so whether it was the
-    /// toolbar button's push stays the flow's own slot to say
-    /// (`PublishFlow.pushSentBranch`).
-    write_pushed: bool,
     /// The answer was a fetch, landed or not. A fetch that could not
     /// reach the far side has already said so in the tab's own terms —
     /// the button's count, the header's line, the panel raised once for
@@ -356,6 +351,20 @@ pub struct RepoTab {
     /// is the same as with any other answer it was waiting for: read the
     /// open file again, or say what git refused.
     stash_answer: i32,
+    /// The toolbar's push — plain, leased, or the first push the
+    /// question took — waiting for the answer to its own press, with the
+    /// branch it was sent for (`ops::PushOut`). A remote branch's rename
+    /// and delete answer under the same word, and the fetch behind the
+    /// press comes back in the same drain, so the word `push` on an
+    /// answer says nothing about whose it was: the id does.
+    push_out: crate::ops::PushOut,
+    /// Where that press's own answer stands in `write_answers`, or -1
+    /// where this notify carried none of it — and the branch it was
+    /// about, which is what a refusal is remembered against
+    /// (デザイン規約 §リモートへ送る). The picture QML is handed, the
+    /// way `commit_answer` is the editor's.
+    push_answer: i32,
+    push_answer_branch: String,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing
@@ -422,6 +431,11 @@ struct WriteAnswer {
     op: String,
     stopped: bool,
     failed: bool,
+    /// git's own words where it was refused, empty where it landed —
+    /// **on the answer, not beside the group** (`last_write_error` is
+    /// whichever answer came last): a reader waiting for one write by
+    /// name reads the words of that one.
+    error: String,
     at_tip: bool,
     head_seq: u64,
     /// What the far side, a hook, or this end itself said about refusing

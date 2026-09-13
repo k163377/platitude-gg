@@ -85,30 +85,27 @@ Item {
                                           || publishFlow.pushState === "behind"
                                           || publishFlow.pushState === "diverged")
                                          && publishFlow.repoTab.busyCount === 0
-    /// The branch a push of this button's is out for, from the send until the answer. What comes back names the
-    /// operation and not what it was about, and `push` is also what a remote branch's rename and delete report as — so
-    /// this says both which branch the answer belongs to and whether it belongs to this button at all.
-    property string pushSentBranch: ""
     /// The branch whose last push git turned down, and what it said. Remembered per branch: most refusals are about
     /// that branch's standing with its remote and say nothing about the one beside it (デザイン規約 §リモートへ送る).
     property string pushFailBranch: ""
     property string pushFailReason: ""
     readonly property bool pushFailed:
         publishFlow.pushFailBranch !== "" && publishFlow.pushFailBranch === publishFlow.workTree.branch
+    /// The branch goes with the press: the tab writes it down beside the id the push is accepted under, and hands
+    /// the answer back with it (`RepoTab.pushAnswer` / `pushAnswerBranch`) — nothing here holds a branch across the
+    /// round trip, and nothing reads the word `push` on an answer as this button's.
     function pushNow() {
         if (publishFlow.pushState === "publish") {
             publishFlow.startPublishAsk()
             return
         }
-        publishFlow.pushSentBranch = publishFlow.workTree.branch
-        publishFlow.repoTab.pushCurrent("", "")
+        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "", "")
     }
     /// The lease is pinned to the commit this window has on screen rather than left to compare against the tracking
     /// ref: a background fetch must not turn this into a plain force. A remote that moved since is refused, and the
     /// refusal is answered by a fetch (core).
     function forcePush() {
-        publishFlow.pushSentBranch = publishFlow.workTree.branch
-        publishFlow.repoTab.pushCurrent("lease", publishFlow.upstreamOid())
+        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "lease", publishFlow.upstreamOid())
     }
     /// Commit the remote-tracking branch points at, as shown here.
     function upstreamOid() {
@@ -116,17 +113,18 @@ Item {
                ? publishFlow.remotesModel.oidOfName(publishFlow.workTree.upstream)
                : ""
     }
-    /// A push this button sent has come back (`writePushed` — the page calls this once per answer). Nothing in the
-    /// answer says which branch it was for, and a remote branch's rename and delete answer under the same word — the
-    /// slot filled at the send is what makes this the toolbar button's news (デザイン規約 §リモートへ送る).
+    /// A push this button sent has come back — found by the id its press was given, never by the word `push` on an
+    /// answer, which a remote branch's rename and delete carry too (`RepoTab.pushAnswer`, -1 where this notify carried
+    /// none; the page calls this once per notify). What git said is read off that answer, not off the group the
+    /// drain leaves behind: the fetch running behind the press answers in the same drain (デザイン規約 §リモートへ送る).
     function noteWriteAnswer() {
-        if (!publishFlow.repoTab.writePushed || publishFlow.pushSentBranch === "")
+        const at = publishFlow.repoTab.pushAnswer
+        if (at < 0)
             return
-        const sent = publishFlow.pushSentBranch
-        publishFlow.pushSentBranch = ""
-        if (publishFlow.repoTab.writeRefused) {
+        const sent = publishFlow.repoTab.pushAnswerBranch
+        if (publishFlow.repoTab.writeAnswerFailed(at)) {
             publishFlow.pushFailBranch = sent
-            publishFlow.pushFailReason = publishFlow.repoTab.lastWriteError
+            publishFlow.pushFailReason = publishFlow.repoTab.writeAnswerError(at)
         } else if (publishFlow.pushFailBranch === sent) {
             // Landed. The button that went through must not go on saying that the go before it did not.
             publishFlow.pushFailBranch = ""
@@ -345,9 +343,10 @@ Item {
     }
 
     function answerPublish() {
-        // The same slot a plain push fills: a refused first push is still this button's news (デザイン規約 §リモートへ送る).
-        publishFlow.pushSentBranch = publishFlow.workTree.branch
-        publishFlow.repoTab.publishCurrent(publishFlow.publishRemote,
+        // The same owner a plain push writes to: a refused first push is still this button's news
+        // (デザイン規約 §リモートへ送る).
+        publishFlow.repoTab.publishCurrent(publishFlow.workTree.branch,
+                                           publishFlow.publishRemote,
                                            publishFlow.publishBranch,
                                            publishFlow.publishLease)
     }

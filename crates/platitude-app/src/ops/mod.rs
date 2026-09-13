@@ -36,6 +36,9 @@ mod diff_reread_tests;
 mod press;
 #[cfg(test)]
 mod press_tests;
+mod push_out;
+#[cfg(test)]
+mod push_out_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
@@ -46,5 +49,6 @@ mod stash_out_tests;
 pub use branch_delete_out::BranchDeleteOut;
 pub use diff_reread::DiffReread;
 pub use press::Press;
+pub use push_out::PushOut;
 pub use stand_in::{Row, Rows, StandIn};
 pub use stash_out::StashOut;

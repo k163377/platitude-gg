@@ -143,6 +143,15 @@ impl RepoTab {
     // answered. Its other wait — the tree itself — is asked for rather
     // than watched (`takeStashLanding`).
     qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
+    // …and where the toolbar's push answered, with the branch that press
+    // was sent for: a refusal is remembered per branch, and the word
+    // `push` on an answer does not say whose it was (`ops::PushOut`).
+    qproperty!("pushAnswer", Member = push_answer, Notify = changed);
+    qproperty!(
+        "pushAnswerBranch",
+        Member = push_answer_branch,
+        Notify = changed
+    );
     // What is left over, classified in drain::settle_write — the page
     // reads meanings, never op names (app-ui.md). These describe the last
     // answer of this notify **nobody was waiting for by name**: a drain
@@ -163,7 +172,6 @@ impl RepoTab {
     );
     qproperty!("writeReworded", Member = write_reworded, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
-    qproperty!("writePushed", Member = write_pushed, Notify = changed);
     qproperty!("writeFetched", Member = write_fetched, Notify = changed);
     // What a write that did not happen has to say for itself — the page
     // makes a notice out of these rather than an error
@@ -303,6 +311,16 @@ impl RepoTab {
     #[qslot]
     fn write_answer_failed(&self, index: i32) -> bool {
         self.write_answer_at(index).is_some_and(|a| a.failed)
+    }
+
+    /// git's own words for that refusal, empty where it landed. Read off
+    /// the answer rather than `lastWriteError`, which is whichever answer
+    /// came last in the drain.
+    #[qslot]
+    fn write_answer_error(&self, index: i32) -> String {
+        self.write_answer_at(index)
+            .map(|a| a.error.clone())
+            .unwrap_or_default()
     }
 
     /// It left a commit at the tip to go to.
@@ -894,22 +912,36 @@ impl RepoTab {
     /// Pushes the branch that is checked out to wherever it tracks, or to
     /// the default remote when it tracks nothing yet. `force` is `""` /
     /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
-    /// user actually saw.
+    /// user actually saw. `branch` is what the button is sending, as the
+    /// page shows it — written down with the id the press is accepted
+    /// under, so the answer comes back to this branch and no other
+    /// (`ops::PushOut`).
     #[qslot]
-    fn push_current(&mut self, force: String, lease_expect: String) {
+    fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
         let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
-        self.with_session(|s| s.push_current(fallback.clone(), force.clone()));
+        let asked = self.ask_session(|s| s.push_current(fallback.clone(), force.clone()));
+        self.push_out
+            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
     }
 
     /// The first push of a branch, to the remote and name the question
     /// just took. Records the answer as the upstream, so the branch never
-    /// asks again.
+    /// asks again. `branch` is the one being published, written down the
+    /// way `pushCurrent` writes its own.
     #[qslot]
-    fn publish_current(&mut self, remote: String, remote_branch: String, expect: String) {
-        self.with_session(|s| {
+    fn publish_current(
+        &mut self,
+        branch: String,
+        remote: String,
+        remote_branch: String,
+        expect: String,
+    ) {
+        let asked = self.ask_session(|s| {
             s.publish_current(remote.clone(), remote_branch.clone(), expect.clone())
         });
+        self.push_out
+            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
     }
 
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
