@@ -43,6 +43,12 @@ const REPORT_FILE: &str = "wedge.txt";
 const TRAIL_FILE: &str = "stations.txt";
 #[cfg(windows)]
 const DUMP_FILE: &str = "app.dmp";
+/// The thread listing as the parent read it, whole, beside the pictures:
+/// the line under the verdict shows the first few threads and counts the
+/// rest ([`listed`]). Written by the listing itself, which is a process
+/// on Windows ([`threads_of`]) and the stand-in a stalled look is made
+/// of everywhere ([`look_at`]); the walk of `/proc` leaves none.
+const THREADS_FILE: &str = "threads.txt";
 
 /// How long a look at the app may take: the listing is one PowerShell
 /// start and one query, the dump writes the process's whole memory to
@@ -187,9 +193,10 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
             "the thread listing",
             stand_in(),
             STALLED_LOOK_CEILING,
+            Some(&shot_dir.join(THREADS_FILE)),
         ))
     } else {
-        threads_of(pid)
+        threads_of(pid, shot_dir)
     };
     let mut lines = vec![match threads {
         Ok(threads) => format!(
@@ -208,7 +215,8 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
 /// What a bounded diagnostic came back with.
 #[derive(Debug)]
 enum Answer {
-    /// It ended on its own: how, and what it wrote to stdout.
+    /// It ended on its own: how, and what it had written by then to the
+    /// file it was given for stdout — nothing where it was given none.
     Ended { status: ExitStatus, stdout: String },
     /// It stood past its ceiling and was ended here, after this long —
     /// or could not be, which is said rather than assumed, with the pid
@@ -227,27 +235,39 @@ enum Answer {
 /// before this answers, so what comes after it — the reaping of the app
 /// — never runs beside a dumper still holding the process open.
 ///
-/// Stdout is drained on a thread of its own ([`crate::app_out`]), so a
-/// listing longer than a pipe cannot block the child. On the ceiling the
-/// thread is left to end with the pipe: what it read is not wanted, and
-/// a pipe a child of the ended one still holds would hold the join.
-fn bounded(what: &str, mut command: Command, ceiling: Duration) -> Answer {
+/// **Stdout goes to a file, never a pipe.** A pipe is read to its end,
+/// and its end is every write handle closed — a child of the diagnostic
+/// that inherited its stdout and outlives it holds one, and would hold
+/// the answer for as long as it lives (the test that leaves such a child
+/// behind waited its whole twenty seconds on the pipe). A file has no
+/// other end: what the diagnostic wrote is read off the disk once it has
+/// exited, and whatever still holds the file holds nothing here. `said`
+/// is that file; `None` for a diagnostic whose words are not wanted.
+fn bounded(what: &str, mut command: Command, ceiling: Duration, said: Option<&Path>) -> Answer {
+    let stdout = match said.map(File::create) {
+        None => Stdio::null(),
+        Some(Ok(file)) => Stdio::from(file),
+        Some(Err(error)) => {
+            return Answer::Unstarted(format!(
+                "{what} could not be given a file for what it says: {error}"
+            ));
+        }
+    };
     command
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
+        .stdout(stdout)
         .stderr(Stdio::null());
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => return Answer::Unstarted(format!("{what} could not be started: {error}")),
     };
-    let stdout = child.stdout.take().map(crate::app_out::collect);
     let mut wait = Wait::new(what, Budget::whole(ceiling), LOOK_AGAIN);
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout = stdout
-                    .and_then(|reader| reader.join().ok())
-                    .map(|said| said.lines.join("\n"))
+                let stdout = said
+                    .and_then(|path| std::fs::read(path).ok())
+                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
                     .unwrap_or_default();
                 return Answer::Ended { status, stdout };
             }
@@ -392,19 +412,26 @@ foreach ($thread in $process.Threads) {
 
 /// Every thread of the process ([`LISTING_SCRIPT`]). Windows has no way
 /// to this in std, and the one it has is the same PowerShell the reaper
-/// reads its process tree from (`crate::reap`).
+/// reads its process tree from (`crate::reap`). The listing is written
+/// whole beside the pictures ([`THREADS_FILE`]) and read back from there.
 #[cfg(windows)]
-fn threads_of(pid: u32) -> Result<Vec<String>, String> {
+fn threads_of(pid: u32, shot_dir: &Path) -> Result<Vec<String>, String> {
     let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-    listing(bounded("the thread listing", command, LISTING_CEILING))
+    listing(bounded(
+        "the thread listing",
+        command,
+        LISTING_CEILING,
+        Some(&shot_dir.join(THREADS_FILE)),
+    ))
 }
 
 /// The same off `/proc`: the thread's name is there as well, which says
 /// whose it is — a tokio worker, the deadline thread, a render thread.
+/// A walk, not a process: it leaves no file beside the pictures.
 #[cfg(unix)]
-fn threads_of(pid: u32) -> Result<Vec<String>, String> {
+fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Vec<String>, String> {
     let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
         .map_err(|error| format!("/proc/{pid}/task could not be read: {error}"))?;
     let mut threads = Vec::new();
@@ -484,7 +511,7 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
         .replace("PGG_KIND", &DUMP_KIND.to_string());
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-    match bounded("the dump", command, DUMP_CEILING) {
+    match bounded("the dump", command, DUMP_CEILING, None) {
         Answer::Ended { status, .. } if status.success() => match std::fs::metadata(&path) {
             Ok(meta) => format!(
                 "  a dump of the app: {} ({} MB) — WinDbg: `!analyze -v`, then `~*k` for the thread that stands",
@@ -859,7 +886,7 @@ mod tests {
         // the verdict is that it was ended, never how long that took.
         let ceiling = Duration::from_millis(300);
 
-        let answer = bounded("a stalled listing", stand_in(), ceiling);
+        let answer = bounded("a stalled listing", stand_in(), ceiling, None);
 
         let Answer::OutOfTime { pid, after, ended } = answer else {
             panic!("the stand-in answered: {answer:?}");
@@ -873,16 +900,26 @@ mod tests {
     }
 
     /// A diagnostic that ends on its own answers with its exit and what
-    /// it wrote, whole — the listing is read off exactly that.
+    /// it wrote, whole — the listing is read off exactly that, and the
+    /// file it was written to stays beside the pictures.
     #[test]
     fn a_diagnostic_that_answers_is_carried_whole() {
-        let answer = bounded("an echo", says_one(), Duration::from_secs(60));
+        let dir = lanes("answers");
+        let said = dir.join("said.txt");
+
+        let answer = bounded("an echo", says_one(), Duration::from_secs(60), Some(&said));
 
         let Answer::Ended { status, stdout } = answer else {
             panic!("the echo did not end: {answer:?}");
         };
         assert!(status.success(), "{status}");
         assert_eq!(stdout.trim(), "one");
+        assert_eq!(
+            std::fs::read_to_string(&said)
+                .expect("what it said, on the disk")
+                .trim(),
+            "one"
+        );
         assert_eq!(
             listing(Answer::Ended { status, stdout }),
             Ok(vec!["one".to_string()])
@@ -962,12 +999,13 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn a_listing_names_the_threads_of_a_standing_process() {
+        let dir = lanes("listing");
         let mut standing = stand_in()
             .stdout(std::process::Stdio::null())
             .spawn()
             .expect("a process to list");
 
-        let listed = super::threads_of(standing.id());
+        let listed = super::threads_of(standing.id(), &dir);
 
         standing
             .kill()
@@ -981,6 +1019,17 @@ mod tests {
         assert!(
             threads.iter().any(|line| line.contains("@ping.exe")),
             "{threads:?}"
+        );
+        // The whole listing is on the disk beside the pictures, the same
+        // lines the answer was read off.
+        let written = std::fs::read_to_string(dir.join(super::THREADS_FILE))
+            .expect("the listing, on the disk");
+        assert_eq!(
+            written
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count(),
+            threads.len()
         );
     }
 
@@ -996,6 +1045,63 @@ mod tests {
     fn says_one() -> std::process::Command {
         let mut command = std::process::Command::new("sh");
         command.args(["-c", "echo one"]);
+        command
+    }
+
+    /// A diagnostic can leave a child of its own behind — one that
+    /// inherited its stdout and outlives it. The answer is the
+    /// diagnostic's own exit and what it had written by then; what it
+    /// left behind holds nothing here. The child left behind writes
+    /// `done.txt` as its last act, so whether the answer waited for it
+    /// is read off the disk and not off a clock.
+    #[test]
+    fn a_child_the_diagnostic_leaves_behind_does_not_hold_the_answer() {
+        let dir = lanes("left-behind");
+        let done = dir.join("done.txt");
+
+        let answer = bounded(
+            "a listing that leaves a child behind",
+            leaves_a_child_behind(&dir),
+            Duration::from_secs(60),
+            Some(&dir.join("said.txt")),
+        );
+
+        let Answer::Ended { status, .. } = answer else {
+            panic!("the diagnostic did not end on its own: {answer:?}");
+        };
+        assert!(status.success(), "{status}");
+        assert!(
+            !done.exists(),
+            "the answer waited for the child the diagnostic left behind"
+        );
+    }
+
+    /// A process that ends at once and leaves a child behind, holding
+    /// the stdout it was given for twenty seconds and then writing
+    /// `done.txt` beside the script. The script is a file so that the
+    /// shell's own quoting never enters the picture, and is named by its
+    /// whole path: a machine with `NoDefaultCurrentDirectoryInExePath`
+    /// set has a `cmd` that does not look in the current directory.
+    #[cfg(windows)]
+    fn leaves_a_child_behind(dir: &std::path::Path) -> std::process::Command {
+        let script = dir.join("child.cmd");
+        std::fs::write(
+            &script,
+            "@echo off\r\nstart /b cmd /c \"ping -n 20 127.0.0.1 >nul & echo x > done.txt\"\r\n",
+        )
+        .expect("a script that leaves a child behind");
+        let mut command = std::process::Command::new("cmd");
+        command.arg("/c").arg(script).current_dir(dir);
+        command
+    }
+
+    #[cfg(not(windows))]
+    fn leaves_a_child_behind(dir: &std::path::Path) -> std::process::Command {
+        let script = dir.join("child.sh");
+        std::fs::write(&script, "(sleep 20; echo x > done.txt) &\n")
+            .expect("a script that leaves a child behind");
+        let mut command = std::process::Command::new("sh");
+        command.arg(script).current_dir(dir);
         command
     }
 
