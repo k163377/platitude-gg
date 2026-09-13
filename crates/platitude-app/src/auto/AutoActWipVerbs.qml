@@ -163,6 +163,11 @@ Item {
             page.showWip()
         } else if (act === "wip-lanes") {
             wipLanesTimer.start()
+        } else if (act === "carried-read") {
+            // **The argument is which copy**, because the two in the preset are different shapes: one holds an
+            // untracked file, which has no pieces to stage whoever owns it, and the other a staged edit — the one
+            // where "no hunk puts a seat out" is a claim about this pane rather than about the file.
+            carriedReadTimer.start()
         } else if (act === "wip-tally") {
             // Read the two together: `status::Kinds` counts rows, so the kinds have to add up to `rows` — a drift means
             // one of the two stopped reading the same status.
@@ -325,6 +330,94 @@ Item {
             driver.writeSeqBefore = repoTab.writeSeq
             repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
             driver.barrierNotice.start()
+        }
+    }
+    // Another working copy's uncommitted row, read in this window: the pane lists that copy's files and opens one of
+    // them, and every control that would write is down (P3-確認事項 §別 worktree の未コミット行).
+    //
+    // **The whole line is output side.** The two counts say the pane really is showing that copy rather than this
+    // window's own tree, and each of the four verdicts is read off the control itself — the two presses are made the
+    // way a hand makes them and answer whether the button took them, and the two diff readings are the button's own
+    // `enabled` and whether a hunk puts a seat out at all. Built out of `writable` instead, every one of them would
+    // go green with the disabling unwired (app-ui.md §UI 自動化の因果性).
+    SampleTimer {
+        id: carriedReadTimer
+        property bool asked: false
+        property bool opened: false
+        /// The row of the copy the argument names, or -1 while the graph has none of it. Off the model, which is what
+        /// says whose a row is — a row off screen has no delegate to ask.
+        function rowOf(name) {
+            for (let row = 0; row < graphModel.rowTotal; row++) {
+                if (graphModel.carriedName(row) === name)
+                    return row
+            }
+            return -1
+        }
+        onTriggered: {
+            if (graphModel.finishCount === 0 || !workTree.loaded)
+                return
+            if (!carriedReadTimer.asked) {
+                const row = carriedReadTimer.rowOf(Harness.autoActArg)
+                if (row < 0)
+                    return
+                // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞).
+                const item = graphPane.view.itemAtIndex(row)
+                if (item === null)
+                    return
+                item.leftClick(0, Qt.NoModifier)
+                carriedReadTimer.asked = true
+                return
+            }
+            // The copy's own files have to have arrived — until they do the lists still hold this window's, and a
+            // report taken there would be about the wrong tree.
+            const files = page.wipUnstaged
+            if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
+                return
+            if (!carriedReadTimer.opened) {
+                // The pane's own numbering — one run, and a folder row in the tree view answers with no key at all.
+                let key = ""
+                for (let i = 0; key === "" && i < files.shownRows; i++)
+                    key = files.fileKeyAt(i)
+                if (key === "")
+                    return
+                const cut = key.indexOf(":")
+                const path = key.substring(cut + 1)
+                page.openDiff(key.substring(0, cut), path, files.origOf(path))
+                carriedReadTimer.opened = true
+                return
+            }
+            if (!driver.diffPane.diffSettled())
+                return
+            // The hover behind the name is the only place a cut one is whole, and the tooltip waits out `tipDelayMs`
+            // after the stand-in is rested — so a run on a long name waits for it, and one on a name that fits has
+            // nothing to wait for.
+            driver.carriedPane.namePointedAt = true
+            if (driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown)
+                return
+            carriedReadTimer.stop()
+            // **Read before the step below**, which opens another file: the count taken after it is a pane in the
+            // middle of reading one.
+            const lines = driver.diffPane.view.count
+            // One step of the arrows, through the pane's own walk. **A row is found by the side its bytes are on**
+            // even in this one list, so a pane handed the run's name instead of the file's bucket walks from nowhere
+            // and answers the file it is already on (observed).
+            const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
+            // **One list, one tally, and no seat that writes.** The copy in this preset holds one path staged and
+            // then written again, so `files=1` and a `tally=` of one are the fold — counted per side they would both
+            // be two, and the row above the pane would be saying a different number from the pane. `cut=`/`tip=` are
+            // the long name's whole claim: the band cut it, and the hover behind it carries it. The diff's own line
+            // count goes last, after the part the table pins: a line pinned through it could not be written down at
+            // all (`verify::outcome` matches a substring).
+            Harness.report("carried_read copy=" + files.carriedName
+                              + " files=" + files.total
+                              + " tally=" + graphModel.carriedTally(page.selectedRow)
+                              + " cut=" + driver.carriedPane.nameCut
+                              + " tip=" + driver.carriedPane.nameTipShown
+                              + " stepped=" + stepped
+                              + " stageFile=" + driver.diffPane.stageOffered
+                              + " pieces=" + driver.diffPane.piecesOffered
+                              + " lines=" + lines)
+            driver.complete()
         }
     }
     SampleTimer {

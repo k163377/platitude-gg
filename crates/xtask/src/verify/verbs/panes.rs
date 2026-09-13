@@ -335,4 +335,36 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "write_notice open=true clears=true tone=danger",
     },
+    // Another working copy's uncommitted work, read in this window as a
+    // pane of its own. `copy=` is that pane standing on that copy rather
+    // than on this window's tree; `files=` and `tally=` are the one list
+    // and the row above it agreeing, which they only do because both fold
+    // a path's two sides into one (`Bucket::Whole` / `Kinds::folded`);
+    // `cut=` and `tip=` are what a name too long for the band does; and
+    // the two after them are the diff offering neither its whole-file
+    // word nor a hunk's seat.
+    //
+    // **The three runs are the claim.** `topic` holds one path staged and
+    // then written again, which is the fold — counted per side it would
+    // read 2 twice. `here` holds two untracked files, which is the only
+    // copy the arrows have anywhere to step in (`stepped=`). The third is
+    // named past the pane's floor, and is the only one whose name is cut.
+    Verb {
+        name: "carried-read",
+        when: &[
+            (
+                Arg::Is("here"),
+                "carried_read copy=here files=2 tally=2,0,0,0,0,0 cut=false tip=false \
+                 stepped=true stageFile=false pieces=false",
+            ),
+            (
+                Arg::Starts("an-extremely-long"),
+                "carried_read copy=an-extremely-long-working-copy-name-for-the-edge-case \
+                 files=1 tally=0,1,0,0,0,0 cut=true tip=true stepped=false \
+                 stageFile=false pieces=false",
+            ),
+        ],
+        plain: "carried_read copy=topic files=1 tally=0,1,0,0,0,0 cut=false tip=false \
+                stepped=false stageFile=false pieces=false",
+    },
 ];

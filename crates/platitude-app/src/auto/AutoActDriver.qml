@@ -37,6 +37,7 @@ Item {
     property DetailsPane detailsPane
     property DiffPane diffPane
     property WipPane wipPane
+    property CarriedPane carriedPane
     property RebasePlanPane planPane
     property RowLayout gitCorner
 

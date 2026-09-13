@@ -252,6 +252,7 @@
 - `tab-pin-go`(その張り付きタブを押して、帯を本物の席まで流す。must_say)
 - `tab-open-go`(同じ staging に 13 個目のリポジトリを開いて、帯がその席まで流れる。引数は開くリポジトリ = 省略で xtask が建てる。must_say)
 - `carried-open --preset carried`(**別の作業コピーの未コミット行をダブルクリックして、その作業コピーを別タブで開く** = 中身を読む唯一の道。この窓のペインはこの窓の木を読むので、他所の変更はその木のタブで読み・ステージする。**preset 必須** — 他所の行が出るのは `carried` だけ。行は**モデルに訊いて**探す(画面外の行にデリゲートは無い)、押すのは**行自身の `doubleClick`**(ページを直に叩くと行の判断を通らずに緑になる)。報告行 `carried_open tabs= grew= wanted=`、must_say は `tabs=2 grew=true` — **2 枚目のタブがリポジトリを出している絵は、どの扉で開いても同じ絵**なので、主張は数の側。完了はタブが開いたことではなく**そのページが自分のリポジトリを出したこと**まで待つ)
+- `carried-read <コピー名> --preset carried`(**別の作業コピーの未コミット行を選んで、`WORKING COPY` モードで出す**。**preset 必須**・**引数必須** = どのコピーに立つか(`topic` = 同じパスが index と作業ツリーの両方 / `here` = 未追跡 / `an-extremely-long-working-copy-name-for-the-edge-case` = 名前・ブランチ・パスが全部長いエッジケース)。行は**モデルに訊いて**探し(画面外の行にデリゲートは無い)、押すのは**行自身の `leftClick`**。報告行 `carried_read copy= branch= files= tally= open= stageFile= pieces= lines=`、must_say は `lines=` の手前まで(行数はコピーの持ち物)。**全部が出力側** —— `copy=`/`branch=` がペインが本当にそのコピーに立っていること、**`files=` と `tally=` が畳み**(`topic` は 1 パス 2 面なので、畳まなければ両方 2 になる)、`open=` はペインの唯一のボタン、後ろ 2 つは diff が whole-file の語も hunk の座席も出さないこと)
 - `tab-carry`(タブ切替が何を連れて行き何を捨てるか。must_say)
 - `corner`(右下の git バージョン表示の譲り方。報告行 `git_corner`)
 - `open-again`(開いているリポジトリをもう一度開く — 訊かれず既存タブへ)

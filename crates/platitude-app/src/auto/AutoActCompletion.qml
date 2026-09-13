@@ -180,6 +180,9 @@ QtObject {
                 "graph-tail", "graph-tail-more",
                 "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
+                // Three arrivals behind the press, each from a different tree: the copy's row, the copy's file list,
+                // and a file of that copy read on its own. Its own sampler owns the end of all three.
+                "carried-read",
                 "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",

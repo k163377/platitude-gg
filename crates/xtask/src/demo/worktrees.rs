@@ -41,21 +41,45 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     repo.write("scratch.txt", "experiment\n")?;
     repo.git(&["stash", "push", "--include-untracked", "-m", "experiment"])?;
 
-    // Standing where this window stands, holding an untracked file.
+    // Standing where this window stands, holding two untracked files —
+    // two so the pane's arrows have somewhere to step (`carried-read`).
     repo.git(&["worktree", "add", "-b", "side/here", "../here"])?;
     let here = repo.root.join("here");
+    std::fs::write(here.join("jotted.txt"), "another note over here\n")
+        .map_err(|e| format!("writing jotted.txt: {e}"))?;
     std::fs::write(here.join("notes.txt"), "jotted over here\n")
         .map_err(|e| format!("writing notes.txt: {e}"))?;
 
-    // Further down the history, holding one staged edit.
+    // Further down the history, holding **one path on both sides**: staged
+    // and then written again. The pane reading it shows one row — the
+    // split is that copy's index, which nothing here can move — so this is
+    // the copy the fold is read on (`Kinds::folded`, `Bucket::Whole`).
     repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
     let topic = repo.root.join("topic");
     std::fs::write(topic.join("src/topic.txt"), "topic redrafted\n")
         .map_err(|e| format!("writing topic.txt: {e}"))?;
     repo.git_at(&topic, &["add", "--", "src/topic.txt"])?;
+    std::fs::write(topic.join("src/topic.txt"), "topic redrafted, and again\n")
+        .map_err(|e| format!("writing topic.txt again: {e}"))?;
 
     // Clean: a copy with nothing to say draws no row at all.
     repo.git(&["worktree", "add", "-b", "side/quiet", "../quiet"])?;
+
+    // A name with nowhere to go: the pane's floor is 300px and this is
+    // past it whatever the font, so the band, the block and the diff's own
+    // header are all read on this one (`carried-long`).
+    repo.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "side/an-extremely-long-branch-name-for-the-edge-case",
+        "../an-extremely-long-working-copy-name-for-the-edge-case",
+    ])?;
+    let long = repo
+        .root
+        .join("an-extremely-long-working-copy-name-for-the-edge-case");
+    std::fs::write(long.join("docs/guide.md"), "guide, rewritten over there\n")
+        .map_err(|e| format!("writing the long copy's guide: {e}"))?;
 
     // This window's own tree, so its row stands too and the two can be
     // told apart by the name only one of them wears.

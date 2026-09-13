@@ -36,6 +36,7 @@ Item {
     required property var detailsPane
     required property var diffPane
     required property var wipPane
+    required property var carriedPane
     required property var gitCorner
     /// The seat the plan's face is built in while a plan stands. Not asked for up front: the plan verbs raise the
     /// face the way a hand does and read it only once it is up, so the driver follows the seat's `item` instead.
@@ -108,6 +109,7 @@ Item {
             detailsPane: harness.detailsPane
             diffPane: harness.diffPane
             wipPane: harness.wipPane
+            carriedPane: harness.carriedPane
             planPane: harness.planPane
             gitCorner: harness.gitCorner
             refMenu: harness.refRowMenu.menu
