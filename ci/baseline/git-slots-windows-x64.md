@@ -14,7 +14,7 @@
   枝が 8 本増えるので **corpus token は `fb3d090c4261f4500bd61c8db7389485d515feab`(refs 50,012)**
   — perf 記録の token とは別物で、この記録の中でだけ比較する。コピーを `git worktree remove` +
   `git branch -D pgg-copy-<n>` で下ろせば元の token に戻る
-- 撃ち方(N ごとに 1 行):
+- 実行手順(N ごとに 1 行):
 
   ```
   PGG_ALLOW_GUI=1 cargo xtask perf --repo <corpus> --runs 3 --no-font-walk --allow-noisy --cases <cases.tsv> --cycles 12 --setting git_concurrency=<N> --setting copies_interval_secs=5 --label slots-<N>
@@ -22,12 +22,12 @@
 
   `cases.tsv` は `cargo xtask corpus` が印刷する 2 行(`newest` = HEAD `e512482e`、76 ファイル変更・
   開くのは 34,059 バイトの java / `second` = その下の行 `336dd534`)。**24 操作**(2 コミット × 12 周の
-  行選択 → details → diff)を撃ちながら、**5 秒ごとの巡回**(8 コピーの `status --porcelain=v2 -z
+  行選択 → details → diff)を実行しながら、**5 秒ごとの巡回**(8 コピーの `status --porcelain=v2 -z
   --branch -uall`)を走らせる = 操作と巡回を重ねるための間隔で、既定(30 秒)ではない。
   1 run ≈ 50 秒、捨て 1 + 3 run。`--setting` / `--log` / `--allow-noisy` / `corpus --copies` は
   この実測で足した口
 - 機械: perf 記録と同じ台(Ryzen 9 9900X 12C/24T、DISPLAY2 180Hz、RTX 3070 D3D11、git 2.55、
-  Qt 6.10.3)。**静かではない** — `--allow-noisy` で撃った理由は、巡回そのものの kernel /
+  Qt 6.10.3)。**静かではない** — `--allow-noisy` で実行した理由は、巡回そのものの kernel /
   Defender 側の代金(`System` が 1 コア・`MsMpEng` がその 1/3)が sampler の「対象以外」に数えられて
   35% の閾を毎回超えるため(job object は子 git を数えるが、その git のファイル走査に付く
   フィルタドライバの時間は数えない)。N=16 の頭には別セッションの `cargo xtask linux test` が
@@ -46,7 +46,7 @@
 | 16 (8) | 1794–2006–2258 | 777–963–982 | 2.7–2.9–4.0 | 78 / 316 | 40 / 193 | 102 / 535 | 70 / 460 | 176.2–177.8 / 1–2–3 | 317.7 | 68–75–87% / 25–32–43% |
 | 参照: 巡回なし(perf 記録 §判定、5 run) | 1093–1157–1205 | 120–127–147 | — | 78–85–89(max) | — | 102–106–115 | — | 177.6–178.0 / 1–2 | 300.7–303.1(gross) | 12–16% / 8–12% |
 
-N=1 は 4 回撃って 4 回とも harness が読みとして refuse した(捨て run の app.log から: グラフの
+N=1 は 4 回実行して 4 回とも harness が読みとして refuse した(捨て run の app.log から: グラフの
 初回フレーム 10.7–13.8 s、最初の diff 6.5 s、巡回 5.0–7.9 s)。1 枠を interactive と background が
 aging(`OVERTAKEN_LIMIT` = 4)で交互に取り、開幕の stream が rebuild に取られて `first_chunk_ms` が
 出ない。設定は 1 を受けるが、使う値ではない。
@@ -81,7 +81,7 @@ aging(`OVERTAKEN_LIMIT` = 4)で交互に取り、開幕の stream が rebuild �
 ## 操作 1 回の内訳 — 枠待ち / プロセス起動 / git の仕事 / 結果反映
 
 巡回を止め(`--setting copies_interval_secs=0`)、既定の N(この台で 8)で `--log debug` を付けて
-撃った 2 run(12 操作 × 2)。executor が 1 コマンドごとに残す `waited_ms`(枠待ち)・`spawn_ms`
+実行した 2 run(12 操作 × 2)。executor が 1 コマンドごとに残す `waited_ms`(枠待ち)・`spawn_ms`
 (`CreateProcess` の呼び出し)・`elapsed_ms`(spawn → reap)の 3 つと、harness の `details data`
 (要求 → drain)/ `details frame`(→ フレーム)。別セッションの `cargo xtask shipped` が頭に重なり、
 machine は 32–41% busy(対象以外 26–35%)。
@@ -160,7 +160,7 @@ fsmonitor は「最初の token からの差分」を毎回 daemon に訊く分�
 リポジトリ設定と index への書き込みなので、入れるなら明示の設定操作でなければならず、
 その代金に見合う数字が無い。daemon は probe が自分で止めている(`fsmonitor--daemon stop`)。
 
-## 撃ち直し
+## 再実行
 
 コピーが立っていれば §条件 の 1 行だけ。立っていなければ `cargo xtask corpus --copies 8`(8 × 109,652
 ファイルのチェックアウトで数分)。`--allow-noisy` は外せない(理由は §条件)。内訳は §操作 1 回の内訳

@@ -422,11 +422,12 @@ impl super::RepoSession {
     /// clock settles fairly — the answer about the row the reader has
     /// stepped off must not be the one left on screen.
     ///
-    /// **Outside [`AT_ONCE`]**, so a tick where a copy's pane is open
-    /// stands one read more than the cap: the copy being read pays twice,
-    /// once for its row's tallies and once for the pane's file list.
-    /// Whether the two can be one read is part of the measurement the cap
-    /// itself is waiting on (ci/baseline/perf-windows-x64.md §未取得).
+    /// **One read more than the tick's**, so a copy whose pane is open
+    /// pays twice: once for its row's tallies and once for the pane's
+    /// file list — each through the execution slots like every other git
+    /// (`process::Slots`), with nothing of its own to cap the pair.
+    /// Whether the two can be one read is still to be measured
+    /// (ci/baseline/perf-windows-x64.md §未取得).
     pub fn read_carried_status(self: &std::sync::Arc<Self>, path: String, name: String) {
         let s = std::sync::Arc::clone(self);
         let cancel = self.carried_read.begin(&self.root_cancel);
