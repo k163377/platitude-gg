@@ -16,10 +16,18 @@
 //! and a count taken off it was out by an order of magnitude.
 //!
 //! The other direction is an invariant rather than a backlog: a line
-//! whose verb no name answers is one the gate still runs, and the run
-//! spends its whole ceiling doing nothing (the harness ignores a name it
-//! does not know). So an unanswered line fails this command, while
-//! unrecorded verbs are reported and counted.
+//! whose verb the harness no longer names is one the gate still runs,
+//! and the run spends its whole ceiling doing nothing (the harness
+//! ignores a name it does not know). So that line fails this command,
+//! while unrecorded verbs are reported and counted.
+//!
+//! **The two halves are judged on different readings, deliberately.**
+//! The count is of dispatches, which is what a verb is; the failure is
+//! against every kebab-case word the harness holds, because a dispatch
+//! is not the only way one is reached — the file-row family asks whether
+//! the act is in a list it keeps. Failing on the narrower reading would
+//! turn "the harness writes this one differently" into a red gate for
+//! whoever wrote it, and this runs in every gate on the machine.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -33,45 +41,75 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err(format!("unknown option {unknown:?} (verbs takes none)"));
     }
     let root = crate::tree::workspace_root();
-    let answered = answered(&root)?;
+    let harness = harness(&root)?;
     let recorded = recorded(&root);
 
-    let unrecorded: Vec<&String> = answered.difference(&recorded).collect();
-    let unanswered: Vec<&String> = recorded.difference(&answered).collect();
+    let unrecorded: Vec<&String> = harness.answered.difference(&recorded).collect();
+    // Judged against every name the harness holds rather than against the
+    // dispatches alone: a verb reached through a list this does not read
+    // is answered all the same, and a gate that failed on one would be
+    // blaming a census line for how the harness was written.
+    let gone: Vec<&String> = recorded.difference(&harness.mentioned).collect();
 
-    println!("verbs the harness answers: {}", answered.len());
+    println!("verbs the harness answers: {}", harness.answered.len());
     println!("verbs the census records:  {}", recorded.len());
     println!("never run by the gate:     {}", unrecorded.len());
     for verb in &unrecorded {
         println!("  {verb}");
     }
-    if unanswered.is_empty() {
+    if gone.is_empty() {
         return Ok(());
     }
     Err(format!(
-        "the census holds {} line(s) no verb answers — the gate runs them and the run \
-         waits out its whole ceiling doing nothing. Drop the line or restore the name: {}",
-        unanswered.len(),
-        unanswered
-            .iter()
+        "the census holds {} line(s) whose verb the harness no longer names — the gate runs \
+         them and the run waits out its whole ceiling saying nothing. Drop the line (the one \
+         edit the census takes by hand) or restore the name: {}",
+        gone.len(),
+        gone.iter()
             .map(|verb| verb.as_str())
             .collect::<Vec<_>>()
             .join(" ")
     ))
 }
 
-/// Every verb name the harness compares against.
-fn answered(root: &Path) -> Result<BTreeSet<String>, String> {
-    let mut names = BTreeSet::new();
+/// What the harness says about verb names: the ones it compares an act
+/// against, and every kebab-case word it holds at all.
+struct Harness {
+    /// Names a dispatch asks for outright.
+    answered: BTreeSet<String>,
+    /// Every such word in the harness, whatever it is written in — a
+    /// dispatch, a list the dispatch reads (`AutoActDriver.fileRowActs`),
+    /// a completion table. **What the failing half is judged on**, since
+    /// a name written anywhere here is one somebody may still be
+    /// answering by a road this does not read.
+    mentioned: BTreeSet<String>,
+}
+
+fn harness(root: &Path) -> Result<Harness, String> {
+    let mut harness = Harness {
+        answered: BTreeSet::new(),
+        mentioned: BTreeSet::new(),
+    };
+    let mut files = 0;
     for file in crate::gate::qml_files(root)? {
         if !file.starts_with(HARNESS) {
             continue;
         }
+        files += 1;
         let text = std::fs::read_to_string(root.join(&file))
             .map_err(|e| format!("could not read {file}: {e}"))?;
-        names.extend(verbs_in(&text));
+        harness.answered.extend(verbs_in(&text));
+        harness.mentioned.extend(words_in(&text));
     }
-    Ok(names)
+    if files == 0 {
+        // Every census line would read as stale, which is a scan that
+        // found nothing rather than a census that means nothing.
+        return Err(format!(
+            "no QML under {HARNESS} — the harness is not where this expects it, so nothing \
+             here can be said about which verbs are answered"
+        ));
+    }
+    Ok(harness)
 }
 
 /// The verb each census line ran — its first word, the rest being the
@@ -88,7 +126,9 @@ fn recorded(root: &Path) -> BTreeSet<String> {
 /// The names compared against in one file. A dispatch is written two
 /// ways — the page's families take the act as `act`, and the window's
 /// read `Harness.autoAct` where they stand — and both are the same
-/// question: does this run answer to that name.
+/// question: does this run answer to that name. Either may be reached
+/// through whatever holds it (`planOpenTimer.act`), so what is asked is
+/// read off the last word rather than the whole of it.
 fn verbs_in(text: &str) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     for (at, _) in text.match_indices("===") {
@@ -97,7 +137,8 @@ fn verbs_in(text: &str) -> BTreeSet<String> {
             .rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
             .next()
             .unwrap_or_default();
-        if asked != "act" && !asked.ends_with(".autoAct") && asked != "autoAct" {
+        let asked = asked.rsplit('.').next().unwrap_or_default();
+        if asked != "act" && asked != "autoAct" {
             continue;
         }
         let Some(rest) = text[at + 3..].trim_start().strip_prefix('"') else {
@@ -110,6 +151,26 @@ fn verbs_in(text: &str) -> BTreeSet<String> {
         if is_verb(name) {
             found.insert(name.to_string());
         }
+    }
+    found
+}
+
+/// Every word in one file that could be a verb name, wherever it
+/// stands. A dispatch is not the only place one is written: the file-row
+/// family reads a list and asks whether the act is in it, and a name
+/// added to such a list and nowhere else is still answered.
+fn words_in(text: &str) -> BTreeSet<String> {
+    let mut found = BTreeSet::new();
+    let mut rest = text;
+    while let Some(open) = rest.find('"') {
+        let after = &rest[open + 1..];
+        let Some(close) = after.find('"') else {
+            break;
+        };
+        if is_verb(&after[..close]) {
+            found.insert(after[..close].to_string());
+        }
+        rest = &after[close + 1..];
     }
     found
 }
@@ -128,7 +189,42 @@ fn is_verb(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_verb, verbs_in};
+    use super::{is_verb, verbs_in, words_in};
+
+    /// An act reached through whatever holds it is the same dispatch.
+    /// Read off the whole expression it would be missed, and a verb
+    /// written only that way would read as a census line nobody answers.
+    #[test]
+    fn an_act_is_asked_for_through_its_holder_too() {
+        let text = r#"
+            if (planOpenTimer.act === "rebase-plan") { return }
+            running: driver.autoAct === "band"
+        "#;
+        let found = verbs_in(text);
+        assert_eq!(
+            found.iter().map(String::as_str).collect::<Vec<_>>(),
+            ["band", "rebase-plan"]
+        );
+    }
+
+    /// The list a family reads instead of comparing: no dispatch names
+    /// these, and the failing half must still count them as answered.
+    #[test]
+    fn a_name_in_a_list_is_a_name_the_harness_holds() {
+        let text = r#"
+            readonly property var fileRowActs: [
+                "stage-many", "file-menu-staged", "open-mergetool"
+            ]
+        "#;
+        assert!(verbs_in(text).is_empty());
+        assert_eq!(
+            words_in(text)
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["file-menu-staged", "open-mergetool", "stage-many"]
+        );
+    }
 
     /// Both dispatch shapes, and nothing else from the same line.
     #[test]

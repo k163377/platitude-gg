@@ -188,10 +188,14 @@ const TAIL: &str = "  shipped [--no-build]
       re-photographs — however it would be judged if it ran. Counts both
       sides off the tree: the names the harness compares PGG_AUTO_ACT
       against (crates/platitude-app/src/auto), and the first word of each
-      census line. Prints the verbs with no line, and fails on a line no
-      verb answers — that one the gate still runs, and the run waits out
-      its whole ceiling saying nothing. Recording a missing verb is one
-      `verify-ui <line>` without --no-census.
+      census line. Prints the verbs with no line, and fails on a line
+      whose verb the harness does not name anywhere — that one the gate
+      still runs, and the run waits out its whole ceiling saying nothing.
+      The two halves read the harness differently on purpose: the count
+      is of dispatches, the failure is of every name it holds, since a
+      verb can be reached through a list rather than a comparison.
+      Recording a missing verb is one `verify-ui <line>` without
+      --no-census.
 
   wedge-check
       Stops three runs on purpose and reads back what the parent could
