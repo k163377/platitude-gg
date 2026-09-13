@@ -418,17 +418,12 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
             .expect("a child handed the lock's description")
     };
 
-    let held = first_gate();
-    let mut closing = carry(&held);
-    drop(held);
-    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
-    assert!(
-        !ok && text.contains("already running"),
-        "a lock let go of by closing it was not carried by the child:\n{text}"
-    );
-    closing.kill().expect("the child that carried it");
-    closing.wait().expect("the child that carried it");
-
+    // **The unlocked half goes first, and the closed half last.** Both take the same lock file, and this suite
+    // forks with a thread per core: a neighbour forking between this thread's `open` and its release hands its own
+    // pre-`execve` child a copy of the description, which holds the lock until that child execs. Released by
+    // *unlocking*, the description is free whoever holds a copy of it, so the acquisition after it is answered by
+    // the file and nothing else. Released by *closing*, it is not — which is the whole of what the second half is
+    // here to show, and why nothing in this test takes the lock after it.
     let held = first_gate();
     let mut unlocking = carry(&held);
     held.unlock().expect("let the first gate's lock go");
@@ -444,6 +439,17 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
         !note.exists(),
         "the note comes down with the gate that wrote it"
     );
+
+    let held = first_gate();
+    let mut closing = carry(&held);
+    drop(held);
+    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
+    assert!(
+        !ok && text.contains("already running"),
+        "a lock let go of by closing it was not carried by the child:\n{text}"
+    );
+    closing.kill().expect("the child that carried it");
+    closing.wait().expect("the child that carried it");
 }
 
 /// A verb that passed rewrote its census line, so the tree that passed
