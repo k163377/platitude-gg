@@ -181,6 +181,13 @@ pub struct DiffModel {
     ending_scope: String,
     ending_ext: String,
     current_key: String,
+    /// Which working copy the open diff was read from, empty for this
+    /// window's own tree. Beside the key rather than in it, because the
+    /// two are asked different questions: the key says which file an
+    /// answer is about (and a copy's file is the same file by that name),
+    /// this says whose it is — which is what settles a re-read's aim and
+    /// what the pane refuses every write over.
+    current_at: String,
     /// The rows of the diff on screen, kept so the colours — which arrive
     /// behind them — can be laid over the same lines without another read
     /// (`DiffMsg::Coloured`). Rebuilding all of them costs orders of

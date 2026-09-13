@@ -176,6 +176,16 @@ impl SessionSink for BridgeSink {
                     .refs_tags
                     .push_coalescing(RefsMsg::Snapshot { snapshot, looked });
             }
+            // One list and one consumer, where the window's own status is
+            // copied to three below: another copy's changes are shown as
+            // one run of paths (`models::nav::Bucket::Whole`).
+            SessionEvent::CarriedStatusLoaded { path, name, status } => {
+                self.feeds.carried_nav.push_replace(CarriedStatusMsg {
+                    at: path,
+                    name,
+                    status,
+                });
+            }
             SessionEvent::StatusLoaded {
                 status,
                 head_seq,

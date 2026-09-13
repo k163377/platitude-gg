@@ -354,6 +354,24 @@ pub struct OpProgressMsg {
     pub progress: Option<platitude_core::conflict::Progress>,
 }
 
+/// What another working copy is holding, for the read-only pane
+/// (`SessionEvent::CarriedStatusLoaded`).
+///
+/// **Not a [`StatusMsg`]**, though the lists it feeds are the same three:
+/// everything else on that message is about the tree this window can
+/// write — the HEAD its counts stand beside, what git is in the middle of
+/// here, where a push would go — and a copy has none of it to give. What
+/// is left is the files, and the copy they belong to.
+#[derive(Debug)]
+pub struct CarriedStatusMsg {
+    /// The copy this is about, as git printed its path. The page holds
+    /// the one it is showing and drops anything else.
+    pub at: String,
+    /// The copy's own name, for the band that says whose files these are.
+    pub name: String,
+    pub status: WorkTreeStatus,
+}
+
 #[derive(Debug)]
 pub struct StatusMsg {
     pub status: WorkTreeStatus,

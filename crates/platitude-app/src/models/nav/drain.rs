@@ -1,8 +1,9 @@
 //! One section's feeds, drained into the rows and properties QML reads.
 //!
-//! Five feeds land here, and only the ones this section was attached to
-//! ever hold anything — a list is wired to exactly one of them
-//! (`attach::attach_section_feed` / `attach::attach_worktree_feed`).
+//! Six feeds land here, and only the one this section was attached to
+//! ever holds anything — a list is wired to exactly one of them
+//! (`attach::attach_section_feed` / `attach::attach_worktree_feed` /
+//! `attach::attach_carried_feed`).
 
 use super::*;
 
@@ -86,6 +87,17 @@ impl NavSectionModel {
             let marked = self.eol_marks != eol_marks;
             self.eol_marks = eol_marks;
             arrived |= self.take(Source::files(status)) || marked;
+        }
+        if let Some(feed) = self.carried_feed.clone()
+            && let Some(CarriedStatusMsg { at, name, status }) = feed.drain().pop()
+        {
+            // No line-ending marks come with these. They are about what
+            // the next `git add` in this window would record, and this
+            // window adds nothing over there (規約 §行末の改行コード).
+            let moved = self.carried_at != at || self.carried_name != name;
+            self.carried_at = at;
+            self.carried_name = name;
+            arrived |= self.take(Source::whole_files(status)) || moved;
         }
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()

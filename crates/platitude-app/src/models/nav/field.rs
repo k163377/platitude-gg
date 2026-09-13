@@ -114,7 +114,7 @@ impl NavSectionModel {
                 _ => Value::Said(""),
             },
             Role::Bucket => Value::Said(match of {
-                Entry::File { bucket, .. } => bucket.routing(),
+                Entry::File { item, bucket } => bucket.routing_of(item),
                 // A worktree row carries its branch here (empty =
                 // detached), which is what the row shows on its right.
                 Entry::Worktree { entry, .. } => entry.branch.as_deref().unwrap_or(""),

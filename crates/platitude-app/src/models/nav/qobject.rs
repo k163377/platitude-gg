@@ -14,6 +14,8 @@ impl NavSectionModel {
     qproperty!("headRow", Member = head_row, Notify = changed);
     qproperty!("headDepth", Member = head_depth, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
+    qproperty!("carriedAt", Member = carried_at, Notify = changed);
+    qproperty!("carriedName", Member = carried_name, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!(
         "pointedEolPath",
@@ -129,6 +131,16 @@ impl NavSectionModel {
     #[qslot]
     fn attach_worktree(&mut self, tab_id: i32, run: String) {
         self.attach_worktree_feed(tab_id, run);
+    }
+
+    /// Wires this instance to **another** working copy's changed files.
+    /// One list rather than three runs: the split those three stand for
+    /// is the index's, and nothing here can move that copy's index. A
+    /// feed of its own all the same — this window's own status goes on
+    /// arriving on its own tick while these rows are on screen.
+    #[qslot]
+    fn attach_carried(&mut self, tab_id: i32) {
+        self.attach_carried_feed(tab_id);
     }
 
     #[qslot]

@@ -319,6 +319,25 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// Which row a working copy's uncommitted work stands on now, or -1
+    /// where it stands on none.
+    ///
+    /// **The address of one of these rows is the copy, not the id.** Every
+    /// one of them carries git's all-zero id — that spelling means "there
+    /// is no object here" and is as true of a copy's row as of this
+    /// window's own — so a pane opened on one is followed across a rebuild
+    /// by the path it is about (`RepoPage.settleCarriedAfterPass`), and
+    /// the answer is also how the page hears that the copy has gone clean
+    /// and its row with it.
+    #[qslot]
+    fn carried_row_of(&self, path: String) -> i32 {
+        self.carried
+            .iter()
+            .find(|(_, carried)| carried.path == path)
+            .and_then(|(row, _)| i32::try_from(*row).ok())
+            .unwrap_or(-1)
+    }
+
     /// Reflog selector when the commit is a stash row (empty otherwise).
     #[qslot]
     fn stash_ref_of(&self, oid_hex: String) -> String {

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::hub::{Feed, Hub, RefsMsg, StatusMsg, attached};
+use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
 use super::qml_register;
@@ -160,6 +160,15 @@ pub struct NavSectionModel {
     last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
     refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
+    carried_feed: Option<Arc<Feed<CarriedStatusMsg>>>,
+    /// Which copy the rows came from, empty for this window's own tree.
+    /// **The page's own answer, read back**: a list showing one copy is
+    /// handed another copy's rows only by being told to, and this is what
+    /// says the telling has landed — so a pane about to refuse every write
+    /// is refusing them over the files it is actually showing.
+    carried_at: String,
+    /// That copy's name, as the band says it.
+    carried_name: String,
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
     tab_id: i32,

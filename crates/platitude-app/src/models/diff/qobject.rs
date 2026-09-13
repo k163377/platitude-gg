@@ -20,6 +20,7 @@ impl DiffModel {
     qproperty!("embedded", Member = embedded, Notify = changed);
     qproperty!("embeddedSha8", Member = embedded_sha8, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("carriedAt", Member = current_at, Notify = changed);
     qproperty!("coloured", Member = coloured, Notify = changed);
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
     qproperty!("previewOldUrl", Member = preview_old_url, Notify = changed);
@@ -145,6 +146,41 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
+    /// The same file in another working copy — `at` is that copy's path.
+    /// What the read-only pane opens: the contents have to be readable,
+    /// and the only thing that made the ordinary read this window's own
+    /// was where it was aimed (`RepoSession::load_carried_diff`).
+    #[qslot]
+    fn request_carried(&mut self, at: String, bucket: String, path: String, orig_path: String) {
+        let target = bucket_target(&bucket, &path, orig_path);
+        self.begin_request_in(at, path, target);
+    }
+
+    /// The re-read of that file, on the copies' own slower tick — the one
+    /// the ordinary `refresh_work_tree` is on the page's tick for.
+    ///
+    /// **Aimed where the rows came from.** Sent through the ordinary
+    /// re-read it would read *this* window's file of that name and hand
+    /// it to a pane showing somebody else's, which is the one way the two
+    /// trees can be mixed up on screen.
+    #[qslot]
+    fn refresh_carried(
+        &mut self,
+        at: String,
+        bucket: String,
+        path: String,
+        orig_path: String,
+    ) -> bool {
+        if self.loading || at != self.current_at {
+            return false;
+        }
+        let target = bucket_target(&bucket, &path, orig_path);
+        if diff_key(&target) != self.current_key {
+            return false;
+        }
+        crate::hub::from_session(self.tab_id, |s| s.refresh_carried_diff(at, target)).is_some()
+    }
+
     /// Asks whether the working-tree file on screen still reads the way it
     /// did — the page's tick, while a diff of one is open.
     ///
@@ -160,7 +196,9 @@ impl DiffModel {
     /// reply that a file nobody touched never sends.
     #[qslot]
     fn refresh_work_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
-        if self.loading {
+        // A diff read from another copy is re-read on the copies' tick
+        // and by their aim (`refresh_carried`).
+        if self.loading || !self.current_at.is_empty() {
             return false;
         }
         let target = bucket_target(&bucket, &path, orig_path);

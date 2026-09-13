@@ -462,6 +462,18 @@ impl RepoTab {
         self.with_session(|s| s.refresh_carried());
     }
 
+    /// What one other copy is holding, file by file — the read behind the
+    /// pane, asked when a copy's row is selected and again on the copies'
+    /// tick while it stands open.
+    ///
+    /// Apart from the tick above, which keeps every copy's tallies
+    /// current: this is one copy's file list, and it has to be up when
+    /// the pane opens rather than at the next tick.
+    #[qslot]
+    fn read_carried_status(&mut self, path: String, name: String) {
+        self.with_session(|s| s.read_carried_status(path, name));
+    }
+
     /// The other tick, run several times a second while a write that
     /// replays is out: how far it has got and nothing else. Two file reads
     /// and no process, which is what lets it be that often — the tick

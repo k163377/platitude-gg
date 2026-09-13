@@ -172,6 +172,14 @@ pub struct Feeds {
     pub status_nav_conflicts: Arc<Feed<StatusMsg>>,
     pub status_nav_unstaged: Arc<Feed<StatusMsg>>,
     pub status_nav_staged: Arc<Feed<StatusMsg>>,
+    /// The list of the copy the pane is showing when it is showing
+    /// somebody else's (`CarriedStatusMsg`). **One where this window's own
+    /// tree is three** — the split those three stand for is the index's,
+    /// and nothing here can move that copy's index — and **a feed of its
+    /// own** all the same: this window's status arrives on its own tick
+    /// whether or not anybody is reading another copy, and one shared feed
+    /// would take the other's rows off the screen every ten seconds.
+    pub carried_nav: Arc<Feed<CarriedStatusMsg>>,
     pub stash: Arc<Feed<super::StashList>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
     pub details: Arc<Feed<DetailsMsg>>,
@@ -220,7 +228,7 @@ impl Feeds {
     /// left out of one is a queue that goes on holding a repository
     /// nobody is reading — or one the memory report cannot name, which is
     /// exactly the queue that report exists to catch.
-    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 16] {
+    pub fn each(&self) -> [(&'static str, &dyn FeedOps); 17] {
         [
             ("tab", &*self.tab),
             ("graph", &*self.graph),
@@ -231,6 +239,7 @@ impl Feeds {
             ("status-nav-conflicts", &*self.status_nav_conflicts),
             ("status-nav-unstaged", &*self.status_nav_unstaged),
             ("status-nav-staged", &*self.status_nav_staged),
+            ("carried-nav", &*self.carried_nav),
             ("stash", &*self.stash),
             ("worktrees", &*self.worktrees),
             ("details", &*self.details),

@@ -152,6 +152,23 @@ impl Source {
             .count()
     }
 
+    /// The same status as one list of paths rather than four runs of
+    /// sides — what another working copy's changes are shown as
+    /// ([`Bucket::Whole`]).
+    pub(super) fn whole_files(status: platitude_core::status::WorkTreeStatus) -> Self {
+        let mut order: Vec<FileAt> = (0..status.items.len())
+            .map(|at| FileAt {
+                bucket: Bucket::Whole,
+                at: at as u32,
+            })
+            .collect();
+        // One heading, so the whole list is put in order at once — git
+        // hands its untracked entries over after its tracked ones, and
+        // left that way every new file sits at the foot of the list.
+        by_path(&mut order, &status);
+        Self::Files { status, order }
+    }
+
     pub(super) fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order = Vec::new();
         // The heading being filled, and where its rows began: buckets
@@ -209,6 +226,17 @@ pub(super) enum Bucket {
     Unstaged,
     Untracked,
     Staged,
+    /// Every changed path once, whichever sides it changed on — the one
+    /// list another working copy's changes are shown as.
+    ///
+    /// **The split is the index's, and the index is not this window's to
+    /// move.** Told apart here, a file edited and then edited again would
+    /// stand twice under two headings that name two halves of an act
+    /// nobody reading can take part in. What is left is the question a
+    /// reader of somebody else's copy is actually asking — what has that
+    /// copy got that its last commit has not — which is one row per path
+    /// (デザイン規約 §別の作業コピーを読む).
+    Whole,
 }
 
 impl Bucket {
@@ -228,7 +256,9 @@ impl Bucket {
     fn holds(self, item: &platitude_core::status::StatusItem) -> bool {
         use platitude_core::status::StatusItem;
         match (self, item) {
-            (Self::Conflicts, StatusItem::Unmerged { .. })
+            // Everything git named is a change this copy is holding.
+            (Self::Whole, _)
+            | (Self::Conflicts, StatusItem::Unmerged { .. })
             | (Self::Untracked, StatusItem::Untracked { .. }) => true,
             (Self::Unstaged, StatusItem::Tracked { unstaged, .. }) => *unstaged != '.',
             (Self::Staged, StatusItem::Tracked { staged, .. }) => *staged != '.',
@@ -236,13 +266,30 @@ impl Bucket {
         }
     }
 
-    /// What the row routes diffs and staging by.
+    /// What the row routes diffs and staging by. `Whole` has none of its
+    /// own — the side is the entry's ([`Self::routing_of`]).
     pub(super) fn routing(self) -> &'static str {
         match self {
             Self::Conflicts => "conflicts",
-            Self::Unstaged => "unstaged",
+            Self::Unstaged | Self::Whole => "unstaged",
             Self::Untracked => "untracked",
             Self::Staged => "staged",
+        }
+    }
+
+    /// The same for a row that stands for a whole path rather than one
+    /// side of it: **the side that holds the newest bytes**, which is the
+    /// index where anything is staged and the working tree otherwise. A
+    /// reader opening one of these rows is asking what the copy has, and
+    /// the staged side is the nearer answer to that.
+    pub(super) fn routing_of(self, item: &platitude_core::status::StatusItem) -> &'static str {
+        use platitude_core::status::StatusItem;
+        match (self, item) {
+            (Self::Whole, StatusItem::Unmerged { .. }) => "conflicts",
+            (Self::Whole, StatusItem::Untracked { .. }) => "untracked",
+            (Self::Whole, StatusItem::Tracked { staged, .. }) if *staged != '.' => "staged",
+            (Self::Whole, StatusItem::Tracked { .. }) => "unstaged",
+            _ => self.routing(),
         }
     }
 
@@ -253,6 +300,7 @@ impl Bucket {
             Self::Conflicts => "conflicts",
             Self::Unstaged | Self::Untracked => "unstaged",
             Self::Staged => "staged",
+            Self::Whole => "whole",
         }
     }
 }
@@ -322,6 +370,20 @@ pub(super) fn letters_of(item: &platitude_core::status::StatusItem, bucket: Buck
         (StatusItem::Tracked { unstaged, .. }, Bucket::Unstaged) => unstaged.to_string(),
         (StatusItem::Tracked { staged, .. }, Bucket::Staged) => staged.to_string(),
         (StatusItem::Untracked { .. }, _) => "?".to_string(),
+        // One letter for the whole path: **the index's where it has one**
+        // — a file added to the index and then edited again is an
+        // addition, because that is what this copy has that its last
+        // commit has not.
+        (
+            StatusItem::Tracked {
+                staged, unstaged, ..
+            },
+            Bucket::Whole,
+        ) => match *staged == '.' {
+            true => unstaged,
+            false => staged,
+        }
+        .to_string(),
         _ => String::new(),
     }
 }
@@ -351,6 +413,48 @@ mod tests {
                 bucket.routing(),
             );
         }
+    }
+
+    /// The one list another working copy's changes are shown as: every
+    /// path once, however many sides it changed on, and the letter the
+    /// index gave it where it gave one.
+    ///
+    /// **The fixture's `src/b.txt` is the whole point** — it is `MM`, a
+    /// row under each heading in this window's own pane. Left split here,
+    /// a reader of somebody else's copy would be shown two halves of an
+    /// act they cannot take part in.
+    #[test]
+    fn a_copys_list_holds_every_path_once() {
+        let status = pending();
+        let Source::Files { order, .. } = Source::whole_files(status.clone()) else {
+            panic!("whole_files builds a file source");
+        };
+        assert_eq!(
+            order.len(),
+            status.items.len(),
+            "one row per path, whatever sides it changed on"
+        );
+        let letters: Vec<String> = order
+            .iter()
+            .map(|at| {
+                let item = &status.items[at.at as usize];
+                letters_of(item, at.bucket)
+            })
+            .collect();
+        // In path order, which is what the one heading is sorted by:
+        // a.txt (conflicted), c.txt (untracked), d.txt (staged rename),
+        // src/b.txt (both sides — the index's letter wins).
+        assert_eq!(letters, vec!["UU", "?", "R", "M"]);
+        // And the side each row opens is the row's own, not the run's.
+        let sides: Vec<&str> = order
+            .iter()
+            .map(|at| at.bucket.routing_of(&status.items[at.at as usize]))
+            .collect();
+        assert_eq!(
+            sides,
+            vec!["conflicts", "untracked", "staged", "staged"],
+            "a path on both sides opens the index's, which holds the newer bytes"
+        );
     }
 
     /// The unstaged heading is two of git's answers at once — the tracked

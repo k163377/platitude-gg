@@ -91,6 +91,19 @@ impl DiffModel {
     }
 
     pub(super) fn begin_request(&mut self, title: String, target: DiffTarget) {
+        self.begin_request_in(String::new(), title, target);
+    }
+
+    /// The same, for a file in another working copy — `at` is that copy's
+    /// path and is empty for this window's own tree.
+    ///
+    /// **Part of what "the same file" means.** The path a copy's file is
+    /// named by is the path this window's own file of that name is named
+    /// by, so without the copy in it a step across from one to the other
+    /// would read as a re-read of one file: the rows already on screen
+    /// would be kept, and the reader's place in them with it
+    /// (`same_file`).
+    pub(super) fn begin_request_in(&mut self, at: String, title: String, target: DiffTarget) {
         let key = diff_key(&target);
         // Reading the same file again — which is what every partial write
         // ends with — keeps the rows that are on screen until the new ones
@@ -99,8 +112,9 @@ impl DiffModel {
         // size that reads as a flash rather than as an update. `drain`
         // swaps the whole list inside one call, so the exchange is never
         // seen half done.
-        let same_file = key == self.current_key;
+        let same_file = key == self.current_key && at == self.current_at;
         self.current_key = key;
+        self.current_at = at.clone();
         self.title = title;
         self.is_binary = false;
         self.fingerprint = String::new();
@@ -129,7 +143,10 @@ impl DiffModel {
             self.reset();
         }
         self.changed();
-        crate::hub::with_session(self.tab_id, |s| s.load_diff(target));
+        match at.is_empty() {
+            true => crate::hub::with_session(self.tab_id, |s| s.load_diff(target)),
+            false => crate::hub::with_session(self.tab_id, |s| s.load_carried_diff(at, target)),
+        }
     }
 
     /// Takes a line-ending notice apart into the pieces its sentence needs.
