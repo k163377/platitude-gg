@@ -101,16 +101,19 @@ jobs:
       # and the counting allocator (memprobe) are both off by default. The
       # arms those two switch out are compiled by the test line below,
       # which runs on the default set.
+      # --locked on every cargo here, as on the gate's (xtask::gate): a cargo
+      # that would rewrite Cargo.lock says so and fails, instead of checking
+      # a graph nobody committed.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
       # The shipped build is the one without the harness, and the only one
       # that can fail to load its QML at all: a type from platitude.auto
       # named in platitude.ui resolves in every other build here. It runs
       # offscreen — the command sets QT_QPA_PLATFORM itself, no display.
       - name: Shipped build loads its QML
-        run: cargo run -p xtask -- shipped
+        run: cargo run --locked -p xtask -- shipped
 
   # Everything (unit + real-git integration tests + offscreen app smoke)
   # must pass inside an empty network namespace: the app itself never
@@ -170,11 +173,11 @@ jobs:
       # without it stands until the timeout kills it.
       - name: Build test binaries and app
         run: |
-          cargo build -p platitude-app --features automation
-          cargo test --workspace --no-run
+          cargo build --locked -p platitude-app --features automation
+          cargo test --locked --workspace --no-run
       - name: Run tests in an empty network namespace
         run: |
-          mapfile -t BINS < <(cargo test --workspace --no-run --message-format=json \
+          mapfile -t BINS < <(cargo test --locked --workspace --no-run --message-format=json \
             | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true) | .executable | select(. != null)')
           echo "collected ${#BINS[@]} test binaries"
           sudo -E env "PATH=${PATH}" "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" \
@@ -200,3 +203,7 @@ jobs:
       # this job pulls the RustSec DB from github.com on top of the checkout.
       - name: cargo-deny (advisories / bans / licenses / sources)
         uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          # The action's default, plus --locked: the graph it checks is the
+          # committed lock, never one it resolved afresh.
+          arguments: --all-features --locked
