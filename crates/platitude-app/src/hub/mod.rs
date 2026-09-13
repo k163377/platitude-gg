@@ -34,6 +34,7 @@ mod msg;
 #[cfg(test)]
 mod plan_tests;
 mod prefs;
+mod saves;
 mod sink;
 mod tabs;
 
@@ -110,6 +111,11 @@ pub struct Hub {
     /// shutdown still see it. Finished handles are pruned where they are
     /// read (`Hub::writes_settled`).
     parked_writes: Vec<tokio::task::JoinHandle<()>>,
+    /// The configuration writes the application asked for outside any
+    /// session — the identity screens' — held until git has answered,
+    /// and seen by the quit gate and the shutdown the way the writes
+    /// above are (`hub::saves`).
+    saves: saves::Saves,
     store: Store,
     settings: Settings,
     /// What the window looks like now, and what is already on disk. The

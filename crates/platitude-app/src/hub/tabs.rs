@@ -289,13 +289,16 @@ impl Hub {
     }
 
     /// Whether nothing git was asked to write would outlast the window:
-    /// no open tab has a local write queued or running, and every write a
-    /// closed tab left running has ended. The quit gate reads this — the
-    /// window stays until it answers true (`Main.qml`), so the join in
-    /// [`Hub::shutdown`] normally has nothing left to wait for.
+    /// no open tab has a local write queued or running, every write a
+    /// closed tab left running has ended, and every identity save the
+    /// application asked for has answered (`hub::saves`). The quit gate
+    /// reads this — the window stays until it answers true (`Main.qml`),
+    /// so the join in [`Hub::shutdown`] normally has nothing left to
+    /// wait for.
     pub fn writes_settled(&mut self) -> bool {
         self.parked_writes.retain(|write| !write.is_finished());
         self.parked_writes.is_empty()
+            && self.saves.pending() == 0
             && self.tabs.values().all(|tab| {
                 tab.session
                     .as_ref()

@@ -214,6 +214,13 @@ impl GitExecutor {
         self
     }
 
+    /// The budget a command that named none runs on — `None` where the
+    /// stock budget was lifted ([`GitExecutor::without_stock_timeouts`]).
+    #[must_use]
+    pub fn stock_timeout(&self) -> Option<Duration> {
+        self.stock_timeout
+    }
+
     /// Returns an executor with environment defaults applied to every Git
     /// subprocess. Per-command [`GitCommand::env`] values take precedence.
     pub fn with_env<I, K, V>(mut self, vars: I) -> Self

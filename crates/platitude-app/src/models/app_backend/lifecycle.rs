@@ -134,12 +134,15 @@ impl AppBackend {
         self.identity_unsaved = false;
         self.identity_changed();
         let feed = Arc::clone(&self.check_feed);
+        // Held by the hub rather than spawned bare: the screen can go and
+        // the window cannot close over a `git config` half way through
+        // its pair (`hub::saves`).
         let spawned = Hub::with(|hub| {
-            let Some(handle) = hub.runtime_handle() else {
-                return false;
-            };
-            let executor = hub.executor();
-            handle.spawn(async move {
+            // On the save's handle, not the reads': a `git config` is a
+            // local write, waited out rather than killed at a budget
+            // (`Hub::save_executor`).
+            let executor = hub.save_executor();
+            hub.spawn_save(async move {
                 use platitude_core::identity::{self, ConfigScope};
                 let cancel = tokio_util::sync::CancellationToken::new();
                 let workdir = app_workdir();
@@ -153,8 +156,7 @@ impl AppBackend {
                 )
                 .await;
                 feed.push(AppMsg::IdentitySaved(written.map_err(|e| e.to_string())));
-            });
-            true
+            })
         })
         .unwrap_or(false);
         if !spawned {

@@ -36,6 +36,7 @@ impl Hub {
                 tabs: HashMap::new(),
                 next_tab_id: 0,
                 parked_writes: Vec::new(),
+                saves: saves::Saves::default(),
                 store,
                 settings,
                 saved_state: state.clone(),
@@ -73,6 +74,10 @@ impl Hub {
             hub.flush_state();
             crate::harness::station(crate::harness::Station::TabsClosing);
             let mut writes = std::mem::take(&mut hub.parked_writes);
+            // The identity saves beside the sessions' writes: a `git
+            // config` half way through its pair is the one thing worse
+            // than either whole (`hub::saves`).
+            writes.extend(hub.saves.take_all());
             for (_, tab) in hub.tabs.drain() {
                 if let Some(session) = tab.session {
                     session.close();
@@ -110,8 +115,33 @@ impl Hub {
         self.runtime.as_ref().map(|r| r.handle().clone())
     }
 
+    /// Runs `save` — a configuration write the application asked for
+    /// outside any session — and holds it until it ends, so the screen
+    /// that asked can go and the window cannot close over it
+    /// (`hub::saves`). `false` where there is no runtime to run it on.
+    pub fn spawn_save(
+        &mut self,
+        save: impl std::future::Future<Output = ()> + Send + 'static,
+    ) -> bool {
+        let Some(handle) = self.runtime_handle() else {
+            return false;
+        };
+        self.saves.hold(handle.spawn(save));
+        true
+    }
+
     pub fn executor(&self) -> GitExecutor {
         self.executor.clone()
+    }
+
+    /// The handle a configuration save runs on: the application's git
+    /// with the stock time budget lifted, which is the local write
+    /// lane's own rule (`operation::Lane::Local`) — a `git config` is a
+    /// local write, waited out and never killed, since the one thing
+    /// worse than either half of the pair is one half landed
+    /// (`hub::saves`).
+    pub fn save_executor(&self) -> GitExecutor {
+        saves::executor_for(&self.executor)
     }
 
     /// Where the git this run spawns actually is. The settings screen
