@@ -33,6 +33,9 @@ impl GraphModel {
         self.marks.clear();
         self.parent_oids.clear();
         self.index.clear();
+        self.carried.clear();
+        self.carried_names.clear();
+        self.carried_revision = self.carried_revision.wrapping_add(1);
     }
 
     /// Takes the marks off a chunk of walked rows, in the rows' order.
@@ -45,6 +48,22 @@ impl GraphModel {
             // is answered as the nowhere id the WIP row carries: no range
             // ends on it and nothing names it as a parent.
             let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
+            // The rows another copy draws, filed by the index the delegate
+            // will ask with. All six written whatever they are: empty is
+            // what says a row is not one of theirs (`carried_tally`).
+            if let Some(carried) = &row.carried {
+                let k = &carried.kinds;
+                self.carried.insert(
+                    self.marks.len(),
+                    format!(
+                        "{},{},{},{},{},{}",
+                        k.added, k.modified, k.deleted, k.renamed, k.copied, k.conflicted
+                    ),
+                );
+                self.carried_names
+                    .insert(self.marks.len(), carried.name.to_string());
+                self.carried_revision = self.carried_revision.wrapping_add(1);
+            }
             self.parent_oids.extend(row.parents.iter().copied());
             self.index.push((oid, self.marks.len() as u32));
             self.marks.push(RowMark {

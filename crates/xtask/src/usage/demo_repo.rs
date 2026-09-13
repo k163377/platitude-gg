@@ -143,6 +143,12 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   report: ordinary, detached, locked with a reason,
                   locked without one, one whose folder is gone, and one
                   whose folder and branch both run past the pane
+        carried   other working copies holding uncommitted work, so the
+                  rows they draw have something to say: one standing
+                  where this window stands (its row goes above the stash
+                  on the same commit, holding an untracked file), one on
+                  a branch further down holding a staged edit, and one
+                  clean (no row at all)
         worktree-detached  one linked copy, detached, with a commit made
                   in it: the one shape where a working copy stands
                   somewhere no branch, tag or remote reaches (nav-jump)

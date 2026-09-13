@@ -441,6 +441,27 @@ impl RepoTab {
         self.with_session(|s| s.refresh_poll());
     }
 
+    /// The worktree listing, on the page's tick beside the reads above.
+    /// One process and nothing else (measured, 23ms), which is what lets
+    /// it ride a tick the `status` of another copy may not: what the
+    /// listing feeds is the WORKTREES rows and the mark saying a branch
+    /// is somebody else's, and a window kept open beside another copy
+    /// showed both of those frozen until it was clicked.
+    #[qslot]
+    fn refresh_worktrees(&mut self) {
+        self.with_session(|s| {
+            s.refresh_worktrees();
+        });
+    }
+
+    /// What the other copies are carrying, on a slower tick of its own —
+    /// a whole `status` per copy, so it is neither on the page's tick nor
+    /// on the worktree pass (`RepoSession::refresh_carried`).
+    #[qslot]
+    fn refresh_carried(&mut self) {
+        self.with_session(|s| s.refresh_carried());
+    }
+
     /// The other tick, run several times a second while a write that
     /// replays is out: how far it has got and nothing else. Two file reads
     /// and no process, which is what lets it be that often — the tick

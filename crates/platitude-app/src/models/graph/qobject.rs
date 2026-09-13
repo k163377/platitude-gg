@@ -19,6 +19,11 @@ impl GraphModel {
     // them until the walk that follows the delete lands.
     qproperty!("goneChips", Member = gone_chips, Notify = stats_changed);
     qproperty!("rowTotal", Member = row_total, Notify = stats_changed);
+    qproperty!(
+        "carriedRevision",
+        Member = carried_revision,
+        Notify = stats_changed
+    );
     qproperty!("walkedTotal", Member = walked_total, Notify = stats_changed);
     qproperty!("maxLanes", Member = max_lanes, Notify = stats_changed);
     qproperty!(
@@ -268,6 +273,38 @@ impl GraphModel {
     #[qslot]
     fn newest_commit_row(&self) -> i32 {
         super::item::newest_commit_row(&self.rows).map_or(-1, |i| i as i32)
+    }
+
+    /// What another working copy's uncommitted row says beside its words:
+    /// its six tallies, comma-separated in the order the row draws them,
+    /// or empty for every other row.
+    ///
+    /// **Off the row by index, not off the view.** The view has one set
+    /// of tallies and they are this window's own; a row that read them
+    /// there would say this tree's numbers on somebody else's row
+    /// (observed, three rows saying one set). And not a field on the item
+    /// either — fifteen is the ceiling the model macro allows, and every
+    /// one of them is spent (`GraphRowItem`). **Empty is the answer that
+    /// says "not one of those rows"**, so a carried row always writes all
+    /// six even when a number is zero.
+    #[qslot]
+    fn carried_tally(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.carried.get(&row))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The name of the working copy a row is about, or empty where the
+    /// row is not one of theirs — what the read-only gestures branch on.
+    #[qslot]
+    fn carried_name(&self, row: i32) -> String {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.carried_names.get(&row))
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Reflog selector when the commit is a stash row (empty otherwise).

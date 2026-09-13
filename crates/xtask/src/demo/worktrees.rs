@@ -12,6 +12,57 @@ use super::repo::DemoRepo;
 /// checked out over in `topic`, and git refuses both `switch` and
 /// `branch --delete` for a branch another worktree holds (measured), so the
 /// BRANCHES row for it is the one the menu has to answer for.
+/// Other working copies with something uncommitted in them, so the rows
+/// they draw on the graph have something to say.
+///
+/// **Its own preset rather than dirt added to `worktrees`.** Those copies
+/// are clean on purpose — the verbs that use them are about the rows in
+/// the sidebar, and a carried row appearing in the graph would move every
+/// row number they address by.
+///
+/// Three copies, one of each shape the row has to draw: one standing
+/// where this window stands (its row goes above the stash on the same
+/// commit), one on a branch of its own further down the history, and one
+/// clean (no row at all). The dirt differs so the tallies cannot all be
+/// the same number: untracked only, and one staged edit.
+pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository whose other copies are holding work.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["switch", "--create", "feature/topic-a"])?;
+    repo.commit("src/topic.txt", "topic draft\n", "feat: draft the topic")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
+
+    // A stash on HEAD: the rows of the copies standing here go above it.
+    repo.write("scratch.txt", "experiment\n")?;
+    repo.git(&["stash", "push", "--include-untracked", "-m", "experiment"])?;
+
+    // Standing where this window stands, holding an untracked file.
+    repo.git(&["worktree", "add", "-b", "side/here", "../here"])?;
+    let here = repo.root.join("here");
+    std::fs::write(here.join("notes.txt"), "jotted over here\n")
+        .map_err(|e| format!("writing notes.txt: {e}"))?;
+
+    // Further down the history, holding one staged edit.
+    repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
+    let topic = repo.root.join("topic");
+    std::fs::write(topic.join("src/topic.txt"), "topic redrafted\n")
+        .map_err(|e| format!("writing topic.txt: {e}"))?;
+    repo.git_at(&topic, &["add", "--", "src/topic.txt"])?;
+
+    // Clean: a copy with nothing to say draws no row at all.
+    repo.git(&["worktree", "add", "-b", "side/quiet", "../quiet"])?;
+
+    // This window's own tree, so its row stands too and the two can be
+    // told apart by the name only one of them wears.
+    repo.write("docs/guide.md", "guide v2\n")?;
+    Ok(())
+}
+
 pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",

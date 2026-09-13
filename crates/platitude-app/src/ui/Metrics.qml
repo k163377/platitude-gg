@@ -69,6 +69,14 @@ QtObject {
     // reference-sized repository that read is most of a second (ci/baseline/poll-cost-windows-x64.md) — the
     // measurement is what set this interval, so it is not shortened to feel more responsive.
     readonly property int pollIntervalMs: 10000
+    // What the *other* working copies are carrying, on a tick of its own. **One `git status` per copy** — the same
+    // read as above and as expensive, times however many copies there are — so it may not ride the interval above;
+    // and a window kept open beside another copy is exactly what those rows are for, so it may not wait for somebody
+    // to click the window either. Three ticks of the one above, to start from: the wall clock behind the number is
+    // still to be measured (ci/baseline/perf-windows-x64.md §未取得), and a pass that outlasts this drops the next
+    // tick rather than stacking (`RepoSession::refresh_carried`). **The listing itself is not this** — that is one
+    // process and 23ms of it, and it rides the tick above.
+    readonly property int copiesIntervalMs: 30000
     // The badge's `n/m` while a replay runs, on a tick of its own. It reads two progress files out of the git
     // directory and **starts no process**, which is why the cost above does not apply to it. Faster than this and
     // what is hit is not the read but the notify side: the work tree's model has one `changed()`, and that one

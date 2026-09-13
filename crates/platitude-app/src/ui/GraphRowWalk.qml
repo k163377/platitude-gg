@@ -20,6 +20,13 @@ Item {
     /// A step came to rest on a row and it is time to read it.
     signal activated(string oidHex)
 
+    /// Whether that row is another working copy's uncommitted one — the rows the walk steps over. Asked of the model
+    /// rather than of the delegate: a row off screen has no delegate to ask, and the walk reaches past the viewport
+    /// (see `revealStep`).
+    function carriedAt(row) {
+        return walk.graphModel ? walk.graphModel.carriedName(row) !== "" : false
+    }
+
     /// Moves the selection one row (`delta` = ∓1) and brings it into view; answers whether it moved. The keys and the
     /// automation hook both come through here — a headless run cannot inject a keystroke, so the step has to be
     /// callable as well as pressable (verify-ui).
@@ -37,7 +44,16 @@ Item {
                 || walk.view.namingOid !== "" || walk.view.count === 0)
             return false
         const from = walk.view.currentIndex
-        const row = from < 0 ? 0 : Math.max(0, Math.min(from + delta, walk.view.count - 1))
+        let row = from < 0 ? 0 : Math.max(0, Math.min(from + delta, walk.view.count - 1))
+        // **Another working copy's row is stepped over, not onto.** It answers to nothing — no selection, no pane —
+        // so a current row parked there would be a highlight nothing could move off by doing anything
+        // (P3-確認事項 §別 worktree の未コミット行). Walking on in the same direction, which is what a reader asked
+        // for; a run of them at the end of the list leaves the current row where it was.
+        const step = delta < 0 ? -1 : 1
+        while (row > 0 && row < walk.view.count - 1 && walk.carriedAt(row))
+            row += step
+        if (walk.carriedAt(row))
+            return false
         if (row === from)
             return false
         // Asked before the move: whether there was a reading position to keep. A step off the edge is one row short of

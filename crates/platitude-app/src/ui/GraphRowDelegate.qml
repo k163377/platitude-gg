@@ -51,6 +51,45 @@ Item {
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
     // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
+    // **Whose uncommitted row this is.** Every one of them carries the all-zero id — git's own "there is no object
+    // here", which is true of all of them — so what tells two apart is the working copy each is about, and the one
+    // this window is open on is the one with nothing here. Empty on every commit and on this window's own row.
+    //
+    // **`carriedRevision` is touched on purpose** (both of these): what answers is a slot call, and a slot call is
+    // not made again because the map behind it was rewritten. Without the dependency a row spliced into a rebuilt
+    // graph keeps the answer it was given for whatever stood at its index before — observed, this window's own row
+    // wearing another copy's tallies.
+    readonly property string carriedName: {
+        const view = rowItem.ListView.view
+        if (!rowItem.isWip || !view || !view.model)
+            return ""
+        view.model.carriedRevision
+        return view.model.carriedName(rowItem.index)
+    }
+    // A row about a copy this window is not open on. **Read-only**: it opens no pane, takes no selection, and offers
+    // no gesture — the pane that stages and commits is opened by a WIP row's selection, so a row that cannot be
+    // selected never puts it in front of a tree it does not belong to (P3-確認事項 §別 worktree の未コミット行).
+    readonly property bool carried: rowItem.carriedName !== ""
+    // Its six tallies, packed by `GraphModel::carried_tally` in the order below.
+    readonly property var carriedTally: {
+        if (!rowItem.carried)
+            return null
+        rowItem.ListView.view.model.carriedRevision
+        const packed = rowItem.ListView.view.model.carriedTally(rowItem.index)
+        return packed === "" ? null : packed.split(",").map(n => parseInt(n, 10))
+    }
+    // The six an uncommitted row says, whosever it is: another copy's come off its row, and this window's off the
+    // view — which holds one set, and it is this window's tree's. Ordered added, modified, deleted, renamed, copied,
+    // conflicted, the order both sides are written in.
+    readonly property var shownTally: {
+        if (rowItem.carriedTally)
+            return rowItem.carriedTally
+        const view = rowItem.ListView.view
+        if (!view)
+            return [0, 0, 0, 0, 0, 0]
+        return [view.wipAdded, view.wipModified, view.wipDeleted,
+                view.wipRenamed, view.wipCopied, view.wipConflicted]
+    }
     // Chip records are separated by U+001F (see encode.rs), and arrive in the order the chip reads them out: HEAD →
     // local → remote → tag. One card for the row, so a commit that is both a branch tip and a release shows the branch
     // — the tag is a sheet behind it (`RefChipStack`), read whole in the hover card. A chip the window has already
@@ -230,12 +269,12 @@ Item {
                 visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm
                 sourceComponent: WipTallyRow {
-                    conflicted: rowItem.ListView.view ? rowItem.ListView.view.wipConflicted : 0
-                    added: rowItem.ListView.view ? rowItem.ListView.view.wipAdded : 0
-                    modified: rowItem.ListView.view ? rowItem.ListView.view.wipModified : 0
-                    deleted: rowItem.ListView.view ? rowItem.ListView.view.wipDeleted : 0
-                    renamed: rowItem.ListView.view ? rowItem.ListView.view.wipRenamed : 0
-                    copied: rowItem.ListView.view ? rowItem.ListView.view.wipCopied : 0
+                    added: rowItem.shownTally[0]
+                    modified: rowItem.shownTally[1]
+                    deleted: rowItem.shownTally[2]
+                    renamed: rowItem.shownTally[3]
+                    copied: rowItem.shownTally[4]
+                    conflicted: rowItem.shownTally[5]
                 }
             }
             Item {
@@ -294,7 +333,10 @@ Item {
     /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
     /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
     /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
-    readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
+    /// **Never on another copy's row**: a band under the pointer promises the row answers to it, and this one does
+    /// nothing at all (P3-確認事項 §別 worktree の未コミット行).
+    readonly property bool lit: !rowItem.carried
+                                && (rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip)
 
     // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
     // opening where it lands flashes one card out and back per row (規約 §hover のツールチップ). **Only one of the two is
@@ -330,6 +372,10 @@ Item {
         // reader did not ask for, half a second into a wait they are watching (see `renameWaiting`).
         if (!view || rowItem.renameWaiting)
             return
+        // Another copy's row has nothing behind it: the card would come up empty, with a stamp of `1970-01-01`
+        // (photographed). An empty card is worse than none (P3-確認事項 §別 worktree の未コミット行).
+        if (rowItem.carried)
+            return
         if (rowItem.pointedPart === "chip")
             view.chipExpandRequested(rowItem.oid_hex, rowItem.index,
                                      chipColumn.chipItem.records, chipColumn.chipItem)
@@ -353,6 +399,10 @@ Item {
     /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
     /// click in at the row itself rather than at a copy of what the row would have decided.
     function leftClick(held, modifiers) {
+        // Another copy's row answers to nothing: no selection, so the pane that stages and commits is never opened
+        // in front of a tree this window is not on (P3-確認事項 §別 worktree の未コミット行).
+        if (rowItem.carried)
+            return
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
         // **A click that is building a choice is not a click on a name.** The gesture that opens the name box is two
         // plain clicks spaced apart (`ReclickGesture`); a held Ctrl or Shift says the hand is picking commits, and
@@ -377,6 +427,9 @@ Item {
     /// write that lands ticks later, so nothing on screen says at the moment of the press whether the row took the
     /// gesture or turned it down.
     function doubleClick(modifiers) {
+        // As above — and this one is the door to `switch`, which is the last thing another copy's row may offer.
+        if (rowItem.carried)
+            return
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
         // **A held double-click is two selection presses, not a double-click** (デザイン規約 §複数のコミットを選ぶ).
         // Qt hands the pair over as a double whatever the hand was holding, and the modifier with it — measured,

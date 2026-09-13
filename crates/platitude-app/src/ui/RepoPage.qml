@@ -2223,6 +2223,15 @@ Item {
         running: page.onScreen && page.visible && repoTab.state === "open"
         onTriggered: page.pollRepo()
     }
+    // What the other working copies are carrying, on a tick of its own because it costs a `status` each (see the
+    // token). Same conditions as the tick above: being on screen is what drives it, since a window kept open beside
+    // another copy is what these rows are for.
+    Timer {
+        interval: Metrics.copiesIntervalMs
+        repeat: true
+        running: page.onScreen && page.visible && repoTab.state === "open"
+        onTriggered: repoTab.refreshCarried()
+    }
     // The badge counting a running replay out. Its own tick because it asks its own question: two file reads off the
     // git directory, no process, so it can run at a rate a number is worth watching at — where the tick above carries
     // a whole `git status` and is ten seconds apart for it (デザイン規約 §進行中・長押しの定数, and the measured cost
@@ -2240,6 +2249,9 @@ Item {
     /// different questions — refs and status say what the tree is, the diff says what the file says.
     function pollRepo() {
         repoTab.refreshPoll()
+        // The worktree listing rides this tick: one process, and what it feeds — the WORKTREES rows, the mark saying
+        // a branch is another copy's — was frozen until the window was clicked without it.
+        repoTab.refreshWorktrees()
         page.pollDiff()
     }
 

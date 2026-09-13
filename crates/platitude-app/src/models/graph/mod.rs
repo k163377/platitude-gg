@@ -31,6 +31,22 @@ pub struct GraphModel {
     marks: Vec<RowMark>,
     /// The parent ids the spans in `marks` point into, flattened.
     parent_oids: Vec<Oid>,
+    /// The rows another working copy's uncommitted work draws, by row
+    /// index: its six tallies packed for the delegate, and the copy's
+    /// name beside them. **A map rather than two more fields on the
+    /// item** — fifteen is the ceiling the model macro allows and all of
+    /// them are spent, and these rows are a handful where the window is
+    /// thousands (`GraphModel::carried_tally`).
+    carried: std::collections::HashMap<usize, String>,
+    carried_names: std::collections::HashMap<usize, String>,
+    /// Bumped every time those two are written. **A delegate's answer
+    /// about them is a slot call, and a slot call is not made again
+    /// because the map behind it was rewritten** — a row spliced into a
+    /// rebuilt graph keeps the answer it was given for whatever stood at
+    /// its index before (observed: this window's own row wearing another
+    /// copy's tallies). The delegate reads this beside the call, so the
+    /// binding comes back (`carriedRevision`).
+    carried_revision: i32,
     /// Every drawn row by its id, in id order — how a row is found from
     /// outside (`marks::row_at`): the pin's row on every drain, a
     /// sidebar jump, a menu's question about a commit. A binary search
