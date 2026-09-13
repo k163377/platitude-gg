@@ -64,7 +64,13 @@ pub(crate) fn app_exe(
         // number is still compiling (`crate::budget::watched`).
         let status = crate::budget::watched(
             std::process::Command::new("cargo")
-                .args(["build", "--release", "--features", HARNESS_FEATURE])
+                .args([
+                    "build",
+                    "--locked",
+                    "--release",
+                    "--features",
+                    HARNESS_FEATURE,
+                ])
                 .args(extra)
                 .current_dir(root)
                 .env("PATH", path),
@@ -103,7 +109,7 @@ pub(crate) fn shipped_exe(
         let _busy = crate::still::busy(root, "cargo build --profile shipped")?;
         let status = crate::budget::watched(
             std::process::Command::new("cargo")
-                .args(["build", "--profile", SHIPPED_PROFILE])
+                .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
                 .current_dir(root)
                 .env("PATH", path),
         )

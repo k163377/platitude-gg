@@ -1045,7 +1045,7 @@ fn runner(
     // build lock with the gate's own lock held, and the next gate here
     // would be refused by a live pid saying nothing.
     let build_log = logs.join(format!("{RUNNER}build-{}.log", std::process::id()));
-    let build = ["cargo", "build", "-p", "xtask"].map(String::from);
+    let build = ["cargo", "build", "--locked", "-p", "xtask"].map(String::from);
     match crate::check::run_step(dir, &build, &build_log, &room) {
         Ok(true) => {}
         Ok(false) => {
@@ -1088,11 +1088,11 @@ fn runner(
 }
 
 /// The command as it is started: a step that is one of this program's
-/// own verbs — `cargo run -p xtask -- <verb>…`, which the plan keeps
-/// spelling so that a stamp's key names one line on every machine —
-/// starts from the runner copy, and any other step as spelled.
+/// own verbs — `cargo run --locked -p xtask -- <verb>…`, which the plan
+/// keeps spelling so that a stamp's key names one line on every machine
+/// — starts from the runner copy, and any other step as spelled.
 fn launched(command: &[String], runner: Option<&Path>) -> Vec<String> {
-    const THROUGH_CARGO: [&str; 5] = ["cargo", "run", "-p", "xtask", "--"];
+    const THROUGH_CARGO: [&str; 6] = ["cargo", "run", "--locked", "-p", "xtask", "--"];
     let through_cargo = command.len() >= THROUGH_CARGO.len()
         && command
             .iter()
@@ -1163,6 +1163,7 @@ mod tests {
                 &words(&[
                     "cargo",
                     "run",
+                    "--locked",
                     "-p",
                     "xtask",
                     "--",
@@ -1179,14 +1180,18 @@ mod tests {
                 "--no-build"
             ])
         );
-        let test = words(&["cargo", "test", "-p", "xtask", "--lib"]);
+        let test = words(&["cargo", "test", "--locked", "-p", "xtask", "--lib"]);
         assert_eq!(launched(&test, Some(runner)), test);
-        let verb = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
+        let verb = words(&["cargo", "run", "--locked", "-p", "xtask", "--", "structure"]);
         assert_eq!(
             launched(&verb, None),
             verb,
             "without a copy the plan's spelling stands"
         );
+        // An older spelling, without the lock, is not this runner's line
+        // any more: it is started as spelled, and cargo answers for it.
+        let unlocked = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
+        assert_eq!(launched(&unlocked, Some(runner)), unlocked);
     }
 
     #[test]

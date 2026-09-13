@@ -411,9 +411,12 @@ fn words(line: &[&str]) -> Vec<String> {
 }
 
 /// `cargo xtask <line>`, spelled unquieted the way `check` does so that
-/// cargo's build-lock line reaches the log.
+/// cargo's build-lock line reaches the log — and `--locked`, like every
+/// cargo the gate starts: a cargo that would rewrite `Cargo.lock` says
+/// so and stops, instead of leaving a changed lock under a green
+/// (internal-docs/反映前テストの機械化.md §gate).
 fn xtask(line: &[&str]) -> Vec<String> {
-    let mut command = words(&["cargo", "run", "-p", "xtask", "--"]);
+    let mut command = words(&["cargo", "run", "--locked", "-p", "xtask", "--"]);
     command.extend(words(line));
     command
 }
@@ -749,7 +752,7 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
     let mut steps = Vec::new();
     for package in sorted.rust_in.keys() {
         let crate_dir = format!("crates/{package}");
-        let mut clippy = words(&["cargo", "clippy", "-p", package]);
+        let mut clippy = words(&["cargo", "clippy", "--locked", "-p", package]);
         clippy.extend(words(&[
             "--all-targets",
             "--all-features",
@@ -785,7 +788,7 @@ fn unit_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
         inputs.extend(cargo_inputs(&[]));
         let all = filters.contains("");
         let target = unit_target(package);
-        let mut command = words(&["cargo", "test", "-p", package, target[0]]);
+        let mut command = words(&["cargo", "test", "--locked", "-p", package, target[0]]);
         if !target[1].is_empty() {
             command.push(target[1].to_string());
         }
@@ -814,7 +817,7 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
         let mut inputs: Vec<String> = g.inputs(files).into_iter().collect();
         inputs.extend(cargo_inputs(&[]));
         let all = filters.contains("");
-        let mut command = words(&["cargo", "test", "-p", package, "--test", binary]);
+        let mut command = words(&["cargo", "test", "--locked", "-p", package, "--test", binary]);
         if !all {
             command.push("--".to_string());
             command.extend(filters.iter().cloned());
@@ -1122,6 +1125,19 @@ pub(crate) fn describe(plan: &Plan) -> String {
 #[cfg(test)]
 mod tests {
     use super::parse_ls_tree;
+
+    /// The runner's own steps are spelled `--locked`, like every cargo
+    /// the gate starts: a cargo that would rewrite the lock says so and
+    /// stops, instead of leaving a changed lock under a green. The
+    /// spelling is also a stamp's key, so a change here re-runs every
+    /// step once (`gate::stamp`).
+    #[test]
+    fn the_runners_steps_are_spelled_locked() {
+        assert_eq!(
+            super::xtask(&["structure"]),
+            ["cargo", "run", "--locked", "-p", "xtask", "--", "structure"]
+        );
+    }
 
     /// The listing is read the way `-z` writes it: trees and blobs alike,
     /// a path spelled whole however it is named, nothing for a line that

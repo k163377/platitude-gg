@@ -66,8 +66,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // side's own build lock would then sit with an empty log until the
     // silence ceiling calls it a hang. Spelled out unquieted here, so the
     // lock line (and the compile lines, which are liveness) reach the log.
+    // `--locked` on every cargo here, as on the gate's: a cargo that would
+    // rewrite `Cargo.lock` says so and stops (反映前テストの機械化.md §gate).
     let xtask = |line: &[&str]| {
-        let mut step = words(&["cargo", "run", "-p", "xtask", "--"]);
+        let mut step = words(&["cargo", "run", "--locked", "-p", "xtask", "--"]);
         step.extend(line.iter().map(|w| (*w).to_string()));
         step
     };
@@ -98,6 +100,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         words(&[
             "cargo",
             "clippy",
+            "--locked",
             "--workspace",
             "--all-targets",
             "--all-features",
@@ -105,7 +108,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "-D",
             "warnings",
         ]),
-        words(&["cargo", "test", "--workspace"]),
+        words(&["cargo", "test", "--locked", "--workspace"]),
         // Before the verbs, and for the reason they cannot answer for it:
         // every one of them builds the app *with* the harness, and the
         // build without it is the only one that can fail to load its QML
@@ -114,7 +117,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         xtask(&["shipped"]),
     ];
     let mut linux_steps: Vec<Vec<String>> = vec![
-        xtask(&["linux", "test", "-p", "platitude-core"]),
+        xtask(&["linux", "test", "--locked", "-p", "platitude-core"]),
         // The other Qt build: these ask when a Canvas has painted, and
         // the two stacks paint through different software.
         xtask(&["linux", "qmltest"]),
@@ -130,6 +133,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         xtask(&[
             "linux",
             "clippy",
+            "--locked",
             "--workspace",
             "--all-targets",
             "--all-features",

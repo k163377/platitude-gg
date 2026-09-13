@@ -28,9 +28,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     installed()?;
     let root = crate::tree::workspace_root();
+    // `--locked`: the graph it checks is the committed lock, never one it
+    // resolved afresh — a stale lock is its own red, not a policy pass.
     let status = Command::new("cargo")
-        .arg("deny")
-        .arg("check")
+        .args(["deny", "--locked", "check"])
         .args(OFFLINE_CHECKS)
         .current_dir(&root)
         .status()

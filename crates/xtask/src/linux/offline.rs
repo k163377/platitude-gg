@@ -36,6 +36,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     let build = [
         "cargo",
         "build",
+        "--locked",
         "-p",
         "platitude-app",
         "--features",
@@ -48,7 +49,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     // is the one whose compile output a reader watches, and the listing
     // that follows it is then a re-check that prints nothing.
     println!("building the test binaries…");
-    let tests = ["cargo", "test", "--workspace", "--no-run"].map(String::from);
+    let tests = ["cargo", "test", "--locked", "--workspace", "--no-run"].map(String::from);
     in_container(root, &app, &tests, false)?;
 
     let binaries = test_binaries(root, &app)?;
@@ -94,6 +95,7 @@ fn test_binaries(root: &Path, tag: &str) -> Result<Vec<String>, String> {
     cmd.arg(tag).args([
         "cargo",
         "test",
+        "--locked",
         "--workspace",
         "--no-run",
         "--message-format=json",

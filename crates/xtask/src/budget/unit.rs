@@ -51,9 +51,10 @@ pub(crate) fn demand(jobs: usize) -> u32 {
 pub(crate) fn weight_of(command: &[String], no_build: bool) -> u32 {
     let mut words = command.iter().map(String::as_str);
     let first = words.next().unwrap_or_default();
-    // The plan spells this runner's steps `cargo run -p xtask -- <verb>`
-    // and the gate starts them from a copy of the built runner
-    // (`gate::launched`), so the verb is what follows either spelling.
+    // The plan spells this runner's steps `cargo run --locked -p xtask --
+    // <verb>` and the gate starts them from a copy of the built runner
+    // (`gate::launched`), so the verb is what follows either spelling —
+    // found by the `--`, so the flags between are not counted.
     let verb = if first == "cargo" {
         match words.next().unwrap_or_default() {
             "run" => words.find(|word| *word == "--").and(words.next()),
