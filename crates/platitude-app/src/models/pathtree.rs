@@ -31,9 +31,16 @@ impl<T> DirNode<T> {
     /// `make` is handed how many bytes of the path the folders above the
     /// row already spell — which is where the row's own name begins, and
     /// how far a rename's source is cut back beside it.
+    ///
+    /// **A path that ends in `/` is itself the leaf.** git spells a
+    /// directory it will not open that way — a repository of its own
+    /// inside the working copy, whose files belong to that repository and
+    /// so stay one entry even under `-uall` (`status::load`). The last `/`
+    /// therefore stays on the row's own name rather than opening a folder
+    /// with a nameless row under it.
     pub(super) fn insert(&mut self, path: &str, make: impl FnOnce(usize) -> T) {
         let mut node = self;
-        let mut rest = path;
+        let mut rest = path.strip_suffix('/').unwrap_or(path);
         let mut from = 0;
         while let Some((dir, tail)) = rest.split_once('/') {
             node = node.dirs.entry(dir.to_string()).or_default();
@@ -136,6 +143,18 @@ mod tests {
             drawn(&tree(&["a/here.txt", "a/b/deeper.txt"]), 0),
             vec!["a/", "  b/", "    deeper.txt", "  here.txt"]
         );
+    }
+
+    #[test]
+    fn a_directory_git_would_not_open_is_a_row_and_not_a_shelf() {
+        // What git answers with for a repository of its own sitting in the
+        // working copy: the one entry `vendor/nest/`, beside the files of
+        // the directory it shares. The row is that directory.
+        assert_eq!(
+            drawn(&tree(&["vendor/nest/", "vendor/plain.txt"]), 0),
+            vec!["vendor/", "  nest/", "  plain.txt"]
+        );
+        assert_eq!(drawn(&tree(&["nest/"]), 0), vec!["nest/"]);
     }
 
     #[test]

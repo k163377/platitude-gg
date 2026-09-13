@@ -217,4 +217,35 @@ mod tests {
         assert_eq!(says(&model, 1, Role::Change), FOLDED);
         assert_eq!(says(&model, 2, Role::Name), "c.txt");
     }
+
+    /// git will not open a repository sitting in the working copy: what it
+    /// hands over is the one entry `vendor/nest/`, whatever it was asked
+    /// about untracked files (`status_integration`). That entry is a row —
+    /// a folder row with a nameless row under it would offer to open what
+    /// there is nothing to put in.
+    #[test]
+    fn a_directory_git_would_not_open_is_one_row() {
+        use platitude_core::status::{StatusItem, WorkTreeStatus};
+        let untracked = |path: &str| StatusItem::Untracked {
+            path: path.to_string(),
+        };
+        let mut model = section(
+            "worktree",
+            Source::files(WorkTreeStatus {
+                items: vec![untracked("vendor/nest/"), untracked("vendor/plain.txt")],
+                ..Default::default()
+            }),
+        );
+        model.tree_view = true;
+        model.arrange();
+
+        assert_eq!(model.shown_rows(), 3);
+        assert_eq!(says(&model, 0, Role::Name), "vendor");
+        assert!(flags(&model, 0, Role::Folder));
+        assert_eq!(says(&model, 1, Role::Name), "nest/");
+        assert!(!flags(&model, 1, Role::Folder));
+        assert_eq!(says(&model, 1, Role::Full), "vendor/nest/");
+        assert_eq!(depth_of(&model, 1), 1);
+        assert_eq!(says(&model, 2, Role::Name), "plain.txt");
+    }
 }
