@@ -212,10 +212,12 @@ pub struct RepoSession {
     /// can outlast its interval, and stacking them is what the cap is
     /// there to prevent.
     pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
-    /// Whether the other copies are read at all (`set_copies_read`):
+    /// Whether the other copies are read at all (`set_copies_read` —
     /// the settings' "never", which has to hold for the reads an opening
-    /// and a focus fire, not only for the page's tick.
-    pub(super) copies_read: std::sync::atomic::AtomicBool,
+    /// and a focus fire, not only for the page's tick), what the last
+    /// pass left — a row each, drawn where their HEAD lands — and the
+    /// pass in flight, under one lock (`carried::Copies`).
+    pub(super) copies: super::carried::Copies,
     /// One in flight per snapshot, for the reads a repository can be asked
     /// for from more than one place at once (see [`ReadFlight`]). Each
     /// answers its callers with what they act on: whether the refs or
@@ -264,11 +266,6 @@ pub struct RepoSession {
     /// reason the tag index is, since every refs read wants it and none
     /// of them changes it.
     pub(super) worktree_holders: Mutex<Arc<super::joins::WorktreeHolders>>,
-    /// What those copies are carrying uncommitted, as the last worktree
-    /// read left it — a row each, drawn where their HEAD lands. Filled by
-    /// the same pass and from the same listing, so a copy cannot be a row
-    /// here and missing from the marks beside it.
-    pub(super) carried: Mutex<Arc<Vec<super::Carried>>>,
     /// Bumped when that set became a different one. **Nothing else in the
     /// refs key would notice** — taking or giving back a working copy
     /// moves no ref, so without this the mark would wait for an unrelated

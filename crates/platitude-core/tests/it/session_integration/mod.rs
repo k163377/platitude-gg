@@ -8,6 +8,7 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 mod auto_fetch;
+mod carried;
 mod carry_move;
 mod carry_rewrite;
 mod command_log;

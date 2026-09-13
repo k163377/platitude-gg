@@ -173,9 +173,154 @@ pub(super) async fn read_all(
     found.into_iter().map(|(_, wip)| wip).collect()
 }
 
+/// Whether the other copies are read at all, what the last pass left,
+/// and the pass in flight — **one owner under one lock**, so a pass that
+/// began before the copies were turned off cannot land after it: the
+/// switch and the rows move together, and a landing is checked against
+/// the switch's count in the same breath as it is written. Held apart
+/// (a flag beside the rows), the pass that was out when the switch went
+/// off landed its reading afterwards, and with the tick stopped nothing
+/// ever took those rows down again.
+#[derive(Default)]
+pub(super) struct Copies {
+    state: std::sync::Mutex<CopiesState>,
+}
+
+struct CopiesState {
+    /// The settings' switch (`settings::Defaults::copies_interval_secs`
+    /// above zero).
+    read: bool,
+    /// How many times the copies have been turned off. A pass takes the
+    /// number as it begins and lands on the same number only — rows read
+    /// for a switch since turned are a reading nobody asked for, and
+    /// would put back up what the turning took down.
+    turned: u64,
+    rows: std::sync::Arc<Vec<Carried>>,
+    /// The pass in flight, stopped when the copies are turned off: a
+    /// read still waiting for a slot then spawns nothing, and one
+    /// running is not left to answer a question nobody is asking.
+    pass: Option<CancellationToken>,
+}
+
+impl Default for CopiesState {
+    fn default() -> Self {
+        Self {
+            read: true,
+            turned: 0,
+            rows: std::sync::Arc::new(Vec::new()),
+            pass: None,
+        }
+    }
+}
+
+/// What a pass begins with: the count it lands on, and the token that
+/// stops it.
+pub(super) struct PassTicket {
+    turned: u64,
+    cancel: CancellationToken,
+}
+
+/// What a landing came to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Landing {
+    /// The rows are as the pass read them, and that moved one.
+    Moved,
+    /// The rows are as the pass read them, which is as they were.
+    Same,
+    /// Nothing was written: the copies were turned off since the pass
+    /// began.
+    Refused,
+}
+
+impl Copies {
+    /// Begins a pass, or none while the copies are off. The token is a
+    /// child of `parent`, so the session's close ends the pass the way
+    /// it ends everything else.
+    pub(super) fn begin(&self, parent: &CancellationToken) -> Option<PassTicket> {
+        let mut state = super::relock(&self.state);
+        if !state.read {
+            return None;
+        }
+        let cancel = parent.child_token();
+        state.pass = Some(cancel.clone());
+        Some(PassTicket {
+            turned: state.turned,
+            cancel,
+        })
+    }
+
+    /// Lands what a pass read, and says what that came to.
+    pub(super) fn land(&self, ticket: &PassTicket, fresh: Vec<Carried>) -> Landing {
+        let mut state = super::relock(&self.state);
+        if state.turned != ticket.turned {
+            return Landing::Refused;
+        }
+        if *state.rows == fresh {
+            return Landing::Same;
+        }
+        state.rows = std::sync::Arc::new(fresh);
+        Landing::Moved
+    }
+
+    /// Turns the copies on or off. Off takes the rows down — what they
+    /// said is a reading nobody will take again — and stops the pass in
+    /// flight. Says whether a row moved.
+    pub(super) fn turn(&self, read: bool) -> bool {
+        let mut state = super::relock(&self.state);
+        state.read = read;
+        if read {
+            return false;
+        }
+        state.turned += 1;
+        if let Some(pass) = state.pass.take() {
+            pass.cancel();
+        }
+        if state.rows.is_empty() {
+            return false;
+        }
+        state.rows = std::sync::Arc::new(Vec::new());
+        true
+    }
+
+    /// The rows as the last landing left them, for the walk that draws
+    /// them.
+    pub(super) fn rows(&self) -> std::sync::Arc<Vec<Carried>> {
+        std::sync::Arc::clone(&super::relock(&self.state).rows)
+    }
+}
+
+/// A pass over the other copies, for whoever started it to wait on
+/// ([`super::RepoSession::refresh_carried`]): the reads are the
+/// session's, and this is where they are over.
+#[derive(Debug)]
+pub struct CarriedPass {
+    told: tokio::sync::oneshot::Receiver<CarriedOutcome>,
+}
+
+impl CarriedPass {
+    /// Waits for the pass to end, and says how.
+    pub async fn outcome(self) -> CarriedOutcome {
+        self.told.await.unwrap_or(CarriedOutcome::Dropped)
+    }
+}
+
+/// How a pass over the other copies ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CarriedOutcome {
+    /// The rows are as the pass read them; `moved` says whether that
+    /// changed one, and asked for the walk again.
+    Landed { moved: bool },
+    /// Nothing landed: the reads were stopped — by the session's close,
+    /// or by the copies being turned off under the pass — or the copies
+    /// were turned off between the reads and the landing.
+    Dropped,
+}
+
 impl super::RepoSession {
     /// Reads what the other copies are carrying, and asks for the rebuild
-    /// if it came back different.
+    /// if it came back different. Answers with the pass, for a caller
+    /// that waits on it; `None` where none begins — the repository is
+    /// not open, the pass before is still out, or the copies are off.
     ///
     /// **On a cadence of its own** (`settings::Defaults::copies_interval_secs`),
     /// apart from the listing that rides the page's tick: the listing is
@@ -197,35 +342,66 @@ impl super::RepoSession {
     /// background handle: served after the reader's own commands, kept
     /// out of the click's reserve, and taken back out of the queue with
     /// the session if it closes first (`process::Slots`).
-    pub fn refresh_carried(self: &std::sync::Arc<Self>) {
-        if !self.copies_read.load(std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
+    pub fn refresh_carried(self: &std::sync::Arc<Self>) -> Option<CarriedPass> {
+        let workdir = self.workdir()?;
         let Ok(permit) = std::sync::Arc::clone(&self.carried_slot).try_acquire_owned() else {
             tracing::trace!("carried read skipped: the previous one has not finished");
-            return;
+            return None;
         };
+        // After the permit, so at most one ticket is ever out: the pass
+        // the turning-off stops is the one running.
+        let ticket = self.copies.begin(&self.root_cancel)?;
+        let (tell, told) = tokio::sync::oneshot::channel();
         let s = std::sync::Arc::clone(self);
         self.runtime.spawn(async move {
             let _permit = permit;
-            let cancel = s.root_cancel.clone();
-            // The listing again rather than the one the worktree pass
-            // read: one process and 23ms of it (measured), against keeping
-            // a second copy of the listing in step with that pass.
-            let Ok(worktrees) = crate::worktrees::load(&s.exec_background, &workdir, &cancel).await
-            else {
-                return;
-            };
-            let carried = read_all(&s.exec_background, &worktrees, &workdir, &cancel).await;
-            if s.note_carried(carried) {
-                // The rebuild a status that moved this tree asks for:
-                // these rows are drawn by the walk and by nothing else.
-                s.refresh_log();
+            let outcome = s.pass_over_copies(&workdir, &ticket).await;
+            if tell.send(outcome).is_err() {
+                tracing::trace!("nobody was waiting on the pass over the other copies");
             }
         });
+        Some(CarriedPass { told })
+    }
+
+    /// One pass: the listing, a `status` per copy, and the landing.
+    async fn pass_over_copies(
+        self: &std::sync::Arc<Self>,
+        workdir: &Path,
+        ticket: &PassTicket,
+    ) -> CarriedOutcome {
+        // The listing again rather than the one the worktree pass read:
+        // one process, against keeping a second copy of the listing in
+        // step with that pass.
+        let Ok(worktrees) =
+            crate::worktrees::load(&self.exec_background, workdir, &ticket.cancel).await
+        else {
+            return CarriedOutcome::Dropped;
+        };
+        let carried = read_all(&self.exec_background, &worktrees, workdir, &ticket.cancel).await;
+        // Reads stopped part-way are not a reading: what they left out
+        // would come down as copies with nothing to show.
+        if ticket.cancel.is_cancelled() {
+            return CarriedOutcome::Dropped;
+        }
+        match self.copies.land(ticket, carried) {
+            Landing::Moved => {
+                // The rebuild a status that moved this tree asks for:
+                // these rows are drawn by the walk and by nothing else.
+                self.refresh_log();
+                CarriedOutcome::Landed { moved: true }
+            }
+            Landing::Same => CarriedOutcome::Landed { moved: false },
+            Landing::Refused => CarriedOutcome::Dropped,
+        }
+    }
+
+    /// Waits until no pass over the other copies is in flight — the
+    /// boundary a test closes on before it counts their reads or turns
+    /// them off, the way `wait_for_snapshot_reads` closes the opening's.
+    pub async fn wait_for_carried_pass(&self) {
+        if let Ok(permit) = self.carried_slot.acquire().await {
+            drop(permit);
+        }
     }
 
     /// Reads what one other working copy is holding, for the pane that is
@@ -274,43 +450,22 @@ impl super::RepoSession {
     /// (`settings::Defaults::copies_interval_secs` = 0), which the
     /// page's tick honours on its own and which this makes hold for the
     /// reads an opening and a focus fire as well (`refresh_quick`).
-    /// Turned off, the rows already drawn come down with it: what they
-    /// said is a reading nobody will take again.
+    /// Turned off, the rows already drawn come down with it — what they
+    /// said is a reading nobody will take again — and so does the pass
+    /// in flight, whose reading would put them back up (`Copies`).
     pub fn set_copies_read(self: &std::sync::Arc<Self>, read: bool) {
-        self.copies_read
-            .store(read, std::sync::atomic::Ordering::SeqCst);
-        if !read && self.note_carried(Vec::new()) {
+        if self.copies.turn(read) {
             self.refresh_log();
         }
     }
 
-    /// The set as the last read left it, for the walk that draws it.
-    pub(super) fn carried(&self) -> std::sync::Arc<Vec<Carried>> {
-        match self.carried.lock() {
-            Ok(held) => std::sync::Arc::clone(&held),
-            Err(poisoned) => std::sync::Arc::clone(&poisoned.into_inner()),
-        }
-    }
-
-    /// Files away what the other copies are carrying, and says whether the
-    /// graph has to be walked again for it.
+    /// The set as the last pass left it, for the walk that draws it.
     ///
     /// **A row stands or falls on the whole record, not on the dirt
     /// alone**: the tallies are drawn on the row, so a copy that only
     /// staged another file has moved a row the walk has to rebuild.
-    pub(super) fn note_carried(&self, fresh: Vec<Carried>) -> bool {
-        // A poisoned lock is taken rather than given up on, the way the
-        // holders' is: what is behind it is a snapshot, and dropping it
-        // would take every row off the graph for the rest of the session.
-        let mut held = match self.carried.lock() {
-            Ok(held) => held,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        if ***held == fresh {
-            return false;
-        }
-        *held = std::sync::Arc::new(fresh);
-        true
+    pub(super) fn carried(&self) -> std::sync::Arc<Vec<Carried>> {
+        self.copies.rows()
     }
 }
 
@@ -337,5 +492,57 @@ mod tests {
             COPIES_INTERVAL_MAX_SECS,
             "past the ceiling is the ceiling"
         );
+    }
+
+    fn row(name: &str) -> Carried {
+        Carried {
+            name: name.into(),
+            path: format!("/copies/{name}"),
+            head: Oid::from_hex_str(&"a".repeat(40)).expect("an oid"),
+            kinds: Kinds::default(),
+        }
+    }
+
+    // Turned off under a pass in flight, the copies stop it and refuse
+    // what it read: the rows the turning took down do not come back up.
+    #[test]
+    fn a_pass_begun_before_the_copies_were_turned_off_lands_nothing() {
+        let copies = Copies::default();
+        let root = CancellationToken::new();
+        let first = copies.begin(&root).expect("the copies are read");
+        assert_eq!(copies.land(&first, vec![row("a")]), Landing::Moved);
+        let second = copies.begin(&root).expect("still read");
+        assert!(copies.turn(false), "the rows come down with the switch");
+        assert!(
+            second.cancel.is_cancelled(),
+            "and the pass in flight is stopped"
+        );
+        assert!(!root.is_cancelled(), "the session's own token is not");
+        assert_eq!(
+            copies.land(&second, vec![row("a")]),
+            Landing::Refused,
+            "what was read for the switch before cannot come back up"
+        );
+        assert!(copies.rows().is_empty());
+        assert!(
+            copies.begin(&root).is_none(),
+            "and no pass begins while the copies are off"
+        );
+    }
+
+    // Turned back on, the copies read again on a count of their own: a
+    // pass from before the turning is still refused, a new one lands.
+    #[test]
+    fn the_copies_turned_back_on_land_a_new_pass_and_still_refuse_an_old_one() {
+        let copies = Copies::default();
+        let root = CancellationToken::new();
+        let stale = copies.begin(&root).expect("read");
+        copies.turn(false);
+        assert!(!copies.turn(true), "turning on moves no row by itself");
+        let fresh = copies.begin(&root).expect("read again");
+        assert_eq!(copies.land(&stale, vec![row("old")]), Landing::Refused);
+        assert_eq!(copies.land(&fresh, vec![row("new")]), Landing::Moved);
+        assert_eq!(copies.land(&fresh, vec![row("new")]), Landing::Same);
+        assert_eq!(copies.rows().len(), 1);
     }
 }
