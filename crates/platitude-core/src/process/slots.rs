@@ -114,7 +114,7 @@ pub const MAX_CONCURRENCY: u32 = 32;
 /// Where the default concurrency stops growing with the machine, and
 /// where it stops shrinking (see [`default_concurrency`]).
 pub const DEFAULT_CONCURRENCY_CEILING: u32 = 8;
-pub const DEFAULT_CONCURRENCY_FLOOR: u32 = 2;
+pub const DEFAULT_CONCURRENCY_FLOOR: u32 = 4;
 
 /// The concurrency a fresh settings file starts from: a third of the
 /// machine's threads, held between the floor and the ceiling.
@@ -126,11 +126,19 @@ pub const DEFAULT_CONCURRENCY_FLOOR: u32 = 2;
 /// them in parallel are the whole machine — what the click's `show`
 /// then waits on is not a slot but a core. Measured over eight copies
 /// of the corpus read in a loop (ci/baseline/git-slots-windows-x64.md):
-/// on twenty-four threads the click's latencies and the first paint
-/// were best at eight slots (four of them background), no better at
-/// sixteen, and worse at four and two. Twenty-four over three is eight;
-/// a laptop's eight threads come to the floor, where one background
-/// read runs beside one interactive one.
+/// on twenty-four threads sixteen slots are no better than eight, and
+/// the pass over those copies is no faster wide than narrow — the
+/// machine runs out before the slots do. Twenty-four over three is
+/// eight.
+///
+/// **The floor is four, because that is where the click's three fit.**
+/// Two slots is the one setting where the median suffers rather than
+/// the tail: opening a diff spends three commands at once, so with a
+/// pool of two the head of its serial chain queues for a slot on every
+/// open, on a machine with nothing else running at all — a whole
+/// process's worth of wait added to the one point a person waits at
+/// (same record, §枠の床). A laptop's eight threads therefore come to
+/// four, where the three fit and one background read runs beside them.
 #[must_use]
 pub fn default_concurrency() -> u32 {
     std::thread::available_parallelism().map_or(DEFAULT_CONCURRENCY_FLOOR, |threads| {
@@ -177,14 +185,16 @@ impl Limits {
     /// **A quarter, because opening a diff is three commands at once.**
     /// The click spends `diff-tree`, `check-attr` and the
     /// `rev-parse` → `cat-file` chain in parallel, so a reserve under
-    /// three puts one of them — and it is the head of the chain that
-    /// queues — behind whatever the session is reading for itself. At a
-    /// half the reserve only reaches three at eight slots, which no
-    /// machine under eighteen threads defaults to; at a quarter it is
-    /// three from four slots up. What it costs is background width, and
-    /// the pass over other working copies does not spend it: eight
-    /// copies of the reference corpus read in 2.6 s four at a time and
-    /// 2.5 s eight at a time (ci/baseline/git-slots-windows-x64.md).
+    /// three puts one of them behind whatever the session is reading for
+    /// itself — and the one that queues is the head of the chain, so the
+    /// wait lands on the critical path rather than beside it. At a half
+    /// the reserve only reaches three at eight slots, which no machine
+    /// under eighteen threads defaults to; at a quarter it is three from
+    /// four slots up. What it costs is background width, which the pass
+    /// over the other working copies barely spends: those reads saturate
+    /// the machine long before they fill the slots, so the pass takes
+    /// about as long however many of it run at once
+    /// (ci/baseline/git-slots-windows-x64.md).
     #[must_use]
     pub fn of(asked: u32) -> Self {
         let total = concurrency(asked) as usize;

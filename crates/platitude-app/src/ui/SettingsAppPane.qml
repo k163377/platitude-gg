@@ -483,7 +483,7 @@ ColumnLayout {
         enabled: !AppBackend.gitPathOffersRestart
         caption: qsTr("GIT PROCESSES")
         HelpText {
-            text: qsTr("How many git commands run at once, in every repository. Whatever you are waiting on goes first and always finds room: the reads made in the background, and anything waiting on a network or another program, never take more than half between them. %1 is the most.")
+            text: qsTr("How many git commands run at once, in every repository. Whatever you are waiting on goes first and always finds room: the reads made in the background, and anything waiting on a network or another program, never take more than a quarter between them. %1 is the most.")
                   .arg(AppBackend.gitConcurrencyMax)
         }
         LabeledField {
