@@ -74,6 +74,12 @@ struct Case {
     /// with them: what is being checked is the sentence a person reads,
     /// so a rewording that leaves the reading behind is a red here.
     wants: &'static [&'static str],
+    /// The same, held to on Windows alone: what the listing walks there
+    /// and nowhere else (`super::look::threads_of` — the walk of `/proc`
+    /// carries no stacks), so a host on another system is not held to a
+    /// line it cannot print. The gate's host side runs wherever the tree
+    /// is checked out.
+    wants_on_windows: &'static [&'static str],
     /// A watchdog abort also reaches `exiting`, but is not an act that
     /// completed before stopping. Do not accept it as the held case.
     forbids: &'static [&'static str],
@@ -81,8 +87,14 @@ struct Case {
 
 impl Case {
     fn missing(&self, said: &str) -> Vec<String> {
+        let here: &[&str] = if cfg!(windows) {
+            self.wants_on_windows
+        } else {
+            &[]
+        };
         self.wants
             .iter()
+            .chain(here.iter())
             .filter(|want| !said.contains(**want))
             .map(|want| format!("missing `{want}`"))
             .chain(
@@ -123,6 +135,10 @@ const CASES: &[Case] = &[
             "threads at the ceiling:",
             " alive — ",
         ],
+        // And the stack the main thread stands in, which is the one line
+        // a stop inside the exit can be read off — walked on Windows
+        // only.
+        wants_on_windows: &["the main thread stands in:"],
         forbids: &["auto-act watchdog expired"],
     },
     Case {
@@ -136,6 +152,7 @@ const CASES: &[Case] = &[
             "it got as far as `exiting`",
             "the app's own account: wedged in `exiting`",
         ],
+        wants_on_windows: &[],
         forbids: &["auto-act watchdog expired"],
     },
     Case {
@@ -147,6 +164,7 @@ const CASES: &[Case] = &[
             "the stations it reached:",
             "event-loop ",
         ],
+        wants_on_windows: &[],
         forbids: &["auto_act complete=band"],
     },
     Case {
@@ -173,6 +191,7 @@ const CASES: &[Case] = &[
             "under the app:",
             "pictures on disk:",
         ],
+        wants_on_windows: &[],
         // A listing that came back is a stall that did not happen.
         forbids: &["auto-act watchdog expired", " alive — "],
     },
@@ -294,12 +313,41 @@ mod tests {
             .find(|case| case.wants.contains(&"left no wedge.txt"))
             .expect("the observed shape");
         assert!(observed.wants.contains(&" alive — "));
+        // The stack is walked on Windows alone, so it is wanted there
+        // alone: held to everywhere, the check would be red on every
+        // other host for a line the listing there cannot print.
+        assert!(
+            observed
+                .wants_on_windows
+                .contains(&"the main thread stands in:")
+        );
+        assert!(
+            !CASES
+                .iter()
+                .any(|case| case.wants.contains(&"the main thread stands in:")),
+            "the stack line is a Windows want, never a want everywhere"
+        );
+        let said = observed.wants.join("\n");
+        let missing = observed.missing(&said);
+        assert_eq!(
+            missing.is_empty(),
+            !cfg!(windows),
+            "off Windows the wants alone satisfy the case; on it the stack is owed too: {missing:?}"
+        );
     }
 
     #[test]
     fn an_aborted_act_is_not_a_completed_act_held_at_exit() {
         for case in &CASES[..2] {
-            let said = case.wants.join("\n");
+            // Everything the case wants here, the Windows-only words
+            // included: what a run that read back whole would have said.
+            let said = case
+                .wants
+                .iter()
+                .chain(case.wants_on_windows.iter())
+                .copied()
+                .collect::<Vec<_>>()
+                .join("\n");
             assert!(case.missing(&said).is_empty());
             assert!(
                 !case

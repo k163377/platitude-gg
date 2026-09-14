@@ -74,14 +74,28 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
     } else {
         threads_of(pid, shot_dir)
     };
-    let mut lines = vec![match threads {
-        Ok(threads) => format!(
-            "  threads at the ceiling: {} alive — {}",
-            threads.len(),
-            listed(&threads)
-        ),
-        Err(why) => format!("  threads at the ceiling: could not be listed — {why}"),
-    }];
+    let mut lines = match threads {
+        Ok(threads) => {
+            let mut lines = vec![format!(
+                "  threads at the ceiling: {} alive — {}",
+                threads.lines.len(),
+                listed(&threads.lines)
+            )];
+            // The one stack that names a stop inside the exit: past
+            // `exiting` every other thread is already ended, so the
+            // listing is one line whatever held the lock, and where that
+            // line stands is the whole of what can be read.
+            if let Some(stack) = threads.main_stack() {
+                lines.push(format!(
+                    "  the main thread stands in: {stack} (every thread's stack: {THREADS_FILE})"
+                ));
+            }
+            lines
+        }
+        Err(why) => vec![format!(
+            "  threads at the ceiling: could not be listed — {why}"
+        )],
+    };
     if unordered {
         lines.push(dump_of(pid, shot_dir));
     }
@@ -169,19 +183,72 @@ fn bounded(what: &str, mut command: Command, ceiling: Duration, said: Option<&Pa
     }
 }
 
+/// What a listing answered with: one line per thread, and the stack
+/// each stood in where the listing could walk it — Windows walks them
+/// ([`LISTING_SCRIPT`]: `stack <tid> <frames>` lines after the threads);
+/// the walk of `/proc` has none.
+#[derive(Debug, PartialEq, Eq)]
+struct Threads {
+    lines: Vec<String>,
+    /// `(tid, frames)`, the frames innermost first and joined by ` <- `.
+    stacks: Vec<(String, String)>,
+}
+
+impl Threads {
+    /// The main thread's stack, cut to what one line under the verdict
+    /// can hold: the thread named `main`, or the first listed where none
+    /// is. `None` where the listing walked nothing.
+    fn main_stack(&self) -> Option<String> {
+        const SHOWN: usize = 12;
+        let tid = self
+            .lines
+            .iter()
+            .find(|line| {
+                line.split_whitespace()
+                    .any(|word| word.starts_with("main@"))
+            })
+            .or_else(|| self.lines.first())?
+            .split_whitespace()
+            .next()?;
+        let (_, frames) = self.stacks.iter().find(|(id, _)| id == tid)?;
+        let frames: Vec<&str> = frames.split(" <- ").collect();
+        let mut shown = frames
+            .iter()
+            .take(SHOWN)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" <- ");
+        if frames.len() > SHOWN {
+            shown.push_str(" <- …");
+        }
+        Some(shown)
+    }
+}
+
 /// The threads a listing answered with, or why it could not answer —
 /// worded for the line under the verdict, and the same words whichever
 /// system's listing it was.
-fn listing(answer: Answer) -> Result<Vec<String>, String> {
+fn listing(answer: Answer) -> Result<Threads, String> {
     match answer {
         Answer::Ended { status, stdout } if status.success() => {
-            let threads: Vec<String> = stdout
+            let mut threads = Threads {
+                lines: Vec::new(),
+                stacks: Vec::new(),
+            };
+            for line in stdout
                 .lines()
                 .map(str::trim)
                 .filter(|line| !line.is_empty())
-                .map(str::to_string)
-                .collect();
-            if threads.is_empty() {
+            {
+                match line.strip_prefix("stack ") {
+                    Some(rest) => {
+                        let (tid, frames) = rest.split_once(' ').unwrap_or((rest, ""));
+                        threads.stacks.push((tid.to_string(), frames.to_string()));
+                    }
+                    None => threads.lines.push(line.to_string()),
+                }
+            }
+            if threads.lines.is_empty() {
                 return Err("the listing answered with no threads".to_string());
             }
             Ok(threads)
@@ -252,16 +319,48 @@ fn listed(threads: &[String]) -> String {
 /// middle, which `Get-Process` does not carry: each is one Win32 call,
 /// made from C# the way the dump is ([`DUMP_SCRIPT`]). A thread that
 /// could not be opened is listed by its number alone, as `-@?`.
+///
+/// **Then the stack each thread stands in**, one `stack <tid> <frames>`
+/// line per thread, walked with `dbghelp` (`StackWalk64` over a context
+/// read from the suspended thread, resumed after) — the debugger's own
+/// library, on every Windows, so a stopped process names the DLL and
+/// the function it stands in with no debugger installed. Frames are
+/// `module!symbol+offset` off the **nearest export** where no symbols
+/// are on the machine (Qt's and the exe's are not), so the module is
+/// exact and the function is a neighbourhood; `module+offset` where
+/// even that is missing. A thread that could not be opened, suspended
+/// or read says so in place of its frames. **The symbol search path is
+/// empty and prompts are off**: a machine whose `_NT_SYMBOL_PATH` names
+/// a symbol server would otherwise send the listing to the network for
+/// every module, and the listing's ceiling would be spent there — a
+/// PDB beside a module is still found without any path.
 #[cfg(windows)]
 const LISTING_SCRIPT: &str = "Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class PggThreads {
     [DllImport(\"kernel32.dll\", SetLastError = true)] static extern IntPtr OpenThread(uint access, bool inherit, uint tid);
+    [DllImport(\"kernel32.dll\", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr handle);
     [DllImport(\"kernel32.dll\", SetLastError = true)] static extern int GetThreadDescription(IntPtr handle, out IntPtr description);
     [DllImport(\"kernel32.dll\")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport(\"kernel32.dll\")] static extern uint SuspendThread(IntPtr handle);
+    [DllImport(\"kernel32.dll\")] static extern uint ResumeThread(IntPtr handle);
+    [DllImport(\"kernel32.dll\")] static extern bool GetThreadContext(IntPtr handle, IntPtr context);
+    [DllImport(\"kernel32.dll\", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+    [DllImport(\"kernel32.dll\", CharSet = CharSet.Ansi)] static extern IntPtr GetProcAddress(IntPtr module, string name);
+    [DllImport(\"kernel32.dll\", CharSet = CharSet.Unicode)] static extern uint K32GetModuleBaseNameW(IntPtr process, IntPtr module, StringBuilder name, uint size);
     [DllImport(\"ntdll.dll\")] static extern int NtQueryInformationThread(IntPtr handle, int kind, out IntPtr info, int length, IntPtr returned);
+    [DllImport(\"dbghelp.dll\", SetLastError = true)] static extern bool SymInitialize(IntPtr process, string path, bool invade);
+    [DllImport(\"dbghelp.dll\")] static extern bool SymCleanup(IntPtr process);
+    [DllImport(\"dbghelp.dll\")] static extern uint SymSetOptions(uint options);
+    [DllImport(\"dbghelp.dll\")] static extern ulong SymGetModuleBase64(IntPtr process, ulong address);
+    [DllImport(\"dbghelp.dll\")] static extern bool SymFromAddr(IntPtr process, ulong address, out ulong displacement, IntPtr symbol);
+    [DllImport(\"dbghelp.dll\")] static extern bool StackWalk64(uint machine, IntPtr process, IntPtr thread, IntPtr frame, IntPtr context, IntPtr readMemory, IntPtr functionTableAccess, IntPtr getModuleBase, IntPtr translateAddress);
+    static IntPtr process = IntPtr.Zero;
+    static IntPtr fta = IntPtr.Zero;
+    static IntPtr gmb = IntPtr.Zero;
     public static string Describe(uint tid) {
         IntPtr handle = OpenThread(0x0040 | 0x0800, false, tid);
         if (handle == IntPtr.Zero) return \"|\";
@@ -271,6 +370,72 @@ public static class PggThreads {
         if (NtQueryInformationThread(handle, 9, out start, IntPtr.Size, IntPtr.Zero) == 0) at = start.ToInt64().ToString();
         CloseHandle(handle);
         return name + \"|\" + at;
+    }
+    public static string Begin(uint pid) {
+        process = OpenProcess(0x0400 | 0x0010, false, pid);
+        if (process == IntPtr.Zero) return \"the process could not be opened\";
+        SymSetOptions(0x2 | 0x4 | 0x80000);
+        if (!SymInitialize(process, \"\", true)) { CloseHandle(process); process = IntPtr.Zero; return \"symbols could not be initialised\"; }
+        IntPtr dbghelp = GetModuleHandle(\"dbghelp.dll\");
+        fta = GetProcAddress(dbghelp, \"SymFunctionTableAccess64\");
+        gmb = GetProcAddress(dbghelp, \"SymGetModuleBase64\");
+        return \"\";
+    }
+    public static void End() {
+        if (process == IntPtr.Zero) return;
+        SymCleanup(process);
+        CloseHandle(process);
+        process = IntPtr.Zero;
+    }
+    public static string Walk(uint tid) {
+        if (process == IntPtr.Zero) return \"no process to walk in\";
+        IntPtr thread = OpenThread(0x0008 | 0x0002 | 0x0040, false, tid);
+        if (thread == IntPtr.Zero) return \"the thread could not be opened\";
+        IntPtr raw = Marshal.AllocHGlobal(1232 + 16);
+        IntPtr context = new IntPtr((raw.ToInt64() + 15L) & ~15L);
+        IntPtr frame = Marshal.AllocHGlobal(512);
+        IntPtr symbol = Marshal.AllocHGlobal(88 + 512);
+        StringBuilder frames = new StringBuilder();
+        try {
+            if (SuspendThread(thread) == 0xFFFFFFFF) return \"the thread could not be suspended\";
+            try {
+                for (int i = 0; i < 1232; i++) Marshal.WriteByte(context, i, 0);
+                Marshal.WriteInt32(context, 0x30, 0x100003);
+                if (!GetThreadContext(thread, context)) return \"the context could not be read\";
+                long rip = Marshal.ReadInt64(context, 0xF8);
+                long rsp = Marshal.ReadInt64(context, 0x98);
+                long rbp = Marshal.ReadInt64(context, 0xA0);
+                for (int i = 0; i < 512; i++) Marshal.WriteByte(frame, i, 0);
+                Marshal.WriteInt64(frame, 0, rip); Marshal.WriteInt32(frame, 12, 3);
+                Marshal.WriteInt64(frame, 32, rbp); Marshal.WriteInt32(frame, 44, 3);
+                Marshal.WriteInt64(frame, 48, rsp); Marshal.WriteInt32(frame, 60, 3);
+                for (int depth = 0; depth < 24; depth++) {
+                    if (!StackWalk64(0x8664, process, thread, frame, context, IntPtr.Zero, fta, gmb, IntPtr.Zero)) break;
+                    ulong pc = (ulong)Marshal.ReadInt64(frame, 0);
+                    if (pc == 0) break;
+                    if (frames.Length > 0) frames.Append(\" <- \");
+                    frames.Append(Name(symbol, pc));
+                }
+            } finally { ResumeThread(thread); }
+        } finally {
+            Marshal.FreeHGlobal(raw); Marshal.FreeHGlobal(frame); Marshal.FreeHGlobal(symbol);
+            CloseHandle(thread);
+        }
+        return frames.Length == 0 ? \"no frames\" : frames.ToString();
+    }
+    static string Name(IntPtr symbol, ulong pc) {
+        ulong moduleBase = SymGetModuleBase64(process, pc);
+        string module = \"?\";
+        if (moduleBase != 0) { StringBuilder name = new StringBuilder(260); if (K32GetModuleBaseNameW(process, new IntPtr((long)moduleBase), name, 260) > 0) module = name.ToString(); }
+        for (int i = 0; i < 88 + 512; i++) Marshal.WriteByte(symbol, i, 0);
+        Marshal.WriteInt32(symbol, 0, 88); Marshal.WriteInt32(symbol, 80, 500);
+        ulong displacement;
+        if (SymFromAddr(process, pc, out displacement, symbol)) {
+            string function = Marshal.PtrToStringAnsi(new IntPtr(symbol.ToInt64() + 84));
+            return module + \"!\" + function + \"+0x\" + displacement.ToString(\"x\");
+        }
+        if (moduleBase != 0) return module + \"+0x\" + (pc - moduleBase).ToString(\"x\");
+        return \"0x\" + pc.ToString(\"x\");
     }
 }
 '@
@@ -284,14 +449,20 @@ foreach ($thread in $process.Threads) {
     if ($described[1] -ne '') { $start = [int64]$described[1]; $module = $modules | Where-Object { $start -ge $_.Base -and $start -lt $_.End } | Select-Object -First 1; if ($module) { $in = $module.Name } else { $in = 'unmapped' } }
     $waiting = ''; if ($thread.ThreadState -eq 'Wait') { $waiting = $thread.WaitReason }
     '{0} {1} {2} {3}@{4} cpu={5}ms' -f $thread.Id, $thread.ThreadState, $waiting, $name, $in, [int]$thread.TotalProcessorTime.TotalMilliseconds
-}";
+}
+$began = [PggThreads]::Begin([uint32]PGG_PID)
+foreach ($thread in $process.Threads) {
+    if ($began -ne '') { $walked = $began } else { $walked = [PggThreads]::Walk([uint32]$thread.Id) }
+    'stack {0} {1}' -f $thread.Id, $walked
+}
+[PggThreads]::End()";
 
 /// Every thread of the process ([`LISTING_SCRIPT`]). Windows has no way
 /// to this in std, and the one it has is the same PowerShell the reaper
 /// reads its process tree from (`crate::reap`). The listing is written
 /// whole beside the pictures ([`THREADS_FILE`]) and read back from there.
 #[cfg(windows)]
-fn threads_of(pid: u32, shot_dir: &Path) -> Result<Vec<String>, String> {
+fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
     let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
@@ -305,9 +476,10 @@ fn threads_of(pid: u32, shot_dir: &Path) -> Result<Vec<String>, String> {
 
 /// The same off `/proc`: the thread's name is there as well, which says
 /// whose it is — a tokio worker, the deadline thread, a render thread.
-/// A walk, not a process: it leaves no file beside the pictures.
+/// A walk, not a process: it leaves no file beside the pictures, and no
+/// stacks (`/proc/<pid>/task/<tid>/stack` is root's).
 #[cfg(unix)]
-fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Vec<String>, String> {
+fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
     let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
         .map_err(|error| format!("/proc/{pid}/task could not be read: {error}"))?;
     let mut threads = Vec::new();
@@ -332,7 +504,10 @@ fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Vec<String>, String> {
     if threads.is_empty() {
         return Err(format!("/proc/{pid}/task lists no threads"));
     }
-    Ok(threads)
+    Ok(Threads {
+        lines: threads,
+        stacks: Vec::new(),
+    })
 }
 
 /// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
@@ -438,7 +613,61 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
-    use super::{Answer, bounded, listing, stand_in};
+    use super::{Answer, Threads, bounded, listing, stand_in};
+
+    /// The stacks come after the threads as `stack <tid> <frames>` lines,
+    /// and the main thread's is the one the verdict shows — by its name,
+    /// or the first listed where nothing is named — cut to a line's
+    /// worth of frames.
+    #[test]
+    fn a_listing_carries_each_threads_stack_and_shows_the_mains() {
+        let said = "7 Wait UserRequest main@app.exe cpu=1ms\n\
+                    9 Wait EventPairLow -@ntdll.dll cpu=0ms\n\
+                    stack 9 ntdll!NtWaitForWorkViaWorkerFactory+0x14\n\
+                    stack 7 ntdll!NtDelayExecution+0x14 <- KERNELBASE!SleepEx+0x9e <- app+0x1234\n";
+        let threads = listing(Answer::Ended {
+            status: exit_status(0),
+            stdout: said.to_string(),
+        })
+        .expect("a listing with stacks");
+        assert_eq!(threads.lines.len(), 2);
+        assert_eq!(threads.stacks.len(), 2);
+        assert_eq!(
+            threads.main_stack().as_deref(),
+            Some("ntdll!NtDelayExecution+0x14 <- KERNELBASE!SleepEx+0x9e <- app+0x1234")
+        );
+
+        let unnamed = Threads {
+            lines: vec!["3 Wait - -@x.exe cpu=0ms".to_string()],
+            stacks: vec![(
+                "3".to_string(),
+                (1..=14)
+                    .map(|n| format!("f{n}"))
+                    .collect::<Vec<_>>()
+                    .join(" <- "),
+            )],
+        };
+        let shown = unnamed.main_stack().expect("the first thread's stack");
+        assert!(shown.starts_with("f1 <- f2"), "{shown}");
+        assert!(shown.ends_with("f12 <- …"), "{shown}");
+        let unwalked = Threads {
+            lines: vec!["3 S main wchan=0".to_string()],
+            stacks: Vec::new(),
+        };
+        assert_eq!(unwalked.main_stack(), None);
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code.unsigned_abs())
+    }
+
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code << 8)
+    }
 
     /// A diagnostic that stands past its ceiling is ended there and said
     /// to have been. Whether it is gone is asked of the machine, not of
@@ -485,7 +714,10 @@ mod tests {
         );
         assert_eq!(
             listing(Answer::Ended { status, stdout }),
-            Ok(vec!["one".to_string()])
+            Ok(Threads {
+                lines: vec!["one".to_string()],
+                stacks: Vec::new(),
+            })
         );
     }
 
@@ -575,24 +807,35 @@ mod tests {
             .and_then(|()| standing.wait())
             .expect("the stand-in ended");
         let threads = listed.expect("the stand-in's threads");
-        assert!(!threads.is_empty());
-        for line in &threads {
+        assert!(!threads.lines.is_empty());
+        for line in &threads.lines {
             assert!(line.contains('@') && line.contains(" cpu="), "{line}");
         }
         assert!(
-            threads.iter().any(|line| line.contains("@ping.exe")),
+            threads.lines.iter().any(|line| line.contains("@ping.exe")),
             "{threads:?}"
         );
+        // Every thread was walked, and the stand-in's main thread — ping
+        // counting off a second — stands in the system's sleep, which the
+        // walk names by module and export with no symbols on the machine.
+        assert_eq!(threads.stacks.len(), threads.lines.len(), "{threads:?}");
+        let main = threads
+            .main_stack()
+            .expect("the stand-in's main thread's stack");
+        assert!(
+            main.contains("ntdll") || main.contains("KERNELBASE") || main.contains("kernel32"),
+            "{main}"
+        );
         // The whole listing is on the disk beside the pictures, the same
-        // lines the answer was read off.
+        // lines the answer was read off, stacks and all.
         let written = std::fs::read_to_string(dir.join(super::THREADS_FILE))
             .expect("the listing, on the disk");
         assert_eq!(
             written
                 .lines()
-                .filter(|line| !line.trim().is_empty())
+                .filter(|line| !line.trim().is_empty() && !line.starts_with("stack "))
                 .count(),
-            threads.len()
+            threads.lines.len()
         );
     }
 
