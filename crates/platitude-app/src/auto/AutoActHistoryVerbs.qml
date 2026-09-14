@@ -149,6 +149,16 @@ Item {
                 if (act === "drop-last-commit")
                     driver.barrierNotice.start()
             }
+        } else if (act === "wip-landing-stopped") {
+            // The landing a stopped operation owes the working tree, taken in a pass that carries every other
+            // copy's row and none of this window's — the arrangement the run is started into
+            // (`xtask::verify::child`, `harness::faults`), since which of the walk and the status gets there first
+            // is the scheduler's. **The press comes from a clean tree**: a replay is refused over uncommitted work,
+            // and the row this landing goes to is the one the stop itself leaves behind.
+            const clash = arg === "" ? "side/clash" : arg
+            page.openRefMenu("branch", clash, clash, branchesModel.oidOfName(clash))
+            stoppedLandingTimer.start()
+            repoTab.rebase(clash, "", true)
         } else if (act === "integrate-menu") {
             acts.openIntegrateMenu(arg)
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
@@ -273,6 +283,81 @@ Item {
             renderedBarrier.begin()
         }
     }
+    // The two moments of the landing a stopped operation owes, in one line because neither means anything alone:
+    // `owed=` and `early=` are the page **after a pass that beat the status was offered to the landing and turned
+    // down** — the move decided and still held, with nothing opened and nothing standing on a copy — and `wip=` is
+    // the pass that carries ours landing on this window's own tree. Every copy's row wears the same all-zero id,
+    // so a reader that took the id at row 0 for ours resolves the landing onto a copy and the press ends somewhere
+    // nobody asked for.
+    SampleTimer {
+        id: stoppedLandingTimer
+        property bool read: false
+        /// The passes this page had settled when the one this run asks for was asked for. **The landing is only
+        /// ever offered a pass that finishes after it was armed** (`RepoPage.onStatsChanged` →
+        /// `tryPendingWipSelect`), so a reading taken before one has is a reading of a question nobody asked yet —
+        /// and `owed=` would say the landing is still held however it reads row 0.
+        property int owedAt: -1
+        property bool owed: false
+        property bool early: false
+        property bool earlyCopy: false
+        /// A run that was never started into the arrangement says so and stops. Both doors into it answer whether
+        /// the hold was up, so neither can read the ordinary order as this.
+        function refuse() {
+            stoppedLandingTimer.stop()
+            Harness.report("wip_stop_landing held=false")
+            driver.complete()
+        }
+        onTriggered: {
+            // The stop, named by what git left: the press has answered, an operation is standing and the status
+            // that carries its conflicted rows has arrived, and the landing it owes is armed.
+            if (stoppedLandingTimer.owedAt < 0) {
+                if (repoTab.busyCount !== 0 || workTree.opText === "" || !workTree.wipRowStands
+                        || graphModel.loading || !page.pageLanding)
+                    return
+                // **The pass is asked for rather than waited for.** What ordinarily brings the next one is this
+                // window's own row appearing, and the hold is what takes that away — a stopped replay moves no
+                // branch, so nothing else asks either (measured: the run sat at the pass it opened with while the
+                // press answered, the operation stood and the landing waited). Asked here, it lands with every
+                // other copy's row and none of ours, which is the pass the landing has to turn down.
+                if (!graphModel.walkAgainWhileHeld()) {
+                    stoppedLandingTimer.refuse()
+                    return
+                }
+                stoppedLandingTimer.owedAt = graphModel.finishCount
+                return
+            }
+            // That pass, named by what it left standing: it leads with **a neighbour copy's** row rather than ours
+            // (`GraphModel.carriedTop` — the copy the preset stands where this replay stops, so the row it draws is
+            // the one the landing would take). A pass with no all-zero row on top puts nothing in front of the
+            // misreading, so it is not the one this reads.
+            if (!stoppedLandingTimer.read) {
+                if (graphModel.loading || graphModel.finishCount <= stoppedLandingTimer.owedAt
+                        || graphModel.wipRow || !graphModel.carriedTop)
+                    return
+                stoppedLandingTimer.read = true
+                stoppedLandingTimer.owed = page.pageLanding
+                stoppedLandingTimer.early = page.wipShown
+                stoppedLandingTimer.earlyCopy = page.carriedPath !== ""
+                if (!graphModel.letTheWorkingTreeRowThrough())
+                    stoppedLandingTimer.refuse()
+                return
+            }
+            if (!graphModel.wipRow || !PageSettled.settled(page))
+                return
+            stoppedLandingTimer.stop()
+            Harness.report("wip_stop_landing held=true otherTop=true owed=" + stoppedLandingTimer.owed
+                              + " early=" + stoppedLandingTimer.early
+                              + " earlyCopy=" + stoppedLandingTimer.earlyCopy
+                              + " wip=" + page.wipShown
+                              + " copy=" + (page.carriedPath !== "")
+                              + " op=" + workTree.opText
+                              // The row the landing lit, not the one the page was standing on before it: this
+                              // landing moves the highlight without activating a row (`tryPendingWipSelect`).
+                              + " lit=" + graphPane.view.currentIndex)
+            driver.complete()
+        }
+    }
+
     // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its
     // refresh and the beat the viewport waits out all have to be behind it, and the picture cannot answer the second
     // half: a row can be selected and still be somewhere nobody can see.

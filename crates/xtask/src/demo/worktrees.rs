@@ -87,6 +87,53 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The same copies, over a tree with nothing uncommitted in it and a
+/// branch whose one commit lands on the line this one just moved.
+///
+/// **Both halves are needed and they pull against each other.** A replay
+/// is refused over uncommitted work, so the press that stops has to
+/// start from a clean tree — and the row a stopped operation's landing
+/// goes to only exists because the stop itself leaves conflicts behind.
+/// So the tree is committed here and dirtied by git, in a graph where
+/// every other copy already has a row of its own — and one of them
+/// stands where the replay stops, so the pass the run holds this
+/// window's row back from leads with somebody else's
+/// (`PGG_AUTO_ACT=wip-landing-stopped`).
+pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
+    carried(repo)?;
+    repo.commit(
+        "docs/guide.md",
+        "guide v2\n",
+        "docs: take the guide further",
+    )?;
+    repo.git(&["switch", "--create", "side/clash", "HEAD~1"])?;
+    repo.commit(
+        "docs/guide.md",
+        "guide, the side's way\n",
+        "docs: the side's guide",
+    )?;
+    repo.git(&["switch", "main"])?;
+
+    // A copy standing where the replay stops, holding work of its own.
+    // **Its row is what the held-back pass leads with**: a carried row is
+    // handed out by the walk at the commit its copy stands on
+    // (`session::rows::CarriedRows::take_for`), the replay leaves this
+    // window detached at that same commit, and the rows of the copies
+    // `carried` already put further down the history draw nowhere near
+    // the top. Without it the pass this run arranges leads with an
+    // ordinary commit, which the reading this verb is about answers
+    // correctly anyway — and the run would pass without ever asking.
+    //
+    // **Holding the branch the replay names is fine**: git rebases onto
+    // that commit without checking the branch out here, and the press
+    // answers in a second and a half either way (measured both forms).
+    repo.git(&["worktree", "add", "../clashing", "side/clash"])?;
+    let clashing = repo.root.join("clashing");
+    std::fs::write(clashing.join("scratch.txt"), "held over on the side\n")
+        .map_err(|e| format!("writing the clashing copy's scratch: {e}"))?;
+    Ok(())
+}
+
 pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",

@@ -187,6 +187,63 @@ Item {
             acts.reportStale()
         }
     }
+    // PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other working copy's
+    // row and none of its own. The run is started into that arrangement (`--preset carried` with the hold raised
+    // before anything opens, `xtask::verify::child`), because which of the walk and the first status gets there
+    // first is the scheduler's and a repository cannot be built into it.
+    //
+    // **A window verb, because the page never settles while the hold is up**: the graph's rows and the status
+    // disagree on purpose, which is the one thing `PageSettled` refuses, so a page verb would wait out its
+    // watchdog before it ever ran (`AutoActDriver`'s baseline).
+    //
+    // The claim is one line over two moments: nothing landed while the row was held back, and the pass that
+    // carries it lands on this window's own tree. Every copy's row wears the same all-zero id, so a reader that
+    // took the id at row 0 for ours opens the pane on a copy nobody asked for and stands the page on it — which is
+    // `early=` and `earlyCopy=`, read before the hold comes down.
+    SampleTimer {
+        id: wipLandingTimer
+        running: Harness.autoAct === "wip-landing"
+        property bool read: false
+        property bool early: false
+        property bool earlyCopy: false
+        onTriggered: {
+            const page = acts.window.curPage
+            if (!page)
+                return
+            const graph = page.pageGraph
+            if (!wipLandingTimer.read) {
+                // The raced pass, named by what it left standing: the status has said this tree is dirty, a pass
+                // has finished, and the row that pass holds is **a neighbour copy's** rather than ours
+                // (`GraphModel.carriedTop`). Asked for rather than hoped for: a pass carrying no all-zero row at
+                // all is one the plain reading of row 0 answers correctly too, so latching on that would let this
+                // verb pass without ever putting the misreading in front of the page.
+                if (!page.pageWt.loaded || !page.pageWt.wipRowStands
+                        || graph.loading || graph.finishCount <= 0 || graph.wipRow || !graph.carriedTop)
+                    return
+                wipLandingTimer.read = true
+                wipLandingTimer.early = page.wipShown
+                wipLandingTimer.earlyCopy = page.carriedPath !== ""
+                // `held=` is the hold answering for itself: a run that read a landing it never arranged for would
+                // otherwise pass on the ordinary order.
+                if (!graph.letTheWorkingTreeRowThrough()) {
+                    stop()
+                    Harness.report("wip_landing held=false")
+                    window.finishAutoAct()
+                }
+                return
+            }
+            if (!graph.wipRow || !PageSettled.settled(page))
+                return
+            stop()
+            Harness.report("wip_landing held=true otherTop=true early=" + wipLandingTimer.early
+                              + " earlyCopy=" + wipLandingTimer.earlyCopy
+                              + " wip=" + page.wipShown
+                              + " copy=" + (page.carriedPath !== "")
+                              + " row=" + page.selectedRow)
+            window.finishAutoAct()
+        }
+    }
+
     /// The five that are judged come first and in one run, because `must_say` matches them as one string. `badge=`
     /// leads; `stopped=` and `stale=` are the model's own two, which the badge folds into one — a run where they
     /// disagreed with it would be a badge standing for nothing. `tint=` is the rule reaching the paint (規約 §状態), and

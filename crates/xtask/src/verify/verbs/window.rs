@@ -279,6 +279,39 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "graph_stale badge=true stopped=true stale=false tint=danger card=true",
     },
+    // Where the page lands when the pass it opened on carries every other
+    // working copy's row and none of its own — the arrangement the run is
+    // started into, since which of the walk and the first status gets
+    // there first is the scheduler's.
+    //
+    // Both moments are in the one line because neither means anything
+    // alone: `early=` and `earlyCopy=` are the page while the row was
+    // held back — nothing opened, and nothing stood on a copy — and
+    // `wip=` is the pass that carries ours landing on this window's own
+    // tree. `held=true` is the hold answering for itself, so a run that
+    // read the ordinary order cannot pass as one that read this.
+    // `otherTop=true` is the rest of that arrangement: the held-back pass
+    // led with a neighbour copy's row, which is the row the misreading
+    // takes. Without it a run whose graph simply had no all-zero row on
+    // top would pass while never asking the question. The row at the end
+    // is judged too — where the landing put the reader is the half a
+    // picture of a working-tree pane cannot tell from any other.
+    Verb {
+        name: "wip-landing",
+        when: &[],
+        plain: "wip_landing held=true otherTop=true early=false earlyCopy=false wip=true copy=false row=0",
+    },
+    // The other landing on the working tree, read in the same
+    // arrangement: the one a stopped operation owes. `owed=true` is the
+    // move decided and still held while the row was out, and the press
+    // that made it is a replay this window started from a clean tree —
+    // the conflicts it stopped in are what the row it lands on is made
+    // of.
+    Verb {
+        name: "wip-landing-stopped",
+        when: &[],
+        plain: "wip_stop_landing held=true otherTop=true owed=true early=false earlyCopy=false wip=true copy=false op=REBASING lit=0",
+    },
     // The band's three actions at the last cell that still has a word
     // in it. A band shot at one width says nothing about the width its
     // shape was supposed to change at, so what is judged is that the

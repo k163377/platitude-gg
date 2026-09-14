@@ -240,6 +240,13 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.fault_hold_act {
         cmd.env("PGG_FAULT_HOLD_ACT", "1");
     }
+    // Raised for the verbs whose subject it is, the way the held save is:
+    // what they are about is the page a pass that beat the first status
+    // leaves, and a run that had to be asked for it by hand would be one
+    // the census could not record (`super::verbs::graph_walk`).
+    if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str()) {
+        cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
+    }
     // The saves held until a station where a run asked for it — and,
     // unasked, for the verb whose subject that is: its identity save is
     // held until the shutdown joins it, which is what the run reads
@@ -308,6 +315,12 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
 
     Ok(cmd)
 }
+
+/// The verbs started into a graph that walks as if this window's first
+/// status had not arrived — the two landings on the working tree, read
+/// in the one arrangement a repository cannot be built into
+/// (`platitude_app::harness::faults`).
+const HELD_WIP_ROW_VERBS: &[&str] = &["wip-landing", "wip-landing-stopped"];
 
 /// The verb whose subject is the exit waiting for a configuration save
 /// the hub holds, and the station its save is held until: the one the

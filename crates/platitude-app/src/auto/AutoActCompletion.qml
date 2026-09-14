@@ -40,6 +40,7 @@ QtObject {
                 "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
+                "wip-landing-stopped",
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
                 "rebase-onto", "revert-commit", "op-exit-go", "op-exit-lands", "stage-hunk",
                 "stage-line", "keep-place", "code-shrink", "discard-hunk-go", "line-back", "diff-follow",
@@ -90,6 +91,7 @@ QtObject {
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
+                "wip-landing-stopped",
                 "merge-commit",
                 "code-send", "code-grow", "code-shrink", "code-swap",
                 "line-back", "diff-follow", "line-run",
@@ -252,6 +254,7 @@ QtObject {
                 "tab-pin", "tab-pin-go", "tab-open-go",
                 "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "badges-hover-early", "graph-stale", "graph-stopped",
+                "wip-landing",
                 "band-actions", "band-actions-none",
                 "band-actions-fold", "band-actions-alert", "band-actions-stopped", "fetch-tip-link",
                 "old-git", "old-git-card",
