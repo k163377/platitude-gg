@@ -111,8 +111,48 @@ pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
 /// <verb>`, so the command reads the same as on the host.
 const XTASK_VERBS: [&str; 3] = ["verify-ui", "demo-repo", "qmltest"];
 
-/// Cargo verbs that build something, and so care which stage they run in.
-const BUILD_VERBS: [&str; 7] = ["build", "check", "test", "clippy", "bench", "run", "doc"];
+/// Cargo verbs that build something, and so care which stage they run
+/// in. A list of what needs Qt can be short without being unsafe: a verb
+/// missing from it picks the smaller image and fails to build, in front
+/// of the person who typed it — which is why the lock flag is decided
+/// the other way round ([`UNLOCKED_VERBS`]). Cargo's own one-letter
+/// aliases are here because `linux t` reaches the app exactly as
+/// `linux test` does.
+const BUILD_VERBS: [&str; 11] = [
+    "build", "check", "test", "clippy", "bench", "run", "doc", "b", "c", "t", "r",
+];
+
+/// The cargo verbs that are handed to the container **without**
+/// `--locked`. Everything else gets it.
+///
+/// **The default is locked, and the list is of the exceptions**, because
+/// the two ways of being wrong are not the same size. The tree at /work
+/// is the host's own checkout, so a cargo in there that rewrites the
+/// lock writes it on the machine outside — a verb this forgot would do
+/// that silently, which is the thing there must be no path to (CLAUDE.md
+/// 絶対制約: a dependency change is a human's decision). A verb wrongly
+/// given the flag says so and stops, in front of the person who typed
+/// it. A list of the verbs that resolve is a list to be caught short by:
+/// it was, twice — `metadata`, `tree` and then `fetch`, which generates
+/// a lock file of its own if none is there.
+///
+/// So: `fmt`, which resolves nothing (`cargo-fmt` asks for `--no-deps`
+/// metadata and would reject the flag), and the verbs whose whole
+/// purpose is to move the lock or the manifest, which `--locked` exists
+/// to refuse. A third-party subcommand that does not take the flag is
+/// the loud kind of wrong: run it through `--shell`, or add it here if
+/// it is one this project uses.
+const UNLOCKED_VERBS: [&str; 9] = [
+    "fmt",
+    "update",
+    "generate-lockfile",
+    "add",
+    "remove",
+    "clean",
+    "new",
+    "init",
+    "help",
+];
 
 /// The packages that hold no Qt. A build restricted to these needs no Qt
 /// either; anything else reaches platitude-app, including a bare `cargo
@@ -219,26 +259,89 @@ fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, Strin
     Ok(tag)
 }
 
+/// Cargo's own options that take their value in the next word. **A
+/// subcommand is not simply the first word that is not an option**:
+/// cargo takes its own options ahead of one (`cargo --offline fetch`),
+/// and the value of one of these is a word that starts with no dash —
+/// `cargo --config net.retry=2 test` would hand `net.retry=2` out as the
+/// subcommand to anything that only looked for that. The `--flag=value`
+/// spelling is one word and needs none of this.
+const GLOBAL_OPTIONS_WITH_A_VALUE: [&str; 5] = ["--explain", "--color", "--config", "-C", "-Z"];
+
+/// Where the subcommand stands in the line, past cargo's own options, or
+/// `None` for a line that has none (`--version`, `--list`).
+///
+/// An option this does not know is read as a flag, so its value — if it
+/// had one — is taken for the subcommand and `--locked` lands after it.
+/// That is the loud kind of wrong: cargo answers "no such subcommand" in
+/// front of the person who typed it, where a line that quietly went
+/// unlocked would have rewritten the host's lock instead
+/// ([`UNLOCKED_VERBS`]).
+fn subcommand_at(rest: &[String]) -> Option<usize> {
+    let mut at = 0;
+    while let Some(word) = rest.get(at) {
+        if word == "--" {
+            return None;
+        }
+        if !word.starts_with('-') {
+            return Some(at);
+        }
+        if GLOBAL_OPTIONS_WITH_A_VALUE.contains(&word.as_str()) {
+            at += 1;
+        }
+        at += 1;
+    }
+    None
+}
+
 /// What to run inside: a cargo command, with `xtask` folded in when the
-/// first word is one of the task runner's own verbs.
+/// subcommand is one of the task runner's own verbs, and `--locked`
+/// spelled on unless that subcommand is one that must not carry it
+/// ([`UNLOCKED_VERBS`]).
+///
+/// A task-runner verb needs neither: `cargo xtask` is an alias that
+/// carries `--locked` already (.cargo/config.toml), and a second one
+/// would be a second place to forget it.
 fn command_line(rest: &[String]) -> Vec<String> {
     let mut line = vec!["cargo".to_string()];
-    if rest
-        .first()
-        .is_some_and(|verb| XTASK_VERBS.contains(&verb.as_str()))
-    {
-        line.push("xtask".to_string());
-    }
     line.extend(rest.iter().cloned());
+    // A line with no subcommand resolves nothing, so there is nothing to
+    // lock and nowhere to put it.
+    let Some(at) = subcommand_at(rest) else {
+        return line;
+    };
+    let verb = rest[at].as_str();
+    if XTASK_VERBS.contains(&verb) {
+        // Where the subcommand stands, which is not always the front:
+        // `--offline verify-ui commit` is cargo's option and then ours.
+        line.insert(at + 1, "xtask".to_string());
+        return line;
+    }
+    // Only what the caller typed as options: past `--` the words belong
+    // to the program being run, and one of those spelling `--locked` is
+    // not this line carrying it. `--frozen` is `--locked` and
+    // `--offline` in one word, so a line that has it is already locked.
+    let options = rest.split(|word| word == "--").next().unwrap_or(rest);
+    let spelled = options
+        .iter()
+        .any(|word| word == "--locked" || word == "--frozen");
+    if !UNLOCKED_VERBS.contains(&verb) && !spelled {
+        // Right after the subcommand, where the gate spells it
+        // (`gate::plan`) — `line` carries "cargo" in front of `rest`.
+        line.insert(at + 2, "--locked".to_string());
+    }
     line
 }
 
 /// Which image the command needs. Nothing here is a guess about Qt itself:
 /// either the command names only Qt-free packages, or it can reach the app.
 fn stage_for(rest: &[String]) -> &'static str {
-    let Some(verb) = rest.first().map(String::as_str) else {
-        // A bare `--shell`. The small image opens now; --stage app asks for
-        // the other one.
+    // The subcommand rather than the first word, for the reason
+    // [`subcommand_at`] gives: `--offline test` is cargo's option and
+    // then the verb that reaches the app.
+    let Some(verb) = subcommand_at(rest).map(|at| rest[at].as_str()) else {
+        // A bare `--shell`, or a line that is all options. The small
+        // image opens now; --stage app asks for the other one.
         return "core";
     };
     if XTASK_VERBS.contains(&verb) {
@@ -419,7 +522,7 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     if shell {
         cmd.arg("bash");
     } else {
-        cmd.args(&inside);
+        cmd.args(watched_from_inside(&inside));
     }
     // Through the budget's runner: the container goes on running when
     // the launcher is killed, so the ledger has to know which number is
@@ -439,6 +542,68 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         Some(code) => format!("the run in {tag} exited {code}"),
         None => format!("the run in {tag} was killed"),
     })
+}
+
+/// The files whose bytes decide what a cargo in there resolves, as the
+/// mount hands them over: the three at the root and **every member's own
+/// manifest**, which a resolve reads too. A glob rather than a list, so
+/// a member added to the workspace is not a member this forgets — the
+/// host's side of the same evidence reads the same set off the tree
+/// (`gate::evidence::read_to_resolve`). All of them are the host's own
+/// files, read across the boundary between a Windows checkout and a
+/// Linux container, which is the one thing about /work that the machine
+/// outside cannot see.
+const READ_TO_RESOLVE: [&str; 4] = [
+    "Cargo.lock",
+    "Cargo.toml",
+    ".cargo/config.toml",
+    "crates/*/Cargo.toml",
+];
+
+/// The command with a look at those files bracketed around it.
+///
+/// **A container is `--rm`, so nothing survives it that it did not say
+/// while it ran.** A cargo that stops on the lock file leaves a message
+/// naming the file and nothing about the bytes it read, and every look
+/// taken afterwards — from out here, or from a second container — is a
+/// look at a different moment through a mount that has since settled.
+/// The look before the command runs is held in a variable and printed
+/// only if the command fails, so a green run says nothing new and a red
+/// one carries both ends of the bracket.
+///
+/// **What it can and cannot settle**: `bytes=0` on the near side of a
+/// failure says this container was handed an empty file. Both ends
+/// intact says only that nothing was standing wrong before the command
+/// and after it — **the read cargo itself made is in between, and is not
+/// bracketed**, so neither end is evidence of what cargo read.
+fn watched_from_inside(inside: &[String]) -> Vec<String> {
+    // Unquoted so the glob is the shell's to expand; a pattern that
+    // matches nothing stays as it was typed, and the test below reports
+    // it absent under its own name rather than passing over it.
+    let looks = READ_TO_RESOLVE
+        .map(|file| format!("{WORK}/{file}"))
+        .join(" ");
+    // `${f#/work/}`: the name as the host's side of the evidence spells
+    // it, so the two lines stand side by side.
+    let script = format!(
+        "look() {{\n  for f in {looks}; do\n    \
+         if [ -f \"$f\" ]; then echo \"pgg-probe $1 ${{f#{WORK}/}} \
+         bytes=$(wc -c < \"$f\") sha=$(sha256sum \"$f\" | cut -c1-16)\"; \
+         else echo \"pgg-probe $1 ${{f#{WORK}/}} absent\"; fi\n  done\n}}\n\
+         before=$(look before)\n\"$@\"\ncode=$?\n\
+         if [ \"$code\" -ne 0 ]; then\n  echo \"$before\"\n  look after\n  \
+         echo \"pgg-probe cargo $(cargo --version 2>&1)\"\n  \
+         printf 'pgg-probe ran'; for w in \"$@\"; do printf ' [%s]' \"$w\"; done; echo\n\
+         fi\nexit \"$code\"\n"
+    );
+    let mut line = vec![
+        "sh".to_string(),
+        "-c".to_string(),
+        script,
+        IMAGE.to_string(),
+    ];
+    line.extend(inside.iter().cloned());
+    line
 }
 
 /// A `docker run`, already carrying the marks everything a container
