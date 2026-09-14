@@ -208,9 +208,38 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         );
     }
     if let Some(walk) = context.font_walk {
-        for line in font_walk_lines(kept, walk, opts.settle_ms) {
+        for line in font_walk_lines(kept, walk, opts) {
             println!("{line}");
         }
+    }
+}
+
+/// Whether the runs being reported walked the font database themselves.
+///
+/// **The corpus asks during the scroll** ([`super::fonts`]): one subject
+/// in a thousand opens with an emoji, so the first screen carries none
+/// and the pass over the window's rows carries two. A run that never
+/// scrolled — the staged table's `--no-open`, `--no-select --no-scroll`,
+/// `--no-scroll` — never paid the charge the calibration weighed, and
+/// subtracting it there would take tens of MB off a number nobody spent.
+///
+/// Conservative on purpose, and in the direction that cannot mislead: a
+/// run named onto an emoji row with `--select-oid` does pay without
+/// scrolling, and is reported gross. Reading a gross number as gross is
+/// the reader's own arithmetic; reading a number as net when nothing was
+/// taken off is the report lying about the budget line.
+fn paid_the_walk(opts: &Options) -> bool {
+    opts.open && opts.scroll
+}
+
+/// The flag that named this run's shape, for the line that says why
+/// there is no net — the reader asked for the shape and gets it named
+/// back rather than a sentence about scrolling in general.
+fn shape_of(opts: &Options) -> &'static str {
+    if !opts.open {
+        "--no-open"
+    } else {
+        "--no-scroll"
     }
 }
 
@@ -218,7 +247,8 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
 /// budget is read against (ci/baseline/perf-windows-x64.md §判定). The
 /// working set above stays as sampled, walk included, so the two can be
 /// read against each other.
-fn font_walk_lines(kept: &[Reading], walk: &FontWalk, settle_ms: u64) -> Vec<String> {
+fn font_walk_lines(kept: &[Reading], walk: &FontWalk, opts: &Options) -> Vec<String> {
+    let settle_ms = opts.settle_ms;
     let (Some(working_set), Some(private)) = (walk.working_set(), walk.private()) else {
         return vec![
             "  font walk   : not weighed — the calibration run said its three lines, but the \
@@ -227,6 +257,7 @@ fn font_walk_lines(kept: &[Reading], walk: &FontWalk, settle_ms: u64) -> Vec<Str
         ];
     };
     let charge = walk.charge();
+    let unpaid = !paid_the_walk(opts);
     let mut lines = vec![format!(
         "  font walk   : {} working set, {} private — Qt populating its font database for the \
          first glyph the UI family lacks, weighed by the calibration run (run-font-walk){}",
@@ -234,10 +265,20 @@ fn font_walk_lines(kept: &[Reading], walk: &FontWalk, settle_ms: u64) -> Vec<Str
         signed_mb(private),
         if charge == 0 {
             "; nothing to take off — the walk had already been paid before that run asked"
+        } else if unpaid {
+            "; not taken off below — these runs never reached the rows that ask"
         } else {
             ", and taken off the working set below"
         }
     )];
+    if unpaid {
+        lines.push(format!(
+            "  net         : - (no net line: {} never scrolls the window, so nothing here paid \
+             the walk — read the working set above as it stands)",
+            shape_of(opts)
+        ));
+        return lines;
+    }
     let net: Vec<f64> = kept
         .iter()
         .map(|r| mb(r.peak_working_set.saturating_sub(charge)))
@@ -505,9 +546,22 @@ fn median(sorted: &[f64]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reading, attribution_lines, count_spread, font_walk_lines, median, spread};
+    use super::{
+        Options, Reading, attribution_lines, count_spread, font_walk_lines, median, spread,
+    };
     use crate::perf::attribution::{Attribution, Heap};
     use crate::perf::fonts::{FontWalk, Tick};
+
+    /// The run as its flags shaped it, settled the way an invocation's
+    /// are — so a test names the measurement mode the reader names
+    /// (`--no-scroll`) rather than poking the field behind it.
+    fn shaped(words: &[&str]) -> Options {
+        let mut args = vec!["--repo".to_string(), "x".to_string()];
+        args.extend(words.iter().map(|w| (*w).to_string()));
+        let mut opts = crate::perf::options::parse(&args).expect("a shape the parser takes");
+        opts.settle_ms = 8000;
+        opts
+    }
 
     /// The walk's weight is said beside the working set, and the net
     /// line is every kept run's peak less that weight — settled too,
@@ -539,7 +593,8 @@ mod tests {
             before: Some(tick(0, 200, 150)),
             after: Some(tick(3, 255, 203)),
         };
-        let text = font_walk_lines(&kept, &walk, 8000).join("\n");
+        let full = shaped(&[]);
+        let text = font_walk_lines(&kept, &walk, &full).join("\n");
         assert!(
             text.contains("font walk   : +55.0MB working set, +53.0MB private"),
             "{text}"
@@ -552,7 +607,7 @@ mod tests {
             after: walk.before,
             ..walk.clone()
         };
-        let text = font_walk_lines(&kept, &paid, 8000).join("\n");
+        let text = font_walk_lines(&kept, &paid, &full).join("\n");
         assert!(text.contains("+0.0MB working set"), "{text}");
         assert!(text.contains("already been paid"), "{text}");
         assert!(text.contains("net         : 300.0–304.0"), "{text}");
@@ -561,9 +616,64 @@ mod tests {
             after: None,
             ..walk
         };
-        let text = font_walk_lines(&kept, &unweighed, 8000).join("\n");
+        let text = font_walk_lines(&kept, &unweighed, &full).join("\n");
         assert!(text.contains("not weighed"), "{text}");
         assert!(!text.contains("net         :"), "{text}");
+    }
+
+    /// **The runs that stage the table never scroll, so nothing in them
+    /// paid the walk** — and a net line under one would take tens of MB
+    /// off a number nobody spent (P3-確認事項 §性能). The weight is still
+    /// printed, because the calibration run did weigh it; what is
+    /// withheld is the subtraction and the word `net` in front of it.
+    #[test]
+    fn a_run_that_never_scrolls_is_not_reported_net_of_a_walk_it_did_not_pay() {
+        let kept = [Reading {
+            peak_working_set: 300 << 20,
+            settled_working_set: 296 << 20,
+            ..Reading::default()
+        }];
+        let tick = |at_us, working_set: u64, private: u64| Tick {
+            at_us,
+            working_set: working_set << 20,
+            private: private << 20,
+        };
+        let walk = FontWalk {
+            begin_us: Some(1),
+            done_us: Some(2),
+            settled_us: Some(3),
+            before: Some(tick(0, 200, 150)),
+            after: Some(tick(3, 255, 203)),
+        };
+        // Every shape the staged table is taken in, and the one it is
+        // not: the three on the left hold the window still, and only the
+        // full run walks the rows the emoji are in.
+        for words in [
+            vec!["--no-open"],
+            vec!["--no-select", "--no-scroll"],
+            vec!["--no-scroll"],
+        ] {
+            let text = font_walk_lines(&kept, &walk, &shaped(&words)).join("\n");
+            assert!(
+                text.contains("+55.0MB working set"),
+                "the weight is still said for {words:?}: {text}"
+            );
+            assert!(
+                text.contains("never scrolls the window"),
+                "and why there is no net, for {words:?}: {text}"
+            );
+            assert!(
+                !text.contains("245.0") && !text.contains("241.0"),
+                "nothing is taken off for {words:?}: {text}"
+            );
+            assert!(
+                !text.contains("settled net"),
+                "and the settled line goes with it for {words:?}: {text}"
+            );
+        }
+        // `--no-select` alone still scrolls, so it still pays.
+        let text = font_walk_lines(&kept, &walk, &shaped(&["--no-select"])).join("\n");
+        assert!(text.contains("net         : 245.0"), "{text}");
     }
 
     #[test]
