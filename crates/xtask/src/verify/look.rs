@@ -11,12 +11,11 @@
 //! the disk once it has exited, so a child it left behind — holding what
 //! would have been the pipe's write end — holds nothing here.
 
-use std::fs::File;
 use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
-use crate::wait::{Budget, LOOK_AGAIN, Wait};
+use crate::subprocess::{Answer, bounded};
 
 #[cfg(windows)]
 const DUMP_FILE: &str = "app.dmp";
@@ -100,87 +99,6 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
         lines.push(dump_of(pid, shot_dir));
     }
     lines
-}
-
-/// What a bounded diagnostic came back with.
-#[derive(Debug)]
-enum Answer {
-    /// It ended on its own: how, and what it had written by then to the
-    /// file it was given for stdout — nothing where it was given none.
-    Ended { status: ExitStatus, stdout: String },
-    /// It stood past its ceiling and was ended here, after this long —
-    /// or could not be, which is said rather than assumed, with the pid
-    /// that may then still be running.
-    OutOfTime {
-        pid: u32,
-        after: Duration,
-        ended: Result<(), String>,
-    },
-    /// It could not be started, or asked after.
-    Unstarted(String),
-}
-
-/// Runs `command` to its end or to `ceiling`, whichever comes first, and
-/// says which. A diagnostic past its ceiling is ended and waited for
-/// before this answers, so what comes after it — the reaping of the app
-/// — never runs beside a dumper still holding the process open.
-///
-/// **Stdout goes to a file, never a pipe.** A pipe is read to its end,
-/// and its end is every write handle closed — a child of the diagnostic
-/// that inherited its stdout and outlives it holds one, and would hold
-/// the answer for as long as it lives (the test that leaves such a child
-/// behind waited its whole twenty seconds on the pipe). A file has no
-/// other end: what the diagnostic wrote is read off the disk once it has
-/// exited, and whatever still holds the file holds nothing here. `said`
-/// is that file; `None` for a diagnostic whose words are not wanted.
-fn bounded(what: &str, mut command: Command, ceiling: Duration, said: Option<&Path>) -> Answer {
-    let stdout = match said.map(File::create) {
-        None => Stdio::null(),
-        Some(Ok(file)) => Stdio::from(file),
-        Some(Err(error)) => {
-            return Answer::Unstarted(format!(
-                "{what} could not be given a file for what it says: {error}"
-            ));
-        }
-    };
-    command
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(Stdio::null());
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(error) => return Answer::Unstarted(format!("{what} could not be started: {error}")),
-    };
-    let mut wait = Wait::new(what, Budget::whole(ceiling), LOOK_AGAIN);
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = said
-                    .and_then(|path| std::fs::read(path).ok())
-                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-                    .unwrap_or_default();
-                return Answer::Ended { status, stdout };
-            }
-            Ok(None) => {}
-            Err(error) => {
-                return Answer::Unstarted(format!("{what} could not be asked after: {error}"));
-            }
-        }
-        if wait.look_again("its exit").is_err() {
-            // Asking it to end is only asking; the wait is what says the process is
-            // gone, and either failing is carried out as the answer.
-            let ended = child
-                .kill()
-                .and_then(|()| child.wait())
-                .map(|_| ())
-                .map_err(|error| error.to_string());
-            return Answer::OutOfTime {
-                pid: child.id(),
-                after: wait.elapsed(),
-                ended,
-            };
-        }
-    }
 }
 
 /// What a listing answered with: one line per thread, and the stack
