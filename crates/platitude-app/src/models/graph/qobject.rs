@@ -159,6 +159,36 @@ impl GraphModel {
         crate::harness::fail_graph_pass(self.tab_id, &step);
     }
 
+    /// Automation: the passes that were walking as if this window's first
+    /// status had not arrived stop doing so, and one is asked for in the
+    /// same call. Answers whether the hold had been up, so a run cannot
+    /// read a landing it never arranged for as one it did
+    /// (`harness::let_the_working_tree_row_through`).
+    ///
+    /// The slot stays whatever the build is, for the reason
+    /// [`Self::fail_graph_pass`] gives.
+    #[qslot]
+    fn let_the_working_tree_row_through(&mut self) -> bool {
+        crate::harness::let_the_working_tree_row_through(self.tab_id)
+    }
+
+    /// Automation: one more pass while the hold stays up. Answers whether
+    /// the hold was up, like the call that lowers it.
+    ///
+    /// **The arrangement has to be asked for after a write**: what
+    /// ordinarily brings the next pass is this window's own row appearing
+    /// (`session::refresh` rebuilds on a move, and a stopped replay moves
+    /// no branch), and the hold is exactly what keeps that from happening
+    /// — so a landing owed by a stopped operation would be offered no
+    /// pass at all to turn down (`harness::walk_again_while_held`).
+    ///
+    /// The slot stays whatever the build is, for the reason
+    /// [`Self::fail_graph_pass`] gives.
+    #[qslot]
+    fn walk_again_while_held(&mut self) -> bool {
+        crate::harness::walk_again_while_held(self.tab_id)
+    }
+
     /// Row index of a commit (sidebar jump); -1 when absent. Through the
     /// id index (`marks::row_at`), not a scan of the window.
     #[qslot]

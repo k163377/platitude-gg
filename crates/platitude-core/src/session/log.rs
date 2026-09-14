@@ -449,7 +449,18 @@ impl RepoSession {
             // truncation notice claiming history the user just asked to
             // see — a rebuild is the only thing that speaks when one
             // overtakes the stream the change asked for (core.md).
-            let unchanged = shared.sent_footer == Some(footer)
+            //
+            // **Every pass speaks while the working-tree row is held
+            // back** ([`PassHooks::holds_back_the_working_tree_row`]).
+            // What that hold arranges is a pass with no row of this
+            // window's, and after a write there is nothing else for such
+            // a pass to differ by — a stopped replay moves no branch, and
+            // the row that would have made the difference is the one
+            // being held — so the reproduction would be walked and then
+            // dropped here as "the same picture" (measured). Nobody but a
+            // harness ever raises it.
+            let unchanged = !self.holds_back_the_working_tree_row()
+                && shared.sent_footer == Some(footer)
                 && shared.sent_rows.len() == rows.len()
                 && shared
                     .sent_rows

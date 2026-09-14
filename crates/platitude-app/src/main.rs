@@ -31,6 +31,13 @@ fn main() {
     // behind, the QML watchdog being unable to fire once the event loop
     // stops turning or is left (`harness::deadline`).
     harness::watch_deadline();
+    // Before any repository is opened, so the opening's own walk is one
+    // of the passes that carries no row of this window's working tree —
+    // which is the arrangement the landings on it are answerable for and
+    // the one nothing can be built into (`harness::faults`).
+    if harness::knobs().fault_hold_wip_row {
+        harness::hold_the_working_tree_row();
+    }
     // Said once, before anything else can fail: a run whose window never
     // comes up, or whose stderr is all a verify-ui report keeps, still
     // names the tree it was built from (CLAUDE.md ビルド・テスト).

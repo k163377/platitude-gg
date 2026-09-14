@@ -25,6 +25,12 @@ use platitude_core::session::PassStep;
 #[derive(Default)]
 struct GraphFaults {
     at: std::sync::Mutex<Option<PassStep>>,
+    /// Whether every pass must walk as one that began before the first
+    /// status did ([`PassHooks::holds_back_the_working_tree_row`]).
+    /// Raised before the repository is opened, so the opening's own walk
+    /// is one of them, and lowered by the run when it has read what that
+    /// pass left the page holding.
+    holds_the_row: std::sync::atomic::AtomicBool,
 }
 
 #[cfg(feature = "automation")]
@@ -55,6 +61,67 @@ impl PassHooks for GraphFaults {
             message: "the graph walk was made to fail".to_string(),
         })
     }
+
+    fn holds_back_the_working_tree_row(&self) -> bool {
+        self.holds_the_row.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Raises the hold before anything is opened, off the run's own word
+/// (`knobs::holds_the_working_tree_row`).
+#[cfg(feature = "automation")]
+pub(crate) fn hold_the_working_tree_row() {
+    GraphFaults::standing()
+        .holds_the_row
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(not(feature = "automation"))]
+pub(crate) fn hold_the_working_tree_row() {}
+
+/// Lowers it again and asks the tab's session for the pass that carries
+/// the row, answering whether the hold had been up — the run reads the
+/// page on either side of this call, and the difference between the two
+/// is what it is about (`GraphModel.letTheWorkingTreeRowThrough`).
+#[cfg(feature = "automation")]
+pub(crate) fn let_the_working_tree_row_through(tab_id: i32) -> bool {
+    let held = GraphFaults::standing()
+        .holds_the_row
+        .swap(false, std::sync::atomic::Ordering::SeqCst);
+    if held {
+        crate::hub::with_session(tab_id, |s| s.refresh_log());
+    }
+    held
+}
+
+#[cfg(not(feature = "automation"))]
+pub(crate) fn let_the_working_tree_row_through(_tab_id: i32) -> bool {
+    false
+}
+
+/// Asks the tab's session for a pass with the hold left standing,
+/// answering whether it was up (`GraphModel.walkAgainWhileHeld`).
+///
+/// **What a write leaves behind does not bring one on its own.** A
+/// rebuild follows a read that moved (`session::refresh`), and a replay
+/// that stops moves no branch — what moves is this window's own row
+/// appearing, which is the very thing the hold takes away. So the pass a
+/// landing owed by a stopped operation has to turn down is asked for
+/// here.
+#[cfg(feature = "automation")]
+pub(crate) fn walk_again_while_held(tab_id: i32) -> bool {
+    let held = GraphFaults::standing()
+        .holds_the_row
+        .load(std::sync::atomic::Ordering::SeqCst);
+    if held {
+        crate::hub::with_session(tab_id, |s| s.refresh_log());
+    }
+    held
+}
+
+#[cfg(not(feature = "automation"))]
+pub(crate) fn walk_again_while_held(_tab_id: i32) -> bool {
+    false
 }
 
 /// What every session this application opens lets into its graph passes

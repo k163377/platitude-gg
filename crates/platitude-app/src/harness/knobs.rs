@@ -67,6 +67,12 @@ pub(crate) struct Knobs {
     /// since a ceiling short enough to beat a completion on one machine
     /// is one the completion beats on another.
     pub fault_hold_act: bool,
+    /// `PGG_FAULT_HOLD_WIP_ROW` — walk every pass as one that began
+    /// before this window's first status did, until the run says
+    /// otherwise. The arrangement the readers that land on the working
+    /// tree are answerable for and a repository cannot be built into
+    /// (`platitude_core::session::PassHooks::holds_back_the_working_tree_row`).
+    pub fault_hold_wip_row: bool,
     /// `PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
     /// spawns until the station this names is reached
     /// (`harness::deadline`), so a close can be photographed landing on a
@@ -175,6 +181,7 @@ fn read() -> Knobs {
         fault_hang: text("PGG_FAULT_HANG"),
         fault_no_deadline: on("PGG_FAULT_NO_DEADLINE"),
         fault_hold_act: on("PGG_FAULT_HOLD_ACT"),
+        fault_hold_wip_row: on("PGG_FAULT_HOLD_WIP_ROW"),
         fault_hold_save: text("PGG_FAULT_HOLD_SAVE"),
         select: on("PGG_AUTO_SELECT"),
         scroll: on("PGG_AUTO_SCROLL"),

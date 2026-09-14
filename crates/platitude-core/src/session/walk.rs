@@ -237,6 +237,16 @@ impl RepoSession {
     /// names and no edge reaches — appearing and vanishing with a merge
     /// the graph never mentions.
     fn pending_commit(&self) -> Option<Vec<Oid>> {
+        // **Held back where somebody asked for that**
+        // ([`PassHooks::holds_back_the_working_tree_row`]): a pass that
+        // began before the first status carries no row of this window's,
+        // and every copy's. That is the scheduler's race to win or lose,
+        // so it is the one arrangement a repository cannot be walked
+        // into — and the readers that land on the working tree have to
+        // be answerable for what they do in it.
+        if self.holds_back_the_working_tree_row() {
+            return None;
+        }
         let incoming = self.standing.merge_incoming();
         let stacked = self.standing.wip_dirty() || !incoming.is_empty();
         stacked.then_some(incoming)

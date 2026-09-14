@@ -105,6 +105,29 @@ pub trait PassHooks: Send + Sync + 'static {
     /// the pass the caller then asks for succeeds, and the mark goes up
     /// and straight back down before anything can be read off it.
     fn fault(&self, at: PassStep) -> Option<GitError>;
+
+    /// Whether a pass must walk as one that began before this window's
+    /// first status did: no row of its own uncommitted work at the top,
+    /// and no leash from it.
+    ///
+    /// **The one arrangement a repository cannot be walked into.** Which
+    /// of the walk and the status gets there first is the scheduler's,
+    /// and the readers that land on the working tree are answerable for
+    /// what they do in the pass that lost — where every other working
+    /// copy has a row and this window has none, all of them wearing the
+    /// same all-zero id. Answered `false` by anything that has not been
+    /// asked to arrange it, which is everything but a harness.
+    ///
+    /// **While it is up, every pass is published** (`RepoSession::
+    /// run_swap_pass`, which otherwise drops a pass whose picture is the
+    /// one already on screen). After a write there is nothing else for
+    /// such a pass to differ by — a stopped replay moves no branch, and
+    /// the row that would have made the difference is the one being held
+    /// — so the arrangement would be walked and then dropped as the same
+    /// picture, and the readers it is for would never be offered it.
+    fn holds_back_the_working_tree_row(&self) -> bool {
+        false
+    }
 }
 
 impl RepoSession {
@@ -118,6 +141,14 @@ impl RepoSession {
     /// The fault standing at `at`, if anything was handed in that has one.
     pub(super) fn pass_fault(&self, at: PassStep) -> Option<GitError> {
         self.pass_hooks.as_ref().and_then(|hooks| hooks.fault(at))
+    }
+
+    /// Whether a pass must walk as one that began before the first status
+    /// did ([`PassHooks::holds_back_the_working_tree_row`]).
+    pub(super) fn holds_back_the_working_tree_row(&self) -> bool {
+        self.pass_hooks
+            .as_ref()
+            .is_some_and(|hooks| hooks.holds_back_the_working_tree_row())
     }
 }
 
