@@ -23,6 +23,7 @@
 
 mod census;
 mod deps;
+mod evidence;
 mod graph;
 mod hooks;
 mod inputs;
@@ -565,12 +566,24 @@ fn run_sides(
     );
     let host_waited = Waited::default();
     let linux_waited = Waited::default();
+    // This run's own name, for what a red step leaves behind
+    // (`evidence`). The second it started and the process that ran it,
+    // as the record beside it is named (`record::keep`) — one pair of
+    // eyes reading a red gate has both.
+    let run = format!(
+        "{}-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs()),
+        std::process::id()
+    );
     let host_ground = Ground {
         name: "host",
         dir: &plan.dir,
         store,
         logs,
         runner,
+        run: &run,
         waited: &host_waited,
         pool: &pool,
         seat: &seat,
@@ -656,6 +669,10 @@ struct Ground<'a> {
     store: &'a Store,
     logs: &'a Path,
     runner: Option<&'a Path>,
+    /// What this run is called where its red steps' logs are kept
+    /// (`evidence::keep`): a step's log is named by its index, so the
+    /// next gate in this tree writes over it.
+    run: &'a str,
     /// Where this side's units tally what they waited for room another
     /// gate was holding — said in a line here and kept in the run's
     /// record, beside the longest units, which are what a landing's
@@ -971,7 +988,27 @@ fn run_one(
         }
         Err(why) => {
             println!("[{name}] FAIL   {id} ({secs}s): {why}");
-            Err(id.clone())
+            // The log is kept before anything else looks at this tree:
+            // the re-run that follows a red gate writes over it in place
+            // (`evidence`), and a keeping that failed is said here and
+            // is never a second failure of the step.
+            match evidence::keep(
+                ground.logs,
+                ground.run,
+                ground.dir,
+                &log,
+                &required.step.command,
+            ) {
+                Ok(None) => Err(id.clone()),
+                Ok(Some(note)) => {
+                    println!("[{name}] {note}");
+                    Err(format!("{id} — {note}"))
+                }
+                Err(why) => {
+                    println!("[{name}] the red step's log was not kept: {why}");
+                    Err(id.clone())
+                }
+            }
         }
     }
 }

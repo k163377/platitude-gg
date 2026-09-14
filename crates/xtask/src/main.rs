@@ -13,6 +13,7 @@ mod commands;
 mod corpus;
 mod demo;
 mod deny;
+mod digest;
 mod docs;
 mod gate;
 mod gui;
