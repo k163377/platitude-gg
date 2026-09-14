@@ -37,6 +37,7 @@
 mod env;
 mod modules;
 mod popups;
+mod wiprow;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -125,11 +126,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (crossed, harness_types) = modules::check(&root)?;
     let (looked_up, app_files) = env::check(&root)?;
     let (closed_for, product_files) = popups::check(&root)?;
+    let (asked_the_id, qml_files) = wiprow::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
     let closing_for_others = closed_for.len();
     failures.extend(crossed);
     failures.extend(looked_up);
     failures.extend(closed_for);
+    failures.extend(asked_the_id);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -142,7 +145,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
              ({}% comment and blank), {} on the ledger, {pinned} pinned by the baseline, \
              {harness_types} harness types out of the product's reach, \
              {app_files} app files off the environment, \
-             {product_files} product files closing nothing but their own — PASS",
+             {product_files} product files closing nothing but their own, \
+             {qml_files} QML files asking the graph which row is this window's — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -342,6 +346,79 @@ fn relative(root: &Path, file: &Path) -> String {
         .unwrap_or(file)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+/// The text with every comment and every string literal's contents turned
+/// to spaces, line breaks kept so the lines still count.
+fn without_comments_and_strings(text: &str) -> String {
+    #[derive(PartialEq)]
+    enum In {
+        Code,
+        Line,
+        Block,
+        Text(char),
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut state = In::Code;
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        let next = chars.get(i + 1).copied();
+        match state {
+            In::Code => match c {
+                '/' if next == Some('/') => {
+                    state = In::Line;
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                '/' if next == Some('*') => {
+                    state = In::Block;
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                '"' | '\'' | '`' => {
+                    state = In::Text(c);
+                    out.push(c);
+                }
+                _ => out.push(c),
+            },
+            In::Line => {
+                if c == '\n' {
+                    state = In::Code;
+                    out.push('\n');
+                } else {
+                    out.push(' ');
+                }
+            }
+            In::Block => {
+                if c == '*' && next == Some('/') {
+                    state = In::Code;
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                out.push(if c == '\n' { '\n' } else { ' ' });
+            }
+            In::Text(quote) => {
+                if c == '\\' {
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                if c == quote {
+                    state = In::Code;
+                    out.push(c);
+                } else {
+                    out.push(if c == '\n' { '\n' } else { ' ' });
+                }
+            }
+        }
+        i += 1;
+    }
+    out
 }
 
 /// The ledger, its text, and the entries that exempt a file.

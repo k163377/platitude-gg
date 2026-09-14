@@ -72,7 +72,7 @@ struct Finding {
 /// Everything one file does about closing that the rule forbids, in line
 /// order.
 fn findings(text: &str) -> Vec<Finding> {
-    let code = without_comments_and_strings(text);
+    let code = super::without_comments_and_strings(text);
     let root = root_type(&code);
     let popup = root.as_deref().is_some_and(|name| POPUPS.contains(&name));
     let mut found = Vec::new();
@@ -258,79 +258,6 @@ fn call_at(chars: &[char], at: usize) -> Option<String> {
     } else {
         format!("{receiver}.{name}()")
     })
-}
-
-/// The text with every comment and every string literal's contents turned
-/// to spaces, line breaks kept so the lines still count.
-fn without_comments_and_strings(text: &str) -> String {
-    #[derive(PartialEq)]
-    enum In {
-        Code,
-        Line,
-        Block,
-        Text(char),
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
-    let mut state = In::Code;
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied();
-        match state {
-            In::Code => match c {
-                '/' if next == Some('/') => {
-                    state = In::Line;
-                    out.push_str("  ");
-                    i += 2;
-                    continue;
-                }
-                '/' if next == Some('*') => {
-                    state = In::Block;
-                    out.push_str("  ");
-                    i += 2;
-                    continue;
-                }
-                '"' | '\'' | '`' => {
-                    state = In::Text(c);
-                    out.push(c);
-                }
-                _ => out.push(c),
-            },
-            In::Line => {
-                if c == '\n' {
-                    state = In::Code;
-                    out.push('\n');
-                } else {
-                    out.push(' ');
-                }
-            }
-            In::Block => {
-                if c == '*' && next == Some('/') {
-                    state = In::Code;
-                    out.push_str("  ");
-                    i += 2;
-                    continue;
-                }
-                out.push(if c == '\n' { '\n' } else { ' ' });
-            }
-            In::Text(quote) => {
-                if c == '\\' {
-                    out.push_str("  ");
-                    i += 2;
-                    continue;
-                }
-                if c == quote {
-                    state = In::Code;
-                    out.push(c);
-                } else {
-                    out.push(if c == '\n' { '\n' } else { ' ' });
-                }
-            }
-        }
-        i += 1;
-    }
-    out
 }
 
 #[cfg(test)]
