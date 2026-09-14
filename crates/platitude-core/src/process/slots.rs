@@ -169,16 +169,28 @@ pub struct Limits {
 
 impl Limits {
     /// The limits one number from the settings stands for: that many
-    /// processes all told, half of them at most (never fewer than one,
-    /// or no background read would ever run) for the reads nobody is
-    /// waiting on and the commands paced elsewhere together — the other
-    /// half is the click's.
+    /// processes all told, a quarter of them at most (never fewer than
+    /// one, or no background read would ever run) for the reads nobody
+    /// is waiting on and the commands paced elsewhere together — the
+    /// rest is the click's.
+    ///
+    /// **A quarter, because opening a diff is three commands at once.**
+    /// The click spends `diff-tree`, `check-attr` and the
+    /// `rev-parse` → `cat-file` chain in parallel, so a reserve under
+    /// three puts one of them — and it is the head of the chain that
+    /// queues — behind whatever the session is reading for itself. At a
+    /// half the reserve only reaches three at eight slots, which no
+    /// machine under eighteen threads defaults to; at a quarter it is
+    /// three from four slots up. What it costs is background width, and
+    /// the pass over other working copies does not spend it: eight
+    /// copies of the reference corpus read in 2.6 s four at a time and
+    /// 2.5 s eight at a time (ci/baseline/git-slots-windows-x64.md).
     #[must_use]
     pub fn of(asked: u32) -> Self {
         let total = concurrency(asked) as usize;
         Self {
             total,
-            reserve: total - (total / 2).max(1),
+            reserve: total - (total / 4).max(1),
         }
     }
 
@@ -1048,16 +1060,24 @@ mod tests {
                 total: 3,
                 reserve: 2
             },
-            "half rounds down for what is shared"
+            "a quarter rounds down for what is shared"
+        );
+        assert_eq!(
+            Limits::of(4),
+            Limits {
+                total: 4,
+                reserve: 3
+            },
+            "four slots is where the click's three commands all fit"
         );
         assert_eq!(
             Limits::of(8),
             Limits {
                 total: 8,
-                reserve: 4
+                reserve: 6
             }
         );
-        assert_eq!(Limits::of(8).shared(), 4);
+        assert_eq!(Limits::of(8).shared(), 2);
         assert_eq!(
             Limits::of(0).total,
             1,
