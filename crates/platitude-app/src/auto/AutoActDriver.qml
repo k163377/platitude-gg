@@ -191,9 +191,13 @@ Item {
         const oid = graphModel.oidAt(0)
         if (oid === "")
             return "none"
-        // The same reading the row delegate makes of the synthetic working-tree row: an oid of nothing but zeroes.
-        if (!/[^0]/.test(oid))
+        // **Both halves are the graph's own word** (`GraphModel.wipRow` / `carriedTop`): every working copy's row
+        // wears the same all-zero id, so a row read by the id alone answers `wip` for a neighbour's as readily as
+        // for this window's, and the verbs here all ask this to mean ours.
+        if (graphModel.wipRow)
             return "wip"
+        if (graphModel.carriedTop)
+            return "copy"
         return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 

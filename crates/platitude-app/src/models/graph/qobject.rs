@@ -42,6 +42,7 @@ impl GraphModel {
     qproperty!("growing", Member = growing, Notify = stats_changed);
     qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
     qproperty!("wipRow", Member = wip_row, Notify = stats_changed);
+    qproperty!("carriedTop", Member = carried_top, Notify = stats_changed);
     qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
     // How many loaded rows the find bar's line is in. A property rather
     // than the return of the slot that sets the query: a background

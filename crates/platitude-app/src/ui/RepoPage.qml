@@ -2571,14 +2571,13 @@ Item {
     property string anchorOid: ""
     property int anchorRow: -1
     function rememberAnchor() {
-        let row = 0
-        let oidHex = graphModel.oidAt(0)
-        if (GitFacts.wipOid(oidHex)) {
-            row = 1
-            oidHex = graphModel.oidAt(1)
-        }
-        page.anchorOid = oidHex
-        page.anchorRow = oidHex === "" ? -1 : row
+        // **However many working-tree rows stand over it** — this window's own and one per other copy, all wearing
+        // the same all-zero id, so a row skipped by that id alone leaves the anchor on another of them and the
+        // measurement reads back whichever the walk left first (`GraphModel.newestCommitRow`, the one place the
+        // rule is written).
+        const row = graphModel.newestCommitRow()
+        page.anchorOid = row < 0 ? "" : graphModel.oidAt(row)
+        page.anchorRow = row
     }
     // How far the graph slid under the viewport. Zero when the anchor is gone: a rewrite deep in the history moves rows
     // by different amounts and there is no single answer, so the view is left alone.
@@ -2705,11 +2704,12 @@ Item {
     function tryPendingWipSelect() {
         if (!page.pendingWipSelect)
             return
-        // Row 0 is where the working tree stands, and its all-zero id is the graph saying the row is there at all: the
-        // walk prepends it only once it knows the tree is dirty, and until then row 0 is still the commit that was on
-        // top. Landing on that one would take the press to the wrong place entirely.
-        const oidHex = graphModel.oidAt(0)
-        if (!GitFacts.wipOid(oidHex))
+        // Row 0 is where the working tree stands once the walk has prepended it, which it does only after the status
+        // has said there is something to commit; until then row 0 is still the commit that was on top, or a
+        // neighbour copy's row wearing the same all-zero id. Landing on either would take the press to the wrong
+        // place entirely, so the question is the graph's own word (`GraphModel.wipRow`, the one place ours is told
+        // from theirs) and never the id at row 0.
+        if (!graphModel.wipRow)
             return
         page.pendingWipSelect = false
         graphPane.setCurrentRow(0)
@@ -2829,7 +2829,12 @@ Item {
             // two disagreeing is the graph saying it is one read behind, and until the pass that knows lands, row 0
             // is still the commit that was on top (`tryPendingWipSelect` waits on the same word). Every pass calls
             // this again.
-            if (!GitFacts.wipOid(graphModel.oidAt(0)))
+            //
+            // **Asked of the graph's own word rather than of row 0's id** (`GraphModel.wipRow`): every working
+            // copy's row wears the same all-zero id, so the id answers yes for a pass that put a neighbour's row
+            // first and left ours out — and landing there opens the pane on a copy nobody asked for and stands the
+            // page on it (`openWipFor`). Which of the two a pass leaves first is the walk's to decide.
+            if (!graphModel.wipRow)
                 return
             row = 0
         } else {

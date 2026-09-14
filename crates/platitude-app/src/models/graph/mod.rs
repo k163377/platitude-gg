@@ -126,6 +126,11 @@ pub struct GraphModel {
     /// pass half-way through its chunks is not a graph anybody reads this
     /// against.
     wip_row: bool,
+    /// Whether the row this pass left first belongs to another working
+    /// copy (`GraphModel::carried_row_of`) — the other half of the answer
+    /// [`Self::wip_row`] gives, told apart here so no reader has to spell
+    /// the all-zero id out for itself.
+    carried_top: bool,
     /// Model resets (streaming restarts only — in-place replacements do
     /// not reset). QML re-anchors the viewport only when this moves,
     /// because only a reset zeroes the scroll position.

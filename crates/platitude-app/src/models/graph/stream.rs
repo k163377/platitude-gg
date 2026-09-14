@@ -86,6 +86,7 @@ impl GraphModel {
             // standing, and the last pass's answer there would say the
             // graph agrees with a status it was never walked from.
             self.wip_row = false;
+            self.carried_top = false;
             // The query stands — a restart is the same history read
             // again — but its answers went with the rows, and the chunks
             // re-count them.
@@ -329,10 +330,19 @@ impl GraphModel {
         // than held from the ask: a pass is cancelled and replaced by the
         // one that overtook it, and only the rows say which of them is on
         // screen.
-        self.wip_row = self
-            .rows
-            .first()
-            .is_some_and(|row| platitude_core::oid::Oid::hex_is_zero(&row.oid_hex));
+        // **And that the row is this window's own.** Every working copy's
+        // row carries the same all-zero id — that spelling means "there is
+        // no object here", which is as true of a neighbour's row as of
+        // ours (`GraphModel::carried_row_of`) — so the id alone answers
+        // yes for a pass that put a copy's row first and left ours out.
+        // Read against the status that is about this tree, that is the
+        // graph saying it is up to date when it is one read behind.
+        self.carried_top = self.carried.contains_key(&0);
+        self.wip_row = !self.carried_top
+            && self
+                .rows
+                .first()
+                .is_some_and(|row| platitude_core::oid::Oid::hex_is_zero(&row.oid_hex));
         // Only the cut needs the step, and only a settled walk knows
         // there was one — asked for here rather than held from the
         // opening, so a window the settings widen moves the step with it.
@@ -356,5 +366,84 @@ impl GraphModel {
         } else {
             String::new()
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::item::GraphRowItem;
+    use super::super::{CarriedRow, GraphModel};
+
+    /// A row wearing git's all-zero id — how every working copy's
+    /// uncommitted work is drawn, this window's and its neighbours' alike.
+    fn zero_row() -> GraphRowItem {
+        GraphRowItem {
+            oid_hex: "0".repeat(40),
+            ..GraphRowItem::default()
+        }
+    }
+
+    fn commit_row(oid_hex: &str) -> GraphRowItem {
+        GraphRowItem {
+            oid_hex: oid_hex.into(),
+            ..GraphRowItem::default()
+        }
+    }
+
+    /// Settles one pass over `rows`, `copies` naming the indexes a
+    /// neighbour copy drew — which is what `extend_marks` files while the
+    /// chunks arrive.
+    fn pass(model: &mut GraphModel, rows: Vec<GraphRowItem>, copies: &[usize]) {
+        let total = rows.len();
+        model.clear_marks();
+        model.rows = rows;
+        for at in copies {
+            model.carried.insert(*at, CarriedRow::default());
+        }
+        model.settle_footer(
+            i32::try_from(total).unwrap_or_default(),
+            0,
+            u32::try_from(total).unwrap_or_default(),
+            false,
+        );
+    }
+
+    /// **A landing on this window's uncommitted work waits for the pass
+    /// that carries its row.** The walk prepends ours only once the status
+    /// has said there is something to commit, so a pass that beat that
+    /// status carries every neighbour copy's row and none of ours — and
+    /// the id cannot tell those apart, since "there is no object here" is
+    /// as true of a copy's row as of ours. Read by the id alone, such a
+    /// pass says the graph has caught up with a status it has never seen,
+    /// and the two landings that ask this (`RepoPage.trySelectDefault`,
+    /// `RepoPage.tryPendingWipSelect`) take a copy's row and let their
+    /// press go with it.
+    #[test]
+    fn a_pass_that_beat_the_status_carries_no_row_this_window_can_land_on() {
+        let mut model = GraphModel::default();
+
+        // The walk, ahead of this window's first status: the copies have
+        // rows and we have none.
+        pass(
+            &mut model,
+            vec![zero_row(), zero_row(), commit_row("a1")],
+            &[0, 1],
+        );
+        assert!(!model.wip_row, "a neighbour copy's row stood in for ours");
+        assert!(model.carried_top, "whose the leading row was went unsaid");
+
+        // The status lands and asks for the walk again. Ours is prepended,
+        // and the copies' rows are still there under it.
+        pass(
+            &mut model,
+            vec![zero_row(), zero_row(), zero_row(), commit_row("a1")],
+            &[1, 2],
+        );
+        assert!(model.wip_row, "the pass that carries our row was refused");
+        assert!(!model.carried_top, "ours was filed as a neighbour's");
+
+        // And a tree gone clean takes ours away while theirs stand.
+        pass(&mut model, vec![zero_row(), commit_row("a1")], &[0]);
+        assert!(!model.wip_row, "ours was reported over a clean tree");
     }
 }
