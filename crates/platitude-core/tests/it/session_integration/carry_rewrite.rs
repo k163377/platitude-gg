@@ -431,3 +431,185 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
     );
     session.close();
 }
+
+/// The tip check in front of the spawn, as the one-commit edits reach it.
+fn reached_the_tip_check(event: &SessionEvent) -> bool {
+    matches!(event, SessionEvent::CommandStarted { display, .. }
+        if display.starts_with("git rev-parse --verify HEAD"))
+}
+
+/// What the write of `kind` reported for itself, or `None` where it
+/// carried no report — the half of the answer the notice bar is written
+/// out of, which the error string alone cannot say.
+async fn write_report(
+    sink: &CaptureSink,
+    kind: OperationKind,
+) -> Option<platitude_core::report::WriteReport> {
+    sink.wait_for(kind.label(), |evs| {
+        evs.iter().find_map(|e| match e {
+            SessionEvent::WriteFinished {
+                kind: got, report, ..
+            } if *got == kind => Some(report.clone()),
+            _ => None,
+        })
+    })
+    .await
+}
+
+/// **A one-commit edit is pinned to the tip its todo was read against.**
+///
+/// `drop` / `squash` / reword build their own todo out of `upstream..HEAD`
+/// and hand git the whole list ([`platitude_core::sequencer::plan_edit`]),
+/// so a commit that lands after the rows are read is not in it — and a
+/// rebase drops what the todo leaves out **without saying so**. The plan
+/// composed on screen has been pinned since it was built; these three were
+/// not, on the reading that the pin cost a `rev-parse HEAD` on the
+/// response path of the three edits people click most. It costs nothing:
+/// the rows already end at the tip (`EditPlan::tip`).
+///
+/// The window is entered on purpose: the session is parked inside the sink
+/// delivery that announces the tip check, and the commit is made from the
+/// test's own thread while it is held there — the todo is read by then and
+/// the branch has not been looked at yet.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
+    install_todo_editor();
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
+    repo.commit_file("c.txt", "three\n", "after it");
+
+    let (sink, session) = opened(&repo).await;
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(reached_the_tip_check, move || {
+        held.recv().expect("the test releases the edit");
+    });
+    session.drop_commit(doomed.clone());
+    sink.wait_for("the edit reaching its tip check", |events| {
+        events.iter().any(reached_the_tip_check).then_some(())
+    })
+    .await;
+    repo.commit_file("terminal.txt", "typed\n", "landed after the todo was read");
+    let injected = repo.git(&["rev-parse", "HEAD"]);
+    release.send(()).expect("the edit is released");
+
+    let refusal = write_result(&sink, OperationKind::Drop)
+        .await
+        .expect("the replay is refused");
+    assert!(
+        refusal.contains("tip moved") && refusal.contains("nothing was rewritten"),
+        "the refusal says the plan's premise went: {refusal}"
+    );
+    // The reader is told, rather than left with a log panel of commands
+    // that all succeeded: nothing ran that a row could explain
+    // (デザイン規約 §答えの要らない報せ).
+    let report = write_report(&sink, OperationKind::Drop)
+        .await
+        .expect("a report the notice bar is written from");
+    assert_eq!(
+        report.kind,
+        platitude_core::report::ReportKind::RewriteTipMoved
+    );
+    assert!(
+        report.reason.is_empty(),
+        "nobody outside wrote a sentence for this one: {report:?}"
+    );
+    assert!(
+        rewrite_route(&sink).is_empty(),
+        "the tree was clean, so the refusal comes before any spawn: {:?}",
+        rewrite_route(&sink)
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD"]),
+        injected,
+        "the commit that landed inside the window is still the tip"
+    );
+    assert_eq!(
+        repo.git(&["log", "--format=%s"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec![
+            "landed after the todo was read",
+            "after it",
+            "the one to go",
+            "root"
+        ],
+        "and nothing was rewritten — the commit the edit was about is still there"
+    );
+    session.close();
+}
+
+/// The same pin, at the other end of the same write: the carry spawns the
+/// replay twice, and the stretch between them — a `detect`, a `stash
+/// push`, and the pop that may follow — is the wider of the two windows.
+///
+/// **And the work comes back.** A refusal on the second attempt is one
+/// nothing here started, so the stash the carry made is put back before
+/// the answer goes out: a reader who is told the branch moved still has
+/// what they had staged and unstaged, on the side it was on.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
+    install_todo_editor();
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
+    repo.commit_file("c.txt", "three\n", "after it");
+    // What git refuses the first spawn over, which is what sends the write
+    // round through the stash in the first place.
+    repo.write_file("a.txt", "staged edit\n");
+    repo.git(&["add", "--", "a.txt"]);
+    repo.write_file("c.txt", "unstaged edit\n");
+
+    let (sink, session) = opened(&repo).await;
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(reached_the_stash, move || {
+        held.recv().expect("the test releases the carry");
+    });
+    session.drop_commit(doomed.clone());
+    sink.wait_for("the carry reaching its stash", |events| {
+        events.iter().any(reached_the_stash).then_some(())
+    })
+    .await;
+    repo.commit_file("terminal.txt", "typed\n", "landed while the carry ran");
+    let injected = repo.git(&["rev-parse", "HEAD"]);
+    release.send(()).expect("the carry is released");
+
+    let refusal = write_result(&sink, OperationKind::Drop)
+        .await
+        .expect("the replay is refused");
+    assert!(
+        refusal.contains("tip moved") && refusal.contains("nothing was rewritten"),
+        "the refusal says the plan's premise went: {refusal}"
+    );
+    assert_eq!(
+        rewrite_route(&sink),
+        vec!["rebase --interactive", "stash push", "stash pop"],
+        "the second spawn never happened, and the work came back"
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD"]),
+        injected,
+        "the commit that landed inside the window is still the tip"
+    );
+    assert!(
+        repo.git(&["log", "--format=%s"]).contains("the one to go"),
+        "and nothing was rewritten"
+    );
+    assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
+    // Both edits are in the tree again. **Which side they are on is not
+    // this path's to keep**: a replay that came back an `Err` did nothing,
+    // so the restore is `stash_round::pop_back_after_failure`'s plain pop
+    // and everything lands unstaged — the split survives the way round
+    // that lands (`pop_back_split_first`).
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).expect("read"),
+        "staged edit\n",
+        "the edit that was staged is back in the tree"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("c.txt")).expect("read"),
+        "unstaged edit\n",
+        "and so is the one that was not"
+    );
+    session.close();
+}

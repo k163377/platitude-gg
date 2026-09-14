@@ -86,8 +86,9 @@ impl RepoSession {
     /// `git rebase --interactive` with a plan assembled in the UI. The todo
     /// editor is the helper binary shipped beside the application.
     ///
-    /// `expect_head` (full hex, empty = unchecked) is the tip the plan was
-    /// composed against. The screen pins it when the plan opens; a terminal
+    /// `expect_head` (full hex) is the tip the plan was composed against —
+    /// anything else refuses, there being no unpinned replay. The screen
+    /// pins it when the plan opens; a terminal
     /// or another session moving the branch in between would leave the
     /// plan's todo silently dropping whatever landed, so a tip that moved
     /// is refused and nothing is touched. It travels with the plan rather
@@ -120,12 +121,7 @@ impl RepoSession {
             move |exec, repo, cancel| async move {
                 let state = opstate::detect(&exec, &repo.workdir, &cancel).await?;
                 if state.any() {
-                    return Err(GitError::Rejected {
-                        message: format!(
-                            "a {} is in progress here; nothing was rewritten",
-                            standing_name(&state)
-                        ),
-                    });
+                    return Err(report::rewrite_while_standing(standing_name(&state)));
                 }
                 let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
                 let landing =

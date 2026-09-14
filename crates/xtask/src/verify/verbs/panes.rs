@@ -332,6 +332,26 @@ pub(super) const TABLE: &[Verb] = &[
                 "write_notice open=true clears=true why=false tone=danger log=false wrong=false \
                  said=origin would not update main",
             ),
+            // The two a rewrite is turned down with: the tip moved after
+            // the plan was composed (`ReportKind::RewriteTipMoved`), or an
+            // operation was already standing (`RewriteWhileStanding`).
+            // **The verb hands the kind in**, so nothing is spawned here
+            // and `log=false` is a claim about the dress rather than the
+            // route — the plan's own check refuses before any spawn, but
+            // the carry's guard refuses after git's one refusal and that
+            // one does leave a row (`session_integration::standing_op`).
+            // `why=true` is this application's own second line, which is
+            // what a log row cannot give either way.
+            (
+                Arg::Is("tip-moved"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten",
+            ),
+            (
+                Arg::Is("op-standing"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten",
+            ),
         ],
         plain: "write_notice open=true clears=true tone=danger",
     },

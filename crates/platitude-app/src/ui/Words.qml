@@ -133,7 +133,11 @@ QtObject {
         case "off-branch":
         case "fold-first":
         case "unfetched-base":
-        case "drop-all": return qsTr("The history was not rewritten")
+        case "drop-all":
+        // The two the outside world makes after the press. Same heading, for the same reason: what did not happen
+        // is the same thing, and which of them it was is the line underneath.
+        case "tip-moved":
+        case "op-standing": return qsTr("The history was not rewritten")
         default: return qsTr("The commit was not made")
         }
     }
@@ -184,6 +188,17 @@ QtObject {
             return qsTr("The commit below this one is not in this clone. Replaying from here would cut the branch off from the rest of its history.")
         case "drop-all":
             return qsTr("This is the last commit, and a branch cannot be left with no history at all.")
+        // The two that are about right now rather than about the commits: something outside this window moved
+        // between the press and git. **One line each, like the five above** — the bar gives a report one
+        // (`NoticeBar`, デザイン規約 §長さ), and a sentence that runs past it loses its end rather than wrapping.
+        //
+        // **The heading has already said what did not happen**, so these owe the reader the cause and nothing else:
+        // spelling out what a replay would have dropped is the application explaining its own reasoning, which is
+        // the half a reader in the middle of a gesture does not read.
+        case "tip-moved":
+            return qsTr("The branch moved after this was worked out.")
+        case "op-standing":
+            return qsTr("An operation is in progress here. Finish it or put it down first.")
         default: return ""
         }
     }

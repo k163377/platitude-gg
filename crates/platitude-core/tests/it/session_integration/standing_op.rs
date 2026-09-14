@@ -62,6 +62,24 @@ fn wrote_anything(sink: &CaptureSink) -> Vec<String> {
         .collect()
 }
 
+/// Which report the write of `kind` carried, or `None` where it carried
+/// none — the half of the answer the notice bar is written from, which
+/// the error string alone cannot say.
+async fn report_kind(
+    sink: &CaptureSink,
+    kind: OperationKind,
+) -> Option<platitude_core::report::ReportKind> {
+    sink.wait_for(kind.label(), |evs| {
+        evs.iter().find_map(|e| match e {
+            platitude_core::session::SessionEvent::WriteFinished {
+                kind: got, report, ..
+            } if *got == kind => Some(report.as_ref().map(|r| r.kind)),
+            _ => None,
+        })
+    })
+    .await
+}
+
 fn merge_stands(repo: &TestRepo) -> bool {
     repo.path.join(".git").join("MERGE_HEAD").exists()
 }
@@ -96,6 +114,14 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
     assert!(
         refusal.contains("merge") && refusal.contains("nothing was rewritten"),
         "the refusal names what is standing: {refusal}"
+    );
+    // **And it reaches the reader, not just the log.** Nothing ran, so
+    // there is no row in the command log for the panel to raise over —
+    // the report is what puts the sentence on the notice bar
+    // (デザイン規約 §答えの要らない報せ).
+    assert_eq!(
+        report_kind(&sink, OperationKind::Rebase).await,
+        Some(platitude_core::report::ReportKind::RewriteWhileStanding)
     );
     assert_eq!(
         wrote_anything(&sink),
@@ -136,6 +162,13 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
         refusal.contains("merge") && refusal.contains("nothing was rewritten"),
         "the refusal names what is standing rather than repeating git's \
          advice to commit or stash: {refusal}"
+    );
+    // The carry's own guard says it the same way the plan's does: git
+    // *did* run here, and refused in the words a dirty tree is refused
+    // in, so the sentence the reader gets is this end's either way.
+    assert_eq!(
+        report_kind(&sink, OperationKind::Squash).await,
+        Some(platitude_core::report::ReportKind::RewriteWhileStanding)
     );
     let spawned = wrote_anything(&sink);
     assert_eq!(

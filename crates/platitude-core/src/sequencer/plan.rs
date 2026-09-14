@@ -19,6 +19,16 @@ pub struct EditPlan {
     /// The plan reaches the first commit, so the rebase needs `--root`.
     pub root: bool,
     pub steps: Vec<RebaseStep>,
+    /// The tip `steps` was read against — what the replay checks HEAD
+    /// against before it spawns ([`crate::session`]'s `Replay`).
+    ///
+    /// **Taken out of the rows, not asked for.** The range always ends at
+    /// HEAD (`range_arg`) and `read_rows` reverses git's own order, so the
+    /// last step *is* the tip this plan was composed against: pinning it
+    /// costs no process at all, which is what kept it unpinned while the
+    /// pin was thought to need one on the response path of the three edits
+    /// people click most (CLAUDE.md §性能予算).
+    pub tip: String,
 }
 
 impl EditPlan {
@@ -110,6 +120,15 @@ pub async fn plan_edit(
     let Some(index) = steps.iter().position(|s| s.oid == oid) else {
         return Err(report::rewrite_off_branch(short(oid)));
     };
+    // The last step is the tip: the range ends at HEAD either way
+    // (`range_arg`) and `read_rows` hands git's newest-first order back
+    // reversed. The position above says the list is not empty, and an
+    // empty tip would refuse rather than run unpinned
+    // (`Replay::tip_still_stands`).
+    let tip = steps
+        .last()
+        .map(|step| step.oid.clone())
+        .unwrap_or_default();
     match edit {
         Edit::SquashIntoParent => {
             if index == 0 {
@@ -127,6 +146,7 @@ pub async fn plan_edit(
         upstream,
         root,
         steps,
+        tip,
     })
 }
 

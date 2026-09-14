@@ -94,6 +94,23 @@ pub enum ReportKind {
     /// left onto a made-up empty commit, leaving the branch pointing at
     /// an empty tree with no message (実測), so this end stops first.
     DropAllCommits,
+
+    /// **The two the outside world makes, after the plan was already
+    /// worked out.** Unlike the five above — which are about the commits
+    /// as they were read and so cannot come true between the press and
+    /// the spawn — these are the premise going while the write is on its
+    /// way, and a reader who did nothing wrong is the one who meets them
+    /// (P3-確認事項 §要判断 `GitError::Rejected`).
+    ///
+    /// The branch moved after the plan was composed: the todo is a fixed
+    /// list of ids and a rebase drops what it leaves out without a word,
+    /// so the replay is refused with nothing touched.
+    RewriteTipMoved,
+    /// A merge, cherry-pick, revert, rebase or bisect was standing when
+    /// the rewrite reached git — started from a terminal, most often,
+    /// since the screen holds its own doors shut while one stands. The
+    /// operation is named on the band rather than in the sentence.
+    RewriteWhileStanding,
 }
 
 /// One report: the two halves the screen is made of, and the names the
@@ -233,6 +250,31 @@ pub fn drop_all_commits() -> crate::error::GitError {
     withheld(
         ReportKind::DropAllCommits,
         "dropping every commit would leave the branch with no history".to_string(),
+    )
+}
+
+/// A replay whose branch moved after the plan was worked out.
+///
+/// **A report rather than a bare refusal, because a reader can be
+/// standing right in front of it**: nothing here was pressed wrongly, and
+/// nothing ran that the command log could show a row for — the bar is the
+/// only surface that can say what happened (デザイン規約 §答えの要らない報せ).
+#[must_use]
+pub fn rewrite_tip_moved() -> crate::error::GitError {
+    withheld(
+        ReportKind::RewriteTipMoved,
+        "the branch tip moved after the plan was composed; nothing was rewritten".to_string(),
+    )
+}
+
+/// A rewrite asked for while an operation was standing. `standing` is
+/// git's own verb for it, which the log keeps; the screen names it from
+/// the band instead ([`ReportKind::RewriteWhileStanding`]).
+#[must_use]
+pub fn rewrite_while_standing(standing: &str) -> crate::error::GitError {
+    withheld(
+        ReportKind::RewriteWhileStanding,
+        format!("a {standing} is in progress here; nothing was rewritten"),
     )
 }
 

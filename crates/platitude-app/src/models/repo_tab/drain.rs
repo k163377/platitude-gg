@@ -285,6 +285,8 @@ impl RepoTab {
                     ReportKind::FoldFirstCommit => "fold-first",
                     ReportKind::RewriteUnfetchedBase => "unfetched-base",
                     ReportKind::DropAllCommits => "drop-all",
+                    ReportKind::RewriteTipMoved => "tip-moved",
+                    ReportKind::RewriteWhileStanding => "op-standing",
                 }
                 .to_string(),
                 report.remote,

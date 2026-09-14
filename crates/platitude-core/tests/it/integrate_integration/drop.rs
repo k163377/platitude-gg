@@ -108,6 +108,34 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     );
 }
 
+/// **Every one-commit edit pins the tip it was composed against**,
+/// whichever verb asked for it: the ids the todo is written from end at
+/// HEAD, and that last one is what the replay checks the branch against
+/// before it spawns (`Replay::tip_still_stands`). Held for the three here
+/// rather than through three replays — the refusal itself is one road, and
+/// `session_integration::carry_rewrite` walks it at both boundaries.
+#[tokio::test]
+async fn every_one_commit_edit_pins_the_tip_it_was_composed_against() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "under the one to edit");
+    let target = repo.commit_file_id("c.txt", "three\n", "the one to edit");
+    repo.commit_file("d.txt", "four\n", "the tip");
+    let head = repo.git(&["rev-parse", "HEAD"]);
+    let (exec, cancel) = env();
+
+    for edit in [
+        sequencer::Edit::Drop,
+        sequencer::Edit::Reword("a new line\n".into()),
+        sequencer::Edit::SquashIntoParent,
+    ] {
+        let plan = sequencer::plan_edit(&exec, &repo.path, &target, edit, &cancel)
+            .await
+            .expect("the range is a plain one");
+        assert_eq!(plan.tip, head, "the tip the todo was written for");
+    }
+}
+
 /// The refusal sits before the edit is even looked at (`plan_edit` checks
 /// the range first), so a drop and a reword hit the same wall: a plain
 /// interactive rebase would flatten the merge rather than replay it.

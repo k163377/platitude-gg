@@ -51,6 +51,7 @@ use crate::rebase_plan;
 use crate::refs::{self, HeadState, RefEntry, RefKind};
 use crate::remote;
 use crate::repo::RepoInfo;
+use crate::report;
 use crate::sequencer;
 use crate::stage;
 use crate::stash::{self, StashEntry};

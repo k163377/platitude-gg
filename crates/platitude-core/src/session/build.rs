@@ -16,7 +16,9 @@ pub(super) struct Replay<'a> {
     upstream: &'a str,
     steps: &'a [sequencer::RebaseStep],
     options: integrate::RebaseOptions,
-    /// The tip `steps` was written against (full hex, empty = unchecked).
+    /// The tip `steps` was written against, full hex. **Every replay
+    /// carries one**, so anything else refuses rather than running
+    /// unpinned ([`Replay::tip_still_stands`]).
     expect_head: &'a str,
     /// The todo-editor binary shipped beside the application.
     helper: PathBuf,
@@ -88,18 +90,11 @@ impl Replay<'_> {
         repo: &RepoInfo,
         cancel: &CancellationToken,
     ) -> Result<(), GitError> {
-        if self.expect_head.is_empty() {
-            return Ok(());
-        }
         let head = commit::head_oid(executor, &repo.workdir, cancel).await?;
         if head.to_hex() == self.expect_head {
             return Ok(());
         }
-        Err(GitError::Rejected {
-            message: "the branch tip moved after the plan was composed; \
-                      nothing was rewritten"
-                .to_string(),
-        })
+        Err(report::rewrite_tip_moved())
     }
 }
 
@@ -137,20 +132,22 @@ impl Rewrite<'_> {
 
 /// Replays a one-commit edit plan through `git rebase --interactive`.
 ///
-/// Unpinned, where the plan composed on screen is not
-/// ([`Replay::tip_still_stands`]): this one is read out of the repository
-/// a step earlier in the same write, so there is no tip held from before
-/// the press to compare against. The window is the carry's alone and it is
-/// narrower, but it is the same window — logged in P3-確認事項 §core rather
-/// than closed here, because the read that would close it is one more
-/// spawn on the response path of the three edits people click most.
+/// Pinned to the tip the plan was read against, as the plan composed on
+/// screen is ([`Replay::tip_still_stands`]). The pin rides on the plan
+/// (`EditPlan::tip`) rather than being read here: the rows the todo is
+/// made of already end at HEAD, so nothing is spawned for it and the
+/// response path of the three edits people click most is untouched.
+///
+/// **The window is narrowed, not closed** — git takes a todo but not the
+/// tip it was written for, so what is left between the read and the spawn
+/// is the same gap nothing can be put inside.
 pub(super) async fn run_plan(
     executor: &GitExecutor,
     repo: &RepoInfo,
     plan: &sequencer::EditPlan,
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
-    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options(), "")?;
+    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options(), &plan.tip)?;
     rewrite_carrying(executor, repo, &Rewrite::Replay(&replay), cancel).await
 }
 
@@ -223,14 +220,7 @@ async fn carry_across_rewrite(
     // classifier reads as work in the way.
     let state = opstate::detect(executor, &repo.workdir, cancel).await?;
     if integrate::InProgress::from_state(&state).is_some() {
-        return Err(GitError::Rejected {
-            message: format!(
-                "a {} is in progress here; nothing was rewritten \
-                 (git refused because that operation's own result is in \
-                 the index)",
-                standing_name(&state)
-            ),
-        });
+        return Err(report::rewrite_while_standing(standing_name(&state)));
     }
     if !stash_everything(executor, repo, cancel).await? {
         // The tree was cleaned between the refusal and now, so there is
