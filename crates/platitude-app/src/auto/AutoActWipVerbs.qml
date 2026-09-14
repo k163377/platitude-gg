@@ -349,6 +349,12 @@ Item {
         id: carriedReadTimer
         property bool asked: false
         property bool opened: false
+        /// Whether the step to the next file has been made, whether it moved the pane off the file it was on, and
+        /// which file that was. A copy carrying one file is stepped and stays, and a run that waited for a move
+        /// there would wait for good.
+        property bool walked: false
+        property bool moved: false
+        property string leftPath: ""
         /// The row of the copy the argument names, or -1 while the graph has none of it. Off the model, which is what
         /// says whose a row is — a row off screen has no delegate to ask.
         function rowOf(name) {
@@ -399,14 +405,28 @@ Item {
             driver.carriedPane.namePointedAt = true
             if (driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown)
                 return
-            carriedReadTimer.stop()
+            if (carriedReadTimer.walked) {
+                // **The run ends on the file the step below asked for.** A pane still waiting on that read
+                // photographs empty and builds no rows, so both the picture and the census would be of the race
+                // rather than of the file. Where the step moved nothing there is no second read to wait for, and
+                // the settle above is the whole of it.
+                if (carriedReadTimer.moved
+                        && (!page.diffShown || page.diffPath === carriedReadTimer.leftPath))
+                    return
+                carriedReadTimer.stop()
+                driver.complete()
+                return
+            }
             // **Read before the step below**, which opens another file: the count taken after it is a pane in the
             // middle of reading one.
             const lines = driver.diffPane.view.count
             // One step of the arrows, through the pane's own walk. **A row is found by the side its bytes are on**
             // even in this one list, so a pane handed the run's name instead of the file's bucket walks from nowhere
             // and answers the file it is already on (observed).
+            carriedReadTimer.leftPath = page.diffPath
             const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
+            carriedReadTimer.walked = true
+            carriedReadTimer.moved = stepped
             // **One list, one tally, and no seat that writes.** The copy in this preset holds one path staged and
             // then written again, so `files=1` and a `tally=` of one are the fold — counted per side they would both
             // be two, and the row above the pane would be saying a different number from the pane. `cut=`/`tip=` are
@@ -422,7 +442,6 @@ Item {
                               + " stageFile=" + driver.diffPane.stageOffered
                               + " pieces=" + driver.diffPane.piecesOffered
                               + " lines=" + lines)
-            driver.complete()
         }
     }
     SampleTimer {
