@@ -32,6 +32,7 @@ Item {
     readonly property var commitTagCard: driver.commitTagCard
     readonly property var refList: driver.refList
     readonly property var rowCard: driver.rowCard
+    readonly property var rowHost: driver.rowHost
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
 
@@ -111,6 +112,15 @@ Item {
                 rowCardTimer.row = at
                 rowCardTimer.start()
             }
+        } else if (act === "row-card-return") {
+            // The hand that walked down into the card and came back to the row it came off. **Entered at the row's
+            // own pointer property**, which is the one thing a real pointer writes here (`onPositionChanged` /
+            // `onContainsMouseChanged` write nothing else), so the run goes through `settlePointed` rather than past
+            // it — the door `row-card` uses is one step further in and cannot see this at all.
+            // **Row 1 by default, not row 0**: the presets this runs on carry a dirty working tree, whose row stands
+            // at the top and has no card at all (`GraphRowDelegate.partAt` answers nothing for it).
+            cardReturnTimer.row = arg === "" ? 1 : Number(arg)
+            cardReturnTimer.start()
         } else if (act === "card-message" || act === "card-message-esc") {
             // The note under a message the card had to stop, pressed where a hand presses it
             // (`CommitHoverCard.askMessage` is the click handler's own body). The card is opened the way `row-card`
@@ -547,6 +557,43 @@ Item {
                 return
             refListShownTimer.stop()
             renderedBarrier.begin()
+        }
+    }
+    // The rest the row opens its card after is `tipDelayMs` away, so this samples until the card is up and then makes
+    // the return in one turn.
+    SampleTimer {
+        id: cardReturnTimer
+        /// The row the hand rests on, leaves and comes back to.
+        property int row: 0
+        /// Where the card stood the first time, and the pointer that put it there. The second rest is made at a
+        /// different x on purpose: the seat is the pointer's, so a card that is opened again rather than held moves,
+        /// and a run that came back to the same x could not tell the two apart.
+        property real seat: 0
+        property real firstX: 0
+        onTriggered: {
+            const at = graphPane.view.itemAtIndex(cardReturnTimer.row)
+            if (!at)
+                return
+            // The rest, and then the wait it opens after. Both are the row's own (`GraphRowDelegate.settlePointed`).
+            if (!rowCard.opened) {
+                cardReturnTimer.firstX = Math.round(at.width / 3)
+                at.pointerRowX = cardReturnTimer.firstX
+                return
+            }
+            cardReturnTimer.stop()
+            cardReturnTimer.seat = rowCard.x
+            // The hand walks off the row into the card, and back onto the row a little further along. **Read in the
+            // same turn as the return**: everything from the pointer to the hold is one synchronous stretch, so what
+            // the beat would have done to a card nobody re-held is not something this has to wait to find out — the
+            // hold is either back before the beat can start or it is not (規約 §前提条件を完了判定に混ぜない).
+            at.pointerRowX = -1
+            at.pointerRowX = cardReturnTimer.firstX * 2
+            Harness.report(
+                "row_card_return held=" + rowHost.rowCardWanted
+                + " open=" + rowCard.opened
+                + " moved=" + (rowCard.x !== cardReturnTimer.seat)
+                + " oid=" + (rowHost.rowCardOid === at.oid_hex))
+            driver.complete()
         }
     }
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.

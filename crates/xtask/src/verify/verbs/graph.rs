@@ -157,6 +157,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "row_card open=true lit=true",
     },
+    // The hand that walked down into that card and came back to the row
+    // it came off. **Not a picture's question at all**: a card held up
+    // and a card taken down and opened again frame identically once the
+    // beats are over, and the only difference a reader sees is the blink
+    // and the sideways step in between (P3-確認事項, observed).
+    //
+    // `held=` is the claim — the hold is back in the same turn as the
+    // return, which is the only way it beats `hoverKeepMs`.
+    //
+    // **`moved=` is a guard, not the proof.** The seat comes off the
+    // row's own `pointerX`, which is `MouseArea.mouseX` and therefore the
+    // one thing a headless run cannot write (verify-ui §hover の絵の撮り方):
+    // the card cannot slide here whatever the code does, so this field
+    // holds a future seat worked out from something a run *can* move, and
+    // the sideways step a real hand sees is argued from where the seat
+    // comes from rather than measured.
+    Verb {
+        name: "row-card-return",
+        when: &[],
+        plain: "row_card_return held=true open=true moved=false oid=true",
+    },
     // The note under a message that card had to cut, pressed. Three of
     // the four are things a picture frames the same either way: a card
     // that never opened and a card that closed leave the same empty

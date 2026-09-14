@@ -106,6 +106,16 @@ Item {
     function openRowCard(row) {
         if (!row || host.refListUp || host.hoverBlocked)
             return
+        // **Already out, of this very commit** — the hand walked down into the card and came back to the row it came
+        // off. What is being asked for is the hold, and the hold is the whole of what is given: the seat below comes
+        // off the pointer, so working it out again slides the card sideways under a hand that only went back where it
+        // started (P3-確認事項, observed). **By the commit and by the card, not by the row**: delegates travel, and a
+        // card that has closed has no commit of its own left (`rowCard.onClosed`), so a second look at the same row
+        // after it went opens properly.
+        if (rowCard.opened && host.rowCardOid === row.oid_hex) {
+            host.rowCardWanted = true
+            return
+        }
         rowCard.subject = row.subject
         rowCard.body = row.body
         rowCard.author = row.author

@@ -359,6 +359,12 @@ Item {
             // this", and it has been answered — re-hold now, or it closes at `hoverKeepMs` and reopens at
             // `tipDelayMs`, which reads as a blink (規約「戻る手は待たせない」).
             rowItem.openPointed()
+        } else if (rowItem.pointedPart === "row" && rowItem.cardOnThisRow) {
+            // The same condition one card along, and the same answer. **The card is the worse of the two to sit the
+            // rest out for**: `hoverKeepMs` is shorter than `tipDelayMs`, so it goes down and comes back — and comes
+            // back at wherever the pointer is by then, the seat being the pointer's (`RowHoverHost.openRowCard`).
+            // `cardOnThisRow` is read by the commit, so a delegate recycled onto another row does not take this door.
+            rowItem.openPointed()
         } else if (rowItem.pointedPart !== "") {
             restDelay.restart()
         }

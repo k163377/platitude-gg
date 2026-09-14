@@ -89,6 +89,9 @@ Item {
     property string markWanted: ""
     property RefListPopup refList
     property CommitHoverCard rowCard
+    /// The pair's own keeper, for the one verb whose subject is what it is holding rather than what it drew
+    /// (`row-card-return`): whether the hand coming back to a row re-holds the card that is already out.
+    property RowHoverHost rowHost
 
     /// The details card has caught up with a real selection — the one readiness every card-reading sampler waits on.
     /// Named once so no copy can drop the empty-selection half: the bare `!==` comparison is vacuously satisfied while

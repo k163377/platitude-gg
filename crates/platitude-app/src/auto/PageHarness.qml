@@ -147,6 +147,7 @@ Item {
             remoteMenu: harness.remoteRowMenu.menu
             refList: harness.rowHost.listPopup
             rowCard: harness.rowHost.hoverCard
+            rowHost: harness.rowHost
         }
     }
 

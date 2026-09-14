@@ -180,6 +180,9 @@ QtObject {
                 "graph-choose-drop",
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
                 "row-card", "card-sweep", "menu-hover",
+                // The rest the row opens its card after is a beat away, so the return cannot be made until the
+                // sampler has seen the card come up.
+                "row-card-return",
                 // The press on the card's note and the pane it lands in are one sampler's walk: the card has to be
                 // holding a cut message before the note is there to press, and what the press asks for arrives after
                 // it. A render barrier in front of that photographs the commit that was open before.
