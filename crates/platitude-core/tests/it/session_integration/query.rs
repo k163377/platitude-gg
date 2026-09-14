@@ -523,7 +523,25 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     // The move re-read the remotes once, not once per tick: the next poll
     // reads the same marks, finds the held answer equal, and asks git for
     // no listing of its own.
-    assert_eq!(listed(&sink), 1, "{:?}", commands_of(&sink));
+    //
+    // **One, and the two ways it could be more.** The opening boundary
+    // above leaves no remotes read in flight and the answer held, so the
+    // `forget` this move causes is the only invalidation and the listing
+    // behind it the only miss. Two would say one of those is not true:
+    // either an invalidation landed while a read was in flight, which
+    // makes that read take a second answer and keep it out of the cache
+    // (`session::state::Derived::get_or_try_init`), or a second `forget`
+    // ran — the config stat (`forget_what_the_config_decides`) seeing the
+    // repository's own file move, which writing the *global* mark does
+    // not touch. Which of the two it was is in the commands below: two
+    // listings around one `config` read is the first, two apart is the
+    // second. Neither is answered by allowing two.
+    assert_eq!(
+        listed(&sink),
+        1,
+        "the global mark's move asked for one listing of the remotes: {:?}",
+        commands_of(&sink)
+    );
     let polled =
         crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
             .await;
