@@ -2090,6 +2090,11 @@ Item {
     /// and neither is a repository with no commit to select, so both answer yes holding no details at all.
     readonly property bool pageDetailsSettled: page.wipShown || page.selectedOid === ""
                                                || !detailsModel.loading
+    /// Whether this page still owes itself a landing — a move of the reader it has already decided on and is holding
+    /// until the refreshed pair can carry it (`pendingHeadSelect` / `pendingWipSelect`). Read where a sampler asks
+    /// whether the page has stopped arriving (`PageSettled`): between a write's answer and the landing behind it,
+    /// every other reading of the page is of the repository as the write found it, and both ends of that hold still.
+    readonly property bool pageLanding: page.pendingHeadSelect || page.pendingWipSelect
     /// The window's own band, handed back in by `Main`. The Stash button stands there rather than on this page
     /// (デザイン規約 §変更を退避する), and this page's verbs press the real one through here — a verb that called what the
     /// button calls would be answering for a second way in rather than for the band's wiring. An automation-only

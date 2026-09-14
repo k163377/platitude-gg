@@ -6,8 +6,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// Which verbs write, and which of them hand their completion to somebody else — the two questions
-/// `AutoActDriver.prepareCompletion` asks before a verb runs, and the two lists nothing else reads.
+/// Which verbs write, which of them hand their completion to somebody else, and which are owed the status behind
+/// their write — the three questions `AutoActDriver.prepareCompletion` asks before a verb runs, and the three
+/// lists nothing else reads.
 ///
 /// Kept apart from the verbs because they are read the other way round: a verb is one branch and one sampler,
 /// while each of these is one line per verb in a list every verb has to be found in.
@@ -56,6 +57,23 @@ QtObject {
             // The bare form opens the menu's hold row and stops there; only the `go` argument carries the
             // hold through to a write, so a bare run held at the write barrier would wait out the watchdog.
             && !(act === "delete-stash-row" && Harness.autoActArg !== "go")
+    }
+
+    /// Whether this verb's picture is of the page the status behind its write leaves, rather than of the page the
+    /// write's answer arrives on.
+    ///
+    /// **The two are different pages, and which one a run reaches is the machine's to decide.** core answers a
+    /// write before it publishes the status that write invalidated (`session::write::run_write`), so at the answer
+    /// the working-tree row this write is about to take away is still standing and the page has not yet decided
+    /// where to put the reader. Both moments settle (`PageSettled`), so the census walked from one names
+    /// `WipTallyRow` and from the other `FileRowDelegate` — a generated file moving under a tree nobody touched,
+    /// and a gate that refuses to stamp for it.
+    ///
+    /// **Only where the status is owed.** A fetch that brought nothing down reads the refs and stops without one
+    /// (`AfterWrite::Refs`), so a verb named here whose write is one of those waits out the watchdog. What is
+    /// waited on, and how a run arms it, is `AutoActDriver.statusOwedFrom`.
+    function owesStatus(act) {
+        return ["commit", "amend", "op-exit-go"].indexOf(act) >= 0
     }
 
     function defersCompletion(act) {

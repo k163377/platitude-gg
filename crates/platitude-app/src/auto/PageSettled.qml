@@ -20,6 +20,13 @@ import QtQuick
 /// answers yes with whatever it holds — `graph-stopped` leaves an empty column, and a swap that failed (`stale`) leaves
 /// the pass before it standing.
 ///
+/// **A landing the page owes itself is a read still on its way** (`RepoPage.pageLanding`): where a write put the
+/// reader is decided at the answer and resolved against the refreshed pair, so in between the page is holding a
+/// move it has already made up its mind about. **Both ends of that move settle every other term here** — before it
+/// the row the write is about to take away still stands, after it the new commit's changed files are on the right —
+/// which is why the term is needed at all (`AutoActCompletion.owesStatus` says what the two pages cost). The
+/// photograph is still the verb's own moment; what this holds is the walk, which says so (`WindowCensus.waited`).
+///
 /// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was never
 /// given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing is coming,
 /// so a run on either has the whole of what its verb shows. Answering no for those would hold the run open until the
@@ -36,6 +43,7 @@ QtObject {
         const graph = page.pageGraph
         return state === "open" && page.pageWt.loaded
             && page.pageRefsLoaded && graph.finishCount > 0 && page.pageDetailsSettled
-            && (graph.failed || graph.stale || graph.wipRow === page.pageWt.wipRowStands)
+            && (graph.failed || graph.stale
+                || (!page.pageLanding && graph.wipRow === page.pageWt.wipRowStands))
     }
 }

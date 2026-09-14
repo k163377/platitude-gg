@@ -114,6 +114,35 @@ Item {
     /// ends between two looks at it — which the container did and the host did not, and which taking work out of the
     /// post-write refresh made likelier still (measured, `line-back`, then `keep-place`).
     property int writeSeqBefore: 0
+    /// Whether this run's picture is of the page the status behind its write leaves rather than of the page its
+    /// answer arrives on — the verb says so (`AutoActCompletion.owesStatus`), and that file is where the two
+    /// pages are told apart.
+    property bool statusOwed: false
+    /// Which report of HEAD can carry that status (`RepoTab.writeAnswerHeadSeq`), 0 until this run's own answer
+    /// names one. **A status counted before the write cannot reach that number**, which is what makes the wait
+    /// below about this write — the reset landing waits on the same pair for the same reason
+    /// (`AutoActHistoryVerbs.resetLandedTimer`). Not a count of statuses: the poll's own tick moves that too.
+    property int statusOwedFrom: 0
+    /// Arms that wait on the answer at `index` of the notify being drained — the run's own, where the run knows
+    /// which one that is (`RepoTab.commitAnswer`). A notify that carried none (-1) leaves the arming to the
+    /// connection below, which takes the first answer nobody could have pressed for.
+    function owedStatusAt(index) {
+        driver.statusOwed = true
+        driver.statusOwedFrom = index < 0 ? 0 : repoTab.writeAnswerHeadSeq(index)
+    }
+    /// Whether everything a run that named [`statusOwed`] is waiting for is in: the status that write asked for,
+    /// the graph holding where it put HEAD, and the page that pair leaves behind.
+    ///
+    /// **The graph is waited out on the row and not on a count of passes** — a pass finishes for work nobody here
+    /// asked for, and the rebuild the refs ask for is skipped where nothing moved. Where the reader ends up on what
+    /// the write made, the landing inside `PageSettled` asks for that row as well; where the tree keeps the reader
+    /// on the working-tree face, nothing else does.
+    function owedStatusLanded() {
+        return driver.statusOwedFrom !== 0
+            && workTree.statusSeq >= driver.statusOwedFrom
+            && graphModel.rowOf(workTree.headOid) >= 0
+            && PageSettled.settled(page)
+    }
     /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
     /// write barrier alone answers for.
     ///
@@ -165,6 +194,8 @@ Item {
     function prepareCompletion(act) {
         driver.completionDeferred = completion.defersCompletion(act)
         driver.writeExpected = completion.isWriteAct(act)
+        driver.statusOwed = completion.owesStatus(act)
+        driver.statusOwedFrom = 0
         driver.writeSeqBefore = repoTab.writeSeq
         driver.treeGoneRow = ""
         driver.graphGoneOid = ""
@@ -264,13 +295,36 @@ Item {
         }
     }
     readonly property alias barrierRendered: renderedBarrier
+    // The number this run's own write answer named, for a run with no index of its own to arm from
+    // (`owedStatusAt`). **Not whatever answered first**: the fetch a page makes on its way open and the interval's
+    // own travel the same queue and answer on the same notify, and a run armed on one of those waits for a report
+    // a status read before the press already carries. Nobody presses those two, and nothing else here answers
+    // without having been pressed.
+    Connections {
+        target: driver.repoTab
+        enabled: driver.statusOwed && driver.statusOwedFrom === 0
+        function onWriteSeqChanged() {
+            const tab = driver.repoTab
+            for (let i = 0; i < tab.writeAnswerCount(); i++) {
+                const op = tab.writeAnswerOp(i)
+                if (tab.writeAnswerSeq(i) > driver.writeSeqBefore
+                        && op !== "auto-fetch" && op !== "open-fetch") {
+                    driver.statusOwedFrom = tab.writeAnswerHeadSeq(i)
+                    return
+                }
+            }
+        }
+    }
     // `writeSeq` moving past the armed sequence proves the write's answer was absorbed; `busyCount === 0` is the
     // quiet condition on top — nothing else this run started is still in flight. (Waiting for busy to *rise* would
-    // wedge: the answer can be absorbed before this sampler ever sees the flag up.)
+    // wedge: the answer can be absorbed before this sampler ever sees the flag up.) A verb whose picture is of the
+    // page the write's status leaves waits past both (`owedStatusLanded`).
     SampleTimer {
         id: writeBarrier
         onTriggered: {
             if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+                return
+            if (driver.statusOwed && !driver.owedStatusLanded())
                 return
             writeBarrier.stop()
             if (driver.treeGoneRow === "")

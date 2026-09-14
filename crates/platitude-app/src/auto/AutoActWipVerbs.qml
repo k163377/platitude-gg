@@ -271,7 +271,12 @@ Item {
             Harness.report("commit_answered landed=" + landed
                               + " empty=" + (wipPane.subjectText === "" && wipPane.bodyText === "")
                               + " amend=" + page.amending)
-            driver.complete()
+            // Reported at the answer, which is what the line is about, and completed behind the status that answer
+            // asks for. **Armed off this press's own answer** (`RepoTab.commitAnswer`), because the press is two
+            // writes: the staging in front of it answers first, and the status it asks for is one the commit has
+            // not been made in yet.
+            driver.owedStatusAt(repoTab.commitAnswer)
+            driver.barrierWrite.start()
         }
     }
     QtObject {
