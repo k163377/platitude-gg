@@ -59,10 +59,26 @@ Item {
             acts.reportTool()
         }
     }
+    /// Whether this machine's stock-take of merge editors has been made — the read went out, and it came back.
+    ///
+    /// **Latched off the flag's own edges, because the flag reads false on both sides of the read** and an empty
+    /// list means opposite things there: before it, nobody has asked yet; after it, this machine has none. Only the
+    /// second is an answer, and it is the one that ends the two verbs below.
+    property bool toolsWentOut: false
+    property bool toolsCameBack: false
+    function noteToolsFlight() {
+        if (!acts.window.curPage)
+            return
+        if (acts.window.curPage.pageTab.mergeToolsLoading)
+            acts.toolsWentOut = true
+        else if (acts.toolsWentOut)
+            acts.toolsCameBack = true
+    }
     Connections {
         target: acts.window.curPage ? acts.window.curPage.pageTab : null
         function onMergeToolsLoadingChanged() {
             acts.noteToolLoading()
+            acts.noteToolsFlight()
         }
     }
     function reportTool() {
@@ -90,6 +106,21 @@ Item {
             if (!settingsDialog.opened) {
                 settingsDialog.pressToolOnOpen = true
                 settingsDialog.openAt("git")
+                return
+            }
+            // **An inventory that named nothing is an answer, and it is the end of both of these.** The candidates'
+            // second wave is a stock-take of the machine (`git mergetool --tool-help`), so a machine with no merge
+            // editor on it answers with an empty list — and an empty list is a card with nothing to drop, which
+            // closes itself (`AppCombo.hasList`). Neither the `opened` the settled verb waits for nor the loading
+            // edge behind it can come after that, so a run that went on waiting would spend the whole watchdog in
+            // silence and be read as a wedge. Said instead, and finished: the run fails on its own report line in
+            // the seconds the stock-take takes, naming the machine rather than the wiring.
+            if (acts.toolsCameBack && acts.gitPane.toolChoices.length === 0) {
+                stop()
+                acts.reportTool()
+                Harness.report("merge_editor_none this machine's stock-take named no merge editor, "
+                                  + "so the list has nothing to drop")
+                window.finishAutoAct()
                 return
             }
             const ready = Harness.autoAct === "settings-tools-loading"
