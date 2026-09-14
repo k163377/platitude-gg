@@ -141,10 +141,17 @@ Item {
                 // that work went (規約 §未コミット変更がある状態で履歴を書き換える の着地表).
                 if (act === "drop-stops")
                     opStoppedTimer.begin(true)
-                if (dropCommitItem.holdMs > 0)
+                if (dropCommitItem.holdMs > 0) {
                     dropCommitItem.completeHold()
-                else
+                } else {
+                    // The item's own click takes the menu down before the write goes out (`CommitRowMenu`,
+                    // `dropCommitItem.onHeld` has the order). Fired past the item, the menu stands until something
+                    // else closes it, and whether that beats the census walk is the scheduler's — so it is taken
+                    // down here, and the completion waits for it to be gone (`AutoActDriver.menuGoing`).
+                    commitMenu.dismiss()
+                    driver.menuGoing = commitMenu
                     page.dropCommit(commitMenuState.menuOid)
+                }
                 // The drop with nowhere to land comes back as a report, and the bar it comes down in is the shot.
                 if (act === "drop-last-commit")
                     driver.barrierNotice.start()

@@ -166,6 +166,12 @@ Item {
     /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
     /// that set this would wait out the watchdog. Widen the barrier before pointing a new verb at it.
     property string graphGoneOid: ""
+    /// The menu this run took down on the product's behalf, or null. A verb that fires a row's write past the item
+    /// (`page.dropCommit` from the history verbs) closes nothing by itself, and a closing menu is still on screen for
+    /// its exit transition — which the census walk counts (`WindowCensus` goes by `visible`). So the completion
+    /// holds until this one has gone (`complete`), the way the item's own click would have had it down before the
+    /// write's answer came.
+    property AppMenu menuGoing: null
     /// How many entries the stash list held before that write. The list is read after the rebuild rather than with it,
     /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
     /// state the application ever rests in, and the run is judged by eye.
@@ -243,6 +249,13 @@ Item {
     }
 
     function complete() {
+        // The menu the verb took down is on screen for its exit transition, and the walk counts what is visible
+        // (`WindowCensus`): whichever barrier brought the run here, it is not complete while that menu is on its
+        // way out (`menuGoing`).
+        if (driver.menuGoing !== null && driver.menuGoing.visible) {
+            menuGoneBarrier.start()
+            return
+        }
         page.Window.window.finishAutoAct()
     }
 
@@ -371,6 +384,17 @@ Item {
         }
     }
     readonly property alias barrierNotice: noticeBarrier
+    // The menu a verb took down, waited off the screen rather than off the clock: `visible` stays up for the exit
+    // transition and drops when it ends, and that edge is what lets the completion through (`complete`).
+    SampleTimer {
+        id: menuGoneBarrier
+        onTriggered: {
+            if (driver.menuGoing.visible)
+                return
+            menuGoneBarrier.stop()
+            driver.complete()
+        }
+    }
     /// What the chain does once the working tree has answered — or straight away, for the verbs that name no row of
     /// it: the graph rebuild for the verbs whose write takes a row off the graph, and the shot for everyone else.
     function afterTreeSettled() {
