@@ -338,14 +338,18 @@ impl AppBackend {
         crate::winframe::minimize();
     }
 
-    /// Pulls a restored window back inside the screen it came up on, and
-    /// answers whether it had to. The scene cannot do this itself: what
-    /// has to fit is the frame, which is wider than the window says it
-    /// is, and the work area is not a thing QML reports
-    /// (`winframe::fit_to_work_area`).
+    /// Pulls a restored window back inside the work area of the screen
+    /// the saved place was on, and answers whether it had to. The scene
+    /// cannot do this itself: what has to fit is the frame, which is
+    /// wider than the window says it is, and the work area is not a
+    /// thing QML reports (`winframe::fit_to_work_area`).
+    ///
+    /// `screen` is that screen's name as QML spells it
+    /// (`Screen.name` — the display device), empty where the saved place
+    /// names no screen this desktop still has.
     #[qslot]
-    fn fit_window_to_screen(&self) -> bool {
-        crate::winframe::fit_to_work_area()
+    fn fit_window_to_screen(&self, screen: String) -> bool {
+        crate::winframe::fit_to_work_area(&screen)
     }
 
     // -- window state -------------------------------------------------------

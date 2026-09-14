@@ -77,14 +77,77 @@ extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
 
 /// Fits every windowed top-level window into its monitor's work
 /// area, and says whether any of them moved.
-pub(crate) fn fit_to_work_area() -> bool {
+pub(crate) fn fit_to_work_area(screen: &str) -> bool {
     MOVED.set(false);
+    HOME.set(work_area_of(screen));
     // SAFETY: as in `square_corners` — the same walk, and the callback
     // only reads the window it is handed and repositions it.
     unsafe {
         EnumThreadWindows(GetCurrentThreadId(), fit_one, 0);
     }
+    HOME.set(None);
     MOVED.get()
+}
+
+/// The work area of the display device `screen` names (`\\.\DISPLAY2`,
+/// which is what Qt calls a screen on Windows), or `None` where nothing
+/// answers to it — a first run with no saved place, and a monitor
+/// unplugged since the run that wrote one.
+///
+/// **A name rather than a point.** Qt's coordinates are its own: with
+/// two monitors at different scale factors the number a window reports
+/// is not the number Windows would take, so a point handed across would
+/// pick the wrong monitor exactly where the mixed-DPI desktop needs it
+/// most. The device name is the one spelling both sides already agree
+/// on (`QScreen::name` is `DISPLAY_DEVICE.DeviceName`).
+fn work_area_of(screen: &str) -> Option<Rect> {
+    if screen.is_empty() {
+        return None;
+    }
+    WANTED.with(|wanted| wanted.replace(screen.encode_utf16().collect()));
+    FOUND.set(None);
+    // SAFETY: the callback is a real `extern "system"` function of the
+    // shape `EnumDisplayMonitors` expects; it only fills a local of the
+    // documented shape and writes thread-local state. A null device
+    // context and a null clip rectangle are the documented way to walk
+    // every display.
+    unsafe {
+        EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), named_one, 0);
+    }
+    FOUND.get()
+}
+
+/// Runs for every display until the wanted one answers.
+extern "system" fn named_one(
+    monitor: *mut c_void,
+    _dc: *mut c_void,
+    _rect: *const Rect,
+    _param: isize,
+) -> i32 {
+    let mut info = MonitorInfoEx {
+        info: MonitorInfo {
+            size: size_of::<MonitorInfoEx>() as u32,
+            ..MonitorInfo::default()
+        },
+        device: [0; MONITOR_NAME_LEN],
+    };
+    // SAFETY: `monitor` is live for the callback, and the call fills a
+    // local whose `size` field says how much of it there is.
+    let known = unsafe { GetMonitorInfoW(monitor, (&raw mut info).cast()) != 0 };
+    if !known {
+        return 1;
+    }
+    let name: Vec<u16> = info
+        .device
+        .iter()
+        .take_while(|c| **c != 0)
+        .copied()
+        .collect();
+    if WANTED.with(|wanted| *wanted.borrow() != name) {
+        return 1;
+    }
+    FOUND.set(Some(info.info.work));
+    0
 }
 
 thread_local! {
@@ -92,6 +155,13 @@ thread_local! {
     /// a window that was just moved is not one to measure the frame
     /// slop against (`WindowShape.settleTimer`).
     static MOVED: Cell<bool> = const { Cell::new(false) };
+    /// The work area the walk is fitting to, or `None` to take each
+    /// window's own nearest monitor.
+    static HOME: Cell<Option<Rect>> = const { Cell::new(None) };
+    /// The display device name [`work_area_of`] is looking for, and
+    /// what it found.
+    static WANTED: std::cell::RefCell<Vec<u16>> = const { std::cell::RefCell::new(Vec::new()) };
+    static FOUND: Cell<Option<Rect>> = const { Cell::new(None) };
 }
 
 /// Runs for every top-level window the thread owns. A maximised one
@@ -112,12 +182,17 @@ extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
     let known = unsafe {
         GetWindowRect(window, &mut rect);
         let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
-        GetMonitorInfoW(monitor, &mut info) != 0
+        GetMonitorInfoW(monitor, (&raw mut info).cast()) != 0
     };
-    if !known {
-        return 1;
-    }
-    let work = info.work;
+    // The monitor the saved place named, where it named one that is
+    // still here. Otherwise the window's own nearest, which is what a
+    // first run and an unplugged monitor both want: somewhere on the
+    // desktop rather than off it.
+    let work = match HOME.get() {
+        Some(work) => work,
+        None if known => info.work,
+        None => return 1,
+    };
     let width = (rect.right - rect.left).min(work.right - work.left);
     let height = (rect.bottom - rect.top).min(work.bottom - work.top);
     let x = rect.left.min(work.right - width).max(work.left);

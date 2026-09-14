@@ -53,24 +53,53 @@ Item {
         return shape.keepSavedSize ? saved : Math.min(saved, screen)
     }
 
+    /// The screen the saved top-left corner falls on, or `null` for a position nobody saved and for one whose screen
+    /// is not here any more — a monitor unplugged since the run that wrote it.
+    ///
+    /// **The saved place decides the screen, not the window and not the pointer.** Before this, everything about the
+    /// restore was measured against wherever the platform had just put the window — which on Windows is the screen
+    /// the pointer is on — so a window saved on one monitor was sized to another monitor's width and pulled into that
+    /// monitor's work area (2026-09-05 実測, P3-確認事項). Both of those are answers to "where is it now", and the
+    /// question is "where was it left".
+    ///
+    /// Takes the list rather than reading `Qt.application.screens` itself, so the arithmetic can be held against a
+    /// desktop this machine does not have (`tst_windowshape`).
+    function screenHolding(x, y, screens) {
+        if (x === shape.unplaced || y === shape.unplaced)
+            return null
+        for (let i = 0; i < screens.length; i++) {
+            const s = screens[i]
+            if (x >= s.virtualX && x < s.virtualX + s.width
+                    && y >= s.virtualY && y < s.virtualY + s.height)
+                return s
+        }
+        return null
+    }
+
     // The size and place the window was left in. Assigned rather than bound: from here on the window manager and the
     // person dragging it own these. An unsaved position stays unset so the platform places the window itself — a first
     // run should not open at 0,0.
     function applySavedWindow() {
+        const x = AppBackend.startWindowX()
+        const y = AppBackend.startWindowY()
+        // The screen the saved place is on, decided before anything is measured against one ([`screenHolding`]).
+        // `Screen` — the window's own, which is wherever the platform has just put it — is the fallback for a first
+        // run and for a screen that has since gone.
+        const home = shape.screenHolding(x, y, Qt.application.screens)
+        const roomW = home !== null ? home.width : Screen.width
+        const roomH = home !== null ? home.height : Screen.height
         // Over the floor on the way in, not after: what is assigned here is what `settleTimer` measures the frame slop
         // from, and what a maximise would come back to.
         const wantWidth = Math.max(
-            shape.insideScreen(AppBackend.startWindowWidth(), Screen.width),
+            shape.insideScreen(AppBackend.startWindowWidth(), roomW),
             Math.ceil(shape.window.floorWidth))
         const wantHeight = Math.max(
-            shape.insideScreen(AppBackend.startWindowHeight(), Screen.height),
+            shape.insideScreen(AppBackend.startWindowHeight(), roomH),
             Math.ceil(shape.window.floorHeight))
         shape.window.width = wantWidth
         shape.window.height = wantHeight
         shape.askedWidth = wantWidth
         shape.askedHeight = wantHeight
-        const x = AppBackend.startWindowX()
-        const y = AppBackend.startWindowY()
         if (x !== shape.unplaced && y !== shape.unplaced) {
             shape.window.x = x
             shape.window.y = y
@@ -79,7 +108,12 @@ Item {
         // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` sees neither number; the platform
         // side moves the window back and says whether it had to. Before the maximise, not after: the shape standing
         // when a window is maximised is the shape a restore comes back to.
-        const moved = AppBackend.fitWindowToScreen()
+        //
+        // **Named rather than found from the window**: the platform side is told which monitor to fit to, so a
+        // window the platform has put somewhere else is pulled back to the saved one instead of being clamped into
+        // wherever it landed. An empty name leaves it to answer from the window, which is what a first run and an
+        // unplugged monitor both want — the nearest monitor, rather than a window left off the desktop.
+        const moved = AppBackend.fitWindowToScreen(home !== null ? home.name : "")
         if (AppBackend.startWindowMaximized()) {
             // Through the platform, so it holds the shape to come back to (`toggleMaximized`). Where there is no
             // platform command, `visibility` still carries it.

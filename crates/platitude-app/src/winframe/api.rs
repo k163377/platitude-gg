@@ -73,9 +73,17 @@ pub fn minimize() {
     win32::minimize();
 }
 
-/// Pulls the window back inside the work area of the monitor it came up
-/// on, and answers whether it had to. Windowed windows only — a maximised
-/// one is the platform's own arrangement.
+/// Pulls the window back inside the work area of the monitor `screen`
+/// names (`\\.\DISPLAY2`, as `QScreen::name` spells it), and answers
+/// whether it had to. Windowed windows only — a maximised one is the
+/// platform's own arrangement.
+///
+/// **Named, because "the monitor it came up on" is the wrong monitor.**
+/// Where the platform first puts a window is the pointer's screen, and
+/// fitting the restore to that one is how a window saved on another
+/// monitor ended up on this one (2026-09-05 実測, P3-確認事項). An empty
+/// name falls back to each window's own nearest monitor, which is what a
+/// first run and a monitor unplugged since the save both want.
 ///
 /// The scene cannot do this itself: it knows neither the work area (QML
 /// reports no screen's) nor the frame, which is wider than the window
@@ -86,14 +94,15 @@ pub fn minimize() {
 /// Shrinks only as far as it must, and moves rather than shrinks
 /// wherever moving is enough.
 #[cfg(windows)]
-pub fn fit_to_work_area() -> bool {
-    win32::fit_to_work_area()
+pub fn fit_to_work_area(screen: &str) -> bool {
+    win32::fit_to_work_area(screen)
 }
 
 /// Left to the window manager on the other two platforms, which place
 /// their own windows.
 #[cfg(not(windows))]
-pub fn fit_to_work_area() -> bool {
+pub fn fit_to_work_area(screen: &str) -> bool {
+    let _ = screen;
     false
 }
 

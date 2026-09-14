@@ -58,6 +58,22 @@ struct MonitorInfo {
 }
 const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
+/// `CCHDEVICENAME` (wingdi.h): how long a display device's name is.
+const MONITOR_NAME_LEN: usize = 32;
+
+/// `MONITORINFOEXW` (winuser.h) — `MONITORINFO` with the device name
+/// after it. Filled by the same call, which reads `size` to know which
+/// of the two it is being handed.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MonitorInfoEx {
+    info: MonitorInfo,
+    device: [u16; MONITOR_NAME_LEN],
+}
+
+/// `MONITORENUMPROC` (winuser.h). Returning zero stops the walk early.
+type MonitorEnumProc = extern "system" fn(*mut c_void, *mut c_void, *const Rect, isize) -> i32;
+
 /// `WM_SYSCOMMAND` (winuser.h).
 const WM_SYSCOMMAND: u32 = 0x0112;
 
@@ -152,7 +168,16 @@ unsafe extern "system" {
 #[link(name = "user32")]
 unsafe extern "system" {
     fn MonitorFromWindow(window: *mut c_void, flags: u32) -> *mut c_void;
+    // Takes the wider `MONITORINFOEXW` too — which of the two it is
+    // being handed is what the struct's own `size` field says, so the
+    // pointer is cast at each call site.
     fn GetMonitorInfoW(monitor: *mut c_void, info: *mut MonitorInfo) -> i32;
+    fn EnumDisplayMonitors(
+        dc: *mut c_void,
+        clip: *const Rect,
+        callback: MonitorEnumProc,
+        param: isize,
+    ) -> i32;
 }
 
 // SAFETY: as the other user32 blocks — plain integers and pointers
