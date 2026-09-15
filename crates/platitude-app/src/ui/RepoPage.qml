@@ -455,6 +455,20 @@ Item {
             return
         page.tellRefusal(answer)
     }
+    /// The answer to a push a **ref row** sent — the two `push --delete`s, the rename git has no command for, and the
+    /// two pairs that reach over there after doing something here (`RepoTab.refPushAnswer`, -1 where this notify
+    /// carried none).
+    ///
+    /// **Its own answer, not the group's.** These all answer under the word `push`, like the fetch running behind
+    /// them and like the toolbar's own button, so a fetch coming back in the same drain took the group over and the
+    /// far side's refusal was never said at all (P3-確認事項, observed). The rows the delete took away come back
+    /// either way — that is the delete's own owner — and what only this carries is why.
+    function absorbRefPushAnswer() {
+        const answer = repoTab.refPushAnswer
+        if (answer < 0 || !repoTab.writeAnswerFailed(answer))
+            return
+        page.tellRefusal(answer)
+    }
     /// What one answer that did not happen has to say for itself, whoever was waiting for it: somebody outside this
     /// application turned it down — a hook here or over there, a remote this end had only an older picture of.
     /// Nothing here could have known beforehand and nothing here can answer it, so what they said comes down as a
@@ -1640,6 +1654,8 @@ Item {
         publishFlow.noteWriteAnswer()
         // …and what git said about it is the page's to say, off the same answer.
         page.absorbPushAnswer()
+        // …and the same for the pushes a ref row sends, which answer under the same word.
+        page.absorbRefPushAnswer()
         // A pop that did not happen leaves its entry, and its name, where they were — so this is read on both
         // landings, above the refusal branch and its early returns.
         page.absorbPopLabel()

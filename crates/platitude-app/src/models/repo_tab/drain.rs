@@ -33,6 +33,8 @@ impl RepoTab {
         self.read_stash_out();
         self.push_out.new_notify();
         self.read_push_out();
+        self.ref_push_out.new_notify();
+        self.read_ref_push_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -363,6 +365,10 @@ impl RepoTab {
             self.read_push_out();
             answered_for = true;
         }
+        if self.ref_push_out.answered(id, at) {
+            self.read_ref_push_out();
+            answered_for = true;
+        }
         if !answered_for {
             self.fold_into_group(kind, landed, at);
         }
@@ -402,6 +408,17 @@ impl RepoTab {
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1);
         self.push_answer_branch = self.push_out.branch().to_string();
+    }
+
+    /// The same for the pushes a ref row sends: where their answer
+    /// stands, and the row that press was about.
+    fn read_ref_push_out(&mut self) {
+        self.ref_push_answer = self
+            .ref_push_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+        self.ref_push_target = self.ref_push_out.branch().to_string();
     }
 
     /// One answer nobody was waiting for by name, folded into the group

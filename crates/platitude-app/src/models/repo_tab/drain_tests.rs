@@ -262,9 +262,10 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
     );
 }
 
-// A push nobody here pressed for — a remote branch's rename, which
-// answers as a push, or a page that has since gone — has no button
-// waiting: its answer falls to the group like any other nobody named.
+// A push nobody here pressed for — one a page that has since gone sent —
+// has no press waiting: its answer falls to the group like any other
+// nobody named. **Both owners are empty here**, which is what makes this
+// the leftover case rather than the ref row's own (below).
 #[test]
 fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     let mut tab = RepoTab::default();
@@ -1072,3 +1073,92 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
         "and owed once — nothing is left for a later status to pay again"
     );
 }
+
+// ---- the pushes a ref row sends ---------------------------------------
+
+/// The row pressed: a `push --delete` went to the queue under `OURS`, for
+/// the remote row `origin/topic`.
+fn ref_push_pressed() -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.ref_push_asked("origin/topic", Some(OURS));
+    tab
+}
+
+/// The far side's refusal reaches the press that asked for it, whichever
+/// order the drain carried the two answers in.
+///
+/// **All of these answer under the word `push`** — the two `push
+/// --delete`s, the rename git has no command for, the two pairs that
+/// reach over there after doing something here — and so does the fetch
+/// running behind them. One drain empties the whole queue and notifies
+/// once, and the group the page reads when any answer will do describes
+/// whichever ownerless answer finished last: a fetch that landed after
+/// the refusal took the report away with it, and the reader was told
+/// nothing at all (P3-確認事項, observed).
+///
+/// Both orders, because only one of them is the bug: a test that ran the
+/// other alone would pass against the arrangement that lost it.
+#[test]
+fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
+    for fetch_first in [false, true] {
+        let mut tab = ref_push_pressed();
+        let refusal = reported(
+            OURS,
+            K::Push,
+            "remote: Cannot delete a protected branch",
+            Some(platitude_core::WriteReport::on_remote(
+                ReportKind::RemoteDelete,
+                "origin",
+                "topic",
+                "Cannot delete a protected branch".into(),
+            )),
+        );
+        let fetch = answered(SOMEBODY_ELSE, K::Fetch, "");
+        tab.absorb(if fetch_first {
+            vec![fetch, refusal]
+        } else {
+            vec![refusal, fetch]
+        });
+
+        let at = tab.ref_push_answer;
+        assert!(
+            at >= 0,
+            "the press's own answer, by id (fetch first: {fetch_first})"
+        );
+        let answer = tab.write_answer_at(at).expect("the answer it points at");
+        assert!(answer.failed, "and it is the refusal, not the fetch");
+        assert_eq!(answer.report_kind, "delete");
+        assert_eq!(answer.report_reason, "Cannot delete a protected branch");
+        assert_eq!(
+            tab.ref_push_target, "origin/topic",
+            "named with the row it was sent for"
+        );
+        // Which is exactly why it cannot be read off the group: that one
+        // is the fetch's, and it landed.
+        assert!(tab.write_fetched && !tab.write_refused);
+        assert_eq!(tab.write_report_kind, "");
+    }
+}
+
+/// And the next press starts from nothing. An answer left standing would
+/// be read a second time under a press this drain brought no answer for
+/// at all — the same thing every other owner puts down at the top of a
+/// drain (`Press::new_notify`).
+#[test]
+fn a_ref_rows_push_does_not_hand_the_next_press_the_last_answer() {
+    let mut tab = ref_push_pressed();
+    tab.absorb(vec![answered(OURS, K::Push, "refused")]);
+    assert!(tab.ref_push_answer >= 0);
+
+    tab.ref_push_asked("origin/other", Some(SOMEBODY_ELSE));
+    tab.absorb(vec![answered(OURS, K::Push, "refused")]);
+    assert_eq!(
+        tab.ref_push_answer, -1,
+        "the answer standing is the first press's, and that press is over"
+    );
+    assert_eq!(
+        tab.ref_push_target, "origin/other",
+        "and the row waited for is the one just pressed"
+    );
+}
+

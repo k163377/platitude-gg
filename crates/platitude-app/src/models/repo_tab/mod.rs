@@ -365,6 +365,20 @@ pub struct RepoTab {
     /// way `commit_answer` is the editor's.
     push_answer: i32,
     push_answer_branch: String,
+    /// The pushes a **ref row** sends — the two `push --delete`s and the
+    /// rename git has no command for, and the two pairs that reach over
+    /// there after doing something here. The same arrangement as the
+    /// toolbar's one door along, and for the same reason: they answer
+    /// under the word `push` like everything else that reaches a remote,
+    /// so a fetch coming back in the same drain took the group over and
+    /// the refusal was never said at all (P3-確認事項, observed —
+    /// `drain::fold_into_group` describes whichever ownerless answer
+    /// finished last).
+    ref_push_out: crate::ops::PushOut,
+    /// Where that press's own answer stands in `write_answers`, or -1
+    /// where this notify carried none of it, and the row it was about.
+    ref_push_answer: i32,
+    ref_push_target: String,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
     /// or here, a remote this end had only an older picture of. Nothing

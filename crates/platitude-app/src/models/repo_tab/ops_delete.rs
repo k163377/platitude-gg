@@ -74,7 +74,20 @@ impl RepoTab {
     pub(super) fn remote_branch_delete(&mut self, remote: String, branch: String) {
         let row = format!("{remote}/{branch}");
         let asked = self.ask_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
+        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
         self.took_away(&[(Row::Remote, &row)], asked);
+    }
+
+    /// Writes down the id a push a ref row sent was accepted under, with
+    /// the row it was about, so git's answer to **that** press is what
+    /// the page reports (`ops::PushOut`).
+    ///
+    /// **The rows coming back is not the whole of the answer.** The
+    /// delete's own owner puts those back either way; what only the
+    /// refusal carries is why, and a refusal folded into the group is one
+    /// a fetch answering in the same drain takes over.
+    pub(super) fn ref_push_asked(&mut self, row: &str, accepted: Option<u64>) {
+        self.ref_push_out.asked(accepted, row.to_string());
     }
 
     /// Both halves as one queued write, so it is one thing to put back.
@@ -89,6 +102,7 @@ impl RepoTab {
         let asked = self.ask_session(|s| {
             s.delete_branch_everywhere(branch.clone(), remote.clone(), remote_branch.clone(), force)
         });
+        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
     }
 
@@ -110,6 +124,10 @@ impl RepoTab {
     /// and a name.
     pub(super) fn remote_tag_delete(&mut self, remote: String, tag: String, row_goes: bool) {
         let asked = self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));
+        self.ref_push_asked(
+            &format!("{remote}/{tag}"),
+            asked.map(platitude_core::OperationId::as_u64),
+        );
         let rows: &[(Row, &str)] = if row_goes { &[(Row::Tag, &tag)] } else { &[] };
         self.took_away(rows, asked);
     }
@@ -119,6 +137,10 @@ impl RepoTab {
     /// leaves the name gone from the remote and still in the sidebar.
     pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String) {
         let asked = self.ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone()));
+        self.ref_push_asked(
+            &format!("{remote}/{tag}"),
+            asked.map(platitude_core::OperationId::as_u64),
+        );
         self.took_away(&[(Row::Tag, &tag)], asked);
     }
 

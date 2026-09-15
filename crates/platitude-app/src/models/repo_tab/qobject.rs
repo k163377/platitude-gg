@@ -152,6 +152,15 @@ impl RepoTab {
         Member = push_answer_branch,
         Notify = changed
     );
+    // …and the same pair for the pushes a ref row sends, which answer
+    // under the same word and used to lose their refusal to whatever
+    // else came back in the drain (`ops::PushOut`).
+    qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
+    qproperty!(
+        "refPushTarget",
+        Member = ref_push_target,
+        Notify = changed
+    );
     // What is left over, classified in drain::settle_write — the page
     // reads meanings, never op names (app-ui.md). These describe the last
     // answer of this notify **nobody was waiting for by name**: a drain
@@ -1031,7 +1040,10 @@ impl RepoTab {
     /// because the old name is destroyed rather than moved.
     #[qslot]
     fn rename_remote_branch(&mut self, remote: String, from: String, to: String) {
-        self.with_session(|s| s.rename_remote_branch(remote.clone(), from.clone(), to.clone()));
+        let row = format!("{remote}/{from}");
+        let asked =
+            self.ask_session(|s| s.rename_remote_branch(remote.clone(), from.clone(), to.clone()));
+        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 
     /// `git push <remote> --delete <branch>` (destructive).
