@@ -57,21 +57,16 @@ fn note(transcript: Option<&str>) -> String {
     let record = transcript
         .map(|path| {
             format!(
-                " Earlier turns may have been summarized away, so read the \
-                 session's record rather than recalling it: {path}."
+                " If earlier instructions are missing from context, read the relevant \
+                 turns in the session record: {path}."
             )
         })
         .unwrap_or_default();
     format!(
-        "This prompt asks for a review, so the review covers the session \
-         and not only the code: hold the work against every instruction \
-         the user gave in this session, and answer in both directions — \
-         what was asked for and is missing, half-applied or quietly \
-         dropped (a correction sent mid-turn is an instruction like any \
-         other), and what was done past the ask (files nobody named, scope \
-         widened, refactors, docs or tests nobody requested).{record} Name \
-         the instructions that were met as well: a review listing only \
-         findings cannot be told from one that stopped looking."
+        "Review the implementation and verification against the applicable user instructions, \
+         including corrections during the task. Check for missing work and unauthorized scope \
+         changes; necessary supporting edits belong to the requested work. Report findings \
+         and material verification limits.{record}"
     )
 }
 

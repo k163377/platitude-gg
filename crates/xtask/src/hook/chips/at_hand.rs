@@ -131,12 +131,12 @@ mod tests {
         // As `git_query` answers it: trimmed, so the leading blank of a
         // first ` M` line is gone and the rest still have theirs.
         let status = "M crates/xtask/src/hook/chips/guard.rs\n\
-                      \x20M crates/xtask/src/hook/chips/leftovers.rs\n\
+                      \x20M crates/xtask/src/hook/chips/ledger.rs\n\
                        ?? crates/xtask/src/hook/chips/at_hand.rs\n\
                        R  internal-docs/古い.md -> internal-docs/新しい.md";
         let found = touched(status);
         assert!(found.contains("crates/xtask/src/hook/chips/guard.rs"));
-        assert!(found.contains("crates/xtask/src/hook/chips/leftovers.rs"));
+        assert!(found.contains("crates/xtask/src/hook/chips/ledger.rs"));
         assert!(found.contains("crates/xtask/src/hook/chips/at_hand.rs"));
         // A rename is over both of its names: a chip may know the file
         // by the one this branch moved it off.

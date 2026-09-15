@@ -78,14 +78,44 @@ fn stop(sb: &Sandbox) -> String {
 }
 
 #[test]
+fn stop_reports_repository_state_without_prescribing_a_place_for_prose() {
+    let sb = Sandbox::new("stop-evidence");
+    sb.write_refs(&sb.seat, 24);
+    sb.commit_all(&sb.seat, "feat(core): twenty-four", &[]);
+    says(&sb, "main反映");
+    let transcript = sb.root.join("session.jsonl");
+    let payload = format!(
+        "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"transcript_path\":\"{}\",\"stop_hook_active\":false}}",
+        forward(&sb.seat),
+        forward(&transcript)
+    );
+    let reply = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"外部確認が未対応\"}]}}\n";
+    std::fs::write(&transcript, reply).expect("transcript");
+    let before = hook(&sb, "stop", &payload);
+    assert!(before.contains("1 commit(s) not on main"), "{before}");
+    assert!(!before.contains("\"decision\":\"block\""), "{before}");
+
+    // Recording a limitation cannot change what the repository proves.
+    std::fs::write(
+        &transcript,
+        format!(
+            "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"tool_use\",\"name\":\"Edit\",\"input\":{{\"file_path\":\"internal-docs/P3-確認事項.md\"}}}}]}}}}\n{reply}"
+        ),
+    )
+    .expect("transcript with note");
+    let after = hook(&sb, "stop", &payload);
+    assert!(after.contains("1 commit(s) not on main"), "{after}");
+    assert!(!after.contains("\"decision\":\"block\""), "{after}");
+}
+
+#[test]
 fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
     let sb = Sandbox::new("permit-ready");
     let note = says(&sb, "直してmain反映");
     assert!(
         note.contains("Before landing")
-            && note.contains("review findings")
-            && note.contains("background tasks")
-            && note.contains("rechecks before invoking land"),
+            && note.contains("complete and commit")
+            && note.contains("CLAUDE.md"),
         "{note}"
     );
     assert_eq!(says(&sb, "ここも直して"), "");
@@ -148,7 +178,7 @@ fn necessary_corrections_after_landing_remain_possible_and_visible() {
     );
     let refused = lands(&sb);
     assert!(
-        refused.contains("second time") && refused.contains("Finish"),
+        refused.contains("second time") && refused.contains("land only"),
         "{refused}"
     );
     assert_ne!(sb.main_sha(), sb.head(&sb.seat));

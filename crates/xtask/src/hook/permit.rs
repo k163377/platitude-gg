@@ -9,8 +9,7 @@
 //!   that stopped before main moved (a dirty seat, a red gate, a rebase
 //!   that halted) fulfilled nothing, and the ask stands until one does;
 //! * it asked, and a landing moved main on it — spent. The land verb
-//!   writes this at the fast-forward (`landed`). Corrections can still
-//!   be finished and verified, but a second landing needs another ask;
+//!   writes this at the fast-forward (`landed`);
 //! * it did not ask — closed. A correction, an answer to a question, an
 //!   approval of something else: none carries an earlier ask forward. A
 //!   message that asks again opens it again.
@@ -100,18 +99,9 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
     store(&path, &permit);
     if permit.standing == Standing::Open {
         println!(
-            "Before landing, reconcile the current request and earlier applicable instructions \
-             with the work on the branch: implementation, review findings, necessary docs and \
-             verification. Read the relevant session record if context is missing. Wait for \
-             all requested reviews and checks, including background tasks, to complete; read \
-             their results, resolve findings and finish required rechecks before invoking land. \
-             Starting a check, silence or elapsed time is not completion. Finish and \
-             commit known remaining work before `cargo xtask land`; a clean tree or green gate \
-             alone does not establish completeness. If a required decision or external check \
-             is unavailable, report it before landing and obtain agreement on the reduced scope. \
-             When the work is complete, land directly; its gate performs the final verification. \
-             If a necessary correction is discovered after landing, finish and verify it in a \
-             claimed seat, then report its unlanded branch/SHA and request another landing."
+            "Before landing, complete and commit the requested work under CLAUDE.md §Git 運用. \
+             The permit authorizes one landing; it does not establish task completion. \
+             Land runs the final gate."
         );
     }
 }
@@ -161,11 +151,7 @@ pub(super) fn unmet(input: &str) -> Option<String> {
             permit.excerpt,
             ago(permit.asked_at)
         ),
-        Standing::Spent => format!(
-            "permit: work remains after the landing: {remaining} in {cwd}. Finish necessary \
-             corrections and verification, report the unlanded branch/SHA and remaining work, \
-             and request another landing; do not report the whole request as landed."
-        ),
+        Standing::Spent => format!("permit: work remains after the landing: {remaining} in {cwd}."),
         Standing::Closed => return None,
     })
 }
@@ -197,9 +183,8 @@ fn asks_for_main(prompt: &str) -> bool {
 /// The refusal, by what the permit says. Every form ends the same way,
 /// because the way out is the same: the branch stays, the user reads.
 fn refusal(what: &str, permit: Option<&Permit>) -> String {
-    let report = "Finish necessary corrections and verification in a claimed seat. Leave the \
-                  work on its branch and report the unlanded branch/SHA and any remaining work; \
-                  say マージ可 only when the work is complete and the gate passed";
+    let report = "This permit controls land only. Complete the work under CLAUDE.md §Git 運用 \
+                  before reporting its branch/SHA and verification result";
     match permit {
         Some(Permit {
             standing: Standing::Spent,
@@ -426,7 +411,7 @@ mod tests {
             "{text}"
         );
         for text in [refusal("x", Some(&spent)), refusal("x", None)] {
-            assert!(text.contains("マージ可"), "{text}");
+            assert!(text.contains("CLAUDE.md §Git 運用"), "{text}");
         }
     }
 

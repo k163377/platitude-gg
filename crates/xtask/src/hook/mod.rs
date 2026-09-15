@@ -83,23 +83,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// Stop: one JSON object at most. The chip guards ask first — how the
-/// list is numbered, then what the reply says it is leaving behind
-/// without putting it anywhere — and only while this turn has an ask
-/// left: a block is put once, or the answer to it is met by the same
-/// block again. When they have nothing to say, the seat's standing goes
-/// to the user as a system message: the ask for main this turn leaves
-/// unmet, if the user's message made one, and where the seat's gate
-/// stands — a seat reported before its tip was gated is what the user
-/// reads there.
+/// Stop: check chip numbering once, then report the permit and gate
+/// standing. Repository state cannot establish whether the request is
+/// complete; the session checks that against the user's instructions.
 fn stop(input: &str) -> Result<(), String> {
-    if payload::bool_field(input, "stop_hook_active") != Some(true) {
-        if chips::numbering(input)? {
-            return Ok(());
-        }
-        if chips::leftovers(input)? {
-            return Ok(());
-        }
+    if payload::bool_field(input, "stop_hook_active") != Some(true) && chips::numbering(input)? {
+        return Ok(());
     }
     let cwd = payload::string_field(input, "cwd").unwrap_or_default();
     let message = [permit::unmet(input), crate::gate::standing(&cwd)]

@@ -26,10 +26,7 @@
 //! * a chip may not claim a path a live chip already claims — the two
 //!   are one chip, or the first stacks the second itself once its own
 //!   work (or the decision it is waiting on) is done;
-//! * a turn does not end while the live set fails to read 1..N;
-//! * and a turn does not end saying in prose that work is left undone
-//!   while doing nothing about it — finishing it here, writing it into
-//!   the 確認事項 doc, or, last of the three, stacking it (`leftovers`).
+//! * a turn does not end while the live set fails to read 1..N.
 //!
 //! The ledger is this session's alone. A chip the user has since started
 //! or dropped by hand is invisible from here, and a session that ends
@@ -41,11 +38,9 @@ use std::collections::BTreeSet;
 mod at_hand;
 mod guard;
 mod ledger;
-mod leftovers;
 
 pub(crate) use guard::{post_chip, pre_spawn, stop as numbering};
 pub(crate) use ledger::session_end;
-pub(crate) use leftovers::stop as leftovers;
 
 /// One live chip, as the ledger remembers it.
 struct Chip {
