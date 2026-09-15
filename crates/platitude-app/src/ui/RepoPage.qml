@@ -160,10 +160,19 @@ FocusScope {
             page.closeDiffToGraph()
             return true
         }
-        if (!detailsPane.attention && !page.commandsAttention)
+        // The fourth door into the log, beside `>_`, `Clear` and the closing mark (デザイン規約 §git が言ったことを読む場所).
+        // It stands over nothing — it takes a room of its own behind a splitter — which is why it was first counted
+        // with the left menu, which Escape does not fold either. What tells the two apart is the one thing the menu
+        // never does: **a failed command raises this panel, and nothing but a hand puts it back down**. Below the
+        // centre and above the marks, since a reader with the diff up is not reaching past it for this. The reader's
+        // own hand, so `shutCommands` — a panel Escape put away is not one the next landing fetch may take over.
+        if (page.commandsOpen) {
+            page.shutCommands()
+            return true
+        }
+        if (!detailsPane.attention)
             return false
         detailsPane.dropAttention()
-        page.commandsAttention = false
         return true
     }
     Keys.onEscapePressed: event => {
@@ -2170,6 +2179,10 @@ FocusScope {
     /// Whether the command log is up. Closed is the resting state: the `>_` at the foot of the left menu opens it, and
     /// a failed command raises it.
     property bool commandsOpen: false
+    // The mark is the panel's own, so it cannot outlive it (`commandsAttention`). Written here rather than in each
+    // way down — the three the reader presses, Escape, and the recovery a landing fetch takes it down with — because
+    // what it says is about the mark rather than about any one of them.
+    onCommandsOpenChanged: if (!page.commandsOpen) page.commandsAttention = false
     // Who the panel standing belongs to — the one rule here that is about the **order** failures arrive in, which is
     // why it is a component of its own with every order walked (`CommandsOwner` / `tst_commandsowner.qml`).
     CommandsOwner {

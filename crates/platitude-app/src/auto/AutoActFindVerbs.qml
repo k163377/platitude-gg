@@ -113,7 +113,8 @@ Item {
                 commandsSweepTimer.start()
             else if (act !== "commands")
                 commandsPickTimer.start()
-        } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut") {
+        } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut"
+                   || act === "commands-escape") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
             // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
             // down with the `>_` instead, which leaves the error line standing and the mark red.
@@ -122,6 +123,8 @@ Item {
             repoTab.checkoutBranch("pgg-no-such-branch", false)
             if (act === "commands-fail-shut")
                 commandsShutTimer.start()
+            else if (act === "commands-escape")
+                commandsEscapeTimer.start()
         } else {
             return false
         }
@@ -274,6 +277,35 @@ Item {
             Harness.report("commands_shut wrong=" + page.commandsWrong
                               + " open=" + page.commandsShown
                               + " folded=" + page.sidebarCollapsed
+                              + " mark=" + page.commandsMarkColor)
+            renderedBarrier.begin()
+        }
+    }
+    // PGG_AUTO_ACT=commands-escape: the key on the one panel nothing else takes down. It starts from the same refusal
+    // `commands-fail` does, because that is the panel the fourth door is for — one the reader never asked for and the
+    // next success will not clear (デザイン規約 §git が言ったことを読む場所). Entered at `escapePressed`, where
+    // `Keys.onEscapePressed` enters: a keystroke cannot be injected (verify-ui スキル). **`took=` is the claim** — the
+    // page has to say the key was its own, or a press that fell through to nobody would frame exactly like this one.
+    SampleTimer {
+        id: commandsEscapeTimer
+        property bool took: false
+        property bool pressed: false
+        onTriggered: {
+            if (!commandsEscapeTimer.pressed) {
+                if (!page.commandsWrong || !page.commandsShown)
+                    return
+                commandsEscapeTimer.pressed = true
+                commandsEscapeTimer.took = page.escapePressed()
+                return
+            }
+            if (page.commandsShown)
+                return
+            commandsEscapeTimer.stop()
+            // The mark goes with the panel it was on, so the run says both — a red left behind on a panel that is no
+            // longer there is the half a picture of the shut window cannot answer for.
+            Harness.report("commands_escape took=" + commandsEscapeTimer.took
+                              + " open=" + page.commandsShown
+                              + " wrong=" + page.commandsWrong
                               + " mark=" + page.commandsMarkColor)
             renderedBarrier.begin()
         }

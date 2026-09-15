@@ -208,7 +208,8 @@ QtObject {
                 // and a file of that copy read on its own. Its own sampler owns the end of all three. The pane at
                 // rest waits out the first two and the rows built from them.
                 "carried-read", "carried-stand",
-                "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy", "commands-sweep",
+                "divider-refuse", "commands-fail-shut", "commands-escape",
+                "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",
                 // All four end in their own samplers: the plan arrives through the feed, and the three that run wait

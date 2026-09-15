@@ -66,6 +66,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_shut wrong=true open=false",
     },
+    // The same panel taken down by the key instead, which is the door
+    // cut for exactly this panel: nothing else on screen said what git
+    // said, so it raised itself, and until now only a press could put
+    // it away (デザイン規約 §git が言ったことを読む場所). `took=true`
+    // is the page claiming the key — an Escape that fell through to
+    // nobody leaves the same shut window as one that never went out,
+    // and `open=false` alone cannot tell them apart. `wrong=true` is
+    // the refusal still on the mark afterwards: the panel goes, the
+    // record does not.
+    Verb {
+        name: "commands-escape",
+        when: &[],
+        plain: "commands_escape took=true open=false wrong=true",
+    },
     // Recovery is the show, and the picture can only hold its quiet
     // half: a band that failed and healed ends the run looking like
     // one that never failed at all. `was=`/`hadline=`/`wasopen=` are
