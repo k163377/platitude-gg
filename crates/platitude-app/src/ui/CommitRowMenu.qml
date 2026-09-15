@@ -66,6 +66,9 @@ Item {
     required property bool canMoveBranch
     required property bool canBranchHere
     required property bool stashCanWrite
+    /// Whether anything besides this branch still reaches the tip — what decides whether the drop row is held
+    /// (`CommitMenuState.menuTipHeldElsewhere`, the same answer `RebasePlanRunBar` is handed).
+    required property bool tipHeldElsewhere
     /// Whether the name this row draws is somewhere to move to, and whether that move raises a question rather than
     /// going through (offers::ref_menu — the same two answers the sidebar's row reads).
     required property bool canSwitch
@@ -234,15 +237,15 @@ Item {
             onTriggered: rowMenu.squashRequested(rowMenu.oid)
         }
         // Held while this branch is the only thing holding its tip; a plain click once something else does — then the
-        // replaced commits stay drawn and a cherry-pick brings any of them back (デザイン規約 §長押し). The answer is a property
-        // of the branch, not of the row, so it is already in hand when the menu opens: a mark appearing later would
-        // re-indent every row (`AppMenu.holdIndent`) with the hand already on its way.
+        // replaced commits stay drawn and a cherry-pick brings any of them back (デザイン規約 §長押し). Taken from the
+        // answer the menu opened with, not read live: a mark appearing later would re-indent every row
+        // (`AppMenu.holdIndent`) with the hand already on its way.
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
             note: rowMenu.published ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
-            holdMs: rowMenu.workTree.headReachedElsewhere ? 0 : Metrics.holdMs
+            holdMs: rowMenu.tipHeldElsewhere ? 0 : Metrics.holdMs
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
                 commitMenu.dismiss()

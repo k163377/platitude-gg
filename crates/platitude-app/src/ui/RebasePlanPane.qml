@@ -31,32 +31,12 @@ Rectangle {
     /// afterwards, so the button is held rather than clicked (デザイン規約 §長押し). Handed in: half the answer is the
     /// right pane's, and this pane owns nothing but the rows (`RepoPage.planDiscards`).
     property bool discards: false
-    /// The same answer as the press under way was given it — **whether this is a hold is settled the moment the
-    /// button goes down** (デザイン規約 §フル interactive rebase, the same line `RebasePlanRunBar` stands on).
-    /// `discards` follows the boxes in the right pane, so it can fall under a hand that is already holding, and
-    /// `ActionButton` reads the length again at the release: a hold begun on the warned button would come back as a
-    /// click and put the plan away on a gesture nobody made. The frame and the word freeze with it.
-    ///
-    /// Declared with the live value so it reads right from the start; the `Binding` below is what keeps it, dropped
-    /// while a press is under way with nothing put back after (`RestoreNone`) — which is the freeze itself.
-    property bool cancelHolds: planPane.discards
-    /// A gesture is under way. The pointer's is `down`; the keyboard's is not — an armed hold takes Space itself
-    /// (`HoldDriver.pressKey`), so `down` never rises for it and the climbing fill is what says the press is there.
-    readonly property bool cancelPressing: cancelButton.down || cancelButton.holdProgress > 0
 
     /// The list the rows stand in, so a verb can make the same calls a hand on a row makes. An automation-only
     /// exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property alias view: planList
 
     color: Theme.bgBase
-
-    Binding {
-        target: planPane
-        property: "cancelHolds"
-        value: planPane.discards
-        when: !planPane.cancelPressing
-        restoreMode: Binding.RestoreNone
-    }
 
     // The widest verb decides the chip column, measured off a real chip so the resolved font is what measures it
     // (app-ui.md — a metrics call in a binding freezes on the default font; a Label's implicitWidth does not).
@@ -122,11 +102,12 @@ Rectangle {
                     //
                     // The frame carries what is about to be lost, and the word takes the colour only because this is
                     // a hold (規約 §長押し — `RebasePlanRunBar` と同じ線). The word itself does not change: pressing
-                    // this still puts the plan away, hold or no hold. All three read the latch, not the live answer,
-                    // so nothing about the button changes under a hand that is already holding.
-                    frameColor: planPane.cancelHolds ? Theme.warning : Theme.borderDefault
-                    tone: planPane.cancelHolds ? Theme.warning : Theme.textPrimary
-                    holdMs: planPane.cancelHolds ? Metrics.holdMs : 0
+                    // this still puts the plan away, hold or no hold. **The dressing reads the length the press was
+                    // given** (`ActionButton.armedMs`), not `discards`: the boxes in the right pane can empty under a
+                    // hand that is already holding, and the button would lose its frame there.
+                    frameColor: cancelButton.armedMs > 0 ? Theme.warning : Theme.borderDefault
+                    tone: cancelButton.armedMs > 0 ? Theme.warning : Theme.textPrimary
+                    holdMs: planPane.discards ? Metrics.holdMs : 0
                     onActivated: planPane.planModel.cancelPlan()
                     onHeld: planPane.planModel.cancelPlan()
                 }

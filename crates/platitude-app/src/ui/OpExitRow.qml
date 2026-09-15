@@ -22,6 +22,10 @@ Item {
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
+    /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
+    /// under way. A card whose tag is worked out from the same answer the length is reads this too, so the row does
+    /// not re-word itself under a hand that is already on it (デザイン規約 §長押し).
+    readonly property alias armedMs: holdDrive.armedMs
     property color holdTone: Theme.danger
     property bool enabled: true
     /// The width this row's chip asks the card's shared column to hold, so every sentence starts on the same x.
@@ -60,7 +64,7 @@ Item {
     // its cost before it is touched (デザイン規約 §状態).
     readonly property color wordColor: !opRow.enabled ? Theme.textMuted
                                      : opRow.holding ? Theme.textOnAccent
-                                     : opRow.holdMs > 0 ? opRow.holdTone
+                                     : opRow.armedMs > 0 ? opRow.holdTone
                                      : Theme.textPrimary
 
     Rectangle {
@@ -81,7 +85,7 @@ Item {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: opRow.holdProgress
         tint: opRow.wordColor
-        visible: opRow.holdMs > 0
+        visible: opRow.armedMs > 0
     }
 
     // The menu row's own padding (`AppMenuItem` padding: spaceSm), so the card's rows and a menu's read as the same
@@ -140,11 +144,14 @@ Item {
         // Released anywhere, or dragged off the row: both call it off. A plain row runs on the release that lands on
         // it.
         onReleased: mouse => {
-            if (opRow.holdMs > 0) {
-                holdDrive.letUp()
-                return
-            }
-            if (mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height)
+            // Against the length **this press** was given, and nothing at all where what decided it has moved since
+            // (`HoldDriver.armedMs` / `stale`): the free `--skip` and the one that takes a commit away are the same
+            // row with two gestures, and git answering mid-press must not turn one into the other
+            // (デザイン規約 §長押し).
+            const plain = holdDrive.armedMs <= 0 && !holdDrive.stale
+                    && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height
+            holdDrive.letUp()
+            if (plain)
                 opRow.picked()
         }
         onCanceled: holdDrive.letUp()
@@ -163,6 +170,8 @@ Item {
         }
     }
     Keys.onReleased: event => holdDrive.releaseKey(event)
+    // A key let go after the focus has moved is answered somewhere else (`HoldDriver.focusLost`).
+    onActiveFocusChanged: if (!opRow.activeFocus) holdDrive.focusLost()
 
     HoldDriver {
         id: holdDrive

@@ -14,22 +14,99 @@ QtObject {
     /// Held all the way down. What that runs is the owner's to say.
     signal finished()
 
+    /// A gesture is under way: the press itself, and the fill's own tail after it — a press that stopped short slides
+    /// back out, and the shape must not change under the hand while it does.
+    property bool pressed: false
+    readonly property bool gesturing: drive.pressed || drive.progress > 0
+
+    /// **The length the press under way was given** (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」). `holdMs` is
+    /// worked out from state that moves on its own — a fetch answering, a check coming back, git refusing — so read
+    /// live it changes mid-press: a hold begun on a red button came back as a click and ran the plain command, and a
+    /// click begun on a plain one was dropped altogether when the button turned into a hold under the hand.
+    ///
+    /// Declared with the live value so it reads right from the start; the `Binding` is what keeps it, dropped while a
+    /// gesture is under way with nothing put back after (`RestoreNone`) — which is the freeze itself. **Owners whose
+    /// wording or frame is worked out from the same condition read this too**, so nothing about the control changes
+    /// under the hand (`ActionButton.armedMs` / `AppMenuItem.armedMs`).
+    property int armedMs: drive.holdMs
+    readonly property Binding arm: Binding {
+        target: drive
+        property: "armedMs"
+        value: drive.holdMs
+        when: !drive.gesturing
+        restoreMode: Binding.RestoreNone
+    }
+    /// **What the press is against besides its length**, as one string: the tab, the branch, where it is going, which
+    /// row of a list it is standing on. The length says which command and how much confirmation it asks for — it does
+    /// **not** say what that command is aimed at, and a control whose target can be swapped out from under the hand
+    /// has to say so here. A band button re-pointed at another tab arms the very same length and sends that tab's
+    /// branch (measured, `tst_holdlatch`); a list delegate re-used for another row runs on whatever it is pointed at
+    /// when the fill runs out. Empty is "the length is the whole of it", which is what a control nothing can re-point
+    /// says.
+    property string premise: ""
+    property string armedPremise: drive.premise
+    readonly property Binding armTarget: Binding {
+        target: drive
+        property: "armedPremise"
+        value: drive.premise
+        when: !drive.gesturing
+        restoreMode: Binding.RestoreNone
+    }
+    /// **The premise the press was made under has gone** — the length it was given, or what it was aimed at. A gesture
+    /// that outlives either has nothing left to mean, so the owner's signal is not raised at all and the release
+    /// answers nothing either (デザイン規約 §長押し). The gesture itself is left to run out: blanking it here would
+    /// hand the release back to the live answer, which is the very thing it must not be judged by.
+    ///
+    /// **Latched, not compared.** Read as a comparison with what is true now, a target that went and came back put
+    /// the gesture back in business — a tab switched away from and switched back to answered the press as though
+    /// nothing had happened (measured). What was lost stays lost until the next press, which is what [`begin`]
+    /// clears.
+    property bool stale: false
+    onHoldMsChanged: drive.noteSpoiled()
+    onPremiseChanged: drive.noteSpoiled()
+    function noteSpoiled() {
+        if (drive.gesturing && (drive.holdMs !== drive.armedMs || drive.premise !== drive.armedPremise))
+            drive.stale = true
+    }
+    /// **The hand let go somewhere this control cannot hear.** A key press is answered by a key release, and a
+    /// release goes wherever the focus is — so a press made here and let go after the focus moved leaves the fill
+    /// running, and it runs out and fires (measured, `tst_holdlatch`). Only the keyboard's gesture: a pointer keeps
+    /// its grab wherever the focus goes, and blanking that one would call off a hold nobody let go of.
+    function focusLost() {
+        if (!drive.byKey || !drive.gesturing)
+            return
+        drive.stale = true
+        drive.blank()
+    }
+    /// Whether the gesture under way was started from the keyboard ([`pressKey`]) rather than by a pointer.
+    property bool byKey: false
+
     /// A press landed — or automation stands in for one: fill from zero.
+    ///
+    /// The latch closes first, so everything from here to the release reads the length this press was given.
     function begin() {
-        if (drive.holdMs <= 0)
+        drive.stale = false
+        drive.byKey = false
+        drive.pressed = true
+        if (drive.armedMs <= 0)
             return
         back.stop()
         fill.restart()
     }
     /// The press let go, or slid off: stop filling. The animation's own onStopped decides between sliding back and
     /// blanking.
+    ///
+    /// **Whoever calls this reads [`armedMs`] and [`stale`] first**: the latch opens here for a press that left no
+    /// fill behind it, and the click that follows a release arrives in the same delivery.
     function letUp() {
+        drive.pressed = false
         fill.stop()
     }
     /// Called off without the hand letting go — whatever was held has gone. Blanks the fill rather than sliding it
     /// back: the slide is an answer to a press that stopped short, and there is nothing left here for it to be an
     /// answer about.
     function blank() {
+        drive.pressed = false
         fill.stop()
         back.stop()
         drive.progress = 0
@@ -53,12 +130,15 @@ QtObject {
         if (drive.holdMs <= 0 || !drive.ownsKey(event))
             return false
         drive.begin()
+        drive.byKey = true
         event.accepted = true
         return true
     }
-    /// And the release. Same gate, so a disarmed hold answers no key at all and the owner's own reading of it stands.
+    /// And the release. **Against the length the press was given, not the one standing now**: a key taken at the press
+    /// has to be answered here whatever has happened since, or the control underneath reads the release as a plain
+    /// one and runs the click a hold was being made instead of.
     function releaseKey(event) {
-        if (drive.holdMs <= 0 || !drive.ownsKey(event))
+        if (drive.armedMs <= 0 || !drive.ownsKey(event))
             return false
         drive.letUp()
         event.accepted = true
@@ -70,7 +150,8 @@ QtObject {
         property: "progress"
         from: 0
         to: 1
-        duration: Math.max(drive.holdMs, 1)
+        // The length this press was given, which is what the fill is drawing out (see `armedMs`).
+        duration: Math.max(drive.armedMs, 1)
         // A press that stopped short slides back out instead of blanking: a held control reports no click at all, so
         // without this the only answer to a plain click is nothing happening (デザイン規約 §長押し). Pressed all the way
         // through, it has already fired and there is nothing left to say — that one blanks.
@@ -80,7 +161,10 @@ QtObject {
             else if (drive.progress > 0)
                 back.restart()
         }
-        onFinished: drive.finished()
+        // **Nothing is raised for a premise that has gone** (see `stale`). The fill ran out under a hand that was
+        // holding for one command and would be answered with another, so the gesture ends here and the control goes
+        // back to reading what is true now.
+        onFinished: if (!drive.stale) drive.finished()
     }
     readonly property NumberAnimation back: NumberAnimation {
         target: drive

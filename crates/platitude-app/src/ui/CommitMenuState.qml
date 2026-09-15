@@ -51,6 +51,10 @@ QtObject {
     /// other answer, because the tag it feeds sits at the end of a row and widens the card: a count that grew while
     /// the menu stood would move the card's edge under the hand (app-ui.md §メニュー).
     property int menuHardResetTakes: 0
+    /// Whether anything besides this branch still reaches the tip, which is what decides whether the drop row is
+    /// held. Read here for the same reason as the count above and one more: a mark arriving later re-indents **every**
+    /// row (`AppMenu.holdIndent`), so the words move under a hand already reaching for one.
+    property bool menuTipHeldElsewhere: false
 
     /// What the `switch` row reads, asked of the name the menu is aimed at. Empty on a row that draws none, which is
     /// what takes the row off the menu.
@@ -94,6 +98,7 @@ QtObject {
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
         menuState.menuHardResetTakes = menuState.workTree.hardResetTakes
+        menuState.menuTipHeldElsewhere = menuState.workTree.headReachedElsewhere
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
         menuState.menuCanEditHistory = offers.includes("edit-history")

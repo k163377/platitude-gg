@@ -414,6 +414,9 @@ Rectangle {
                 holdTone: Theme.danger
                 holdMs: Metrics.holdMs
                 enabled: !diffRow.busy
+                // Which hunk of which reading (`HoldDriver.premise`): the pane re-reads itself behind every write, and
+                // a delegate re-used across that read would discard whatever it was pointed at when the fill ran out.
+                premise: diffRow.rowsGen + ":" + diffRow.hunk
                 onHeld: diffRow.discardRequested(diffRow.hunk)
             }
             // The same pair of colours the file rows put on their own `+` and `−`: staging is the green half of the

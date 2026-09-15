@@ -237,14 +237,19 @@ AppMenu {
                     : (branchCard.repoTab.branchDeleteAsked === state.refId
                        && branchCard.repoTab.branchDeleteMerged === "no")))
         readonly property bool heldRow: remoteRow || refusedRow
-        code: refusedRow ? "branch -D"
+        /// The same answer as the press under way was given it: `refusedRow` follows git's answer to the *last* press,
+        /// which is exactly what a hand on this row is waiting for, so read live the row re-words itself and changes
+        /// gesture under that hand (デザイン規約 §長押し). `remoteRow` cannot move while the menu stands, so the length
+        /// the press was given says the whole of it (`AppMenuItem.armedMs`).
+        readonly property bool shownRefused: refDeleteItem.branchRow && refDeleteItem.armedMs > 0
+        code: shownRefused ? "branch -D"
             : branchRow ? "branch --delete"
             : "push --delete"
         // The name is data, not sentence: never translated, and it does not bid for the menu's width
         // (`growsForText`).
         text: state.refId
         growsForText: false
-        note: refusedRow ? qsTr("not merged") : ""
+        note: shownRefused ? qsTr("not merged") : ""
         // On a branch the three delete forms are a fixed table — rows that cannot be chosen stay and grey out, the
         // app-menu rule rather than the assembled-menu one (デザイン規約 §メニュー、by design): the current branch
         // keeps its rows, saying why nothing here answers. The other kinds keep the assembled rule.
@@ -294,8 +299,21 @@ AppMenu {
     // half runs first and a refusal stops the pair with nothing touched.
     AppMenuItem {
         id: refBothDeleteItem
+        /// **Whether the local half goes as `-D`, as the press under way was given it** (デザイン規約 §長押し).
+        /// `refusedRow` follows git's answer to the *last* press, which can land while a hand is already on this row:
+        /// read live, a hold begun on the warning comes down as a force delete, throwing away commits nobody was shown
+        /// losing. The length cannot carry it — this row is held either way — so the latch is its own, declared live
+        /// and kept by the `Binding` for as long as a gesture lasts (`AppMenuItem.gesturing`).
+        property bool forces: refDeleteItem.refusedRow
+        readonly property Binding forcesHeld: Binding {
+            target: refBothDeleteItem
+            property: "forces"
+            value: refDeleteItem.refusedRow
+            when: !refBothDeleteItem.gesturing
+            restoreMode: Binding.RestoreNone
+        }
         text: qsTr("Delete both")
-        note: refDeleteItem.refusedRow ? qsTr("not merged") : ""
+        note: refBothDeleteItem.forces ? qsTr("not merged") : ""
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
         // The local half's refusal names the row first — it is the half that runs first — and the drifted reading is
         // read after it.
@@ -307,7 +325,7 @@ AppMenu {
         holdMs: Metrics.holdMs
         // The colour of the half that decides: reaching past this machine is warning, but once the local half runs as
         // `-D` this row throws away commits that live nowhere else, and that is danger (デザイン規約 §状態).
-        holdTone: refDeleteItem.refusedRow ? Theme.danger : Theme.warning
+        holdTone: refBothDeleteItem.forces ? Theme.danger : Theme.warning
         onHeld: {
             branchCard.dismiss()
             const c = state.remoteCounterpart
@@ -318,7 +336,7 @@ AppMenu {
             branchCard.repoTab.deleteBranchEverywhere(
                 state.refId, remote,
                 GitFacts.branchOfRef(c, branchCard.repoTab.remoteNames),
-                refDeleteItem.refusedRow)
+                refBothDeleteItem.forces)
         }
     }
 }

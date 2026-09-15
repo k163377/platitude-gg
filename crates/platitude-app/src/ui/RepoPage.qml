@@ -1322,6 +1322,7 @@ Item {
             canBranchHere: commitMenuState.menuCanBranchHere
             stashCanWrite: commitMenuState.menuStashCanWrite
             hardResetTakes: commitMenuState.menuHardResetTakes
+            tipHeldElsewhere: commitMenuState.menuTipHeldElsewhere
             // The same road the row's double-click takes, held on the same answers (`switchToRef`).
             onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
             // Straight to the graph row: this menu is only ever raised on one.

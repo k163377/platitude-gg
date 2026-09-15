@@ -32,6 +32,18 @@ HoverToolButton {
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
+    /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
+    /// under way. An owner whose wording, frame or tone is worked out from the same condition the length is reads this
+    /// instead, so the button cannot change what it says under a hand that is already holding
+    /// (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」).
+    readonly property alias armedMs: holdDrive.armedMs
+    /// **A gesture is under way**, the fill's slide back included (`HoldDriver.gesturing`) — what an owner latches on
+    /// when what it dresses itself from is an answer other than the length.
+    readonly property alias gesturing: holdDrive.gesturing
+    /// **What this button's press is aimed at** (`HoldDriver.premise`) — set it wherever the target can be swapped
+    /// out from under the hand without the length moving: a band button re-pointed at another tab, a list delegate
+    /// re-used for another row.
+    property alias premise: holdDrive.premise
     /// Frame drawn around the button. Transparent leaves the button bare.
     property color frameColor: "transparent"
     /// The last go at what this button does did not work. Drawn as a mark standing clear of the word's last letter, in
@@ -206,14 +218,50 @@ HoverToolButton {
     activeFocusOnTab: actionBtn.holdMs > 0
     Accessible.description: actionBtn.holdMs > 0 ? Words.holdToActivate : ""
 
-    onClicked: if (actionBtn.holdMs <= 0 && actionBtn.live) actionBtn.activated()
-    onDownChanged: {
-        if (actionBtn.holdMs <= 0 || !actionBtn.live)
+    /// Whether the press that has just been let go was a plain one, worked out **before** the latch opens: the click
+    /// arrives in the same delivery as the release, and by then the length is back to whatever is true now.
+    ///
+    /// `clickJudged` says whether there was a press to judge at all. **A `clicked()` can be raised with no press
+    /// behind it** — the band's own doors do exactly that so a run presses what a hand presses
+    /// (`TopBar.stashNow` / `fetchNow`, `TabStrip`, `WipBucketHeader`) — and one of those is answered from the live
+    /// length, there being no gesture for a latch to be about.
+    property bool clickWanted: false
+    property bool clickJudged: false
+    onClicked: {
+        if (!actionBtn.live)
             return
-        if (actionBtn.down)
+        const plain = actionBtn.clickJudged ? actionBtn.clickWanted : actionBtn.holdMs <= 0
+        actionBtn.clickJudged = false
+        if (plain)
+            actionBtn.activated()
+    }
+    /// A button that goes deaf under the hand — git took it onto the network, or the state it acts on went — has
+    /// nothing left for the gesture to land on. The fill blanks rather than sliding back, and no signal is raised:
+    /// the press was made on a button that is no longer there to press.
+    onLiveChanged: if (!actionBtn.live) {
+        // Both, so the next `clicked()` — which may be one raised with no press behind it — is judged from what is
+        // true then rather than from a press this button never answered.
+        actionBtn.clickWanted = false
+        actionBtn.clickJudged = false
+        holdDrive.blank()
+    }
+    onDownChanged: {
+        // **The press is gated, the release is not.** A release left unanswered leaves the fill running, and it runs
+        // on to fire a hold under a hand that has already let go (and the latch below never opens again).
+        if (actionBtn.down && !actionBtn.live)
+            return
+        if (actionBtn.down) {
+            // Unconditionally, whatever the length is: the latch is what a plain press is answered from too, and a
+            // press that never closed it is one whose meaning can still change under the hand.
+            actionBtn.clickJudged = false
             holdDrive.begin()
-        else
-            holdDrive.letUp()
+            return
+        }
+        // A hold reports no click at all, and a press whose premise went reports nothing either
+        // (`HoldDriver.stale` — デザイン規約 §長押し).
+        actionBtn.clickWanted = holdDrive.armedMs <= 0 && !holdDrive.stale
+        actionBtn.clickJudged = true
+        holdDrive.letUp()
     }
     // The hold's other hand (`HoldDriver.pressKey`), offered only while the button is one a press can reach at all: a
     // button waiting on git answers no key any more than it answers a click.
@@ -225,6 +273,10 @@ HoverToolButton {
         if (actionBtn.live)
             holdDrive.releaseKey(event)
     }
+    // **A key press is answered wherever the focus is when the key comes up.** Move it and the release lands on
+    // something else, leaving this fill to run out and fire a hold nobody was still making
+    // (`HoldDriver.focusLost`).
+    onActiveFocusChanged: if (!actionBtn.activeFocus) holdDrive.focusLost()
     HoldDriver {
         id: holdDrive
         holdMs: actionBtn.holdMs
@@ -356,7 +408,7 @@ HoverToolButton {
                 kind: actionBtn.kind
                 // A phrase carries the hold's mark itself, ahead of its first chip: this seat is at the row's left
                 // edge and the phrase is centred, so the two would stand apart (`ActionButtonLabel.phraseHoldMs`).
-                holdMs: btnLabel.phrased ? 0 : actionBtn.holdMs
+                holdMs: btnLabel.phrased ? 0 : actionBtn.armedMs
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.busy
@@ -397,7 +449,7 @@ HoverToolButton {
                 alertTight: actionBtn.alertTight
                 fontSize: actionBtn.font.pixelSize
                 phraseHead: actionBtn.phraseHead
-                phraseHoldMs: actionBtn.holdMs
+                phraseHoldMs: actionBtn.armedMs
                 phraseHoldProgress: actionBtn.holdProgress
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail

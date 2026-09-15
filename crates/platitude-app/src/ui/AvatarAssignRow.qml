@@ -93,6 +93,9 @@ RowLayout {
         frameColor: avatarRow.lit ? Theme.dangerDim : Theme.borderSubtle
         holdMs: Metrics.holdMs
         holdTone: Theme.danger
+        // Whose face this press is aimed at (`HoldDriver.premise`): an assignment landing while the hand is here
+        // rebuilds the list, and a delegate re-used for another row would take that person's instead.
+        premise: avatarRow.modelData.email
         onHeld: AppBackend.removeAvatar(avatarRow.modelData.email)
     }
 }

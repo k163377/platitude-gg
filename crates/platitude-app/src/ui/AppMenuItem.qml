@@ -93,6 +93,14 @@ MenuItem {
     property bool asks: false
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
+    /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
+    /// under way. A row whose chip, note or tone is worked out from the same answer the length is reads this instead,
+    /// so the row cannot change what it says — or what it runs — under a hand that is already holding
+    /// (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」).
+    readonly property alias armedMs: holdDrive.armedMs
+    /// **A gesture is under way**, the fill's slide back included (`HoldDriver.gesturing`) — what a row latches on
+    /// when what it dresses itself from is an answer other than the length (`RefBranchMenu` の `Delete both`).
+    readonly property alias gesturing: holdDrive.gesturing
     /// The colour the hold fills the row with.
     property color holdTone: Theme.danger
     /// Held all the way down.
@@ -150,12 +158,12 @@ MenuItem {
     // something away (デザイン規約 §状態); over the fill the words cross the tone itself and lift clear of it.
     readonly property color wordColor: !menuItem.enabled || menuItem.blocked ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
-                                     : menuItem.holdMs > 0 ? menuItem.holdTone : Theme.textPrimary
+                                     : menuItem.armedMs > 0 ? menuItem.holdTone : Theme.textPrimary
     /// The colour the name inside those words takes instead. **Its own only while the row has nothing of its own to
     /// say**: a row that cannot be chosen is grey to its last letter (§無効), and one that is held says what it costs
     /// across the whole line (§長押し) — a name lit blue in either would read as the one part of the row still
     /// answering.
-    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.holdMs > 0
+    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedMs > 0
                                       ? menuItem.wordColor : Theme.textLink
     /// Those words as the markup `Text.StyledText` reads: the sentence in the row's colour, the name in its own. One
     /// label rather than three, so the line elides, measures and hovers the way every other row's does.
@@ -193,7 +201,7 @@ MenuItem {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: menuItem.holdProgress
         tint: menuItem.wordColor
-        visible: menuItem.holdMs > 0
+        visible: menuItem.armedMs > 0
     }
     // **The other thing that can stand in that seat**: this row does not do what it says on its own — it raises a
     // question first. A row cannot be both (a question is not answered by holding the row that raises it), so the two
@@ -214,7 +222,7 @@ MenuItem {
         height: Theme.iconSm
         // Not on a row that cannot be pressed at all: the mark says "read this before you press", and there is no
         // press to read it before — what the row has to say then is the line under the pointer (`blockedWhy`).
-        visible: menuItem.asks && menuItem.holdMs <= 0 && !menuItem.blocked
+        visible: menuItem.asks && menuItem.armedMs <= 0 && !menuItem.blocked
     }
     // The kind's own mark, standing where the row begins. Out in the card's padding rather than in the row's layout
     // for the same reason the ring is: the word behind it has to sit against the mark, not against the mark plus the
@@ -363,14 +371,21 @@ MenuItem {
         anchors.fill: parent
         // A blocked row takes the press and does nothing with it: the row underneath would otherwise run and close the
         // menu, and the line explaining why it is out would never be read.
-        enabled: menuItem.blocked || ((menuItem.holdMs > 0 || menuItem.staysOpen) && menuItem.enabled)
+        // **The length this press was given**, so a row that turns into a held one under the hand does not take the
+        // area out from under the gesture it is in the middle of — the release would then never arrive here and the
+        // fill would run on to fire a hold nobody was still making.
+        enabled: menuItem.blocked || ((holdDrive.armedMs > 0 || menuItem.staysOpen) && menuItem.enabled)
         onPressed: if (!menuItem.blocked) holdDrive.begin()
         // Released anywhere, or dragged off the row: both call it off. A stays-open row has no fill to call off —
         // letting go on the row is its click, and letting go outside it is not.
         onReleased: mouse => {
+            // Worked out before the latch opens, and nothing at all where the answer the press was made under has
+            // gone since (`HoldDriver.stale`): this row's plain press and its hold are two different commands, and a
+            // press that outlived its own premise is not either of them (デザイン規約 §長押し).
+            const pick = !menuItem.blocked && holdDrive.armedMs <= 0 && !holdDrive.stale && menuItem.staysOpen
+                    && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height
             holdDrive.letUp()
-            if (!menuItem.blocked && menuItem.holdMs <= 0 && menuItem.staysOpen
-                    && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height)
+            if (pick)
                 menuItem.picked()
         }
         onCanceled: holdDrive.letUp()
@@ -388,4 +403,6 @@ MenuItem {
         holdDrive.pressKey(event)
     }
     Keys.onReleased: event => holdDrive.releaseKey(event)
+    // A key let go after the focus has moved is answered somewhere else (`HoldDriver.focusLost`).
+    onActiveFocusChanged: if (!menuItem.activeFocus) holdDrive.focusLost()
 }

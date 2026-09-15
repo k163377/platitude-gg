@@ -168,13 +168,15 @@ Rectangle {
         }
         // A merge steps through nothing: no commit to leave out, and nowhere to stop stepping.
         OpExitRow {
+            id: skipRow
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             code: "--skip"
             text: qsTr("Leave this commit out")
-            // What the skip costs, said where a menu row says it.
-            note: opExitCard.skipIsFree ? qsTr("nothing in it") : ""
+            // What the skip costs, said where a menu row says it — off the length the press under way was given, so
+            // the tag and the gesture cannot disagree while a hand is on the row (`OpExitRow.armedMs`).
+            note: skipRow.armedMs <= 0 ? qsTr("nothing in it") : ""
             visible: opExitCard.workTree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
             // The mark is what says a row takes something away (デザイン規約 §長押し), so it goes when the row does not: git

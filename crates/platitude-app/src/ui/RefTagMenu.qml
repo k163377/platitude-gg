@@ -125,7 +125,9 @@ AppMenu {
     // spelling because a menu row is measured against the widest row (§git 用語のコード表記).
     AppMenuItem {
         id: refPushTagItem
-        code: state.tagDriftOid === "" ? "push" : "push --force"
+        // Off the length the press under way was given, so the chip cannot change command under a hand that is
+        // already on the row (`AppMenuItem.armedMs`, デザイン規約 §長押し).
+        code: refPushTagItem.armedMs <= 0 ? "push" : "push --force"
         //: Follows the `push` chip: "push to origin".
         text: qsTr("to %1").arg(state.pushRemote)
         offered: state.canPushTag
