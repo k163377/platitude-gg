@@ -85,7 +85,7 @@ QtObject {
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
-                "diff-band-sweep", "diff-bar", "diff-blank",
+                "diff-band-sweep", "diff-bar", "diff-blank", "diff-escape",
                 "preview", "preview-unstaged", "preview-staged", "preview-close",
                 // The write barrier is behind these, not in front of them: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
@@ -217,6 +217,9 @@ QtObject {
                 // The reorder, which finishes inside the same sampler the overview does: the whole carry is one
                 // turn once the plan stands, and it writes nothing.
                 "plan-fold-carry",
+                // And the key pressed on that same face, which arrives through the same feed: what Escape does to
+                // the plan is read once the rows are there, not while the read is still out.
+                "plan-escape", "plan-escape-held",
                 // The opening face and the running replay, each held from an edge of its own and each finished by
                 // the sampler that took that edge. Deliberately not write acts: the first writes nothing at all, and
                 // what the second photographs is the middle of the write rather than its answer — held at the write

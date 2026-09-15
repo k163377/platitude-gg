@@ -42,7 +42,7 @@ Item {
             || act === "diff-select" || act === "diff-copy"
             || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
             || act === "diff-band-sweep" || act === "diff-bar" || act === "diff-blank"
-            || act === "diff-follow" || act === "line-run") {
+            || act === "diff-follow" || act === "line-run" || act === "diff-escape") {
             // All enter through one file's diff and act on its first hunk. The bucket rides in front of the path
             // (`<bucket>:<path>`) when it is not the usual unstaged one: an untracked file has no unstaged diff at all,
             // a conflicted one is read from `conflicts`. Only the bucket names count as one, so a path carrying a colon
@@ -166,7 +166,8 @@ Item {
             // "diff-band-sweep" is about the band above the rows and not about a row at all, so the settled diff is
             // the whole of what it waits for — a file with no changed line in its first hunk still has a path in the
             // band, and demanding one would leave that run waiting out its watchdog.
-            if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep"].indexOf(Harness.autoAct) >= 0)
+            if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep",
+                 "diff-escape"].indexOf(Harness.autoAct) >= 0)
                 return diffPane.diffSettled()
             // The previews wait for the pictures as well as the read: the decode is asynchronous, and a pane
             // photographed between the two shows an empty frame under a caption.
@@ -259,6 +260,25 @@ Item {
                                   + " url=" + (diffPane.diffModel.previewNewUrl === ""
                                                && diffPane.diffModel.previewOldUrl === "" ? "empty" : "held"))
                 renderedBarrier.begin()
+                return
+            }
+            // Escape over a settled diff. The key goes to the page's own handler, which is the last thing an
+            // Escape nobody else claimed reaches (`RepoPage.escapePressed`, `tests/qml/tst_escape.qml`) — and the
+            // one line `Keys.onEscapePressed` is made of, so a run entering here enters where the key does
+            // (verify-ui「注入はハンドラ本体そのものへ入れる」). A keystroke cannot be injected.
+            //
+            // **`took=` and `shown=` are both said**: a handler that answered `false` and a pane that stayed open are
+            // different failures, and the picture — the graph, back where it was — cannot tell either from a diff
+            // that was never opened.
+            if (act === "diff-escape") {
+                // **The hand is sent into the pane first**, by the door the wheel uses (`DiffPane.handArrived`):
+                // Escape from a file list is the easy half, and the half that breaks is this one — the pane it
+                // closes is the pane holding the keyboard, and where that keyboard lands is what decides whether a
+                // second Escape reaches anything at all.
+                diffPane.handArrived()
+                escapeTimer.hand = diffPane.view.activeFocus
+                escapeTimer.took = page.escapePressed()
+                escapeTimer.start()
                 return
             }
             // The squares a line only puts out under the pointer, named rather than hovered (hover cannot be injected
@@ -727,6 +747,28 @@ Item {
     //
     // The argument names the file to open; the verb decides its own second step from what the tree holds afterwards,
     // and reports both.
+    // Escape over a diff the hand was inside, read **after the pane has actually gone off the screen**: the key is
+    // answered in one turn, but the swap behind it is the layout's, and a page asked in the same turn is still
+    // holding the keyboard through the pane that is on its way out. `kept=` is the claim — the page is a focus scope,
+    // so the keyboard the closing pane let go of stays inside it and the next Escape has somewhere to land
+    // (`RepoPage`, `tests/qml/tst_escape.qml`).
+    SampleTimer {
+        id: escapeTimer
+        property bool hand: false
+        property bool took: false
+        onTriggered: {
+            if (page.diffShown || diffPane.view.visible)
+                return
+            escapeTimer.stop()
+            Harness.report("diff_escape took=" + escapeTimer.took
+                              + " shown=" + page.diffShown
+                              + " key=" + (page.diffKey === "" ? "empty" : "held")
+                              + " folded=" + page.sidebarCollapsed
+                              + " hand=" + escapeTimer.hand
+                              + " kept=" + page.activeFocus)
+            renderedBarrier.begin()
+        }
+    }
     SampleTimer {
         id: followTimer
         property int step: 0

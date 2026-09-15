@@ -136,8 +136,29 @@ FocusScope {
     /// live between them by an order written where they meet (`noticeBar.yieldsEscape`); anything else that comes to
     /// want Escape is added the way this one is, as a key handler under all of them.
     ///
-    /// Accepted only when there was a mark to take: an Escape this page did nothing with is not this page's.
+    /// **Topmost first, and the marks last** — the mark is what is left to dismiss when nothing else stands, so
+    /// anything that took the centre answers before it does. Everything above this line has already had its chance:
+    /// a shortcut, a popup or a box that wants Escape was matched before the key was delivered here at all.
+    ///
+    /// Accepted only when there was something to take: an Escape this page did nothing with is not this page's.
     function escapePressed() {
+        // The plan has the centre and names its own way out, so Escape is that door rather than a second one — and
+        // **only while that door is a press**. With something composed to lose the button is a hold (規約 §長押し —
+        // `RebasePlanPane.discards`), and one key down is not a hold; a key that threw away typed rows because it
+        // could not be held would be the very thing the hold is there to stop.
+        if (page.planShown) {
+            if (page.planDiscards)
+                return false
+            planModel.cancelPlan()
+            return true
+        }
+        // The diff stands over the graph and costs nothing to put away — the same one press its own `✕` takes
+        // (デザイン規約 §hover のツールチップ「この窓で立つものは全部 Esc に答える」). The reading position and the
+        // lines picked out in it are the only things it holds, and the `✕` already spends both.
+        if (page.diffShown) {
+            page.closeDiff()
+            return true
+        }
         if (!detailsPane.attention && !page.commandsAttention)
             return false
         detailsPane.dropAttention()

@@ -38,12 +38,14 @@ Item {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
             || act === "plan-reword-out" || act === "plan-reword-ask" || act === "plan-loading"
-            || act === "plan-details-held" || act === "plan-fold-carry") {
+            || act === "plan-details-held" || act === "plan-fold-carry"
+            || act === "plan-escape" || act === "plan-escape-held") {
             // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
             // Each verb selects the smallest plan its result needs — the three about the right pane's boxes need
             // only that the newest commit be a row of it, since that is the row the plan opens the selection on,
             // and the carry needs three: one to hold the fold, the oldest to carry it over, and one above.
-            const back = act === "rebase-plan" ? 3
+            const back = act === "rebase-plan" || act === "plan-escape"
+                         || act === "plan-escape-held" ? 3
                        : act === "rebase-plan-run" || act === "plan-fold-carry" ? 2
                        : 1
             const fromOid = arg !== "" ? driver.autoActOid(arg)
@@ -171,6 +173,23 @@ Item {
                 // commit's (`RepoPage.onPlanActiveChanged`) — the walk starts from exactly the screen a reader
                 // gets, with no verb dressed on anything.
                 planHeldTimer.begin()
+            } else if (planOpenTimer.act === "plan-escape"
+                       || planOpenTimer.act === "plan-escape-held") {
+                // The one key that puts a standing thing away, against the one face whose way out is priced
+                // (デザイン規約 §フル interactive rebase「`Discard` は 2 状態」). With nothing composed the button takes a
+                // press, so Escape is that press; with a verb set on a row it takes a hold, and one key down is not
+                // one — `held=true` is the plan still standing, which is the whole of the claim.
+                //
+                // Entered at `escapePressed`, where `Keys.onEscapePressed` enters: a keystroke cannot be injected
+                // (verify-ui), and the handler above it is the one line that calls this.
+                if (planOpenTimer.act === "plan-escape-held")
+                    plan.setAction(1, "squash")
+                const took = page.escapePressed()
+                Harness.report("plan_escape discards=" + page.planDiscards
+                                  + " took=" + took
+                                  + " held=" + page.planShown
+                                  + " dirty=" + plan.dirty)
+                renderedBarrier.begin()
             } else if (planOpenTimer.act === "plan-fold-carry") {
                 // The reorder as a hand makes it: a fold taken up, carried down over the oldest place — where no
                 // fold can stand — and set back down where it started. Driven through the list's own functions,

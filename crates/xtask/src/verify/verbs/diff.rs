@@ -23,6 +23,25 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=false lit=true focused=true",
     },
+    // Escape over an open diff, with the hand already inside it. The
+    // page's handler is the last thing an Escape nobody else claimed
+    // reaches, and `took=true` is it claiming the key — without it the
+    // key would go on to whatever asks next and the run would read as a
+    // pane that closed itself. `shown=false` is the pane gone and
+    // `key=empty` the page holding no file any more, which is what tells
+    // this from a pane hidden with its reading left standing behind it.
+    //
+    // `hand=true kept=true` is the other half, and the one no picture
+    // could hold: the pane that had the keyboard is the pane that just
+    // went, and `kept=` says the keyboard stayed inside the page rather
+    // than falling out to the window — where this page is a descendant
+    // and nothing it handles is on the key's way any more, so the *next*
+    // Escape would reach nothing at all.
+    Verb {
+        name: "diff-escape",
+        when: &[],
+        plain: "diff_escape took=true shown=false key=empty folded=false hand=true kept=true",
+    },
     // The row of a repository of its own. There is no patch behind it and
     // never will be — git does not cross into another repository — so
     // `embedded=true` is the pane having an answer about the path at all,

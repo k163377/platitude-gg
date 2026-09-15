@@ -173,6 +173,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_fold_carry carried=squash landed=squash row=1 rows=3 dirty=true",
     },
+    // Escape over the plan, on the two sides of the one thing that
+    // prices its exit. With nothing composed `Discard` is a press, so
+    // Escape is that press and the face goes; with a verb set on a row
+    // it is a hold, and a key that is down once is not one — `took=false
+    // held=true` is the plan standing its ground, which is the whole of
+    // the second run. Neither is in the picture: a plan that was never
+    // opened and a plan Escape put away photograph the same graph.
+    Verb {
+        name: "plan-escape",
+        when: &[],
+        plain: "plan_escape discards=false took=true held=false",
+    },
+    Verb {
+        name: "plan-escape-held",
+        when: &[],
+        plain: "plan_escape discards=true took=false held=true dirty=true",
+    },
     // The face the plan opens with, before its rows exist. Every half of
     // it is invisible: an empty pane photographs the same whether a read
     // is out, was refused, or was never asked for — and `standing=false`
