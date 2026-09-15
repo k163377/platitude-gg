@@ -172,10 +172,16 @@ pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
     )
 }
 
-/// Todo-editor mode: replace git's todo file with the prepared plan.
-pub fn apply_plan(plan_path: &Path, todo_path: &Path) -> std::io::Result<()> {
-    let plan = std::fs::read(plan_path)?;
-    std::fs::write(todo_path, plan)
+/// Todo-editor mode: write the prepared plan over git's todo file,
+/// **keeping the lines git put in it** ([`super::merge_todo`]).
+///
+/// Answers what had to be left out, for the helper to say on stderr.
+pub fn apply_plan(plan_path: &Path, todo_path: &Path) -> std::io::Result<Vec<String>> {
+    let plan = std::fs::read_to_string(plan_path)?;
+    let generated = std::fs::read_to_string(todo_path)?;
+    let merged = super::merge_todo(&plan, &generated);
+    std::fs::write(todo_path, merged.text)?;
+    Ok(merged.orphaned)
 }
 
 /// Path as a shell sees it (git's shell on Windows takes forward slashes).

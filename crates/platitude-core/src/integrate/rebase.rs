@@ -313,13 +313,14 @@ pub(crate) fn rebase_command(
         // `--no-rebase-merges` pins off `rebase.rebaseMerges`, the config
         // that decides the shape of the todo git writes: with it standing
         // the list opens with `label onto` / `reset onto` ahead of the
-        // picks. The editor replaces that file wholesale, so the config
-        // changes nothing about what runs today — but that rests on the
-        // merge backend accepting a todo with no labels in it, and the
-        // plan on screen is what git has to be asked for rather than what
-        // it works out to. The driven form only: a plain rebase has no
-        // plan to keep, so the config is the person's own (measurements
-        // and the rest of the decision in rules-refs/core.md).
+        // picks. **The editor keeps the lines git put in** — that is what
+        // makes `--update-refs` work at all (`sequencer::merge_todo`) —
+        // so those labels would now travel into the plan and replay a
+        // shape nobody composed. The plan on screen is what git has to be
+        // asked for rather than what it works out to. The driven form
+        // only: a plain rebase has no plan to keep, so the config is the
+        // person's own (measurements and the rest of the decision in
+        // rules-refs/core.md).
         cmd = cmd
             .args(["--interactive", "--no-rebase-merges"])
             .env("GIT_SEQUENCE_EDITOR", editor);

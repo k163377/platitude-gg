@@ -21,7 +21,7 @@ pub use run::{
     HELPER_NAME, TODO_EDITOR_FLAG, apply_plan, helper_in, helper_path, rebase_interactive,
     sequence_editor_command,
 };
-pub use todo::{RebaseStep, TodoAction, TodoLine, render_todo};
+pub use todo::{MergedTodo, RebaseStep, TodoAction, TodoLine, merge_todo, render_todo};
 
 pub(crate) use plan::{Base, base_of, range_arg};
 

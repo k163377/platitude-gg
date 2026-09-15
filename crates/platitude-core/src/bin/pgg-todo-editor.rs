@@ -27,18 +27,33 @@ fn main() -> ExitCode {
         return fail(&format!("unknown argument `{flag}`"));
     }
     match apply_plan(&PathBuf::from(plan), &PathBuf::from(todo)) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(orphaned) => {
+            // git wrote a line for a commit the plan has nothing to say
+            // about — a range that moved between the two. Said rather
+            // than carried: put anywhere else it would move a ref to a
+            // place nobody asked for, and git shows what its editor said.
+            for line in orphaned {
+                say(&format!("left out of the plan: {line}"));
+            }
+            ExitCode::SUCCESS
+        }
         Err(error) => fail(&format!("could not install the rebase plan: {error}")),
+    }
+}
+
+/// A word on stderr that does not stop the rebase.
+fn say(message: &str) {
+    let mut err = std::io::stderr();
+    if let Err(e) = writeln!(err, "pgg-todo-editor: {message}") {
+        drop(e);
     }
 }
 
 /// Reports on stderr, where git shows editor failures, and fails the
 /// rebase rather than letting it run git's own todo list.
 fn fail(message: &str) -> ExitCode {
-    let mut err = std::io::stderr();
-    if let Err(e) = writeln!(err, "pgg-todo-editor: {message}") {
-        // Nothing left to report with; the exit code still stops the rebase.
-        drop(e);
-    }
+    // Nothing left to report with if the write fails; the exit code still
+    // stops the rebase.
+    say(message);
     ExitCode::FAILURE
 }

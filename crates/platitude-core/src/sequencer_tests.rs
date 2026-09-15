@@ -99,6 +99,104 @@ fn render_and_parse_round_trip() {
     assert_eq!(render_todo(&lines), "pick aaa one\nsquash bbb two\n");
 }
 
+/// The todo git writes for the same range under `--update-refs`, copied
+/// from a run of it (2.51, measured): one line per local branch inside
+/// the range, none for the tag, and a **comment** where another working
+/// copy has the branch checked out.
+const GENERATED: &str = "\
+pick 987d296 # c2
+update-ref refs/heads/inside-a
+
+pick 87156cc # c3
+# Ref refs/heads/held checked out at 'C:/tmp/ur-held'
+
+pick 5e34748 # c4
+update-ref refs/heads/inside-b
+
+pick 3c37418 # c5
+
+# Rebase d9df930..3c37418 onto d9df930 (6 commands)
+# Commands:
+# p, pick <commit> = use commit
+";
+
+fn full(short: &str) -> String {
+    format!("{short}{}", "0".repeat(40 - short.len()))
+}
+
+/// **What decides which refs follow a rewrite is git's**, and the plan is
+/// written over its todo rather than in place of it: the `update-ref`
+/// lines it put there travel with the commit they came after. Written
+/// whole the way this used to be, the flag was passed and nothing
+/// followed (P3-確認事項 §A).
+#[test]
+fn the_plan_carries_over_the_ref_lines_git_wrote() {
+    let plan = format!(
+        "pick {} c2\nreword {} c3\nexec git commit --amend --file m\npick {} c4\npick {} c5\n",
+        full("987d296"),
+        full("87156cc"),
+        full("5e34748"),
+        full("3c37418")
+    );
+    let merged = merge_todo(&plan, GENERATED);
+    assert_eq!(
+        merged.text,
+        format!(
+            "pick {} c2\nupdate-ref refs/heads/inside-a\nreword {} c3\n\
+             exec git commit --amend --file m\npick {} c4\nupdate-ref refs/heads/inside-b\n\
+             pick {} c5\n",
+            full("987d296"),
+            full("87156cc"),
+            full("5e34748"),
+            full("3c37418")
+        ),
+        "each ref line follows the commit git wrote it after — and a reword's own \
+         exec comes first, since that is what leaves HEAD where the ref lands"
+    );
+    assert!(merged.orphaned.is_empty());
+    assert!(
+        !merged.text.contains("checked out at"),
+        "the comment goes: git reads none of them, and the branch it names is one \
+         git deliberately gave no ref line"
+    );
+}
+
+/// A row moved takes its ref with it, which is what a hand editing the
+/// file would leave behind — and a dropped row keeps it, so the branch
+/// lands where the commit it was on used to be.
+#[test]
+fn a_ref_line_travels_with_the_commit_it_was_written_after() {
+    let plan = format!(
+        "pick {} c4\npick {} c2\ndrop {} c3\npick {} c5\n",
+        full("5e34748"),
+        full("987d296"),
+        full("87156cc"),
+        full("3c37418")
+    );
+    let merged = merge_todo(&plan, GENERATED);
+    let lines: Vec<&str> = merged.text.lines().collect();
+    assert_eq!(lines[1], "update-ref refs/heads/inside-b");
+    assert_eq!(lines[3], "update-ref refs/heads/inside-a");
+    assert_eq!(lines.len(), 6, "and nothing else was added: {lines:?}");
+}
+
+/// A line git wrote for a commit the plan says nothing about is left out
+/// and named, rather than carried to wherever the walk happened to end:
+/// the range moved between the plan and the spawn, and a ref put at the
+/// tip is one nobody asked to move.
+#[test]
+fn a_ref_line_with_no_commit_left_is_reported_rather_than_moved() {
+    let plan = format!("pick {} c2\npick {} c5\n", full("987d296"), full("3c37418"));
+    let merged = merge_todo(&plan, GENERATED);
+    assert_eq!(merged.orphaned, vec!["update-ref refs/heads/inside-b"]);
+    assert!(!merged.text.contains("inside-b"));
+    assert!(
+        merged.text.contains("update-ref refs/heads/inside-a"),
+        "the one whose commit is still in the plan is kept: {}",
+        merged.text
+    );
+}
+
 #[test]
 fn editor_command_is_shell_quoted_with_forward_slashes() {
     let cmd = sequence_editor_command(
@@ -163,7 +261,7 @@ fn a_parent_header_is_read_out_of_the_headers_alone() {
 }
 
 #[test]
-fn apply_plan_overwrites_the_todo_file() {
+fn apply_plan_writes_the_plan_over_the_todo_file() {
     let dir = tempfile::tempdir().expect("tempdir");
     let plan = dir.path().join("plan");
     let todo = dir.path().join("todo");
@@ -174,4 +272,53 @@ fn apply_plan_overwrites_the_todo_file() {
         std::fs::read_to_string(&todo).expect("read"),
         "pick aaa one\n"
     );
+}
+
+/// **A plan the size of a history, reordered end to end.** The ids are
+/// matched by the nine characters git abbreviates to, the lines it wrote
+/// stay with their own commits wherever those went, and nothing is left
+/// over. Both halves of that were a scan before — one over git's lines per
+/// line of the plan, and one closing the gap each taken line left — so the
+/// cost went with the square of the range (ci/baseline の
+/// code-costs-windows-x64.md §todo の突き合わせ).
+#[test]
+fn a_reordered_plan_the_size_of_a_history_keeps_every_ref_with_its_commit() {
+    // Leading characters that differ, the way a real abbreviation does: a
+    // zero-padded counter shares its first nine with every other one.
+    fn oid(i: usize) -> String {
+        let h = (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        format!("{h:016x}{i:024x}")
+    }
+    const ROWS: usize = 20_000;
+    const EVERY: usize = 10;
+
+    let mut generated = String::new();
+    for i in 0..ROWS {
+        generated.push_str(&format!("pick {} subject {i}\n", &oid(i)[..9]));
+        if i % EVERY == 0 {
+            generated.push_str(&format!("update-ref refs/heads/b{i}\n"));
+        }
+    }
+    // Back to front: the order the old scan paid most for, since every row
+    // it took came from the far end of what was left.
+    let mut plan = String::new();
+    for i in (0..ROWS).rev() {
+        plan.push_str(&format!("pick {} subject {i}\n", oid(i)));
+    }
+
+    let merged = merge_todo(&plan, &generated);
+    assert!(merged.orphaned.is_empty(), "{:?}", merged.orphaned);
+    let lines: Vec<&str> = merged.text.lines().collect();
+    assert_eq!(lines.len(), ROWS + ROWS / EVERY);
+    for (at, line) in lines.iter().enumerate() {
+        let Some(rest) = line.strip_prefix("update-ref refs/heads/b") else {
+            continue;
+        };
+        let owner: usize = rest.parse().expect("the branch names its commit");
+        assert_eq!(
+            lines[at - 1],
+            format!("pick {} subject {owner}", oid(owner)),
+            "the ref line follows its own commit wherever the plan put it"
+        );
+    }
 }
