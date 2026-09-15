@@ -154,9 +154,10 @@ FocusScope {
         }
         // The diff stands over the graph and costs nothing to put away — the same one press its own `✕` takes
         // (デザイン規約 §hover のツールチップ「この窓で立つものは全部 Esc に答える」). The reading position and the
-        // lines picked out in it are the only things it holds, and the `✕` already spends both.
+        // lines picked out in it are the only things it holds, and the `✕` already spends both. The arrows go to the
+        // graph with it, which is the same door the mark uses (`closeDiffToGraph`).
         if (page.diffShown) {
-            page.closeDiff()
+            page.closeDiffToGraph()
             return true
         }
         if (!detailsPane.attention && !page.commandsAttention)
@@ -2095,6 +2096,23 @@ FocusScope {
         return true
     }
 
+    /// Puts the diff away by a gesture aimed at the diff itself — Escape, or the header's own mark — and hands the
+    /// arrows to the graph (デザイン規約 §diff のファイル一覧「diff を仕舞う所作は、矢印をグラフへ返す」).
+    ///
+    /// **Not the file row's second click** (`toggleDiff`). That is a press, it landed in the list, and the list is
+    /// still on screen with the row it lit — so the keyboard stays where the press fell and the arrows go on walking
+    /// files (規約 §diff のファイル一覧「キーボードは press が落ちた所に残る」). These two doors have no such place to
+    /// leave it in: Escape is not a press at all, and the mark's own pane is what goes. What is left in the middle is
+    /// the graph, so the graph is what answers next.
+    ///
+    /// **Nothing else that closes a diff comes through here.** The rest are not the reader putting it away — a plan
+    /// taking the centre, a write moving HEAD, the side under the reader running out, the list coming back — and the
+    /// graph is not always even what they leave behind.
+    function closeDiffToGraph() {
+        page.closeDiff()
+        graphPane.takeKeyboard()
+    }
+
     function closeDiff() {
         page.diffShown = false
         page.diffKey = ""
@@ -3254,7 +3272,7 @@ FocusScope {
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling
                             menuStanding: page.menuStanding
-                            onCloseRequested: page.closeDiff()
+                            onCloseRequested: page.closeDiffToGraph()
                             onCopyRequested: text => clipboard.copy(text)
                             onCodeMenuRequested: page.openCodeMenu()
                             onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)

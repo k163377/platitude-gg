@@ -49,10 +49,16 @@ pub(super) const TABLE: &[Verb] = &[
     // than falling out to the window — where this page is a descendant
     // and nothing it handles is on the key's way any more, so the *next*
     // Escape would reach nothing at all.
+    //
+    // `graph=true` says where inside the page it landed: the history the
+    // reader is left looking at, so the arrows walk it. One item holds
+    // active focus at a time, so this is the file list letting go as
+    // well — and a run where the key closed the pane but left the arrows
+    // with nobody photographs exactly the same graph.
     Verb {
         name: "diff-escape",
         when: &[],
-        plain: "diff_escape took=true shown=false key=empty folded=false hand=true kept=true",
+        plain: "diff_escape took=true shown=false key=empty folded=false hand=true kept=true graph=true",
     },
     // The row of a repository of its own. There is no patch behind it and
     // never will be — git does not cross into another repository — so

@@ -275,6 +275,13 @@ Rectangle {
     function setCurrentRow(row) {
         graphList.currentIndex = row
     }
+    /// The arrows are this pane's again, asked for from outside it: the thing that was standing over the graph has
+    /// been put away and what the reader is left looking at is the history (`RepoPage.closeDiffToGraph`). Every press
+    /// inside this pane already comes through the list's own door (`GraphList.takeKeyboard`), and so does this — the
+    /// one answer to "what gives this pane the keyboard" stays in one place.
+    function takeKeyboard() {
+        graphList.takeKeyboard()
+    }
 
     // ---- walking the history with the arrow keys, and where the view
     // stands for it (規約 §矢印で履歴を辿る) ---------------------------

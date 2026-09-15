@@ -26,6 +26,7 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var worktreeModel: driver.worktreeModel
     readonly property var diffPane: driver.diffPane
+    readonly property var graphPane: driver.graphPane
     readonly property var diffRowMenu: driver.diffRowMenu
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
@@ -252,7 +253,7 @@ Item {
                 // The pane closed through the same door the header's `✕` goes through. What the run is for is
                 // outside it — whether the decoded pictures went with the URLs — and the outside reads the process;
                 // the line says the pane let go of them (`url=empty`), which is the whole of what QML can say.
-                page.closeDiff()
+                page.closeDiffToGraph()
                 Harness.report("preview_close was=" + was
                                   + " kind=" + diffPane.diffModel.previewKind
                                   + " shown=" + page.diffShown
@@ -765,7 +766,11 @@ Item {
                               + " key=" + (page.diffKey === "" ? "empty" : "held")
                               + " folded=" + page.sidebarCollapsed
                               + " hand=" + escapeTimer.hand
-                              + " kept=" + page.activeFocus)
+                              + " kept=" + page.activeFocus
+                              // **Active focus is held by one item at a time**, so this is also the file list
+                              // saying it let go: the hand was in the diff, the diff is gone, and the arrows now
+                              // enter where `GraphPane.stepRow` does rather than at a list nobody is looking at.
+                              + " graph=" + graphPane.view.activeFocus)
             renderedBarrier.begin()
         }
     }
