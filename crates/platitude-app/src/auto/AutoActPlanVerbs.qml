@@ -573,7 +573,7 @@ Item {
                 // The row's own press rather than the pane's signal: the door being held is at the far end of it
                 // (`RepoPage.openDiff`), and the run has to arrive through everything in between. `diffShown` is
                 // written inside that call, so an unheld door is already open by the next line.
-                row.activated("", row.pathText, row.origPathText)
+                row.press()
                 planHeldTimer.sawDiff = page.diffShown
                 plan.cancelPlan()
                 planHeldTimer.stage = "gone"

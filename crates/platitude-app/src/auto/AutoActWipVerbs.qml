@@ -30,6 +30,7 @@ Item {
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
+    readonly property var gitCorner: driver.gitCorner
     readonly property var diffPane: driver.diffPane
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var commitMenuState: driver.commitMenuState
@@ -168,6 +169,9 @@ Item {
             // untracked file, which has no pieces to stage whoever owns it, and the other a staged edit — the one
             // where "no hunk puts a seat out" is a claim about this pane rather than about the file.
             carriedReadTimer.start()
+        } else if (act === "carried-stand") {
+            // The same pane with nothing read yet — the argument is the copy, as above.
+            carriedStandTimer.start()
         } else if (act === "wip-tally") {
             // Read the two together: `status::Kinds` counts rows, so the kinds have to add up to `rows` — a drift means
             // one of the two stopped reading the same status.
@@ -394,8 +398,14 @@ Item {
                 if (key === "")
                     return
                 const cut = key.indexOf(":")
-                const path = key.substring(cut + 1)
-                page.openDiff(key.substring(0, cut), path, files.origOf(path))
+                // **Asked of the row, not of the page.** The model says which row to reach for; what is read is
+                // whatever that row makes of the model on its own — which is the half a run that carried the model's
+                // own answer to `openDiff` can never see, and the half that was empty here (verify-ui §壊れない動詞).
+                // The row answers null until the list has built it, which is this tick's whole wait.
+                const row = driver.carriedPane.filesWalk.rowFor(key.substring(0, cut), key.substring(cut + 1))
+                if (row === null)
+                    return
+                row.press()
                 carriedReadTimer.opened = true
                 return
             }
@@ -422,6 +432,11 @@ Item {
             // **Read before the step below**, which opens another file: the count taken after it is a pane in the
             // middle of reading one.
             const lines = driver.diffPane.view.count
+            // What the list is lighting while one file is open. **Both halves** — `lit=` is the same reading the file
+            // walk's own verbs make (`file_step`), and it is the first lit row of however many there are, so a list
+            // lighting all of them answers with the right name at the top (`FileRowWalk.litRows`).
+            const lit = driver.carriedPane.filesWalk.litPath() === page.diffPath
+            const litRows = driver.carriedPane.filesWalk.litRows()
             // One step of the arrows, through the pane's own walk. **A row is found by the side its bytes are on**
             // even in this one list, so a pane handed the run's name instead of the file's bucket walks from nowhere
             // and answers the file it is already on (observed).
@@ -429,21 +444,85 @@ Item {
             const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
             carriedReadTimer.walked = true
             carriedReadTimer.moved = stepped
-            // **One list, one tally, and no seat that writes.** The copy in this preset holds one path staged and
-            // then written again, so `files=1` and a `tally=` of one are the fold — counted per side they would both
-            // be two, and the row above the pane would be saying a different number from the pane. `cut=`/`tip=` are
+            // **One list, one tally, one light, and no seat that writes.** The copy in this preset holds one path
+            // staged and then written again, so `files=1` and a `tally=` of one are the fold — counted per side they
+            // would both be two, and the row above the pane would be saying a different number from the pane.
+            // `lit=`/`litRows=` are the light the one open file is worth: the row wearing it is the file in the
+            // middle, and it is the only one wearing it. `cut=`/`tip=` are
             // the long name's whole claim: the band cut it, and the hover behind it carries it. The diff's own line
             // count goes last, after the part the table pins: a line pinned through it could not be written down at
             // all (`verify::outcome` matches a substring).
             Harness.report("carried_read copy=" + files.carriedName
                               + " files=" + files.total
                               + " tally=" + graphModel.carriedTally(page.selectedRow)
+                              + " lit=" + lit
+                              + " litRows=" + litRows
                               + " cut=" + driver.carriedPane.nameCut
                               + " tip=" + driver.carriedPane.nameTipShown
                               + " stepped=" + stepped
                               + " stageFile=" + driver.diffPane.stageOffered
                               + " pieces=" + driver.diffPane.piecesOffered
                               + " lines=" + lines)
+        }
+    }
+    // The same pane at rest: the copy picked, its files listed, and nothing read.
+    //
+    // **The half `carried-read` cannot photograph.** With a file open the list's one light is the reading, so a list
+    // that lights every row it has still answers with the right name at the top; with nothing open there is no name
+    // to answer with at all, and `litRows=` is the only thing that can tell the two apart (`FileRowWalk.litRows`).
+    //
+    // **The corner is claimed here** for the same reason. Which pane is under it decides whether it is offered a seat
+    // at all, and this is the pane `corner` cannot reach — that verb picks between this window's own tree and a
+    // commit of its history, and neither of those is another copy's work.
+    SampleTimer {
+        id: carriedStandTimer
+        property bool asked: false
+        /// What the first folder row of the list calls itself, empty where the copy's paths are all at the root.
+        /// **The one name in this pane that is not the row's own path**: this model folds by `<run>:<path>` and keeps
+        /// the path in the slot beside it, so a row handed the fold key says `whole:src` everywhere it says a name —
+        /// the hover most of all, which is the only place a path is spelled out (`FileRowDelegate.foldKey`).
+        function folderPath() {
+            const view = driver.carriedPane.view
+            for (let i = 0; i < view.count; i++) {
+                const row = view.itemAtIndex(i)
+                if (row && row.isFolder === true)
+                    return row.pathText
+            }
+            return ""
+        }
+        onTriggered: {
+            if (graphModel.finishCount === 0 || !workTree.loaded)
+                return
+            if (!carriedStandTimer.asked) {
+                // The same road in as `carried-read`, down to the row taking its own decision (verify-ui §壊れない動詞).
+                const row = carriedReadTimer.rowOf(Harness.autoActArg)
+                if (row < 0)
+                    return
+                const item = graphPane.view.itemAtIndex(row)
+                if (item === null)
+                    return
+                item.leftClick(0, Qt.NoModifier)
+                carriedStandTimer.asked = true
+                return
+            }
+            // The copy's own files have to have arrived, and the rows be built out of them: what they light — and
+            // what they leave bare underneath — is nothing at all until they stand.
+            const files = page.wipUnstaged
+            if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
+                return
+            if (driver.carriedPane.view.count === 0 || gitCorner.width <= 0)
+                return
+            carriedStandTimer.stop()
+            // `corner=` is the label's own visibility rather than the room it was handed — reporting what was asked
+            // for goes green with the binding cut (`corner`, which learned this the hard way).
+            Harness.report("carried_stand copy=" + files.carriedName
+                              + " files=" + files.total
+                              + " litRows=" + driver.carriedPane.filesWalk.litRows()
+                              + " reading=" + page.diffShown
+                              + " corner=" + gitCorner.visible
+                              + " folderPath=" + carriedStandTimer.folderPath()
+                              + " room=" + Math.round(gitCorner.roomLeft))
+            driver.complete()
         }
     }
     SampleTimer {

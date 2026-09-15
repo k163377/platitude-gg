@@ -124,6 +124,24 @@ Item {
         }
         return ""
     }
+    /// Automation: how many of the rows on screen are painted as lit. **The count is the half a name cannot say**: a
+    /// list whose only light is the reading wears exactly one while a file is open and none while none is, and a list
+    /// lighting all of its rows still answers `litPath` with the right name at the top (verify-ui).
+    ///
+    /// **Asked of `litNow`, not of the key above.** That key is the row's own path, which is the very thing such a
+    /// list has failed to read — counted through it, a wholly lit list comes to none (observed).
+    function litRows() {
+        let lit = 0
+        for (let side = 0; side < walk.sides.length; side++) {
+            const view = walk.sides[side].view
+            for (let i = 0; i < view.count; i++) {
+                const row = view.itemAtIndex(i)
+                if (row && row.litNow === true)
+                    lit++
+            }
+        }
+        return lit
+    }
     /// Automation: the row for one file, once the list has built it — `itemAtIndex` answers null until then, and a
     /// click aimed at nothing latches a wait that never ends (app-ui.md §UI 自動化の因果性). The bucket tells apart the two
     /// rows of a file changed on both sides; empty matches either, which is every row of a commit's list.

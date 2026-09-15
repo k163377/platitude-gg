@@ -326,8 +326,9 @@ Item {
                                 worktreeModel.origOf(fileStepTimer.path),
                                 Qt.NoModifier)
             else
-                row.activated("", fileStepTimer.path,
-                              detailsModel.origOf(fileStepTimer.path))
+                // The row's own press, with the row's own reading of its model in it: handed the path from beside it
+                // instead, this goes green on a row that reads nothing at all (verify-ui §壊れない動詞).
+                row.press()
             return true
         }
         function walkNow() {

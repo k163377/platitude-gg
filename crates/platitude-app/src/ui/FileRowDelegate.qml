@@ -51,6 +51,10 @@ Item {
     /// That name while the row is painted as the one being read, empty otherwise — what a headless run reads off the
     /// list. The rectangle's own `visible`, since reading the condition back would go green with the rectangle unwired.
     readonly property string litKey: selectedBox.visible ? fileRow.walkKey : ""
+    /// The same rectangle as a bare answer. **The name above cannot count** — it carries the row's own path, which is
+    /// the very thing a list lighting every row it has failed to read, so rows counted by it come to none exactly
+    /// where the count is worth taking (`FileRowWalk.litRows`).
+    readonly property bool litNow: selectedBox.visible
     /// The turn this row's fold arrow is drawn at, -1 on a file row — what a headless run reads instead of the flag
     /// behind it, since reading the flag back would go green with the arrow unwired (`NameCell.foldTurn`).
     readonly property real foldTurn: nameCell.foldTurn

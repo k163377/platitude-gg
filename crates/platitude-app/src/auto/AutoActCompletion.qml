@@ -205,8 +205,9 @@ QtObject {
                 "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
                 // Three arrivals behind the press, each from a different tree: the copy's row, the copy's file list,
-                // and a file of that copy read on its own. Its own sampler owns the end of all three.
-                "carried-read",
+                // and a file of that copy read on its own. Its own sampler owns the end of all three. The pane at
+                // rest waits out the first two and the rows built from them.
+                "carried-read", "carried-stand",
                 "divider-refuse", "commands-fail-shut", "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 "edit-message-leave", "edit-message-focus",

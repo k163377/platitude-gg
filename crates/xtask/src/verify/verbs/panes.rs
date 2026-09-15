@@ -374,17 +374,53 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Is("here"),
-                "carried_read copy=here files=2 tally=2,0,0,0,0,0 cut=false tip=false \
-                 stepped=true stageFile=false pieces=false",
+                "carried_read copy=here files=2 tally=2,0,0,0,0,0 lit=true litRows=1 \
+                 cut=false tip=false stepped=true stageFile=false pieces=false",
             ),
             (
                 Arg::Starts("an-extremely-long"),
                 "carried_read copy=an-extremely-long-working-copy-name-for-the-edge-case \
-                 files=1 tally=0,1,0,0,0,0 cut=true tip=true stepped=false \
+                 files=1 tally=0,1,0,0,0,0 lit=true litRows=1 cut=true tip=true stepped=false \
                  stageFile=false pieces=false",
             ),
         ],
-        plain: "carried_read copy=topic files=1 tally=0,1,0,0,0,0 cut=false tip=false \
-                stepped=false stageFile=false pieces=false",
+        plain: "carried_read copy=topic files=1 tally=0,1,0,0,0,0 lit=true litRows=1 \
+                cut=false tip=false stepped=false stageFile=false pieces=false",
+    },
+    // The same pane at rest, which is where picking the row leaves a reader
+    // and where the verb above has already read a file past.
+    //
+    // **`litRows=0` is the whole of the first claim.** This pane's only light is
+    // the reading, so with nothing open no row wears one — and a list that
+    // cannot tell its rows apart lights all of them, which the verb above
+    // cannot see: its one open file makes the top of a wholly lit list read
+    // exactly like the one correct row.
+    //
+    // `folderPath=` is the other name this pane could not read: the model
+    // under it folds by `<run>:<path>` and keeps the path itself beside
+    // that, so a folder row handed the fold key says `whole:src` wherever
+    // it says a name — the hover above all, which is the only place a
+    // path is spelled out at all. Empty on the copy whose files are all
+    // at the root, which is why the claim is made on the other two.
+    //
+    // `corner=` is the version in the pane's own foot. Nothing is pinned
+    // there — this pane lends the seat the way the commit pane does — and
+    // `corner` itself cannot make the claim: that verb picks between this
+    // window's own tree and a commit of its history, and neither of those is
+    // another copy's work.
+    Verb {
+        name: "carried-stand",
+        when: &[
+            (
+                Arg::Is("here"),
+                "carried_stand copy=here files=2 litRows=0 reading=false corner=true folderPath=",
+            ),
+            (
+                Arg::Starts("an-extremely-long"),
+                "carried_stand copy=an-extremely-long-working-copy-name-for-the-edge-case \
+                 files=1 litRows=0 reading=false corner=true folderPath=docs",
+            ),
+        ],
+        plain: "carried_stand copy=topic files=1 litRows=0 reading=false corner=true folderPath=src",
     },
 ];

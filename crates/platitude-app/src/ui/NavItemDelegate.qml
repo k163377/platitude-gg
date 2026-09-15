@@ -121,6 +121,9 @@ Item {
     /// That name while the row is painted as one of the chosen, empty otherwise — what a headless run reads off the
     /// list. The rectangle's own `visible`, since reading `chosen` back would go green with the rectangle unwired.
     readonly property string litKey: chosenBox.visible ? navRow.walkKey : ""
+    /// The same rectangle as a bare answer, so a count of the lit rows does not go through the name each of them
+    /// carries (`FileRowWalk.litRows`, and `FileRowDelegate.litNow` — the other list's rows answer the same pair).
+    readonly property bool litNow: chosenBox.visible
 
     signal refClicked(string oidHex)
     /// A working-tree file row was clicked. `modifiers` carries Ctrl and Shift, which is how several rows are chosen at
