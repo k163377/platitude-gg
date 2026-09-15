@@ -35,23 +35,17 @@ Item {
     /// files, which sit in none.
     required property string readBucket
     required property string readPath
-    /// The row this list is lighting on its own account, as `<bucket>:<path>` — empty for a list whose only light is
-    /// the reading. **The working tree's is its choice** (`WipPane.soleChosen`), which a diff closing does not take
-    /// away: there the light says "this row is what a press acts on" as well as "this is what is being read"
-    /// (デザイン規約 §diff のファイル一覧 —— 光は既に在る選択の光そのもの).
-    ///
-    /// So the arrows go on moving it with the diff shut, which is the rule itself: they move the row that is lit, and
-    /// a lit row nothing answers for is a list that has quietly stopped taking the keyboard.
-    property string standKey: ""
     /// Where the walk stands: the read file until an arrow moves it, and the row ahead of the reading for as long as a
     /// held key runs (the reading catches up when the hand comes off — `noteStep`).
     property string atBucket: ""
     property string atPath: ""
-    /// Where the next walk sets off from: the file being read while one is, and the list's own light otherwise. Empty
-    /// when the list is lighting nothing — there is no row for a step to be a step from, and the arrows are not how a
-    /// first one is opened.
+    /// Where the next walk sets off from: **the file being read, and nothing else** (デザイン規約 §diff のファイル一覧).
+    /// Empty with no diff up, and then the arrows move no file — there is no row for a step to be a step from, and the
+    /// arrows are not how a first one is opened. Both lists answer the same way because both lights mean the same
+    /// thing: the working tree's goes with the reading it was opened by, so no list is left lighting a row the arrows
+    /// would have to answer for with nothing on screen (`WipPane.onReadKeyChanged`).
     readonly property string fromKey:
-        walk.readPath !== "" ? walk.readBucket + ":" + walk.readPath : walk.standKey
+        walk.readPath !== "" ? walk.readBucket + ":" + walk.readPath : ""
     onFromKeyChanged: {
         const cut = walk.fromKey.indexOf(":")
         walk.atBucket = cut < 0 ? "" : walk.fromKey.substring(0, cut)
@@ -71,7 +65,7 @@ Item {
     /// (verify-ui).
     ///
     /// Refused while the list is off screen: the two file lists swap with each other, and one nobody can see must not
-    /// answer arrows (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」). Refused as well with the list lighting nothing
+    /// answer arrows (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」). Refused as well with nothing being read
     /// (`fromKey`) — there is no row for a step to be a step from, and the arrows are not how a first one is opened.
     ///
     /// Answering `false` at either end is how it stops rather than wraps: the model has nowhere to send it and the key

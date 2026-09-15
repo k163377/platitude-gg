@@ -34,6 +34,28 @@ ColumnLayout {
     /// see `readOne`.
     property string readBucket: ""
     property string readPath: ""
+    /// The file being read, as the rows are keyed, and **empty unless both halves are there**. The two arrive as
+    /// separate bindings off the same source and the page empties them one at a time (`RepoPage.closeDiff`), so for a
+    /// moment the bucket is gone while the path is still standing — a key built out of that half-state is a key no row
+    /// was ever under, and remembering it below would lose the row the reading was actually on (app-ui.md).
+    readonly property string readKey:
+        wipPane.readBucket === "" || wipPane.readPath === ""
+        ? "" : wipPane.readBucket + ":" + wipPane.readPath
+    /// The row the reading was last on, so that the light can go where the reading goes.
+    property string wasRead: ""
+    /// **The light in this list means what it means in the commit's: the file being read** (デザイン規約
+    /// §diff のファイル一覧). So the reading going away takes its row out of the choice, whichever door put the diff
+    /// away — the second click on the row, the header's `✕`, Escape — and the list is left lighting nothing, the same
+    /// as the commit's.
+    ///
+    /// **Only where that row was the whole of the choice.** Several rows lit is a choice a press acts on, and a diff
+    /// standing over one of them never put the rest up; clearing them would throw away a walk over the rows that was
+    /// made for staging or discarding rather than for reading.
+    onReadKeyChanged: {
+        if (wipPane.readKey === "" && wipPane.soleChosen !== "" && wipPane.soleChosen === wipPane.wasRead)
+            wipPane.clearChoice()
+        wipPane.wasRead = wipPane.readKey
+    }
 
     /// Whoever the message credits as it stands, packed the way the details pane's line is fed
     /// (`encode::encode_co_authors`). Nothing has been committed, so the only place a trailer exists is the text.
@@ -149,14 +171,7 @@ ColumnLayout {
     property int chosenCount: 0
     /// The row the next Shift-click reaches from.
     property int anchorRow: -1
-    /// The one chosen row, as `<bucket>:<path>`, and empty unless exactly one is — **what the arrows walk from when no
-    /// diff is open** (`FileRowWalk.standKey`). A click that closed the diff it had opened leaves its row lit, because
-    /// this light is the choice and a press still acts on it (デザイン規約 §diff のファイル一覧), so the arrows have to go
-    /// on moving it.
-    ///
-    /// **Held back while several are lit**: the arrows move *the* lit row and collapse the choice onto where they land
-    /// (`onStepped`), so with a whole Ctrl-clicked choice up there is no one row to name and a step would throw the
-    /// rest of it away. A diff being read names that row itself, and is what the walk sets off from whenever one is.
+    /// The one chosen row, as `<bucket>:<path>`, and empty unless exactly one is.
     readonly property string soleChosen: {
         if (wipPane.chosenCount !== 1)
             return ""
@@ -256,7 +271,6 @@ ColumnLayout {
         }
         readBucket: wipPane.readBucket
         readPath: wipPane.readPath
-        standKey: wipPane.soleChosen
         onStepped: (bucket, path) => wipPane.chooseOnly(bucket, path)
         onLanded: (bucket, path, origPath) => wipPane.fileWalked(bucket, path, origPath)
     }

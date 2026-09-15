@@ -59,12 +59,17 @@ Item {
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
-                   || act === "wip-step" || act === "wip-step-shut") {
+                   || act === "wip-step"
+                   || act === "changes-shut" || act === "wip-shut") {
             // The file list's arrows: one file per press, the light and the diff moving together (規約 §diff のファイル一覧).
             // `-edge` walks further than the list is long, so the last presses are refused and it stops rather than
             // wrapping. The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a
             // file changed on both sides has a row under each.
-            if (act === "wip-step" || act === "wip-step-shut") {
+            //
+            // The two `-shut` verbs walk nowhere: they stop on the row's second click, where both lists are left
+            // lighting nothing and the arrows move no file (規約 §diff のファイル一覧). **Read as a pair** — that the two
+            // now answer alike is the claim, and one of them alone cannot say it.
+            if (act === "wip-step" || act === "wip-shut") {
                 const cut = arg.indexOf(":")
                 const head = cut > 0 ? arg.substring(0, cut) : ""
                 const named = head === "staged" || head === "unstaged"
@@ -80,7 +85,7 @@ Item {
                 fileStepTimer.path = arg
             }
             fileStepTimer.overrun = act === "changes-step-edge"
-            fileStepTimer.shut = act === "wip-step-shut"
+            fileStepTimer.shut = act === "changes-shut" || act === "wip-shut"
             fileStepTimer.begin()
         } else if (act === "changes-fold" || act === "changes-unfold") {
             // The commit's CHANGES tree opened and shut by its folder rows. The argument is the directory, written the
@@ -304,9 +309,9 @@ Item {
         /// Whether the click has gone out, so the tick that follows is waiting for the diff rather than for the row.
         property bool clicked: false
         property bool stopped: false
-        /// Whether the run clicks the same row a second time before walking, which shuts the diff it opened
-        /// (`RepoPage.toggleDiff`). What that leaves is a list with a lit row and nothing being read — the arrows
-        /// move the lit row, so they have to go on working from it (デザイン規約 §diff のファイル一覧).
+        /// Whether the run clicks the same row a second time and stops there, which shuts the diff it opened
+        /// (`RepoPage.toggleDiff`). What that leaves is the subject of the `-shut` pair: a list lighting nothing,
+        /// the same in both (デザイン規約 §diff のファイル一覧).
         property bool shut: false
         property bool closed: false
         function begin() {
@@ -364,9 +369,33 @@ Item {
                     fileStepTimer.closed = fileStepTimer.strike()
                 return
             }
-            // And the walk from the row the shut diff left lit, which is the whole of what this variant asks.
-            if (fileStepTimer.shut && fileStepTimer.closed && !page.diffShown)
-                fileStepTimer.walkNow()
+            // What the shut diff left behind, which is the whole of what the `-shut` pair asks.
+            if (fileStepTimer.shut && fileStepTimer.closed && !page.diffShown) {
+                fileStepTimer.stop()
+                fileShutReport.start()
+            }
+        }
+    }
+    // What each list is left lighting with nothing being read — the two used to disagree here and now do not
+    // (デザイン規約 §diff のファイル一覧). **`lit=` is the whole claim** and it is read off the rectangles rather than off
+    // the condition behind them (`litPath`), so a run whose light was only ever in the model says `lit=false`.
+    // `open=false` is what makes the answer that list's own rather than a diff still standing over it.
+    SampleTimer {
+        id: fileShutReport
+        onTriggered: {
+            if (page.diffShown)
+                return
+            fileShutReport.stop()
+            const walk = fileStepTimer.walk
+            // The three the judgement reads stand together and in this order: a `must_say` is a stretch of the line
+            // rather than a set of fields (`verify::verbs`), and each list's answer is all three at once.
+            Harness.report(
+                "file_shut path=" + fileStepTimer.path
+                + " pane=" + fileStepTimer.pane
+                + " open=" + page.diffShown
+                + " lit=" + (walk.litPath() !== "")
+                + " focused=" + walk.view.activeFocus)
+            driver.complete()
         }
     }
     // Longer than the settle behind the walk (`keyStepSettleMs`), because what is read is the reading a hand coming off
@@ -391,10 +420,7 @@ Item {
                 + " moved=" + (page.diffPath !== fileStepTimer.path)
                 + " stopped=" + fileStepTimer.stopped
                 + " lit=" + (walk.litPath() === page.diffPath)
-                + " focused=" + walk.view.activeFocus
-                // Last, so that the three walks that came before this one read the same line they always did: a
-                // `must_say` is a stretch of the line rather than a set of fields (`verify::verbs`).
-                + " shut=" + fileStepTimer.closed)
+                + " focused=" + walk.view.activeFocus)
             driver.complete()
         }
     }

@@ -23,17 +23,22 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=false lit=true focused=true",
     },
-    // And the same walk from a list whose diff has been shut by a second
-    // click on the row it was opened from. The light stays — it is the
-    // choice, and a press still acts on it (デザイン規約 §diff の
-    // ファイル一覧) — so the arrows have to go on moving it. `shut=true`
-    // says the second click landed, and `moved=true` that the walk set
-    // off with nothing being read: the two together are the bug this is
-    // cut for, where a lit row answered no arrow at all.
+    // The second click stopped at, in each list, where the two used to
+    // part and now do not: the light means the file being read in both,
+    // so both go out with the diff (デザイン規約 §diff のファイル一覧).
+    // `lit=false` is the whole of it, and it has to be a pair — one of
+    // these alone is a list with no diff up, which either answer frames
+    // identically. `open=false` is what makes the dark list the list's
+    // own answer rather than a reading still standing over it.
     Verb {
-        name: "wip-step-shut",
+        name: "wip-shut",
         when: &[],
-        plain: "moved=true stopped=false lit=true focused=true shut=true",
+        plain: "pane=wip open=false lit=false",
+    },
+    Verb {
+        name: "changes-shut",
+        when: &[],
+        plain: "pane=changes open=false lit=false",
     },
     // Escape over an open diff, with the hand already inside it. The
     // page's handler is the last thing an Escape nobody else claimed
