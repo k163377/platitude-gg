@@ -17,6 +17,13 @@ Item {
 
     // Required: the margin below is read while this is built, and an unset window would fail it once in silence.
     required property var window
+    /// Where the keyboard goes when a caret is walked away from. **Not the window's content item**, which is above
+    /// every page rather than inside one: a key is delivered to whatever holds the focus and then up its parents only,
+    /// so focus resting there leaves the page's own Escape handler off the chain and the one gesture that puts a
+    /// standing thing away stops working until the next press that takes the keyboard back
+    /// (`RepoPage.escapePressed`, `tests/qml/tst_escape.qml`). Null falls back to the content item — a window with no
+    /// page open has no handler to keep on the chain.
+    property var home: null
 
     /// The press that took the caret away landed somewhere else, at `scenePos` in scene coordinates. Whatever was
     /// standing open on the strength of holding the keyboard is walked away from here — the left menu's in-place name
@@ -47,7 +54,10 @@ Item {
                 return
             const local = item.mapFromItem(null, point.scenePressPosition)
             if (local.x < 0 || local.y < 0 || local.x >= item.width || local.y >= item.height) {
-                watcher.window.contentItem.forceActiveFocus()
+                if (watcher.home !== null)
+                    watcher.home.forceActiveFocus()
+                else
+                    watcher.window.contentItem.forceActiveFocus()
                 watcher.pressedAway(point.scenePressPosition)
             }
         }

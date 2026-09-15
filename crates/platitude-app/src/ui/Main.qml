@@ -141,6 +141,9 @@ ApplicationWindow {
 
     FocusRelease {
         window: root
+        // The page on screen, so an Escape after the caret was walked away from still reaches the one handler that
+        // puts this window's standing things away.
+        home: root.curPage
         // The left menu's name box is held open by nothing but the keyboard it took, so the press that took the
         // keyboard away is what walks away from it (デザイン規約 §左メニューの所作). Only the tab on screen has one.
         onPressedAway: scenePos => {

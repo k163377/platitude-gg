@@ -6,7 +6,13 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-Item {
+// **A focus scope rather than a plain `Item`**, and that is what keeps Escape answerable: a pane swapped off the
+// screen lets the keyboard go (規約 §矢印で履歴を辿る), and inside a plain item it falls all the way out of the page to
+// the window's own content item — where this page is a descendant rather than an ancestor, so nothing here is on the
+// key's way any more and the one gesture that puts a standing thing away goes quiet until the next press
+// (measured with qmltestrunner; the facts are held by `tests/qml/tst_escape.qml`). A scope catches that fall: it
+// keeps active focus itself and `Keys.onEscapePressed` below goes on hearing the key.
+FocusScope {
     id: page
     required property int index
     required property int tab_id
