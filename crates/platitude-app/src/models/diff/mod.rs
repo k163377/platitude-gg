@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
@@ -221,6 +222,13 @@ pub struct DiffModel {
     sel_active: bool,
     sel_has_new: bool,
     sel_removed: i32,
+    /// When the file on screen was asked for, for the two numbers the
+    /// frame the pane draws cannot give: how much of the wait was the
+    /// read, how much was building the model, and what is left is the
+    /// drawing (`perf`, ci/baseline/perf-windows-x64.md §操作 1 点の内訳).
+    /// Taken by the rows arriving, so a re-read that finds nothing moved
+    /// and the colours behind a diff report nothing.
+    requested_at: Option<Instant>,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,
 }

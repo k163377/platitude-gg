@@ -113,6 +113,7 @@ impl DiffModel {
         // swaps the whole list inside one call, so the exchange is never
         // seen half done.
         let same_file = key == self.current_key && at == self.current_at;
+        self.requested_at = Some(std::time::Instant::now());
         self.current_key = key;
         self.current_at = at.clone();
         self.title = title;

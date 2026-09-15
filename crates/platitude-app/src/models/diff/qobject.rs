@@ -342,10 +342,17 @@ impl DiffModel {
         if mine.is_empty() {
             return;
         }
+        let carries_rows = mine.iter().any(|m| matches!(m, DiffMsg::Loaded { .. }));
+        // Held for the two marks below rather than taken at the first of
+        // them: one says when the rows arrived and the other when they
+        // are in the model, and between them is what this call costs.
+        // **Only a batch carrying rows takes it** — the colours behind a
+        // diff are a second message about a read already answered.
+        let asked = carries_rows.then(|| self.requested_at.take()).flatten();
         // Before the first of them is applied, and only where there is a
         // place to lose: rows arriving for a file with none on screen are
         // a pane opening, not a reader being moved.
-        if !self.lines.is_empty() && mine.iter().any(|m| matches!(m, DiffMsg::Loaded { .. })) {
+        if !self.lines.is_empty() && carries_rows {
             self.rows_replacing();
         }
         for msg in mine {
@@ -360,6 +367,14 @@ impl DiffModel {
                     ..
                 } => {
                     self.loading = false;
+                    if let Some(t0) = &asked {
+                        // Data arrival only; PagePerfDriver separately
+                        // observes the frame that draws it.
+                        tracing::info!(
+                            elapsed_ms = t0.elapsed().as_millis() as u64,
+                            "diff request round trip"
+                        );
+                    }
                     self.is_binary = patches.iter().any(|p| p.is_binary);
                     self.is_new_file = is_new_file(&patches);
                     self.is_combined = is_combined(&patches);
@@ -398,6 +413,14 @@ impl DiffModel {
             }
         }
         self.changed();
+        if let Some(t0) = asked {
+            // The rows are in the model and the signals are out; what is
+            // left before the frame is the view and the painting.
+            tracing::info!(
+                elapsed_ms = t0.elapsed().as_millis() as u64,
+                "diff rows applied"
+            );
+        }
     }
 }
 qml_register!(DiffModel, "DiffModel", singleton = false);

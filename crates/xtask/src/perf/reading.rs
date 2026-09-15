@@ -46,7 +46,18 @@ pub(super) struct Reading {
     /// question on a 100Hz screen and a 180Hz one.
     pub(super) over_16_ms: Option<usize>,
     pub(super) details_ms: Vec<u64>,
+    /// The same request, measured to where the answer is in the model and
+    /// its signals are out — so the wait divides into the read, this
+    /// call, and the view and painting the frame below ends.
+    pub(super) details_applied_ms: Vec<u64>,
     pub(super) details_frame_ms: Vec<f64>,
+    /// The file's own round trip: asked for until its rows are in the
+    /// model. The frame below is the whole wait, so the two say how much
+    /// of the longest point a person waits at is the read and how much is
+    /// the drawing.
+    pub(super) diff_ms: Vec<u64>,
+    /// And where the rows of it are in the model (`details_applied_ms`).
+    pub(super) diff_applied_ms: Vec<u64>,
     pub(super) diff_frame_ms: Vec<f64>,
     pub(super) events: Vec<super::interactions::Event>,
     pub(super) diff_scrolls: Vec<String>,
@@ -254,6 +265,23 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     if reading.total_ms.is_none() {
         gaps.push("the finished graph (no `elapsed_ms=`)");
     }
+    gaps.extend(scenario_gaps(reading, opts));
+    if gaps.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the run ended without {} — the app's log did not say what this \
+         measurement reads, so the numbers it did take cannot be published \
+         as a whole reading",
+        gaps.join(", ")
+    ))
+}
+
+/// What the scenario this run was asked to drive had to say about
+/// itself: the selection it settled on and the completion it named, each
+/// driven point's two numbers, and the scroll. **Both ways round** — a
+/// page nobody selected on must not be holding a selection's numbers.
+fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
     let expected = format!(
         "selection={} details={} diff={} graph={} scrolled={}",
         opts.selection,
@@ -262,6 +290,7 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         opts.scroll || !opts.select || !opts.diff,
         opts.scroll
     );
+    let mut gaps = Vec::new();
     if reading.selection.as_deref() != Some(opts.selection.as_str())
         || !reading
             .scenario_complete
@@ -276,8 +305,9 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     if !opts.select && (!reading.details_ms.is_empty() || !reading.details_frame_ms.is_empty()) {
         gaps.push("an actually unselected page");
     }
-    if opts.select && opts.diff && reading.diff_frame_ms.is_empty() {
-        gaps.push("the requested diff frame");
+    if opts.select && opts.diff && (reading.diff_frame_ms.is_empty() || reading.diff_ms.is_empty())
+    {
+        gaps.push("the requested diff (round trip and frame)");
     }
     if opts.scroll
         && (!reading.fps.is_some_and(|fps| fps.is_finite() && fps > 0.0)
@@ -292,15 +322,7 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     {
         gaps.push("the complete timestamped frame trace");
     }
-    if gaps.is_empty() {
-        return Ok(());
-    }
-    Err(format!(
-        "the run ended without {} — the app's log did not say what this \
-         measurement reads, so the numbers it did take cannot be published \
-         as a whole reading",
-        gaps.join(", ")
-    ))
+    gaps
 }
 
 /// What the calibration run is missing when it lost its one number: the
@@ -381,12 +403,7 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
     {
         found.total_ms = v.parse().ok();
     }
-    if line.contains("details request round trip")
-        && let Some(v) = field(line, "elapsed_ms=")
-        && let Ok(ms) = v.parse()
-    {
-        found.details_ms.push(ms);
-    }
+    interaction_marks(line, found);
     if line.contains("perf_selection") {
         found.selection = field(line, "mode=").map(str::to_string);
         found.selected_oid = field(line, "oid=").map(str::to_string);
@@ -400,16 +417,6 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
             && field(line, "row=")
                 .and_then(|v| v.parse::<usize>().ok())
                 .is_some();
-    }
-    if line.contains("perf_details_frame")
-        && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())
-    {
-        found.details_frame_ms.push(ms);
-    }
-    if line.contains("perf_diff_frame")
-        && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())
-    {
-        found.diff_frame_ms.push(ms);
     }
     if line.contains("scroll_bench") && !diff_surface {
         found.frame_count = field(line, "frame_count=").and_then(|v| v.parse().ok());
@@ -438,6 +445,35 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
         }
     }
 }
+/// The marks one driven point leaves, in the order the wait divides:
+/// the app says when the answer arrived and when the rows of it were in
+/// the model, and the harness says when the frame that drew them came.
+fn interaction_marks(line: &str, found: &mut Reading) {
+    for (mark, into) in [
+        ("details request round trip", &mut found.details_ms),
+        ("details rows applied", &mut found.details_applied_ms),
+        ("diff request round trip", &mut found.diff_ms),
+        ("diff rows applied", &mut found.diff_applied_ms),
+    ] {
+        if line.contains(mark)
+            && let Some(v) = field(line, "elapsed_ms=")
+            && let Ok(ms) = v.parse()
+        {
+            into.push(ms);
+        }
+    }
+    for (mark, into) in [
+        ("perf_details_frame", &mut found.details_frame_ms),
+        ("perf_diff_frame", &mut found.diff_frame_ms),
+    ] {
+        if line.contains(mark)
+            && let Some(ms) = field(line, "elapsed_ms=").and_then(|v| v.parse().ok())
+        {
+            into.push(ms);
+        }
+    }
+}
+
 /// One `key=value` off a line whose keys are whole words: the tables the
 /// runner writes for itself (`perf::display`, `perf::sampler`).
 ///

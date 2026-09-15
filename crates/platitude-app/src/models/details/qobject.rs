@@ -207,7 +207,11 @@ impl DetailsModel {
         if hex != self.requested {
             return; // stale response for a previous selection
         }
-        if let Some(t0) = self.requested_at.take() {
+        // Held for the two marks rather than taken at the first of them:
+        // one says when the answer arrived and the other when it is in the
+        // model, and between them is what this call costs.
+        let asked = self.requested_at.take();
+        if let Some(t0) = &asked {
             // Data arrival only; PagePerfDriver separately observes a frame.
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,
@@ -251,6 +255,14 @@ impl DetailsModel {
         self.loading = false;
         self.take_files(&details.files);
         self.changed();
+        if let Some(t0) = asked {
+            // The rows are in the model and the signals are out; what is
+            // left before the frame is the view and the painting.
+            tracing::info!(
+                elapsed_ms = t0.elapsed().as_millis() as u64,
+                "details rows applied"
+            );
+        }
     }
 
     /// Switches the CHANGES list between tree and flat-path display.

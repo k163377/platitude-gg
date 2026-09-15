@@ -161,6 +161,40 @@ PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印
   前提はログが無色であること — 色コードが乗ると `key=value` が検索不能になる
   (`platitude_gg::init_tracing` は色を付けない)
 
+## 操作 1 点の内訳 — 読み / 適用 / 描画(2026-09-15)
+
+**別の座り** — 席 c の木(`b06eec32`)、**`corpus --copies 8` の作業コピーが立ったコーパス**
+(token `fb3d090c4261f4500bd61c8db7389485d515feab`、refs 50,012)に `--allow-noisy` で撃った
+3 run。開幕の巡回がグラフと機械を取り合う条件なので**絶対値は §判定 の行と並べない** —
+読むのは割り方:
+
+3 段に割る 3 つの印は、要求した時刻からの経過として全部 app が言う —— `… request round trip`
+(答えが drain された = report の `details data` / `diff data`)、`… rows applied`(行がモデルに
+入り、変更通知も出た = `details rows` / `diff rows`)、そしてハーネスが見たフレーム
+(`details frame` / `diff frame`)。**run ごとに**(ms、3 run とも同じ invocation):
+
+| run | 詳細: 読み / 適用 / 描画 | diff: 読み / 適用 / 描画 |
+|---|---|---|
+| 1 | 86 / 30 / 14 | 320 / 47 / 16 |
+| 2 | 153 / 44 / 22 | 119 / 32 / 13 |
+| 3 | 83 / 44 / 24 | 144 / 50 / 19 |
+
+- **読みは座りで大きく散る**(83–320ms)が、**適用 30–50ms と描画 13–24ms は run を跨いで安定** ——
+  待ちの本体は読みで、残り 2 段のうち**重いのはモデルの側**。別の invocation(同じ木・同じ座り、
+  3 run)は詳細 84–85–150 / diff 93–96–114ms の読みに対しフレームまで 139.7–146.0–212.6 /
+  142.5–153.1–156.6ms で、差(約 43–62ms)はこの表の適用 + 描画と合う
+- **一覧のデリゲートの作り直しが乗るのは「モデルに入ってからフレームまで」の 13–24ms の側**
+  —— `reset()` を `dataChanged` に替える案(P3-確認事項 §性能)が狙えるのは小さい方の半分で、
+  適用の 30–50ms はモデルを組む側の代金
+- **読みの中は全部プロセス**(同じ座りの `--log debug` の 1 run で並びを撮った):
+  `diff-tree -r -p` / `config --get-regexp core.autocrlf` / `rev-parse --verify <oid>:<path>` /
+  `check-attr -z text eol` / `cat-file blob` の 5 本で、**3 本は同時に起き、答えは最後の 1 本が
+  返った 0.3ms 後に届く** —— **diff の組み立ては前の待ちの陰に隠れていて、測れる残りを持たない**。
+  1 本ごとの起動と実行は静かな机で撮った
+  [git-slots-windows-x64.md](git-slots-windows-x64.md) §操作 1 回の内訳 が正で、長い鎖も同じ
+  2 本(`rev-parse` → `cat-file`)—— [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能 の
+  「commit の diff は詳細一覧が status を知っているので probe 1 本が消える」はその鎖の頭のこと
+
 ## 表示に依らない計測(`--software`)
 
 同じ `ea004354` を棚の exe のまま software scene graph で撮った 2 座り(2026-09-06。各 較正 run +
@@ -406,7 +440,6 @@ fsmonitor 有効 0.72–0.76s / 無効 0.28–0.29s)。歩く量そのものは�
 
 | 何を | なぜ要る | 何が要るか |
 |---|---|---|
-| diff を開く 1 点の残り | 人が待つ最長の点。**ハイライトの第 2 段は測れた**(2026-09-13: `perf_diff_frame` の後に `perf_colour_frame` が 34–35ms 遅れて立つ = raw 121.2–126.0 → 色付き 155.3–161.3ms)ので、残るのは raw の中の `git show` の spawn と diff の組み立ての割り方 | app 側に段の印を足して撮る(P3-確認事項 §性能) |
 | ページを開く +45MB のヒープの中身 | Rust の 18.8 を引いた ~26MB(+189K ブロックの大半)が QML のどの部品か | 部品ごとのオブジェクト数(item tree の census を数に変える) |
 | 同時に走る `status` の本数と実時間 | 取得済み — 別 worktree の未コミット行の巡回は実行枠(`process::Slots`)の background 上限で走り、K = 1/2/4/8 の巡回幅・巡回中の応答・CPU・メモリと既定値の判断は [git-slots-windows-x64.md](git-slots-windows-x64.md) が持つ(corpus の隣に `cargo xtask corpus --copies 8` で建てた 8 コピーに対する実測) | **残り 1 つ**: ペインが 1 つのコピーを読んでいる間、そのコピーだけは行の集計とペインのファイル一覧(`RepoSession::read_carried_status`)で 2 度読まれる(どちらも同じ実行枠を通る)。一覧の側を集計へ相乗りさせられるかは、この読みが入る前の実測なので未測定 |
 

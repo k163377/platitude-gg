@@ -389,6 +389,17 @@ fn interaction(kept: &[Reading], software: bool) {
     if !details.is_empty() {
         println!("  details data: {} ms (request to drain)", spread(&details));
     }
+    let applied: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.details_applied_ms.clone())
+        .map(f)
+        .collect();
+    if !applied.is_empty() {
+        println!(
+            "  details rows: {} ms (request to the rows being in the model)",
+            spread(&applied)
+        );
+    }
     let rendered: Vec<f64> = kept
         .iter()
         .flat_map(|r| r.details_frame_ms.iter().copied())
@@ -398,6 +409,21 @@ fn interaction(kept: &[Reading], software: bool) {
             "  details frame: {} ms (handler to frame; excludes OS input delivery{})",
             spread(&rendered),
             not_the_display(software)
+        );
+    }
+    let read: Vec<f64> = kept.iter().flat_map(|r| r.diff_ms.clone()).map(f).collect();
+    if !read.is_empty() {
+        println!("  diff data   : {} ms (request to drain)", spread(&read));
+    }
+    let laid: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.diff_applied_ms.clone())
+        .map(f)
+        .collect();
+    if !laid.is_empty() {
+        println!(
+            "  diff rows   : {} ms (request to the rows being in the model)",
+            spread(&laid)
         );
     }
     let diff: Vec<f64> = kept

@@ -202,6 +202,29 @@ fn data_arrival_does_not_stand_in_for_a_rendered_response() {
 }
 
 #[test]
+fn a_diff_is_two_numbers_and_a_run_holding_one_of_them_is_not_a_measurement() {
+    let opts = options(&["--repo", ".", "--no-scroll"]);
+    let mut reading = unselected_reading();
+    for line in [
+        "perf_selection mode=first oid=abc",
+        "details request round trip elapsed_ms=50",
+        "perf_details_frame elapsed_ms=75",
+        "perf_complete selection=first details=true diff=true graph=false scrolled=false",
+    ] {
+        absorb(line, &mut reading);
+    }
+    absorb("perf_diff_frame elapsed_ms=110", &mut reading);
+    assert!(
+        missing(&reading, &opts)
+            .expect_err("the read behind the frame is missing")
+            .contains("round trip"),
+    );
+    absorb("diff request round trip elapsed_ms=60", &mut reading);
+    assert!(missing(&reading, &opts).is_ok());
+    assert_eq!(reading.diff_ms, vec![60]);
+}
+
+#[test]
 fn contradictory_or_empty_scenarios_are_rejected() {
     for args in [
         vec!["--no-open", "--runs", "0"],
