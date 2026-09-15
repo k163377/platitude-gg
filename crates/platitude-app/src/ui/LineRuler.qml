@@ -78,12 +78,20 @@ TextEdit {
             const cut = run.split(":")
             const from = Number(cut[0])
             const to = from + Number(cut[1])
+            // **A run past the end of the line is not this line's.** A row is handed its line and the runs on it
+            // one property at a time (`DiffRowDelegate`, `reuseItems`), so in between them a run can stand against
+            // a line that has none of its places — the row before's runs on the row after's blank line. Nothing is
+            // drawn for it and nothing is asked of the layout: the half still to arrive settles the washes again,
+            // and a place past the end is a rectangle at nowhere and a warning from Qt for each one asked.
+            if (to > ruler.length)
+                return []
             out = out.concat(twoWay ? ruler.walked(from, to)
                                     : [ruler.spanned(ruler.xOf(from), ruler.xOf(to))])
         }
         return out
     }
-    /// Where one place is drawn.
+    /// Where one place is drawn. **Only ever a place the line has** — a place past the end is a rectangle at
+    /// nowhere and a warning from Qt, so the runs are held against the line first (`rectsOf`).
     function xOf(at) { return ruler.positionToRectangle(at).x }
     /// Two places as the one rectangle between them, whichever way round they came.
     function spanned(a, b) { return { x: Math.min(a, b), w: Math.abs(b - a) } }

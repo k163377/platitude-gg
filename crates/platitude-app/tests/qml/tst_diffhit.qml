@@ -255,6 +255,18 @@ Item {
             compare(ruler.rectsOf(root.markupOf("abc"), false, "").length, 0)
         }
 
+        /// A row is handed its line and the runs on it one property at a time (`DiffRowDelegate`), so between the
+        /// two a run stands against a line that has none of its places — most often the line the row before was
+        /// drawn from, over a blank line. **That run is not this line's**: it washes nothing, and the places past
+        /// the end are never put to the layout (each one is a rectangle at nowhere and a warning from Qt).
+        function test_a_run_the_line_has_no_places_for_washes_nothing() {
+            compare(ruler.rectsOf("", false, "0:33").length, 0)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, "0:33").length, 0)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, "2:2").length, 0)
+            // The run that ends exactly at the line's end is the line's own, and is drawn.
+            compare(ruler.rectsOf(root.markupOf("abc"), false, "0:3").length, 1)
+        }
+
         /// A line that reads both ways has no order along it, so a run over one cannot be read off its two ends.
         /// **What the walk guarantees is that every place the run names is inside a piece** — the two ends can name
         /// the same x and would wash nothing at all, which is the failure this is here to stop.
