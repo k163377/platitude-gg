@@ -59,12 +59,12 @@ Item {
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
-                   || act === "wip-step") {
+                   || act === "wip-step" || act === "wip-step-shut") {
             // The file list's arrows: one file per press, the light and the diff moving together (規約 §diff のファイル一覧).
             // `-edge` walks further than the list is long, so the last presses are refused and it stops rather than
             // wrapping. The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a
             // file changed on both sides has a row under each.
-            if (act === "wip-step") {
+            if (act === "wip-step" || act === "wip-step-shut") {
                 const cut = arg.indexOf(":")
                 const head = cut > 0 ? arg.substring(0, cut) : ""
                 const named = head === "staged" || head === "unstaged"
@@ -80,6 +80,7 @@ Item {
                 fileStepTimer.path = arg
             }
             fileStepTimer.overrun = act === "changes-step-edge"
+            fileStepTimer.shut = act === "wip-step-shut"
             fileStepTimer.begin()
         } else if (act === "changes-fold" || act === "changes-unfold") {
             // The commit's CHANGES tree opened and shut by its folder rows. The argument is the directory, written the
@@ -303,34 +304,33 @@ Item {
         /// Whether the click has gone out, so the tick that follows is waiting for the diff rather than for the row.
         property bool clicked: false
         property bool stopped: false
+        /// Whether the run clicks the same row a second time before walking, which shuts the diff it opened
+        /// (`RepoPage.toggleDiff`). What that leaves is a list with a lit row and nothing being read — the arrows
+        /// move the lit row, so they have to go on working from it (デザイン規約 §diff のファイル一覧).
+        property bool shut: false
+        property bool closed: false
         function begin() {
             fileStepTimer.clicked = false
+            fileStepTimer.closed = false
             fileStepTimer.stopped = false
             fileStepTimer.steps = 1
             fileStepTimer.start()
         }
-        readonly property var walk:
-            fileStepTimer.pane === "wip" ? wipPane.filesWalk : detailsPane.filesWalk
-        onTriggered: {
-            if (!fileStepTimer.clicked) {
-                const row = fileStepTimer.walk.rowFor(fileStepTimer.bucket,
-                                                      fileStepTimer.path)
-                if (!row)
-                    return
-                fileStepTimer.clicked = true
-                if (fileStepTimer.pane === "wip")
-                    row.fileClicked(fileStepTimer.bucket, fileStepTimer.path,
-                                    worktreeModel.origOf(fileStepTimer.path),
-                                    Qt.NoModifier)
-                else
-                    row.activated("", fileStepTimer.path,
-                                  detailsModel.origOf(fileStepTimer.path))
-                return
-            }
-            // The click has to have landed before a step means anything: a walk with nothing being read is refused, and
-            // reading that as "the end" would go green on a click that never arrived.
-            if (!page.diffShown || page.diffPath !== fileStepTimer.path)
-                return
+        /// The click that goes out twice in this run, by the row's own signal both times.
+        function strike() {
+            const row = fileStepTimer.walk.rowFor(fileStepTimer.bucket, fileStepTimer.path)
+            if (!row)
+                return false
+            if (fileStepTimer.pane === "wip")
+                row.fileClicked(fileStepTimer.bucket, fileStepTimer.path,
+                                worktreeModel.origOf(fileStepTimer.path),
+                                Qt.NoModifier)
+            else
+                row.activated("", fileStepTimer.path,
+                              detailsModel.origOf(fileStepTimer.path))
+            return true
+        }
+        function walkNow() {
             fileStepTimer.stop()
             if (fileStepTimer.overrun)
                 fileStepTimer.steps = fileStepTimer.walk.view.count + 5
@@ -340,6 +340,32 @@ Item {
                     fileStepTimer.stopped = true
             }
             fileStepReport.start()
+        }
+        readonly property var walk:
+            fileStepTimer.pane === "wip" ? wipPane.filesWalk : detailsPane.filesWalk
+        onTriggered: {
+            if (!fileStepTimer.clicked) {
+                if (!fileStepTimer.strike())
+                    return
+                fileStepTimer.clicked = true
+                return
+            }
+            // The click has to have landed before a step means anything: a walk with nothing being read is refused, and
+            // reading that as "the end" would go green on a click that never arrived.
+            if (page.diffShown && page.diffPath === fileStepTimer.path) {
+                if (!fileStepTimer.shut) {
+                    fileStepTimer.walkNow()
+                    return
+                }
+                // The second click, on the row already being read. **Not before the read has landed** — a diff shut
+                // while it was still coming would be a run about a race rather than about the reader's second click.
+                if (!fileStepTimer.closed && diffPane.diffSettled())
+                    fileStepTimer.closed = fileStepTimer.strike()
+                return
+            }
+            // And the walk from the row the shut diff left lit, which is the whole of what this variant asks.
+            if (fileStepTimer.shut && fileStepTimer.closed && !page.diffShown)
+                fileStepTimer.walkNow()
         }
     }
     // Longer than the settle behind the walk (`keyStepSettleMs`), because what is read is the reading a hand coming off
@@ -364,7 +390,10 @@ Item {
                 + " moved=" + (page.diffPath !== fileStepTimer.path)
                 + " stopped=" + fileStepTimer.stopped
                 + " lit=" + (walk.litPath() === page.diffPath)
-                + " focused=" + walk.view.activeFocus)
+                + " focused=" + walk.view.activeFocus
+                // Last, so that the three walks that came before this one read the same line they always did: a
+                // `must_say` is a stretch of the line rather than a set of fields (`verify::verbs`).
+                + " shut=" + fileStepTimer.closed)
             driver.complete()
         }
     }

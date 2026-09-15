@@ -149,6 +149,21 @@ ColumnLayout {
     property int chosenCount: 0
     /// The row the next Shift-click reaches from.
     property int anchorRow: -1
+    /// The one chosen row, as `<bucket>:<path>`, and empty unless exactly one is — **what the arrows walk from when no
+    /// diff is open** (`FileRowWalk.standKey`). A click that closed the diff it had opened leaves its row lit, because
+    /// this light is the choice and a press still acts on it (デザイン規約 §diff のファイル一覧), so the arrows have to go
+    /// on moving it.
+    ///
+    /// **Held back while several are lit**: the arrows move *the* lit row and collapse the choice onto where they land
+    /// (`onStepped`), so with a whole Ctrl-clicked choice up there is no one row to name and a step would throw the
+    /// rest of it away. A diff being read names that row itself, and is what the walk sets off from whenever one is.
+    readonly property string soleChosen: {
+        if (wipPane.chosenCount !== 1)
+            return ""
+        for (const key in wipPane.chosenKeys)
+            return key
+        return ""
+    }
     function isChosen(bucket, path) {
         return wipPane.chosenKeys[bucket + ":" + path] === true
     }
@@ -241,6 +256,7 @@ ColumnLayout {
         }
         readBucket: wipPane.readBucket
         readPath: wipPane.readPath
+        standKey: wipPane.soleChosen
         onStepped: (bucket, path) => wipPane.chooseOnly(bucket, path)
         onLanded: (bucket, path, origPath) => wipPane.fileWalked(bucket, path, origPath)
     }

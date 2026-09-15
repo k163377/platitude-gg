@@ -23,6 +23,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=false lit=true focused=true",
     },
+    // And the same walk from a list whose diff has been shut by a second
+    // click on the row it was opened from. The light stays — it is the
+    // choice, and a press still acts on it (デザイン規約 §diff の
+    // ファイル一覧) — so the arrows have to go on moving it. `shut=true`
+    // says the second click landed, and `moved=true` that the walk set
+    // off with nothing being read: the two together are the bug this is
+    // cut for, where a lit row answered no arrow at all.
+    Verb {
+        name: "wip-step-shut",
+        when: &[],
+        plain: "moved=true stopped=false lit=true focused=true shut=true",
+    },
     // Escape over an open diff, with the hand already inside it. The
     // page's handler is the last thing an Escape nobody else claimed
     // reaches, and `took=true` is it claiming the key — without it the
