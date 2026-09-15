@@ -98,6 +98,20 @@ Item {
     /// nothing is selected, and a sampler that copies it without a prior selection guard photographs a stale card.
     readonly property bool cardSettled: page.selectedOid !== "" && detailsModel.shaHex === page.selectedOid
 
+    /// The graph row another working copy's uncommitted work stands on, or -1 while the graph holds none of it.
+    /// **Asked of the model**: a row off screen has no delegate to ask, and every one of these rows answers to the
+    /// same all-zero id, so the copy's own name is what tells them apart (`GraphModel.carriedName`).
+    ///
+    /// Named here rather than in one family: two of them stand on a copy before doing anything else, and a second
+    /// copy of the walk is a second answer to "which row is that copy's".
+    function rowOfCopy(name) {
+        for (let row = 0; row < graphModel.rowTotal; row++) {
+            if (graphModel.carriedName(row) === name)
+                return row
+        }
+        return -1
+    }
+
     /// Kicked off by the page once its models are attached: a verb that ran before them would act on a repository
     /// nothing has read yet.
     property bool claimed: false

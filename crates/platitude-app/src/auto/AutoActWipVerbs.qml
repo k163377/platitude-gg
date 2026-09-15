@@ -361,20 +361,11 @@ Item {
         property bool walked: false
         property bool moved: false
         property string leftPath: ""
-        /// The row of the copy the argument names, or -1 while the graph has none of it. Off the model, which is what
-        /// says whose a row is — a row off screen has no delegate to ask.
-        function rowOf(name) {
-            for (let row = 0; row < graphModel.rowTotal; row++) {
-                if (graphModel.carriedName(row) === name)
-                    return row
-            }
-            return -1
-        }
         onTriggered: {
             if (graphModel.finishCount === 0 || !workTree.loaded)
                 return
             if (!carriedReadTimer.asked) {
-                const row = carriedReadTimer.rowOf(Harness.autoActArg)
+                const row = driver.rowOfCopy(Harness.autoActArg)
                 if (row < 0)
                     return
                 // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞).
@@ -495,7 +486,7 @@ Item {
                 return
             if (!carriedStandTimer.asked) {
                 // The same road in as `carried-read`, down to the row taking its own decision (verify-ui §壊れない動詞).
-                const row = carriedReadTimer.rowOf(Harness.autoActArg)
+                const row = driver.rowOfCopy(Harness.autoActArg)
                 if (row < 0)
                     return
                 const item = graphPane.view.itemAtIndex(row)

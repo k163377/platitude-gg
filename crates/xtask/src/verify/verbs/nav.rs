@@ -211,9 +211,27 @@ pub(super) const TABLE: &[Verb] = &[
     // argument asked for (`-tree` keeps the tree, where row 0 is
     // the elided folder chain), `tip=` the shared instance's own
     // visible.
+    // The third pane is claimed by its words as well as its tip, and
+    // it is the only one of the three that needs to be. The rows there
+    // come from the model the sidebar shares, which folds by
+    // `<run>:<path>` and keeps the path itself beside it — one field in
+    // the list this row was written for, two in that one — so a folder
+    // row handed the fold key says `whole:src` everywhere it says a
+    // name, and the hover is the only place a path is spelled out at
+    // all (observed). `topic` is the copy whose one file is nested.
     Verb {
         name: "path-tip",
-        when: &[(Arg::Ends("-tree"), "tree=true tip=true")],
+        when: &[
+            (
+                Arg::Is("carried:topic-tree"),
+                "path_tip pane=carried tree=true tip=true text=src",
+            ),
+            (
+                Arg::Is("carried:topic"),
+                "path_tip pane=carried tree=false tip=true text=src/topic.txt",
+            ),
+            (Arg::Ends("-tree"), "tree=true tip=true"),
+        ],
         plain: "tree=false tip=true",
     },
     // And the same tooltip taken away: `copied=` is the whole of the

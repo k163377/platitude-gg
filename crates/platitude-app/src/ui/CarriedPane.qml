@@ -50,6 +50,11 @@ ColumnLayout {
     readonly property bool nameTipShown: nameSeat.ToolTip.visible
     /// Stands in for the pointer on the name, which headless cannot inject (verify-ui).
     property bool namePointedAt: false
+    /// The same stand-in for a file row's own hover, which says the whole path (`FileRowDelegate.pointedTipRow`).
+    /// -1 points at no row. **This list needs one of its own**: the pointer cannot be injected, and the path a row
+    /// names is the one thing in it the row works out rather than shows — a folder row here is handed a fold key
+    /// beside its path, and the two are one field in the list this row was written for.
+    property int pointedTipRow: -1
     /// How much of this pane's bottom edge is left bare for the corner text the page hangs there. **This pane lends
     /// the seat**, the same measurement and for the same reason the commit pane's does (`DetailsPane.bottomRoom`):
     /// nothing is pinned to its foot — what a reader can do with another copy's work is read it, so there is no
@@ -151,6 +156,7 @@ ColumnLayout {
         delegate: FileRowDelegate {
             listWidth: fileList.width
             menuStanding: carriedPane.menuStanding
+            pointedTipRow: carriedPane.pointedTipRow
             readPath: carriedPane.readPath
             // **What a row cannot read off this model under the commit list's names.** These rows are a
             // `NavSectionModel`'s, which spells the whole path `full`, packs a folder's fold into the change code,

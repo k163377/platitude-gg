@@ -27,8 +27,10 @@ Item {
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var worktreeModel: driver.worktreeModel
+    readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
+    readonly property var carriedPane: driver.carriedPane
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
@@ -49,11 +51,18 @@ Item {
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf in the flattened view, the folder chain in the tree (`-tree`). The argument
-            // picks the pane the way `corner` does.
+            // picks the pane the way `corner` does, with one more: `carried:<copy>` is another working copy's, which
+            // is named rather than numbered — its rows all answer to the same all-zero id (`driver.rowOfCopy`).
+            // **The tree's suffix is read off the whole argument**, so a copy whose own folder ends in `-tree` is
+            // read as the tree form of a copy without it; the presets hold no such name.
             const wantsTree = ("" + arg).endsWith("-tree")
             const pane = wantsTree ? ("" + arg).slice(0, -5) : arg
+            pathTipTimer.carried = pane.startsWith("carried:") ? pane.slice(8) : ""
             pathTipTimer.wipSide = pane === "" || pane === "wip"
-            if (pathTipTimer.wipSide) {
+            if (pathTipTimer.carried !== "") {
+                // The copy has to be stood on before its list exists at all, which is this timer's own first tick.
+                page.setWipTreeView(wantsTree)
+            } else if (pathTipTimer.wipSide) {
                 page.showWip()
                 worktreeModel.setTreeView(wantsTree)
             } else {
@@ -151,7 +160,25 @@ Item {
     SampleTimer {
         id: pathTipTimer
         property bool wipSide: true
+        /// The copy this run is pointing into, empty for the two panes of this window's own tree.
+        property string carried: ""
+        property bool stood: false
         onTriggered: {
+            if (pathTipTimer.carried !== "") {
+                if (!pathTipTimer.standOnCopy())
+                    return
+                // The copy's own files have to have arrived: until they do the pane holds this window's, and a row
+                // pointed at there would be the wrong tree's.
+                const files = page.wipUnstaged
+                if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
+                    return
+                if (carriedPane.view.count === 0)
+                    return
+                pathTipTimer.stop()
+                carriedPane.pointedTipRow = 0
+                pathTipReport.start()
+                return
+            }
             if (pathTipTimer.wipSide && worktreeModel.total === 0)
                 return
             if (!pathTipTimer.wipSide && !driver.cardSettled)
@@ -163,6 +190,23 @@ Item {
                 detailsPane.pointedTipRow = 0
             pathTipReport.start()
         }
+        /// Picks the copy's row, once, through the row's own press — the row's decision is the one taken
+        /// (verify-ui §壊れない動詞). Answers whether the pane is standing on it.
+        function standOnCopy() {
+            if (pathTipTimer.stood)
+                return true
+            if (graphModel.finishCount === 0 || !workTree.loaded)
+                return false
+            const row = driver.rowOfCopy(pathTipTimer.carried)
+            if (row < 0)
+                return false
+            const item = graphPane.view.itemAtIndex(row)
+            if (item === null)
+                return false
+            item.leftClick(0, Qt.NoModifier)
+            pathTipTimer.stood = true
+            return false
+        }
     }
     SampleTimer {
         id: pathTipReport
@@ -172,8 +216,10 @@ Item {
                 return
             pathTipReport.stop()
             Harness.report("path_tip pane="
-                + (pathTipTimer.wipSide ? "wip" : "details")
-                + " tree=" + (pathTipTimer.wipSide ? worktreeModel.treeView : detailsModel.treeView)
+                + (pathTipTimer.carried !== "" ? "carried"
+                   : pathTipTimer.wipSide ? "wip" : "details")
+                + " tree=" + (pathTipTimer.carried !== "" ? page.wipUnstaged.treeView
+                              : pathTipTimer.wipSide ? worktreeModel.treeView : detailsModel.treeView)
                 + " tip=" + tip.visible
                 + " text=" + tip.text)
             driver.complete()
