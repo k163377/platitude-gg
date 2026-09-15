@@ -4,6 +4,7 @@
 use crate::support::TestRepo;
 use crate::support::session::{opened, write_result};
 use platitude_core::OperationKind;
+use platitude_core::session::SessionEvent;
 
 /// A move that fails for a reason a stash cannot help with — a name git
 /// rejects — stops there: nothing is stashed, so the uncommitted work is
@@ -524,4 +525,65 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
         "and the pick it would have undone is still standing"
     );
     session.close();
+}
+
+/// **A carry whose session closes half-way finishes anyway**, so the work
+/// it emptied the tree of is put back rather than left in the stash.
+///
+/// The close cancels the reads and gives up the tree's place in the
+/// order, but a local write is not on the token it cancels
+/// (`session::write`: `Lane::Local` is run under one of its own) and the
+/// loop drains its queue after the cancellation rather than dropping it.
+/// The tab that closes mid-write is the reachable way in, and the quit
+/// gate is the other end of the same rule (rules-refs/core.md §書き込み
+/// レーン) — this is that guarantee read from the repository, which is the
+/// only place it can be read from once nobody is watching the events.
+///
+/// Held at the stash on purpose: between it and the `switch` is the one
+/// stretch where a write that stopped would leave the work somewhere
+/// other than the tree (P3-確認事項 §core, logged there as a cancel
+/// window before the writes were let run on).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("both.txt", "l1\nl2\nl3\nl4\nl5\n", "root");
+    repo.git(&["switch", "-c", "other"]);
+    repo.commit_file("both.txt", "l1-THEIRS\nl2\nl3\nl4\nl5\n", "other");
+    repo.git(&["switch", "main"]);
+    repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
+
+    let (sink, session) = opened(&repo).await;
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    sink.hook_once(reached_the_stash, move || {
+        held.recv().expect("the test releases the carry");
+    });
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+        name: "other".into(),
+    });
+    sink.wait_for("the carry reaching its stash", |events| {
+        events.iter().any(reached_the_stash).then_some(())
+    })
+    .await;
+    // The tab goes while the work is in the stash and the tree is empty.
+    session.close();
+    release.send(()).expect("the carry is released");
+
+    // The write runs on to its end and answers there, closed or not.
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
+    assert!(
+        repo.git(&["stash", "list"]).is_empty(),
+        "nothing was left in the stash for anybody to find later"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
+        "l1-THEIRS\nl2\nl3\nl4\nl5-MINE\n",
+        "and the work is back in the tree the move landed in"
+    );
+}
+
+/// The stash a carry makes on its way round, as the sink announces it.
+fn reached_the_stash(event: &SessionEvent) -> bool {
+    matches!(event, SessionEvent::CommandStarted { display, .. }
+        if display.starts_with("git stash push"))
 }
