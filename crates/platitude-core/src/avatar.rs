@@ -64,6 +64,68 @@ pub enum AvatarError {
     NoStore,
 }
 
+/// A refusal as the screen is written from it (app-ui.md「Rust に文言を
+/// 置かない」): which one it is, the numbers its sentence takes, and
+/// whoever outside wrote a line of their own.
+///
+/// **The sentences above are the log's.** They reach a screen through
+/// this instead, where the words are `qsTr`'d like every other word in
+/// the application — six of the seven are this end's own writing and had
+/// no business being in Rust at all. The two that wrap an `io::Error` are
+/// the exception in the other direction: the operating system's words
+/// are carried across untouched, under a frame the UI writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AvatarRefusal {
+    pub kind: &'static str,
+    /// The numbers the sentence takes, in the order it takes them.
+    pub facts: Vec<String>,
+    /// What the operating system said, where the failure is one it made.
+    /// Empty for the rest, which is how the screen tells the two apart.
+    pub said: String,
+}
+
+impl AvatarError {
+    /// This refusal as the screen reads it.
+    #[must_use]
+    pub fn refusal(&self) -> AvatarRefusal {
+        let plain = |kind: &'static str| AvatarRefusal {
+            kind,
+            facts: Vec::new(),
+            said: String::new(),
+        };
+        match self {
+            Self::TooLarge => AvatarRefusal {
+                kind: "too-large",
+                facts: vec![(MAX_BYTES / (1024 * 1024)).to_string()],
+                said: String::new(),
+            },
+            Self::Picture(crate::picture::PictureError::Unreadable) => plain("unreadable"),
+            Self::Picture(crate::picture::PictureError::TooManyPixels { width, height }) => {
+                AvatarRefusal {
+                    kind: "too-many-pixels",
+                    facts: vec![
+                        format!("{width}x{height}"),
+                        (crate::picture::MAX_PIXELS / 1_000_000).to_string(),
+                    ],
+                    said: String::new(),
+                }
+            }
+            Self::Picture(crate::picture::PictureError::Unstorable) => plain("unstorable"),
+            Self::Read { source, .. } => AvatarRefusal {
+                kind: "read",
+                facts: Vec::new(),
+                said: source.to_string(),
+            },
+            Self::Write { source, .. } => AvatarRefusal {
+                kind: "write",
+                facts: Vec::new(),
+                said: source.to_string(),
+            },
+            Self::NoStore => plain("no-store"),
+        }
+    }
+}
+
 /// The key a picture is filed under.
 ///
 /// One function so the log parser, the details pane and the store cannot

@@ -104,6 +104,39 @@ QtObject {
         }
     }
 
+    /// Why a picture was not filed against an address, from the kind core answered with
+    /// (`avatar::AvatarRefusal`). `facts` carries the numbers the sentence takes, U+001F-joined in the order it
+    /// takes them; `said` is the operating system's own line, for the two failures it made and empty for the rest.
+    ///
+    /// **Five of the seven are this application's own refusals**, and their words belong here rather than in a Rust
+    /// string like every other word on screen (app-ui.md「Rust に文言を置かない」). The other two are the reverse
+    /// case: what the operating system said is carried across untouched, under a frame written here — the same
+    /// division a report makes between the heading and whoever wrote the line under it (デザイン規約 §長さ).
+    ///
+    /// The size is named on the one about pixels because the ceiling a reader was told about is the *file* size:
+    /// without the dimensions, a two-megabyte file being refused has no explanation at all.
+    function avatarFailure(kind, facts, said) {
+        const numbers = facts === "" ? [] : facts.split(String.fromCharCode(31))
+        switch (kind) {
+        case "too-large":
+            return qsTr("This file is larger than %1 MB.").arg(numbers[0])
+        case "unreadable":
+            return qsTr("This file is not a PNG or a JPEG that can be read.")
+        case "too-many-pixels":
+            return qsTr("This file is %1, past the %2 megapixels this can take.")
+                     .arg(numbers[0]).arg(numbers[1])
+        case "unstorable":
+            return qsTr("The picture could not be stored.")
+        case "no-store":
+            return qsTr("There is nowhere to keep avatars on this machine.")
+        case "read":
+            return qsTr("This file could not be read.") + (said === "" ? "" : "\n" + said)
+        case "write":
+            return qsTr("The picture could not be written.") + (said === "" ? "" : "\n" + said)
+        default: return ""
+        }
+    }
+
     /// What did not happen, for a write that did not happen and has something to say for itself — from the kind core
     /// answered with (`delete` / `update` / `outdated` / `commit` — `RepoTab.writeReportKind`). Why is whoever said no
     /// to say, and the bar quotes it underneath (デザイン規約 §答えの要らない報せ).

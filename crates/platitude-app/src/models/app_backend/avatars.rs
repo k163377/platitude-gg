@@ -16,17 +16,31 @@ impl AppBackend {
     /// hold instead (デザイン規約 §長押し).
     pub(super) fn file_avatar(&mut self, email: &str, name: &str, file_url: &str) {
         let source = crate::urlpath::file_url_to_path(file_url);
-        self.avatar_error =
-            Hub::with(|hub| hub.assign_avatar(email, name, &source)).unwrap_or_default();
-        if !self.avatar_error.is_empty() {
-            tracing::warn!(error = %self.avatar_error, "avatar not assigned");
-        }
+        let refused = Hub::with(|hub| hub.assign_avatar(email, name, &source)).flatten();
+        // The three halves the card's line is written from: which refusal
+        // it was, the numbers its sentence takes, and the operating
+        // system's own words where the failure is one it made. The words
+        // themselves are the screen's (`Words.avatarFailure`) —
+        // app-ui.md「Rust に文言を置かない」.
+        let (kind, facts, said) = match refused {
+            Some(refusal) => (
+                refusal.kind.to_string(),
+                refusal.facts.join("\u{1f}"),
+                refusal.said,
+            ),
+            None => (String::new(), String::new(), String::new()),
+        };
+        self.avatar_error_kind = kind;
+        self.avatar_error_facts = facts;
+        self.avatar_error_said = said;
         self.reload_avatars();
     }
 
     pub(super) fn unfile_avatar(&mut self, email: &str) {
         Hub::with(|hub| hub.remove_avatar(email));
-        self.avatar_error.clear();
+        self.avatar_error_kind.clear();
+        self.avatar_error_facts.clear();
+        self.avatar_error_said.clear();
         self.reload_avatars();
     }
 

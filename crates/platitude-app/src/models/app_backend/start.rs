@@ -132,7 +132,9 @@ impl Default for AppBackend {
             git_path_error: String::new(),
             git_path_in_use: Hub::with(|hub| hub.git_program().to_string()).unwrap_or_default(),
             avatars: packed_avatars(),
-            avatar_error: String::new(),
+            avatar_error_kind: String::new(),
+            avatar_error_facts: String::new(),
+            avatar_error_said: String::new(),
             avatar_patterns: platitude_core::avatar::EXTENSIONS
                 .iter()
                 .map(|e| format!("*.{e}"))

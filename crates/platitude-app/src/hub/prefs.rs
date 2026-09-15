@@ -158,16 +158,28 @@ impl Hub {
     }
 
     /// Files a picture against an address and writes the settings out.
-    /// Reports git-style: the error is the message, empty means it worked.
-    pub fn assign_avatar(&mut self, email: &str, name: &str, source: &std::path::Path) -> String {
+    ///
+    /// Answers with the refusal as the screen is written from it, or
+    /// `None` where it worked (`avatar::AvatarRefusal` —
+    /// app-ui.md「Rust に文言を置かない」).
+    pub fn assign_avatar(
+        &mut self,
+        email: &str,
+        name: &str,
+        source: &std::path::Path,
+    ) -> Option<platitude_core::avatar::AvatarRefusal> {
         let Some(dir) = self.store.avatars_dir() else {
-            return platitude_core::avatar::AvatarError::NoStore.to_string();
+            return Some(platitude_core::avatar::AvatarError::NoStore.refusal());
         };
         if let Err(error) = self.settings.avatars.assign(&dir, email, name, source) {
-            return error.to_string();
+            // git's own words for what happened go to the log, where
+            // every other failure's do; the screen is written from the
+            // kind beside them.
+            tracing::warn!(%error, "avatar not assigned");
+            return Some(error.refusal());
         }
         self.save_settings_now();
-        String::new()
+        None
     }
 
     /// Takes the picture off an address. The person's own file is untouched.

@@ -159,8 +159,18 @@ impl AppBackend {
     );
     qproperty!("avatars", Member = avatars, Notify = avatars_changed);
     qproperty!(
-        "avatarError",
-        Member = avatar_error,
+        "avatarErrorKind",
+        Member = avatar_error_kind,
+        Notify = avatars_changed
+    );
+    qproperty!(
+        "avatarErrorFacts",
+        Member = avatar_error_facts,
+        Notify = avatars_changed
+    );
+    qproperty!(
+        "avatarErrorSaid",
+        Member = avatar_error_said,
         Notify = avatars_changed
     );
     qproperty!("avatarPatterns", Member = avatar_patterns, Constant);

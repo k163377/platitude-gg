@@ -187,8 +187,14 @@ pub struct AppBackend {
     /// Assigned pictures, packed one per record: address, name, URL.
     /// The settings list is the only reader, and it is a handful of rows.
     avatars: String,
-    /// git-style: empty means the last assignment worked.
-    avatar_error: String,
+    /// How the last assignment was refused, as the card writes its line
+    /// from it: which refusal it was, the numbers that sentence takes
+    /// (U+001F-joined), and the operating system's own words where the
+    /// failure is one it made. All three empty means it worked
+    /// (`avatar::AvatarRefusal`, `Words.avatarFailure`).
+    avatar_error_kind: String,
+    avatar_error_facts: String,
+    avatar_error_said: String,
     /// The patterns the picker offers, built from the kinds the store
     /// accepts so the dialog and the store cannot drift apart. Patterns
     /// only: the word in front of them is the dialog's, and words live in

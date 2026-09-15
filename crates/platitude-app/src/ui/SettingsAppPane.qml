@@ -657,11 +657,15 @@ ColumnLayout {
         }
         Label {
             Layout.fillWidth: true
-            visible: AppBackend.avatarError !== ""
+            visible: AppBackend.avatarErrorKind !== ""
             wrapMode: Text.Wrap
             color: Theme.danger
             font.pixelSize: Theme.fontSm
-            text: AppBackend.avatarError
+            // The words are this side's, off the kind core answered with — the numbers it takes come with it, and
+            // the two failures the operating system made carry its own line under ours (`Words.avatarFailure`).
+            text: Words.avatarFailure(AppBackend.avatarErrorKind,
+                                      AppBackend.avatarErrorFacts,
+                                      AppBackend.avatarErrorSaid)
         }
     }
 
