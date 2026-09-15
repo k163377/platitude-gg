@@ -89,6 +89,22 @@ impl Said {
 /// microseconds of the spawn, and a stream's own start is what the times
 /// off it are wanted against.
 pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
+    collect_marking(reader, std::sync::Arc::default(), |_| false)
+}
+
+/// The same, raising `mark` the moment a line `when` recognises arrives.
+///
+/// **A wait that can end on what the app said rather than on the clock.**
+/// The lines are read on this thread while the parent waits on another,
+/// so a run whose verdict is already decided — the QML that would not
+/// load, which leaves an app with no window sitting in its event loop
+/// until the ceiling — is ended when it is decided rather than paid for
+/// in full (`verify::child`).
+pub(crate) fn collect_marking<R: Read + Send + 'static>(
+    reader: R,
+    mark: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    when: fn(&str) -> bool,
+) -> std::thread::JoinHandle<Said> {
     std::thread::spawn(move || {
         // waits(measured): the stream's own clock, which the time of every line is
         // read off (`Said::at`) — worded into a verdict, never deciding one
@@ -98,6 +114,9 @@ pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinH
             at: Vec::new(),
         };
         for line in lines(reader) {
+            if when(&line) {
+                mark.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
             said.lines.push(line);
             said.at.push(started.elapsed());
         }
@@ -138,6 +157,38 @@ mod tests {
         // bytes Qt chose are past undoing, the ASCII around them is not.
         assert!(read[1].starts_with("qml: here"), "{read:?}");
         assert_eq!(read[2], "screenshot saved=true");
+    }
+
+    /// The mark is raised as the line goes by, not once the stream ends:
+    /// what it is for is a wait that can end while the app is still
+    /// running (`verify::child`).
+    #[test]
+    fn a_watched_line_raises_its_mark_and_the_rest_still_arrives() {
+        let mark = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let said = super::collect_marking(
+            std::io::Cursor::new(b"one\nthe needle\ntwo".to_vec()),
+            std::sync::Arc::clone(&mark),
+            |line| line.contains("needle"),
+        )
+        .join()
+        .expect("the reader to finish");
+
+        assert!(mark.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(said.lines.len(), 3, "{:?}", said.lines);
+    }
+
+    #[test]
+    fn a_stream_with_nothing_to_watch_for_raises_nothing() {
+        let mark = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        super::collect_marking(
+            std::io::Cursor::new(b"one\ntwo\n".to_vec()),
+            std::sync::Arc::clone(&mark),
+            |line| line.contains("needle"),
+        )
+        .join()
+        .expect("the reader to finish");
+
+        assert!(!mark.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]

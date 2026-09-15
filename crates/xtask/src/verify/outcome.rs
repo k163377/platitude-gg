@@ -23,6 +23,16 @@ pub(super) struct Outcome {
     pub(super) watchdog_expired: bool,
     pub(super) write_failures: usize,
     pub(super) allow_write_failure: bool,
+    /// Whether the run said its own write barrier's contract broke
+    /// (`AutoActDriver.sayBroken`). **No flag excuses it and no picture
+    /// answers it**: the harness is saying the run stopped being about the
+    /// write it was pressed for, so the shot is of some other page —
+    /// `--allow-write-failure` is about git refusing a write the verb
+    /// meant to make, which is a different sentence.
+    ///
+    /// The run ends itself the moment it says so, rather than spending the
+    /// ceiling in silence, so this line is the whole of the evidence.
+    pub(super) contract_broken: bool,
     /// Whether the app was refused the settings it was handed *and
     /// nothing staged that* — the two verbs whose subject is a held
     /// store are not counted here ([`super::child`]).
@@ -58,6 +68,7 @@ impl Outcome {
             && !self.timed_out
             && !self.watchdog_expired
             && !self.write_sank_it()
+            && !self.contract_broken
             && !self.store_refused
             && (self.must_say.is_none() || self.said)
             && self.held_save_landed.is_none_or(|landed| landed)
@@ -97,6 +108,10 @@ pub(super) fn judge(
             .filter(|l| l.contains("write failed"))
             .count(),
         allow_write_failure: opts.allow_write_failure,
+        contract_broken: err_lines
+            .iter()
+            .chain(out_lines.iter())
+            .any(|l| l.contains("write_contract ")),
         // ASCII only, and so readable on both sides: a Windows Qt writes
         // its log lines in the local code page (verify-ui skill).
         store_refused: !super::child::stages_a_held_store(&opts.verb)
@@ -204,11 +219,16 @@ pub(super) fn announce(
             (None, false) => String::new(),
         },
     );
+    // A run the parent stopped waiting on says why itself, and the
+    // ceiling's diagnostics are about a run whose reason is unknown.
+    if let Some(why) = super::wedge::gave_up_early(ran) {
+        println!("  {why}");
+    }
     // A run ended by a ceiling is the one that says nothing for itself:
     // the app's own account of where it stood, and what only the parent
     // can see about it, are the whole of what the next occurrence is read
     // from ([`super::wedge`]).
-    if super::wedge::at_a_ceiling(ran) {
+    else if super::wedge::at_a_ceiling(ran) {
         for line in super::wedge::account(shot_dir, ran, &shots) {
             println!("{line}");
         }
@@ -263,6 +283,14 @@ pub(super) fn announce(
              --allow-write-failure."
         );
     }
+    if outcome.contract_broken {
+        println!(
+            "  the harness broke its own write barrier's contract — the `write_contract` line \
+             above says which press and what it was armed over. The run ended there rather \
+             than at the ceiling, and its picture is of whatever page it had got to; no flag \
+             excuses this one, because the run stopped being about the write it was pressed for."
+        );
+    }
     if outcome.store_refused {
         println!(
             "  the settings this run was handed were already held, so it opened the window \
@@ -292,11 +320,35 @@ mod tests {
         watchdog_expired: false,
         write_failures: 0,
         allow_write_failure: false,
+        contract_broken: false,
         store_refused: false,
         must_say: None,
         said: true,
         held_save_landed: None,
     };
+
+    /// **The harness saying its own barrier broke is a red nothing
+    /// excuses.** `--allow-write-failure` is about git refusing a write
+    /// the verb meant to make; this is the run saying it stopped being
+    /// about the write it was pressed for, and the picture it took is of
+    /// some other page.
+    #[test]
+    fn a_broken_contract_fails_the_run_whatever_else_it_did() {
+        let broken = Outcome {
+            contract_broken: true,
+            ..WELL
+        };
+        assert!(WELL.passed(), "the same run otherwise");
+        assert!(!broken.passed());
+        assert!(
+            !Outcome {
+                allow_write_failure: true,
+                ..broken
+            }
+            .passed(),
+            "and the flag for a refused write does not reach it"
+        );
+    }
 
     /// The witness on disk is the verdict for the one verb that has it:
     /// a run that printed every line it should have and left the run's
@@ -407,6 +459,7 @@ mod tests {
             quiet_for: None,
             reaped: None,
             looked: Vec::new(),
+            gave_up: None,
         }
     }
 

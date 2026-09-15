@@ -78,7 +78,28 @@ pub(super) struct Ran {
     /// reaped at the ceiling; empty for one that ended itself
     /// (`super::look::look_at`).
     pub(super) looked: Vec<String>,
+    /// Why the parent stopped waiting before the ceiling, where it did.
+    /// `None` for every run that was let go to the end — which is every
+    /// run whose reason for stopping is not already known.
+    pub(super) gave_up: Option<String>,
 }
+
+/// What Qt writes when its engine could not build the file it was handed
+/// (`qqmlapplicationengine.cpp`, v6.10.3: `qWarning() <<
+/// "QQmlApplicationEngine failed to load component"`, and the same with
+/// `create` where the file parsed but its root would not build). The
+/// errors themselves follow on the lines after it; `rootObjects()` is
+/// left empty either way, so nothing is coming.
+///
+/// **ASCII only, and so readable on both sides**: a Windows Qt writes its
+/// log lines in the local code page (verify-ui skill).
+fn qml_refused(line: &str) -> bool {
+    line.contains("QQmlApplicationEngine failed to load component")
+        || line.contains("QQmlApplicationEngine failed to create component")
+}
+
+const QML_REFUSED_ACCOUNT: &str = "the app said its QML would not load, so nothing was waiting to be photographed — \
+     the lines above are Qt's own account of it";
 
 /// Starts the app, waits it out, and answers with everything it said.
 pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
@@ -102,10 +123,25 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     // (`crate::budget::child_started`). Silent under a gate, whose steps
     // say it through the ticket they were handed.
     crate::budget::child_started(child.id(), &app);
-    let stdout = child.stdout.take().map(crate::app_out::collect);
-    let stderr = child.stderr.take().map(crate::app_out::collect);
+    // **The one failure the parent can end the wait on.** A QML file that
+    // will not load leaves an application with no window at all, sitting
+    // in its event loop until the ceiling — and `gate::verbs` runs the
+    // verbs of such a tree one at a time until one comes back green, so
+    // every one of them pays the full watchdog (P3-確認事項). Qt says so
+    // itself the moment it happens, and the run is already decided by
+    // then: there is no window to photograph and no verb to run.
+    let unloadable = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    fn watch<R: std::io::Read + Send + 'static>(
+        pipe: Option<R>,
+        mark: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Option<std::thread::JoinHandle<crate::app_out::Said>> {
+        pipe.map(|r| crate::app_out::collect_marking(r, std::sync::Arc::clone(mark), qml_refused))
+    }
+    let stdout = watch(child.stdout.take(), &unloadable);
+    let stderr = watch(child.stderr.take(), &unloadable);
 
     let mut timed_out = false;
+    let mut gave_up = None;
     let mut held_at = None;
     let mut reaped = None;
     let mut looked = Vec::new();
@@ -122,6 +158,17 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         let held = ordered.filter(|station| {
             super::wedge::last_station(start.shot_dir).as_deref() == Some(*station)
         });
+        // Nothing left to wait for: no window was built, so no verb will
+        // run and no picture will be taken. Ended here rather than at the
+        // ceiling, and said in its own words — the diagnostics a wedge
+        // takes are about a run whose reason is unknown, and this one's
+        // is in the lines the app already wrote.
+        if unloadable.load(std::sync::atomic::Ordering::SeqCst) {
+            gave_up = Some(QML_REFUSED_ACCOUNT.to_string());
+            let (under, ended) = crate::reap::reap(&mut child);
+            reaped = Some(under.line());
+            break ended;
+        }
         if held.is_none() && wait.look_again("its exit").is_ok() {
             continue;
         }
@@ -177,6 +224,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         quiet_for: spoke_at.map(|at| elapsed.saturating_sub(at)),
         reaped,
         looked,
+        gave_up,
     })
 }
 

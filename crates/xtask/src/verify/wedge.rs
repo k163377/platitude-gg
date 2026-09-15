@@ -77,6 +77,13 @@ pub(super) fn at_a_ceiling(ran: &super::child::Ran) -> bool {
     ran.timed_out || ran.status.and_then(|s| s.code()) == Some(WEDGED_EXIT)
 }
 
+/// Whether the parent stopped waiting on something the app said rather
+/// than on the clock — a run whose reason is already known, and whose
+/// account is that reason rather than the ceiling's diagnostics.
+pub(super) fn gave_up_early(ran: &super::child::Ran) -> Option<&str> {
+    ran.gave_up.as_deref()
+}
+
 /// Everything the parent can still say about a run that stopped
 /// answering, as the lines to print under the verdict.
 pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf]) -> Vec<String> {
@@ -499,6 +506,7 @@ mod tests {
             quiet_for: Some(Duration::from_secs(138)),
             reaped: None,
             looked: Vec::new(),
+            gave_up: None,
         }
     }
 
