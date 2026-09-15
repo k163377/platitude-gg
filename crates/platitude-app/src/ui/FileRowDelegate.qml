@@ -14,15 +14,33 @@ Item {
 
     readonly property string changeText: model.change ?? ""
     readonly property string nameText: model.name ?? ""
-    readonly property string pathText: model.path ?? ""
+    /// The whole path — what a diff is asked for by, what the hover says, and the name the walk over this list finds a
+    /// row by. **Asked as its own question**, the way `NameCell.folded` is and for the same reason: the two models
+    /// that hang these rows do not spell it alike. A commit's changed files spell it `path`
+    /// (`models::details::FileItem`), which is the answer below; a working copy's spell it `full`
+    /// (`models::nav::Role`), so the pane showing one says so.
+    ///
+    /// **A role this model does not answer is not an error** — it reads back `undefined`, says nothing about it, and
+    /// leaves every row holding the same empty string. Two of those match, so the whole list lights up the moment
+    /// nothing is being read, and none of it lights while something is (observed on the carried pane).
+    property string pathText: model.path ?? ""
+    /// Which side of the index this row's bytes are on, empty for a commit's changed files — those sit in no bucket.
+    /// A working copy's rows carry one (`Bucket::routing_of`), and it is half of what addresses the file: the page
+    /// opens the diff by the pair.
+    property string bucket: ""
+    /// What a folder row folds by. **Not always the path above**: a commit's changed files keep one field for both
+    /// (`models::details::FileItem.path`), which is the answer here; a working copy's model folds by `<run>:<path>`
+    /// and keeps the path itself beside it, so a pane on that one says which is which. A file row never folds.
+    property string foldKey: fileRow.pathText
     readonly property string origPathText: model.orig_path ?? ""
     /// The same source written the way this row writes names — what the row shows. The one above stays whole: that one
     /// addresses a diff.
     readonly property string origNameText: model.orig_name ?? ""
     readonly property bool isFolder: (model.folder ?? false) === true
-    /// A shut folder row. This list keeps the answer in a field of its own, where the sidebar's packs it into the
-    /// change code (`NameCell.folded`).
-    readonly property bool isFolded: (model.collapsed ?? false) === true
+    /// A shut folder row. The commit's list keeps the answer in a field of its own, which is the answer below; the
+    /// sidebar's model packs it into the change code, so a pane on that one says so (`NameCell.folded`, which is
+    /// asked the same way and for the same reason).
+    property bool isFolded: (model.collapsed ?? false) === true
     /// The path the middle pane is reading, handed down by the pane — one copy there rather than one per row. A folder
     /// is never it: a folder has no diff, and its own path is the fold key.
     property string readPath: ""
@@ -50,6 +68,16 @@ Item {
 
     signal activated(string bucket, string path, string origPath)
     signal folderToggled(string key)
+
+    /// What a press on this row does — a folder folds, a file is read. **The handler below is one line and this is the
+    /// whole of its body**, because this is also the door a headless run comes in by: a run handed the path by the
+    /// model beside the row would go green with the row itself reading nothing at all (verify-ui §壊れない動詞).
+    function press() {
+        if (fileRow.isFolder)
+            fileRow.folderToggled(fileRow.foldKey)
+        else
+            fileRow.activated(fileRow.bucket, fileRow.pathText, fileRow.origPathText)
+    }
 
     width: listWidth
     height: Theme.rowHeight
@@ -89,12 +117,7 @@ Item {
         id: fileMouse
         anchors.fill: parent
         hoverEnabled: true
-        onClicked: {
-            if (fileRow.isFolder)
-                fileRow.folderToggled(fileRow.pathText)
-            else
-                fileRow.activated("", fileRow.pathText, fileRow.origPathText)
-        }
+        onClicked: fileRow.press()
     }
     // Hover says the path, whatever the row shows and however wide the pane is (デザイン規約 §hover のツールチップ). Asking
     // whether the row had already said it — tree leaf against paths view, and either against what the pane elided —

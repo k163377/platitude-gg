@@ -50,6 +50,12 @@ ColumnLayout {
     readonly property bool nameTipShown: nameSeat.ToolTip.visible
     /// Stands in for the pointer on the name, which headless cannot inject (verify-ui).
     property bool namePointedAt: false
+    /// How much of this pane's bottom edge is left bare for the corner text the page hangs there. **This pane lends
+    /// the seat**, the same measurement and for the same reason the commit pane's does (`DetailsPane.bottomRoom`):
+    /// nothing is pinned to its foot — what a reader can do with another copy's work is read it, so there is no
+    /// button down there to be drawn across. The working tree's pane is the one that never lends it.
+    readonly property real bottomRoom: carriedPane.height - fileList.y
+        - Math.max(0, Math.min(fileList.height, fileList.originY + fileList.contentHeight - fileList.contentY))
 
     spacing: 0
 
@@ -146,6 +152,18 @@ ColumnLayout {
             listWidth: fileList.width
             menuStanding: carriedPane.menuStanding
             readPath: carriedPane.readPath
+            // **What a row cannot read off this model under the commit list's names.** These rows are a
+            // `NavSectionModel`'s, which spells the whole path `full`, packs a folder's fold into the change code,
+            // and is the only one of the two that carries a bucket at all (`models::nav::Role`) — and a role asked
+            // for under a name the model does not answer comes back empty without a word said about it.
+            //
+            // **A folder row is the one that needs both**: this model folds by `<run>:<path>` and keeps the path
+            // itself in the slot a rename would use, so the fold key and the name the hover says are two different
+            // strings here (`NavItemDelegate.hoverText` reads the pair the same way for the working tree's list).
+            pathText: model.folder === true ? model.orig_path : model.full
+            foldKey: model.full
+            isFolded: model.change === "FOLDED"
+            bucket: model.bucket
             onActivated: (bucket, path, origPath) => {
                 fileList.forceActiveFocus()
                 carriedPane.fileActivated(bucket, path, origPath)

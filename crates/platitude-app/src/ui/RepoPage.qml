@@ -1913,7 +1913,11 @@ FocusScope {
         // The list's light names the file being read. A click had already made this row the whole of the choice, so
         // what this catches is the pane moving itself — the commit's list needs no such line, its light *is* the path
         // being read (`DetailsPane.readPath`).
-        if (kind !== "commit")
+        //
+        // **Only this window's own tree has such a choice.** The file being read may be another copy's, and that
+        // pane's light is the reading alone; picking here would put this tree's own list on a path chosen in a tree
+        // nobody asked about — and that choice is what a press acts on (`WipPane.readOne`).
+        if (kind !== "commit" && page.wipWritable)
             wipPane.readOne(kind, path)
         if (kind === "commit")
             page.askCommitDiff(path, origPath)
@@ -3322,8 +3326,13 @@ FocusScope {
                         // corner's seat (§コミットメッセージの 2 つの枠「ペインの底は空かない」). Said through the
                         // corner's own property — a `visible` here replaces the one it draws itself by.
                         offered: !page.planActive
-                        // Only one of the two panes is on screen at a time, and each measures its own file list.
-                        roomLeft: page.wipShown ? wipPane.bottomRoom : detailsPane.bottomRoom
+                        // Only one of the three panes is on screen at a time, and each measures its own file list.
+                        // **The carried copy's is asked for its own room** rather than counted as the working tree:
+                        // the tree's pane never lends the corner (its foot is the commit button's), and a carried
+                        // pane read through that answer left every reader of another copy's work with no version at
+                        // all.
+                        roomLeft: !page.wipShown ? detailsPane.bottomRoom
+                                : page.wipWritable ? wipPane.bottomRoom : carriedPane.bottomRoom
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceXs
