@@ -441,7 +441,7 @@ fsmonitor 有効 0.72–0.76s / 無効 0.28–0.29s)。歩く量そのものは�
 | 何を | なぜ要る | 何が要るか |
 |---|---|---|
 | ページを開く +45MB のヒープの中身 | Rust の 18.8 を引いた ~26MB(+189K ブロックの大半)が QML のどの部品か | 部品ごとのオブジェクト数(item tree の census を数に変える) |
-| 同時に走る `status` の本数と実時間 | 取得済み — 別 worktree の未コミット行の巡回は実行枠(`process::Slots`)の background 上限で走り、K = 1/2/4/8 の巡回幅・巡回中の応答・CPU・メモリと既定値の判断は [git-slots-windows-x64.md](git-slots-windows-x64.md) が持つ(corpus の隣に `cargo xtask corpus --copies 8` で建てた 8 コピーに対する実測) | **残り 1 つ**: ペインが 1 つのコピーを読んでいる間、そのコピーだけは行の集計とペインのファイル一覧(`RepoSession::read_carried_status`)で 2 度読まれる(どちらも同じ実行枠を通る)。一覧の側を集計へ相乗りさせられるかは、この読みが入る前の実測なので未測定 |
+| 同時に走る `status` の本数と実時間 | 取得済み — 別 worktree の未コミット行の巡回は実行枠(`process::Slots`)の background 上限で走り、K = 1/2/4/8 の巡回幅・巡回中の応答・CPU・メモリと既定値の判断は [git-slots-windows-x64.md](git-slots-windows-x64.md) が持つ(corpus の隣に `cargo xtask corpus --copies 8` で建てた 8 コピーに対する実測) 取得済み — ペインが立っているコピーの二重読み(tick ごとに status 1 本ぶん = 405 / 418ms)も同記録 §ペインが立っているコピーの二重読み。残るのは測定ではなく採否 |
 
 ## Qt の床(2026-08-11)
 

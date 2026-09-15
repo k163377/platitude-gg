@@ -184,6 +184,25 @@ B = `max(1, n/4)`。巡回 5 秒・同じ exe 対、交互に撃つ。
 リポジトリ設定と index への書き込みなので、入れるなら明示の設定操作でなければならず、
 その代金に見合う数字が無い。daemon は probe が自分で止めている(`fsmonitor--daemon stop`)。
 
+## ペインが立っているコピーの二重読み(2026-09-15)
+
+**ペインが 1 つのコピーを開いている間、そのコピーだけが tick ごとに 2 度読まれる** —— 行の集計の
+pass(全コピー)と、ペインのファイル一覧(`RepoSession::read_carried_status` を `RepoPage.pollCarried`
+が同じ tick で撃つ)。**どちらも同じ `status --porcelain=v2 -z --branch -uall`** で、同じ background
+の枠を分け合う。
+
+- **代金は status 1 本ぶん**: 製品条件のコピー 1 で **405 / 418ms**(5 回の min / 中央、max 442 =
+  §`status` の高速化機構 と同じ probe をこの日に撃ち直した値)。8 コピーの pass は 9 本になり、
+  そのコピー 1 つだけを見れば読みは 2 倍
+- **一覧は pass の答えから作れる形**(pass が撃つのと同じコマンドの同じ出力)なので相乗りの余地は
+  ある —— ただし**選んだ瞬間の 1 本は別**で、そこだけは次の tick を待たせられない。採否は
+  [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §別 worktree の未コミット行
+- **verify-ui の run から大きい木の時間を読まない**: あちらは `GIT_CONFIG_NOSYSTEM=1` で system の
+  gitconfig を読まない環境なので、**同じコピーの status が 6.1–6.9s**(同じ日・同じ機械・
+  `carried-read` を `--repo <corpus>` で撃った 2 run の全 status。8 コピーの pass は 25–26s)。
+  この機械の system config は `core.fscache = true` を持つが、**どの設定がこの差かの切り分けは
+  していない**(NOSYSTEM を立てた probe は hook が撃たせない)
+
 ## 再実行
 
 コピーが立っていれば §条件 の 1 行だけ。立っていなければ `cargo xtask corpus --copies 8`(8 × 109,652
