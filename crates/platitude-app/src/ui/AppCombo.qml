@@ -27,6 +27,18 @@ ComboBox {
     /// an arrow over an empty list says "nothing" where "not yet" is the truth.
     property bool loading: false
 
+    /// How wide this field would have to be for its value to stand uncut: the word, both of the input's own insets,
+    /// the control's left one, and **the width the control keeps back for the arrow whether it draws one or not**.
+    /// What a layout asks when the field is allowed to take the room it needs (`PublishForm`); nothing here reads it,
+    /// so a field nobody sizes by it is unchanged.
+    ///
+    /// **Rounded up and then one over, and that pixel is the whole point**: the elide is handed a width and cuts
+    /// anything that does not sit inside it, so a field measured to exactly its own name's width comes back cut by
+    /// the rounding — a box with room to spare beside it and a `…` in the middle of the name (observed).
+    readonly property real wantedWidth: Math.ceil(input.fitWidth) + 1
+                                        + input.leftPadding + input.rightPadding
+                                        + combo.leftPadding + seat.width
+
     /// The last row is not one of the answers but the way to one this list does not hold yet. Set off by the line a
     /// menu separates its groups with (デザイン規約 §メニュー): a row that acts and a row that answers cannot be told apart while
     /// both are plain text on one ground, and the list is read before it is clicked.
@@ -77,16 +89,38 @@ ComboBox {
     // Own contentItem, so it does not go through palette (§無効).
     contentItem: TextInput {
         id: input
+        /// The room the word has — the box less both of its own insets — and the width the whole value would want.
+        /// **Whether to cut is decided from these two and not left to the elide**: the elide is handed a width and
+        /// answers with what it kept, so a name that fits by a fraction comes back cut all the same and there is
+        /// nothing here to tell that from a name that really was too long (observed — a box 282 wide cutting a name
+        /// measured at 281). The same pair decides what `AppCombo.wantedWidth` asks for, so a field given that width
+        /// draws its value whole.
+        readonly property real room: input.width - input.leftPadding - input.rightPadding
+        readonly property real fitWidth: whole.advanceWidth
         // Picking only, the value is the owner's and never `editText`: ComboBox does not maintain that outside an
         // editable field.
-        text: combo.pickOnly ? combo.wanted : combo.editText
+        //
+        // **And it is cut to fit, because nothing here can scroll it into view.** A `TextInput` too narrow for its
+        // text scrolls to the caret, which on a field nobody can type into means the head of the name is simply gone
+        // off the left edge with no mark saying so — a remote read as `…-a-very-long-name` where the reader needed
+        // the part in front. Cut in the middle, the way a name too long for its column is (`CutName`, which is the
+        // component where names stand in a *column* and their right edges have to line up — one field in a form has
+        // no such neighbours, so the elide's own arithmetic is enough here).
+        text: combo.pickOnly ? (input.fitWidth > input.room ? fit.elidedText : combo.wanted) : combo.editText
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
         // The same frame-to-word inset the plain boxes keep (`SlimField`) — this field stands beside one of them in
         // the question bar, and two boxes a row apart holding their text at different distances read as two different
         // kinds of box (デザイン規約 §選ぶ欄と打つ欄 already has the ground saying which is which).
         leftPadding: Theme.spaceXs
-        rightPadding: Theme.spaceXs
+        // **The arrow is what stops the word at this end, not the frame.** The control reserves the indicator's own
+        // width and no more, while the seat that indicator sits in is pushed a further `spaceSm` in from the frame
+        // (`seat.x`) — so a name longer than the box used to run on under the glyph, since a `TextInput` scrolls its
+        // text rather than eliding it. What is added here is that gap plus the same word inset the other end keeps.
+        // Nothing to open, nothing to keep clear of: a field with no list falls back to the plain inset rather than
+        // losing a quarter of its width to an arrow it never draws (`tst_appcombo`, which measures the laid-out
+        // geometry this arithmetic is aimed at).
+        rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
         readOnly: combo.pickOnly
         selectByMouse: !combo.pickOnly
@@ -94,6 +128,25 @@ ComboBox {
         selectedTextColor: Theme.textPrimary
         onTextChanged: if (!combo.pickOnly) combo.editText = text
         onTextEdited: combo.wanted = text
+        // The cut itself, against the room the word actually has — the box less both insets, the right one of which
+        // is the arrow's (below). Its own font rather than `combo.font`, so the measuring and the drawing are the
+        // same metrics.
+        TextMetrics {
+            id: fit
+            font: input.font
+            text: combo.wanted
+            elide: Text.ElideMiddle
+            elideWidth: Math.max(0, input.width - input.leftPadding - input.rightPadding)
+        }
+        // **The whole name's width, measured by a ruler with no cut in it.** `fit` is told where to cut and answers
+        // about what it drew, so asking *it* how wide the name is would be asking the box how wide it already is —
+        // a field sized from that settles wherever it happens to land and stays cut with room to spare beside it
+        // (observed, the publish question's destination).
+        TextMetrics {
+            id: whole
+            font: input.font
+            text: combo.wanted
+        }
         // A read-only input still takes the press, so the control it sits in would never see the click that opens its
         // list.
         MouseArea {

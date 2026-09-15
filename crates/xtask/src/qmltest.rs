@@ -44,6 +44,20 @@ const UI: &str = "crates/platitude-app/src/ui";
 const WORK: &str = "target/qmltest";
 /// `import platitude.ui` looks for `<import path>/platitude/ui/qmldir`.
 const MODULE: &str = "platitude/ui";
+/// The application's own Rust-backed module, which several `ui`
+/// components name in their imports whether or not they reach into it
+/// (`AppCombo`). It is registered by the running application and by
+/// nothing else, so qmltestrunner cannot have the real one — and a file
+/// whose import does not resolve is a **type** that does not resolve,
+/// which is where a test of an entirely Qt-side geometry stops.
+///
+/// Staged empty on purpose: what it buys is the import line, and a test
+/// that builds something actually reaching into it fails on the name it
+/// wanted rather than on a stub answering for it.
+const APP_MODULE: &str = "platitude";
+/// The one type that stub declares, named so that a test reaching for it
+/// reads as the mistake it is.
+const APP_STUB_TYPE: &str = "NotTheApplication.qml";
 
 /// The ceiling for one file. QtTest bounds its own waits (`tryCompare`),
 /// but `when: windowShown` on a window that never comes up is not one of
@@ -135,6 +149,19 @@ fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
     if !module.join("qmldir").is_file() {
         return Err(format!("{UI}/qmldir is gone — nothing declares the module"));
     }
+    let app = import.join(APP_MODULE);
+    std::fs::create_dir_all(&app).map_err(|e| format!("{}: {e}", app.display()))?;
+    // One type, because a module with none has no version for the
+    // unversioned `import platitude` to resolve to and reads as not
+    // installed. Nothing imports the name, and a test that reaches for a
+    // real one fails on the name it wanted.
+    std::fs::write(app.join(APP_STUB_TYPE), "import QtQuick\n\nQtObject {}\n")
+        .map_err(|e| format!("{APP_MODULE}/{APP_STUB_TYPE}: {e}"))?;
+    std::fs::write(
+        app.join("qmldir"),
+        format!("module {APP_MODULE}\nNotTheApplication 1.0 {APP_STUB_TYPE}\n"),
+    )
+    .map_err(|e| format!("{APP_MODULE}/qmldir: {e}"))?;
     Ok(import)
 }
 

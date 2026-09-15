@@ -56,6 +56,11 @@ QtObject {
     // What the subject column always keeps, which is one of the two things that stop the graph column from taking
     // more room as the window narrows (the other is the lane ceiling).
     readonly property int messageMinW: 160
+    // The floor under each of the two boxes a question bar asks its `<remote>/<branch>` in. They fill the bar rather
+    // than standing at a fixed width — the room is there, and a name cut while the bar is half empty is a name cut
+    // for nothing — but neither goes under this, which is the width they used to be given outright
+    // (デザイン規約 §レイアウト初期値).
+    readonly property int askFieldMinW: 160
     readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50

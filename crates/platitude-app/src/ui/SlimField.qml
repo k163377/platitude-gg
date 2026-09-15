@@ -16,6 +16,10 @@ TextField {
     /// A refusal outranks it — that is a different axis, and the one the
     /// reader has to answer before anything else.
     property color focusTone: Theme.borderFocus
+    /// How wide this box would have to be for what is in it to stand without scrolling — what is typed plus both
+    /// insets. What a layout asks where this box is the one that may take the room it needs (`PublishForm`); the
+    /// text itself is never cut here, so a box narrower than this scrolls rather than losing anything.
+    readonly property real wantedWidth: slim.contentWidth + slim.leftPadding + slim.rightPadding
     implicitHeight: Theme.iconLg
     font.pixelSize: Theme.fontMd
     // The one value every box in this application keeps between its frame and its words — the pane's own inset, which

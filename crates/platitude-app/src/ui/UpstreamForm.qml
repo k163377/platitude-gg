@@ -33,18 +33,29 @@ ColumnLayout {
     spacing: Theme.spaceXs
 
     RowLayout {
+        id: askRow
         Layout.fillWidth: true
         spacing: Theme.spaceXs
+        /// The same two claims the publish question's row settles (`PublishForm`): what is being typed asks first,
+        /// and the destination takes what is left, down to the floor the two boxes share.
+        readonly property real room: upstreamForm.width - slash.width - 2 * askRow.spacing
+        readonly property real nameWidth:
+            Math.min(Math.max(Metrics.askFieldMinW, upstreamBranchField.wantedWidth),
+                     Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW))
+        readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
+        // The same two boxes the publish question asks in, sized the same way (デザイン規約 §レイアウト初期値).
         AppCombo {
             id: remotePick
             pickOnly: true
-            // The fixed-input width every boxed field shares (デザイン規約 §レイアウト初期値 160) — not a width of its own.
-            Layout.preferredWidth: 160
+            Layout.minimumWidth: Metrics.askFieldMinW
+            Layout.maximumWidth: askRow.remoteCeiling
+            Layout.preferredWidth: Math.max(Metrics.askFieldMinW, remotePick.wantedWidth)
             model: upstreamForm.remotes
             wanted: upstreamForm.remote
             onActivated: index => upstreamForm.remotePicked(index)
         }
         Label {
+            id: slash
             Layout.alignment: Qt.AlignVCenter
             text: "/"
             color: Theme.textMuted
@@ -54,14 +65,14 @@ ColumnLayout {
         // to point at.
         SlimField {
             id: upstreamBranchField
-            Layout.preferredWidth: 160
+            Layout.minimumWidth: Metrics.askFieldMinW
+            Layout.maximumWidth: Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW)
+            Layout.preferredWidth: askRow.nameWidth
+            Layout.fillWidth: true
             text: upstreamForm.branch
             refused: upstreamForm.refused
             onTextEdited: upstreamForm.branchEdited(text)
             Component.onCompleted: upstreamBranchField.forceActiveFocus()
-        }
-        Item {
-            Layout.fillWidth: true
         }
     }
 }
