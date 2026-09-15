@@ -187,6 +187,10 @@ impl RepoTab {
                         self.settle_write(id, kind, error, report, head_seq, reads_from);
                     }
                 }
+                // The last of the three: everything this write invalidated
+                // has been read again and published, which is what a run
+                // photographing the page a write leaves has to wait for.
+                TabMsg::WriteSettled { id, .. } => self.write_watch.settled(id),
             }
         }
     }
@@ -320,6 +324,10 @@ impl RepoTab {
                 OperationKind::Revert | OperationKind::CherryPick | OperationKind::Merge
             );
         self.write_seq += 1;
+        // The middle of the write's three boundaries, for whoever is
+        // waiting on this one by the id its own ask was given. Matched,
+        // never compared: the ids are not a sequence (`write_watch`).
+        self.write_watch.answered(id);
         // The answer as it came, kept whole: this is what an owner is
         // handed and what every reader waiting for one write by name
         // reads its meanings off (`write_answers`).

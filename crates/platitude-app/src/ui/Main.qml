@@ -194,6 +194,13 @@ ApplicationWindow {
         if (acts !== null)
             acts.finish()
     }
+    // What the page's own run has its write barrier holding, for the line a run that stopped answering leaves. The
+    // page cannot reach the window's harness seat itself, and the seat is where the ceiling lives.
+    function noteAutoActWrite(state) {
+        const acts = harness.ask()
+        if (acts !== null)
+            acts.noteWriteState(state)
+    }
 
     TabsModel {
         id: tabsModel

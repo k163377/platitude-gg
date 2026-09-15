@@ -488,10 +488,14 @@ impl SessionSink for BridgeSink {
                 });
             }
             // The page waits on the answer, not on the reads behind it
-            // (`TabMsg::WriteState`), so nothing here has a boundary to
-            // carry yet — the harness's write barrier is the first
-            // consumer one would have (internal-docs/P3-確認事項.md).
-            SessionEvent::WriteSettled { .. } => {}
+            // (`TabMsg::WriteState`). The run that photographs the page a
+            // write leaves waits on this one instead: it is what says the
+            // last of those reads has been published.
+            SessionEvent::WriteSettled { id, .. } => {
+                self.feeds
+                    .tab
+                    .push(TabMsg::WriteSettled { id: id.as_u64() });
+            }
             SessionEvent::WriteStopped { .. } => self.feeds.tab.push(TabMsg::WriteStopped),
             SessionEvent::WriteStarted { id, kind } => {
                 self.feeds.tab.push(TabMsg::WriteState {

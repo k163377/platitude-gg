@@ -240,14 +240,14 @@ Item {
     SampleTimer {
         id: avatarReportTimer
         onTriggered: {
-            if (detailsModel.avatarUrl === "" && AppBackend.avatarError === "")
+            if (detailsModel.avatarUrl === "" && AppBackend.avatarErrorKind === "")
                 return
             avatarReportTimer.stop()
             Harness.report(
             "avatar email=" + detailsModel.authorEmail
             + " details=" + (detailsModel.avatarUrl !== "")
             + " rows=" + graphModel.avatarRowCount()
-            + " error=" + AppBackend.avatarError)
+            + " error=" + AppBackend.avatarErrorKind)
             driver.complete()
         }
     }
@@ -297,7 +297,7 @@ Item {
     SampleTimer {
         id: commandsPickTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             // Two rows, because the fixture makes two writes and the drag is about crossing from one row to another:
             // the write barrier alone lets a tick through while an opening read is the only thing in the log, and a
@@ -340,7 +340,7 @@ Item {
         /// Where the ground began at the previous sample, for the settle below.
         property string lastGeom: ""
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return

@@ -145,6 +145,19 @@ impl OperationKind {
         }
     }
 
+    /// Whether a person asked for a write of this kind, or it is one of
+    /// the fetches this application makes on its own — the interval's and
+    /// the one an opening fires.
+    ///
+    /// **Read off the lane rather than listed again**: the lane already
+    /// names that set ([`Lane::UnaskedFetch`]), and a second spelling
+    /// would let the two disagree about which writes have somebody
+    /// waiting on them.
+    #[must_use]
+    pub fn asked_for(self) -> bool {
+        self.lane() != Lane::UnaskedFetch
+    }
+
     /// Which lane serves a write of this kind.
     ///
     /// **The one place the sets are written.** The budget, the token and

@@ -72,8 +72,6 @@ impl RepoSession {
         F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
-        let operation = Operation::new(kind, after);
-        let local = operation.lane == Lane::Local;
         // The place in the working tree's order is taken here, inside the
         // call that hands the id back, so two sessions on one tree are
         // ordered by when each accepted: a tab opened over a write still
@@ -84,14 +82,22 @@ impl RepoSession {
         // delete is paced by the network and still takes a ref away here
         // before it gets there.
         //
-        // **Taken and queued under one lock.** The loop serves this queue
-        // in order and every request waits for its own place, so a pair
-        // accepted the other way round would leave the loop holding a
-        // place behind a request in its own queue — waiting on the write
-        // it is itself the only one that can run, for good. Two callers
-        // asking at once is all that would take.
-        let sent = {
+        // **Numbered, placed and queued under one lock.** The loop serves
+        // this queue in order and every request waits for its own place,
+        // so a pair accepted the other way round would leave the loop
+        // holding a place behind a request in its own queue — waiting on
+        // the write it is itself the only one that can run, for good. Two
+        // callers asking at once is all that would take. The id is taken
+        // here for the same reason and not a weaker one: numbered outside,
+        // two requests racing can be numbered the other way round from the
+        // order the queue took them, and a log read across two sessions on
+        // one tree would say the wrong one went first. **It is not a
+        // licence to compare ids** — they answer to equality and nothing
+        // else ([`OperationId`]), and every reader here matches its own.
+        let (operation, local, sent) = {
             let _accepting = relock(&self.accepting);
+            let operation = Operation::new(kind, after);
+            let local = operation.lane == Lane::Local;
             let place = kind
                 .writes_here()
                 .then(|| self.write_order())
@@ -104,11 +110,12 @@ impl RepoSession {
             }
             // Enqueueing is synchronous, so the queue order is the order
             // the UI asked in. Sending only fails once the loop has ended.
-            self.write_tx.send(WriteRequest {
+            let sent = self.write_tx.send(WriteRequest {
                 operation,
                 place,
                 run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
-            })
+            });
+            (operation, local, sent)
         };
         // A refused request is dropped here with its place, which is how
         // a tree stops waiting for a write nobody will run.

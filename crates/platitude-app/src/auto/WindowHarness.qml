@@ -100,6 +100,11 @@ Item {
     function claimPageAct() {
         return shotDriver.claimPageAct()
     }
+    /// Where the page's own write barrier stands, kept for the line the ceiling leaves. Forwarded like the three
+    /// above: the ceiling lives on the shot driver and the page cannot reach it (`AutoActDriver.noteWrite`).
+    function noteWriteState(state) {
+        shotDriver.writeState = state
+    }
     /// One run has one ending. The census is not asked for here: the picture calls for it
     /// (`AutoShotDriver.appPictured`) and it walks once the window has stopped arriving, which the ending waits for.
     function finish() {

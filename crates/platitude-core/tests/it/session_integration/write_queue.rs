@@ -1,9 +1,10 @@
 //! Writes go through the session's queue: one at a time, and a failure is
 //! reported and refreshed like any other.
 
-use crate::support::session::{opened, write_result};
+use crate::support::session::{opened, write_answer, write_result};
 use crate::support::{TestRepo, barrier_hook};
 use platitude_core::OperationKind;
+use platitude_core::commit::CommitOptions;
 use platitude_core::session::SessionEvent;
 
 /// Writes are serialized per session: a burst of concurrent stage requests
@@ -398,4 +399,55 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
         0,
         "the pending count drained with the loop"
     );
+}
+
+/// **The id the queue hands back is the caller's own**, and the events
+/// about that write are found by it and by nothing else.
+///
+/// Which is the only thing that can be: every event afterwards carries an
+/// id, and none of them says which of them is yours. There is no shared
+/// "the last one accepted" to read instead — a reader that went looking
+/// for one would be reading whatever the *next* caller put there, since
+/// nothing holds still between two asks.
+///
+/// **Nor is the number a place in a queue.** `OperationId::next()` and the
+/// lock the queue is entered under would be two moments if the number were
+/// taken outside it, and a request that stalled in between would be
+/// numbered ahead of one that went in first. Taken under that lock, the
+/// numbering and the order agree — and **readers still match rather than
+/// compare** ([`OperationId`] answers to equality alone), so nothing
+/// depends on the agreement.
+///
+/// Two asks are outstanding at once here, the first held inside git by its
+/// hook, which is what makes "which id is mine" a real question rather
+/// than the only answer available.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_ask_is_answered_under_the_id_it_was_given() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    repo.write_file("new.txt", "content\n");
+    repo.git(&["add", "new.txt"]);
+    let release = repo.path.join("hook-release");
+    repo.write_hook("pre-commit", &barrier_hook(&release));
+
+    let (sink, session) = opened(&repo).await;
+    let held = session
+        .commit("held by the hook".into(), CommitOptions::default())
+        .expect("the commit was accepted");
+    let mine = session
+        .create_branch("topic".into(), None, false)
+        .expect("the branch was accepted");
+    assert_ne!(held, mine, "two asks, two ids");
+    assert!(
+        held.as_u64() < mine.as_u64(),
+        "numbered under the lock they queue under: {held:?} then {mine:?}"
+    );
+
+    // Both are out at once; each answer comes back under the id its own
+    // ask was given, which is what lets a reader holding one tell the
+    // other's answer from its own.
+    std::fs::write(&release, b"go").expect("the hook is released");
+    assert_eq!(write_answer(&sink, held).await, None, "the commit landed");
+    assert_eq!(write_answer(&sink, mine).await, None, "and the branch did");
+    session.close();
 }

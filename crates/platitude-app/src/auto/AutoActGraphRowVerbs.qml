@@ -217,9 +217,10 @@ Item {
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
-            // The submit is ticks away; the barrier is held until it (`expectWriteAtPress`).
+            // The submit is ticks away; the watch is armed here and catches the ask whenever it comes
+            // (`AutoActDriver.beginWrite`), so what it waits on in between is the input and not a missing id.
             if (act === "graph-rename")
-                driver.expectWriteAtPress()
+                driver.beginWrite("graph-rename")
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // The same gesture, and the double-click beside it, put in at the card the chip unfolds into. The
@@ -230,7 +231,7 @@ Item {
             reclickListTimer.picks = act === "ref-list-pick"
             reclickListTimer.across = act === "graph-reclick-across"
             if (reclickListTimer.picks)
-                driver.expectWriteAtPress()
+                driver.beginWrite("ref-list-pick")
             reclickListTimer.start()
         } else {
             return false
@@ -913,7 +914,7 @@ Item {
                 // Through to git, by the path the field's own Enter takes. The write barrier finishes this one.
                 graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
                                                reclickGraphTimer.name, graphPane.namingMode)
-                driver.pressedWrite()
+                driver.inputWent(true)
             }
         }
     }
@@ -992,9 +993,8 @@ Item {
                 if (!refList.opened)
                     return
                 if (reclickListTimer.picks) {
-                    if (!refList.doubleClickRow(reclickListTimer.card))
+                    if (!driver.inputWent(refList.doubleClickRow(reclickListTimer.card)))
                         return
-                    driver.pressedWrite()
                     reclickListTimer.stop()
                     Harness.report("ref_list_pick row=" + reclickListTimer.row
                                       + " card=" + reclickListTimer.card

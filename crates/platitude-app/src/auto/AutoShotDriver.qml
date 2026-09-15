@@ -57,6 +57,14 @@ Item {
     }
     /// What the census is doing, for the watchdog's line alone. Bound by whoever holds one (`WindowHarness`).
     property string censusState: "-"
+    /// **Where the run's own write had got to**, for the watchdog's line and nothing else — written by the page that
+    /// claimed the run (`Main.noteAutoActWrite` ← `AutoActDriver`), so a run that never reached a page leaves the
+    /// dash it starts with.
+    ///
+    /// Four things, because a barrier that has not opened has four reasons and they need different answers: the
+    /// press this run is waiting on, whether its input has gone in, what the tab made of it, and the id the tab is
+    /// holding. "No id" on its own says none of them.
+    property string writeState: "-"
 
     function claimPageAct() {
         if (driver.pageActClaimed)
@@ -126,6 +134,12 @@ Item {
             console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
                          + " parts=" + driver.shotParts + " ink=" + Ink.owed
                          + " census=" + driver.censusState)
+            // **What the write barrier was holding, if this run wanted a write at all.** `press=` names the input
+            // the verb was waiting on, `input=` whether it has gone in, and `watch=` / `id=` are the tab's own word
+            // — an `id=0` under `watch=armed` is a press still to land, under `watch=turned-down` a queue that took
+            // nothing, and neither is the same as a verb that never armed. Nothing here decides which: it says what
+            // was held, and the reading is the reader's.
+            console.warn("write state " + driver.writeState)
             Qt.quit()
         }
     }

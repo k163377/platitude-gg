@@ -580,11 +580,11 @@ Item {
             }
             detailsPane.setMessageText(Harness.autoActArg, "")
             // "edit-message" stops here, with the save row on screen.
-            if (Harness.autoAct === "reword") {
-                driver.writeSeqBefore = repoTab.writeSeq
-            }
             if (Harness.autoAct === "reword")
-                detailsPane.submitMessage()
+                driver.pressWrite("reword", () => {
+                    detailsPane.submitMessage()
+                    return true
+                })
             // "edit-message-leave" walks away from the unsaved text. Nothing asks any more — the draft goes and the
             // next commit's own message arrives, which is what the shot is of.
             else if (Harness.autoAct === "edit-message-leave")

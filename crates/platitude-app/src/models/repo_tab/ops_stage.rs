@@ -32,15 +32,22 @@ fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
 impl RepoTab {
     /// The gathered-path writes share one shape: take the set, skip an
     /// empty ask, hand the batch to the session.
-    pub(super) fn drain_paths<R>(
+    ///
+    /// `send` answers with the id its ask was given, like every other
+    /// write this tab makes — the door keeps it for whoever is waiting on
+    /// that write ([`RepoTab::ask_session`]).
+    pub(super) fn drain_paths(
         &mut self,
-        send: impl FnOnce(&std::sync::Arc<platitude_core::session::RepoSession>, Vec<String>) -> R,
+        send: impl FnOnce(
+            &std::sync::Arc<platitude_core::session::RepoSession>,
+            Vec<String>,
+        ) -> Option<platitude_core::OperationId>,
     ) {
         let paths = std::mem::take(&mut self.pending_paths);
         if paths.is_empty() {
             return;
         }
-        self.with_session(move |s| send(s, paths));
+        self.ask_session(move |s| send(s, paths));
     }
 
     /// Works out what a discard of the gathered rows would take, before
@@ -79,10 +86,12 @@ impl RepoTab {
         self.drain_paths(|s, keys| {
             let chosen: Vec<(String, DiscardSide)> =
                 keys.iter().filter_map(|key| chosen_row(key)).collect();
-            if chosen.is_empty() {
-                return;
-            }
-            s.discard_chosen(chosen);
+            // Nothing to send, so nothing is asked for and no id comes
+            // back — which is what a reader waiting on this press has to
+            // be told apart from a write it will get an answer to.
+            (!chosen.is_empty())
+                .then(|| s.discard_chosen(chosen))
+                .flatten()
         });
     }
 
@@ -113,12 +122,8 @@ impl RepoTab {
             tracing::warn!(fingerprint, "selection staging without a diff fingerprint");
             return false;
         };
-        let mut queued = false;
-        self.with_session(|s| {
-            s.apply_partial(target.clone(), selects.clone(), seen);
-            queued = true;
-        });
-        queued
+        self.ask_session(|s| s.apply_partial(target.clone(), selects.clone(), seen))
+            .is_some()
     }
 
     /// Answers whether a write went out, for the same reason as
@@ -144,12 +149,8 @@ impl RepoTab {
             tracing::warn!(fingerprint, "selection discard without a diff fingerprint");
             return false;
         };
-        let mut queued = false;
-        self.with_session(|s| {
-            s.discard_partial(target.clone(), selects.clone(), seen);
-            queued = true;
-        });
-        queued
+        self.ask_session(|s| s.discard_partial(target.clone(), selects.clone(), seen))
+            .is_some()
     }
 }
 

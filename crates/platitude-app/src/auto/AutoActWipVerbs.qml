@@ -110,9 +110,9 @@ Item {
                 driver.stashWanted = "feat: write the summary"
                 wipPane.setMessage(driver.stashWanted, "")
             }
-            // The press is ticks away; the barrier must not pass on a
-            // fetch that answered in between (`expectWriteAtPress`).
-            driver.expectWriteAtPress()
+            // The press is ticks away; the watch is armed here and catches the ask
+            // whenever it comes, so a fetch answering in between is not it.
+            driver.beginWrite(act)
             stashPressTimer.fromWip = act === "stash-lands"
             stashPressTimer.start()
         } else if (act === "stash-file") {
@@ -332,8 +332,10 @@ Item {
             if (!page.diffShown || driver.diffPane.diffModel.loading)
                 return
             stalePartTimer.stop()
-            driver.writeSeqBefore = repoTab.writeSeq
-            repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
+            driver.pressWrite("stage-selection", () => {
+                repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
+                return true
+            })
             driver.barrierNotice.start()
         }
     }
@@ -481,11 +483,13 @@ Item {
             wipPane.setResetAuthorChecked(true)
             wipPane.setMessage(Harness.autoActArg, "")
             // The run is deferred, so nothing raises a barrier for it on the way out: the commit is sent from here and
-            // waited out from here. Both marks are re-read on the spot rather than carried over from
+            // waited out from here. The mark is re-read on the spot rather than carried over from
             // `prepareCompletion` — the page's own opening fetch can have answered in between.
-            driver.writeSeqBefore = repoTab.writeSeq
             driver.headOidBefore = workTree.headOid
-            page.commitNow()
+            driver.pressWrite("commit", () => {
+                page.commitNow()
+                return true
+            })
             resetAuthorLandedTimer.start()
         }
     }
@@ -505,7 +509,7 @@ Item {
     SampleTimer {
         id: resetAuthorLandedTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+            if (!driver.wroteAndSettled()
                     || workTree.headOid === driver.headOidBefore
                     || graphModel.rowOf(workTree.headOid) < 0
                     || !driver.cardSettled)
@@ -582,9 +586,8 @@ Item {
                 graphPane.setCurrentRow(0)
                 page.showWip()
             }
-            if (!page.pageBand.stashNow())
+            if (!driver.inputWent(page.pageBand.stashNow()))
                 return
-            driver.pressedWrite()
             driver.graphGoneOid = going
             stashPressTimer.stop()
         }
@@ -608,7 +611,7 @@ Item {
             mergeCommitTimer.start()
         }
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             // The commit exists; the picture is of the graph holding it. **Against the id it moved from**, not
             // merely "HEAD is somewhere in the graph": refs and the walk arrive behind the write and behind each

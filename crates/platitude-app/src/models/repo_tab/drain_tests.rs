@@ -708,6 +708,26 @@ fn answered(id: u64, kind: K, error: &str) -> TabMsg {
     reported(id, kind, error, None)
 }
 
+/// The other two of the write's three boundaries (`session::write`).
+fn started(id: u64, kind: K) -> TabMsg {
+    TabMsg::WriteState {
+        id,
+        kind,
+        running: true,
+        error: String::new(),
+        report: None,
+        head_seq: 0,
+        reads_from: 0,
+    }
+}
+
+/// The last boundary. The kind is taken and dropped so the calls below
+/// read like the pair above them — what a settle says is the id, and
+/// whose write it was is the caller's own business.
+fn settle_msg(id: u64, _kind: K) -> TabMsg {
+    TabMsg::WriteSettled { id }
+}
+
 fn stash_answered(id: u64, error: &str) -> TabMsg {
     answered(id, K::Stash, error)
 }
@@ -1074,6 +1094,154 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     );
 }
 
+/// A tab whose run has armed its watch and had an ask taken under `id` —
+/// what `ask_session` does inside the call that returns that id, which a
+/// tab with no session behind it cannot be driven through.
+fn watching(id: u64) -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.watch_next_write("press".into());
+    tab.write_watch.asked(Some(id));
+    tab
+}
+
+/// **The two boundaries reach the watch off the feed's own messages** —
+/// the wiring `write_watch`'s own tests cannot see. Nothing else opens it:
+/// the fetch a timer fires and the one an opening makes come down the same
+/// feed, and the answer to each carries its own id.
+///
+/// Before the watch the barrier armed on a count and waited for it to
+/// move. Neither half of that was about the press: those fetches move
+/// `writeSeq` on their own, and between the press and the moment git has
+/// the write there is a stretch where nothing is running — so one of them
+/// landing inside it satisfied both halves, and the picture was taken
+/// before the write ran (P3-確認事項).
+#[test]
+fn the_boundaries_reach_the_watch_and_nothing_else_opens_it() {
+    let mut tab = watching(OURS);
+    tab.absorb(vec![
+        started(SOMEBODY_ELSE, K::AutoFetch),
+        answered(SOMEBODY_ELSE, K::AutoFetch, ""),
+        settle_msg(SOMEBODY_ELSE, K::AutoFetch),
+    ]);
+    assert_eq!(tab.write_seq, 1, "the answer is counted as an answer");
+    assert!(
+        !tab.wrote_through(),
+        "but it is not the one being waited on"
+    );
+
+    tab.absorb(vec![answered(OURS, K::Commit, "")]);
+    assert_eq!(
+        tab.write_watch_stage(),
+        "answered",
+        "git has this one; the reads behind it are still out"
+    );
+    assert!(!tab.wrote_through());
+
+    tab.absorb(vec![settle_msg(OURS, K::Commit)]);
+    assert_eq!(tab.write_watch_stage(), "settled");
+    assert!(tab.wrote_through());
+}
+
+/// **An ask that was numbered first and queued second**: the run's own
+/// write carries the *lower* id and finishes *last*, and the barrier opens
+/// on it and on nothing before it.
+///
+/// This is the arrangement the identity comparison exists for.
+/// `OperationId::next()` and the queue's own lock are not the same moment
+/// — a request takes its number and then queues — so a caller can be
+/// numbered and then lose its turn. A boundary read as `>=` would have
+/// opened here on somebody else's answer, and the run would have gone on
+/// to photograph a page its own write had not reached.
+#[test]
+fn a_write_numbered_after_this_one_and_finished_first_does_not_open_it() {
+    let mut tab = watching(OURS);
+    assert!(!tab.wrote_through(), "nothing has answered yet");
+
+    // Somebody else's write, in front in the queue and higher in the
+    // numbering, all the way through.
+    tab.absorb(vec![
+        started(SOMEBODY_ELSE, K::Branch),
+        answered(SOMEBODY_ELSE, K::Branch, ""),
+        settle_msg(SOMEBODY_ELSE, K::Branch),
+    ]);
+    assert!(
+        !tab.wrote_through(),
+        "an id past this one's is not this one's"
+    );
+    assert_eq!(
+        tab.watched_write_id(),
+        OURS as i32,
+        "the watch keeps its own"
+    );
+
+    tab.absorb(vec![
+        answered(OURS, K::Commit, ""),
+        settle_msg(OURS, K::Commit),
+    ]);
+    assert!(tab.wrote_through(), "and this write's own finish opens it");
+}
+
+/// The same the other way round — the run's own ask numbered *after* the
+/// one that finishes first. Neither direction is the test on its own: one
+/// catches `>=`, the other catches `<=`.
+#[test]
+fn nor_does_one_numbered_before_it() {
+    let mut tab = watching(SOMEBODY_ELSE);
+    tab.absorb(vec![
+        started(OURS, K::Commit),
+        answered(OURS, K::Commit, ""),
+        settle_msg(OURS, K::Commit),
+    ]);
+    assert!(!tab.wrote_through());
+
+    tab.absorb(vec![
+        answered(SOMEBODY_ELSE, K::Branch, ""),
+        settle_msg(SOMEBODY_ELSE, K::Branch),
+    ]);
+    assert!(tab.wrote_through());
+}
+
+/// **A run that has asked for nothing passes nothing.** The watch is
+/// asleep, and no answer to anybody's write makes it say otherwise.
+#[test]
+fn a_run_with_no_write_of_its_own_never_passes() {
+    let mut tab = RepoTab::default();
+    tab.absorb(vec![
+        started(OURS, K::Commit),
+        answered(OURS, K::Commit, ""),
+        settle_msg(OURS, K::Commit),
+    ]);
+    assert_eq!(tab.write_watch_stage(), "asleep");
+    assert_eq!(tab.watched_write_id(), 0);
+    assert!(!tab.wrote_through());
+}
+
+/// **What the run reads to hold its own contract**: the stage and the id
+/// are the whole of it, and the tab refuses nothing.
+///
+/// Arming over a write still out is a breach when the run had pressed for
+/// that write and not otherwise — what the watch is carrying is as often
+/// as not one nobody pressed for (the read a menu makes on its way open),
+/// and only the run knows which. So the tab answers where it stands and
+/// leaves the judgement upstairs (`AutoActDriver.beginWrite`).
+#[test]
+fn the_tab_says_where_the_watch_stands_and_judges_nothing() {
+    let mut tab = watching(OURS);
+    assert_eq!(tab.write_watch_stage(), "held");
+    assert_eq!(tab.watched_write_id(), OURS as i32);
+
+    tab.watch_next_write("press".into());
+    assert_eq!(tab.write_watch_stage(), "armed", "and it arms regardless");
+    assert_eq!(tab.watched_write_id(), 0);
+
+    tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
+    assert_eq!(
+        tab.write_watch_stage(),
+        "armed",
+        "a write nothing is armed for leaves it where it is"
+    );
+}
+
 // ---- the pushes a ref row sends ---------------------------------------
 
 /// The row pressed: a `push --delete` went to the queue under `OURS`, for
@@ -1161,4 +1329,3 @@ fn a_ref_rows_push_does_not_hand_the_next_press_the_last_answer() {
         "and the row waited for is the one just pressed"
     );
 }
-

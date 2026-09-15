@@ -113,7 +113,7 @@ Item {
             // The hold's end is the press the write barrier is armed on (`holdToEnd`), said by the pane when the
             // pill confirms.
             if (act === "rename-remote-go")
-                driver.holdToEnd(graphPane, graphPane.askConfirmed)
+                driver.holdToEnd(graphPane)
             else
                 renameAskTimer.start()
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {

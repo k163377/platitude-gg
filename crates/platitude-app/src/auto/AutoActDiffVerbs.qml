@@ -312,13 +312,15 @@ Item {
                 return
             }
             if (act === "stage-hunk" || act === "stage-line") {
-                driver.writeSeqBefore = repoTab.writeSeq
                 // One line goes through its own mark — the press writes, there and then — and a hunk through its
                 // heading's word.
-                if (act === "stage-line")
-                    diffPane.stageLine(0, line)
-                else
-                    page.stageSelection(0, -1)
+                driver.pressWrite(act, () => {
+                    if (act === "stage-line")
+                        diffPane.stageLine(0, line)
+                    else
+                        page.stageSelection(0, -1)
+                    return true
+                })
                 writeBarrier.start()
                 return
             }
@@ -357,7 +359,7 @@ Item {
             // No line-level discard exists — a hunk is the smallest piece that can be thrown away. The hold's end is
             // the press the write barrier is armed on (`holdToEnd`), said by the pane on the hunk's own signal.
             if (act === "discard-hunk-go") {
-                driver.holdToEnd(diffPane, diffPane.discardHunkRequested)
+                driver.holdToEnd(diffPane)
                 writeBarrier.start()
             } else {
                 renderedBarrier.begin()
@@ -615,12 +617,7 @@ Item {
         /// rows that read brings replace the ones on screen — a step that went on from the answer alone reads rows
         /// about to be swapped, and the run ends with that swap still on its way.
         function wroteAndSettled() {
-            return repoTab.busyCount === 0
-                    && repoTab.writeSeq > driver.writeSeqBefore
-                    && !page.diffSettling
-        }
-        function expect() {
-            driver.writeSeqBefore = repoTab.writeSeq
+            return driver.wroteAndSettled() && !page.diffSettling
         }
         onTriggered: {
             const rows = diffPane.view.count
@@ -629,8 +626,10 @@ Item {
                 if (line < 0)
                     return
                 lineBackTimer.rows0 = rows
-                lineBackTimer.expect()
-                diffPane.stageLine(0, line)
+                driver.pressWrite("stage-line", () => {
+                    diffPane.stageLine(0, line)
+                    return true
+                })
                 lineBackTimer.step = 1
                 return
             }
@@ -639,9 +638,11 @@ Item {
                     return
                 lineBackTimer.rows1 = rows
                 lineBackTimer.shrank = true
-                lineBackTimer.expect()
                 // The file list's own `−`, which is the half that was never reaching the pane.
-                repoTab.unstagePath(page.diffPath)
+                driver.pressWrite("unstage-path", () => {
+                    repoTab.unstagePath(page.diffPath)
+                    return true
+                })
                 lineBackTimer.step = 2
                 return
             }
@@ -649,8 +650,10 @@ Item {
                 if (!lineBackTimer.wroteAndSettled() || rows !== lineBackTimer.rows0)
                     return
                 lineBackTimer.back = true
-                lineBackTimer.expect()
-                repoTab.stagePath(page.diffPath)
+                driver.pressWrite("stage-path", () => {
+                    repoTab.stagePath(page.diffPath)
+                    return true
+                })
                 lineBackTimer.step = 3
                 return
             }
@@ -743,14 +746,14 @@ Item {
                 // Whether this side has anything else on it, read before the write takes the file off it.
                 followTimer.alone =
                     worktreeModel.besidePath(page.diffKind, page.diffPath) === ""
-                // The sequence read here is the whole test below: seeing `busyCount` rise as well wedges on a write
-                // that begins and ends inside one tick (see `lineBackTimer`).
-                driver.writeSeqBefore = repoTab.writeSeq
                 // The file list's own `+` / `−`, whole file at a time.
-                if (page.diffKind === "staged")
-                    repoTab.unstagePath(page.diffPath)
-                else
-                    repoTab.stagePath(page.diffPath)
+                driver.pressWrite("follow:" + page.diffKind, () => {
+                    if (page.diffKind === "staged")
+                        repoTab.unstagePath(page.diffPath)
+                    else
+                        repoTab.stagePath(page.diffPath)
+                    return true
+                })
                 followTimer.step = 1
                 return
             }
@@ -758,7 +761,7 @@ Item {
             // rows — and stopped reading (`RepoPage.diffSettling`), so the rows it lands with are the rows the run
             // ends on rather than ones a read still out is about to replace.
             const now = page.diffShown ? page.diffKind + ":" + page.diffPath : ""
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+            if (!driver.wroteAndSettled()
                     || now === followTimer.was || (page.diffShown && diffPane.view.count === 0)
                     || page.diffSettling)
                 return
@@ -1057,16 +1060,16 @@ Item {
                 codeShrinkTimer.measured0 = diffPane.codeMeasured
                 codeShrinkTimer.drawn0 = diffPane.codeDrawn
                 codeShrinkTimer.rows0 = diffPane.view.count
-                // The sequence is read immediately before the press, so its moving is the whole of the evidence
-                // (`lineBackTimer` says why waiting to see `busyCount` rise as well wedges).
-                driver.writeSeqBefore = repoTab.writeSeq
-                diffPane.stageLine(0, codeShrinkTimer.line)
+                driver.pressWrite("stage-line", () => {
+                    diffPane.stageLine(0, codeShrinkTimer.line)
+                    return true
+                })
                 codeShrinkTimer.wrote = true
                 return
             }
             // The write's own edges, the pane's word that it has stopped reading (`RepoPage.diffSettling`), and then
             // the widths of the rows that reading brought — which are the output the whole verb is about.
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+            if (!driver.wroteAndSettled()
                     || page.diffSettling || diffPane.view.count === 0)
                 return
             const now = acts.reachNow()
@@ -1242,15 +1245,17 @@ Item {
                     return
                 }
                 diffPane.scrollTo(acts.readY)
-                driver.writeSeqBefore = repoTab.writeSeq
-                page.stageSelection(0, keepPlaceTimer.line)
+                driver.pressWrite("stage-selection", () => {
+                    page.stageSelection(0, keepPlaceTimer.line)
+                    return true
+                })
                 keepPlaceTimer.wrote = true
                 return
             }
             // Both edges of the write, and then the one output the whole verb is about: the rebuilt list put back on
             // the place. A write that emptied this side never gets a row back and so never lands anywhere — which is a
             // fixture with no place in it, and the run waits rather than passing on the silence.
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+            if (!driver.wroteAndSettled()
                     || diffPane.placeLandedY < 0)
                 return
             keepPlaceTimer.stop()

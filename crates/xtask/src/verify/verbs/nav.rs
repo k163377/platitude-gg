@@ -4,6 +4,24 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // Naming a branch off the top row, held here for what the run waited
+    // on rather than for what it drew: the barrier every write verb
+    // passes through says whether it waited on **its own write**
+    // (`AutoActDriver.writeBarrier`).
+    //
+    // **`mine=false` is a barrier that went back to counting.** A count
+    // moves for the fetch a repository makes on its way open and for the
+    // interval's own, and between the press and git having the write
+    // there is a stretch where nothing is running for a quiet condition
+    // to catch — so a run could pass both halves on somebody else's
+    // answer and photograph the page before its own write ran. `settled=`
+    // is the other half: everything that write invalidated had been read
+    // again and published before anything was drawn (P3-確認事項).
+    Verb {
+        name: "name-branch",
+        when: &[],
+        plain: "write_barrier mine=true settled=true",
+    },
     // A name git will not take — the branch beside this one already
     // carries it. **The box stays open holding what was typed** and git's
     // own words go under it, where closing it first would have thrown the

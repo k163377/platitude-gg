@@ -97,6 +97,24 @@ pub enum TabMsg {
         /// not evidence and only the stamp is (`ops::StandIn`).
         reads_from: u64,
     },
+    /// Everything that write invalidated has been read again and
+    /// published (`SessionEvent::WriteSettled`) — the last of its three
+    /// boundaries, and the only one that speaks for the readings behind
+    /// the answer rather than for the command.
+    ///
+    /// **Published, not drawn.** What the window is showing is the
+    /// window's own business; this says only that nothing further is
+    /// coming for that write, which is what a run waiting to photograph
+    /// the page a write leaves has no other way to know
+    /// (`AutoActDriver.writeBarrier`).
+    ///
+    /// The id and nothing else: what a reader does with it is match its
+    /// own, so the kind would only be a second way to ask the same
+    /// question — and the wrong one, since two writes of a kind answer
+    /// alike (`write_watch`).
+    WriteSettled {
+        id: u64,
+    },
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {
         local: String,

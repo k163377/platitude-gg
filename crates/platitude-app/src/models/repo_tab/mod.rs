@@ -20,6 +20,9 @@ mod ops_remote;
 mod ops_stage;
 mod qobject;
 mod state;
+mod write_watch;
+
+use write_watch::WriteWatch;
 
 /// Failed fetches in a row before the timer is stopped — more than one,
 /// so a brief offline blip (a lid closed on a train) does not stop it.
@@ -242,6 +245,9 @@ pub struct RepoTab {
     /// landing, and where the screen goes next differs for all three.
     last_write_stopped: bool,
     write_seq: i32,
+    /// **The one write a run is waiting for**, kept by the id its own ask
+    /// was given and asked about by equality alone (`write_watch`).
+    write_watch: WriteWatch,
     /// That answer, classified where the op names are known
     /// (`drain::settle_write`).
     ///
@@ -439,6 +445,15 @@ pub struct RepoTab {
 /// it pressed; `head_seq` is the number the session named for the first
 /// report of HEAD after the write (`TabMsg::WriteState::head_seq`), which
 /// a landing on its tip arms on.
+/// Whether anybody asked for that write, or it is one of the fetches the
+/// page makes on its own — the interval's and the one an opening fires.
+/// **The set is named in core**, where the queue's own lane already
+/// draws it (`OperationKind::asked_for`), so this side cannot come to
+/// disagree with the queue about which writes have somebody waiting.
+pub(super) fn asked_for(kind: OperationKind) -> bool {
+    kind.asked_for()
+}
+
 struct WriteAnswer {
     id: u64,
     seq: i32,

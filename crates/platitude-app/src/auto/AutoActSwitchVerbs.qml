@@ -327,12 +327,14 @@ Item {
                 return
             }
             // Whichever gesture this shape of the question takes — a held pill reports no click, and a click pill has
-            // no hold to run to its end. The bar itself says which it is.
-            driver.writeSeqBefore = repoTab.writeSeq
+            // no hold to run to its end. The bar itself says which it is, and each way in arms its own watch.
             if (graphPane.askHold)
-                graphPane.completeHold()
+                driver.holdToEnd(graphPane)
             else
-                page.answerRowAsk()
+                driver.pressWrite("answer-ask", () => {
+                    page.answerRowAsk()
+                    return true
+                })
             switchStoppedLandedTimer.start()
         }
     }
@@ -344,7 +346,7 @@ Item {
         id: switchStoppedLandedTimer
         property int stashes: -1
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore
+            if (!driver.wroteAndSettled()
                     || workTree.opCommand !== "" || !graphPane.askCard.shut)
                 return
             if (switchStoppedLandedTimer.stashes >= 0
@@ -407,8 +409,10 @@ Item {
                 driver.complete()
                 return
             }
-            driver.writeSeqBefore = repoTab.writeSeq
-            page.answerRowAsk()
+            driver.pressWrite("answer-ask", () => {
+                page.answerRowAsk()
+                return true
+            })
             writeBarrier.start()
         }
     }

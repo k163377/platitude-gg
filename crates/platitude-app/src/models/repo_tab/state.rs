@@ -70,6 +70,7 @@ impl Default for RepoTab {
             last_write_error: String::new(),
             last_write_stopped: false,
             write_seq: 0,
+            write_watch: crate::models::repo_tab::WriteWatch::default(),
             write_refused: false,
             write_stale_diff: false,
             write_moved_head: false,
@@ -107,9 +108,12 @@ impl Default for RepoTab {
     }
 }
 impl RepoTab {
-    /// Runs `f` with this tab's session, if the tab is still open. The
-    /// id a write hands back is let go; a slot that returns it to the
-    /// page asks through [`Self::ask_session`].
+    /// Runs `f` with this tab's session, if the tab is still open.
+    ///
+    /// **Reads only.** Every write this tab asks for goes through
+    /// [`Self::ask_session`], which is where the id it is given is kept
+    /// for whoever is waiting on that write (`write_watch`); a write sent
+    /// from here would be one nothing could wait for by name.
     pub(super) fn with_session<R>(
         &self,
         f: impl FnOnce(&Arc<platitude_core::session::RepoSession>) -> R,
@@ -117,19 +121,25 @@ impl RepoTab {
         crate::hub::with_session(self.tab_id, f);
     }
 
-    /// Asks the session for a write and answers with the id it was
-    /// accepted under — nothing where there is no session to ask or the
-    /// session took nothing (it is closed). **An id is a promise of an
-    /// answer**, so whoever waits for one waits on this and nothing else:
-    /// the page holding it across the bridge (`RepoPage.pendingPopId`),
-    /// and the rows a delete took off the screen (`ops::StandIn`).
+    /// **The one door a write leaves this tab by.** Asks the session and
+    /// answers with the id it was accepted under — nothing where there is
+    /// no session to ask or the session took nothing (it is closed).
+    ///
+    /// **An id is a promise of an answer**, so whoever waits for one waits
+    /// on this and nothing else: the page holding it across the bridge
+    /// (`RepoPage.pendingPopId`), the rows a delete took off the screen
+    /// (`ops::StandIn`), and the run whose picture is of what the write
+    /// left, which the watch keeps it for (`write_watch`) — **inside this
+    /// call, which is the only moment the id is anybody's in particular**.
     pub(super) fn ask_session(
-        &self,
+        &mut self,
         f: impl FnOnce(
             &Arc<platitude_core::session::RepoSession>,
         ) -> Option<platitude_core::OperationId>,
     ) -> Option<platitude_core::OperationId> {
-        crate::hub::from_session(self.tab_id, f).flatten()
+        let asked = crate::hub::from_session(self.tab_id, f).flatten();
+        self.write_watch.asked(asked.map(|id| id.as_u64()));
+        asked
     }
 
     /// The page has put a status on screen: its counts stood beside the
@@ -262,12 +272,16 @@ impl RepoTab {
 
     /// Moves HEAD, taking uncommitted work along — through a stash when
     /// git will not carry it itself, which needs nothing asked here.
-    pub(super) fn move_head(&self, target: platitude_core::branch::CheckoutTarget, leaving: bool) {
-        self.with_session(|s| {
+    pub(super) fn move_head(
+        &mut self,
+        target: platitude_core::branch::CheckoutTarget,
+        leaving: bool,
+    ) {
+        self.ask_session(|s| {
             if leaving {
-                s.checkout_leaving_operation(target.clone());
+                s.checkout_leaving_operation(target.clone())
             } else {
-                s.checkout(target.clone());
+                s.checkout(target.clone())
             }
         });
     }
@@ -310,7 +324,7 @@ impl RepoTab {
                 return;
             }
         };
-        self.with_session(|s| s.reset(rev.clone(), mode));
+        self.ask_session(|s| s.reset(rev.clone(), mode));
     }
 }
 

@@ -161,9 +161,11 @@ Item {
                 // head's row goes to the reflog and the rewritten one takes its place, and that pair is the barrier
                 // (app-ui.md — その書き込みが動かす当のモデルの行を待つ).
                 plan.setAction(plan.stepCount - 1, "drop")
-                driver.writeSeqBefore = repoTab.writeSeq
                 planRanTimer.begin(workTree.headOid)
-                plan.runPlan()
+                driver.pressWrite("run-plan", () => {
+                    plan.runPlan()
+                    return true
+                })
             } else if (planOpenTimer.act === "plan-details-held") {
                 // The row the plan opened on is already the selected one, and the right pane is already its
                 // commit's (`RepoPage.onPlanActiveChanged`) — the walk starts from exactly the screen a reader

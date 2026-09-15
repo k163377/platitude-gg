@@ -15,7 +15,7 @@ impl RepoTab {
                 return;
             }
         };
-        self.with_session(|s| s.resolve_current(continuation));
+        self.ask_session(|s| s.resolve_current(continuation));
     }
 
     pub(super) fn take_side(&mut self, side: String) {
@@ -32,7 +32,7 @@ impl RepoTab {
         if paths.is_empty() {
             return;
         }
-        self.with_session(|s| s.take_side(paths.clone(), side));
+        self.ask_session(|s| s.take_side(paths.clone(), side));
     }
 
     pub(super) fn run_merge_tool(&mut self) {
@@ -40,7 +40,7 @@ impl RepoTab {
         if paths.is_empty() {
             return;
         }
-        self.with_session(|s| s.mergetool(paths.clone()));
+        self.ask_session(|s| s.mergetool(paths.clone()));
     }
 
     pub(super) fn list_merge_tools(&mut self) {

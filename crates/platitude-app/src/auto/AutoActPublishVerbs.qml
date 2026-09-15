@@ -260,7 +260,7 @@ Item {
     SampleTimer {
         id: fetchedRefListTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             const stacked = graphPane.view.itemAtIndex(
                 Number(Harness.autoActArg))
@@ -282,8 +282,10 @@ Item {
             pushRetryTimer.stop()
             Harness.report("push_retry refused=" + page.pushFailed
                               + " branch=" + publishFlow.pushFailBranch)
-            driver.writeSeqBefore = repoTab.writeSeq
-            page.forcePush()
+            driver.pressWrite("force-push", () => {
+                page.forcePush()
+                return true
+            })
             writeBarrier.start()
         }
     }
@@ -471,8 +473,11 @@ Item {
             if (!remoteDialog.visible || remoteDialog.wantedName === "" || remoteDialog.wantedUrl === "")
                 return
             publishNewTimer.stop()
-            driver.writeSeqBefore = repoTab.writeSeq
-            remoteDialog.submit()
+            // The dialog is answered here, which is the input; the ask it makes is inside the same call.
+            driver.pressWrite("remote-dialog", () => {
+                remoteDialog.submit()
+                return true
+            })
             publishAnswerTimer.start()
         }
     }
@@ -506,13 +511,21 @@ Item {
                               + publishFlow.publishState
                               + " unsure=" + publishFlow.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
-            // The same gesture a person is given: a hold cannot be answered by a click here either. The hold's end
-            // is the press the write barrier is armed on (`holdToEnd`), said by the pane when the pill confirms.
-            driver.writeSeqBefore = repoTab.writeSeq
+            // **The remote this run added is not the write it waits out** — `publish-new-go` presses two, and only
+            // the push is the one the picture is of. Said out loud rather than left to be inferred: arming over a
+            // write this run is still waiting out is a breach, and forgetting to wait looks the same from there
+            // (`repo_tab::write_watch`).
+            driver.letWriteGo()
+            // The same gesture a person is given: a hold cannot be answered by a click here either. Each way in is a
+            // press of its own and arms its own watch (`holdToEnd` / `pressWrite`) — the hold's is its end, ticks
+            // after this, and a stray answer landing inside it is not what the barrier opens on.
             if (publishFlow.publishRefused)
-                driver.holdToEnd(graphPane, graphPane.askConfirmed)
+                driver.holdToEnd(graphPane)
             else
-                page.answerRowAsk()
+                driver.pressWrite("answer-ask", () => {
+                    page.answerRowAsk()
+                    return true
+                })
             writeBarrier.start()
         }
     }

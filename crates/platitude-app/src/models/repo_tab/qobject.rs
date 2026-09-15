@@ -156,11 +156,7 @@ impl RepoTab {
     // under the same word and used to lose their refusal to whatever
     // else came back in the drain (`ops::PushOut`).
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
-    qproperty!(
-        "refPushTarget",
-        Member = ref_push_target,
-        Notify = changed
-    );
+    qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
     // What is left over, classified in drain::settle_write — the page
     // reads meanings, never op names (app-ui.md). These describe the last
     // answer of this notify **nobody was waiting for by name**: a drain
@@ -306,6 +302,96 @@ impl RepoTab {
         self.write_answer_at(index)
             .map(|a| a.kind.label().to_string())
             .unwrap_or_default()
+    }
+
+    /// Whether anybody pressed for that one, or it is a fetch the page
+    /// made on its own (`asked_for` — the same set the write ids move
+    /// by). A run reading answers one by one asks this rather than
+    /// matching the word `writeAnswerOp` gives it.
+    #[qslot]
+    fn write_answer_asked(&self, index: i32) -> bool {
+        self.write_answer_at(index)
+            .is_some_and(|a| super::asked_for(a.kind))
+    }
+
+    /// **The next write this tab is asked to make is the one to wait for**
+    /// (`write_watch`).
+    ///
+    /// A slot and not a property because arming is a thing done, at a
+    /// moment: whoever calls this is about to put an input in, and the ask
+    /// that input produces is the one kept — which is the only way the id
+    /// is anybody's in particular. A run never holds the number.
+    #[qslot]
+    pub(crate) fn watch_next_write(&mut self, what: String) -> String {
+        self.write_watch.arm(&what).unwrap_or_default()
+    }
+
+    /// The input this run put in has gone. **From here the run is waiting
+    /// on that write**, however it waits — the shared barrier or a sampler
+    /// of its own, which is not this side's business and never was.
+    #[qslot]
+    pub(crate) fn write_input_went(&mut self) {
+        self.write_watch.input_went();
+    }
+
+    /// **This run is moving on from the write it pressed for without
+    /// waiting it out**, which a composite operation has to say out loud
+    /// (`write_watch`) — otherwise it reads as forgetting to wait.
+    #[qslot]
+    pub(crate) fn let_write_go(&mut self) {
+        self.write_watch.let_go();
+    }
+
+    /// A breach the run saw and this side could not. Ends the run the same
+    /// way one raised here does.
+    #[qslot]
+    pub(crate) fn break_write_contract(&mut self, breach: String) {
+        self.write_watch.broke(&breach);
+    }
+
+    /// Whether the contract is broken — **final**: nothing arms past it
+    /// and nothing completes.
+    #[qslot]
+    pub(crate) fn write_contract_broken(&self) -> bool {
+        self.write_watch.broken()
+    }
+
+    /// Where the run stands with its own write, and what it called the
+    /// press: `dispatched` / `input` / `pressed` / `broken`.
+    #[qslot]
+    pub(crate) fn write_run_stage(&self) -> String {
+        self.write_watch.run_stage().to_string()
+    }
+
+    #[qslot]
+    pub(crate) fn write_wanted(&self) -> String {
+        self.write_watch.wanted().to_string()
+    }
+
+    /// Whether the write being watched has been through both of the
+    /// boundaries behind it: git answered it, and everything it
+    /// invalidated has been read again and published.
+    ///
+    /// **Matched by id, never compared.** Another write somebody asked for
+    /// moves every count and every flag and still leaves this false,
+    /// whichever way round the two were numbered (`write_watch`).
+    #[qslot]
+    pub(crate) fn wrote_through(&self) -> bool {
+        self.write_watch.through()
+    }
+
+    /// Where the watch stands, and the id it is holding — the two halves
+    /// of what a run that stopped answering has to say for itself
+    /// (`AutoShotDriver` の watchdog). `asleep` / `armed` / `turned-down` /
+    /// `held` / `answered` / `settled`, and 0 for "no ask has been taken".
+    #[qslot]
+    pub(crate) fn write_watch_stage(&self) -> String {
+        self.write_watch.stage().to_string()
+    }
+
+    #[qslot]
+    pub(crate) fn watched_write_id(&self) -> i32 {
+        bridge_id(self.write_watch.id())
     }
 
     /// git stopped part-way through that one and left the operation
@@ -535,12 +621,12 @@ impl RepoTab {
 
     #[qslot]
     fn stage_path(&mut self, path: String) {
-        self.with_session(|s| s.stage_paths(vec![path.clone()]));
+        self.ask_session(|s| s.stage_paths(vec![path.clone()]));
     }
 
     #[qslot]
     fn unstage_path(&mut self, path: String) {
-        self.with_session(|s| s.unstage_paths(vec![path.clone()]));
+        self.ask_session(|s| s.unstage_paths(vec![path.clone()]));
     }
 
     /// The same two over the gathered set, for when several rows are
@@ -591,12 +677,12 @@ impl RepoTab {
 
     #[qslot]
     fn stage_all(&mut self) {
-        self.with_session(|s| s.stage_all());
+        self.ask_session(|s| s.stage_all());
     }
 
     #[qslot]
     fn unstage_all(&mut self) {
-        self.with_session(|s| s.unstage_all());
+        self.ask_session(|s| s.unstage_all());
     }
 
     /// `git add` over every conflicted path — the conflicted bucket's
@@ -604,7 +690,7 @@ impl RepoTab {
     /// no paths are gathered here.
     #[qslot]
     fn stage_conflicted(&mut self) {
-        self.with_session(|s| s.stage_conflicted());
+        self.ask_session(|s| s.stage_conflicted());
     }
 
     /// Stages (or unstages) part of one file's diff, addressed by the row
@@ -687,7 +773,7 @@ impl RepoTab {
     /// comes back as `moveAskSeq` for the UI to ask about.
     #[qslot]
     fn checkout_moving_branch(&mut self, local: String, start: String, leaving: bool) {
-        self.with_session(|s| s.checkout_moving_branch(local.clone(), start.clone(), leaving));
+        self.ask_session(|s| s.checkout_moving_branch(local.clone(), start.clone(), leaving));
     }
 
     /// Moves an existing local branch to `start` and lands on it. What the
@@ -711,7 +797,7 @@ impl RepoTab {
     #[qslot]
     fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
         let start = (!start_point.is_empty()).then_some(start_point);
-        self.with_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
+        self.ask_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
     }
 
     /// Deletes a local branch, and takes its row off the screen behind the
@@ -725,7 +811,7 @@ impl RepoTab {
 
     #[qslot]
     fn rename_branch(&mut self, from: String, to: String, force: bool) {
-        self.with_session(|s| s.rename_branch(from.clone(), to.clone(), force));
+        self.ask_session(|s| s.rename_branch(from.clone(), to.clone(), force));
     }
 
     /// Records the remote branch `branch` is measured against. The two
@@ -739,14 +825,14 @@ impl RepoTab {
             return;
         }
         let upstream = format!("refs/remotes/{remote}/{remote_branch}");
-        self.with_session(|s| s.set_upstream(branch.clone(), upstream.clone()));
+        self.ask_session(|s| s.set_upstream(branch.clone(), upstream.clone()));
     }
 
     /// Puts a lightweight tag on `commit` (HEAD when empty). Never
     /// forced: a name already taken is git's to refuse.
     #[qslot]
     fn create_tag(&mut self, name: String, commit: String) {
-        self.with_session(|s| s.create_tag(name.clone(), commit.clone()));
+        self.ask_session(|s| s.create_tag(name.clone(), commit.clone()));
     }
 
     /// Sends one tag to one remote. `lease_expect` pins a leased
@@ -754,7 +840,7 @@ impl RepoTab {
     /// on; empty sends it plain.
     #[qslot]
     fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
-        self.with_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
+        self.ask_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
     }
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
@@ -775,7 +861,7 @@ impl RepoTab {
     /// the same object and a delete of the old one.
     #[qslot]
     fn rename_tag(&mut self, from: String, to: String) {
-        self.with_session(|s| s.rename_tag(from.clone(), to.clone()));
+        self.ask_session(|s| s.rename_tag(from.clone(), to.clone()));
     }
 
     /// Deletes a tag: only the name goes.
@@ -788,7 +874,7 @@ impl RepoTab {
     /// drop — so the entry moves to the top of the list.
     #[qslot]
     fn rename_stash(&mut self, selector: String, message: String) {
-        self.with_session(|s| s.rename_stash(selector.clone(), message.clone()));
+        self.ask_session(|s| s.rename_stash(selector.clone(), message.clone()));
     }
 
     /// `git stash push -u` over the whole working tree, on the press —
@@ -817,7 +903,7 @@ impl RepoTab {
     /// pop's own answer among the stash answers that look alike
     /// (`writeAnswerIndex`); zero where no session took it.
     #[qslot]
-    fn pop_stash(&self, selector: String) -> i32 {
+    fn pop_stash(&mut self, selector: String) -> i32 {
         let asked = self.ask_session(|s| s.stash_pop(selector.clone()));
         asked.map_or(0, |id| bridge_id(id.as_u64()))
     }
@@ -827,7 +913,7 @@ impl RepoTab {
     /// the page is waiting to hear which answer was this one's.
     #[qslot]
     fn apply_stash(&mut self, selector: String) {
-        self.with_session(|s| s.stash_apply(selector.clone()));
+        self.ask_session(|s| s.stash_apply(selector.clone()));
     }
 
     /// `git stash drop` (destructive): the entry's row goes at the press.
@@ -915,7 +1001,7 @@ impl RepoTab {
     #[qslot]
     fn fetch(&mut self, remote: String) {
         let remote = (!remote.is_empty()).then_some(remote);
-        self.with_session(|s| s.fetch(remote.clone()));
+        self.ask_session(|s| s.fetch(remote.clone()));
     }
 
     /// Pushes the branch that is checked out to wherever it tracks, or to
@@ -957,7 +1043,7 @@ impl RepoTab {
     /// nowhere is recorded just the same, and the push finds out.
     #[qslot]
     fn add_remote(&mut self, name: String, url: String) {
-        self.with_session(|s| s.add_remote(name.clone(), url.clone()));
+        self.ask_session(|s| s.add_remote(name.clone(), url.clone()));
     }
 
     /// The fetch URL a remote is written down with, empty for a name this
@@ -979,13 +1065,13 @@ impl RepoTab {
     /// remote is what moves it.
     #[qslot]
     fn set_push_default(&mut self, name: String) {
-        self.with_session(|s| s.set_push_default(name.clone()));
+        self.ask_session(|s| s.set_push_default(name.clone()));
     }
 
     /// `git remote set-url <name> <url>` — the way back from a typo.
     #[qslot]
     fn set_remote_url(&mut self, name: String, url: String) {
-        self.with_session(|s| s.set_remote_url(name.clone(), url.clone()));
+        self.ask_session(|s| s.set_remote_url(name.clone(), url.clone()));
     }
 
     /// Asks what a push under this branch name would meet on that remote.
@@ -1076,7 +1162,7 @@ impl RepoTab {
             squash: false,
             message: (!message.trim().is_empty()).then_some(message),
         };
-        self.with_session(|s| s.merge(rev.clone(), options.clone()));
+        self.ask_session(|s| s.merge(rev.clone(), options.clone()));
     }
 
     /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
@@ -1092,24 +1178,24 @@ impl RepoTab {
             update_refs,
             root: false,
         };
-        self.with_session(|s| s.rebase(upstream.clone(), options.clone()));
+        self.ask_session(|s| s.rebase(upstream.clone(), options.clone()));
     }
 
     #[qslot]
     fn cherry_pick(&mut self, rev: String) {
-        self.with_session(|s| s.cherry_pick(vec![rev.clone()]));
+        self.ask_session(|s| s.cherry_pick(vec![rev.clone()]));
     }
 
     /// Folds a commit into its parent (one-commit interactive rebase).
     #[qslot]
     fn squash_into_parent(&mut self, oid: String) {
-        self.with_session(|s| s.squash_into_parent(oid.clone()));
+        self.ask_session(|s| s.squash_into_parent(oid.clone()));
     }
 
     /// Leaves one commit out of the history, replaying what came after it.
     #[qslot]
     fn drop_commit(&mut self, oid: String) {
-        self.with_session(|s| s.drop_commit(oid.clone()));
+        self.ask_session(|s| s.drop_commit(oid.clone()));
     }
 
     /// Replaces one commit's message. HEAD is amended; anything older is
@@ -1120,12 +1206,12 @@ impl RepoTab {
         if message.is_empty() {
             return;
         }
-        self.with_session(|s| s.reword(oid.clone(), message.clone()));
+        self.ask_session(|s| s.reword(oid.clone(), message.clone()));
     }
 
     #[qslot]
     fn revert(&mut self, rev: String) {
-        self.with_session(|s| s.revert(vec![rev.clone()]));
+        self.ask_session(|s| s.revert(vec![rev.clone()]));
     }
 
     /// Continues / aborts / skips whatever is in progress. `how` is
@@ -1161,7 +1247,7 @@ impl RepoTab {
     /// Records which merge tool to launch; empty clears the choice.
     #[qslot]
     fn set_merge_tool(&mut self, tool: String) {
-        self.with_session(|s| s.set_merge_tool(tool.clone()));
+        self.ask_session(|s| s.set_merge_tool(tool.clone()));
     }
 
     /// Asks for the configured merge tool; the answer arrives on the

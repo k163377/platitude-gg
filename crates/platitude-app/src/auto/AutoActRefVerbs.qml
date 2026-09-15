@@ -64,7 +64,7 @@ Item {
             // The plain one is finished by the write barrier `dispatchFinished` puts up, which reads nothing until
             // the press arms it; the other two own their own completion (`AutoActCompletion.defersCompletion`) and
             // their tail goes on off the press itself.
-            driver.expectWriteAtPress()
+            driver.beginWrite(act)
             deleteRowTimer.after = act === "delete-branch-go" ? "hold"
                                  : act === "delete-branch-refused" ? "refused" : ""
             deleteRowTimer.start()
@@ -94,7 +94,7 @@ Item {
             refMenu.openSub(refTagCard)
             // The hold's end is the press, and the latch is read there rather than sampled for: the stand-in can be
             // let go inside one tick on a demo repository (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態).
-            driver.expectWriteAtPress()
+            driver.beginWrite(act)
             refTagDeleteItem.held.connect(stoodDownTimer.pressed)
             refTagDeleteItem.completeHold()
             stoodDownTimer.start()
@@ -142,7 +142,7 @@ Item {
             //
             // The menu goes up and the row is pressed from the sampler, on the same terms as the sidebar's three
             // above: both entrances end at the one page function, and it drops what it is asked while a write runs.
-            driver.expectWriteAtPress()
+            driver.beginWrite(act)
             chipDeleteTimer.start()
         } else if (act === "chip-menu") {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — there is no second menu on
@@ -274,7 +274,7 @@ Item {
                 driver.complete()
                 return
             }
-            driver.pressedWrite()
+            driver.inputWent(true)
             if (deleteRowTimer.after === "hold")
                 forceDeleteTimer.start()
             else if (deleteRowTimer.after === "refused")
@@ -285,7 +285,7 @@ Item {
     SampleTimer {
         id: forceDeleteTimer
         onTriggered: {
-            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0 || refDeleteItem.holdMs <= 0)
+            if (!driver.wroteAndSettled() || refDeleteItem.holdMs <= 0)
                 return
             forceDeleteTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.text
@@ -429,10 +429,9 @@ Item {
                 driver.complete()
                 return
             }
-            driver.writeSeqBefore = repoTab.writeSeq
             if (tagMenuTimer.press === "remote-refuse") {
                 // Nothing moves, so there is no reading of this name to wait for: what the run waits on is the bar.
-                refRemoteTagDeleteItem.completeHold()
+                driver.holdToEnd(refRemoteTagDeleteItem)
                 driver.barrierNotice.start()
                 return
             }
@@ -453,7 +452,10 @@ Item {
             if (refPushTagItem.holdMs > 0)
                 driver.holdToEnd(refPushTagItem)
             else
-                refPushTagItem.triggered()
+                driver.pressWrite("push-tag", () => {
+                    refPushTagItem.triggered()
+                    return true
+                })
             writeBarrier.start()
         }
     }
@@ -465,7 +467,7 @@ Item {
         property string tag: ""
         property string was: ""
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             const now = tagsModel.tagSides(tagGoneTimer.tag)
             if (now === tagGoneTimer.was)
@@ -557,10 +559,10 @@ Item {
                     return
                 }
                 chipDeleteTimer.pressed = true
-                driver.pressedWrite()
+                driver.inputWent(true)
                 return
             }
-            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+            if (!driver.wroteAndSettled())
                 return
             chipDeleteTimer.stop()
             Harness.report("chip_delete branch=" + Harness.autoActArg
@@ -574,7 +576,7 @@ Item {
     SampleTimer {
         id: refusedRowTimer
         onTriggered: {
-            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+            if (!driver.wroteAndSettled())
                 return
             refusedRowTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.code
@@ -609,10 +611,10 @@ Item {
         property bool stood: false
         function pressed() {
             stoodDownTimer.stood = graphModel.goneChips !== ""
-            driver.pressedWrite()
+            driver.inputWent(true)
         }
         onTriggered: {
-            if (repoTab.writeSeq <= driver.writeSeqBefore || repoTab.busyCount !== 0)
+            if (!driver.wroteAndSettled())
                 return
             // The answer is not the end of it: the rows stay off the screen until a listing that looked after the
             // write has been drawn, and this is that listing arriving (`ops::StandIn`).

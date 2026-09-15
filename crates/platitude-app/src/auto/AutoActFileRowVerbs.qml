@@ -72,13 +72,15 @@ Item {
         onTriggered: {
             if (!bucketAllTimer.pressed) {
                 // The heading exists once the list has laid its sections out, which is a frame after the rows arrive.
-                if (wipPane.rowAt(0) === null || !wipPane.moveBucket(bucketAllTimer.from))
+                if (wipPane.rowAt(0) === null)
                     return
-                driver.writeSeqBefore = repoTab.writeSeq
+                if (!driver.pressWrite("bucket:" + bucketAllTimer.from,
+                                       () => wipPane.moveBucket(bucketAllTimer.from)))
+                    return
                 bucketAllTimer.pressed = true
                 return
             }
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq <= driver.writeSeqBefore)
+            if (!driver.wroteAndSettled())
                 return
             // The bucket that was emptied has to be empty before its heading means anything: the counts are the model's
             // answer and the headings are the list's, and reading the second before the first would report the state

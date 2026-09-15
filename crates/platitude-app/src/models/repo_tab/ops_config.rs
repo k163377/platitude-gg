@@ -14,7 +14,7 @@ impl RepoTab {
             self.last_error_from_fetch = false;
         }
         self.with_session(|s| s.resume_auto_fetch());
-        self.with_session(|s| s.fetch(None));
+        self.ask_session(|s| s.fetch(None));
         self.changed();
     }
 
@@ -57,7 +57,7 @@ impl RepoTab {
         } else {
             platitude_core::identity::ConfigScope::Local
         };
-        self.with_session(|s| s.set_identity(name.clone(), email.clone(), scope));
+        self.ask_session(|s| s.set_identity(name.clone(), email.clone(), scope));
     }
 
     pub(super) fn write_tags_shown(&mut self, shown: bool) {
