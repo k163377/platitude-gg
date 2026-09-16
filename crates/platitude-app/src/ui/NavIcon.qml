@@ -227,8 +227,16 @@ InkCanvas {
             ctx.arc(8 * s, 8 * s, 5 * s, -Math.PI / 2, Math.PI)
             ctx.stroke()
         } else if (icon.kind === "copyicon") {
-            ctx.strokeRect(5.5 * s, 3.5 * s, 7 * s, 7 * s)
-            ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
+            // The corner takes 1 of the grid — a seventh of the sheet's side, and a coordinate, so it shrinks with
+            // the drawing while the line does not (`stroke` above) and the mark keeps its proportion at every size.
+            // **No more than a seventh**: rounded by half again that, a sheet of seven is a blob, and what a reader
+            // tells apart here is two squares lying on each other. Paths rather than `strokeRect`, which has no
+            // radius to give.
+            for (const sheet of [[5.5, 3.5], [3.5, 5.5]]) {
+                ctx.beginPath()
+                ctx.roundedRect(sheet[0] * s, sheet[1] * s, 7 * s, 7 * s, 1 * s, 1 * s)
+                ctx.stroke()
+            }
         } else if (icon.kind === "bang") {
             ctx.beginPath()
             ctx.moveTo(8 * s, 3.5 * s)
