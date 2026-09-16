@@ -91,7 +91,7 @@ Rectangle {
     /// Seated so, the chip reads the same figures from both ends — a whole gap between the frame and the mark, half a
     /// one between the mark and the word.
     readonly property real heldInk: heldMark.inkWidth
-    /// The cloud needs the seat more than the tree does: it is drawn 2.0 of the sixteen in from its own left edge, so
+    /// The cloud needs the seat more than the tree does: it is drawn 1.7 of the sixteen in from its own left edge, so
     /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
     /// up.
     readonly property real badgeInk: badgeMark.inkWidth
@@ -308,7 +308,7 @@ Rectangle {
         // Remote / PR badge: reserved width above, so it survives any elision.
         //
         // **Seated to its ink, like the mark at the other end**, and for the reason that one is: a square seat hands
-        // the mark's own air to the gaps on both sides of it, and the cloud carries two of the sixteen on its left.
+        // the mark's own air to the gaps on both sides of it, and the cloud carries 1.7 of the sixteen on its left.
         // The gap before it would then read as the row's spacing **plus** that — the one place in the chip where two
         // spacings add up, wider than the same token spends anywhere else in the same frame (デザイン規約 §余白;
         // observed).

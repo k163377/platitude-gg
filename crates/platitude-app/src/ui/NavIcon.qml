@@ -38,9 +38,9 @@ InkCanvas {
         case "terminal": return 10
         // The two commit rings, each 1.7 either side of its own centre (4.5 and 11.5); the elbow stands inside them.
         case "pr": return 10.4
-        // The three lobes as drawn: the left one reaches 2.0 and the right one 14.72. **Not centred in its box** —
+        // The three lobes as drawn: the left one reaches 1.7 and the right one 14.6. **Not centred in its box** —
         // which is why this kind answers `inkRightGrid` as well.
-        case "remote": return 12.72
+        case "remote": return 12.9
         // The two rings, each 1.8 either side of its own centre (5 and 11): 3.2 to 12.8, stem and curve inside that.
         case "branch": return 9.6
         // A square of 7.2 turned an eighth of a turn about the middle, so it spans its own diagonal.
@@ -72,7 +72,7 @@ InkCanvas {
         // The far ring and the far lobe: the badge a chip wears is set against the frame's right, so both kinds that
         // stand in that slot answer here.
         case "pr": return 13.2
-        case "remote": return 14.72
+        case "remote": return 14.6
         // The cursor's far end; the chevron behind it stops well short.
         case "terminal": return 13
         default: return 16
@@ -107,6 +107,10 @@ InkCanvas {
         ctx.fillStyle = icon.tint
         ctx.lineWidth = icon.stroke
         ctx.lineCap = "round"
+        // Said every paint, like the four above it: the context outlives one `onPaint` and one `kind`, so a mark that
+        // asks for round joins would otherwise hand them to whatever the same seat draws next (a badge flips between
+        // the cloud and the pull request; a file row's mark follows the change).
+        ctx.lineJoin = "miter"
         if (icon.kind === "branch") {
             ctx.beginPath()
             ctx.moveTo(5 * s, 5 * s)
@@ -122,12 +126,21 @@ InkCanvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "remote") {
-            // Three lobes, drawn to the same share of the grid its siblings take — the tag stands 10.2 of the sixteen
-            // and the archive box 9. A cloud any smaller reads beside a name as a mark somebody had shrunk.
+            // Three lobes off one flat base, drawn to the same share of the grid its siblings take — the tag stands
+            // 10.2 of the sixteen and the archive box 9. A cloud any smaller reads beside a name as a mark somebody
+            // had shrunk. **One lobe carries the mark**: three of a size read as a row of bumps, so the middle one
+            // rises alone and the two ends stand their own radius above the base, which is what lets the close run
+            // flat. **The ends stand well clear of the dome** — 2.4 of the grid on the left and 2.6 on the right —
+            // because the line does not shrink with the coordinates: at `iconSm` it is two grid units wide and a
+            // valley any shallower is ink.
+            // **The arcs change hands where the circles cross.** An arc stopped short of its neighbour is joined by
+            // the straight line `arc` runs to the next start, and that line reads as a dent in the silhouette; the
+            // angles here are that crossing, and the join is round because the outline turns a corner at each one.
+            ctx.lineJoin = "round"
             ctx.beginPath()
-            ctx.arc(5.6 * s, 9.2 * s, 3.6 * s, Math.PI * 0.5, Math.PI * 1.5)
-            ctx.arc(8.6 * s, 6.56 * s, 3.84 * s, Math.PI * 0.95, Math.PI * 0.02, false)
-            ctx.arc(11.6 * s, 9.68 * s, 3.12 * s, Math.PI * 1.55, Math.PI * 0.5)
+            ctx.arc(4.6 * s, 10 * s, 2.9 * s, Math.PI * 0.5, Math.PI * 1.445)
+            ctx.arc(8.05 * s, 7.05 * s, 3.95 * s, Math.PI * 0.9925, Math.PI * 1.9287)
+            ctx.arc(11.2 * s, 9.5 * s, 3.4 * s, Math.PI * 1.5661, Math.PI * 0.5)
             ctx.closePath()
             ctx.stroke()
         } else if (icon.kind === "tag") {

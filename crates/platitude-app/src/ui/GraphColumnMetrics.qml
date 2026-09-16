@@ -62,7 +62,7 @@ QtObject {
     }
     /// The badge at the chip's other end, priced the same way and for the same reason. **The cloud, not the pull
     /// request**: the two share one slot (`RefChip.hasBadge`) so only one of them is ever drawn, and the floor takes
-    /// the wider — 12.72 of the grid against the PR mark's 10.4.
+    /// the wider — 12.9 of the grid against the PR mark's 10.4.
     readonly property NavIcon chipBadgeMark: NavIcon {
         kind: "remote"
         width: Theme.iconSm
