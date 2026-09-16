@@ -372,6 +372,10 @@ impl RepoSession {
         // across awaits and cannot hold this lock (`published::RemoteTips`).
         let mut marks = PublishMarks::new(self.remote_tips(workdir, cancel).await);
         let mut rows: Vec<LogRow> = Vec::new();
+        // What the synthetic rows are about to be laid from, so the
+        // publish below can tell whether it moved while the walk ran
+        // (`session::relay`).
+        let laid_from = self.standing_rows();
 
         // See `run_direct_pass`: a fault left here stands in for the walk.
         let result = match self.pass_fault(PassStep::Swapping) {
@@ -412,6 +416,7 @@ impl RepoSession {
             }
         };
 
+        self.lay_again_if_moved(&mut rows, &mut builder, &laid_from);
         let total = rows.len() as u32;
         let tags = self.tags_shown();
         {

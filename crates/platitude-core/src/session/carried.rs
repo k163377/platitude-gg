@@ -377,6 +377,12 @@ impl super::RepoSession {
         else {
             return CarriedOutcome::Dropped;
         };
+        // Where the listing above found each copy, into the record the
+        // rows are drawn against. **Before the reads rather than after**:
+        // it describes the same moment they were started from, and a
+        // reading is only ever behind a listing taken after it
+        // (`RepoSession::note_copy_heads`).
+        self.note_copy_heads(&worktrees, workdir);
         let carried = read_all(&self.exec_background, &worktrees, workdir, &ticket.cancel).await;
         // Reads stopped part-way are not a reading: what they left out
         // would come down as copies with nothing to show.

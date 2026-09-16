@@ -266,6 +266,25 @@ pub struct RepoSession {
     /// reason the tag index is, since every refs read wants it and none
     /// of them changes it.
     pub(super) worktree_holders: Mutex<Arc<super::joins::WorktreeHolders>>,
+    /// Where each other working copy's HEAD stood when the listing last
+    /// named it, by the key its path is compared on (`joins::same_path_key`).
+    ///
+    /// **The cheap half of what a copy's row is drawn from.** The row's
+    /// place and its tallies come from a `status` of that copy on a tick
+    /// of its own — most of a second each, so a slow one
+    /// (`session::carried`) — while the listing that names every copy's
+    /// HEAD is one process of twenty-odd milliseconds on the page's own
+    /// tick. So this is how a window learns that a copy has committed
+    /// long before it learns what the copy is now carrying, and the row
+    /// drawn from the older reading would stand on a commit that copy
+    /// has left (`relay::Standing`).
+    ///
+    /// **Kept apart from [`Self::worktree_holders`] on purpose**: that
+    /// set decides whether the refs are read and the graph walked again,
+    /// and a commit in a neighbouring copy moves no row of ours — folded
+    /// in there, every one of them would spend a listing of tens of
+    /// thousands of refs to say nothing (`joins::note_worktree_holders`).
+    pub(super) copy_heads: Mutex<Arc<std::collections::HashMap<String, Oid>>>,
     /// Bumped when that set became a different one. **Nothing else in the
     /// refs key would notice** — taking or giving back a working copy
     /// moves no ref, so without this the mark would wait for an unrelated

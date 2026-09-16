@@ -90,6 +90,9 @@ mod query;
 mod read_flight;
 mod refresh;
 mod refresh_op;
+mod relay;
+#[cfg(test)]
+mod relay_tests;
 mod remote_tags;
 mod repo_session;
 mod rows;

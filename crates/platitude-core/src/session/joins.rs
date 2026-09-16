@@ -474,6 +474,7 @@ impl RepoSession {
         workdir: &Path,
     ) -> WorktreeNews {
         let here = same_path_key(&workdir.to_string_lossy());
+        self.note_copy_heads(worktrees, workdir);
         let mine = worktrees
             .iter()
             .filter(|w| !w.bare && same_path_key(&w.path) != here);

@@ -58,7 +58,7 @@ impl RepoSession {
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut sifter = Sifter::new(&stash_refs);
-        let mut carried = super::rows::CarriedRows::new(&self.carried());
+        let mut carried = super::rows::CarriedRows::new(&self.carried_current());
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
         let mut totals = LogTotals {
@@ -168,7 +168,7 @@ impl RepoSession {
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut sifter = Sifter::new(&stash_refs);
-        let mut carried = super::rows::CarriedRows::new(&self.carried());
+        let mut carried = super::rows::CarriedRows::new(&self.carried_current());
         let mut parse_error: Option<String> = None;
 
         let result = self
@@ -236,7 +236,7 @@ impl RepoSession {
     /// with no row above it would leave a commit on screen that no tip
     /// names and no edge reaches — appearing and vanishing with a merge
     /// the graph never mentions.
-    fn pending_commit(&self) -> Option<Vec<Oid>> {
+    pub(super) fn pending_commit(&self) -> Option<Vec<Oid>> {
         // **Held back where somebody asked for that**
         // ([`PassHooks::holds_back_the_working_tree_row`]): a pass that
         // began before the first status carries no row of this window's,

@@ -274,6 +274,15 @@ impl CarriedRows {
             },
             None => item.meta.oid,
         };
+        self.take_at(&anchor, builder)
+    }
+
+    /// The same, for a caller that has worked the anchor out itself — a
+    /// graph being laid out again has the rows rather than the walk's
+    /// entries, and the anchor is the same commit either way
+    /// (`session::relay`).
+    pub(super) fn take_at(&mut self, anchor: &Oid, builder: &mut GraphBuilder) -> Vec<LogRow> {
+        let anchor = *anchor;
         let mut out = Vec::new();
         // `retain` rather than a filter: a copy handed out here is gone
         // from the set, so a stash and its base cannot both draw it.
