@@ -53,6 +53,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Ends(":back"), "tags_eye shown=true there=true")],
         plain: "tags_eye shown=false there=false",
     },
+    // A commit of what is staged over a tree that keeps the rest: the
+    // one shape where the uncommitted row survives its own commit, so
+    // the pair shows the row moving rather than going away. `moved=` is
+    // HEAD, and `wipRow=true` on the far side is the row drawn again
+    // above where it went — which is the whole claim, since a row the
+    // graph had to be walked for a second time would be missing from
+    // that frame.
+    //
+    // `during` is the write out and the picture not yet moved. **The
+    // three flags are what is judged, not the picture**: where the swap
+    // lands between the latch and the grab the flags still describe the
+    // moment the run stopped at, and the picture is read by eye.
+    Verb {
+        name: "wip-commit-half",
+        when: &[(
+            Arg::Is("during"),
+            "wip_half stage=during busy=true moved=false",
+        )],
+        plain: "wip_half stage=after busy=false moved=true wipRow=true",
+    },
     // The two verbs whose whole picture is the card in overlay.png,
     // and the one line that says the card is in it: `popups=` is the
     // window overlay's own count of what it was holding when the

@@ -264,7 +264,7 @@ QtObject {
                 "tab-pin", "tab-pin-go", "tab-open-go",
                 "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "badges-hover-early", "graph-stale", "graph-stopped",
-                "wip-landing",
+                "wip-landing", "wip-commit-half",
                 "band-actions", "band-actions-none",
                 "band-actions-fold", "band-actions-alert", "band-actions-stopped", "fetch-tip-link",
                 "old-git", "old-git-card",

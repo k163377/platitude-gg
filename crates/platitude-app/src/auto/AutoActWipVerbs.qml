@@ -183,6 +183,26 @@ Item {
                               + " copied=" + graphPane.view.wipCopied
                               + " conflicted=" + graphPane.view.wipConflicted
                               + " rows=" + worktreeModel.total)
+        } else if (act === "wip-commit-half") {
+            // A commit of what is staged over a tree that keeps the rest (`--preset dirty`), which is the one shape
+            // where the uncommitted row survives its own commit: HEAD goes somewhere new and the row has to be drawn
+            // again above it, with what is left. **Not `stageAll()`** — staging everything commits the whole tree and
+            // leaves no row on the far side, so the pair would show a row going away rather than moving.
+            //
+            // The argument stops it part-way: `during` is the write out and the picture not yet moved, which is what
+            // says the graph and the tree arrive together rather than one at a time.
+            page.showWip()
+            wipPane.setMessage("feat: record the staged half", "")
+            driver.headOidBefore = workTree.headOid
+            halfWatch.duringOnly = arg === "during"
+            driver.pressWrite("commit", () => {
+                page.commitNow()
+                return true
+            })
+            if (halfWatch.duringOnly)
+                halfDuringTimer.start()
+            else
+                halfSettledTimer.start()
         } else if (act === "wip-message" || act === "wip-message-focus") {
             // A body is typed first because this editor starts empty, and an empty box has no text to take a colour.
             // Read as a pair: the caret is the only difference between the two verbs.
@@ -537,6 +557,48 @@ Item {
             amendAuthorTimer.stop()
             Harness.report("amend_author differs=" + repoTab.headAuthorDiffers
                               + " name=" + repoTab.headAuthorName)
+            driver.complete()
+        }
+    }
+    QtObject {
+        id: halfWatch
+        property bool duringOnly: false
+    }
+    // The write out and nothing moved yet.
+    //
+    // **Both halves, or the moment is not this one.** Busy stays up past the write's own answer while the reads behind
+    // it run, so a sampler that beat the answer and one that missed it both find it raised — and the second is the
+    // picture this verb is not about. HEAD still where it was is what tells them apart; a run that never catches the
+    // pair says nothing and is ended by the watchdog, which is the loud way to find out (app-ui.md §一瞬だけ立つ状態).
+    SampleTimer {
+        id: halfDuringTimer
+        onTriggered: {
+            if (repoTab.busyCount === 0 || workTree.headOid !== driver.headOidBefore)
+                return
+            halfDuringTimer.stop()
+            Harness.report("wip_half stage=during busy=true"
+                              + " moved=" + (workTree.headOid !== driver.headOidBefore)
+                              + " wipRow=" + graphModel.wipRow
+                              + " rows=" + worktreeModel.total)
+            driver.complete()
+        }
+    }
+    // The far side: the write through every boundary, the graph holding the commit HEAD went to, and the row drawn
+    // again above it with what the commit left behind. Read in that order — the last is the answer the other two are
+    // the reasons for.
+    SampleTimer {
+        id: halfSettledTimer
+        onTriggered: {
+            if (!driver.wroteAndSettled()
+                    || workTree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(workTree.headOid) < 0
+                    || !graphModel.wipRow)
+                return
+            halfSettledTimer.stop()
+            Harness.report("wip_half stage=after busy=false"
+                              + " moved=" + (workTree.headOid !== driver.headOidBefore)
+                              + " wipRow=" + graphModel.wipRow
+                              + " rows=" + worktreeModel.total)
             driver.complete()
         }
     }
