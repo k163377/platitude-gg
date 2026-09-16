@@ -563,23 +563,57 @@ Item {
     QtObject {
         id: halfWatch
         property bool duringOnly: false
+        /// Whether the pair below has been seen, and what the page was holding when it was. Kept rather than read
+        /// back: the commit lands while the run is still on its way out, so afterwards these are the settled page's.
+        property bool caught: false
+        property bool sawWipRow: false
+        property int sawRows: -1
     }
     // The write out and nothing moved yet.
     //
     // **Both halves, or the moment is not this one.** Busy stays up past the write's own answer while the reads behind
-    // it run, so a sampler that beat the answer and one that missed it both find it raised — and the second is the
-    // picture this verb is not about. HEAD still where it was is what tells them apart; a run that never catches the
-    // pair says nothing and is ended by the watchdog, which is the loud way to find out (app-ui.md §一瞬だけ立つ状態).
+    // it run, so a look that beat the answer and one that missed it both find it raised — and the second is the
+    // picture this verb is not about. HEAD still where it was is what tells them apart.
+    //
+    // **The pair is read on the tab's own notify rather than on the beat** (app-ui.md §一瞬だけ立つ状態). The window
+    // is a git subprocess wide, but the loop can take the whole of it in one turn — the answer and the reads behind it
+    // drained together — and a beat that lands behind the landing finds HEAD moved at every beat after that, which is
+    // a watchdog spent in silence. This handler runs inside the turn the edge belongs to, so the window cannot close
+    // between the two reads.
+    Connections {
+        target: acts.repoTab
+        enabled: halfWatch.duringOnly && !halfWatch.caught
+        function onBusyCountChanged() {
+            if (repoTab.busyCount === 0 || workTree.headOid !== driver.headOidBefore)
+                return
+            halfWatch.sawWipRow = graphModel.wipRow
+            halfWatch.sawRows = worktreeModel.total
+            halfWatch.caught = true
+        }
+    }
+    // Completed a turn later rather than inside the notify that carried the edge (app-ui.md §UI 自動化の因果性), and
+    // **the run ends either way**: a window that shut without one notify raising busy had no `during` in it to stop
+    // at, which is said out loud and finished the way an inventory that named nothing is (`WindowSettingsActs`). That
+    // line is not the one this verb is judged on, so the run fails on it in the second it takes rather than in the
+    // watchdog's silence — and it names which of the two ways the run ended.
     SampleTimer {
         id: halfDuringTimer
         onTriggered: {
-            if (repoTab.busyCount === 0 || workTree.headOid !== driver.headOidBefore)
+            if (!halfWatch.caught) {
+                if (workTree.headOid === driver.headOidBefore)
+                    return
+                halfDuringTimer.stop()
+                Harness.report("wip_half_missed the commit landed before any notify carried a raised busy, so this "
+                                  + "run had no moment with the write out and the picture still to stop at")
+                driver.complete()
                 return
+            }
             halfDuringTimer.stop()
-            Harness.report("wip_half stage=during busy=true"
-                              + " moved=" + (workTree.headOid !== driver.headOidBefore)
-                              + " wipRow=" + graphModel.wipRow
-                              + " rows=" + worktreeModel.total)
+            // The two flags the guard above stood on, said as what it found — the page they were read beside is the
+            // one in `halfWatch`, and reading them back here would be the settled page answering for the edge.
+            Harness.report("wip_half stage=during busy=true moved=false"
+                              + " wipRow=" + halfWatch.sawWipRow
+                              + " rows=" + halfWatch.sawRows)
             driver.complete()
         }
     }
