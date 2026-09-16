@@ -350,24 +350,31 @@ Qt 6.8 で Windows の既定が DirectWrite になり、旧 backend は QPA 引�
 `--breakdown` を足す(`memprobe` 付きでビルドし直す)。500ms ごとの `mem report` のうち、
 落ち着いた最後の 1 行(`label="perf-done"`。5 run の差は 4KB):
 
-- **live 18.81MB / peak 39.13MB** — 同じ組の WorkingSet 303.1–303.9–308.8MB の **6.1–6.2%**。
+- **live 19.49MB / peak 39.81MB** — 同じ組の WorkingSet 306.5–309.9–310.6MB の **6.3%**。
   peak は開いた直後の一過性(git の出力を読んでいる間の 2 つの 8–16MB のバッファ)で、
   落ち着けば live に戻る。**報告が印刷するのは kept run の最大 = 開いた直後の行**なので、
   この節の数字は run ディレクトリの `app.log` の最後の `mem report` から読む
-- 名前が付いているのは 13.12MB、付いていないのが 5.70MB
+- 名前が付いているのは 13.92MB、付いていないのが 5.57MB
 
 | 名前 | バイト | 個数 |
 |---|---|---|
 | `label-map` | 5.44MB | 48,405 |
-| `refs-snapshot` | 5.29MB | 50,002 |
-| `graph-rows` | 1.74MB | 2,000 |
+| `refs-snapshot` | 5.29MB | 50,010 |
+| `graph-rows` | 2.25MB | 2,008 |
 | `publish-marks` | 0.23MB | 7,202 |
 | `graph-builder` | 0.16MB | 2,001 |
+| `graph-index` | 0.15MB | 2,008 |
+| `graph-marks` | 0.15MB | 2,008 |
 | `applied` | 0.09MB | 655 |
-| `graph-index` | 0.08MB | 2,000 |
-| `details-files` / `sent-rows` / `diff-lines` | 0.03 / 0.03 / 0.02MB | 76 / 2,000 / 57 |
+| `graph-parents` | 0.06MB | 2,000 |
+| `details-files` / `sent-rows` / `diff-lines` | 0.03 / 0.03 / 0.02MB | 76 / 2,008 / 57 |
 
-- **refs 側が行側の 5 倍以上**(refs 系 10.9MB 対 行系 2.0MB)。**refs と行のどちらが
+- **walk をやり直さずにレーンを組み直すのに要る全部が `graph-marks` + `graph-parents` =
+  0.21MB**(行ごとの id と親の範囲 + 親の id)。同じ 2,000 行の `graph-rows` 2.25MB の
+  **1 割未満**で、**アプリが既に持っている**(メニューの問いが読む `marks` / `parent_oids`)。
+  20 万コミット全部まで窓を広げた場合の外挿は marks + parents 約 15MB 対 `graph-rows`
+  約 236MB で、**比はそのまま** — 窓を広げた時にメモリを決めるのは行データの側
+- **refs 側が行側の 4 倍近く**(refs 系 11.0MB 対 行系 2.8MB)。**refs と行のどちらが
   Rust のメモリを決めているかと聞かれれば refs**
 - **ただし Rust 全体が 19MB なので、300MB の主役ではない**。残りは C++ / Qt 側と
   フォント(§常駐の内訳)
