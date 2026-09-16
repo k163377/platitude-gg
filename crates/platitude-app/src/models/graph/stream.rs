@@ -67,6 +67,27 @@ impl GraphModel {
                 self.index.capacity() * size_of::<(Oid, u32)>(),
                 self.index.len(),
             );
+            // **What the walk left that a second walk would not have to
+            // ask git for**: every drawn row's id and where its parents
+            // end (`RowMark`), and the parents themselves. Attributed
+            // because it is the part of the graph's cost that grows with
+            // what somebody asks to see, and because what it costs is
+            // what a rebuild without `git log` would be paying
+            // (`marks.rs`). Two lines rather than one: the spans grow
+            // with the rows and the ids with the parenthood, and a merge-
+            // heavy history moves only the second.
+            crate::harness::memprobe::note_bytes(
+                "graph-marks",
+                self.tab_id,
+                self.marks.capacity() * size_of::<RowMark>(),
+                self.marks.len(),
+            );
+            crate::harness::memprobe::note_bytes(
+                "graph-parents",
+                self.tab_id,
+                self.parent_oids.capacity() * size_of::<Oid>(),
+                self.parent_oids.len(),
+            );
         }
         if changed {
             self.stats_changed();
