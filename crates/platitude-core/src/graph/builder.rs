@@ -87,11 +87,23 @@ impl GraphBuilder {
     /// node draws dashed (stash rows: not part of committed history
     /// proper).
     pub fn push_with_edge_style(&mut self, commit: &CommitMeta, dashed_edge: bool) -> GraphRow {
+        self.push_ids(&commit.oid, &commit.parents, dashed_edge)
+    }
+
+    /// The same row from the two things the lanes are actually made of:
+    /// the commit's id and its parents'.
+    ///
+    /// **What lets a graph be laid out again without asking git.** A row
+    /// already drawn carries both (`LogRow::parents`), so a pass that
+    /// walked with one answer about the synthetic rows can be laid out
+    /// again with another — no process, and no metadata kept beyond what
+    /// the rows already hold (`session::relay`).
+    pub fn push_ids(&mut self, oid: &Oid, parents: &[Oid], dashed_edge: bool) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
 
         // Lanes whose edge terminates at this node.
-        let joins = self.expects.remove(&commit.oid).unwrap_or_default();
+        let joins = self.expects.remove(oid).unwrap_or_default();
 
         let (node_lane, node_color, fresh) = match joins.iter().min() {
             Some(min) => {
@@ -131,9 +143,9 @@ impl GraphBuilder {
             self.lanes[m as usize] = None;
         }
 
-        let mut parents = commit.parents.iter();
+        let mut parents = parents.iter();
         if let Some(p0) = parents.next() {
-            if self.already_emitted(p0, commit) {
+            if self.already_emitted(p0, oid) {
                 // Out-of-order stream: the edge cannot be drawn; leave the
                 // lane free rather than leaking it forever.
             } else {
@@ -157,7 +169,7 @@ impl GraphBuilder {
                     color: self.lane_color(existing),
                     dashed: false,
                 });
-            } else if self.already_emitted(p, commit) {
+            } else if self.already_emitted(p, oid) {
                 // Out-of-order stream: skip, as above.
             } else {
                 let lane = self.find_free_lane_near(node_lane);
@@ -176,7 +188,7 @@ impl GraphBuilder {
             self.lanes.pop();
         }
 
-        self.rows.insert(commit.oid, row);
+        self.rows.insert(*oid, row);
 
         let mut width = node_lane + 1;
         for s in &segments {
@@ -391,12 +403,12 @@ impl GraphBuilder {
         self.expects.entry(expects).or_default().push(lane);
     }
 
-    fn already_emitted(&mut self, parent: &Oid, child: &CommitMeta) -> bool {
+    fn already_emitted(&mut self, parent: &Oid, child: &Oid) -> bool {
         let emitted = self.rows.contains_key(parent);
         if emitted && !self.warned_out_of_order {
             self.warned_out_of_order = true;
             tracing::warn!(
-                child = %child.oid,
+                child = %child,
                 parent = %parent,
                 "log stream is not topologically ordered; some edges will not be drawn"
             );
