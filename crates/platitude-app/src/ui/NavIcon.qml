@@ -112,13 +112,17 @@ InkCanvas {
         // the cloud and the pull request; a file row's mark follows the change).
         ctx.lineJoin = "miter"
         if (icon.kind === "branch") {
+            // **A line stops on the ring it runs into, never inside it.** The cap that hangs off an end and the half
+            // of the ring's own line are both half the weight, so an end laid on the ring's circle reaches the hole's
+            // edge and no further — at `iconSm` as at `iconXl`, since the weight does not scale with the grid. Drawn
+            // to the node's centre instead, the line crosses the ring and stands in the hole as a spike.
             ctx.beginPath()
-            ctx.moveTo(5 * s, 5 * s)
-            ctx.lineTo(5 * s, 11 * s)
+            ctx.moveTo(5 * s, 5.3 * s)
+            ctx.lineTo(5 * s, 10.7 * s)
             ctx.stroke()
             ctx.beginPath()
-            ctx.moveTo(11 * s, 7 * s)
-            ctx.bezierCurveTo(11 * s, 9.5 * s, 8 * s, 9.5 * s, 5.8 * s, 10.2 * s)
+            ctx.moveTo(11 * s, 6.8 * s)
+            ctx.bezierCurveTo(11 * s, 8.6 * s, 8.6 * s, 9.2 * s, 5.6 * s, 9.2 * s)
             ctx.stroke()
             for (const c of [[5, 3.5], [5, 12.5], [11, 5]]) {
                 ctx.beginPath()
