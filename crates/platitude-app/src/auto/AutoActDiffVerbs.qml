@@ -342,7 +342,7 @@ Item {
                         page.stageSelection(0, -1)
                     return true
                 })
-                writeBarrier.start()
+                stagedTimer.start()
                 return
             }
             // Sending the code sideways, and the hand that sends it and the rows at once. Both read what moved rather
@@ -381,10 +381,32 @@ Item {
             // the press the write barrier is armed on (`holdToEnd`), said by the pane on the hunk's own signal.
             if (act === "discard-hunk-go") {
                 driver.holdToEnd(diffPane)
-                writeBarrier.start()
+                stagedTimer.start()
             } else {
                 renderedBarrier.begin()
             }
+        }
+    }
+    // The three presses that write from inside the pane: a line, a hunk, and a hunk thrown away. Each empties the
+    // side it was made on, and an emptied side is the one thing the pane moves off by itself (`diff-follow` is that
+    // move as a verb). **What the move brings is what the run shows**, so the write's answer is not the end:
+    // stopped there, the picture is of a pane wearing the name of the file it followed to over an empty body, and the
+    // census walk of that moment leaves `DiffRowDelegate` off the run's line — what it moved to lands after both.
+    SampleTimer {
+        id: stagedTimer
+        onTriggered: {
+            // The write's own edges, the pane's word that it has stopped reading (`RepoPage.diffSettling`), and — if
+            // it is showing anything at all — something to look at. A pane that closed behind the press shows nothing
+            // and is done. **What the pane lands on need not be rows**: a picture, a binary file and a repository of
+            // its own have none by nature and never will (`DiffPane.diffSettled`), so asking for rows holds those to
+            // the watchdog — an emptied bucket can leave any of them next in the list.
+            if (!driver.wroteAndSettled() || page.diffSettling
+                    || (page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)))
+                return
+            stagedTimer.stop()
+            // Handed to the write's own barrier, which answers for the rest of it — the broken contract said by name,
+            // the status a verb owes, the row a write takes out of its bucket. It is already owed nothing but a tick.
+            writeBarrier.start()
         }
     }
     // PGG_AUTO_ACT=diff-bar: the bar down the side of the diff can still be grabbed — the strip it stands on is not
