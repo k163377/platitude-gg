@@ -520,3 +520,78 @@ fn a_daily_run_keeps_a_full_stamp_it_finds() {
     assert!(text.contains("keeps its full stamp"), "{text}");
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
+
+/// **The steps that build the app and run it read their crates whole.**
+/// Their keys are the two product directories entire — the test targets
+/// under them included — and that is what answers for a file the product
+/// opens by a path no reader of the source can follow. Here the path is
+/// spelled across two files, a segment to each, which is enough to lose
+/// any scan of them: the directory is read whole, so the key moves
+/// anyway and every one of those steps is owed.
+///
+/// **What this pins is the absence of a narrower rule.** A rule that
+/// dropped the test targets from these keys would have to answer for
+/// this shape, and a scan of the sources cannot: not finding a reference
+/// is not the same as there being none.
+#[test]
+fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
+    let sb = Sandbox::new("path-across-two-files");
+    // The file and the source that opens it are spelled out of the same
+    // pieces, so the two cannot drift: the reader sits in this package,
+    // which is what its `CARGO_MANIFEST_DIR` stands for, and the second
+    // commit moves that file and nothing else. Nothing in the run reads
+    // it — the steps are faked — so the agreement has to be structural.
+    let package = "crates/platitude-app";
+    let [root, under, name] = ["tests", "qml", "Probe.qml"];
+    let read = format!("{package}/{root}/{under}/{name}");
+    // A product change, so that the steps below are selected at all: what
+    // is under test is the key they are answered by, not the reach that
+    // picks them.
+    sb.write(
+        &sb.seat,
+        &format!("{package}/src/ui/StashPane.qml"),
+        "Item {\n    width: 7\n    property var model: StashModel\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        &format!("{package}/src/paths.rs"),
+        &format!("pub const TEST_ROOT: &str = \"{root}\";\n"),
+    );
+    sb.write(
+        &sb.seat,
+        &format!("{package}/src/probe.rs"),
+        &format!(
+            "use crate::paths::TEST_ROOT;\npub fn read() -> String {{\n    let p = \
+             std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n        \
+             .join(TEST_ROOT)\n        .join(\"{under}\")\n        .join(\"{name}\");\n    \
+             std::fs::read_to_string(p).unwrap()\n}}\n"
+        ),
+    );
+    sb.write(
+        &sb.seat,
+        &format!("{package}/src/main.rs"),
+        "mod models;\nmod paths;\nmod probe;\nfn main() {}\n",
+    );
+    sb.write(&sb.seat, &read, "Item {}\n");
+    sb.commit_all(&sb.seat, "feat(app): a reader of a file under tests", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    // Green first, or the second run below would be their first and say
+    // nothing about a stamp.
+    let built = ["shipped", "bare", "verify stash --preset basic"];
+    let first = without_always(&sb.ran());
+    for id in built {
+        assert!(first.contains(id), "{id} did not run: {first:?}");
+    }
+
+    // The file it opens, and nothing else.
+    sb.write(&sb.seat, &read, "Item {\n    property int x: 1\n}\n");
+    sb.commit_all(&sb.seat, "test(app-ui): the file it opens", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let again = without_always(&sb.ran());
+    for id in built {
+        assert!(
+            again.contains(id),
+            "{id} kept a stamp over a file the product opens: {again:?}"
+        );
+    }
+}
