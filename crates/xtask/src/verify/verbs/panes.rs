@@ -311,49 +311,25 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=Nothing was staged",
     },
-    // The dress each kind of report wears, asked of the page's own door
-    // (`RepoPage.showReport`) so the run reads the same `Words` the answer
-    // does. **The colour is a two-pixel hairline** — the whole reason
-    // this is a report line.
+    // **The door, not the table.** Which dress a kind wears — the
+    // heading, whether the second line is ours, and the colour — is a
+    // switch over that kind, and every arm of it is asked of the real
+    // `Words` and a real `NoticeBar` for the price of one process
+    // (`tests/qml/tst_reportdress.qml`). What only a window can answer is
+    // this: the page's own door (`RepoPage.showReport`) hands those three
+    // answers to the bar the reader sees, and the middle of the page
+    // stands under it.
     //
-    // **The pair is the claim**: every report is `danger` except the one
-    // that left something standing, so a run of the second alone would
-    // pass against an implementation that painted everything warning.
+    // **One kind, and it is the one that is nobody's default**: a
+    // half-finished rename is the arm where the colour is `warning` and
+    // the second line is this end's own, so a door that dropped either on
+    // the way would read as the other arm here. `log=false` is the verb
+    // handing the kind in with nothing spawned.
     Verb {
         name: "report-tone",
-        when: &[
-            (
-                Arg::Is("half-rename"),
-                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                 said=The rename did not finish",
-            ),
-            (
-                Arg::Is("update"),
-                "write_notice open=true clears=true why=false tone=danger log=false wrong=false \
-                 said=origin would not update main",
-            ),
-            // The two a rewrite is turned down with: the tip moved after
-            // the plan was composed (`ReportKind::RewriteTipMoved`), or an
-            // operation was already standing (`RewriteWhileStanding`).
-            // **The verb hands the kind in**, so nothing is spawned here
-            // and `log=false` is a claim about the dress — the plan's
-            // own check refuses before any spawn, but the carry's guard
-            // refuses after git's one refusal and that one does leave a
-            // row (`session_integration::standing_op`).
-            // `why=true` is this application's own second line, which is
-            // what a log row cannot give either way.
-            (
-                Arg::Is("tip-moved"),
-                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                 said=The history was not rewritten",
-            ),
-            (
-                Arg::Is("op-standing"),
-                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                 said=The history was not rewritten",
-            ),
-        ],
-        plain: "write_notice open=true clears=true tone=danger",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                said=The rename did not finish",
     },
     // Another working copy's uncommitted work, read in this window as a
     // pane of its own. `copy=` is that pane standing on that copy;

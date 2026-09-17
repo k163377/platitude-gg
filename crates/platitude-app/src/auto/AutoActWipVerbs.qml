@@ -71,9 +71,10 @@ Item {
             page.openDiff(stalePartTimer.bucket, stalePartTimer.path, "")
             stalePartTimer.start()
         } else if (act === "report-tone") {
-            // The dress a kind of report wears, entered through the page's own door (`showReport`) so the run reads
-            // the same `Words` the answer does. **Only the kind is handed in** — which report arrived is what the
-            // other verbs prove.
+            // The page's own door (`showReport`), so the run reads the same `Words` the answer does. **Only the kind
+            // is handed in** — which report arrived is what the other verbs prove, and which dress each kind wears is
+            // a switch over that kind, asked of the real `Words` and a real bar in `tests/qml/tst_reportdress.qml`.
+            // What is left for a window is that the door carries all three of those answers through to the bar.
             page.showReport(arg, "origin", "main", "")
             driver.barrierNotice.start()
         } else if (act === "amend") {
